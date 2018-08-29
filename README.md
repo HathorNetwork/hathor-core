@@ -33,3 +33,7 @@ Cheat Sheets
 Run flake8:
 
     flake8 hathor/ tests/ *.py
+
+Run tests with coverage:
+
+	nosetests --with-coverage --cover-package=hathor --cover-html

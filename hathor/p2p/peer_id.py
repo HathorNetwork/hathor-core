@@ -3,10 +3,17 @@
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.exceptions import InvalidSignature
 
 import hashlib
 import base64
 import json
+
+
+class InvalidPeerIdException(Exception):
+    pass
 
 
 class PeerId(object):
@@ -45,6 +52,32 @@ class PeerId(object):
         )
         return base64.b64encode(public_der).decode('utf-8')
 
+    def sign(self, data):
+        return self.private_key.sign(
+            data,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256()
+        )
+
+    def verify_signature(self, signature, data):
+        try:
+            self.public_key.verify(
+                signature,
+                data,
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH
+                ),
+                hashes.SHA256()
+            )
+        except InvalidSignature:
+            return False
+        else:
+            return True
+
     @classmethod
     def create_from_json(cls, data):
         # TODO Check whether pubkey, privkey, and id match.
@@ -65,11 +98,23 @@ class PeerId(object):
                 backend=default_backend()
             )
 
-        self.validate()
         return obj
 
     def validate(self):
-        pass
+        if self.id != self.calculate_id():
+            raise InvalidPeerIdException('id does not match public key')
+        if self.private_key:
+            public_der1 = self.public_key.public_bytes(
+                encoding=serialization.Encoding.DER,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+            )
+            public_key = self.private_key.public_key()
+            public_der2 = public_key.public_bytes(
+                encoding=serialization.Encoding.DER,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+            )
+            if public_der1 != public_der2:
+                raise InvalidPeerIdException('private/public pair does not match')
 
     def to_json(self, include_private_key=False):
         public_der = self.public_key.public_bytes(

@@ -1,54 +1,26 @@
 # encoding: utf-8
 
-from twisted.internet.endpoints import TCP4ServerEndpoint, TCP4ClientEndpoint, connectProtocol
-from twisted.internet import protocol, reactor
+from twisted.internet import reactor
+from twisted.web import server
 from twisted.python import log
 
-from hathor.p2p.protocol import HathorLineReceiver
 from hathor.p2p.peer_id import PeerId
+from hathor.p2p.status import StatusResource
+from hathor.p2p.factory import HathorFactory
+import hathor
 
 import argparse
 import sys
 import json
 
-MyServerProtocol = HathorLineReceiver
-MyClientProtocol = HathorLineReceiver
-
-
-class MyFactory(protocol.Factory):
-    def __init__(self, peer_id):
-        self.peer_id = peer_id
-        super(MyFactory, self).__init__()
-
-    def startFactory(self):
-        self.connected_peers = {}
-
-    def update_peers(self, peer, received_peers):
-        for new_peer_id, new_peer_address in received_peers:
-            if new_peer_id == self.peer_id.id:
-                continue
-            if new_peer_id not in self.connected_peers:
-                host, port = new_peer_address.split(':')
-                self.connect_to(host, port)
-
-    def buildProtocol(self, addr):
-        return MyServerProtocol(self)
-
-    def connect_to(self, host, port):
-        point = TCP4ClientEndpoint(reactor, host, port)
-        connectProtocol(point, MyClientProtocol(self))
-
-    def listen(self, host, port):
-        endpoint = TCP4ServerEndpoint(reactor, int(port), interface=host)
-        endpoint.listen(factory)
-        self.peer_id.endpoints.append(endpoint)
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--dns', action='append', help='Seeds DNS')
     parser.add_argument('--peer', help='json file with peer info')
     parser.add_argument('--listen', help='Address to listen for new connections (ex: 0.0.0.0:8000)')
     parser.add_argument('--bootstrap', action='append', help='Address to connect to')
+    parser.add_argument('--status', type=int, help='Port to run status server')
     args = parser.parse_args()
 
     log.startLogging(sys.stdout)
@@ -59,10 +31,15 @@ if __name__ == '__main__':
         data = json.load(open(args.peer, 'r'))
         peer_id = PeerId.create_from_json(data)
 
+    print('Hathor v{}'.format(hathor.__version__))
     print('My peer id is', peer_id.id)
 
-    factory = MyFactory(peer_id)
+    factory = HathorFactory(peer_id)
     factory.startFactory()
+
+    if args.dns:
+        for host in args.dns:
+            factory.dns_seed_lookup(host)
 
     if args.listen:
         host, port = args.listen.split(':')
@@ -74,5 +51,9 @@ if __name__ == '__main__':
             host, port = address.split(':')
             print('Connecting to: {}:{}...'.format(host, int(port)))
             factory.connect_to(host, int(port))
+
+    if args.status:
+        status_server = server.Site(StatusResource(factory))
+        reactor.listenTCP(args.status, status_server)
 
     reactor.run()
