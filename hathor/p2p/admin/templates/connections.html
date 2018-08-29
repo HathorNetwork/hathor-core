@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+
+{% block header %}
+  <h1>{% block title %}Connections{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+<table class="blueTable">
+  <thead>
+    <tr><th>id</th><th>Endpoints</th></tr>
+  </thead>
+  <tbody>
+    {% for peer in peers %}
+    <tr>
+      <td>{{ peer['id'] }}</td>
+      <td>{{ peer['endpoints'] }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}
