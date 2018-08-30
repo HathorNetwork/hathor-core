@@ -6,6 +6,7 @@ stages:
 
 pep8:
     stage: linters
+    image: python:3.6
     allow_failure: yes
     only:
         - dev
@@ -16,6 +17,7 @@ pep8:
 
 unit-tests:
     stage: unit-tests
+    image: python:3.6
     only:
         - dev
     before_script:
