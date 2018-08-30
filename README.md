@@ -1,16 +1,30 @@
 Hathor Network
 ==============
 
+Connect to Hathor testnet
+------
+
+Run:
+
+    python main.py --listen tcp:8000:interface=0.0.0.0 --testnet
+
+You can include `--status 8001` to run a status web server in port 8001. To access your
+status server, open the brower in http://localhost:80001/.
+
+By default, it will listen in all interfaces (0.0.0.0).
+
+
+
 Run a simple test in one computer
 ------
 
 First run a server which listens for new connections:
 
-    python main.py --listen 0.0.0.0:8000
+    python main.py --listen tcp:8000
 
 Then, run a client which connects to the server. You may run as many clients as you want.
 
-    python main.py --bootstrap 127.0.0.1:8000
+    python main.py --bootstrap tcp:127.0.0.1:8000
 
 
 
@@ -23,7 +37,7 @@ To generate a random peer id, run:
 
 Then, you can use this id in any server or client through the `--peer` parameter. For instance:
 
-    python main.py --listen 0.0.0.0:8000 --peer mypeer.json
+    python main.py --listen tcp:8000 --peer mypeer.json
 
 
 

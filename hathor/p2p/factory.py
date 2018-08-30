@@ -1,7 +1,6 @@
 # encoding: utf-8
 
-from twisted.internet.endpoints import TCP4ServerEndpoint, TCP4ClientEndpoint, connectProtocol
-from twisted.internet import protocol, reactor
+from twisted.internet import protocol, reactor, endpoints
 import twisted.names.client
 
 from hathor.p2p.protocol import HathorLineReceiver
@@ -19,10 +18,9 @@ MyClientProtocol = HathorLineReceiver
 
 
 class HathorFactory(protocol.Factory):
-    default_port = 40403
-
-    def __init__(self, peer_id):
+    def __init__(self, peer_id, default_port=40403):
         self.peer_id = peer_id
+        self.default_port = default_port
         super(HathorFactory, self).__init__()
 
     def startFactory(self):
@@ -40,31 +38,63 @@ class HathorFactory(protocol.Factory):
                 host, port = new_peer_address.split(':')
                 self.connect_to(host, port)
 
-    def connect_to(self, host, port):
-        point = TCP4ClientEndpoint(reactor, host, port)
-        print('Connecting to:', host, port)
-        connectProtocol(point, MyClientProtocol(self))
+    def connect_to(self, description):
+        endpoint = self.clientFromString(description)
+        endpoint.connect(self)
+        print('Connecting to: {}...'.format(description))
 
-    def listen(self, host, port):
-        endpoint = TCP4ServerEndpoint(reactor, int(port), interface=host)
+    def serverFromString(self, description):
+        return endpoints.serverFromString(reactor, description)
+
+    def listen(self, description):
+        endpoint = self.serverFromString(description)
         endpoint.listen(self)
-        self.peer_id.endpoints.append(endpoint)
+        print('Listening to: {}...'.format(description))
+
+    def dns_seed_lookup_text(self, host):
+        x = twisted.names.client.lookupText(host)
+        x.addCallback(self.on_dns_seed_found)
+
+    def dns_seed_lookup_address(self, host):
+        x = twisted.names.client.lookupAddress(host)
+        x.addCallback(self.on_dns_seed_found_ipv4)
+
+    def dns_seed_lookup_ipv6_address(self, host):
+        x = twisted.names.client.lookupIPV6Address(host)
+        x.addCallback(self.on_dns_seed_found_ipv6)
 
     def dns_seed_lookup(self, host):
-        x1 = twisted.names.client.lookupAddress(host)
-        x1.addCallback(self.on_dns_seed_found_ipv4)
-        # x2 = twisted.names.client.lookupIPV6Address(host)
-        # x2.addCallback(self.on_dns_seed_found_ipv6)
+        self.dns_seed_lookup_text(host)
+        self.dns_seed_lookup_address(host)
+        # self.dns_seed_lookup_ipv6_address(host)
+
+    def clientFromString(self, description):
+        return endpoints.clientFromString(reactor, description)
+
+    def on_dns_seed_found(self, results):
+        answers, _, _ = results
+        for x in answers:
+            data = x.payload.data
+            for txt in data:
+                txt = txt.decode('utf-8')
+                try:
+                    print('Seed DNS TXT: "{}" found'.format(txt))
+                    endpoint = self.clientFromString(txt)
+                    endpoint.connect(self)
+                except ValueError:
+                    print('Seed DNS TXT: Error parsing "{}"'.format(txt))
 
     def on_dns_seed_found_ipv4(self, results):
         answers, _, _ = results
         for x in answers:
             address = x.payload.address
             host = socket.inet_ntoa(address)
-            self.connect_to(host, self.default_port)
+            self.connect_to('tcp:{}:{}'.format(host, self.default_port))
+            print('Seed DNS A: "{}" found'.format(host))
 
-    # def on_dns_seed_found_ipv6(self, results):
-    #     answers, _, _ = results
-    #     for x in answers:
-    #         address = x.payload.address
-    #         host = socket.inet_ntop(socket.AF_INET6, address)
+    def on_dns_seed_found_ipv6(self, results):
+        # answers, _, _ = results
+        # for x in answers:
+        #     address = x.payload.address
+        #     host = socket.inet_ntop(socket.AF_INET6, address)
+        raise NotImplemented()
