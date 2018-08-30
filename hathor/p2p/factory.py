@@ -4,9 +4,11 @@ from twisted.internet import protocol, reactor, endpoints
 import twisted.names.client
 
 from hathor.p2p.protocol import HathorLineReceiver
+from hathor.p2p.peer_storage import PeerStorage
 
 import time
 import socket
+import random
 
 
 MyServerProtocol = HathorLineReceiver
@@ -18,8 +20,17 @@ MyClientProtocol = HathorLineReceiver
 
 
 class HathorFactory(protocol.Factory):
-    def __init__(self, peer_id, default_port=40403):
-        self.peer_id = peer_id
+    def __init__(self, peer_id, hostname=None, peer_storage=None, default_port=40403):
+        # Hostname, used to be accessed by other peers.
+        self.hostname = hostname
+
+        # Remote address, which can be different from local address.
+        self.remote_address = None
+
+        # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
+        self.peer_storage = peer_storage or PeerStorage()
+
+        self.my_peer = peer_id
         self.default_port = default_port
         super(HathorFactory, self).__init__()
 
@@ -30,13 +41,17 @@ class HathorFactory(protocol.Factory):
     def buildProtocol(self, addr):
         return MyServerProtocol(self)
 
-    def update_peers(self, peer, received_peers):
-        for new_peer_id, new_peer_address in received_peers:
-            if new_peer_id == self.peer_id.id:
-                continue
-            if new_peer_id not in self.connected_peers:
-                host, port = new_peer_address.split(':')
-                self.connect_to(host, port)
+    def update_peer(self, peer):
+        if peer.id == self.my_peer.id:
+            return
+        self.peer_storage.add_or_merge(peer)
+        self.connect_to_if_not_connected(peer)
+
+    def connect_to_if_not_connected(self, peer):
+        if not peer.entrypoints:
+            return
+        if peer.id not in self.connected_peers:
+            self.connect_to(random.choice(peer.entrypoints))
 
     def connect_to(self, description):
         endpoint = self.clientFromString(description)
@@ -50,6 +65,10 @@ class HathorFactory(protocol.Factory):
         endpoint = self.serverFromString(description)
         endpoint.listen(self)
         print('Listening to: {}...'.format(description))
+        if self.hostname:
+            proto, _, _ = description.partition(':')
+            address = '{}:{}:{}'.format(proto, self.hostname, endpoint._port)
+            self.my_peer.entrypoints.append(address)
 
     def dns_seed_lookup_text(self, host):
         x = twisted.names.client.lookupText(host)
