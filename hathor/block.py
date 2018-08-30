@@ -45,7 +45,7 @@ class Blockchain:
         if _TEST:
             return _TEST_DIFFICULTY
         else:
-            return None # TODO
+            return None     # TODO
 
     def mine_block(self, block, prev_nonce):
         """Trivial CPU mining for testing. Gives up at _MAX_INT; only works with low difficulty."""
