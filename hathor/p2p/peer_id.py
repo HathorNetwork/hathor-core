@@ -21,10 +21,31 @@ class PeerId(object):
         self.id = None
         self.private_key = None
         self.public_key = None
-        self.endpoints = []
+        self.entrypoints = []
 
         if auto_generate_keys:
             self.generate_keys()
+
+    def merge(self, other):
+        assert(self.id == other.id)
+
+        # Copy public key if `self` doesn't have it and `other` does.
+        if not self.public_key and other.public_key:
+            self.public_key = other.public_key
+            self.validate()
+
+        if self.public_key and other.public_key:
+            assert(self.get_public_key() == other.get_public_key())
+
+        # Copy private key if `self` doesn't have it and `other` does.
+        if not self.private_key and other.private_key:
+            self.private_key = other.private_key
+            self.validate()
+
+        # Merge entrypoints.
+        for ep in other.entrypoints:
+            if ep not in self.entrypoints:
+                self.entrypoints.append(ep)
 
     def generate_keys(self, key_size=2048):
         # https://security.stackexchange.com/questions/5096/rsa-vs-dsa-for-ssh-authentication-keys
@@ -80,15 +101,15 @@ class PeerId(object):
 
     @classmethod
     def create_from_json(cls, data):
-        # TODO Check whether pubkey, privkey, and id match.
         obj = cls(auto_generate_keys=False)
         obj.id = data['id']
 
-        public_key_der = base64.b64decode(data['pubKey'])
-        obj.public_key = serialization.load_der_public_key(
-            data=public_key_der,
-            backend=default_backend()
-        )
+        if 'pubKey' in data:
+            public_key_der = base64.b64decode(data['pubKey'])
+            obj.public_key = serialization.load_der_public_key(
+                data=public_key_der,
+                backend=default_backend()
+            )
 
         if 'privKey' in data:
             private_key_der = base64.b64decode(data['privKey'])
@@ -98,11 +119,19 @@ class PeerId(object):
                 backend=default_backend()
             )
 
+        if 'entrypoints' in data:
+            obj.entrypoints = data['entrypoints']
+
         return obj
 
     def validate(self):
-        if self.id != self.calculate_id():
-            raise InvalidPeerIdException('id does not match public key')
+        if self.private_key and not self.public_key:
+            self.public_key = self.private_key.public_key()
+
+        if self.public_key:
+            if self.id != self.calculate_id():
+                raise InvalidPeerIdException('id does not match public key')
+
         if self.private_key:
             public_der1 = self.public_key.public_bytes(
                 encoding=serialization.Encoding.DER,

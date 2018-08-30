@@ -51,7 +51,7 @@ class HathorProtocol(Protocol):
 
     def __init__(self, factory):
         self.factory = factory
-        self.peer_id = None
+        self.peer = None
         self.lc_ping = None
         self.last_message = 0
         self.state = None
@@ -66,8 +66,8 @@ class HathorProtocol(Protocol):
 
     def connectionLost(self, reason):
         remote = self.transport.getPeer()
-        if self.peer_id:
-            self.factory.connected_peers.pop(self.peer_id.id, None)
+        if self.peer:
+            self.factory.connected_peers.pop(self.peer.id, None)
         if self.lc_ping:
             self.lc_ping.stop()
         print('Connection lost:', remote)
@@ -129,24 +129,29 @@ class HathorProtocol(Protocol):
 
     def send_peers(self):
         peers = []
-        for peer in self.factory.connected_peers.values():
-            # TODO: uncomment when endpoints are filled in.
-            # if not peer.peer_id.endpoints:
-            #     continue
-            # peers.append((peer.peer_id.id, peer.endpoints))
-            peers.append((peer.peer_id.id, []))
+        for conn in self.factory.connected_peers.values():
+            peers.append({
+                'id': conn.peer.id,
+                'entrypoints': conn.peer.entrypoints,
+                'last_message': conn.last_message,
+            })
         self.send_message(self.ProtocolCommand.PEERS, json.dumps(peers))
         print('Peers: %s' % str(peers))
 
     def handle_peers(self, payload):
-        self.received_peers = json.loads(payload)
-        self.factory.update_peers(self, self.received_peers)
+        received_peers = json.loads(payload)
+        for data in received_peers:
+            peer = PeerId.create_from_json(data)
+            peer.validate()
+            self.factory.update_peer(peer)
         remote = self.transport.getPeer()
         print(remote, 'PEERS', payload)
 
     def send_hello(self):
+        remote = self.transport.getPeer()
         data = {
             'app': 'Hathor v{}'.format(hathor.__version__),
+            'remote_address': '{}:{}'.format(remote.host, remote.port),
             'nonce': self.hello_nonce,
         }
         self.send_message(self.ProtocolCommand.HELLO, json.dumps(data))
@@ -158,7 +163,7 @@ class HathorProtocol(Protocol):
             self.send_error_and_close_connection('Invalid payload.')
             return
 
-        if {'app', 'nonce'} != set(data):
+        if {'app', 'remote_address', 'nonce'} != set(data):
             self.send_error_and_close_connection('Invalid payload.')
             return
 
@@ -171,13 +176,13 @@ class HathorProtocol(Protocol):
         self.send_peer_id(nonce)
 
     def send_peer_id(self, nonce):
-        peer_id = self.factory.peer_id
+        my_peer = self.factory.my_peer
         hello = {
-            'id': peer_id.id,
-            'pubKey': peer_id.get_public_key(),
-            'endpoints': [],
+            'id': my_peer.id,
+            'pubKey': my_peer.get_public_key(),
+            'entrypoints': my_peer.entrypoints,
             'nonce': nonce,
-            'signature': base64.b64encode(peer_id.sign(nonce.encode('ascii'))).decode('ascii'),
+            'signature': base64.b64encode(my_peer.sign(nonce.encode('ascii'))).decode('ascii'),
         }
         self.send_message(self.ProtocolCommand.PEER_ID, json.dumps(hello))
 
@@ -190,18 +195,27 @@ class HathorProtocol(Protocol):
             self.send_error_and_close_connection('Invalid nonce.')
             return
 
-        peer_id = PeerId.create_from_json(data)
-        peer_id.validate()
+        peer = PeerId.create_from_json(data)
+        peer.validate()
+
+        if peer == self.factory.my_peer:
+            self.send_error_and_close_connection('Are you my clone?!')
+            return
 
         signature = base64.b64decode(data['signature'])
-        if not peer_id.verify_signature(signature, self.hello_nonce.encode('ascii')):
+        if not peer.verify_signature(signature, self.hello_nonce.encode('ascii')):
             self.send_error_and_close_connection('Invalid signature.')
             return
 
-        self.state = self.PeerState.READY
+        if peer.id in self.factory.connected_peers:
+            self.send_error_and_close_connection('We are already connected.')
+            return
 
-        self.peer_id = peer_id
-        self.factory.connected_peers[self.peer_id.id] = self
+        self.state = self.PeerState.READY
+        self.factory.peer_storage.add_or_merge(peer)
+
+        self.peer = peer
+        self.factory.connected_peers[self.peer.id] = self
         print('factory.connected_peers:' + str(self.factory.connected_peers))
 
         self.lc_ping = LoopingCall(self.send_ping_if_necessary)

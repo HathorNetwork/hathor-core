@@ -16,6 +16,7 @@ import json
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
     parser.add_argument('--testnet', action='store_true', help='Connect to Hathor testnet')
     parser.add_argument('--dns', action='append', help='Seed DNS')
     parser.add_argument('--peer', help='json file with peer info')
@@ -35,7 +36,7 @@ if __name__ == '__main__':
     print('Hathor v{}'.format(hathor.__version__))
     print('My peer id is', peer_id.id)
 
-    factory = HathorFactory(peer_id)
+    factory = HathorFactory(peer_id=peer_id, hostname=args.hostname)
     factory.startFactory()
 
     if args.testnet:

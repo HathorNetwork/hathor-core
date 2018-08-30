@@ -13,19 +13,30 @@ class StatusResource(resource.Resource):
 
     def render_GET(self, request):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
-        peers = []
+
+        connected_peers = []
         for conn in self.factory.connected_peers.values():
             remote = conn.transport.getPeer()
-            peers.append({
-                'id': conn.peer_id.id,
+            connected_peers.append({
+                'id': conn.peer.id,
                 'address': '{}:{}'.format(remote.host, remote.port),
                 'last_message': time.time() - conn.last_message,
             })
+
+        known_peers = []
+        for peer in self.factory.peer_storage.values():
+            known_peers.append({
+                'id': peer.id,
+                'entrypoints': peer.entrypoints,
+            })
+
         data = {
             'server': {
                 'uptime': time.time() - self.factory.start_time,
-                'id': self.factory.peer_id.id,
+                'id': self.factory.my_peer.id,
+                'entrypoints': self.factory.my_peer.entrypoints,
             },
-            'peers': peers,
+            'known_peers': known_peers,
+            'connected_peers': connected_peers,
         }
-        return json.dumps(data).encode('utf-8')
+        return json.dumps(data, indent=4).encode('utf-8')
