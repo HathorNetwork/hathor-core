@@ -2,21 +2,23 @@
 
 stages:
     - linters
-    - unittests
+    - unit-tests
 
 pep8:
-    - stage: linters
-    - only: dev
-    - allow_failure: yes
-    - before_script:
-        pip install flake8
-    - script:
-        flake8 hathor/ tests/ *.py
+    stage: linters
+    allow_failure: yes
+    only:
+        - dev
+    before_script:
+        - pip install flake8
+    script:
+        - flake8 hathor/ tests/ *.py
 
-unittests:
-    - stage: unittests
-    - only: dev
-    - before_script:
-        pip install -r requirements.txt
-    - script:
-        nosetests --with-coverage --cover-package=hathor --cover-html
+unit-tests:
+    stage: unit-tests
+    only:
+        - dev
+    before_script:
+        - pip install -r requirements.txt
+    script:
+        - nosetests --with-coverage --cover-package=hathor --cover-html
