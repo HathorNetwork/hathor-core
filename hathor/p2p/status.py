@@ -6,6 +6,11 @@ import time
 
 
 class StatusResource(resource.Resource):
+    """ Implements an status web server API, which responds with a summary
+    of the node state.
+
+    You must run with option `--status <PORT>`.
+    """
     isLeaf = True
 
     def __init__(self, factory):

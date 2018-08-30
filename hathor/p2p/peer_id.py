@@ -17,6 +17,14 @@ class InvalidPeerIdException(Exception):
 
 
 class PeerId(object):
+    """ Identify a peer, even when it is disconnected.
+
+    The public_key and private_key are used to ensure that a new connection
+    that claims to be this peer is really from this peer.
+
+    The entrypoints are strings that describe a way to connect to this peer.
+    Usually a peer will have only one entrypoint.
+    """
     def __init__(self, auto_generate_keys=True):
         self.id = None
         self.private_key = None
@@ -27,6 +35,10 @@ class PeerId(object):
             self.generate_keys()
 
     def merge(self, other):
+        """ Merge two PeerId objects, checking that they have the same
+        id, public_key, and private_key. The entrypoints are merged without
+        duplicating their entries.
+        """
         assert(self.id == other.id)
 
         # Copy public key if `self` doesn't have it and `other` does.
@@ -48,6 +60,9 @@ class PeerId(object):
                 self.entrypoints.append(ep)
 
     def generate_keys(self, key_size=2048):
+        """ Generate a random pair of private key and public key.
+        It also calculates the id of this peer, based on its public key.
+        """
         # https://security.stackexchange.com/questions/5096/rsa-vs-dsa-for-ssh-authentication-keys
         self.private_key = rsa.generate_private_key(
             public_exponent=65537,
@@ -58,6 +73,8 @@ class PeerId(object):
         self.id = self.calculate_id()
 
     def calculate_id(self):
+        """ Calculate and return the id based on the public key.
+        """
         public_der = self.public_key.public_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
@@ -67,6 +84,8 @@ class PeerId(object):
         return h2.hexdigest()
 
     def get_public_key(self):
+        """ Return the public key in DER encoding as an `str`.
+        """
         public_der = self.public_key.public_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
@@ -74,6 +93,8 @@ class PeerId(object):
         return base64.b64encode(public_der).decode('utf-8')
 
     def sign(self, data):
+        """ Sign any data (of type `bytes`).
+        """
         return self.private_key.sign(
             data,
             padding.PSS(
@@ -84,6 +105,8 @@ class PeerId(object):
         )
 
     def verify_signature(self, signature, data):
+        """ Verify a signature of a data. Both must be of type `bytes`.
+        """
         try:
             self.public_key.verify(
                 signature,
@@ -101,6 +124,11 @@ class PeerId(object):
 
     @classmethod
     def create_from_json(cls, data):
+        """ Create a new PeerId from a JSON.
+
+        It is used both to load a PeerId from disk and to create a PeerId
+        from a peer connection.
+        """
         obj = cls(auto_generate_keys=False)
         obj.id = data['id']
 
@@ -125,6 +153,10 @@ class PeerId(object):
         return obj
 
     def validate(self):
+        """ Return `True` if the following conditions are valid:
+          (i) public key and private key matches;
+         (ii) the id matches with the public key.
+        """
         if self.private_key and not self.public_key:
             self.public_key = self.private_key.public_key()
 
@@ -146,6 +178,11 @@ class PeerId(object):
                 raise InvalidPeerIdException('private/public pair does not match')
 
     def to_json(self, include_private_key=False):
+        """ Return a JSON serialization of the object.
+
+        By default, it will not include the private key. If you would like to add
+        it, use the parameter `include_private_key`.
+        """
         public_der = self.public_key.public_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
@@ -154,6 +191,7 @@ class PeerId(object):
         result = {
             'id': self.id,
             'pubKey': base64.b64encode(public_der).decode('utf-8'),
+            'entrypoints': self.entrypoints,
         }
         if include_private_key:
             private_der = self.private_key.private_bytes(
@@ -167,6 +205,8 @@ class PeerId(object):
         return result
 
     def save_to_file(self, path):
+        """ Save the object to a JSON file.
+        """
         data = self.to_json(include_private_key=True)
         fp = open(path, 'w')
         json.dump(data, fp, indent=4)
