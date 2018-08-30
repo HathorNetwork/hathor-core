@@ -70,7 +70,12 @@ Then, install `hathor-python`:
     git clone git@gitlab.com:HathorNetwork/hathor-python.git
     cd hathor-python/
     virtualenv --python=python3 venv
+    source ./venv/bin/activate
     pip install -r requirements.txt
+
+Then, generate your `peer_id.json`:
+
+    python gen_peer_id.py >peer_id.json
 
 Finally, you can run your node.
 
@@ -84,6 +89,7 @@ Create a `run_hathord` with execution permission:
     #!/bin/bash
     source ./venv/bin/activate
     python main.py --hostname <your_hostname_or_public_ip_address> --listen tcp:40403 --testnet
+    exec python main.py --hostname <YOUR_HOSTNAME_OR_PUBLIC_IP_ADDRESS> --listen tcp:40403 --status 8001 --testnet --peer peer_id.json
 
 There follows a configuration template to Supervisor:
 
@@ -96,7 +102,7 @@ There follows a configuration template to Supervisor:
 
 Recommended aliases to control `hathord`:
 
-    alias hathord-stop='sudo supervisorctl stop hathord'
-    alias hathord-start='sudo supervisorctl start hathord'
-    alias hathord-status='sudo supervisorctl status hathord'
-    alias hathord-restart='sudo supervisorctl restart hathord'
+    alias stop-hathord='sudo supervisorctl stop hathord'
+    alias start-hathord='sudo supervisorctl start hathord'
+    alias status-hathord='sudo supervisorctl status hathord'
+    alias restart-hathord='sudo supervisorctl restart hathord'
