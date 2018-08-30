@@ -1,6 +1,7 @@
 # encoding: utf-8
 
 from twisted.internet import protocol, reactor, endpoints
+from twisted.internet.task import LoopingCall
 import twisted.names.client
 
 from hathor.p2p.protocol import HathorLineReceiver
@@ -32,11 +33,16 @@ class HathorFactory(protocol.Factory):
 
         self.my_peer = peer_id
         self.default_port = default_port
+        self.lc_reconnect = LoopingCall(self.reconnect_to_all)
         super(HathorFactory, self).__init__()
 
     def startFactory(self):
         self.connected_peers = {}
         self.start_time = time.time()
+        self.lc_reconnect.start(5)
+
+    def stopFactory(self):
+        self.lc_reconnect.stop()
 
     def buildProtocol(self, addr):
         return MyServerProtocol(self)
@@ -46,6 +52,10 @@ class HathorFactory(protocol.Factory):
             return
         self.peer_storage.add_or_merge(peer)
         self.connect_to_if_not_connected(peer)
+
+    def reconnect_to_all(self):
+        for peer in self.peer_storage.values():
+            self.connect_to_if_not_connected(peer)
 
     def connect_to_if_not_connected(self, peer):
         if not peer.entrypoints:
