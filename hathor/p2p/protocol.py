@@ -4,8 +4,8 @@ from twisted.protocols.basic import LineReceiver
 from twisted.internet.protocol import Protocol
 from twisted.internet.task import LoopingCall
 from twisted.python import log
-from autobahn.asyncio.websocket import WebSocketServerProtocol
-from autobahn.asyncio.websocket import WebSocketClientProtocol
+from autobahn.twisted.websocket import WebSocketServerProtocol
+from autobahn.twisted.websocket import WebSocketClientProtocol
 
 from hathor.p2p.peer_id import PeerId
 import hathor
