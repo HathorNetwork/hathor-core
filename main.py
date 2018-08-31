@@ -36,7 +36,8 @@ if __name__ == '__main__':
     print('Hathor v{}'.format(hathor.__version__))
     print('My peer id is', peer_id.id)
 
-    factory = HathorFactory(peer_id=peer_id, hostname=args.hostname)
+    network = 'testnet'
+    factory = HathorFactory(peer_id=peer_id, network=network, hostname=args.hostname)
 
     if args.testnet:
         factory.dns_seed_lookup_text('testnet.hathor.network')

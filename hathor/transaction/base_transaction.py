@@ -12,7 +12,7 @@ class BaseTransaction:
     """Hathor base transaction"""
 
     def __init__(self, nonce=0, timestamp=None, version=1,
-                 weight=0, inputs=[], outputs=[], parents=[], hash=None, storage=None, is_block=True):
+                 weight=0, inputs=None, outputs=None, parents=None, hash=None, storage=None, is_block=True):
         """
             Nonce: nonce used for the proof-of-work
             Timestamp: moment of creation
@@ -25,12 +25,51 @@ class BaseTransaction:
         self.timestamp = timestamp or int(datetime.datetime.now().timestamp())
         self.version = version
         self.weight = weight
-        self.inputs = inputs
-        self.outputs = outputs
-        self.parents = parents
+        self.inputs = inputs or []
+        self.outputs = outputs or []
+        self.parents = parents or []
         self.storage = storage or get_default_transaction_storage()
         self.hash = hash
         self.is_block = is_block
+
+    @classmethod
+    def create_from_struct(cls, struct_bytes):
+        def unpack(fmt, buf):
+            size = struct.calcsize(fmt)
+            return struct.unpack(fmt, buf[:size]), buf[size:]
+
+        def unpack_len(n, buf):
+            return buf[:n], buf[n:]
+
+        buf = struct_bytes
+
+        tx = cls()
+        (tx.version, tx.weight, tx.timestamp, inputs_len, outputs_len, parents_len), buf = unpack('!HfIHHH', buf)
+
+        for _ in range(parents_len):
+            parent, buf = unpack_len(32, buf)  # 256bits
+            tx.parents.append(parent)
+
+        for _ in range(inputs_len):
+            txin = Input()
+            txin.tx_id, buf = unpack_len(32, buf)  # 256bits
+            (txin.index, data_len), buf = unpack('!BH', buf)
+            tx.data, buf = unpack_len(data_len, buf)
+            tx.inputs.append(txin)
+
+        for _ in range(outputs_len):
+            txout = Output()
+            (txout.value, script_len), buf = unpack('!IH', buf)
+            tx.script = unpack_len(script_len, buf)
+            tx.ouputs.append(txout)
+
+        (tx.nonce,), buf = unpack('!I', buf)
+
+        if len(buf) > 0:
+            raise ValueError('Invalid sequence of bytes')
+
+        tx.hash = tx.calculate_hash()
+        return tx
 
     def __eq__(self, other):
         """Override the default Equals behavior"""
@@ -74,7 +113,7 @@ class BaseTransaction:
 
         for input_tx in self.inputs:
             struct_bytes += input_tx.tx_id
-            struct_bytes += bytes([input_tx.index])
+            struct_bytes += bytes([input_tx.index])  # 1 byte
             # data length
             struct_bytes += int_to_bytes(len(input_tx.data), 2)
             struct_bytes += input_tx.data

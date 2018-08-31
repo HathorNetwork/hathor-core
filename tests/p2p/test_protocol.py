@@ -12,7 +12,8 @@ class HathorProtocolTestCase(unittest.TestCase):
     def setUp(self):
         log.startLogging(sys.stdout)
         peer_id = PeerId()
-        factory = HathorFactory(peer_id)
+        self.network = 'testnet'
+        factory = HathorFactory(peer_id=peer_id, network=self.network)
 
         self.proto = factory.buildProtocol(('127.0.0.1', 0))
         self.tr = proto_helpers.StringTransport()
@@ -60,7 +61,7 @@ class HathorProtocolTestCase(unittest.TestCase):
 
     def test_valid_hello(self):
         peer_id = PeerId()
-        factory = HathorFactory(peer_id)
+        factory = HathorFactory(peer_id=peer_id, network=self.network)
         proto2 = factory.buildProtocol(('127.0.0.1', 0))
         tr2 = proto_helpers.StringTransport()
         proto2.makeConnection(tr2)

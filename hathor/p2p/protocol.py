@@ -8,6 +8,8 @@ from autobahn.twisted.websocket import WebSocketServerProtocol
 from autobahn.twisted.websocket import WebSocketClientProtocol
 
 from hathor.p2p.peer_id import PeerId
+from hathor.transaction import Transaction, Block
+from hathor.storage.exceptions import TransactionDoesNotExist
 import hathor
 
 from enum import Enum
@@ -42,6 +44,9 @@ class HathorProtocol(Protocol):
         READY = 'READY'
 
     class ProtocolCommand(Enum):
+        # ---
+        # Peer-to-peer Control Messages
+        # ---
         # Identifies the app and network the peer would like to connect to.
         HELLO = 'HELLO'
 
@@ -63,6 +68,16 @@ class HathorProtocol(Protocol):
 
         # Notifies an error.
         ERROR = 'ERROR'
+
+        # ---
+        # Hathor Specific Messages
+        # ---
+        GET_DATA = 'GET-DATA'
+        DATA = 'DATA'
+
+        GET_TIPS = 'GET-TIPS'
+        GET_BLOCKS = 'GET-BLOCKS'
+        HASHES = 'HASHES'
 
     def __init__(self, factory):
         self.factory = factory
@@ -139,15 +154,24 @@ class HathorProtocol(Protocol):
 
         # Then, when the peer is ready to communicate, the other commands are available.
         cmd_map = {
+            # p2p control messages
             self.ProtocolCommand.PING: self.handle_ping,
             self.ProtocolCommand.PONG: self.handle_pong,
             self.ProtocolCommand.GET_PEERS: self.handle_get_peers,
             self.ProtocolCommand.PEERS: self.handle_peers,
+
+            # hathor messages
+            self.ProtocolCommand.GET_DATA: self.handle_get_data,
+            self.ProtocolCommand.DATA: self.handle_data,
         }
 
         fn = cmd_map.get(cmd)
         if fn is not None:
-            fn(payload)
+            try:
+                fn(payload)
+            except Exception as e:
+                print('Unhandled Exception:', e)
+                raise
         else:
             print('Command invalid.')
 
@@ -167,6 +191,46 @@ class HathorProtocol(Protocol):
         """ Executed when an ERROR command is received.
         """
         print('ERROR', payload)
+
+    def send_get_data(self, hash_hex):
+        """ Send a GET-DATA message, requesting the data of a given hash.
+        """
+        print('send_get_data', hash_hex)
+        self.send_message(self.ProtocolCommand.GET_DATA, hash_hex)
+
+    def handle_get_data(self, payload):
+        hash_hex = payload
+        print('handle_get_data', hash_hex)
+        try:
+            tx = self.factory.tx_storage.get_transaction_by_hash(hash_hex)
+            payload_type = 'tx' if not tx.is_block else 'block'
+            payload = base64.b64encode(tx.get_struct()).decode('ascii')
+            self.send_data(payload_type, payload)
+        except TransactionDoesNotExist:
+            # TODO Send NOT-FOUND?
+            self.send_data('')
+        except Exception as e:
+            print(e)
+
+    def send_data(self, payload_type, payload):
+        self.send_message(self.ProtocolCommand.DATA, '{}:{}'.format(payload_type, payload))
+
+    def handle_data(self, payload):
+        if not payload:
+            return
+        payload_type, _, payload = payload.partition(':')
+        data = base64.b64decode(payload)
+        if payload_type == 'tx':
+            tx = Transaction.create_from_struct(data)
+        elif payload_type == 'block':
+            tx = Block.create_from_struct(data)
+        else:
+            raise ValueError('Unknown payload load')
+
+        if self.factory.tx_storage.get_genesis_by_hash_bytes(tx.hash):
+            print('!!! WE JUST GOT A GENESIS')
+            return
+        self.factory.on_new_tx(self, tx)
 
     def send_get_peers(self):
         """ Send a GET-PEERS command, requesting a list of nodes.
@@ -212,6 +276,7 @@ class HathorProtocol(Protocol):
         remote = self.transport.getPeer()
         data = {
             'app': 'Hathor v{}'.format(hathor.__version__),
+            'network': self.factory.network,
             'remote_address': '{}:{}'.format(remote.host, remote.port),
             'nonce': self.hello_nonce,
         }
@@ -227,13 +292,17 @@ class HathorProtocol(Protocol):
             self.send_error_and_close_connection('Invalid payload.')
             return
 
-        if {'app', 'remote_address', 'nonce'} != set(data):
+        if {'app', 'network', 'remote_address', 'nonce'} != set(data):
             self.send_error_and_close_connection('Invalid payload.')
             return
 
         app = 'Hathor v{}'.format(hathor.__version__)
         if data['app'] != app:
             print('WARNING Different app versions:', data['app'])
+
+        if data['network'] != self.factory.network:
+            self.send_error_and_close_connection('Wrong network.')
+            return
 
         nonce = data['nonce']
         self.state = self.PeerState.PEER_ID
@@ -269,7 +338,7 @@ class HathorProtocol(Protocol):
         peer = PeerId.create_from_json(data)
         peer.validate()
 
-        if peer == self.factory.my_peer:
+        if peer.id == self.factory.my_peer.id:
             self.send_error_and_close_connection('Are you my clone?!')
             return
 
@@ -324,8 +393,6 @@ class HathorProtocol(Protocol):
         """ Executed when a PONG message is received. It only updates
         the last time a message has been received by this peer.
         """
-        remote = self.transport.getPeer()
-        print('Got pong from', remote)
         self.last_message = time.time()
 
 

@@ -4,14 +4,15 @@ from twisted.internet import protocol, reactor, endpoints
 from twisted.internet.task import LoopingCall
 import twisted.names.client
 
-from hathor.p2p.protocol import HathorLineReceiver
 from hathor.p2p.peer_storage import PeerStorage
+from hathor.storage.memory_storage import TransactionMemoryStorage
 
 import time
 import socket
 import random
 
 
+from hathor.p2p.protocol import HathorLineReceiver
 MyServerProtocol = HathorLineReceiver
 MyClientProtocol = HathorLineReceiver
 
@@ -24,8 +25,9 @@ class HathorFactory(protocol.Factory):
     """ HathorFactory is used to generate HathorProtocol objects. It stores the network state,
     including the known peers, connected peers, and so on. It basically manages the p2p network.
     """
-    def __init__(self, peer_id, hostname=None, peer_storage=None, default_port=40403):
+    def __init__(self, peer_id, network, hostname=None, tx_storage=None, peer_storage=None, default_port=40403):
         """ peer_id: PeerId of this node.
+        network: Which network will this node join? Usually either testnet or mainnet.
         hostname: The hostname of this node is used to generate its entrypoints.
         peer_storage: An instance of PeerStorage. It is instanciated by default if it is not given.
         default_port: Network default port, when only peers IP addresses are discovered.
@@ -38,8 +40,10 @@ class HathorFactory(protocol.Factory):
 
         # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
         self.peer_storage = peer_storage or PeerStorage()
+        self.tx_storage = tx_storage or TransactionMemoryStorage()
 
         self.my_peer = peer_id
+        self.network = network
         self.default_port = default_port
 
         # A timer to try to reconnect to the disconnect known peers.
@@ -58,6 +62,15 @@ class HathorFactory(protocol.Factory):
 
     def buildProtocol(self, addr):
         return MyServerProtocol(self)
+
+    def on_new_tx(self, conn, tx):
+        # XXX What if we receive a genesis?
+        if not self.tx_storage.transaction_exists_by_hash_bytes(tx.hash):
+            self.tx_storage.save_transaction(tx)
+
+        meta = self.tx_storage.get_metadata_by_hash_bytes(tx.hash)
+        meta.peers.add(conn.peer_id.id)
+        self.tx_storage.save_metadata(meta)
 
     def update_peer(self, peer):
         """ Update a peer information in our storage, and instantly attempt to connect

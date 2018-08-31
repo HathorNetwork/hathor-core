@@ -10,6 +10,7 @@ pep8:
     allow_failure: yes
     only:
         - dev
+        - web
     before_script:
         - pip install flake8
     script:
@@ -20,7 +21,9 @@ unit-tests:
     image: python:3.6
     only:
         - dev
+        - web
     before_script:
         - pip install -r requirements.txt
     script:
-        - nosetests --with-coverage --cover-package=hathor --cover-html
+        - nosetests --with-coverage --cover-package=hathor
+    coverage: '/^TOTAL.*\s+(\d+\%)$/'

@@ -7,3 +7,4 @@ class TransactionMetadata:
         """
         self.hash = hash
         self.unspent_outputs = unspent_outputs
+        self.received_by = set()

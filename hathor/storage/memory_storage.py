@@ -11,6 +11,10 @@ class TransactionMemoryStorage(TransactionStorage):
         hash_hex = tx.hash.hex()
         self.transactions[hash_hex] = tx
 
+    def transaction_exists_by_hash_bytes(self, hash_bytes):
+        hash_hex = hash_bytes.hex()
+        return hash_hex in self.transactions
+
     def get_transaction_by_hash_bytes(self, hash_bytes):
         genesis = self.get_genesis_by_hash_bytes(hash_bytes)
         if genesis:
@@ -26,7 +30,14 @@ class TransactionMemoryStorage(TransactionStorage):
         hash_bytes = bytes.fromhex(hash_hex)
         return self.get_transaction_by_hash_bytes(hash_bytes)
 
-    def get_metadata(self, hash_hex):
+    def get_metadata_by_hash_bytes(self, hash_bytes):
+        hash_hex = hash_bytes.hex()
+        if hash_hex in self.metadata:
+            return self.metadata[hash_hex]
+        else:
+            raise TransactionMetadataDoesNotExist
+
+    def get_metadata_by_hash(self, hash_hex):
         if hash_hex in self.metadata:
             return self.metadata[hash_hex]
         else:

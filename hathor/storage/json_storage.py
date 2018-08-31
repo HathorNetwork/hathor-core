@@ -19,6 +19,11 @@ class TransactionJSONStorage(TransactionStorage):
         filepath = os.path.join(self.path, filename)
         return filepath
 
+    def transaction_exists_by_hash_bytes(self, hash_bytes):
+        hash_hex = hash_bytes.hex()
+        filepath = self.generate_filepath(hash_hex)
+        return os.path.isfile(filepath)
+
     def save_to_json(self, filepath, data):
         with open(filepath, 'w') as json_file:
             json_file.write(json.dumps(data, indent=4))
