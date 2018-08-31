@@ -2,6 +2,9 @@ class TransactionStorage:
     def save_transaction(self, tx):
         raise NotImplementedError
 
+    def transaction_exists_by_hash_bytes(self, hash_bytes):
+        raise NotImplementedError
+
     def get_transaction_by_hash_bytes(self, hash_bytes):
         raise NotImplementedError
 
