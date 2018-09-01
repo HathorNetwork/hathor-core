@@ -1,4 +1,4 @@
-from hathor.transaction.base_transaction import BaseTransaction
+from hathor.transaction.base_transaction import BaseTransaction, Output
 from math import log
 
 
@@ -22,8 +22,7 @@ class Block(BaseTransaction):
         """
             weight = 7 + log2(hash_rate)
         """
-        # TODO Get current hash rate from the network
-        return 7 + log(self.hash_rate, 2)
+        return 7 + log(self.network_hashrate, 2)
 
     def verify(self):
         """
@@ -39,10 +38,11 @@ class Block(BaseTransaction):
         self.verify_pow()
 
 
-# TODO add block output
+GENESIS_OUTPUT = Output(1000, b'\x98\xf1+e\x936\xa1\x87M\xdb\xae7\x83\x7f\xa8\xa3\x9ff\xb5=')
 BLOCK_GENESIS = Block(
-    hash=b'\x00\x00\x00*\xa1^\x86\x18tZk\x7f\x88\xdbM\r\xb0Bq\xb02.j\x00\x86H6\x9c\x94iH}',
-    nonce=2458042,
+    hash=b'\x00\x00\x08N\x8a\xb4*\xe07!\x06\x90\x85J4R\xbal\x8bL\x0e\x02VqW\x00>\xa4\xa3d\x00\x8a',
+    nonce=3508191,
     timestamp=1533643200,
-    weight=24
+    weight=24,
+    outputs=[GENESIS_OUTPUT]
 )

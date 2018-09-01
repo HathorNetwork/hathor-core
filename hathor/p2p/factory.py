@@ -5,7 +5,7 @@ from twisted.internet.task import LoopingCall
 import twisted.names.client
 
 from hathor.p2p.peer_storage import PeerStorage
-from hathor.storage.memory_storage import TransactionMemoryStorage
+from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 
 import time
 import socket

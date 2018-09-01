@@ -1,7 +1,7 @@
 import unittest
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.base_transaction import Input, Output
-from hathor.storage.json_storage import TransactionJSONStorage
+from hathor.transaction.storage.json_storage import TransactionJSONStorage
 
 
 class BasicTransactionAndStorageTest(unittest.TestCase):
