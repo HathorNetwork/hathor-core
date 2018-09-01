@@ -5,8 +5,11 @@ from twisted.internet.task import LoopingCall
 import twisted.names.client
 
 from hathor.p2p.peer_storage import PeerStorage
+from hathor.transaction import Block, TxOutput
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
+from hathor.wallet import Wallet
 
+from math import log
 import time
 import socket
 import random
@@ -25,7 +28,8 @@ class HathorFactory(protocol.Factory):
     """ HathorFactory is used to generate HathorProtocol objects. It stores the network state,
     including the known peers, connected peers, and so on. It basically manages the p2p network.
     """
-    def __init__(self, peer_id, network, hostname=None, tx_storage=None, peer_storage=None, default_port=40403):
+    def __init__(self, peer_id, network, hostname=None,
+                 wallet=None, tx_storage=None, peer_storage=None, default_port=40403):
         """ peer_id: PeerId of this node.
         network: Which network will this node join? Usually either testnet or mainnet.
         hostname: The hostname of this node is used to generate its entrypoints.
@@ -41,10 +45,15 @@ class HathorFactory(protocol.Factory):
         # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
         self.peer_storage = peer_storage or PeerStorage()
         self.tx_storage = tx_storage or TransactionMemoryStorage()
+        self.wallet = wallet or Wallet()
 
         self.my_peer = peer_id
         self.network = network
         self.default_port = default_port
+
+        self.blocks_per_difficulty = 5
+        self.avg_time_between_blocks = 12
+        self.block_weight = 18
 
         # A timer to try to reconnect to the disconnect known peers.
         self.lc_reconnect = LoopingCall(self.reconnect_to_all)
@@ -63,14 +72,60 @@ class HathorFactory(protocol.Factory):
     def buildProtocol(self, addr):
         return MyServerProtocol(self)
 
-    def on_new_tx(self, conn, tx):
+    def propagate_tx(self, tx):
+        self.tx_storage.save_transaction(tx)
+        self.on_new_tx(tx)
+        for conn in self.connected_peers.values():
+            conn.send_data(tx)
+
+    def generate_mining_block(self):
+        # TODO Cache to prevent unnecessary processing.
+        address = self.wallet.get_unused_address(mark_as_used=False)
+        # TODO Get maximum allowed amount.
+        amount = 10000
+        tx_outputs = [
+            TxOutput(amount, address)
+        ]
+        tip_blocks = self.tx_storage.get_tip_blocks()
+        tip_txs = self.tx_storage.get_tip_transactions(count=2)
+        parents = tip_blocks + tip_txs
+        return Block(weight=self.block_weight, outputs=tx_outputs, parents=parents, storage=self.tx_storage)
+
+    def on_new_tx(self, tx, conn=None):
         # XXX What if we receive a genesis?
         if not self.tx_storage.transaction_exists_by_hash_bytes(tx.hash):
             self.tx_storage.save_transaction(tx)
 
-        meta = self.tx_storage.get_metadata_by_hash_bytes(tx.hash)
-        meta.peers.add(conn.peer_id.id)
-        self.tx_storage.save_metadata(meta)
+        if tx.is_block:
+            count_blocks = self.tx_storage.count_blocks()
+            if count_blocks % self.blocks_per_difficulty == 0:
+                print('Adjusting difficulty...')
+                avg_dt, new_weight = self.calculate_block_difficulty()
+                print('Block weight updated: avg_dt={:.2f} target_avg_dt={:.2f} {:6.2f} -> {:6.2f}'.format(
+                    avg_dt,
+                    self.avg_time_between_blocks,
+                    self.block_weight,
+                    new_weight
+                ))
+                self.block_weight = new_weight
+
+        # meta = self.tx_storage.get_metadata_by_hash_bytes(tx.hash)
+        # meta.peers.add(conn.peer_id.id)
+        # self.tx_storage.save_metadata(meta)
+
+    def calculate_block_difficulty(self):
+        blocks = self.tx_storage.get_latest_blocks(self.blocks_per_difficulty)
+        dt = blocks[0].timestamp - blocks[-1].timestamp
+
+        new_weight = (
+            self.block_weight
+            + log(self.avg_time_between_blocks, 2)
+            + log(self.blocks_per_difficulty, 2)
+            - log(dt, 2)
+        )
+
+        avg_dt = float(dt) / self.blocks_per_difficulty
+        return avg_dt, new_weight
 
     def update_peer(self, peer):
         """ Update a peer information in our storage, and instantly attempt to connect

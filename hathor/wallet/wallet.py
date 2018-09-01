@@ -1,28 +1,40 @@
-from hathor.wallet.generate_keys import generate_keys, load_keys
-from hathor.wallet.storage import WalletStorage
 from hathor.wallet.data import WalletData
-from hathor.transaction.storage import default_transaction_storage
+from hathor.wallet.keypair import KeyPair
 from hathor.transaction.storage.exceptions import TransactionMetadataDoesNotExist
 from hathor.transaction.base_transaction import Input, Output
 from hathor.transaction.transaction import Transaction
-from hathor.util import get_input_data, get_public_key_bytes, get_address_from_public_key
-import os
+from hathor.util import get_input_data, get_public_key_bytes
+from hathor.util import get_address_from_public_key
 
 
-class Wallet:
+class Wallet(object):
+    def __init__(self, keys=None, tx_storage=None):
+        self.keys = keys or {}
+        self.tx_storage = tx_storage
+        self.unused_keys = set(key for key in self.keys.values() if not key.used)
 
-    def __init__(self, dir='', create_keys=False, storage=None, transaction_storage=None):
-        keys_file = os.path.join(dir, 'keys.json')
-        if create_keys:
-            # Create new keys
-            self.private_key, self.public_key = generate_keys(keys_file)
+    def get_unused_address(self, mark_as_used=True):
+        if len(self.unused_keys) == 0:
+            self.generate_keys()
+
+        if mark_as_used:
+            address = self.unused_keys.pop()
+            keypair = self.keys[address]
+            keypair.used = True
         else:
-            # Load keys from disk
-            self.private_key, self.public_key = load_keys(keys_file)
+            address = next(iter(self.unused_keys))
+        return address
 
-        self.dir = dir
-        self.storage = storage or WalletStorage(path=self.dir)
-        self.transaction_storage = transaction_storage or default_transaction_storage()
+    def generate_keys(self, count=10):
+        for _ in range(count):
+            key = KeyPair()
+            address = key.get_address_b58()
+            self.keys[address] = key
+            self.unused_keys.add(address)
+
+    def select_inputs_for_amount(self, value):
+        self.get_inputs_from_amount(value)
+        pass
 
     def prepare_transaction_without_inputs(self, outputs):
         """
@@ -53,14 +65,14 @@ class Wallet:
 
         tx_outputs = self.handle_return_amount(tx_inputs, tx_outputs)
 
-        return Transaction(inputs=tx_inputs, outputs=tx_outputs, storage=self.transaction_storage)
+        return Transaction(inputs=tx_inputs, outputs=tx_outputs, storage=self.tx_storage)
 
     def handle_return_amount(self, inputs, outputs):
         sum_outputs = sum([output.value for output in outputs])
 
         sum_inputs = 0
         for tx_input in inputs:
-            tx_obj = self.transaction_storage.get_transaction_by_hash_bytes(tx_input.tx_id)
+            tx_obj = self.tx_storage.get_transaction_by_hash_bytes(tx_input.tx_id)
             sum_inputs += tx_obj.outputs[tx_input.index].value
 
         if sum_inputs < sum_outputs:
@@ -83,13 +95,13 @@ class Wallet:
         received_tx = self.storage.get_all_tx_received()
         for received in received_tx:
             try:
-                metadata = self.transaction_storage.get_metadata_by_hash_bytes(received.tx_id)
+                metadata = self.tx_storage.get_metadata_by_hash_bytes(received.tx_id)
                 if received.index in metadata.spent_outputs:
                     continue
             except TransactionMetadataDoesNotExist:
                 pass
 
-            tx_obj = self.transaction_storage.get_transaction_by_hash_bytes(received.tx_id)
+            tx_obj = self.tx_storage.get_transaction_by_hash_bytes(received.tx_id)
             inputs_tx.append({'tx_id': received.tx_id, 'index': received.index})
             total_inputs_amount += tx_obj.outputs[received.index].value
 

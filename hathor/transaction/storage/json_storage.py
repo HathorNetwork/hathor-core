@@ -1,15 +1,22 @@
-import json
-import os
-import re
-import base64
 from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionMetadataDoesNotExist
 from hathor.transaction.storage.transaction_metadata import TransactionMetadata
 
+import json
+import os
+import re
+import base64
+
 
 class TransactionJSONStorage(TransactionStorage):
-    def __init__(self, path=''):
+    def __init__(self, path='./'):
+        self.mkdir_if_needed(path)
         self.path = path
+        super().__init__()
+
+    def mkdir_if_needed(self, path):
+        if not os.path.isdir(path):
+            os.makedirs(path)
 
     def generate_filepath(self, hash_hex):
         filename = 'tx_{}.json'.format(hash_hex)
@@ -39,6 +46,7 @@ class TransactionJSONStorage(TransactionStorage):
             raise error
 
     def save_transaction(self, tx):
+        super().save_transaction(tx)
         data = self.serialize(tx)
         filepath = self.generate_filepath(data['hash'])
         self.save_to_json(filepath, data)
@@ -161,12 +169,17 @@ class TransactionJSONStorage(TransactionStorage):
         return tm
 
     def get_all_transactions(self):
-        path = self.path or '.'  # if self.path is '' we have to put as '.'
+        from hathor.transaction.genesis import genesis_transactions
+        for tx in genesis_transactions(self):
+            yield tx
+
+        path = self.path
         files = os.listdir(path)
         pattern = r'tx_[\dabcdef]{64}\.json'
 
         for f in files:
             if re.match(pattern, f):
-                transaction = self.get_transaction_by_hash(f[3:-5])
-                if not transaction.is_block:
-                    yield transaction
+                # TODO Return a proxy that will load the transaction only when it is used.
+                hash_hex = f[3:-5]
+                transaction = self.get_transaction_by_hash(hash_hex)
+                yield transaction
