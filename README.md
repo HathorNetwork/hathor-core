@@ -26,7 +26,7 @@ Then, run a client which connects to the server. You may run as many clients as 
 
     python main.py --bootstrap tcp:127.0.0.1:8000
 
-To run many nodes in one machine:
+To run multiple nodes in one server:
 
 	python main.py --hostname localhost --listen tcp:8000 --status 8080 --peer peer0.json --data ./peer0/data/
 	python main.py --hostname localhost --listen tcp:8001 --status 8081 --peer peer1.json --data ./peer1/data/
