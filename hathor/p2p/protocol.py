@@ -203,16 +203,16 @@ class HathorProtocol(Protocol):
         print('handle_get_data', hash_hex)
         try:
             tx = self.factory.tx_storage.get_transaction_by_hash(hash_hex)
-            payload_type = 'tx' if not tx.is_block else 'block'
-            payload = base64.b64encode(tx.get_struct()).decode('ascii')
-            self.send_data(payload_type, payload)
+            self.send_data(tx)
         except TransactionDoesNotExist:
             # TODO Send NOT-FOUND?
             self.send_data('')
         except Exception as e:
             print(e)
 
-    def send_data(self, payload_type, payload):
+    def send_data(self, tx):
+        payload_type = 'tx' if not tx.is_block else 'block'
+        payload = base64.b64encode(tx.get_struct()).decode('ascii')
         self.send_message(self.ProtocolCommand.DATA, '{}:{}'.format(payload_type, payload))
 
     def handle_data(self, payload):
@@ -230,7 +230,7 @@ class HathorProtocol(Protocol):
         if self.factory.tx_storage.get_genesis_by_hash_bytes(tx.hash):
             print('!!! WE JUST GOT A GENESIS')
             return
-        self.factory.on_new_tx(self, tx)
+        self.factory.on_new_tx(tx, conn=self)
 
     def send_get_peers(self):
         """ Send a GET-PEERS command, requesting a list of nodes.

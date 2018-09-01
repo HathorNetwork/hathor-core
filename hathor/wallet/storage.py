@@ -15,7 +15,7 @@ class WalletStorage:
 
     def save_data(self, wallet_data):
         data = self.serialize_data(wallet_data)
-        filepath = self.generate_filepath(data['tx_id'])
+        filepath = self.generate_filepath(wallet_data.tx_id.hex())
         with open(filepath, 'w') as json_file:
             json_file.write(json.dumps(data, indent=4))
 

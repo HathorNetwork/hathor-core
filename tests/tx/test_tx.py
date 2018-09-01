@@ -1,7 +1,7 @@
 import unittest
-from hathor.transaction.transaction import Transaction
-from hathor.transaction.base_transaction import Input, Output
-from hathor.transaction.storage.json_storage import TransactionJSONStorage
+from hathor.transaction import Transaction
+from hathor.transaction import TxInput, TxOutput
+from hathor.transaction.storage import TransactionJSONStorage
 
 
 class BasicTransactionAndStorageTest(unittest.TestCase):
@@ -14,8 +14,7 @@ class BasicTransactionAndStorageTest(unittest.TestCase):
         # TODO for now just use any bytes as data.
         # When we start validating output script and input data, we shoudl change
         data = tx_id
-        inputs = []
-        inputs.append(Input(tx_id, index, data))
+        inputs = [TxInput(tx_id, index, data)]
 
         # output
         # TODO for now just use any bytes as script.
@@ -23,7 +22,7 @@ class BasicTransactionAndStorageTest(unittest.TestCase):
         script = bytes.fromhex('24042b5a5ea5f9cf1889bcae9291b68162eda656e8a440363861b5a74efdaec2')
         value = 4
         outputs = []
-        outputs.append(Output(value, script))
+        outputs.append(TxOutput(value, script))
 
         tx1 = Transaction(
             inputs=inputs,
@@ -33,7 +32,7 @@ class BasicTransactionAndStorageTest(unittest.TestCase):
         tx1.resolve()
 
         # save transaction
-        storage = TransactionJSONStorage(path='/tmp/')
+        storage = TransactionJSONStorage(path='/tmp/hathor-tests/')
         storage.save_transaction(tx1)
 
         # retrieve saved transaction

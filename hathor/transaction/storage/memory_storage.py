@@ -6,8 +6,10 @@ class TransactionMemoryStorage(TransactionStorage):
     def __init__(self):
         self.transactions = {}
         self.metadata = {}
+        super().__init__()
 
     def save_transaction(self, tx):
+        super().save_transaction(tx)
         hash_hex = tx.hash.hex()
         self.transactions[hash_hex] = tx
 
@@ -49,6 +51,8 @@ class TransactionMemoryStorage(TransactionStorage):
 
     def get_all_transactions(self):
         """Return all transactions that are not blocks"""
-        for t in self.transactions.values():
-            if not t.is_block:
-                yield t
+        from hathor.transaction.genesis import genesis_transactions
+        for tx in genesis_transactions(self):
+            yield tx
+        for tx in self.transactions.values():
+            yield tx

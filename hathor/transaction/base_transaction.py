@@ -1,8 +1,10 @@
-import datetime
+# encoding: utf-8
+
+from hathor.transaction.exceptions import PowError, WeightError
+
+import time
 import struct
 import hashlib
-from hathor.transaction.storage import genesis_transactions, default_transaction_storage
-from hathor.transaction.exceptions import PowError, WeightError
 
 MAX_NONCE = 2 ** 32
 MAX_NUM_INPUTS = MAX_NUM_OUTPUTS = 256
@@ -22,13 +24,13 @@ class BaseTransaction:
             Parents: transactions you are confirming (2 transactions and 1 block - in case of a block only)
         """
         self.nonce = nonce
-        self.timestamp = timestamp or int(datetime.datetime.now().timestamp())
+        self.timestamp = timestamp or int(time.time())
         self.version = version
         self.weight = weight
         self.inputs = inputs or []
         self.outputs = outputs or []
         self.parents = parents or []
-        self.storage = storage or default_transaction_storage()
+        self.storage = storage
         self.hash = hash
         self.is_block = is_block
 
@@ -58,10 +60,10 @@ class BaseTransaction:
             tx.inputs.append(txin)
 
         for _ in range(outputs_len):
-            txout = Output()
-            (txout.value, script_len), buf = unpack('!IH', buf)
-            tx.script = unpack_len(script_len, buf)
-            tx.ouputs.append(txout)
+            (value, script_len), buf = unpack('!IH', buf)
+            script, buf = unpack_len(script_len, buf)
+            txout = Output(value, script)
+            tx.outputs.append(txout)
 
         (tx.nonce,), buf = unpack('!I', buf)
 
@@ -87,7 +89,8 @@ class BaseTransaction:
 
     @property
     def is_genesis(self):
-        for genesis in genesis_transactions():
+        from hathor.transaction.genesis import genesis_transactions
+        for genesis in genesis_transactions(self.storage):
             if self == genesis:
                 return True
         return False
@@ -167,14 +170,23 @@ class BaseTransaction:
         part1 = self.calculate_hash1()
         return self.calculate_hash2(part1)
 
-    def mining(self):
+    def update_hash(self):
+        self.hash = self.calculate_hash()
+
+    def mining(self, start=0, end=MAX_NONCE):
         """Starts mining until it solves the problem (finds the nonce that satisfies the conditions)"""
-        self.weight = self.calculate_weight()
         pow_part1 = self.calculate_hash1()
         target = self.target
-        while self.nonce < MAX_NONCE:
-            result = self.calculate_hash2(pow_part1.copy())
+        self.nonce = start
+        last_time = time.time()
+        while self.nonce < end:
+            now = time.time()
+            if now - last_time > 2:
+                self.timestamp = int(now)
+                pow_part1 = self.calculate_hash1()
+                last_time = now
 
+            result = self.calculate_hash2(pow_part1.copy())
             if int(result.hex(), 16) < target:
                 return result
             self.nonce += 1

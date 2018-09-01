@@ -1,7 +1,6 @@
 from hathor.transaction.base_transaction import BaseTransaction, MAX_NUM_INPUTS, MAX_NUM_OUTPUTS
 from hathor.transaction.exceptions import InputOutputMismatch, TooManyInputs, TooManyOutputs, DoubleSpend
 from hathor.transaction.storage.exceptions import TransactionMetadataDoesNotExist
-from hathor.transaction.storage.transaction_metadata import TransactionMetadata
 from hathor.util import validate_signature, validate_script
 from math import log
 
@@ -132,23 +131,9 @@ class Transaction(BaseTransaction):
                 metadata = self.get_tx_metadata(input_tx)
                 metadata.spent_outputs.append(input_tx.index)
             except TransactionMetadataDoesNotExist:
+                from hathor.transaction.storage.transaction_metadata import TransactionMetadata
                 metadata = TransactionMetadata(hash=input_tx.tx_id, spent_outputs=[input_tx.index])
 
             self.storage.save_metadata(metadata)
 
         self.storage.save_transaction(self)
-
-
-TX_GENESIS1 = Transaction(
-    hash=b'\x00\x00\x00\xfc\xa3]%\xc2\xb5u\xbe\xc0T0\x8a\x0c$\xc3\xd0\xb7\x98\xf1&\x8b\xecV.\xc1`\xce\x0fh',
-    nonce=17262397,
-    timestamp=1533643201,
-    weight=24
-)
-
-TX_GENESIS2 = Transaction(
-    hash=b'\x00\x00\x00@\xec\x1e\xe7\x14\xcc\x1a\x8b^I\xfc\xed\x84\x84\x84\xab\x80\x81\xb9s\x94\xc9=\xa1B\\Nay',
-    nonce=15665735,
-    timestamp=1533643202,
-    weight=24
-)
