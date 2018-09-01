@@ -1,7 +1,7 @@
 import datetime
 import struct
-from hashlib import sha256
-from hathor.storage.transaction_storage import get_default_transaction_storage, get_genesis_transactions
+import hashlib
+from hathor.transaction.storage import genesis_transactions, default_transaction_storage
 from hathor.transaction.exceptions import PowError, WeightError
 
 MAX_NONCE = 2 ** 32
@@ -28,7 +28,7 @@ class BaseTransaction:
         self.inputs = inputs or []
         self.outputs = outputs or []
         self.parents = parents or []
-        self.storage = storage or get_default_transaction_storage()
+        self.storage = storage or default_transaction_storage()
         self.hash = hash
         self.is_block = is_block
 
@@ -87,7 +87,7 @@ class BaseTransaction:
 
     @property
     def is_genesis(self):
-        for genesis in get_genesis_transactions():
+        for genesis in genesis_transactions():
             if self == genesis:
                 return True
         return False
@@ -153,14 +153,14 @@ class BaseTransaction:
 
     def calculate_hash1(self):
         """Returns the fixed part of the hash"""
-        calculate_hash1 = sha256()
+        calculate_hash1 = hashlib.sha256()
         calculate_hash1.update(self.get_struct_without_nonce())
         return calculate_hash1
 
     def calculate_hash2(self, part1):
         """Returns the full hash of the hash from first part"""
         part1.update(self.nonce.to_bytes(4, byteorder='big', signed=False))
-        return sha256(part1.digest()).digest()
+        return hashlib.sha256(part1.digest()).digest()
 
     def calculate_hash(self):
         """Returns the full hash of the hash"""

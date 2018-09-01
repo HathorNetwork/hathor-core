@@ -1,8 +1,10 @@
 import json
 import os
+import re
 import base64
-from hathor.storage.transaction_storage import TransactionStorage
-from hathor.storage.exceptions import TransactionDoesNotExist, TransactionMetadataDoesNotExist
+from hathor.transaction.storage.transaction_storage import TransactionStorage
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionMetadataDoesNotExist
+from hathor.transaction.storage.transaction_metadata import TransactionMetadata
 
 
 class TransactionJSONStorage(TransactionStorage):
@@ -137,20 +139,34 @@ class TransactionJSONStorage(TransactionStorage):
         filepath = self.generate_metadata_filepath(data['hash'])
         self.save_to_json(filepath, data)
 
-    def get_metadata(self, hash_hex):
+    def get_metadata_by_hash(self, hash_hex):
         filepath = self.generate_metadata_filepath(hash_hex)
         data = self.load_from_json(filepath, TransactionMetadataDoesNotExist)
         return self.load_metadata(data)
 
+    def get_metadata_by_hash_bytes(self, hash_bytes):
+        hash_hex = hash_bytes.hex()
+        return self.get_metadata_by_hash(hash_hex)
+
     def serialize_metadata(self, metadata):
         data = {}
         data['hash'] = metadata.hash.hex()
-        data['unspent_outputs'] = metadata.unspent_outputs
+        data['spent_outputs'] = metadata.spent_outputs
         return data
 
     def load_metadata(self, data):
-        from hathor.storage.transaction_metadata import TransactionMetadata
         tm = TransactionMetadata()
         tm.hash = bytes.fromhex(data['hash'])
-        tm.unspent_outputs = data['unspent_outputs']
+        tm.spent_outputs = data['spent_outputs']
         return tm
+
+    def get_all_transactions(self):
+        path = self.path or '.'  # if self.path is '' we have to put as '.'
+        files = os.listdir(path)
+        pattern = r'tx_[\dabcdef]{64}\.json'
+
+        for f in files:
+            if re.match(pattern, f):
+                transaction = self.get_transaction_by_hash(f[3:-5])
+                if not transaction.is_block:
+                    yield transaction

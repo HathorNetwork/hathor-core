@@ -9,7 +9,7 @@ from autobahn.twisted.websocket import WebSocketClientProtocol
 
 from hathor.p2p.peer_id import PeerId
 from hathor.transaction import Transaction, Block
-from hathor.storage.exceptions import TransactionDoesNotExist
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 import hathor
 
 from enum import Enum

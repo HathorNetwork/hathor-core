@@ -1,5 +1,5 @@
-from hathor.storage.transaction_storage import TransactionStorage
-from hathor.storage.exceptions import TransactionDoesNotExist, TransactionMetadataDoesNotExist
+from hathor.transaction.storage.transaction_storage import TransactionStorage
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionMetadataDoesNotExist
 
 
 class TransactionMemoryStorage(TransactionStorage):
@@ -46,3 +46,9 @@ class TransactionMemoryStorage(TransactionStorage):
     def save_metadata(self, metadata):
         hash_hex = metadata.hash.hex()
         self.metadata[hash_hex] = metadata
+
+    def get_all_transactions(self):
+        """Return all transactions that are not blocks"""
+        for t in self.transactions.values():
+            if not t.is_block:
+                yield t
