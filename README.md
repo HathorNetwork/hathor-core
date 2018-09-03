@@ -70,8 +70,8 @@ How to create a full-node in Ubuntu 16.04
 First, install all packages:
 
     sudo apt update
-    sudo apt install python3 python3-dev python3-setuptools build-essential
-    sudo apt install supervisor  # optional
+    sudo apt install --assume-yes python3 python3-dev python3-setuptools build-essential
+    sudo apt install --assume-yes supervisor  # optional
     sudo easy_install3 pip
     pip3 install virtualenv --user
 
@@ -98,7 +98,6 @@ Create a `run_hathord` with execution permission:
 
     #!/bin/bash
     source ./venv/bin/activate
-    python main.py --hostname <your_hostname_or_public_ip_address> --listen tcp:40403 --testnet
     exec python main.py --hostname <YOUR_HOSTNAME_OR_PUBLIC_IP_ADDRESS> --listen tcp:40403 --status 8001 --testnet --peer peer_id.json
 
 There follows a configuration template to Supervisor:
@@ -116,3 +115,4 @@ Recommended aliases to control `hathord`:
     alias start-hathord='sudo supervisorctl start hathord'
     alias status-hathord='sudo supervisorctl status hathord'
     alias restart-hathord='sudo supervisorctl restart hathord'
+    alias p2p-hathord='curl http://localhost:8001/'

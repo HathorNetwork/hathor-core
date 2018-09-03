@@ -3,7 +3,9 @@
 from multiprocessing import Process, Queue
 
 from hathor.transaction import Block
+from hathor.transaction.exceptions import HathorError
 
+import datetime
 import requests
 import base64
 import argparse
@@ -11,7 +13,7 @@ import argparse
 
 def worker(q_in, q_out):
     block, start, end = q_in.get()
-    block.mining(start, end)
+    block.mining(start, end, sleep=0)
     q_out.put(block.nonce)
 
 
@@ -41,9 +43,19 @@ if __name__ == '__main__':
 
         block.nonce = q_out.get()
         block.update_hash()
-        block_bytes = block.get_struct()
+        try:
+            block.verify()
+        except HathorError as e:
+            pass
+        else:
+            block_bytes = block.get_struct()
 
-        print('New block found: {} (nonce={}, weight={})'.format(block.hash.hex(), block.nonce, block.weight))
-        print('')
+            print('[{}] New block found: {} (nonce={}, weight={})'.format(
+                datetime.datetime.now(),
+                block.hash.hex(),
+                block.nonce,
+                block.weight
+            ))
+            print('')
 
-        requests.post(args.url, data={'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
+            requests.post(args.url, data={'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})

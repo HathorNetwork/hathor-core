@@ -52,8 +52,10 @@ class HathorFactory(protocol.Factory):
         self.default_port = default_port
 
         self.blocks_per_difficulty = 5
-        self.avg_time_between_blocks = 12
-        self.block_weight = 18
+        self.avg_time_between_blocks = 64  # in seconds
+        self.min_block_weight = 10
+        self.block_weight = 10  # starting difficulty (10 is too low for production)
+        self.max_allowed_block_weight_change = 2
 
         # A timer to try to reconnect to the disconnect known peers.
         self.lc_reconnect = LoopingCall(self.reconnect_to_all)
@@ -97,6 +99,7 @@ class HathorFactory(protocol.Factory):
             self.tx_storage.save_transaction(tx)
 
         if tx.is_block:
+            print('New block found: {}'.format(tx.hash.hex()))
             count_blocks = self.tx_storage.count_blocks()
             if count_blocks % self.blocks_per_difficulty == 0:
                 print('Adjusting difficulty...')
@@ -117,12 +120,24 @@ class HathorFactory(protocol.Factory):
         blocks = self.tx_storage.get_latest_blocks(self.blocks_per_difficulty)
         dt = blocks[0].timestamp - blocks[-1].timestamp
 
-        new_weight = (
-            self.block_weight
-            + log(self.avg_time_between_blocks, 2)
+        if dt <= 0:
+            dt = 1  # Strange situation, so, let's just increase difficulty.
+
+        delta = (
+            log(self.avg_time_between_blocks, 2)
             + log(self.blocks_per_difficulty, 2)
             - log(dt, 2)
         )
+
+        if delta > self.max_allowed_block_weight_change:
+            delta = self.max_allowed_block_weight_change
+        elif delta < -self.max_allowed_block_weight_change:
+            delta = -self.max_allowed_block_weight_change
+
+        new_weight = self.block_weight + delta
+
+        if new_weight < self.min_block_weight:
+            new_weight = self.min_block_weight
 
         avg_dt = float(dt) / self.blocks_per_difficulty
         return avg_dt, new_weight

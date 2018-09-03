@@ -4,7 +4,7 @@ import json
 import base64
 from hathor.transaction import Transaction, TxInput, TxOutput, MAX_NUM_INPUTS, MAX_NUM_OUTPUTS
 from hathor.transaction.storage import TransactionMemoryStorage
-from hathor.transaction.exceptions import InputOutputMismatch, WeightError, InputSignatureError, \
+from hathor.transaction.exceptions import InputOutputMismatch, InputSignatureError, \
                                           InputPublicKeyError, TooManyInputs, TooManyOutputs
 from hathor.util import get_private_key_from_bytes, get_public_key_from_bytes, get_input_data, \
                         get_address_from_public_key
@@ -38,23 +38,23 @@ class BasicTransaction(unittest.TestCase):
         self.private_key_random = get_private_key_from_bytes(base64.b64decode(random_priv))
         self.public_key_random = get_public_key_from_bytes(base64.b64decode(random_pub))
 
-    def test_wrong_weight(self):
-        # we don't care about input data or tx id, so us anything
-        random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
-        tx_input = TxInput(
-            tx_id=random_bytes,
-            index=0,
-            data=random_bytes
-        )
-        tx = Transaction(
-            weight=0,
-            hash=random_bytes,
-            inputs=[tx_input],
-            storage=self.tx_storage
-        )
-
-        with self.assertRaises(WeightError):
-            tx.verify_pow()
+    # def test_wrong_weight(self):
+    #     # we don't care about input data or tx id, so us anything
+    #     random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
+    #     tx_input = TxInput(
+    #         tx_id=random_bytes,
+    #         index=0,
+    #         data=random_bytes
+    #     )
+    #     tx = Transaction(
+    #         weight=0,
+    #         hash=random_bytes,
+    #         inputs=[tx_input],
+    #         storage=self.tx_storage
+    #     )
+    #
+    #     with self.assertRaises(WeightError):
+    #         tx.verify_pow()
 
     def test_input_output_match(self):
         genesis_block = self.genesis_blocks[0]
