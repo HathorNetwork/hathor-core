@@ -7,7 +7,7 @@ from math import log
 
 class Transaction(BaseTransaction):
     def __init__(self, nonce=0, timestamp=None, version=1,
-                 weight=0, inputs=[], outputs=[], parents=[], hash=None, storage=None):
+                 weight=0, inputs=None, outputs=None, parents=None, hash=None, storage=None):
         """
             Creating new init just to make sure inputs will always be empty array
             Inputs: all inputs that are being used (empty in case of a block)
@@ -17,9 +17,9 @@ class Transaction(BaseTransaction):
             timestamp=timestamp,
             version=version,
             weight=weight,
-            inputs=inputs,
-            outputs=outputs,
-            parents=parents,
+            inputs=inputs or [],
+            outputs=outputs or [],
+            parents=parents or [],
             hash=hash,
             storage=storage,
             is_block=False
@@ -129,7 +129,7 @@ class Transaction(BaseTransaction):
         for input_tx in self.inputs:
             try:
                 metadata = self.get_tx_metadata(input_tx)
-                metadata.spent_outputs.append(input_tx.index)
+                metadata.spent_outputs.add(input_tx.index)
             except TransactionMetadataDoesNotExist:
                 from hathor.transaction.storage.transaction_metadata import TransactionMetadata
                 metadata = TransactionMetadata(hash=input_tx.tx_id, spent_outputs=[input_tx.index])

@@ -4,14 +4,14 @@ from math import log
 
 class Block(BaseTransaction):
     def __init__(self, nonce=0, timestamp=None, version=1, weight=0,
-                 outputs=[], parents=[], hash=None, storage=None):
+                 outputs=None, parents=None, hash=None, storage=None):
         super().__init__(
             nonce=nonce,
             timestamp=timestamp,
             version=version,
             weight=weight,
-            outputs=outputs,
-            parents=parents,
+            outputs=outputs or [],
+            parents=parents or [],
             hash=hash,
             storage=storage,
             is_block=True

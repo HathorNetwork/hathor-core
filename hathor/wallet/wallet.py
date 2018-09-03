@@ -3,7 +3,7 @@ from hathor.wallet.keypair import KeyPair
 from hathor.transaction.storage.exceptions import TransactionMetadataDoesNotExist
 from hathor.transaction.base_transaction import Input, Output
 from hathor.transaction.transaction import Transaction
-from hathor.util import get_input_data, get_public_key_bytes
+from hathor.util import get_input_data
 from hathor.util import get_address_from_public_key
 
 
@@ -81,8 +81,7 @@ class Wallet(object):
         elif sum_inputs > sum_outputs:
             difference = sum_inputs - sum_outputs
 
-            public_key_bytes = get_public_key_bytes(self.public_key)
-            address = get_address_from_public_key(public_key_bytes)
+            address = get_address_from_public_key(self.public_key)
             new_output = Output(difference, address)
             outputs.append(new_output)
 
@@ -115,8 +114,7 @@ class Wallet(object):
         return inputs_tx
 
     def transaction_received(self, tx):
-        public_key_bytes = get_public_key_bytes(self.public_key)
-        address = get_address_from_public_key(public_key_bytes)
+        address = get_address_from_public_key(self.public_key)
 
         for index, output in enumerate(tx.outputs):
             if output.script == address:
