@@ -53,10 +53,10 @@ class BaseTransaction:
             tx.parents.append(parent)
 
         for _ in range(inputs_len):
-            txin = Input()
-            txin.tx_id, buf = unpack_len(32, buf)  # 256bits
-            (txin.index, data_len), buf = unpack('!BH', buf)
-            tx.data, buf = unpack_len(data_len, buf)
+            input_tx_id, buf = unpack_len(32, buf)  # 256bits
+            (input_index, data_len), buf = unpack('!BH', buf)
+            input_data, buf = unpack_len(data_len, buf)
+            txin = Input(input_tx_id, input_index, input_data)
             tx.inputs.append(txin)
 
         for _ in range(outputs_len):

@@ -159,13 +159,13 @@ class TransactionJSONStorage(TransactionStorage):
     def serialize_metadata(self, metadata):
         data = {}
         data['hash'] = metadata.hash.hex()
-        data['spent_outputs'] = metadata.spent_outputs
+        data['spent_outputs'] = list(metadata.spent_outputs)
         return data
 
     def load_metadata(self, data):
         tm = TransactionMetadata()
         tm.hash = bytes.fromhex(data['hash'])
-        tm.spent_outputs = data['spent_outputs']
+        tm.spent_outputs = set(data['spent_outputs'])
         return tm
 
     def get_all_transactions(self):
