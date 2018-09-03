@@ -1,6 +1,6 @@
 # encoding: utf-8
 
-from hathor.transaction.exceptions import PowError, WeightError
+from hathor.transaction.exceptions import PowError
 
 import time
 import struct
@@ -140,8 +140,8 @@ class BaseTransaction:
 
     def verify_pow(self):
         """Verify proof-of-work and that the weight is correct"""
-        if self.calculate_weight() != self.weight:
-            raise WeightError
+        # if abs(self.calculate_weight() - self.weight) > 1e-6:
+        #     raise WeightError
         if int(self.hash.hex(), 16) >= self.target:
             raise PowError
 
@@ -173,7 +173,7 @@ class BaseTransaction:
     def update_hash(self):
         self.hash = self.calculate_hash()
 
-    def mining(self, start=0, end=MAX_NONCE):
+    def mining(self, start=0, end=MAX_NONCE, sleep_seconds=0):
         """Starts mining until it solves the problem (finds the nonce that satisfies the conditions)"""
         pow_part1 = self.calculate_hash1()
         target = self.target
@@ -185,11 +185,14 @@ class BaseTransaction:
                 self.timestamp = int(now)
                 pow_part1 = self.calculate_hash1()
                 last_time = now
+                self.nonce = start
 
             result = self.calculate_hash2(pow_part1.copy())
             if int(result.hex(), 16) < target:
                 return result
             self.nonce += 1
+            if sleep_seconds > 0:
+                time.sleep(sleep_seconds)
         return None
 
 
