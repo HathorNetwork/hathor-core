@@ -12,19 +12,23 @@ import argparse
 
 
 def worker(q_in, q_out):
-    block, start, end = q_in.get()
-    block.mining(start, end, sleep=0)
+    block, start, end, sleep_seconds = q_in.get()
+    block.mining(start, end, sleep_seconds=sleep_seconds)
     q_out.put(block.nonce)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('url', help='URL to get mining bytes')
-    parser.add_argument('n', type=int, help='Number of mining processes')
+    parser.add_argument('--sleep', type=float, help='Sleep every 2 seconds (in seconds)')
     args = parser.parse_args()
 
     print('Hathor CPU Miner v1.0.0')
     print('URL: {}'.format(args.url))
+
+    sleep_seconds = 0
+    if args.sleep:
+        sleep_seconds = args.sleep
 
     while True:
         print('Requesting mining information...')
@@ -38,7 +42,7 @@ if __name__ == '__main__':
         q_in, q_out = Queue(), Queue()
         p = Process(target=worker, args=(q_in, q_out))
         p.start()
-        q_in.put((block, 0, 2**32))
+        q_in.put((block, 0, 2**32, sleep_seconds))
         p.join()
 
         block.nonce = q_out.get()
