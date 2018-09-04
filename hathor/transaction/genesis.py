@@ -8,6 +8,7 @@ def genesis_transactions(tx_storage):
         nonce=17262397,
         timestamp=1533643201,
         weight=24,
+        height=1,
         storage=tx_storage,
     )
 
@@ -16,6 +17,7 @@ def genesis_transactions(tx_storage):
         nonce=15665735,
         timestamp=1533643202,
         weight=24,
+        height=1,
         storage=tx_storage,
     )
 
@@ -25,6 +27,7 @@ def genesis_transactions(tx_storage):
         nonce=3508191,
         timestamp=1533643200,
         weight=24,
+        height=1,
         outputs=[GENESIS_OUTPUT],
         storage=tx_storage,
     )

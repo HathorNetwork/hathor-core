@@ -28,10 +28,13 @@ class TransactionJSONStorage(TransactionStorage):
         filepath = os.path.join(self.path, filename)
         return filepath
 
-    def transaction_exists_by_hash_bytes(self, hash_bytes):
-        hash_hex = hash_bytes.hex()
+    def transaction_exists_by_hash(self, hash_hex):
         filepath = self.generate_filepath(hash_hex)
         return os.path.isfile(filepath)
+
+    def transaction_exists_by_hash_bytes(self, hash_bytes):
+        hash_hex = hash_bytes.hex()
+        return self.transaction_exists_by_hash(hash_hex)
 
     def save_to_json(self, filepath, data):
         with open(filepath, 'w') as json_file:
@@ -50,6 +53,48 @@ class TransactionJSONStorage(TransactionStorage):
         data = self.serialize(tx)
         filepath = self.generate_filepath(data['hash'])
         self.save_to_json(filepath, data)
+        if tx.is_block:
+            self._save_blockhash_by_height(tx)
+
+    def generate_blocks_at_height_filepath(self, height):
+        filename = 'blks_h_{}.json'.format(height)
+        filepath = os.path.join(self.path, filename)
+        return filepath
+
+    def _save_blockhash_by_height(self, block):
+        """Adds the given block's hash string to the list of block hashes at the given height.
+
+        Input is a block object, but only the hash is saved, in a file with name based on the height of the block.
+        """
+        # Load existing blocks at height, if any.
+        height = block.height
+        data, filepath = self._get_block_hashes_at_height(height)
+        hash_hex = block.hash.hex()
+        if hash_hex not in data:
+            data.append(hash_hex)
+            self.save_to_json(filepath, data)
+
+    def _get_block_hashes_at_height(self, height):
+        """Returns a tuple of list of hashes of blocks at the given height and the storage filename."""
+        filepath = self.generate_blocks_at_height_filepath(height)
+        try:
+            data = self.load_from_json(filepath, FileNotFoundError)
+        except FileNotFoundError:
+            data = []
+        return data, filepath
+
+    def get_block_hashes_at_height(self, height):
+        """Returns a tuple of list of hashes of blocks at the given height and the storage filename."""
+        data, _ = self._get_block_hashes_at_height(height)
+        return data
+
+    def get_blocks_at_height(self, height):
+        """Returns a list of blocks at the given height."""
+        hashes, _ = self._get_block_hashes_at_height(height)
+        data = []
+        for hash_hex in hashes:
+            data.append(self.get_transaction_by_hash(hash_hex))
+        return data
 
     def get_transaction_by_hash_bytes(self, hash_bytes):
         genesis = self.get_genesis_by_hash_bytes(hash_bytes)
@@ -72,6 +117,7 @@ class TransactionJSONStorage(TransactionStorage):
         data['timestamp'] = tx.timestamp
         data['version'] = tx.version
         data['weight'] = tx.weight
+        data['height'] = tx.height
 
         data['parents'] = []
         for parent in tx.parents:
@@ -79,6 +125,10 @@ class TransactionJSONStorage(TransactionStorage):
 
         data['inputs'] = []
         # Blocks don't have inputs
+        # TODO(epnichols): Refactor so that blocks/transactions know how to serialize themselves? Then we could do
+        #                  something like data['inputs'] = tx.serialize_inputs()
+        #                                 data['outputs'] = tx.serialize_outputs()
+        #                  without needing the if statement here.
         if not tx.is_block:
             for input_tx in tx.inputs:
                 data_input = {}

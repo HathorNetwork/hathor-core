@@ -9,6 +9,8 @@ from hathor.transaction import Block, TxOutput
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.wallet import Wallet
 
+from collections import defaultdict
+from enum import Enum
 from math import log
 import time
 import socket
@@ -28,12 +30,17 @@ class HathorFactory(protocol.Factory):
     """ HathorFactory is used to generate HathorProtocol objects. It stores the network state,
     including the known peers, connected peers, and so on. It basically manages the p2p network.
     """
+
+    class NodeSyncState(Enum):
+        SYNCING = 'SYNCING'  # This node still synchronizing with the network
+        SYNCED = 'SYNCED'    # This node is up-to-date with the network
+
     def __init__(self, peer_id, network, hostname=None,
                  wallet=None, tx_storage=None, peer_storage=None, default_port=40403):
         """ peer_id: PeerId of this node.
         network: Which network will this node join? Usually either testnet or mainnet.
         hostname: The hostname of this node is used to generate its entrypoints.
-        peer_storage: An instance of PeerStorage. It is instanciated by default if it is not given.
+        peer_storage: An instance of PeerStorage. It is instantiated by default if it is not given.
         default_port: Network default port, when only peers IP addresses are discovered.
         """
         # Hostname, used to be accessed by other peers.
@@ -45,6 +52,10 @@ class HathorFactory(protocol.Factory):
         # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
         self.peer_storage = peer_storage or PeerStorage()
         self.tx_storage = tx_storage or TransactionMemoryStorage()
+
+        # Map of peer_id to the best block height reported by that peer.
+        self.peer_best_heights = defaultdict(int)
+
         self.wallet = wallet or Wallet()
 
         self.my_peer = peer_id
@@ -57,8 +68,24 @@ class HathorFactory(protocol.Factory):
         self.block_weight = 10  # starting difficulty (10 is too low for production)
         self.max_allowed_block_weight_change = 2
 
+        self.node_sync_state = self.NodeSyncState.SYNCING
+
+        # A set of blocks that we should download, according to peers.
+        self.blocks_to_download = set()
+
+        # A set of transactions that we want to download, to validate blocks we've received.
+        self.txs_to_download = set()
+
+        # Next peer to bother with download requests. TODO: Move to separate class.
+        self.prev_peer_idx = 0
+
+        # Temporary storage for transactions we're downloading while syncing. These transactions/blocks have not
+        # yet been connected with the genesis DAG. Once they connect, we move them to the main tx_storage.
+        self.tx_storage_sync = TransactionMemoryStorage()  # TODO: Should there be a file storage option?
+
         # A timer to try to reconnect to the disconnect known peers.
         self.lc_reconnect = LoopingCall(self.reconnect_to_all)
+
         super(HathorFactory, self).__init__()
 
     def startFactory(self):
@@ -77,8 +104,11 @@ class HathorFactory(protocol.Factory):
     def propagate_tx(self, tx):
         self.tx_storage.save_transaction(tx)
         self.on_new_tx(tx)
-        for conn in self.connected_peers.values():
-            conn.send_data(tx)
+
+        # Only propagate transactions once we are sufficiently syned up with the rest of the network.
+        if self.node_sync_state == self.NodeSyncState.SYNCED:
+            for conn in self.connected_peers.values():
+                conn.send_data(tx)
 
     def generate_mining_block(self):
         # TODO Cache to prevent unnecessary processing.
@@ -89,17 +119,25 @@ class HathorFactory(protocol.Factory):
             TxOutput(amount, address)
         ]
         tip_blocks = self.tx_storage.get_tip_blocks()
+        new_height = self.tx_storage.get_best_height() + 1
         tip_txs = self.tx_storage.get_tip_transactions(count=2)
         parents = tip_blocks + tip_txs
-        return Block(weight=self.block_weight, outputs=tx_outputs, parents=parents, storage=self.tx_storage)
+        return Block(weight=self.block_weight, outputs=tx_outputs, parents=parents, storage=self.tx_storage,
+                     height=new_height)
 
     def on_new_tx(self, tx, conn=None):
         # XXX What if we receive a genesis?
+
+        # Save the transaction if we don't have it.
         if not self.tx_storage.transaction_exists_by_hash_bytes(tx.hash):
-            self.tx_storage.save_transaction(tx)
+            # However, if the transaction doesn't connect to the genesis DAG, just save in temporary storage.
+            if tx.compute_genesis_dag_connectivity(self.tx_storage, self.tx_storage_sync):
+                self.tx_storage.save_transaction(tx)
+            elif not self.tx_storage_sync.transaction_exists_by_hash_bytes(tx.hash):
+                self.tx_storage_sync.save_transaction(tx)
 
         if tx.is_block:
-            print('New block found: {}'.format(tx.hash.hex()))
+            print('New block found: {}'.format(tx.hash_hex))
             count_blocks = self.tx_storage.count_blocks()
             if count_blocks % self.blocks_per_difficulty == 0:
                 print('Adjusting difficulty...')
@@ -115,6 +153,32 @@ class HathorFactory(protocol.Factory):
         # meta = self.tx_storage.get_metadata_by_hash_bytes(tx.hash)
         # meta.peers.add(conn.peer_id.id)
         # self.tx_storage.save_metadata(meta)
+
+        # If we're still syncing, let's check if we're ready now.
+        if self.node_sync_state == self.NodeSyncState.SYNCING:
+            self.try_to_synchronize()
+
+    def on_best_height(self, best_height, conn=None):
+        """A "best height" value was received from a peer."""
+        self.peer_best_heights[conn.peer.id] = best_height
+
+        # If this is greater than our best height, request more blocks and transactions.
+        my_best_height = self.tx_storage.get_best_height()
+        if best_height > my_best_height:
+
+            # TODO: When does this state need to change? We can't trust this peer.
+            self.node_sync_state = self.NodeSyncState.SYNCING
+
+            # Send our latest block and request an inventory (list of hashes)
+            conn.send_get_blocks()
+
+    def on_block_hashes_received(self, block_hashes, conn=None):
+        """We have received a list of hashes of blocks we need to download, according to a peer."""
+        hash_set = set(x for x in block_hashes)
+        self.blocks_to_download.update(hash_set)  # Performs a union and stores in blocks_to_download.
+        for h in hash_set:
+            print('Need to download:', h)
+        self.try_to_synchronize()
 
     def calculate_block_difficulty(self):
         blocks = self.tx_storage.get_latest_blocks(self.blocks_per_difficulty)
@@ -154,6 +218,8 @@ class HathorFactory(protocol.Factory):
     def reconnect_to_all(self):
         """ It is called by the `lc_reconnect` timer and tries to connect to all known
         peers.
+
+        TODO(epnichols): Should we always conect to *all*? Should there be a max #?
         """
         for peer in self.peer_storage.values():
             self.connect_to_if_not_connected(peer)
@@ -255,3 +321,89 @@ class HathorFactory(protocol.Factory):
         #     address = x.payload.address
         #     host = socket.inet_ntop(socket.AF_INET6, address)
         raise NotImplemented()
+
+    def schedule_transaction_download(self, hash_hex):
+        """Schedule/request the download of the given transaction from peers.
+
+        Self-throttle to avoid spamming peers. Spread requests out across known peers.  Send retries
+        to different peers."""
+        # TODO: Refactor this functionality into a separate PeerRequestManager class.
+        # TODO: Throttle request rate.
+        # TODO: Send a repeat request to a different peer each time.
+
+        # Try to find a peer we haven't bothered recently.
+        for i in range(len(self.connected_peers)):
+            # Move to next peer.
+            next_peer_idx = (self.prev_peer_idx + 1) % len(self.connected_peers)
+            conn = list(self.connected_peers.values())[next_peer_idx]
+            self.prev_peer_idx = next_peer_idx
+
+            # Check how long it's been since we last bothered this peer.
+            cur_time = time.time()
+            dt_sec = cur_time - conn.last_request
+
+            if dt_sec > 0.5:  # TODO: Pick a good time. 0.5 seconds for now.
+                # Send request.
+                conn.send_get_data(hash_hex)
+                conn.last_request = cur_time
+                break
+        else:
+            # Couldn't find anyone to bother. Will try again later.
+            pass
+
+    def try_to_synchronize_blocks(self):
+        """Tries to perform sync to receive block data."""
+        hashes_to_remove = set()
+        for hash_hex in self.blocks_to_download:
+            # Check if we already have this hash, either in temp or permanent storage. If so, remove from list.
+            if (self.tx_storage.transaction_exists_by_hash(hash_hex) or
+                    self.tx_storage_sync.transaction_exists_by_hash(hash_hex)):
+                hashes_to_remove.add(hash_hex)
+                continue
+
+            # Need to download.
+            self.schedule_transaction_download(hash_hex)
+
+        # Remove blocks we already downloaded.
+        self.blocks_to_download.difference_update(hashes_to_remove)
+
+    def try_to_synchronize_transactions(self):
+        """Tries to perform sync for non-block transactions.
+
+        Move from genesis block towards the latest block, requesting all transactions required to confirm
+        each block before moving on to the next block.
+        """
+        # TODO(epnichols): Logic for moving through blocks by height.
+
+        # TODO(epnichols): Request transactions.
+        pass
+
+    def migrate_transactions_from_storage_sync(self):
+        """Move transactions from self.storage_sync to self.storage once they are verified and connect to the
+        genesis DAG."""
+        # TODO(epnichols).
+
+        pass
+
+    def try_to_synchronize(self):
+        """Checks the current blocks/transactions to determine if this nodes is sufficiently synced up with the rest
+        of the network.  If not, request the missing blocks/transactions.
+
+        Updates the NodeSyncState enum.
+        """
+        # print('sync attempt...')
+        if self.node_sync_state == self.NodeSyncState.SYNCED:
+            # Nothing to do.
+            return
+
+        self.try_to_synchronize_blocks()
+        self.try_to_synchronize_transactions()
+        self.migrate_transactions_from_storage_sync()
+
+        # We're up-to-date once our set of blocks and transactions to download is empty.
+        if not (self.blocks_to_download or self.txs_to_download):
+            self.node_sync_state = self.NodeSyncState.SYNCED
+            print('Done synchronizing!')
+        else:
+            # TODO(epnichols): This seems to call this function way too often...fix!
+            reactor.callLater(0.5, self.try_to_synchronize)

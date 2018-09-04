@@ -18,7 +18,7 @@ class TooManyOutputs(HathorError):
 
 
 class PowError(HathorError):
-    """Proof-of-work is not correct """
+    """Proof-of-work is not correct"""
 
 
 class WeightError(HathorError):
@@ -31,3 +31,11 @@ class InputSignatureError(HathorError):
 
 class InputPublicKeyError(HathorError):
     """Public key does not match address"""
+
+
+class BlockError(HathorError):
+    """Base class for Block-specific errors"""
+
+
+class BlockHeightError(BlockError):
+    """Block not using correct height"""

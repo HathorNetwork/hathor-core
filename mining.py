@@ -54,11 +54,12 @@ if __name__ == '__main__':
         else:
             block_bytes = block.get_struct()
 
-            print('[{}] New block found: {} (nonce={}, weight={})'.format(
+            print('[{}] New block found: {} (nonce={}, weight={}, height={})'.format(
                 datetime.datetime.now(),
                 block.hash.hex(),
                 block.nonce,
-                block.weight
+                block.weight,
+                block.height
             ))
             print('')
 

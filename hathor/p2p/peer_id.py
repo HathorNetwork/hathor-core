@@ -150,14 +150,18 @@ class PeerId(object):
         if 'entrypoints' in data:
             obj.entrypoints = data['entrypoints']
 
+        # TODO(epnichols): call obj.validate()?
         return obj
 
     def validate(self):
         """ Return `True` if the following conditions are valid:
           (i) public key and private key matches;
          (ii) the id matches with the public key.
+
+         TODO(epnichols): Update docs.  Only raises exceptions; doesn't return anything.
         """
         if self.private_key and not self.public_key:
+            # TODO(epnichols): Modifies self.public_key, even though we're calling "validate". Why is state modified?
             self.public_key = self.private_key.public_key()
 
         if self.public_key:
