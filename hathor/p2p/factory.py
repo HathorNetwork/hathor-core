@@ -127,16 +127,12 @@ class HathorFactory(protocol.Factory):
 
     def on_new_tx(self, tx, conn=None):
         # XXX What if we receive a genesis?
-
-        # Save the transaction if we don't have it.
-        if not self.tx_storage.transaction_exists_by_hash_bytes(tx.hash):
-            # However, if the transaction doesn't connect to the genesis DAG, just save in temporary storage.
-            if tx.compute_genesis_dag_connectivity(self.tx_storage, self.tx_storage_sync):
-                self.tx_storage.save_transaction(tx)
-            elif not self.tx_storage_sync.transaction_exists_by_hash_bytes(tx.hash):
-                self.tx_storage_sync.save_transaction(tx)
-
         if tx.is_block:
+            if tx.weight < self.block_weight:
+                print('Invalid new block: weight ({}) is smaller than the minimum block weight ({})'.format(
+                    tx.weight, self.block_weight)
+                )
+                return
             print('New block found: {}'.format(tx.hash_hex))
             count_blocks = self.tx_storage.count_blocks()
             if count_blocks % self.blocks_per_difficulty == 0:
@@ -149,6 +145,15 @@ class HathorFactory(protocol.Factory):
                     new_weight
                 ))
                 self.block_weight = new_weight
+
+        # Save the transaction if we don't have it.
+        if not self.tx_storage.transaction_exists_by_hash_bytes(tx.hash):
+            # However, if the transaction doesn't connect to the genesis DAG, just save in temporary storage.
+            if tx.compute_genesis_dag_connectivity(self.tx_storage, self.tx_storage_sync):
+                self.tx_storage.save_transaction(tx)
+            elif not self.tx_storage_sync.transaction_exists_by_hash_bytes(tx.hash):
+                self.tx_storage_sync.save_transaction(tx)
+
 
         # meta = self.tx_storage.get_metadata_by_hash_bytes(tx.hash)
         # meta.peers.add(conn.peer_id.id)
