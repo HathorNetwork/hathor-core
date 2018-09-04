@@ -72,12 +72,21 @@ class HathorProtocol(Protocol):
         # ---
         # Hathor Specific Messages
         # ---
-        GET_DATA = 'GET-DATA'
-        DATA = 'DATA'
+        GET_DATA = 'GET-DATA'  # Request the data for a specific transaction.
+        DATA = 'DATA'          # Send the data for a specific transaction.
 
         GET_TIPS = 'GET-TIPS'
-        GET_BLOCKS = 'GET-BLOCKS'
+
+        GET_BLOCKS = 'GET-BLOCKS'  # Request a list of hashes for blocks. Payload is the current latest block.
+        BLOCKS = 'BLOCKS'          # Send a list of hashes for blocks. Payload is a list of hashes.
+
         HASHES = 'HASHES'
+
+        # Request the height of the last known block.
+        GET_BEST_HEIGHT = 'GET-BEST-HEIGHT'
+
+        # Send the height of the last known block.
+        BEST_HEIGHT = 'BEST-HEIGHT'
 
     def __init__(self, factory):
         self.factory = factory
@@ -90,6 +99,9 @@ class HathorProtocol(Protocol):
 
         # The last time a message has been received from this peer.
         self.last_message = 0
+
+        # The last time a request was send to this peer.
+        self.last_request = 0
 
         # The current state of the connection.
         self.state = None
@@ -163,6 +175,10 @@ class HathorProtocol(Protocol):
             # hathor messages
             self.ProtocolCommand.GET_DATA: self.handle_get_data,
             self.ProtocolCommand.DATA: self.handle_data,
+            self.ProtocolCommand.GET_BLOCKS: self.handle_get_blocks,
+            self.ProtocolCommand.BLOCKS: self.handle_blocks,
+            self.ProtocolCommand.GET_BEST_HEIGHT: self.handle_get_best_height,
+            self.ProtocolCommand.BEST_HEIGHT: self.handle_best_height,
         }
 
         fn = cmd_map.get(cmd)
@@ -173,7 +189,7 @@ class HathorProtocol(Protocol):
                 print('Unhandled Exception:', e)
                 raise
         else:
-            print('Command invalid.')
+            print('Command invalid:', cmd)
 
     def send_error(self, msg):
         """ Send an error message to the peer.
@@ -231,6 +247,35 @@ class HathorProtocol(Protocol):
             print('!!! WE JUST GOT A GENESIS')
             return
         self.factory.on_new_tx(tx, conn=self)
+
+    def send_get_best_height(self):
+        self.send_message(self.ProtocolCommand.GET_BEST_HEIGHT)
+
+    def handle_get_best_height(self, unused_payload):
+        print('handle_get_best_height')
+        payload = self.factory.tx_storage.get_best_height()
+        self.send_message(self.ProtocolCommand.BEST_HEIGHT, str(payload))
+
+    def handle_best_height(self, payload):
+        print('handle_best_height:', payload)
+        best_height = int(payload)
+        self.factory.on_best_height(best_height, conn=self)
+
+    def send_get_blocks(self):
+        payload = self.factory.tx_storage.get_latest_block().hash_hex
+        self.send_message(self.ProtocolCommand.GET_BLOCKS, payload)
+
+    def handle_get_blocks(self, payload):
+        print('handle_get_blocks;', payload)
+        block_hashes = self.factory.tx_storage.get_block_hashes_after(payload)
+        block_hashes_hex = [x.hex() for x in block_hashes]
+        output_payload = json.dumps(block_hashes_hex)
+        self.send_message(self.ProtocolCommand.BLOCKS, output_payload)
+
+    def handle_blocks(self, payload):
+        print('handle_blocks')
+        block_hashes = json.loads(payload)
+        self.factory.on_block_hashes_received(block_hashes, conn=self)
 
     def send_get_peers(self):
         """ Send a GET-PEERS command, requesting a list of nodes.
@@ -305,6 +350,7 @@ class HathorProtocol(Protocol):
             return
 
         nonce = data['nonce']
+
         self.state = self.PeerState.PEER_ID
         self.send_peer_id(nonce)
 
@@ -364,6 +410,7 @@ class HathorProtocol(Protocol):
         self.lc_ping.start(1)
 
         self.send_get_peers()
+        self.send_get_best_height()
 
     def send_ping_if_necessary(self):
         """ Send a PING command if the connection has been idle for 3 seconds or more.

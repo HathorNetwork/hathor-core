@@ -6,8 +6,8 @@ from math import log
 
 
 class Transaction(BaseTransaction):
-    def __init__(self, nonce=0, timestamp=None, version=1,
-                 weight=0, inputs=None, outputs=None, parents=None, hash=None, storage=None):
+    def __init__(self, nonce=0, timestamp=None, version=1, weight=0, height=0,
+                 inputs=None, outputs=None, parents=None, hash=None, storage=None):
         """
             Creating new init just to make sure inputs will always be empty array
             Inputs: all inputs that are being used (empty in case of a block)
@@ -17,6 +17,7 @@ class Transaction(BaseTransaction):
             timestamp=timestamp,
             version=version,
             weight=weight,
+            height=height,
             inputs=inputs or [],
             outputs=outputs or [],
             parents=parents or [],
@@ -46,8 +47,9 @@ class Transaction(BaseTransaction):
               (vi) solves the pow with the correct weight
              (vii) validates signature of inputs
             (viii) validates public key and output (of the inputs) addresses
+              (ix) validate that both parents are valid
         """
-        # TODO (i), (v) and (viii)
+        # TODO (i), (v), (viii), and (ix)
         if self.is_genesis:
             # TODO do genesis validation
             return

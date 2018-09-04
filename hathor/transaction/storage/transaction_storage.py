@@ -1,4 +1,5 @@
 # encoding: utf-8
+from hathor.transaction.storage.exceptions import TransactionIsNotABlock
 
 
 class TransactionStorage:
@@ -29,6 +30,9 @@ class TransactionStorage:
     def save_transaction(self, tx):
         if tx.is_block:
             self._add_block_to_cache(tx)
+
+    def transaction_exists_by_hash(self, hash_hex):
+        raise NotImplementedError
 
     def transaction_exists_by_hash_bytes(self, hash_bytes):
         raise NotImplementedError
@@ -68,11 +72,43 @@ class TransactionStorage:
             ret.append(bytes.fromhex(hash_hex))
         return ret
 
+    def get_latest_block(self):
+        blocks = self.get_latest_blocks(5)
+
+        assert blocks, 'No tip blocks available, not even genesis!'
+
+        sorted_blocks = sorted(blocks, key=lambda b: b.height, reverse=True)
+        return sorted_blocks[0]
+
+    def get_best_height(self):
+        """Returns the height for the most recent block."""
+        latest_block = self.get_latest_block()
+        return latest_block.height
+
     def get_latest_blocks(self, count=2):
         # XXX Just for testing, transforming generator into list would be impossible with many transactions
         blocks = list(tx for tx in self.get_all_transactions() if tx.is_block)
         blocks = sorted(blocks, key=lambda t: t.timestamp, reverse=True)
         return blocks[:count]
+
+    def get_blocks_at_height(self, height):
+        """Returns a list of all stored block objects with the given height."""
+        raise NotImplementedError
+
+    def get_block_hashes_at_height(self, height):
+        """Returns a list of all stored block objects with the given height."""
+        raise NotImplementedError
+
+    def get_block_hashes_after(self, hash_hex, num_blocks=100):
+        """Retrieve the next num_blocks block hashes after the given hash. Return value is a list of hashes."""
+        hashes = []
+        tx = self.get_transaction_by_hash(hash_hex)
+        if not tx.is_block:
+            raise TransactionIsNotABlock
+        for i in range(tx.height + 1, tx.height + 1 + num_blocks):
+            for h in self.get_block_hashes_at_height(i):
+                hashes.append(h)
+        return hashes
 
     def get_tip_transactions(self, count=2):
         tips = self.get_latest_transactions(count)

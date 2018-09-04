@@ -2,6 +2,7 @@
 
 from hathor.transaction.exceptions import PowError
 
+from enum import Enum
 import time
 import struct
 import hashlib
@@ -13,8 +14,13 @@ MAX_NUM_INPUTS = MAX_NUM_OUTPUTS = 256
 class BaseTransaction:
     """Hathor base transaction"""
 
-    def __init__(self, nonce=0, timestamp=None, version=1,
-                 weight=0, inputs=None, outputs=None, parents=None, hash=None, storage=None, is_block=True):
+    class GenesisDagConnectivity(Enum):
+        UNKNOWN = -1
+        DISCONNECTED = 0
+        CONNECTED = 1
+
+    def __init__(self, nonce=0, timestamp=None, version=1, weight=0, height=0,
+                 inputs=None, outputs=None, parents=None, hash=None, storage=None, is_block=True):
         """
             Nonce: nonce used for the proof-of-work
             Timestamp: moment of creation
@@ -27,12 +33,28 @@ class BaseTransaction:
         self.timestamp = timestamp or int(time.time())
         self.version = version
         self.weight = weight
+        self.height = height  # TODO(epnichols): Is there any useful meaning here for non-block transactions?
         self.inputs = inputs or []
         self.outputs = outputs or []
         self.parents = parents or []
         self.storage = storage
-        self.hash = hash
+        self.hash = hash      # Stored as bytes.
         self.is_block = is_block
+
+        # Locally we keep track of whether this tx is connected back to a genesis tx.
+        self.genesis_dag_connectivity = self.GenesisDagConnectivity.UNKNOWN
+
+    def __repr__(self):
+        class_name = type(self).__name__
+        return ('%s(nonce=%d, timestamp=%s, version=%s, weight=%f, height=%d, inputs=%s, outputs=%s, parents=%s, '
+                'hash=%s, storage=%s)' %
+                (class_name, self.nonce, self.timestamp, self.version, self.weight, self.height,
+                 repr(self.inputs), repr(self.outputs), repr(self.parents), self.hash, repr(self.storage)))
+
+    def __str__(self):
+        class_name = 'Block' if self.is_block else 'Transaction'
+        return ('%s(nonce=%d, timestamp=%s, version=%s, weight=%f, height=%d, hash=%s)' % (class_name, self.nonce,
+                self.timestamp, self.version, self.weight, self.height, self.hash))
 
     @classmethod
     def create_from_struct(cls, struct_bytes):
@@ -46,7 +68,8 @@ class BaseTransaction:
         buf = struct_bytes
 
         tx = cls()
-        (tx.version, tx.weight, tx.timestamp, inputs_len, outputs_len, parents_len), buf = unpack('!HfIHHH', buf)
+        (tx.version, tx.weight, tx.timestamp, tx.height, inputs_len, outputs_len, parents_len), buf = (
+            unpack('!HfIHHHH', buf))
 
         for _ in range(parents_len):
             parent, buf = unpack_len(32, buf)  # 256bits
@@ -78,6 +101,11 @@ class BaseTransaction:
         return self.hash == other.hash
 
     @property
+    def hash_hex(self):
+        """Return the current stored hash in hex string format"""
+        return self.hash.hex()
+
+    @property
     def sum_outputs(self):
         """Sum of the value of the outputs"""
         return sum([output.value for output in self.outputs])
@@ -95,17 +123,80 @@ class BaseTransaction:
                 return True
         return False
 
+    def compute_genesis_dag_connectivity(self, storage, storage_sync, use_memoized_negative_results=True):
+        """Computes the connectivity state from this tx bach to the genesis transactions.
+
+        Returns True if this transaction has a complete path of confirmations back to the genesis transactions.
+        If only one parent has a path back to the genesis DAG, we return False, since there is more work to do
+        do get the graph connected.
+
+        storage is the main storage object for this node, storing validated transactions. We assume
+           "storage" to only have valid transactions that connect back to a genesis transaction.
+        storage_sync is the *temp* storage object for this node, using while downloading data to synchronize.
+
+        Results are memoized in self.genesis_dag_connectivity, so this only has to be calculated once per tx
+        unless new info is added to the DAG. N.B. Memoization only works if storage_sync is in-memory.
+
+        To recompute, re-memoize, and ignore previously-memoized results, set use_memoized_negative_results=False.
+        This only recomputes results that were UNKNOWN or DISCONNECTED; we assume CONNECTED doesn't change; otherwise
+        we would have to recompute conenctivity for every tx in the entire graph.
+        """
+        if (self.genesis_dag_connectivity == self.GenesisDagConnectivity.CONNECTED) or self.is_genesis:
+            return True
+
+        # Ensure that both parents are connected to the genesis DAG.
+        # TODO(epnichols): Is this overkill? Only one path is needed to establish a connection, but if we're in a
+        # state where one parent doesn't have a path back, we shouldn't yet consider this node really connected.
+        connected = True  # Assume connected.
+        for parent_hash_bytes in self.parents:
+            # Find the parent.
+            if storage.transaction_exists_by_hash_bytes(parent_hash_bytes):
+                # If the parent is in the main storage, it's valid.
+                continue
+            if not storage_sync.transaction_exists_by_hash_bytes(parent_hash_bytes):
+                # We can't even find the parent in temp storage. So our state is "disconnected" for now.
+                connected = False
+                break
+
+            # The parent is in storage_sync. Get the data.
+            parent = storage_sync.get_transaction_by_hash_bytes(parent_hash_bytes)
+
+            # Now check the parent connectivity, using memoized results.
+            # TODO: assumes that our temp storage_sync is in-memory; otherwise memoization data will be lost.
+            parent_connected = parent.compute_genesis_dag_connectivity(storage, storage_sync, True)
+            if parent_connected:
+                continue
+            if use_memoized_negative_results:
+                connected = False
+                break
+
+            # Recompute for unknown/disconnected parents
+            assert not use_memoized_negative_results  # Assert here to clarify code logic.
+
+            parent_connected = parent.compute_genesis_dag_connectivity(storage, storage_sync, False)
+            if not parent_connected:
+                connected = False
+                break
+
+        # Done with recursion on parents.
+        # Memoize results and return.
+        self.genesis_dag_connectivity = (
+            self.GenesisDagConnectivity.CONNECTED if connected else self.GenesisDagConnectivity.DISCONNECTED)
+        return connected
+
     def calculate_weight(self):
         raise NotImplementedError
 
     def get_struct_without_nonce(self):
         """Return the struct of the transaction without the nonce field"""
-        # First part is version (H), weight (f), timestamp (I), inputs len (H), outputs len (H) and parents len (H)
+        # First part is version (H), weight (f), timestamp (I), height (H), inputs len (H), outputs len (H) and
+        # parents len (H)
         struct_bytes = struct.pack(
-            '!HfIHHH',
+            '!HfIHHHH',
             self.version,
             self.weight,
             self.timestamp,
+            self.height,
             len(self.inputs),
             len(self.outputs),
             len(self.parents)
