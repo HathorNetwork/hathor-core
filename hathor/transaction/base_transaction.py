@@ -267,7 +267,8 @@ class BaseTransaction:
     def mining(self, start=0, end=MAX_NONCE, sleep_seconds=0):
         """Starts mining until it solves the problem (finds the nonce that satisfies the conditions).
 
-        `sleep_seconds` is the number of seconds the mining algorithm will sleep every 2 seconds.
+        `sleep_seconds` is the number of seconds the mining algorithm will sleep every attempt. You should
+        use it to reduce CPU usage.
         """
         pow_part1 = self.calculate_hash1()
         target = self.target
@@ -281,13 +282,12 @@ class BaseTransaction:
                 last_time = now
                 self.nonce = start
 
-                if sleep_seconds > 0:
-                    time.sleep(sleep_seconds)
-
             result = self.calculate_hash2(pow_part1.copy())
             if int(result.hex(), 16) < target:
                 return result
             self.nonce += 1
+            if sleep_seconds > 0:
+                time.sleep(sleep_seconds)
         return None
 
 
