@@ -101,6 +101,13 @@ class HathorFactory(protocol.Factory):
     def buildProtocol(self, addr):
         return MyServerProtocol(self)
 
+    def on_peer_connect(self, protocol):
+        self.peer_storage.add_or_merge(protocol.peer)
+        self.connected_peers[protocol.peer.id] = protocol
+
+    def on_peer_disconnect(self, protocol):
+        self.connected_peers.pop(protocol.peer.id)
+
     def propagate_tx(self, tx):
         self.tx_storage.save_transaction(tx)
         self.on_new_tx(tx)
@@ -153,7 +160,6 @@ class HathorFactory(protocol.Factory):
                 self.tx_storage.save_transaction(tx)
             elif not self.tx_storage_sync.transaction_exists_by_hash_bytes(tx.hash):
                 self.tx_storage_sync.save_transaction(tx)
-
 
         # meta = self.tx_storage.get_metadata_by_hash_bytes(tx.hash)
         # meta.peers.add(conn.peer_id.id)
