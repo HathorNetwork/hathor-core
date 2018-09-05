@@ -100,7 +100,7 @@ class ReadyState(BaseState):
         hash_hex = payload
         print('handle_get_data', hash_hex)
         try:
-            tx = self.factory.tx_storage.get_transaction_by_hash(hash_hex)
+            tx = self.protocol.factory.tx_storage.get_transaction_by_hash(hash_hex)
             self.send_data(tx)
         except TransactionDoesNotExist:
             # TODO Send NOT-FOUND?
@@ -125,31 +125,31 @@ class ReadyState(BaseState):
         else:
             raise ValueError('Unknown payload load')
 
-        if self.factory.tx_storage.get_genesis_by_hash_bytes(tx.hash):
+        if self.protocol.factory.tx_storage.get_genesis_by_hash_bytes(tx.hash):
             print('!!! WE JUST GOT A GENESIS')
             return
-        self.factory.on_new_tx(tx, conn=self)
+        self.protocol.factory.on_new_tx(tx, conn=self.protocol)
 
     def send_get_best_height(self):
         self.send_message(self.ProtocolCommand.GET_BEST_HEIGHT)
 
     def handle_get_best_height(self, unused_payload):
         print('handle_get_best_height')
-        payload = self.factory.tx_storage.get_best_height()
+        payload = self.protocol.factory.tx_storage.get_best_height()
         self.send_message(self.ProtocolCommand.BEST_HEIGHT, str(payload))
 
     def handle_best_height(self, payload):
         print('handle_best_height:', payload)
         best_height = int(payload)
-        self.factory.on_best_height(best_height, conn=self)
+        self.protocol.factory.on_best_height(best_height, conn=self.protocol)
 
     def send_get_blocks(self):
-        payload = self.factory.tx_storage.get_latest_block().hash_hex
+        payload = self.protocol.factory.tx_storage.get_latest_block().hash_hex
         self.send_message(self.ProtocolCommand.GET_BLOCKS, payload)
 
     def handle_get_blocks(self, payload):
         print('handle_get_blocks;', payload)
-        block_hashes = self.factory.tx_storage.get_block_hashes_after(payload)
+        block_hashes = self.protocol.factory.tx_storage.get_block_hashes_after(payload)
         block_hashes_hex = [x.hex() for x in block_hashes]
         output_payload = json.dumps(block_hashes_hex)
         self.send_message(self.ProtocolCommand.BLOCKS, output_payload)
@@ -157,7 +157,7 @@ class ReadyState(BaseState):
     def handle_blocks(self, payload):
         print('handle_blocks')
         block_hashes = json.loads(payload)
-        self.factory.on_block_hashes_received(block_hashes, conn=self)
+        self.protocol.factory.on_block_hashes_received(block_hashes, conn=self.protocol)
 
     def send_get_peers(self):
         """ Send a GET-PEERS command, requesting a list of nodes.
@@ -174,7 +174,7 @@ class ReadyState(BaseState):
         """ Send a PEERS command with a list of all known peers.
         """
         peers = []
-        for conn in self.factory.connected_peers.values():
+        for conn in self.protocol.factory.connected_peers.values():
             peers.append({
                 'id': conn.peer.id,
                 'entrypoints': conn.peer.entrypoints,
@@ -191,8 +191,8 @@ class ReadyState(BaseState):
         for data in received_peers:
             peer = PeerId.create_from_json(data)
             peer.validate()
-            self.factory.update_peer(peer)
-        remote = self.transport.getPeer()
+            self.protocol.factory.update_peer(peer)
+        remote = self.protocol.transport.getPeer()
         print(remote, 'PEERS', payload)
 
     def send_ping_if_necessary(self):
