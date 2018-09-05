@@ -10,23 +10,22 @@ import sys
 
 
 class HathorProtocolTestCase(unittest.TestCase):
+    def generate_peer(self, network, peer_id=None):
+        if peer_id is None:
+            peer_id = PeerId()
+        factory = HathorFactory(peer_id=peer_id, network=network)
+        factory.doStart()
+        proto = factory.buildProtocol(('127.0.0.1', 0))
+        tr = proto_helpers.StringTransport()
+        proto.makeConnection(tr)
+        return proto, tr
+
     def setUp(self):
         log.startLogging(sys.stdout)
         self.network = 'testnet'
 
-        peer_id1 = PeerId()
-        factory1 = HathorFactory(peer_id=peer_id1, network=self.network)
-        factory1.doStart()
-        self.proto1 = factory1.buildProtocol(('127.0.0.1', 0))
-        self.tr1 = proto_helpers.StringTransport()
-        self.proto1.makeConnection(self.tr1)
-
-        peer_id2 = PeerId()
-        factory2 = HathorFactory(peer_id=peer_id2, network=self.network)
-        factory2.doStart()
-        self.proto2 = factory2.buildProtocol(('127.0.0.1', 0))
-        self.tr2 = proto_helpers.StringTransport()
-        self.proto2.makeConnection(self.tr2)
+        self.proto1, self.tr1 = self.generate_peer(self.network)
+        self.proto2, self.tr2 = self.generate_peer(self.network)
 
     def tearDown(self):
         self.clean_pending(required_to_quiesce=False)
@@ -86,9 +85,15 @@ class HathorProtocolTestCase(unittest.TestCase):
         cmd, _, _ = result.partition(b' ')
         self.assertEqual(cmd, expected_cmd)
 
-    def _run_one_step(self):
+    def _run_one_step(self, debug=False):
         line1 = self.tr1.value()
         line2 = self.tr2.value()
+
+        if debug:
+            print('--')
+            print('line1', line1)
+            print('line2', line2)
+            print('--')
 
         self.tr1.clear()
         self.tr2.clear()
@@ -128,6 +133,19 @@ class HathorProtocolTestCase(unittest.TestCase):
         self.assertFalse(self.tr1.disconnecting)
         self.assertFalse(self.tr2.disconnecting)
 
+    def test_invalid_same_peer_id(self):
+        self.proto2.factory.my_peer = self.proto1.factory.my_peer
+        self._run_one_step()
+        self._run_one_step()
+        self._check_result_only_cmd(self.tr1.value(), b'ERROR')
+        self.assertTrue(self.tr1.disconnecting)
+
+    def test_invalid_different_network(self):
+        self.proto2, self.tr2 = self.generate_peer(network='mainnet')
+        self._run_one_step()
+        self._check_result_only_cmd(self.tr1.value(), b'ERROR')
+        self.assertTrue(self.tr1.disconnecting)
+
     def test_valid_hello_and_peer_id(self):
         self._run_one_step()
         self._run_one_step()
@@ -136,3 +154,5 @@ class HathorProtocolTestCase(unittest.TestCase):
         # self._check_result_only_cmd(self.tr2.value(), b'GET-PEERS')
         self.assertFalse(self.tr1.disconnecting)
         self.assertFalse(self.tr2.disconnecting)
+        self._run_one_step()
+        self._run_one_step()
