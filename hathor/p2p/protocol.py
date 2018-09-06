@@ -6,6 +6,7 @@ from autobahn.twisted.websocket import WebSocketServerProtocol
 from autobahn.twisted.websocket import WebSocketClientProtocol
 
 from hathor.p2p.states import HelloState, PeerIdState, ReadyState
+from hathor.p2p.rate_limiter import RateLimiter
 
 from enum import Enum
 import time
@@ -29,6 +30,8 @@ class HathorProtocol(object):
     The available states are listed in PeerState class.
     The available commands are listed in the ProtocolCommand class.
     """
+    class RateLimitKeys(Enum):
+        GLOBAL = 'global'
 
     class PeerState(Enum):
         HELLO = HelloState
@@ -53,6 +56,10 @@ class HathorProtocol(object):
 
         # The current state of the connection.
         self.state = None
+
+        # Rate limit
+        self.ratelimit = RateLimiter()
+        self.ratelimit.set_limit(self.RateLimitKeys.GLOBAL, 120, 60)
 
     def change_state(self, state_enum):
         if state_enum not in self._state_instances:
@@ -94,6 +101,10 @@ class HathorProtocol(object):
         """ Executed when a new message arrives.
         """
         self.last_message = time.time()
+
+        if not self.ratelimit.add_hit(self.RateLimitKeys.GLOBAL):
+            self.state.send_throttle(self.RateLimitKeys.GLOBAL)
+            return
 
         fn = self.state.cmd_map.get(cmd)
         if fn is not None:

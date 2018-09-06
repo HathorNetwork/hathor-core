@@ -7,56 +7,15 @@ from hathor.p2p.states.base import BaseState
 from hathor.transaction import Transaction, Block
 from hathor.p2p.peer_id import PeerId
 
-from enum import Enum
 import json
 import base64
 import time
 
 
 class ReadyState(BaseState):
-    class ProtocolCommand(Enum):
-        # ---
-        # Peer-to-peer Control Messages
-        # ---
-
-        # Request a list of peers.
-        GET_PEERS = 'GET-PEERS'
-
-        # Usually it is a response to a GET-PEERS command. But it can be sent
-        # without request when a new peer connects.
-        PEERS = 'PEERS'
-
-        # Ping is used to prevent an idle connection.
-        PING = 'PING'
-
-        # Pong is a response to a PING command.
-        PONG = 'PONG'
-
-        # Notifies an error.
-        ERROR = 'ERROR'
-
-        # ---
-        # Hathor Specific Messages
-        # ---
-        GET_DATA = 'GET-DATA'  # Request the data for a specific transaction.
-        DATA = 'DATA'          # Send the data for a specific transaction.
-
-        GET_TIPS = 'GET-TIPS'
-
-        GET_BLOCKS = 'GET-BLOCKS'  # Request a list of hashes for blocks. Payload is the current latest block.
-        BLOCKS = 'BLOCKS'          # Send a list of hashes for blocks. Payload is a list of hashes.
-
-        HASHES = 'HASHES'
-
-        # Request the height of the last known block.
-        GET_BEST_HEIGHT = 'GET-BEST-HEIGHT'
-
-        # Send the height of the last known block.
-        BEST_HEIGHT = 'BEST-HEIGHT'
-
     def __init__(self, protocol):
-        self.protocol = protocol
-        self.cmd_map = {
+        super().__init__(protocol)
+        self.cmd_map.update({
             # p2p control messages
             self.ProtocolCommand.PING: self.handle_ping,
             self.ProtocolCommand.PONG: self.handle_pong,
@@ -71,7 +30,7 @@ class ReadyState(BaseState):
             self.ProtocolCommand.BLOCKS: self.handle_blocks,
             self.ProtocolCommand.GET_BEST_HEIGHT: self.handle_get_best_height,
             self.ProtocolCommand.BEST_HEIGHT: self.handle_best_height,
-        }
+        })
 
     def on_enter(self):
         protocol = self.protocol
@@ -86,9 +45,6 @@ class ReadyState(BaseState):
         protocol = self.protocol
         protocol.factory.on_peer_disconnect(protocol)
         protocol.lc_ping.stop()
-
-    def handle_error(self, payload):
-        self.protocol.handle_error(payload)
 
     def send_get_data(self, hash_hex):
         """ Send a GET-DATA message, requesting the data of a given hash.
