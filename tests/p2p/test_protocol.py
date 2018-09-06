@@ -5,6 +5,7 @@ from twisted.python import log
 
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.factory import HathorFactory
+from hathor.p2p.manager import HathorManager
 
 import sys
 
@@ -13,7 +14,9 @@ class HathorProtocolTestCase(unittest.TestCase):
     def generate_peer(self, network, peer_id=None):
         if peer_id is None:
             peer_id = PeerId()
-        factory = HathorFactory(peer_id=peer_id, network=network)
+        factory = HathorFactory()
+        manager = HathorManager(factory=factory, peer_id=peer_id, network=network)
+        manager.doStart()
         factory.doStart()
         proto = factory.buildProtocol(('127.0.0.1', 0))
         tr = proto_helpers.StringTransport()
@@ -134,7 +137,7 @@ class HathorProtocolTestCase(unittest.TestCase):
         self.assertFalse(self.tr2.disconnecting)
 
     def test_invalid_same_peer_id(self):
-        self.proto2.factory.my_peer = self.proto1.factory.my_peer
+        self.proto2.factory.manager.my_peer = self.proto1.factory.manager.my_peer
         self._run_one_step()
         self._run_one_step()
         self._check_result_only_cmd(self.tr1.value(), b'ERROR')
