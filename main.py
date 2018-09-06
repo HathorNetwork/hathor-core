@@ -6,10 +6,10 @@ from twisted.python import log
 from twisted.web.resource import Resource
 
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.status import StatusResource
-from hathor.p2p.mining import MiningResource
+from hathor.p2p.resources import StatusResource, MiningResource, TransactionResource
 from hathor.p2p.factory import HathorFactory
 from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage
+from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, SendTokensResource
 import hathor
 
 import argparse
@@ -66,9 +66,23 @@ if __name__ == '__main__':
             factory.connect_to(description)
 
     if args.status:
+        # TODO get this from a file. How should we do with the factory?
         root = Resource()
-        root.putChild(b'status', StatusResource(factory))
-        root.putChild(b'mining', MiningResource(factory))
+        wallet_resource = Resource()
+        root.putChild(b'wallet', wallet_resource)
+
+        resources = (
+            (b'status', StatusResource(factory), root),
+            (b'mining', MiningResource(factory), root),
+            (b'transaction', TransactionResource(factory), root),
+            (b'balance', BalanceResource(factory), wallet_resource),
+            (b'history', HistoryResource(factory), wallet_resource),
+            (b'address', AddressResource(factory), wallet_resource),
+            (b'send_tokens', SendTokensResource(factory), wallet_resource),
+        )
+        for url_path, resource, parent in resources:
+            parent.putChild(url_path, resource)
+
         status_server = server.Site(root)
         reactor.listenTCP(args.status, status_server)
 

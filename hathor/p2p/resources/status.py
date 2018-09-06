@@ -1,5 +1,6 @@
 
 from twisted.web import resource
+from hathor.api_util import set_cors
 
 import json
 import time
@@ -18,6 +19,7 @@ class StatusResource(resource.Resource):
 
     def render_GET(self, request):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
+        set_cors(request, 'GET')
 
         connected_peers = []
         for conn in self.factory.connected_peers.values():

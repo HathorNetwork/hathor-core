@@ -6,6 +6,7 @@ from enum import Enum
 import time
 import struct
 import hashlib
+import base64
 
 MAX_NONCE = 2 ** 32
 MAX_NUM_INPUTS = MAX_NUM_OUTPUTS = 256
@@ -289,6 +290,43 @@ class BaseTransaction:
             if sleep_seconds > 0:
                 time.sleep(sleep_seconds)
         return None
+
+    def to_json(self):
+        data = {}
+        data['hash'] = self.hash.hex()
+        data['nonce'] = self.nonce
+        data['timestamp'] = self.timestamp
+        data['version'] = self.version
+        data['weight'] = self.weight
+        data['height'] = self.height
+
+        data['parents'] = []
+        for parent in self.parents:
+            data['parents'].append(parent.hex())
+
+        data['inputs'] = []
+        # Blocks don't have inputs
+        # TODO(epnichols): Refactor so that blocks/transactions know how to serialize themselves? Then we could do
+        #                  something like data['inputs'] = tx.serialize_inputs()
+        #                                 data['outputs'] = tx.serialize_outputs()
+        #                  without needing the if statement here.
+        if not self.is_block:
+            for input_self in self.inputs:
+                data_input = {}
+                data_input['tx_id'] = input_self.tx_id.hex()
+                data_input['index'] = input_self.index
+                data_input['data'] = base64.b64encode(input_self.data).decode('utf-8')
+                data['inputs'].append(data_input)
+
+        data['outputs'] = []
+        for output in self.outputs:
+            data_output = {}
+            # TODO use base58 and ripemd160
+            data_output['value'] = output.value
+            data_output['script'] = base64.b64encode(output.script).decode('utf-8')
+            data['outputs'].append(data_output)
+
+        return data
 
 
 class Input:
