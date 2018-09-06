@@ -66,6 +66,9 @@ class TransactionStorage:
     def get_all_transactions(self):
         raise NotImplementedError
 
+    def get_count_tx_blocks(self):
+        raise NotImplementedError
+
     def get_tip_blocks(self):
         ret = []
         for hash_hex in self._cache_tip_blocks:
@@ -121,8 +124,20 @@ class TransactionStorage:
         from hathor.transaction.genesis import genesis_transactions
         return genesis_transactions(self)
 
-    def get_latest_transactions(self, count=2):
+    def get_latest(self, transactions, count=2, page=1):
+        transactions = sorted(transactions, key=lambda t: t.timestamp, reverse=True)
+
+        # Calculating indexes based on count and page
+        start_index = (page - 1) * count
+        end_index = start_index + count
+        return transactions[start_index:end_index]
+
+    def get_latest_transactions(self, count=2, page=1):
         # XXX Just for testing, transforming generator into list would be impossible with many transactions
         transactions = list(tx for tx in self.get_all_transactions() if not tx.is_block)
-        transactions = sorted(transactions, key=lambda t: t.timestamp, reverse=True)
-        return transactions[:count]
+        return self.get_latest(transactions=transactions, count=count, page=page)
+
+    def get_latest_tx_blocks(self, count=2, page=1):
+        # XXX Just for testing, transforming generator into list would be impossible with many transactions
+        transactions = list(tx for tx in self.get_all_transactions())
+        return self.get_latest(transactions=transactions, count=count, page=page)

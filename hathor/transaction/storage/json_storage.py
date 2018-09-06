@@ -50,7 +50,7 @@ class TransactionJSONStorage(TransactionStorage):
 
     def save_transaction(self, tx):
         super().save_transaction(tx)
-        data = self.serialize(tx)
+        data = tx.to_json()
         filepath = self.generate_filepath(data['hash'])
         self.save_to_json(filepath, data)
         if tx.is_block:
@@ -109,43 +109,6 @@ class TransactionJSONStorage(TransactionStorage):
     def get_transaction_by_hash(self, hash_hex):
         hash_bytes = bytes.fromhex(hash_hex)
         return self.get_transaction_by_hash_bytes(hash_bytes)
-
-    def serialize(self, tx):
-        data = {}
-        data['hash'] = tx.hash.hex()
-        data['nonce'] = tx.nonce
-        data['timestamp'] = tx.timestamp
-        data['version'] = tx.version
-        data['weight'] = tx.weight
-        data['height'] = tx.height
-
-        data['parents'] = []
-        for parent in tx.parents:
-            data['parents'].append(parent.hex())
-
-        data['inputs'] = []
-        # Blocks don't have inputs
-        # TODO(epnichols): Refactor so that blocks/transactions know how to serialize themselves? Then we could do
-        #                  something like data['inputs'] = tx.serialize_inputs()
-        #                                 data['outputs'] = tx.serialize_outputs()
-        #                  without needing the if statement here.
-        if not tx.is_block:
-            for input_tx in tx.inputs:
-                data_input = {}
-                data_input['tx_id'] = input_tx.tx_id.hex()
-                data_input['index'] = input_tx.index
-                data_input['data'] = base64.b64encode(input_tx.data).decode('utf-8')
-                data['inputs'].append(data_input)
-
-        data['outputs'] = []
-        for output in tx.outputs:
-            data_output = {}
-            # TODO use base58 and ripemd160
-            data_output['value'] = output.value
-            data_output['script'] = base64.b64encode(output.script).decode('utf-8')
-            data['outputs'].append(data_output)
-
-        return data
 
     def load(self, data):
         from hathor.transaction.transaction import Transaction
@@ -233,3 +196,10 @@ class TransactionJSONStorage(TransactionStorage):
                 hash_hex = f[3:-5]
                 transaction = self.get_transaction_by_hash(hash_hex)
                 yield transaction
+
+    def get_count_tx_blocks(self):
+        from hathor.transaction.genesis import genesis_transactions
+        genesis_len = len([tx for tx in genesis_transactions(self)])
+        path = self.path
+        files = os.listdir(path)
+        return len(files) + genesis_len

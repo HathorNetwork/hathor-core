@@ -67,3 +67,8 @@ class TransactionMemoryStorage(TransactionStorage):
 
     def get_block_hashes_at_height(self, height):
         return [x.hash for x in self._blocks_by_height[height]]
+
+    def get_count_tx_blocks(self):
+        from hathor.transaction.genesis import genesis_transactions
+        genesis_len = len([tx for tx in genesis_transactions(self)])
+        return len(self.transactions) + genesis_len
