@@ -30,7 +30,7 @@ class HelloState(BaseState):
         remote = protocol.transport.getPeer()
         data = {
             'app': 'Hathor v{}'.format(hathor.__version__),
-            'network': protocol.factory.network,
+            'network': protocol.manager.network,
             'remote_address': '{}:{}'.format(remote.host, remote.port),
             'nonce': protocol.hello_nonce_sent,
         }
@@ -55,7 +55,7 @@ class HelloState(BaseState):
         if data['app'] != app:
             print('WARNING Different app versions:', data['app'])
 
-        if data['network'] != protocol.factory.network:
+        if data['network'] != protocol.manager.network:
             protocol.send_error_and_close_connection('Wrong network.')
             return
 

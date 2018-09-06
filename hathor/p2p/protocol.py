@@ -40,6 +40,8 @@ class HathorProtocol(object):
 
     def __init__(self, factory):
         self.factory = factory
+        self.manager = self.factory.manager
+
         self._state_instances = {}
 
         # The peer on the other side of the connection.

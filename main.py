@@ -8,6 +8,7 @@ from twisted.web.resource import Resource
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.resources import StatusResource, MiningResource, TransactionResource
 from hathor.p2p.factory import HathorFactory
+from hathor.p2p.manager import HathorManager
 from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage
 from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, SendTokensResource
 import hathor
@@ -48,22 +49,24 @@ if __name__ == '__main__':
         print('Using TransactionMemoryStorage')
 
     network = 'testnet'
-    factory = HathorFactory(peer_id=peer_id, network=network, hostname=args.hostname, tx_storage=tx_storage)
+    factory = HathorFactory()
+    manager = HathorManager(factory, peer_id=peer_id, network=network, hostname=args.hostname, tx_storage=tx_storage)
+    manager.doStart()
 
     if args.testnet:
-        factory.dns_seed_lookup_text('testnet.hathor.network')
+        manager.dns_seed_lookup_text('testnet.hathor.network')
 
     if args.dns:
         for host in args.dns:
-            factory.dns_seed_lookup(host)
+            manager.dns_seed_lookup(host)
 
     if args.listen:
         for description in args.listen:
-            factory.listen(description)
+            manager.listen(description)
 
     if args.bootstrap:
         for description in args.bootstrap:
-            factory.connect_to(description)
+            manager.connect_to(description)
 
     if args.status:
         # TODO get this from a file. How should we do with the factory?
@@ -72,13 +75,13 @@ if __name__ == '__main__':
         root.putChild(b'wallet', wallet_resource)
 
         resources = (
-            (b'status', StatusResource(factory), root),
-            (b'mining', MiningResource(factory), root),
-            (b'transaction', TransactionResource(factory), root),
-            (b'balance', BalanceResource(factory), wallet_resource),
-            (b'history', HistoryResource(factory), wallet_resource),
-            (b'address', AddressResource(factory), wallet_resource),
-            (b'send_tokens', SendTokensResource(factory), wallet_resource),
+            (b'status', StatusResource(manager), root),
+            (b'mining', MiningResource(manager), root),
+            (b'transaction', TransactionResource(manager), root),
+            (b'balance', BalanceResource(manager), wallet_resource),
+            (b'history', HistoryResource(manager), wallet_resource),
+            (b'address', AddressResource(manager), wallet_resource),
+            (b'send_tokens', SendTokensResource(manager), wallet_resource),
         )
         for url_path, resource, parent in resources:
             parent.putChild(url_path, resource)
