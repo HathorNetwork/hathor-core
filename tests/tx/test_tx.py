@@ -6,8 +6,8 @@ from hathor.transaction import Transaction, TxInput, TxOutput, MAX_NUM_INPUTS, M
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.transaction.exceptions import InputOutputMismatch, InputSignatureError, \
                                           InputPublicKeyError, TooManyInputs, TooManyOutputs
-from hathor.util import get_private_key_from_bytes, get_public_key_from_bytes, get_input_data, \
-                        get_address_from_public_key
+from hathor.crypto.util import get_private_key_from_bytes, get_public_key_from_bytes, \
+                        get_input_data, get_address_from_public_key
 
 
 class BasicTransaction(unittest.TestCase):

@@ -1,5 +1,6 @@
 import struct
 import hashlib
+import base58
 from hathor.transaction.exceptions import InputSignatureError, InputPublicKeyError
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -19,6 +20,17 @@ def get_public_key_bytes(public_key, encoding=serialization.Encoding.DER,
     return public_key.public_bytes(
         encoding,
         format
+    )
+
+
+def get_private_key_bytes(private_key,
+                          encoding=serialization.Encoding.DER,
+                          format=serialization.PrivateFormat.PKCS8,
+                          encryption_algorithm=serialization.NoEncryption()):
+    return private_key.private_bytes(
+        encoding=encoding,
+        format=format,
+        encryption_algorithm=encryption_algorithm
     )
 
 
@@ -59,6 +71,18 @@ def get_address_from_public_key(public_key):
     """
     public_key_bytes = get_public_key_bytes(public_key)
     return get_address_from_public_key_bytes(public_key_bytes)
+
+
+def get_address_b58_from_public_key(public_key):
+    return base58.b58encode(get_address_from_public_key(public_key)).decode('utf-8')
+
+
+def get_address_b58_from_public_key_bytes(public_key):
+    return base58.b58encode(get_address_from_public_key_bytes(public_key)).decode('utf-8')
+
+
+def get_address_b58_from_bytes(address):
+    return base58.b58encode(address).decode('utf-8')
 
 
 # private_key is ec.EllipticCurvePrivateKey

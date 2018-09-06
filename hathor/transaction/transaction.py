@@ -1,7 +1,7 @@
 from hathor.transaction.base_transaction import BaseTransaction, MAX_NUM_INPUTS, MAX_NUM_OUTPUTS
 from hathor.transaction.exceptions import InputOutputMismatch, TooManyInputs, TooManyOutputs, DoubleSpend
 from hathor.transaction.storage.exceptions import TransactionMetadataDoesNotExist
-from hathor.util import validate_signature, validate_script
+from hathor.crypto.util import validate_signature, validate_script
 from math import log
 
 
