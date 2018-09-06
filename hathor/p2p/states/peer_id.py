@@ -5,29 +5,17 @@ from hathor.p2p.peer_id import PeerId
 
 import base64
 import json
-from enum import Enum
 
 
 class PeerIdState(BaseState):
-    class ProtocolCommand(Enum):
-        # Identifies the peer.
-        PEER_ID = 'PEER-ID'
-
-        # Notifies an error.
-        ERROR = 'ERROR'
-
     def __init__(self, protocol):
-        self.protocol = protocol
-        self.cmd_map = {
+        super().__init__(protocol)
+        self.cmd_map.update({
             self.ProtocolCommand.PEER_ID: self.handle_peer_id,
-            self.ProtocolCommand.ERROR: self.handle_error,
-        }
+        })
 
     def on_enter(self):
         self.send_peer_id()
-
-    def handle_error(self, payload):
-        self.protocol.handle_error(payload)
 
     def send_peer_id(self):
         """ Send a PEER-ID message, identifying the peer. It goes with a

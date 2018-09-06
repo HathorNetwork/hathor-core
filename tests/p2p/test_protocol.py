@@ -156,3 +156,5 @@ class HathorProtocolTestCase(unittest.TestCase):
         self.assertFalse(self.tr2.disconnecting)
         self._run_one_step()
         self._run_one_step()
+        self.assertFalse(self.tr1.disconnecting)
+        self.assertFalse(self.tr2.disconnecting)
