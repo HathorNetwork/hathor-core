@@ -1,28 +1,80 @@
-from hathor.wallet.data import WalletData
+import os
+import json
+import base58
+from collections import namedtuple
 from hathor.wallet.keypair import KeyPair
-from hathor.transaction.storage.exceptions import TransactionMetadataDoesNotExist
-from hathor.transaction.base_transaction import Input, Output
-from hathor.transaction.transaction import Transaction
-from hathor.util import get_input_data
-from hathor.util import get_address_from_public_key
+from hathor.wallet.exceptions import WalletOutOfSync
+from hathor.transaction import TxInput, TxOutput
+from hathor.crypto.util import get_input_data, decode_input_data, \
+                               get_address_b58_from_public_key_bytes, \
+                               get_address_b58_from_bytes
+
+# TODO add timestamp
+UnspentTx = namedtuple('UnspentTx', ['tx_id', 'index', 'value'])
+# tx_id is the tx spending the output
+# from_tx_id is the tx where we received the tokens
+# from_index is the index in the above tx
+SpentTx = namedtuple('SpentTx', ['tx_id', 'from_tx_id', 'from_index', 'value'])
+
+WalletInputInfo = namedtuple('WalletInputInfo', ['tx_id', 'index', 'private_key'])
+WalletOutputInfo = namedtuple('WalletOutputInfo', ['address', 'value'])
 
 
 class Wallet(object):
-    def __init__(self, keys=None, tx_storage=None):
+    def __init__(self, keys=None, directory='./', filename='keys.json'):
+        """ A wallet will hold key pair objects and the unspent and
+        spent transactions associated with the keys.
+
+        All files will be stored in the same directory, and it should
+        only contain wallet associated files.
+
+        keys: set of KeyPair objects (b58_address => KeyPair)
+        directory: location where to store associated files
+        filename: name of the keys file, relative to directory
+        """
+        self.filepath = os.path.join(directory, filename)
         self.keys = keys or {}
-        self.tx_storage = tx_storage
-        self.unused_keys = set(key for key in self.keys.values() if not key.used)
+        self.unused_keys = set(key.get_address_b58() for key in self.keys.values() if not key.used)
+        self.unspent_txs = {}
+        self.spent_txs = []
+        self.balance = 0
+
+    def read_keys_from_file(self):
+        """Reads the keys from file and updates the keys dictionary
+
+        Uses the directory and filename specified in __init__
+        """
+        new_keys = {}
+        with open(self.filepath, 'r') as json_file:
+            json_data = json.loads(json_file.read())
+            for data in json_data:
+                keypair = KeyPair.from_json(data)
+                new_keys[keypair.get_address_b58()] = keypair
+
+        self.keys.update(new_keys)
+
+    def _write_keys_to_file(self):
+        data = [keypair.to_json() for keypair in self.keys.values()]
+        with open(self.filepath, 'w') as json_file:
+            json_file.write(json.dumps(data, indent=4))
 
     def get_unused_address(self, mark_as_used=True):
+        updated = False
         if len(self.unused_keys) == 0:
             self.generate_keys()
+            updated = True
 
         if mark_as_used:
             address = self.unused_keys.pop()
             keypair = self.keys[address]
             keypair.used = True
+            updated = True
         else:
             address = next(iter(self.unused_keys))
+
+        if updated:
+            self._write_keys_to_file()
+
         return address
 
     def generate_keys(self, count=10):
@@ -32,77 +84,69 @@ class Wallet(object):
             self.keys[address] = key
             self.unused_keys.add(address)
 
-    def select_inputs_for_amount(self, value):
-        self.get_inputs_from_amount(value)
-        pass
+    def prepare_transaction(self, cls, inputs, outputs):
+        """Prepares the tx inputs and outputs.
 
-    def prepare_transaction_without_inputs(self, outputs):
-        """
-            Outputs: array of dict {'address': b'address', 'value': 0}
-        """
-        amount = sum([output['value'] for output in outputs])
-        inputs = self.get_inputs_from_amount(amount)
-        return self.prepare_transaction_with_inputs(inputs, outputs)
+        Can be used to create blocks by passing empty list to inputs.
 
-    def prepare_transaction_with_inputs(self, inputs, outputs):
+        cls: either Transaction or Block
+        inputs: array of WalletInputInfo tuple
+        outputs: array of WalletOutputInfo tuple
         """
-            Inputs: array of dict {'tx_id': b'tx_id', 'index': 0}
-            Outputs: array of dict {'address': b'address', 'value': 0}
-        """
-        # TODO how to get unconfirmed transactions (parents)?
-        # TODO where should we do it?
-        # parents = self.storage.get_latest_transactions()
-        # parents_hash = [p.hash for p in parents]
-
         tx_inputs = []
         for i in inputs:
-            input_data = get_input_data(i['tx_id'], self.private_key, self.public_key)
-            tx_inputs.append(Input(i['tx_id'], i['index'], input_data))
+            input_data = get_input_data(i.tx_id, i.private_key, i.private_key.public_key())
+            tx_inputs.append(TxInput(i.tx_id, i.index, input_data))
 
         tx_outputs = []
         for o in outputs:
-            tx_outputs.append(Output(o['value'], o['address']))
+            tx_outputs.append(TxOutput(o.value, o.address))
 
-        tx_outputs = self.handle_return_amount(tx_inputs, tx_outputs)
+        return cls(inputs=tx_inputs, outputs=tx_outputs)
 
-        return Transaction(inputs=tx_inputs, outputs=tx_outputs, storage=self.tx_storage)
+    def prepare_transaction_compute_inputs(self, cls, outputs):
+        """Calculates de inputs given the outputs. Handles change.
 
-    def handle_return_amount(self, inputs, outputs):
+        cls: either Transaction or Block
+        outputs: array of WalletOutputInfo tuple
+        """
+        amount = sum(output.value for output in outputs)
+        inputs, total_inputs_amount = self.get_inputs_from_amount(amount)
+        change_tx = self.handle_change_tx(total_inputs_amount, outputs)
+        if change_tx:
+            # change is usually the first output
+            outputs.insert(0, change_tx)
+        return self.prepare_transaction(cls, inputs, outputs)
+
+    def handle_change_tx(self, sum_inputs, outputs):
+        """Creates an output transaction with the change value
+        """
         sum_outputs = sum([output.value for output in outputs])
 
-        sum_inputs = 0
-        for tx_input in inputs:
-            tx_obj = self.tx_storage.get_transaction_by_hash_bytes(tx_input.tx_id)
-            sum_inputs += tx_obj.outputs[tx_input.index].value
-
-        if sum_inputs < sum_outputs:
-            # TODO raise exception I dont have this amount of tokens
-            pass
-        elif sum_inputs > sum_outputs:
+        if sum_inputs > sum_outputs:
             difference = sum_inputs - sum_outputs
-
-            address = get_address_from_public_key(self.public_key)
-            new_output = Output(difference, address)
-            outputs.append(new_output)
-
-        return outputs
+            address_b58 = self.get_unused_address()
+            address = base58.b58decode(address_b58)
+            new_output = WalletOutputInfo(address, difference)
+            return new_output
+        return None
 
     def get_inputs_from_amount(self, amount):
+        """Creates inputs from our pool of unspent tx given a value
+
+        This is a very simple algorithm, so it does not try to find the best combination
+        of inputs.
+        """
         inputs_tx = []
         total_inputs_amount = 0
 
-        received_tx = self.storage.get_all_tx_received()
-        for received in received_tx:
-            try:
-                metadata = self.tx_storage.get_metadata_by_hash_bytes(received.tx_id)
-                if received.index in metadata.spent_outputs:
-                    continue
-            except TransactionMetadataDoesNotExist:
-                pass
+        for address_b58, utxo_list in self.unspent_txs.items():
+            for utxo in utxo_list:
+                inputs_tx.append(WalletInputInfo(utxo.tx_id, utxo.index, self.keys[address_b58].private_key))
+                total_inputs_amount += utxo.value
 
-            tx_obj = self.tx_storage.get_transaction_by_hash_bytes(received.tx_id)
-            inputs_tx.append({'tx_id': received.tx_id, 'index': received.index})
-            total_inputs_amount += tx_obj.outputs[received.index].value
+                if total_inputs_amount >= amount:
+                    break
 
             if total_inputs_amount >= amount:
                 break
@@ -111,13 +155,56 @@ class Wallet(object):
             # TODO raise exception I dont have this amount of tokens
             pass
 
-        return inputs_tx
+        return inputs_tx, total_inputs_amount
 
-    def transaction_received(self, tx):
-        address = get_address_from_public_key(self.public_key)
+    def on_new_tx(self, tx):
+        """Checks the inputs and outputs of a transaction for matching keys.
 
+        If an output matches, will add it to the unspent_txs dict.
+        If an input matches, removes from unspent_txs dict and adds to spent_txs list.
+        """
+        updated = False
+
+        # check outputs
         for index, output in enumerate(tx.outputs):
-            if output.script == address:
-                wd = WalletData(tx.hash, index)
-                self.storage.save_data(wd)
-                break
+            # address this tokens were sent to
+            output_address = get_address_b58_from_bytes(output.script)
+            if output_address in self.keys.keys():
+                # this wallet received tokens
+                utxo = UnspentTx(tx.hash, index, output.value)
+                utxo_list = self.unspent_txs.pop(output_address, [])
+                utxo_list.append(utxo)
+                self.unspent_txs[output_address] = utxo_list
+                # mark key as used
+                self.keys[output_address].used = True
+                self.balance += output.value
+                updated = True
+
+        # check inputs
+        for index, _input in enumerate(tx.inputs):
+            (_, _, _, public_key) = decode_input_data(_input.data)
+            input_address = get_address_b58_from_public_key_bytes(public_key)
+            if input_address in self.keys.keys():
+                # this wallet spent tokens
+                # remove from unspent_txs
+                utxo_list = self.unspent_txs.pop(input_address)
+                list_index = -1
+                for i, utxo in enumerate(utxo_list):
+                    if utxo.tx_id == _input.tx_id and utxo.index == _input.index:
+                        list_index = i
+                        break
+                if list_index == -1:
+                    # the wallet does not have the output referenced by this input
+                    raise WalletOutOfSync
+                old_utxo = utxo_list.pop(list_index)
+                if len(utxo_list) > 0:
+                    self.unspent_txs[input_address] = utxo_list
+                # add to spent_txs
+                spent = SpentTx(tx.hash, _input.tx_id, _input.index, old_utxo.value)
+                self.spent_txs.append(spent)
+                self.balance -= old_utxo.value
+                updated = True
+
+        if updated:
+            # TODO update disk file
+            pass
