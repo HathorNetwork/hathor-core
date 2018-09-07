@@ -10,11 +10,11 @@ from hathor.crypto.util import get_input_data, decode_input_data, \
                                get_address_b58_from_bytes
 
 # TODO add timestamp
-UnspentTx = namedtuple('UnspentTx', ['tx_id', 'index', 'value'])
+UnspentTx = namedtuple('UnspentTx', ['tx_id', 'index', 'value', 'timestamp'])
 # tx_id is the tx spending the output
 # from_tx_id is the tx where we received the tokens
 # from_index is the index in the above tx
-SpentTx = namedtuple('SpentTx', ['tx_id', 'from_tx_id', 'from_index', 'value'])
+SpentTx = namedtuple('SpentTx', ['tx_id', 'from_tx_id', 'from_index', 'value', 'timestamp'])
 
 WalletInputInfo = namedtuple('WalletInputInfo', ['tx_id', 'index', 'private_key'])
 WalletOutputInfo = namedtuple('WalletOutputInfo', ['address', 'value'])
@@ -104,6 +104,32 @@ class Wallet(object):
 
         return cls(inputs=tx_inputs, outputs=tx_outputs)
 
+    def prepare_transaction_incomplete_inputs(self, cls, inputs, outputs):
+        """Uses the function above to prepare transaction.
+
+        The difference is that the inputs argument does not contain the private key
+        corresponding to it.
+
+        Consider the wallet UI scenario: the user will see all unspent txs and can select
+        which ones he wants to use as input, but the wallet is responsible for managing
+        the keys, so he won't be able to send the inputs with the corresponding key.
+        """
+        new_inputs = []
+        for _input in inputs:
+            found = False
+            for address_b58, utxo_list in self.unspent_txs.items():
+                for utxo in utxo_list:
+                    if _input.tx_id == utxo.tx_id and _input.index == utxo.index:
+                        new_inputs.insert(
+                            0,
+                            WalletInputInfo(_input.tx_id, _input.index, self.keys[address_b58].private_key)
+                        )
+                        found = True
+            if not found:
+                raise WalletOutOfSync
+
+        return self.prepare_transaction(cls, new_inputs, outputs)
+
     def prepare_transaction_compute_inputs(self, cls, outputs):
         """Calculates de inputs given the outputs. Handles change.
 
@@ -171,7 +197,7 @@ class Wallet(object):
             output_address = get_address_b58_from_bytes(output.script)
             if output_address in self.keys.keys():
                 # this wallet received tokens
-                utxo = UnspentTx(tx.hash, index, output.value)
+                utxo = UnspentTx(tx.hash, index, output.value, tx.timestamp)
                 utxo_list = self.unspent_txs.pop(output_address, [])
                 utxo_list.append(utxo)
                 self.unspent_txs[output_address] = utxo_list
@@ -200,7 +226,7 @@ class Wallet(object):
                 if len(utxo_list) > 0:
                     self.unspent_txs[input_address] = utxo_list
                 # add to spent_txs
-                spent = SpentTx(tx.hash, _input.tx_id, _input.index, old_utxo.value)
+                spent = SpentTx(tx.hash, _input.tx_id, _input.index, old_utxo.value, tx.timestamp)
                 self.spent_txs.append(spent)
                 self.balance -= old_utxo.value
                 updated = True
