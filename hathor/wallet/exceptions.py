@@ -2,4 +2,6 @@ from hathor.exception import HathorError
 
 
 class WalletOutOfSync(HathorError):
-    """Some input has already been spent"""
+    """Error when wallet performs illegal operation
+    because it's state is not synced with latest txs.
+    """

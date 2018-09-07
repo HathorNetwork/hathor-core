@@ -7,7 +7,7 @@ import shutil
 from hathor.transaction import Transaction
 from hathor.transaction.genesis import genesis_transactions
 from hathor.wallet import Wallet
-from hathor.wallet.wallet import WalletOutputInfo
+from hathor.wallet.wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.keypair import KeyPair
 from hathor.crypto.util import get_private_key_from_bytes
 
@@ -56,22 +56,34 @@ class BasicWallet(unittest.TestCase):
 
         # create transaction spending this value, but sending to same wallet
         new_address = w.get_unused_address()
-        key = w.keys[new_address]
-        out = WalletOutputInfo(key.get_address(), 100)
-        tx = w.prepare_transaction_compute_inputs(Transaction, outputs=[out])
-        tx.update_hash()
-        w.on_new_tx(tx)
+        key1 = w.keys[new_address]
+        out = WalletOutputInfo(key1.get_address(), 100)
+        tx1 = w.prepare_transaction_compute_inputs(Transaction, outputs=[out])
+        tx1.update_hash()
+        w.on_new_tx(tx1)
         self.assertEqual(len(w.spent_txs), 1)
         self.assertEqual(w.balance, genesis_value)
 
         # generate a new block and check if we increase balance
         new_address = w.get_unused_address()
-        key = w.keys[new_address]
-        out = WalletOutputInfo(key.get_address(), 300)
-        tx = w.prepare_transaction(Transaction, inputs=[], outputs=[out])
-        tx.update_hash()
-        w.on_new_tx(tx)
+        key2 = w.keys[new_address]
+        out = WalletOutputInfo(key2.get_address(), 300)
+        tx2 = w.prepare_transaction(Transaction, inputs=[], outputs=[out])
+        tx2.update_hash()
+        w.on_new_tx(tx2)
         self.assertEqual(len(w.spent_txs), 1)
+        self.assertEqual(w.balance, genesis_value + 300)
+
+        # pass inputs and outputs to prepare_transaction, but not the input keys
+        # spend output from block
+        input_info = WalletInputInfo(tx2.hash, 0, None)
+        new_address = w.get_unused_address()
+        key3 = w.keys[new_address]
+        out = WalletOutputInfo(key3.get_address(), 300)
+        tx3 = w.prepare_transaction_incomplete_inputs(Transaction, inputs=[input_info], outputs=[out])
+        tx3.update_hash()
+        w.on_new_tx(tx3)
+        self.assertEqual(len(w.spent_txs), 2)
         self.assertEqual(w.balance, genesis_value + 300)
 
 
