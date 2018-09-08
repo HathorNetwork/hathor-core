@@ -27,7 +27,7 @@ class StatusResource(resource.Resource):
             connected_peers.append({
                 'id': conn.peer.id,
                 'address': '{}:{}'.format(remote.host, remote.port),
-                'received_bytes': conn.received_bytes,
+                # 'received_bytes': conn.received_bytes,
                 'last_message': time.time() - conn.last_message,
             })
 

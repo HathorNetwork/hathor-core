@@ -7,7 +7,7 @@ from twisted.web.resource import Resource
 
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.resources import StatusResource, MiningResource, TransactionResource
-from hathor.p2p.factory import HathorFactory
+from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 from hathor.p2p.manager import HathorManager
 from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage
 from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, SendTokensResource
@@ -49,8 +49,11 @@ if __name__ == '__main__':
         print('Using TransactionMemoryStorage')
 
     network = 'testnet'
-    factory = HathorFactory()
-    manager = HathorManager(factory, peer_id=peer_id, network=network, hostname=args.hostname, tx_storage=tx_storage)
+    server_factory = HathorServerFactory()
+    client_factory = HathorClientFactory()
+
+    manager = HathorManager(server_factory, client_factory, peer_id=peer_id,
+                            network=network, hostname=args.hostname, tx_storage=tx_storage)
     manager.doStart()
 
     if args.testnet:
