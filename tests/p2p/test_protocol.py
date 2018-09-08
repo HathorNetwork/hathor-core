@@ -4,7 +4,7 @@ from twisted.test import proto_helpers
 from twisted.python import log
 
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.factory import HathorFactory
+from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 from hathor.p2p.manager import HathorManager
 
 import sys
@@ -14,11 +14,14 @@ class HathorProtocolTestCase(unittest.TestCase):
     def generate_peer(self, network, peer_id=None):
         if peer_id is None:
             peer_id = PeerId()
-        factory = HathorFactory()
-        manager = HathorManager(factory=factory, peer_id=peer_id, network=network)
+        server_factory = HathorServerFactory()
+        client_factory = HathorClientFactory()
+        manager = HathorManager(server_factory, client_factory, peer_id=peer_id, network=network)
         manager.doStart()
-        factory.doStart()
-        proto = factory.buildProtocol(('127.0.0.1', 0))
+        server_factory.doStart()
+        client_factory.doStart()
+
+        proto = server_factory.buildProtocol(('127.0.0.1', 0))
         tr = proto_helpers.StringTransport()
         proto.makeConnection(tr)
         return proto, tr

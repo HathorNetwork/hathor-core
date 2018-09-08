@@ -38,9 +38,9 @@ class HathorProtocol(object):
         PEER_ID = PeerIdState
         READY = ReadyState
 
-    def __init__(self, factory):
+    def __init__(self, factory, manager):
         self.factory = factory
-        self.manager = self.factory.manager
+        self.manager = manager
 
         self._state_instances = {}
 
@@ -75,7 +75,7 @@ class HathorProtocol(object):
             if self.state:
                 self.state.on_enter()
 
-    def connectionMade(self):
+    def on_connect(self):
         """ Executed when the connection is established.
         """
         remote = self.transport.getPeer()
@@ -84,11 +84,11 @@ class HathorProtocol(object):
         # The initial state is HELLO.
         self.change_state(self.PeerState.HELLO)
 
-    def connectionLost(self, reason):
+    def on_disconnect(self, reason):
         """ Executed when the connection is lost.
         """
         remote = self.transport.getPeer()
-        log.msg('HathorProtocol.connectionLost()', remote)
+        log.msg('HathorProtocol.connectionLost()', remote, reason)
         self.state.on_exit()
         self.state = None
 
@@ -140,8 +140,13 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
     It is simply a TCP connection which sends one message per line.
     """
     def connectionMade(self):
-        self.setLineMode()
         super(HathorLineReceiver, self).connectionMade()
+        self.setLineMode()
+        self.on_connect()
+
+    def connectionLost(self, reason):
+        super(HathorLineReceiver, self).connectionMade()
+        self.on_disconnect(reason)
 
     def lineReceived(self, line):
         line = line.decode('utf-8')

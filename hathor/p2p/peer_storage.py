@@ -3,7 +3,7 @@
 
 class PeerStorage(dict):
     """ PeerStorage is used to store all known peers in memory.
-    It is a dict an a peer object can be retrieved by its `peer.id`.
+    It is a dict of peer objects, and peers can be retrieved by their `peer.id`.
     """
 
     def add(self, peer):

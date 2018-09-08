@@ -16,7 +16,6 @@ import time
 import socket
 import random
 
-
 from hathor.p2p.protocol import HathorLineReceiver
 MyServerProtocol = HathorLineReceiver
 MyClientProtocol = HathorLineReceiver
@@ -24,6 +23,50 @@ MyClientProtocol = HathorLineReceiver
 # from hathor.p2p.protocol import HathorWebSocketServerProtocol, HathorWebSocketClientProtocol
 # MyServerProtocol = HathorWebSocketServerProtocol
 # MyClientProtocol = HathorWebSocketClientProtocol
+
+
+def generate_privkey_crt_pem():
+    """ Generates a new certificate with a new private key. This certificate is
+    used only for TLS connection, and won't be used to identify the peer.
+
+    Adapted from:
+    https://github.com/twisted/twisted/blob/trunk/src/twisted/test/server.pem
+    """
+    from datetime import datetime
+
+    from OpenSSL.crypto import FILETYPE_PEM, TYPE_RSA, X509, PKey, dump_privatekey, dump_certificate
+
+    key = PKey()
+    key.generate_key(TYPE_RSA, 2048)
+
+    cert = X509()
+
+    # It is optional to have a subject and an issue in a certificate.
+    # It works with and without these fields.
+    # issuer = cert.get_issuer()
+    # subject = cert.get_subject()
+    # for dn in [issuer, subject]:
+    #     dn.C = b'XX'   # Country
+    #     dn.ST = b'XX'  # State or Province
+    #     dn.L = b'XX'   # Locality
+    #     dn.CN = b'testnet.hathor.network'  # Common Name
+    #     dn.O = b'Hathor Network'  # noqa: E741 ambiguous variable name 'O'
+    #     dn.OU = b'testnet'   # Organization Unit
+    #     dn.emailAddress = b'noreply@testnet.hathor.network'
+
+    # Set the period in which the certificate is valid. In this case, the
+    # reference time is now, and it will be valid between 10 minutes ago
+    # and 100 years from now. This 10 minutes tolerance is to accomodate
+    # differences in the time between peers.
+    # To check the valid period, run a server with ssl and then run:
+    # `openssl s_client -showcerts -connect localhost:8000 | openssl x509 -noout -dates`
+    cert.set_serial_number(datetime.now().toordinal())
+    cert.gmtime_adj_notBefore(-60 * 10)
+    cert.gmtime_adj_notAfter(60 * 60 * 24 * 365 * 100)
+
+    cert.set_pubkey(key)
+    cert.sign(key, 'sha256')
+    return dump_privatekey(FILETYPE_PEM, key) + dump_certificate(FILETYPE_PEM, cert)
 
 
 class HathorManager(object):
@@ -35,7 +78,7 @@ class HathorManager(object):
         SYNCING = 'SYNCING'  # This node still synchronizing with the network
         SYNCED = 'SYNCED'    # This node is up-to-date with the network
 
-    def __init__(self, factory, peer_id, network, hostname=None,
+    def __init__(self, server_factory, client_factory, peer_id, network, hostname=None,
                  wallet=None, tx_storage=None, peer_storage=None, default_port=40403):
         """ peer_id: PeerId of this node.
         network: Which network will this node join? Usually either testnet or mainnet.
@@ -44,8 +87,11 @@ class HathorManager(object):
         default_port: Network default port, when only peers IP addresses are discovered.
         """
         # Factory.
-        self.factory = factory
-        factory.manager = self
+        self.server_factory = server_factory
+        self.server_factory.manager = self
+
+        self.client_factory = client_factory
+        self.client_factory.manager = self
 
         # Hostname, used to be accessed by other peers.
         self.hostname = hostname
@@ -242,12 +288,23 @@ class HathorManager(object):
         if peer.id not in self.connected_peers:
             self.connect_to(random.choice(peer.entrypoints))
 
-    def connect_to(self, description):
+    def connect_to(self, description, ssl=True):
         """ Attempt to connect to a peer, even if a connection already exists.
         Usually you should call `connect_to_if_not_connected`.
+
+        If `ssl` is True, then the connection will be wraped by a TLS.
         """
         endpoint = self.clientFromString(description)
-        endpoint.connect(self.factory)
+
+        if ssl:
+            from twisted.internet import ssl
+            from twisted.protocols.tls import TLSMemoryBIOFactory
+            context = ssl.ClientContextFactory()
+            factory = TLSMemoryBIOFactory(context, True, self.client_factory)
+        else:
+            factory = self.server_factory
+
+        endpoint.connect(factory)
         print('Connecting to: {}...'.format(description))
 
     def serverFromString(self, description):
@@ -255,13 +312,40 @@ class HathorManager(object):
         """
         return endpoints.serverFromString(reactor, description)
 
-    def listen(self, description):
+    def listen(self, description, ssl=True):
         """ Start to listen to new connection according to the description.
 
-        e.g. description="tcp:8000"
+        If `ssl` is True, then the connection will be wraped by a TLS.
+
+        :Example:
+
+        `manager.listen(description='tcp:8000')`
+
+        :param description: A description of the protocol and its parameters.
+        :type description: str
         """
         endpoint = self.serverFromString(description)
-        endpoint.listen(self.factory)
+
+        if ssl:
+            # XXX Is it safe to generate a new certificate for each connection?
+            #     What about CPU usage when many new connections arrive?
+            from twisted.internet.ssl import PrivateCertificate
+            from twisted.protocols.tls import TLSMemoryBIOFactory
+            certificate = PrivateCertificate.loadPEM(generate_privkey_crt_pem())
+            contextFactory = certificate.options()
+            factory = TLSMemoryBIOFactory(contextFactory, False, self.server_factory)
+
+            # from twisted.internet.ssl import CertificateOptions, TLSVersion
+            # options = dict(privateKey=certificate.privateKey.original, certificate=certificate.original)
+            # contextFactory = CertificateOptions(
+            #     insecurelyLowerMinimumTo=TLSVersion.TLSv1_2,
+            #     lowerMaximumSecurityTo=TLSVersion.TLSv1_3,
+            #     **options,
+            # )
+        else:
+            factory = self.client_factory
+
+        endpoint.listen(factory)
         print('Listening to: {}...'.format(description))
         if self.hostname:
             proto, _, _ = description.partition(':')

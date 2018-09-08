@@ -5,6 +5,13 @@
 .. currentmodule:: hathor.p2p
 
 
+``hathor.p2p.manager``
+=======================
+
+.. automodule:: hathor.p2p.manager
+   :members:
+   :undoc-members:
+
 ``hathor.p2p.protocol``
 =======================
 
