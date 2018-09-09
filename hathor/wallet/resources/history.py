@@ -28,7 +28,7 @@ class HistoryResource(resource.Resource):
 
         history = []
         for obj in history_tuple:
-            history_dict = obj._asdict()
+            history_dict = obj.to_dict()
             history_dict['tx_id'] = history_dict['tx_id'].hex()
             if 'from_tx_id' in history_dict:
                 history_dict['from_tx_id'] = history_dict['from_tx_id'].hex()
