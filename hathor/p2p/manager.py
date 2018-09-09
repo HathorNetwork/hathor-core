@@ -7,7 +7,9 @@ import twisted.names.client
 from hathor.p2p.peer_storage import PeerStorage
 from hathor.transaction import Block, TxOutput
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
+from hathor.crypto.util import generate_privkey_crt_pem
 from hathor.wallet import Wallet
+from hathor.pubsub import HathorEvents, PubSubManager
 
 from collections import defaultdict
 from enum import Enum
@@ -25,50 +27,6 @@ MyClientProtocol = HathorLineReceiver
 # MyClientProtocol = HathorWebSocketClientProtocol
 
 
-def generate_privkey_crt_pem():
-    """ Generates a new certificate with a new private key. This certificate is
-    used only for TLS connection, and won't be used to identify the peer.
-
-    Adapted from:
-    https://github.com/twisted/twisted/blob/trunk/src/twisted/test/server.pem
-    """
-    from datetime import datetime
-
-    from OpenSSL.crypto import FILETYPE_PEM, TYPE_RSA, X509, PKey, dump_privatekey, dump_certificate
-
-    key = PKey()
-    key.generate_key(TYPE_RSA, 2048)
-
-    cert = X509()
-
-    # It is optional to have a subject and an issue in a certificate.
-    # It works with and without these fields.
-    # issuer = cert.get_issuer()
-    # subject = cert.get_subject()
-    # for dn in [issuer, subject]:
-    #     dn.C = b'XX'   # Country
-    #     dn.ST = b'XX'  # State or Province
-    #     dn.L = b'XX'   # Locality
-    #     dn.CN = b'testnet.hathor.network'  # Common Name
-    #     dn.O = b'Hathor Network'  # noqa: E741 ambiguous variable name 'O'
-    #     dn.OU = b'testnet'   # Organization Unit
-    #     dn.emailAddress = b'noreply@testnet.hathor.network'
-
-    # Set the period in which the certificate is valid. In this case, the
-    # reference time is now, and it will be valid between 10 minutes ago
-    # and 100 years from now. This 10 minutes tolerance is to accomodate
-    # differences in the time between peers.
-    # To check the valid period, run a server with ssl and then run:
-    # `openssl s_client -showcerts -connect localhost:8000 | openssl x509 -noout -dates`
-    cert.set_serial_number(datetime.now().toordinal())
-    cert.gmtime_adj_notBefore(-60 * 10)
-    cert.gmtime_adj_notAfter(60 * 60 * 24 * 365 * 100)
-
-    cert.set_pubkey(key)
-    cert.sign(key, 'sha256')
-    return dump_privatekey(FILETYPE_PEM, key) + dump_certificate(FILETYPE_PEM, cert)
-
-
 class HathorManager(object):
     """ HathorManager manages the node, including bootstraping, peer discovery, connections,
     synchonization, and so on.
@@ -79,14 +37,36 @@ class HathorManager(object):
         SYNCED = 'SYNCED'    # This node is up-to-date with the network
 
     def __init__(self, server_factory, client_factory, peer_id, network, hostname=None,
-                 wallet=None, tx_storage=None, peer_storage=None, default_port=40403):
-        """ peer_id: PeerId of this node.
-        network: Which network will this node join? Usually either testnet or mainnet.
-        hostname: The hostname of this node is used to generate its entrypoints.
-        peer_storage: An instance of PeerStorage. It is instantiated by default if it is not given.
-        default_port: Network default port, when only peers IP addresses are discovered.
+                 pubsub=None, wallet=None, tx_storage=None, peer_storage=None, default_port=40403):
         """
-        # Factory.
+        :param server_factory: Factory used when new connections arrive.
+        :type server_factory: :py:class:`hathor.p2p.factory.HathorServerFactory`
+
+        :param client_factory: Factory used when opening new connections.
+        :type client_factory: :py:class:`hathor.p2p.factory.HathorClientFactory`
+
+        :param peer_id: Id of this node. If not given, a new one is created.
+        :type peer_id: :py:class:`hathor.p2p.peer_id.PeerId`
+
+        :param network: Name of the network this node participates. Usually it is either testnet or mainnet.
+        :type network: string
+
+        :param hostname: The hostname of this node. It is used to generate its entrypoints.
+        :type hostname: string
+
+        :param pubsub: If not given, a new one is created.
+        :type pubsub: :py:class:`hathor.p2p.pubsub.PubSubManager`
+
+        :param tx_storage: If not given, a :py:class:`TransactionMemoryStorage` one is created.
+        :type tx_storage: :py:class:`hathor.transaction.storage.transaction_storage.TransactionStorage`
+
+        :param peer_storage: If not given, a new one is created.
+        :type peer_storage: :py:class:`hathor.p2p.peer_storage.PeerStorage`
+
+        :param default_port: Network default port. It is used when only ip addresses are discovered.
+        :type default_port: int
+        """
+        # Factories.
         self.server_factory = server_factory
         self.server_factory.manager = self
 
@@ -102,6 +82,7 @@ class HathorManager(object):
         # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
         self.peer_storage = peer_storage or PeerStorage()
         self.tx_storage = tx_storage or TransactionMemoryStorage()
+        self.pubsub = pubsub or PubSubManager()
 
         # Map of peer_id to the best block height reported by that peer.
         self.peer_best_heights = defaultdict(int)
@@ -139,19 +120,44 @@ class HathorManager(object):
     def doStart(self):
         """ A factory must be started only once. And it is usually automatically started.
         """
-        self.connected_peers = {}
+        self.pubsub.publish(HathorEvents.MANAGER_ON_START)
+
+        # List of pending connections.
+        self.connecting_peers = {}  # Dict[IStreamClientEndpoint, twisted.internet.defer.Deferred]
+
+        # List of peers connected but still not ready to communicate.
+        self.handshaking_peers = set()  # Set[HathorProtocol]
+
+        # List of peers connected and ready to communicate.
+        self.connected_peers = {}  # Dict[string (peer.id), HathorProtocol]
+
         self.start_time = time.time()
         self.lc_reconnect.start(5)
 
     def doStop(self):
+        self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
         self.lc_reconnect.stop()
 
+    def on_connection_failure(self, failure, endpoint):
+        print('Connection failure: address={}:{} message={}'.format(endpoint._host, endpoint._port, failure))
+        self.connecting_peers.pop(endpoint)
+
     def on_peer_connect(self, protocol):
+        print('on_peer_connect()', protocol)
+        self.handshaking_peers.add(protocol)
+
+    def on_peer_ready(self, protocol):
+        print('on_peer_ready()', protocol)
+        self.handshaking_peers.remove(protocol)
         self.peer_storage.add_or_merge(protocol.peer)
         self.connected_peers[protocol.peer.id] = protocol
 
     def on_peer_disconnect(self, protocol):
-        self.connected_peers.pop(protocol.peer.id)
+        print('on_peer_disconnect()', protocol)
+        if protocol.peer:
+            self.connected_peers.pop(protocol.peer.id)
+        if protocol in self.handshaking_peers:
+            self.handshaking_peers.remove(protocol)
 
     def propagate_tx(self, tx):
         self.tx_storage.save_transaction(tx)
@@ -288,7 +294,10 @@ class HathorManager(object):
         if peer.id not in self.connected_peers:
             self.connect_to(random.choice(peer.entrypoints))
 
-    def connect_to(self, description, ssl=True):
+    def _connect_to_callback(self, protocol, endpoint):
+        self.connecting_peers.pop(endpoint)
+
+    def connect_to(self, description, ssl=False):
         """ Attempt to connect to a peer, even if a connection already exists.
         Usually you should call `connect_to_if_not_connected`.
 
@@ -304,7 +313,11 @@ class HathorManager(object):
         else:
             factory = self.server_factory
 
-        endpoint.connect(factory)
+        deferred = endpoint.connect(factory)
+        self.connecting_peers[endpoint] = deferred
+
+        deferred.addCallback(self._connect_to_callback, endpoint)
+        deferred.addErrback(self.on_connection_failure, endpoint)
         print('Connecting to: {}...'.format(description))
 
     def serverFromString(self, description):
@@ -312,7 +325,7 @@ class HathorManager(object):
         """
         return endpoints.serverFromString(reactor, description)
 
-    def listen(self, description, ssl=True):
+    def listen(self, description, ssl=False):
         """ Start to listen to new connection according to the description.
 
         If `ssl` is True, then the connection will be wraped by a TLS.
@@ -392,8 +405,7 @@ class HathorManager(object):
                 txt = txt.decode('utf-8')
                 try:
                     print('Seed DNS TXT: "{}" found'.format(txt))
-                    endpoint = self.clientFromString(txt)
-                    endpoint.connect(self)
+                    self.connect_to(txt)
                 except ValueError:
                     print('Seed DNS TXT: Error parsing "{}"'.format(txt))
 

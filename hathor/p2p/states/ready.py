@@ -34,7 +34,7 @@ class ReadyState(BaseState):
 
     def on_enter(self):
         protocol = self.protocol
-        protocol.manager.on_peer_connect(protocol)
+        protocol.manager.on_peer_ready(protocol)
         protocol.lc_ping = LoopingCall(self.send_ping_if_necessary)
         protocol.lc_ping.start(1)
 
@@ -43,7 +43,6 @@ class ReadyState(BaseState):
 
     def on_exit(self):
         protocol = self.protocol
-        protocol.manager.on_peer_disconnect(protocol)
         protocol.lc_ping.stop()
 
     def send_get_data(self, hash_hex):
@@ -82,7 +81,8 @@ class ReadyState(BaseState):
             raise ValueError('Unknown payload load')
 
         if self.protocol.manager.tx_storage.get_genesis_by_hash_bytes(tx.hash):
-            print('!!! WE JUST GOT A GENESIS')
+            # We just got the data of a genesis tx/block. What should we do?
+            # Will it reduce peer reputation score?
             return
         self.protocol.manager.on_new_tx(tx, conn=self.protocol)
 

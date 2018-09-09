@@ -41,8 +41,11 @@ class HathorProtocol(object):
     def __init__(self, factory, manager):
         self.factory = factory
         self.manager = manager
+        self.pubsub = self.manager.pubsub
 
         self._state_instances = {}
+
+        self.app_version = 'Unknown'
 
         # The peer on the other side of the connection.
         self.peer = None
@@ -56,6 +59,9 @@ class HathorProtocol(object):
         # The last time a request was send to this peer.
         self.last_request = 0
 
+        # The time in which the connection was established.
+        self.connection_time = 0
+
         # The current state of the connection.
         self.state = None
 
@@ -66,7 +72,9 @@ class HathorProtocol(object):
     def change_state(self, state_enum):
         if state_enum not in self._state_instances:
             state_cls = state_enum.value
-            self._state_instances[state_enum] = state_cls(self)
+            instance = state_cls(self)
+            instance.state_name = state_enum.name
+            self._state_instances[state_enum] = instance
         new_state = self._state_instances[state_enum]
         if new_state != self.state:
             if self.state:
@@ -81,16 +89,22 @@ class HathorProtocol(object):
         remote = self.transport.getPeer()
         log.msg('HathorProtocol.connectionMade()', remote)
 
+        self.connection_time = time.time()
+
         # The initial state is HELLO.
         self.change_state(self.PeerState.HELLO)
+
+        self.manager.on_peer_connect(self)
 
     def on_disconnect(self, reason):
         """ Executed when the connection is lost.
         """
         remote = self.transport.getPeer()
         log.msg('HathorProtocol.connectionLost()', remote, reason)
-        self.state.on_exit()
-        self.state = None
+        if self.state:
+            self.state.on_exit()
+            self.state = None
+        self.manager.on_peer_disconnect(self)
 
     def send_message(self, cmd, payload):
         """ A generic message which must be implemented to send a message
@@ -149,14 +163,20 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
         self.on_disconnect(reason)
 
     def lineReceived(self, line):
-        line = line.decode('utf-8')
-        msgtype, _, msgdata = line.partition(' ')
+        try:
+            line = line.decode('utf-8')
+        except UnicodeDecodeError:
+            self.transport.loseConnection()
+            return
 
+        msgtype, _, msgdata = line.partition(' ')
         try:
             cmd = self.state.ProtocolCommand(msgtype)
-            self.recv_message(cmd, msgdata)
         except ValueError:
             self.transport.loseConnection()
+            return
+        else:
+            self.recv_message(cmd, msgdata)
 
     def send_message(self, cmd_enum, payload=None):
         cmd = cmd_enum.value

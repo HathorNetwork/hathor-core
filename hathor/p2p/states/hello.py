@@ -59,5 +59,6 @@ class HelloState(BaseState):
             protocol.send_error_and_close_connection('Wrong network.')
             return
 
+        protocol.app_version = data['app']
         protocol.hello_nonce_received = data['nonce']
         protocol.change_state(protocol.PeerState.PEER_ID)

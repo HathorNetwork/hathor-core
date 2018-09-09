@@ -50,6 +50,9 @@ extensions = [
     'sphinx.ext.autodoc',
 ]
 
+# Include __init__'s docstring with class's docstring.
+autoclass_content = 'both'
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
