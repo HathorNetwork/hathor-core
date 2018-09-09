@@ -9,7 +9,6 @@ from hathor.crypto.util import get_input_data, decode_input_data, \
                                get_address_b58_from_public_key_bytes, \
                                get_address_b58_from_bytes
 
-# TODO add timestamp
 UnspentTx = namedtuple('UnspentTx', ['tx_id', 'index', 'value', 'timestamp'])
 # tx_id is the tx spending the output
 # from_tx_id is the tx where we received the tokens
@@ -21,7 +20,7 @@ WalletOutputInfo = namedtuple('WalletOutputInfo', ['address', 'value'])
 
 
 class Wallet(object):
-    def __init__(self, keys=None, directory='./', filename='keys.json'):
+    def __init__(self, keys=None, directory='./', filename='keys.json', history_file='history.json'):
         """ A wallet will hold key pair objects and the unspent and
         spent transactions associated with the keys.
 
@@ -31,8 +30,10 @@ class Wallet(object):
         keys: set of KeyPair objects (b58_address => KeyPair)
         directory: location where to store associated files
         filename: name of the keys file, relative to directory
+        history_file: name of the history file, relative to directory
         """
         self.filepath = os.path.join(directory, filename)
+        self.history_path = os.path.join(directory, history_file)
         self.keys = keys or {}
         self.unused_keys = set(key.get_address_b58() for key in self.keys.values() if not key.used)
         self.unspent_txs = {}
@@ -166,6 +167,10 @@ class Wallet(object):
 
         This is a very simple algorithm, so it does not try to find the best combination
         of inputs.
+
+        If the wallet does not have enough balance, we just log a warning and return
+        all available unspent tx. The final tx won't be valid, as sum(inputs) != sum(outputs),
+        but we let the network deal with it.
         """
         inputs_tx = []
         total_inputs_amount = 0
@@ -182,7 +187,7 @@ class Wallet(object):
                 break
 
         if total_inputs_amount < amount:
-            # TODO raise exception I dont have this amount of tokens
+            # TODO log warning: I dont have this amount of tokens
             pass
 
         return inputs_tx, total_inputs_amount
@@ -236,8 +241,55 @@ class Wallet(object):
                 updated = True
 
         if updated:
-            # TODO update disk file
+            # TODO update history file?
+            # XXX should wallet always update it or it will be called externally?
             pass
+
+    def save_history_to_file(self):
+        data = {}
+        data['balance'] = self.balance
+        data['unspent_txs'] = unspent_txs = {}
+
+        data['spent_txs'] = [spent_tx.to_dict() for spent_tx in self.spent_txs]
+
+        for address_b58, utxo_list in self.unspent_txs.items():
+            unspent_txs[address_b58] = [utxo.to_dict() for utxo in utxo_list]
+
+        with open(self.history_path, 'w') as json_file:
+            json_file.write(json.dumps(data, indent=4))
+
+    def read_history_from_file(self):
+        json_data = {}
+        with open(self.history_path, 'r') as json_file:
+            json_data = json.loads(json_file.read())
+
+        self.balance = json_data['balance']
+        self.spent_txs = [SpentTx.from_dict(data) for data in json_data['spent_txs']]
+
+        self.unspent_txs = {}
+        for address_b58, utxo_list in json_data['unspent_txs'].items():
+            self.unspent_txs[address_b58] = [UnspentTx.from_dict(utxo) for utxo in utxo_list]
+
+    def replay_from_storage(self, tx_storage):
+        """Builds this wallet's state based on all transactions in the storage
+        """
+
+        self.unspent_txs = {}
+        self.spent_txs = []
+        self.balance = 0
+
+        # TODO we won't be able to hold all transactions in memory in the future
+        all_txs = tx_storage.get_all_transactions()
+
+        # XXX can we trust tx timestamp to order the transactions? This ordering is
+        # important to the wallet. If it replays the transactions in wrong order,
+        # an exception may happen
+        ordered_txs = sorted(all_txs, key=lambda t: t.timestamp, reverse=False)
+
+        for tx in ordered_txs:
+            self.on_new_tx(tx)
+
+        # TODO update history file?
 
     def get_history(self, count=10, page=1):
         history = []
@@ -253,3 +305,60 @@ class Wallet(object):
         end_index = start_index + count
 
         return ordered_history[start_index:end_index], total
+
+
+class UnspentTx:
+    def __init__(self, tx_id, index, value, timestamp):
+        self.tx_id = tx_id
+        self.index = index
+        self.value = value
+        self.timestamp = timestamp
+
+    def to_dict(self):
+        data = {}
+        data['timestamp'] = self.timestamp
+        data['tx_id'] = self.tx_id.hex()
+        data['index'] = self.index
+        data['value'] = self.value
+        return data
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(
+            bytes.fromhex(data['tx_id']),
+            data['index'],
+            data['value'],
+            data['timestamp']
+        )
+
+
+class SpentTx:
+    def __init__(self, tx_id, from_tx_id, from_index, value, timestamp):
+        """tx_id: the tx spending the output
+        from_tx_id: tx where we received the tokens
+        from_index: index in the above tx
+        """
+        self.tx_id = tx_id
+        self.from_tx_id = from_tx_id
+        self.from_index = from_index
+        self.value = value
+        self.timestamp = timestamp
+
+    def to_dict(self):
+        data = {}
+        data['timestamp'] = self.timestamp
+        data['tx_id'] = self.tx_id.hex()
+        data['from_tx_id'] = self.from_tx_id.hex()
+        data['from_index'] = self.from_index
+        data['value'] = self.value
+        return data
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(
+            bytes.fromhex(data['tx_id']),
+            bytes.fromhex(data['from_tx_id']),
+            data['from_index'],
+            data['value'],
+            data['timestamp']
+        )
