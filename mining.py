@@ -7,13 +7,17 @@ from hathor.transaction.exceptions import HathorError
 
 import datetime
 import requests
+import time
 import base64
 import argparse
+from json.decoder import JSONDecodeError
+
+_SLEEP_ON_ERROR_SECONDS = 5
 
 
 def worker(q_in, q_out):
     block, start, end, sleep_seconds = q_in.get()
-    block.mining(start, end, sleep_seconds=sleep_seconds)
+    block.start_mining(start, end, sleep_seconds=sleep_seconds)
     q_out.put(block.nonce)
 
 
@@ -33,8 +37,14 @@ if __name__ == '__main__':
     while True:
         print('Requesting mining information...')
         response = requests.get(args.url)
-        data = response.json()
-
+        try:
+            data = response.json()
+        except JSONDecodeError as e:
+            print('Error reading response from server: %s' % response)
+            print(e)
+            print('Waiting %d seconds to try again...' % _SLEEP_ON_ERROR_SECONDS)
+            time.sleep(_SLEEP_ON_ERROR_SECONDS)
+            continue
         block_bytes = base64.b64decode(data['block_bytes'])
         block = Block.create_from_struct(block_bytes)
         print('Mining block with weight {}'.format(block.weight))

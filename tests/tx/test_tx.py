@@ -3,9 +3,9 @@ import os
 import json
 import base64
 from hathor.transaction import Transaction, TxInput, TxOutput, MAX_NUM_INPUTS, MAX_NUM_OUTPUTS
+from hathor.crypto.exceptions import InputSignatureError, InputPublicKeyError
 from hathor.transaction.storage import TransactionMemoryStorage
-from hathor.transaction.exceptions import InputOutputMismatch, InputSignatureError, \
-                                          InputPublicKeyError, TooManyInputs, TooManyOutputs
+from hathor.transaction.exceptions import InputOutputMismatch, TooManyInputs, TooManyOutputs
 from hathor.crypto.util import get_private_key_from_bytes, get_public_key_from_bytes, \
                         get_input_data, get_address_from_public_key
 

@@ -25,14 +25,6 @@ class WeightError(HathorError):
     """Transaction not using correct weight"""
 
 
-class InputSignatureError(HathorError):
-    """Incorrect input signature"""
-
-
-class InputPublicKeyError(HathorError):
-    """Public key does not match address"""
-
-
 class BlockError(HathorError):
     """Base class for Block-specific errors"""
 

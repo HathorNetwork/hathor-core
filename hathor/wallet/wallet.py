@@ -77,6 +77,10 @@ class Wallet(object):
 
         return address
 
+    def get_unused_address_bytes(self, mark_as_used=True):
+        address_str = self.get_unused_address(mark_as_used)
+        return address_str.encode('utf-8')
+
     def generate_keys(self, count=10):
         for _ in range(count):
             key = KeyPair()

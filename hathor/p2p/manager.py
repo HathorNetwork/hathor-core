@@ -164,7 +164,7 @@ class HathorManager(object):
 
     def generate_mining_block(self):
         # TODO Cache to prevent unnecessary processing.
-        address = self.wallet.get_unused_address(mark_as_used=False)
+        address = self.wallet.get_unused_address_bytes(mark_as_used=False)
         # TODO Get maximum allowed amount.
         amount = 10000
         tx_outputs = [
