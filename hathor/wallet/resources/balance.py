@@ -11,13 +11,13 @@ class BalanceResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, factory):
-        # Important to have the factory so we can know the tx_storage
-        self.factory = factory
+    def __init__(self, manager):
+        # Important to have the manager so we can know the tx_storage
+        self.manager = manager
 
     def render_GET(self, request):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        data = {'balance': 2000}
+        data = {'balance': self.manager.wallet.balance}
         return json.dumps(data, indent=4).encode('utf-8')

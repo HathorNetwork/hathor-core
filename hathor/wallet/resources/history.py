@@ -2,6 +2,7 @@ from twisted.web import resource
 from hathor.api_util import set_cors
 
 import json
+import math
 
 
 class HistoryResource(resource.Resource):
@@ -11,35 +12,30 @@ class HistoryResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, factory):
-        # Important to have the factory so we can know the tx_storage
-        self.factory = factory
+    def __init__(self, manager):
+        # Important to have the manager so we can know the tx_storage
+        # TODO Change manager to manager in all resources
+        self.manager = manager
 
     def render_GET(self, request):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
+        page = int(request.args[b'page'][0])
+        count = int(request.args[b'count'][0])
+
+        history_tuple, total = self.manager.wallet.get_history(count, page)
+
+        history = []
+        for obj in history_tuple:
+            history_dict = obj._asdict()
+            history_dict['tx_id'] = history_dict['tx_id'].hex()
+            if 'from_tx_id' in history_dict:
+                history_dict['from_tx_id'] = history_dict['from_tx_id'].hex()
+            history.append(history_dict)
+
         data = {
-            'history': [
-                {
-                    'tx_id': '1234',
-                    'index': 1,
-                    'value': 1000,
-                    'timestamp': 1536173681
-                },
-                {
-                    'tx_id': '2345',
-                    'index': 0,
-                    'value': 5001,
-                    'timestamp': 1536173659,
-                },
-                {
-                    'tx_id': '7890',
-                    'index': 0,
-                    'value': 1001,
-                    'timestamp': 1536173259,
-                    'spent': '1111',
-                },
-            ]
+            'history': history,
+            'total_pages': math.ceil(total / count)
         }
         return json.dumps(data, indent=4).encode('utf-8')

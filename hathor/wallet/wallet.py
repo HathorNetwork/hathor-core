@@ -238,3 +238,18 @@ class Wallet(object):
         if updated:
             # TODO update disk file
             pass
+
+    def get_history(self, count=10, page=1):
+        history = []
+        unspent = self.unspent_txs.values()
+        for obj in unspent:
+            history += obj
+
+        history += self.spent_txs
+        ordered_history = sorted(history, key=lambda el: el.timestamp, reverse=True)
+
+        total = len(ordered_history)
+        start_index = (page - 1) * count
+        end_index = start_index + count
+
+        return ordered_history[start_index:end_index], total
