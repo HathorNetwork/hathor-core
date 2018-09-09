@@ -11,6 +11,13 @@ import base64
 MAX_NONCE = 2 ** 32
 MAX_NUM_INPUTS = MAX_NUM_OUTPUTS = 256
 
+_INPUT_SIZE_BYTES = 32  # 256 bits
+
+# Version (H), weight (f), timestamp (I), height (Q), inputs len (H), outputs len (H) and
+# parents len (H).
+# H = unsigned short (2 bytes), f = float(4), I = unsigned int (4), Q = unsigned long long int (64)
+_TRANSACTION_FORMAT_STRING = '!HfIQHHH'  # Update code below if this changes.
+
 
 class BaseTransaction:
     """Hathor base transaction"""
@@ -70,14 +77,14 @@ class BaseTransaction:
 
         tx = cls()
         (tx.version, tx.weight, tx.timestamp, tx.height, inputs_len, outputs_len, parents_len), buf = (
-            unpack('!HfIHHHH', buf))
+            unpack(_TRANSACTION_FORMAT_STRING, buf))
 
         for _ in range(parents_len):
             parent, buf = unpack_len(32, buf)  # 256bits
             tx.parents.append(parent)
 
         for _ in range(inputs_len):
-            input_tx_id, buf = unpack_len(32, buf)  # 256bits
+            input_tx_id, buf = unpack_len(_INPUT_SIZE_BYTES, buf)  # 256bits
             (input_index, data_len), buf = unpack('!BH', buf)
             input_data, buf = unpack_len(data_len, buf)
             txin = Input(input_tx_id, input_index, input_data)
@@ -190,10 +197,8 @@ class BaseTransaction:
 
     def get_struct_without_nonce(self):
         """Return the struct of the transaction without the nonce field"""
-        # First part is version (H), weight (f), timestamp (I), height (H), inputs len (H), outputs len (H) and
-        # parents len (H)
         struct_bytes = struct.pack(
-            '!HfIHHHH',
+            _TRANSACTION_FORMAT_STRING,
             self.version,
             self.weight,
             self.timestamp,
@@ -209,12 +214,14 @@ class BaseTransaction:
         for input_tx in self.inputs:
             struct_bytes += input_tx.tx_id
             struct_bytes += bytes([input_tx.index])  # 1 byte
+
             # data length
             struct_bytes += int_to_bytes(len(input_tx.data), 2)
             struct_bytes += input_tx.data
 
         for output_tx in self.outputs:
             struct_bytes += int_to_bytes(output_tx.value, 4)
+
             # script length
             struct_bytes += int_to_bytes(len(output_tx.script), 2)
             struct_bytes += output_tx.script
@@ -239,7 +246,7 @@ class BaseTransaction:
 
     def resolve(self):
         """Start mining to achieve the target"""
-        hash_bytes = self.mining()
+        hash_bytes = self.start_mining()
         if hash_bytes:
             self.hash = hash_bytes
             return True
@@ -265,7 +272,7 @@ class BaseTransaction:
     def update_hash(self):
         self.hash = self.calculate_hash()
 
-    def mining(self, start=0, end=MAX_NONCE, sleep_seconds=0):
+    def start_mining(self, start=0, end=MAX_NONCE, sleep_seconds=0):
         """Starts mining until it solves the problem (finds the nonce that satisfies the conditions).
 
         `sleep_seconds` is the number of seconds the mining algorithm will sleep every attempt. You should
@@ -336,6 +343,10 @@ class Input:
             index: index of the output you are spending from transaction tx_id (1 byte)
             data: data to solve output script
         """
+        assert isinstance(tx_id, bytes), 'Value is %s, type %s' % (str(tx_id), type(tx_id))
+        assert isinstance(index, int),  'Value is %s, type %s' % (str(index), type(index))
+        assert isinstance(data, bytes), 'Value is %s, type %s' % (str(data), type(data))
+
         self.tx_id = tx_id                  # bytes
         self.index = index                  # int
         self.data = data                    # bytes
@@ -347,6 +358,9 @@ class Output:
             value: amount spent (4 bytes)
             script: script in bytes
         """
+        assert isinstance(value, int), 'Value is %s, type %s' % (str(value), type(value))
+        assert isinstance(script, bytes), 'Value is %s, type %s' % (str(script), type(script))
+
         self.value = value                  # int
         self.script = script                # bytes
 

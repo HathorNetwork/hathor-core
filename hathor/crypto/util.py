@@ -1,7 +1,7 @@
 import struct
 import hashlib
 import base58
-from hathor.transaction.exceptions import InputSignatureError, InputPublicKeyError
+from hathor.crypto.exceptions import InputSignatureError, InputPublicKeyError
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
@@ -74,6 +74,12 @@ def get_address_from_public_key(public_key):
 
 
 def get_address_b58_from_public_key(public_key):
+    """Gets the b58 address from a public key.
+
+    :param: ec.EllipticCurvePublicKey
+    :return: the b58-encoded address
+    :rtype: string
+    """
     return base58.b58encode(get_address_from_public_key(public_key)).decode('utf-8')
 
 

@@ -14,7 +14,10 @@
 #
 import os
 import sys
+
 sys.path.insert(0, os.path.abspath('../'))
+import hathor  # noqa: E402
+
 os.environ['GEN_DOCS'] = '1'
 
 
@@ -24,7 +27,7 @@ project = 'Hathor Network'
 copyright = '2018, Hathor Labs'
 author = 'Hathor Labs'
 
-import hathor
+
 # The short X.Y version
 version = '.'.join(hathor.__version__.split('.')[:2])
 # The full version, including alpha/beta/rc tags
