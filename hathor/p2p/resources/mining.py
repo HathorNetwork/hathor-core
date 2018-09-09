@@ -16,21 +16,21 @@ class MiningResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, factory):
-        self.factory = factory
+    def __init__(self, manager):
+        self.manager = manager
 
     def render_POST(self, request):
         block_bytes_str = request.args[b'block_bytes'][0]
         block_bytes = base64.b64decode(block_bytes_str)
         block = Block.create_from_struct(block_bytes)
         print('New block found: {}'.format(block.hash.hex()))
-        self.factory.propagate_tx(block)
+        self.manager.propagate_tx(block)
         return b''
 
     def render_GET(self, request):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
 
-        block = self.factory.generate_mining_block()
+        block = self.manager.generate_mining_block()
         block_bytes = block.get_struct()
 
         data = {
