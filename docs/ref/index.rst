@@ -7,3 +7,4 @@ API Reference
    p2p
    transaction
    wallet
+   pubsub

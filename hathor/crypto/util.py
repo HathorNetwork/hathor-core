@@ -137,3 +137,50 @@ def decode_input_data(input_data):
     public_key_len = len(input_data) - signature_len - 2
     format_str = 'B%dsB%ds' % (signature_len, public_key_len)
     return struct.unpack(format_str, input_data)
+
+
+def generate_privkey_crt_pem():
+    """ Generates a new certificate with a new private key. This certificate is
+    used only for TLS connection, and won't be used to identify the peer.
+
+    Adapted from:
+    https://github.com/twisted/twisted/blob/trunk/src/twisted/test/server.pem
+
+    :return: Private key and certificate in PEM format
+    :rtype: string
+    """
+    from datetime import datetime
+
+    from OpenSSL.crypto import FILETYPE_PEM, TYPE_RSA, X509, PKey, dump_privatekey, dump_certificate
+
+    key = PKey()
+    key.generate_key(TYPE_RSA, 2048)
+
+    cert = X509()
+
+    # It is optional to have a subject and an issue in a certificate.
+    # It works with and without these fields.
+    # issuer = cert.get_issuer()
+    # subject = cert.get_subject()
+    # for dn in [issuer, subject]:
+    #     dn.C = b'XX'   # Country
+    #     dn.ST = b'XX'  # State or Province
+    #     dn.L = b'XX'   # Locality
+    #     dn.CN = b'testnet.hathor.network'  # Common Name
+    #     dn.O = b'Hathor Network'  # noqa: E741 ambiguous variable name 'O'
+    #     dn.OU = b'testnet'   # Organization Unit
+    #     dn.emailAddress = b'noreply@testnet.hathor.network'
+
+    # Set the period in which the certificate is valid. In this case, the
+    # reference time is now, and it will be valid between 10 minutes ago
+    # and 100 years from now. This 10 minutes tolerance is to accomodate
+    # differences in the time between peers.
+    # To check the valid period, run a server with ssl and then run:
+    # `openssl s_client -showcerts -connect localhost:8000 | openssl x509 -noout -dates`
+    cert.set_serial_number(datetime.now().toordinal())
+    cert.gmtime_adj_notBefore(-60 * 10)
+    cert.gmtime_adj_notAfter(60 * 60 * 24 * 365 * 100)
+
+    cert.set_pubkey(key)
+    cert.sign(key, 'sha256')
+    return dump_privatekey(FILETYPE_PEM, key) + dump_certificate(FILETYPE_PEM, cert)
