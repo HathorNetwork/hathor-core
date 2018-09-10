@@ -11,6 +11,7 @@ from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 from hathor.p2p.manager import HathorManager
 from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage
 from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, SendTokensResource
+from hathor.transaction.resources import DecodeTxResource, PushTxResource
 import hathor
 
 import argparse
@@ -80,6 +81,8 @@ if __name__ == '__main__':
         resources = (
             (b'status', StatusResource(manager), root),
             (b'mining', MiningResource(manager), root),
+            (b'decode_tx', DecodeTxResource(manager), root),
+            (b'push_tx', PushTxResource(manager), root),
             (b'transaction', TransactionResource(manager), root),
             (b'balance', BalanceResource(manager), wallet_resource),
             (b'history', HistoryResource(manager), wallet_resource),
