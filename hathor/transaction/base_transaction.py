@@ -65,7 +65,7 @@ class BaseTransaction:
                 self.timestamp, self.version, self.weight, self.height, self.hash))
 
     @classmethod
-    def create_from_struct(cls, struct_bytes):
+    def create_from_struct(cls, struct_bytes, storage=None):
         def unpack(fmt, buf):
             size = struct.calcsize(fmt)
             return struct.unpack(fmt, buf[:size]), buf[size:]
@@ -102,6 +102,7 @@ class BaseTransaction:
             raise ValueError('Invalid sequence of bytes')
 
         tx.hash = tx.calculate_hash()
+        tx.storage = storage
         return tx
 
     def __eq__(self, other):

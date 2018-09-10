@@ -4,6 +4,7 @@ from hathor.wallet.wallet import WalletOutputInfo, WalletInputInfo
 from hathor.transaction import Transaction
 
 import json
+import base58
 
 
 class SendTokensResource(resource.Resource):
@@ -29,8 +30,10 @@ class SendTokensResource(resource.Resource):
         # Getting errors from methods and handling them
         outputs = []
         for output in data['outputs']:
-            output['value'] = int(output['value'])
-            outputs.append(WalletOutputInfo(**output))
+            # TODO refactor: move to something like wallet.decode_address
+            address = base58.b58decode(output['address'])  # bytes
+            value = int(output['value'])
+            outputs.append(WalletOutputInfo(address=address, value=value))
 
         if len(data['inputs']) == 0:
             tx = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
@@ -44,7 +47,9 @@ class SendTokensResource(resource.Resource):
             tx = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
 
         # TODO Send tx to be mined
-        print(tx)
+        tx.weight = 10
+        tx.resolve()
+        self.manager.propagate_tx(tx)
 
         ret = {
             'success': True

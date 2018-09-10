@@ -192,7 +192,7 @@ class HathorManager(object):
                 )
                 return
             print('New block found: {}'.format(tx.hash_hex))
-            count_blocks = self.tx_storage.count_blocks()
+            count_blocks = self.tx_storage.get_block_count()
             if count_blocks % self.blocks_per_difficulty == 0:
                 print('Adjusting difficulty...')
                 avg_dt, new_weight = self.calculate_block_difficulty()
@@ -219,6 +219,8 @@ class HathorManager(object):
         # If we're still syncing, let's check if we're ready now.
         if self.node_sync_state == self.NodeSyncState.SYNCING:
             self.try_to_synchronize()
+
+        print('New tx: {}'.format(tx.hash.hex()))
 
     def on_best_height(self, best_height, conn=None):
         """A "best height" value was received from a peer."""
