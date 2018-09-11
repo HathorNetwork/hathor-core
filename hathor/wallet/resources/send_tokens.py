@@ -48,6 +48,7 @@ class SendTokensResource(resource.Resource):
 
         # TODO Send tx to be mined
         tx.weight = 10
+        tx.parents = self.manager.get_new_tx_parents()
         tx.resolve()
         self.manager.propagate_tx(tx)
 

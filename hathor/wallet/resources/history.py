@@ -29,9 +29,9 @@ class HistoryResource(resource.Resource):
         history = []
         for obj in history_tuple:
             history_dict = obj.to_dict()
-            history_dict['tx_id'] = history_dict['tx_id'].hex()
+            history_dict['tx_id'] = history_dict['tx_id']
             if 'from_tx_id' in history_dict:
-                history_dict['from_tx_id'] = history_dict['from_tx_id'].hex()
+                history_dict['from_tx_id'] = history_dict['from_tx_id']
             history.append(history_dict)
 
         data = {

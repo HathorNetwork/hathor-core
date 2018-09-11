@@ -28,6 +28,7 @@ class ReadyState(BaseState):
             self.ProtocolCommand.DATA: self.handle_data,
             self.ProtocolCommand.GET_BLOCKS: self.handle_get_blocks,
             self.ProtocolCommand.BLOCKS: self.handle_blocks,
+
             self.ProtocolCommand.GET_BEST_HEIGHT: self.handle_get_best_height,
             self.ProtocolCommand.BEST_HEIGHT: self.handle_best_height,
         })
@@ -104,9 +105,9 @@ class ReadyState(BaseState):
         self.send_message(self.ProtocolCommand.GET_BLOCKS, payload)
 
     def handle_get_blocks(self, payload):
-        print('handle_get_blocks;', payload)
-        block_hashes = self.protocol.manager.tx_storage.get_block_hashes_after(payload)
-        block_hashes_hex = [x.hex() for x in block_hashes]
+        print('handle_get_blocks:', payload)
+        blocks = self.protocol.manager.tx_storage.get_blocks_before(payload)
+        block_hashes_hex = [x.hash.hex() for x in blocks]
         output_payload = json.dumps(block_hashes_hex)
         self.send_message(self.ProtocolCommand.BLOCKS, output_payload)
 
