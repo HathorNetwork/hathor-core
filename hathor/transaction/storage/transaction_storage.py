@@ -1,6 +1,8 @@
 # encoding: utf-8
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
 
+from collections import deque
+
 
 class TransactionStorage:
     def __init__(self):
@@ -9,27 +11,64 @@ class TransactionStorage:
             raise Exception('You cannot directly create an instance of this class.')
 
     def _init_caches(self):
-        self._cache_tip_blocks = set()
-        self._cache_block_counts = 0
+        self._cache_tips = {}  # Dict[bytes(hash), bool(is_block)]
+        self._cache_block_count = 0
+        self._cache_tx_count = 0
+
+        # We need to construct a topological sort, then iterate from
+        # genesis to tips.
+        topological_sort = self._topological_sort()
+        for tx_hash in topological_sort:
+            tx = self.get_transaction_by_hash_bytes(tx_hash)
+            self._add_to_cache(tx)
+
+    def _topological_sort(self):
+        visited = set()  # Set[bytes(hash)]
+        results = []  # List[bytes(hash)]
+        cnt = 0
         for tx in self.get_all_transactions():
-            if tx.is_block:
-                self._add_block_to_cache(tx)
+            cnt += 1
+            self._topological_sort_dfs(tx, visited, results)
+        assert(len(results) == cnt)
+        return results
 
-    def _add_block_to_cache(self, tx):
-        if not tx.is_block:
+    def _topological_sort_dfs(self, root, visited, results):
+        if root.hash in visited:
             return
-        for parent in tx.parents:
-            if parent.hex() in self._cache_tip_blocks:
-                self._cache_tip_blocks.remove(parent.hex())
-        self._cache_tip_blocks.add(tx.hash.hex())
-        self._cache_block_counts += 1
 
-    def count_blocks(self):
-        return self._cache_block_counts
+        stack = [root]
+        visited.add(root.hash)
+        while stack:
+            tx = stack[-1]
+            is_leaf = True
+            for parent_hash in tx.parents:
+                if parent_hash not in visited:
+                    is_leaf = False
+                    visited.add(parent_hash)
+                    parent = self.get_transaction_by_hash_bytes(parent_hash)
+                    stack.append(parent)
+            if is_leaf:
+                assert(tx == stack.pop())
+                results.append(tx.hash)
+
+    def _add_to_cache(self, tx):
+        for parent_hash in tx.parents:
+            if parent_hash in self._cache_tips:
+                self._cache_tips.pop(parent_hash)
+        self._cache_tips[tx.hash] = tx.is_block
+        if tx.is_block:
+            self._cache_block_count += 1
+        else:
+            self._cache_tx_count += 1
+
+    def get_block_count(self):
+        return self._cache_block_count
+
+    def get_tx_count(self):
+        return self._cache_tx_count
 
     def save_transaction(self, tx):
-        if tx.is_block:
-            self._add_block_to_cache(tx)
+        self._add_to_cache(tx)
 
     def transaction_exists_by_hash(self, hash_hex):
         raise NotImplementedError
@@ -70,9 +109,10 @@ class TransactionStorage:
         raise NotImplementedError
 
     def get_tip_blocks(self):
-        ret = []
-        for hash_hex in self._cache_tip_blocks:
-            ret.append(bytes.fromhex(hash_hex))
+        ret = []  # List[bytes(hash)]
+        for h, is_block in self._cache_tips.items():
+            if is_block:
+                ret.append(h)
         return ret
 
     def get_latest_block(self):
@@ -101,6 +141,35 @@ class TransactionStorage:
     def get_block_hashes_at_height(self, height):
         """Returns a list of all stored block objects with the given height."""
         raise NotImplementedError
+
+    def get_blocks_before(self, hash_hex, num_blocks=100):
+        """Run a BFS starting from the giving `hash_hex`.
+
+        :param hash_hex: Starting point of the BFS.
+        :type hash_hex: string(hex)
+
+        :param num_blocks: Number of blocks to be return.
+        :type num_blocks: int
+        """
+        ref_tx = self.get_transaction_by_hash(hash_hex)
+        if not ref_tx.is_block:
+            raise TransactionIsNotABlock
+        result = []  # List[Block]
+        pending_visits = deque(ref_tx.parents)  # List[bytes(hash)]
+        used = set(pending_visits)  # Set([bytes(hash)])
+        while pending_visits:
+            tx_hash = pending_visits.popleft()
+            tx = self.get_transaction_by_hash_bytes(tx_hash)
+            if not tx.is_block:
+                continue
+            result.append(tx)
+            if len(result) >= num_blocks:
+                break
+            for parent_hash in tx.parents:
+                if parent_hash not in used:
+                    used.add(parent_hash)
+                    pending_visits.append(parent_hash)
+        return result
 
     def get_block_hashes_after(self, hash_hex, num_blocks=100):
         """Retrieve the next num_blocks block hashes after the given hash. Return value is a list of hashes."""

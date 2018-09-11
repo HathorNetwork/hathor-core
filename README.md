@@ -62,6 +62,13 @@ Run tests with coverage:
 
 	nosetests --with-coverage --cover-package=hathor --cover-html
 
+Generate Sphinx docs:
+
+    cd docs
+    make html
+    make latexpdf
+
+The output will be written to `docs/_build/html/`.
 
 
 How to create a full-node in Ubuntu 16.04

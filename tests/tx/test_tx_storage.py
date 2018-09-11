@@ -57,7 +57,8 @@ class _BaseTransactionStorageTest:
                 tx.verify()
 
         def test_storage_basic(self):
-            self.assertEqual(1, self.tx_storage.count_blocks())
+            self.assertEqual(1, self.tx_storage.get_block_count())
+            self.assertEqual(2, self.tx_storage.get_tx_count())
 
             block_parents_hash = self.tx_storage.get_tip_blocks()
             self.assertEqual(1, len(block_parents_hash))
@@ -121,6 +122,45 @@ class _BaseTransactionStorageTest:
             self.assertEqual(latest_tx[0].hash, self.tx.hash)
             self.assertEqual(latest_tx[1].hash, self.genesis_txs[1].hash)
             self.assertEqual(latest_tx[2].hash, self.genesis_txs[0].hash)
+
+        def test_storage_new_blocks(self):
+            from hathor.p2p.manager import HathorManager
+            self.manager = HathorManager(tx_storage=self.tx_storage)
+
+            tip_blocks = self.tx_storage.get_tip_blocks()
+            self.assertEqual(tip_blocks, [self.genesis_blocks[0].hash])
+
+            block1 = self._add_new_block()
+            tip_blocks = self.tx_storage.get_tip_blocks()
+            self.assertEqual(tip_blocks, [block1.hash])
+
+            block2 = self._add_new_block()
+            tip_blocks = self.tx_storage.get_tip_blocks()
+            self.assertEqual(tip_blocks, [block2.hash])
+
+            # Block3 has the same parents as block2.
+            block3 = self._add_new_block(parents=block2.parents)
+            tip_blocks = self.tx_storage.get_tip_blocks()
+            self.assertEqual(set(tip_blocks), {block2.hash, block3.hash})
+
+            # Re-generate caches to test topological sort.
+            self.tx_storage._init_caches()
+            tip_blocks = self.tx_storage.get_tip_blocks()
+            self.assertEqual(set(tip_blocks), {block2.hash, block3.hash})
+
+            # Block4 has both blocks as parents
+            block4 = self._add_new_block()
+            tip_blocks = self.tx_storage.get_tip_blocks()
+            self.assertEqual(tip_blocks, [block4.hash])
+
+        def _add_new_block(self, parents=None):
+            block = self.manager.generate_mining_block()
+            if parents is not None:
+                block.parents = parents
+            block.weight = 10
+            self.assertTrue(block.resolve())
+            self.manager.tx_storage.save_transaction(block)
+            return block
 
 
 class TransactionJSONStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):

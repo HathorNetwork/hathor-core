@@ -35,6 +35,8 @@ class Wallet(object):
         self.filepath = os.path.join(directory, filename)
         self.history_path = os.path.join(directory, history_file)
         self.keys = keys or {}
+
+        # Set[string(base58)]
         self.unused_keys = set(key.get_address_b58() for key in self.keys.values() if not key.used)
         self.unspent_txs = {}
         self.spent_txs = []
@@ -80,7 +82,7 @@ class Wallet(object):
 
     def get_unused_address_bytes(self, mark_as_used=True):
         address_str = self.get_unused_address(mark_as_used)
-        return address_str.encode('utf-8')
+        return base58.b58decode(address_str)
 
     def generate_keys(self, count=10):
         for _ in range(count):

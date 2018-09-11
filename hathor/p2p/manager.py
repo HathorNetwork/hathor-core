@@ -4,7 +4,10 @@ from twisted.internet import reactor, endpoints
 from twisted.internet.task import LoopingCall
 import twisted.names.client
 
+from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import PeerStorage
+from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
+from hathor.p2p.exceptions import InvalidBlockHashesSequence
 from hathor.transaction import Block, TxOutput
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.crypto.util import generate_privkey_crt_pem
@@ -36,7 +39,7 @@ class HathorManager(object):
         SYNCING = 'SYNCING'  # This node still synchronizing with the network
         SYNCED = 'SYNCED'    # This node is up-to-date with the network
 
-    def __init__(self, server_factory, client_factory, peer_id, network, hostname=None,
+    def __init__(self, server_factory=None, client_factory=None, peer_id=None, network=None, hostname=None,
                  pubsub=None, wallet=None, tx_storage=None, peer_storage=None, default_port=40403):
         """
         :param server_factory: Factory used when new connections arrive.
@@ -67,10 +70,10 @@ class HathorManager(object):
         :type default_port: int
         """
         # Factories.
-        self.server_factory = server_factory
+        self.server_factory = server_factory or HathorServerFactory()
         self.server_factory.manager = self
 
-        self.client_factory = client_factory
+        self.client_factory = client_factory or HathorClientFactory()
         self.client_factory.manager = self
 
         # Hostname, used to be accessed by other peers.
@@ -89,8 +92,8 @@ class HathorManager(object):
 
         self.wallet = wallet or Wallet()
 
-        self.my_peer = peer_id
-        self.network = network
+        self.my_peer = peer_id or PeerId()
+        self.network = network or 'testnet'
         self.default_port = default_port
 
         self.blocks_per_difficulty = 5
@@ -160,13 +163,24 @@ class HathorManager(object):
             self.handshaking_peers.remove(protocol)
 
     def propagate_tx(self, tx):
+        """Push a new transaction to the network. It is used by both the wallet and the mining modules.
+        """
         self.tx_storage.save_transaction(tx)
         self.on_new_tx(tx)
 
-        # Only propagate transactions once we are sufficiently syned up with the rest of the network.
+        # Only propagate transactions once we are sufficiently synced up with the rest of the network.
         if self.node_sync_state == self.NodeSyncState.SYNCED:
             for conn in self.connected_peers.values():
-                conn.send_data(tx)
+                conn.state.send_data(tx)
+
+    def get_new_tx_parents(self):
+        """Select which transactions will be confirmed by a new transaction.
+
+        :return: The hashes of the parents for a new transaction.
+        :rtype: List[bytes(hash)]
+        """
+        parents = self.tx_storage.get_tip_transactions(count=2)
+        return parents
 
     def generate_mining_block(self):
         # TODO Cache to prevent unnecessary processing.
@@ -220,6 +234,7 @@ class HathorManager(object):
         if self.node_sync_state == self.NodeSyncState.SYNCING:
             self.try_to_synchronize()
 
+        self.wallet.on_new_tx(tx)
         print('New tx: {}'.format(tx.hash.hex()))
 
     def on_best_height(self, best_height, conn=None):
@@ -234,14 +249,49 @@ class HathorManager(object):
             self.node_sync_state = self.NodeSyncState.SYNCING
 
             # Send our latest block and request an inventory (list of hashes)
-            conn.send_get_blocks()
+            # conn.send_get_blocks()
 
-    def on_block_hashes_received(self, block_hashes, conn=None):
+    def ERIC_on_block_hashes_received(self, block_hashes, conn=None):
         """We have received a list of hashes of blocks we need to download, according to a peer."""
         hash_set = set(x for x in block_hashes)
         self.blocks_to_download.update(hash_set)  # Performs a union and stores in blocks_to_download.
         for h in hash_set:
             print('Need to download:', h)
+
+    def on_block_hashes_received(self, block_hashes, conn=None):
+        """We have received a list of hashes of blocks, according to a peer."""
+
+        # We receive hashes from right-to-left.
+        # Let's reverse it to work with hashes from left-to-right.
+        block_hashes = block_hashes[::-1]
+
+        # Let's check whether we know these received hashes.
+        for i, h in enumerate(block_hashes):
+            if not self.tx_storage.transaction_exists_by_hash(h):
+                first_unknown = i
+                break
+        else:
+            # All hashes are known. It seems we're sync'ed.
+            return
+
+        # Validate block hashes sequence.
+        for h in block_hashes[first_unknown:]:
+            if self.tx_storage.transaction_exists_by_hash(h):
+                # Something is wrong. We're supposed to unknown all hashes after the first unknown.
+                raise InvalidBlockHashesSequence
+
+        if first_unknown == 0:
+            # All hashes are unknown.
+            self.unknown_blocks.extend(block_hashes)
+            self.state.send_get_blocks(block_hashes[0])
+            return
+
+        # Part is known, part is unknown.
+        self.unknown_blocks.extend(block_hashes[first_unknown:])
+        # Now, self.unknown_blocks[0].parents are known.
+        # So, let's sync block after block.
+        raise NotImplementedError
+
         self.try_to_synchronize()
 
     def calculate_block_difficulty(self):
