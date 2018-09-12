@@ -227,3 +227,54 @@ class TransactionStorage:
         # XXX Just for testing, transforming generator into list would be impossible with many transactions
         transactions = list(tx for tx in self.get_all_transactions())
         return self.get_latest(transactions=transactions, count=count, page=page)
+
+    def graphviz(self, format='pdf'):
+        """Return a Graphviz object that can be rendered to generate a visualization of the DAG.
+
+        :param format: Format of the visualization (pdf, png, or jpg)
+        :type format: string
+
+        :return: A Graphviz object
+        :rtype: :py:class:`graphviz.Digraph`
+        """
+        from graphviz import Digraph
+
+        dot = Digraph(format=format)
+
+        g_blocks = dot.subgraph(name='blocks')
+        g_txs = dot.subgraph(name='txs')
+        g_genesis = dot.subgraph(name='genesis')
+
+        tx_tips_attrs = dict(style='filled', fillcolor='#F5D76E')
+        block_attrs = dict(shape='box', style='filled', fillcolor='#EC644B')
+
+        dot.attr('node', shape='oval', style='')
+        nodes_iter = self._topological_sort()
+        for i, tx in enumerate(nodes_iter):
+            name = tx.hash.hex()
+            attrs_node = {'label': tx.hash.hex()[-4:]}
+            attrs_edge = {}
+
+            if tx.is_block:
+                attrs_node.update(block_attrs)
+                attrs_edge.update(dict(pendiwth='4'))
+
+            if tx.hash in self._cache_tips:
+                attrs_node.update(tx_tips_attrs)
+
+            if tx.is_genesis:
+                attrs_node.update(dict(fillcolor='#87D37C', style='filled'))
+                with g_genesis as c:
+                    c.node(name, **attrs_node)
+            elif tx.is_block:
+                with g_blocks as c:
+                    c.node(name, **attrs_node)
+            else:
+                with g_txs as c:
+                    c.node(name, **attrs_node)
+
+            for parent_hash in tx.parents:
+                dot.edge(name, parent_hash.hex(), **attrs_edge)
+
+        dot.attr(rankdir='RL')
+        return dot

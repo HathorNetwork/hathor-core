@@ -194,6 +194,8 @@ class HathorManager(object):
         :rtype: List[bytes(hash)]
         """
         parents = self.tx_storage.get_tip_transactions(count=2)
+        if len(parents) == 1:
+            pass
         return parents
 
     def generate_mining_block(self):
@@ -206,7 +208,7 @@ class HathorManager(object):
         ]
         tip_blocks = self.tx_storage.get_tip_blocks()
         new_height = self.tx_storage.get_best_height() + 1
-        tip_txs = self.tx_storage.get_tip_transactions(count=2)
+        tip_txs = self.get_new_tx_parents()
         parents = tip_blocks + tip_txs
         return Block(weight=self.block_weight, outputs=tx_outputs, parents=parents, storage=self.tx_storage,
                      height=new_height)

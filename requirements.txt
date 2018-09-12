@@ -6,6 +6,8 @@ cryptography==2.3.1
 pyOpenSSL==18.0.0
 service-identity
 
+graphviz==0.9
+
 requests
 
 flake8
