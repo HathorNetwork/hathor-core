@@ -4,8 +4,8 @@ from hathor.transaction.block import Block
 
 def genesis_transactions(tx_storage):
     TX_GENESIS1 = Transaction(
-        hash=bytes.fromhex('000000fca35d25c2b575bec054308a0c24c3d0b798f1268bec562ec160ce0f68'),
-        nonce=17262397,
+        hash=bytes.fromhex('000000831cff82fa730cbdf8640fae6c130aab1681336e2f8574e314a5533849'),
+        nonce=10887893,
         timestamp=1533643201,
         weight=24,
         height=1,
@@ -13,8 +13,8 @@ def genesis_transactions(tx_storage):
     )
 
     TX_GENESIS2 = Transaction(
-        hash=bytes.fromhex('00000040ec1ee714cc1a8b5e49fced848484ab8081b97394c93da1425c4e6179'),
-        nonce=15665735,
+        hash=bytes.fromhex('0000001df6f77892cd562a2d7829bc17d0130546edfc6a81e0a431af4b8aa51e'),
+        nonce=4730590,
         timestamp=1533643202,
         weight=24,
         height=1,
@@ -23,8 +23,8 @@ def genesis_transactions(tx_storage):
 
     GENESIS_OUTPUT = TxOutput(1000, bytes.fromhex('98f12b659336a1874ddbae37837fa8a39f66b53d'))
     BLOCK_GENESIS = Block(
-        hash=bytes.fromhex('0000084e8ab42ae037210690854a3452ba6c8b4c0e02567157003ea4a364008a'),
-        nonce=3508191,
+        hash=bytes.fromhex('000000a0f82cfee5431e03b071364970861ffa1b0633f73ca7f462987ec34195'),
+        nonce=3358544,
         timestamp=1533643200,
         weight=24,
         height=1,

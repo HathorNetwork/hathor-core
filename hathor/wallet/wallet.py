@@ -3,17 +3,11 @@ import json
 import base58
 from collections import namedtuple
 from hathor.wallet.keypair import KeyPair
-from hathor.wallet.exceptions import WalletOutOfSync
+from hathor.wallet.exceptions import WalletOutOfSync, InsuficientFunds, OutOfUnusedAddresses, PrivateKeyNotFound
 from hathor.transaction import TxInput, TxOutput
 from hathor.crypto.util import get_input_data, decode_input_data, \
                                get_address_b58_from_public_key_bytes, \
                                get_address_b58_from_bytes
-
-UnspentTx = namedtuple('UnspentTx', ['tx_id', 'index', 'value', 'timestamp'])
-# tx_id is the tx spending the output
-# from_tx_id is the tx where we received the tokens
-# from_index is the index in the above tx
-SpentTx = namedtuple('SpentTx', ['tx_id', 'from_tx_id', 'from_index', 'value', 'timestamp'])
 
 WalletInputInfo = namedtuple('WalletInputInfo', ['tx_id', 'index', 'private_key'])
 WalletOutputInfo = namedtuple('WalletOutputInfo', ['address', 'value'])
@@ -27,20 +21,33 @@ class Wallet(object):
         All files will be stored in the same directory, and it should
         only contain wallet associated files.
 
-        keys: set of KeyPair objects (b58_address => KeyPair)
-        directory: location where to store associated files
-        filename: name of the keys file, relative to directory
-        history_file: name of the history file, relative to directory
+        :param keys: keys to initialize this wallet
+        :type keys: Dict[string(base58), :py:class:`hathor.wallet.keypair.KeyPair`]
+
+        :param directory: where to store wallet associated files
+        :type directory: string
+
+        :param filename: name of keys file
+        :type filename: string
+
+        :param history_file: name of history file
+        :type history_file: string
         """
         self.filepath = os.path.join(directory, filename)
         self.history_path = os.path.join(directory, history_file)
         self.keys = keys or {}  # Dict[string(b58_address), KeyPair]
 
         # Set[string(base58)]
-        self.unused_keys = set(key.get_address_b58() for key in self.keys.values() if not key.used)
+        self.unused_keys = set(key.address for key in self.keys.values() if not key.used)
+
+        # Dict[string(base58), List[UnspentTx]]
         self.unspent_txs = {}
+
+        # List[SpentTx]
         self.spent_txs = []
+
         self.balance = 0
+        self.password = None
 
     def _manually_initialize(self):
         if os.path.isfile(self.filepath):
@@ -51,13 +58,17 @@ class Wallet(object):
         """Reads the keys from file and updates the keys dictionary
 
         Uses the directory and filename specified in __init__
+
+        :rtype: None
         """
         new_keys = {}
         with open(self.filepath, 'r') as json_file:
             json_data = json.loads(json_file.read())
             for data in json_data:
                 keypair = KeyPair.from_json(data)
-                new_keys[keypair.get_address_b58()] = keypair
+                new_keys[keypair.address] = keypair
+                if not keypair.used:
+                    self.unused_keys.add(keypair.address)
 
         self.keys.update(new_keys)
 
@@ -66,11 +77,27 @@ class Wallet(object):
         with open(self.filepath, 'w') as json_file:
             json_file.write(json.dumps(data, indent=4))
 
+    def unlock(self, password):
+        """Saves the password as bytes.
+        :type password: string
+        """
+        self.password = password.encode()
+
+    def lock(self):
+        self.password = None
+
     def get_unused_address(self, mark_as_used=True):
+        """
+        :raises OutOfUnusedAddresses: When there is no unused address left
+            to be returned and wallet is locked
+        """
         updated = False
         if len(self.unused_keys) == 0:
-            self.generate_keys()
-            updated = True
+            if not self.password:
+                raise OutOfUnusedAddresses
+            else:
+                self.generate_keys()
+                updated = True
 
         if mark_as_used:
             address = self.unused_keys.pop()
@@ -89,21 +116,25 @@ class Wallet(object):
         address_str = self.get_unused_address(mark_as_used)
         return base58.b58decode(address_str)
 
-    def generate_keys(self, count=10):
+    def generate_keys(self, count=20):
         for _ in range(count):
-            key = KeyPair()
-            address = key.get_address_b58()
-            self.keys[address] = key
-            self.unused_keys.add(address)
+            key = KeyPair.create(self.password)
+            self.keys[key.address] = key
+            self.unused_keys.add(key.address)
 
     def prepare_transaction(self, cls, inputs, outputs):
         """Prepares the tx inputs and outputs.
 
         Can be used to create blocks by passing empty list to inputs.
 
-        cls: either Transaction or Block
-        inputs: array of WalletInputInfo tuple
-        outputs: array of WalletOutputInfo tuple
+        :param cls: defines if we're creating a Transaction or Block
+        :type cls: :py:class:`hathor.transaction.Block` or :py:class:`hathor.transaction.Transaction`
+
+        :param inputs: the tx inputs
+        :type inputs: List[WalletInputInfo]
+
+        :param outputs: the tx outputs
+        :type inputs: List[WalletOutputInfo]
         """
         tx_inputs = []
         for txin in inputs:
@@ -117,7 +148,7 @@ class Wallet(object):
         return cls(inputs=tx_inputs, outputs=tx_outputs)
 
     def prepare_transaction_incomplete_inputs(self, cls, inputs, outputs):
-        """Uses the function above to prepare transaction.
+        """Uses prepare_transaction() to prepare transaction.
 
         The difference is that the inputs argument does not contain the private key
         corresponding to it.
@@ -125,6 +156,9 @@ class Wallet(object):
         Consider the wallet UI scenario: the user will see all unspent txs and can select
         which ones he wants to use as input, but the wallet is responsible for managing
         the keys, so he won't be able to send the inputs with the corresponding key.
+
+        :raises PrivateKeyNotFound: when trying to spend output and we don't have the corresponding
+            key in our wallet
         """
         new_inputs = []
         for _input in inputs:
@@ -134,19 +168,23 @@ class Wallet(object):
                     if _input.tx_id == utxo.tx_id and _input.index == utxo.index:
                         new_inputs.insert(
                             0,
-                            WalletInputInfo(_input.tx_id, _input.index, self.keys[address_b58].private_key)
+                            WalletInputInfo(_input.tx_id, _input.index,
+                                            self.keys[address_b58].get_private_key(self.password))
                         )
                         found = True
             if not found:
-                raise WalletOutOfSync
+                raise PrivateKeyNotFound
 
         return self.prepare_transaction(cls, new_inputs, outputs)
 
     def prepare_transaction_compute_inputs(self, cls, outputs):
         """Calculates de inputs given the outputs. Handles change.
 
-        cls: either Transaction or Block
-        outputs: array of WalletOutputInfo tuple
+        :param cls: defines if we're creating a Transaction or Block
+        :type cls: :py:class:`hathor.transaction.Block` or :py:class:`hathor.transaction.Transaction`
+
+        :param outputs: the tx outputs
+        :type inputs: List[WalletOutputInfo]
         """
         amount = sum(output.value for output in outputs)
         inputs, total_inputs_amount = self.get_inputs_from_amount(amount)
@@ -175,16 +213,15 @@ class Wallet(object):
         This is a very simple algorithm, so it does not try to find the best combination
         of inputs.
 
-        If the wallet does not have enough balance, we just log a warning and return
-        all available unspent tx. The final tx won't be valid, as sum(inputs) != sum(outputs),
-        but we let the network deal with it.
+        :raises InsuficientFunds: if the wallet does not have enough ballance
         """
         inputs_tx = []
         total_inputs_amount = 0
 
         for address_b58, utxo_list in self.unspent_txs.items():
             for utxo in utxo_list:
-                inputs_tx.append(WalletInputInfo(utxo.tx_id, utxo.index, self.keys[address_b58].private_key))
+                inputs_tx.append(WalletInputInfo(utxo.tx_id, utxo.index,
+                                 self.keys[address_b58].get_private_key(self.password)))
                 total_inputs_amount += utxo.value
 
                 if total_inputs_amount >= amount:
@@ -194,8 +231,7 @@ class Wallet(object):
                 break
 
         if total_inputs_amount < amount:
-            # TODO log warning: I dont have this amount of tokens
-            pass
+            raise InsuficientFunds('Requested amount: {} / Available: {}'.format(amount, total_inputs_amount))
 
         return inputs_tx, total_inputs_amount
 
@@ -204,6 +240,10 @@ class Wallet(object):
 
         If an output matches, will add it to the unspent_txs dict.
         If an input matches, removes from unspent_txs dict and adds to spent_txs list.
+
+        :raises WalletOutOfSync: when there's an input spending an address in our wallet
+            but we don't have the corresponding UTXO. This indicates the wallet may be
+            missing some transactions.
         """
         updated = False
 

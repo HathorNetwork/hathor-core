@@ -10,6 +10,7 @@ from hathor.p2p.resources import StatusResource, MiningResource, TransactionReso
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 from hathor.p2p.manager import HathorManager
 from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage
+from hathor.wallet import Wallet
 from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, SendTokensResource
 from hathor.transaction.resources import DecodeTxResource, PushTxResource, GraphvizResource
 import hathor
@@ -29,6 +30,7 @@ if __name__ == '__main__':
     parser.add_argument('--bootstrap', action='append', help='Address to connect to (eg: tcp:127.0.0.1:8000')
     parser.add_argument('--status', type=int, help='Port to run status server')
     parser.add_argument('--data', help='Data directory')
+    parser.add_argument('--wallet', help='Wallet directory')
     args = parser.parse_args()
 
     log.startLogging(sys.stdout)
@@ -49,12 +51,19 @@ if __name__ == '__main__':
         tx_storage = TransactionMemoryStorage()
         print('Using TransactionMemoryStorage')
 
+    if args.wallet:
+        wallet = Wallet(directory=args.wallet)
+        wallet.read_keys_from_file()
+        print('Using wallet at {}'.format(args.wallet))
+    else:
+        wallet = Wallet()
+
     network = 'testnet'
     server_factory = HathorServerFactory()
     client_factory = HathorClientFactory()
 
     manager = HathorManager(server_factory, client_factory, peer_id=peer_id,
-                            network=network, hostname=args.hostname, tx_storage=tx_storage)
+                            network=network, hostname=args.hostname, tx_storage=tx_storage, wallet=wallet)
     manager.doStart()
 
     if args.testnet:

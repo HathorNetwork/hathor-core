@@ -37,6 +37,10 @@ Run a simple miner
 
     python mining.py http://localhost:8080/mining 1
 
+If you're running a miner, make sure you start the node with `--wallet /mywallet` parameter to specify the wallet directory. You can create a wallet using the `generate_wallet.py` script.
+
+    python generate_wallet.py --count 50 --directory /mywallet
+
 
 Generate a peer id
 ------
