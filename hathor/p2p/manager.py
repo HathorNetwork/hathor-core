@@ -11,8 +11,8 @@ from hathor.p2p.exceptions import InvalidBlockHashesSequence
 from hathor.transaction import Block, TxOutput
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.crypto.util import generate_privkey_crt_pem
-from hathor.wallet import Wallet
 from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.wallet import Wallet
 
 from collections import defaultdict
 from enum import Enum

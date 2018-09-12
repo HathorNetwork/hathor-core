@@ -3,6 +3,7 @@ from twisted.python import log
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 from hathor.p2p.manager import HathorManager
+from hathor.wallet import Wallet, KeyPair
 
 from tests import unittest
 
@@ -15,9 +16,17 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
             peer_id = PeerId()
         server_factory = HathorServerFactory()
         client_factory = HathorClientFactory()
-        manager = HathorManager(server_factory, client_factory, peer_id=peer_id, network=network)
+        wallet = self._create_wallet()
+        manager = HathorManager(server_factory, client_factory, peer_id=peer_id, network=network, wallet=wallet)
         manager.doStart()
         return manager
+
+    def _create_wallet(self):
+        keys = {}
+        for _i in range(20):
+            keypair = KeyPair.create(b'MYPASS')
+            keys[keypair.address] = keypair
+        return Wallet(keys=keys)
 
     def setUp(self):
         log.startLogging(sys.stdout)

@@ -4,6 +4,7 @@ import shutil
 from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage, TransactionMetadata
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction import Block, Transaction, TxOutput, TxInput
+from hathor.wallet import Wallet, KeyPair
 
 
 class _BaseTransactionStorageTest:
@@ -125,8 +126,9 @@ class _BaseTransactionStorageTest:
             self.assertEqual(latest_tx[2].hash, self.genesis_txs[0].hash)
 
         def test_storage_new_blocks(self):
+            wallet = self._create_wallet()
             from hathor.p2p.manager import HathorManager
-            self.manager = HathorManager(tx_storage=self.tx_storage)
+            self.manager = HathorManager(tx_storage=self.tx_storage, wallet=wallet)
 
             tip_blocks = self.tx_storage.get_tip_blocks()
             self.assertEqual(tip_blocks, [self.genesis_blocks[0].hash])
@@ -162,6 +164,13 @@ class _BaseTransactionStorageTest:
             self.assertTrue(block.resolve())
             self.manager.tx_storage.save_transaction(block)
             return block
+
+        def _create_wallet(self):
+            keys = {}
+            for _i in range(20):
+                keypair = KeyPair.create(b'MYPASS')
+                keys[keypair.address] = keypair
+            return Wallet(keys=keys)
 
 
 class TransactionJSONStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
