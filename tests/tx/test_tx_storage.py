@@ -11,6 +11,7 @@ class _BaseTransactionStorageTest:
     class _TransactionStorageTest(unittest.TestCase):
         def setUp(self, tx_storage):
             self.tx_storage = tx_storage
+            tx_storage._manually_initialize()
             self.genesis = self.tx_storage.get_all_genesis()
             self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
             self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
@@ -144,7 +145,7 @@ class _BaseTransactionStorageTest:
             self.assertEqual(set(tip_blocks), {block2.hash, block3.hash})
 
             # Re-generate caches to test topological sort.
-            self.tx_storage._init_caches()
+            self.tx_storage._manually_initialize()
             tip_blocks = self.tx_storage.get_tip_blocks()
             self.assertEqual(set(tip_blocks), {block2.hash, block3.hash})
 

@@ -125,6 +125,9 @@ class HathorManager(object):
         """
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
 
+        # Initialize manager's components.
+        self._initialize_components()
+
         # List of pending connections.
         self.connecting_peers = {}  # Dict[IStreamClientEndpoint, twisted.internet.defer.Deferred]
 
@@ -136,6 +139,17 @@ class HathorManager(object):
 
         self.start_time = time.time()
         self.lc_reconnect.start(5)
+
+    def _initialize_components(self):
+        """You are not supposed to run this method manually. You should run `doStart()` to initialize the
+        manager.
+
+        This method runs through all transactions, verifying them and updating our wallet.
+        """
+        self.wallet._manually_initialize()
+        for tx in self.tx_storage._topological_sort():
+            self.tx_storage._add_to_cache(tx)
+            self.wallet.on_new_tx(tx)
 
     def doStop(self):
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)

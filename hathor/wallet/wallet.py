@@ -34,13 +34,18 @@ class Wallet(object):
         """
         self.filepath = os.path.join(directory, filename)
         self.history_path = os.path.join(directory, history_file)
-        self.keys = keys or {}
+        self.keys = keys or {}  # Dict[string(b58_address), KeyPair]
 
         # Set[string(base58)]
         self.unused_keys = set(key.get_address_b58() for key in self.keys.values() if not key.used)
         self.unspent_txs = {}
         self.spent_txs = []
         self.balance = 0
+
+    def _manually_initialize(self):
+        if os.path.isfile(self.filepath):
+            print('Loading keys...')
+            self.read_keys_from_file()
 
     def read_keys_from_file(self):
         """Reads the keys from file and updates the keys dictionary
@@ -101,13 +106,13 @@ class Wallet(object):
         outputs: array of WalletOutputInfo tuple
         """
         tx_inputs = []
-        for i in inputs:
-            input_data = get_input_data(i.tx_id, i.private_key, i.private_key.public_key())
-            tx_inputs.append(TxInput(i.tx_id, i.index, input_data))
+        for txin in inputs:
+            input_data = get_input_data(txin.tx_id, txin.private_key, txin.private_key.public_key())
+            tx_inputs.append(TxInput(txin.tx_id, txin.index, input_data))
 
         tx_outputs = []
-        for o in outputs:
-            tx_outputs.append(TxOutput(o.value, o.address))
+        for txout in outputs:
+            tx_outputs.append(TxOutput(txout.value, txout.address))
 
         return cls(inputs=tx_inputs, outputs=tx_outputs)
 
@@ -206,7 +211,7 @@ class Wallet(object):
         for index, output in enumerate(tx.outputs):
             # address this tokens were sent to
             output_address = get_address_b58_from_bytes(output.script)
-            if output_address in self.keys.keys():
+            if output_address in self.keys:
                 # this wallet received tokens
                 utxo = UnspentTx(tx.hash, index, output.value, tx.timestamp)
                 utxo_list = self.unspent_txs.pop(output_address, [])
@@ -221,7 +226,7 @@ class Wallet(object):
         for index, _input in enumerate(tx.inputs):
             (_, _, _, public_key) = decode_input_data(_input.data)
             input_address = get_address_b58_from_public_key_bytes(public_key)
-            if input_address in self.keys.keys():
+            if input_address in self.keys:
                 # this wallet spent tokens
                 # remove from unspent_txs
                 utxo_list = self.unspent_txs.pop(input_address)

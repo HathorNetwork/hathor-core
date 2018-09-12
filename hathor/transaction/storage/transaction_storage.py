@@ -6,33 +6,50 @@ from collections import deque
 
 class TransactionStorage:
     def __init__(self):
-        self._init_caches()
+        self._reset_cache()
         if self.__class__ == TransactionStorage:
             raise Exception('You cannot directly create an instance of this class.')
 
-    def _init_caches(self):
+    def _reset_cache(self):
+        """Reset all caches. This function should not be called unless you know
+        what you are doing.
+        """
         self._cache_tips = {}  # Dict[bytes(hash), bool(is_block)]
         self._cache_block_count = 0
         self._cache_tx_count = 0
 
+    def _manually_initialize(self):
+        """Caches must be initialized. This function should not be called, because
+        usually the HathorManager will handle all this initialization.
+        """
+        self._reset_cache()
+
         # We need to construct a topological sort, then iterate from
         # genesis to tips.
-        topological_sort = self._topological_sort()
-        for tx_hash in topological_sort:
-            tx = self.get_transaction_by_hash_bytes(tx_hash)
+        for tx in self._topological_sort():
             self._add_to_cache(tx)
 
     def _topological_sort(self):
+        """Return an iterable of the transactions in topological ordering, i.e., from
+        genesis to the most recent transactions. The order is important because the
+        transactions are always valid---their parents and inputs exist.
+
+        :return: An iterable with the sorted transactions
+        :rtype: Iterable[BaseTransaction]
+        """
+        # TODO We must optimize this algorithm to remove the `visited` set.
+        #      It will consume too much memory when the number of transactions is big.
+        #      A solution would be to store the ordering in disk, probably indexing by tx's height.
+        #      Sorting the vertices by the lengths of their longest incoming paths produces a topological
+        #      ordering (Dekel, Nassimi & Sahni 1981). See: https://epubs.siam.org/doi/10.1137/0210049
+        #      See also: https://gitlab.com/HathorNetwork/hathor-python/merge_requests/31
         visited = set()  # Set[bytes(hash)]
-        results = []  # List[bytes(hash)]
         cnt = 0
         for tx in self.get_all_transactions():
             cnt += 1
-            self._topological_sort_dfs(tx, visited, results)
-        assert(len(results) == cnt)
-        return results
+            yield from self._topological_sort_dfs(tx, visited)
 
-    def _topological_sort_dfs(self, root, visited, results):
+    def _topological_sort_dfs(self, root, visited):
         if root.hash in visited:
             return
 
@@ -48,8 +65,8 @@ class TransactionStorage:
                     parent = self.get_transaction_by_hash_bytes(parent_hash)
                     stack.append(parent)
             if is_leaf:
-                assert(tx == stack.pop())
-                results.append(tx.hash)
+                assert tx == stack.pop()
+                yield tx
 
     def _add_to_cache(self, tx):
         for parent_hash in tx.parents:

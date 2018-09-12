@@ -1,9 +1,10 @@
-from twisted.trial import unittest
 from twisted.python import log
 
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 from hathor.p2p.manager import HathorManager
+
+from tests import unittest
 
 import sys
 
@@ -15,6 +16,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         server_factory = HathorServerFactory()
         client_factory = HathorClientFactory()
         manager = HathorManager(server_factory, client_factory, peer_id=peer_id, network=network)
+        manager.doStart()
         return manager
 
     def setUp(self):
@@ -24,6 +26,9 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         self.genesis = self.manager.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
+
+    def tearDown(self):
+        self.clean_pending(required_to_quiesce=False)
 
     def _add_new_block(self):
         block = self.manager.generate_mining_block()
