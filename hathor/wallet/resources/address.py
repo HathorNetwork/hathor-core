@@ -19,7 +19,17 @@ class AddressResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
+        new = request.args[b'new'][0].decode('utf-8') == 'true'
+
+        if new:
+            # When user clicks 'Generate new address' we have to mark the old one
+            # as used and return a new one but not mark the new as used
+            # Because if the user refreshs the page we need to show the same
+            self.manager.wallet.get_unused_address(mark_as_used=True)
+
+        address = self.manager.wallet.get_unused_address(mark_as_used=False)
+
         data = {
-            'address': self.manager.wallet.get_unused_address(mark_as_used=False)
+            'address': address,
         }
         return json.dumps(data, indent=4).encode('utf-8')
