@@ -4,15 +4,18 @@ from twisted.internet import reactor
 from twisted.web import server
 from twisted.python import log
 from twisted.web.resource import Resource
+from autobahn.twisted.resource import WebSocketResource
 
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.resources import StatusResource, MiningResource, TransactionResource
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 from hathor.p2p.manager import HathorManager
 from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage
-from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, SendTokensResource
+from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, \
+                                    SendTokensResource, AuthWalletResource
 from hathor.wallet import Wallet
 from hathor.transaction.resources import DecodeTxResource, PushTxResource, GraphvizResource
+from hathor.websocket import HathorAdminWebsocketFactory
 import hathor
 
 import argparse
@@ -102,9 +105,17 @@ if __name__ == '__main__':
             (b'history', HistoryResource(manager), wallet_resource),
             (b'address', AddressResource(manager), wallet_resource),
             (b'send_tokens', SendTokensResource(manager), wallet_resource),
+            (b'auth', AuthWalletResource(manager), wallet_resource),
         )
         for url_path, resource, parent in resources:
             parent.putChild(url_path, resource)
+
+        # Websocket resource
+        ws_factory = HathorAdminWebsocketFactory()
+        resource = WebSocketResource(ws_factory)
+        root.putChild(b"ws", resource)
+
+        ws_factory.subscribe(manager.pubsub)
 
         status_server = server.Site(root)
         reactor.listenTCP(args.status, status_server)
