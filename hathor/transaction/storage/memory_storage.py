@@ -19,6 +19,10 @@ class TransactionMemoryStorage(TransactionStorage):
             self._blocks_by_height[tx.height].append(tx)
 
     def transaction_exists_by_hash(self, hash_hex):
+        hash_bytes = bytes.fromhex(hash_hex)
+        genesis = self.get_genesis_by_hash_bytes(hash_bytes)
+        if genesis:
+            return True
         return hash_hex in self.transactions
 
     def transaction_exists_by_hash_bytes(self, hash_bytes):

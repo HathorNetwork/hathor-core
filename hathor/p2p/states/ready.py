@@ -10,6 +10,7 @@ from hathor.p2p.peer_id import PeerId
 import json
 import base64
 import time
+from collections import namedtuple
 
 
 class ReadyState(BaseState):
@@ -26,8 +27,15 @@ class ReadyState(BaseState):
             # hathor messages
             self.ProtocolCommand.GET_DATA: self.handle_get_data,
             self.ProtocolCommand.DATA: self.handle_data,
+
             self.ProtocolCommand.GET_BLOCKS: self.handle_get_blocks,
             self.ProtocolCommand.BLOCKS: self.handle_blocks,
+
+            self.ProtocolCommand.GET_TRANSACTIONS: self.handle_get_transactions,
+            self.ProtocolCommand.TRANSACTIONS: self.handle_transactions,
+
+            self.ProtocolCommand.GET_TIPS: self.handle_get_tips,
+            self.ProtocolCommand.TIPS: self.handle_tips,
 
             self.ProtocolCommand.GET_BEST_HEIGHT: self.handle_get_best_height,
             self.ProtocolCommand.BEST_HEIGHT: self.handle_best_height,
@@ -40,11 +48,48 @@ class ReadyState(BaseState):
         protocol.lc_ping.start(1)
 
         self.send_get_peers()
-        self.send_get_best_height()
+        self.send_get_tips()
 
     def on_exit(self):
         protocol = self.protocol
         protocol.lc_ping.stop()
+
+    def send_get_tips(self):
+        self.send_message(self.ProtocolCommand.GET_TIPS)
+
+    def handle_get_tips(self, payload):
+        self.send_tips()
+
+    def send_tips(self):
+        print('send_tips')
+        blocks = self.protocol.manager.tx_storage.get_tip_blocks()
+        transactions = self.protocol.manager.tx_storage.get_tip_transactions()
+
+        def serialize(tx):
+            return {
+                'hash': tx.hash.hex(),
+                'parents': [h.hex() for h in tx.parents]
+            }
+
+        data = {
+            'blocks': [serialize(blk) for blk in blocks],
+            'transactions': [serialize(tx) for tx in transactions],
+        }
+        output_payload = json.dumps(data)
+        self.send_message(self.ProtocolCommand.TIPS, output_payload)
+
+    def handle_tips(self, payload):
+        tips = json.loads(payload)
+        Tip = namedtuple('Tip', 'hash parents is_block')
+
+        def deserialize(tx, is_block):
+            tx_hash = bytes.fromhex(tx['hash'])
+            parents = [bytes.fromhex(x) for x in tx['parents']]
+            return Tip(tx_hash, parents, is_block)
+
+        blocks = [deserialize(tx, True) for tx in tips['blocks']]
+        transactions = [deserialize(tx, False) for tx in tips['transactions']]
+        self.protocol.manager.on_tips_received(blocks, transactions, self.protocol)
 
     def send_get_data(self, hash_hex):
         """ Send a GET-DATA message, requesting the data of a given hash.
@@ -85,6 +130,7 @@ class ReadyState(BaseState):
             # We just got the data of a genesis tx/block. What should we do?
             # Will it reduce peer reputation score?
             return
+        tx.storage = self.protocol.manager.tx_storage
         self.protocol.manager.on_new_tx(tx, conn=self.protocol)
 
     def send_get_best_height(self):
@@ -100,13 +146,13 @@ class ReadyState(BaseState):
         best_height = int(payload)
         self.protocol.manager.on_best_height(best_height, conn=self.protocol)
 
-    def send_get_blocks(self):
-        payload = self.protocol.manager.tx_storage.get_latest_block().hash_hex
-        self.send_message(self.ProtocolCommand.GET_BLOCKS, payload)
+    def send_get_blocks(self, hash_hex):
+        self.send_message(self.ProtocolCommand.GET_BLOCKS, hash_hex)
 
     def handle_get_blocks(self, payload):
         print('handle_get_blocks:', payload)
-        blocks = self.protocol.manager.tx_storage.get_blocks_before(payload)
+        hash_hex = payload
+        blocks = self.protocol.manager.tx_storage.get_blocks_before(hash_hex, num_blocks=20)
         block_hashes_hex = [x.hash.hex() for x in blocks]
         output_payload = json.dumps(block_hashes_hex)
         self.send_message(self.ProtocolCommand.BLOCKS, output_payload)
@@ -115,6 +161,23 @@ class ReadyState(BaseState):
         print('handle_blocks')
         block_hashes = json.loads(payload)
         self.protocol.manager.on_block_hashes_received(block_hashes, conn=self.protocol)
+
+    def send_get_transactions(self, hash_hex):
+        self.send_message(self.ProtocolCommand.GET_TRANSACTIONS, hash_hex)
+
+    def handle_get_transactions(self, payload):
+        print('handle_get_transactions:', payload)
+        hash_hex = payload
+        transactions = self.protocol.manager.tx_storage.get_transactions_before(hash_hex, num_blocks=20)
+        txs_hashes_hex = [x.hash.hex() for x in transactions]
+        output_payload = json.dumps(txs_hashes_hex)
+        print('@@', output_payload)
+        self.send_message(self.ProtocolCommand.TRANSACTIONS, output_payload)
+
+    def handle_transactions(self, payload):
+        print('handle_transactions:', payload)
+        txs_hashes = json.loads(payload)
+        self.protocol.manager.on_transactions_hashes_received(txs_hashes, conn=self.protocol)
 
     def send_get_peers(self):
         """ Send a GET-PEERS command, requesting a list of nodes.

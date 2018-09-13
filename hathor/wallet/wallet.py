@@ -277,7 +277,7 @@ class Wallet(object):
                         break
                 if list_index == -1:
                     # the wallet does not have the output referenced by this input
-                    raise WalletOutOfSync
+                    raise WalletOutOfSync('{} {}'.format(_input.tx_id.hex(), _input.index))
                 old_utxo = utxo_list.pop(list_index)
                 if len(utxo_list) > 0:
                     self.unspent_txs[input_address] = utxo_list

@@ -2,6 +2,7 @@
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
 
 from collections import deque
+import random
 
 
 class TransactionStorage:
@@ -14,7 +15,8 @@ class TransactionStorage:
         """Reset all caches. This function should not be called unless you know
         what you are doing.
         """
-        self._cache_tips = {}  # Dict[bytes(hash), bool(is_block)]
+        self._cache_tip_blocks = {}        # Dict[bytes(hash), Block]
+        self._cache_tip_transactions = {}  # Dict[bytes(hash), Transaction]
         self._cache_block_count = 0
         self._cache_tx_count = 0
 
@@ -43,7 +45,7 @@ class TransactionStorage:
         #      Sorting the vertices by the lengths of their longest incoming paths produces a topological
         #      ordering (Dekel, Nassimi & Sahni 1981). See: https://epubs.siam.org/doi/10.1137/0210049
         #      See also: https://gitlab.com/HathorNetwork/hathor-python/merge_requests/31
-        visited = set()  # Set[bytes(hash)]
+        visited = dict()  # Set[bytes(hash), int]
         cnt = 0
         for tx in self.get_all_transactions():
             cnt += 1
@@ -54,29 +56,39 @@ class TransactionStorage:
             return
 
         stack = [root]
-        visited.add(root.hash)
         while stack:
             tx = stack[-1]
-            is_leaf = True
+            if tx.hash in visited:
+                if visited[tx.hash] == 0:
+                    visited[tx.hash] = 1  # 1 = Visited
+                    yield tx
+                assert tx == stack.pop()
+                continue
+
+            visited[tx.hash] = 0  # 0 = Visit in progress
+
+            for txin in tx.inputs:
+                if txin.tx_id not in visited:
+                    txinput = self.get_transaction_by_hash_bytes(txin.tx_id)
+                    stack.append(txinput)
+
             for parent_hash in tx.parents:
                 if parent_hash not in visited:
-                    is_leaf = False
-                    visited.add(parent_hash)
                     parent = self.get_transaction_by_hash_bytes(parent_hash)
                     stack.append(parent)
-            if is_leaf:
-                assert tx == stack.pop()
-                yield tx
 
     def _add_to_cache(self, tx):
-        for parent_hash in tx.parents:
-            if parent_hash in self._cache_tips:
-                self._cache_tips.pop(parent_hash)
-        self._cache_tips[tx.hash] = tx.is_block
         if tx.is_block:
             self._cache_block_count += 1
+            cache = self._cache_tip_blocks
         else:
             self._cache_tx_count += 1
+            cache = self._cache_tip_transactions
+
+        for parent_hash in tx.parents:
+            if parent_hash in cache:
+                cache.pop(parent_hash)
+        cache[tx.hash] = tx
 
     def get_block_count(self):
         return self._cache_block_count
@@ -126,11 +138,52 @@ class TransactionStorage:
         raise NotImplementedError
 
     def get_tip_blocks(self):
-        ret = []  # List[bytes(hash)]
-        for h, is_block in self._cache_tips.items():
-            if is_block:
-                ret.append(h)
-        return ret
+        """
+        Return the blocks which have not been confirmed yet.
+
+        :return: A list of blocks.
+        :rtype: List[Block]
+        """
+        return list(self._cache_tip_blocks.values())
+
+    def get_tip_blocks_hashes(self):
+        """
+        Return the hashes of the blocks which have not been confirmed yet.
+
+        :return: A list of block hashes.
+        :rtype: List[bytes(hash)]
+        """
+        return list(self._cache_tip_blocks.keys())
+
+    def get_tip_transactions(self, count=None):
+        """
+        Return the transactions which have not been confirmed yet.
+
+        :return: A list of transactions.
+        :type: List[Transaction]
+        """
+        ret = list(self._cache_tip_transactions.values())
+        if count is None:
+            return ret
+        # If there are many tip transactions, we randomly choose among them.
+        # Instead of implementing an algorithm to choose without repetition,
+        # I just shuffled the options and get the firsts. Another approach
+        # would be to stop shuffling after `count` steps.
+        random.shuffle(ret)
+        return ret[:count]
+
+    def get_tip_transactions_hashes(self, count=None):
+        """
+        Return the hashes of the transactions which have not been confirmed yet.
+
+        :return: A list of transaction hashes.
+        :type: List[bytes(hash)]
+        """
+        ret = list(self._cache_tip_transactions.keys())
+        if count is None:
+            return ret
+        random.shuffle(ret)
+        return ret[:count]
 
     def get_latest_block(self):
         blocks = self.get_latest_blocks(5)
@@ -158,6 +211,21 @@ class TransactionStorage:
     def get_block_hashes_at_height(self, height):
         """Returns a list of all stored block objects with the given height."""
         raise NotImplementedError
+
+    def get_transactions_before(self, hash_hex, num_blocks=100):
+        """Run a BFS starting from the giving `hash_hex`.
+
+        :param hash_hex: Starting point of the BFS, either a block or a transaction.
+        :type hash_hex: string(hex)
+
+        :param num_blocks: Number of blocks to be return.
+        :type num_blocks: int
+        """
+        ref_tx = self.get_transaction_by_hash(hash_hex)
+        visited = dict()  # Set[bytes(hash), int]
+        result = [x for x in self._topological_sort_dfs(ref_tx, visited) if not x.is_block]
+        result = result[-num_blocks:]
+        return result
 
     def get_blocks_before(self, hash_hex, num_blocks=100):
         """Run a BFS starting from the giving `hash_hex`.
@@ -198,13 +266,6 @@ class TransactionStorage:
             for h in self.get_block_hashes_at_height(i):
                 hashes.append(h)
         return hashes
-
-    def get_tip_transactions(self, count=2):
-        tips = self.get_latest_transactions(count)
-        ret = []
-        for tx in tips:
-            ret.append(tx.hash)
-        return ret
 
     def get_all_genesis(self):
         from hathor.transaction.genesis import genesis_transactions
@@ -259,7 +320,7 @@ class TransactionStorage:
                 attrs_node.update(block_attrs)
                 attrs_edge.update(dict(pendiwth='4'))
 
-            if tx.hash in self._cache_tips:
+            if (tx.hash in self._cache_tip_blocks) or (tx.hash in self._cache_tip_transactions):
                 attrs_node.update(tx_tips_attrs)
 
             if tx.is_genesis:

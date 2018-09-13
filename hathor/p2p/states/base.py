@@ -43,9 +43,13 @@ class BaseState(object):
         DATA = 'DATA'          # Send the data for a specific transaction.
 
         GET_TIPS = 'GET-TIPS'
+        TIPS = 'TIPS'
 
         GET_BLOCKS = 'GET-BLOCKS'  # Request a list of hashes for blocks. Payload is the current latest block.
         BLOCKS = 'BLOCKS'          # Send a list of hashes for blocks. Payload is a list of hashes.
+
+        GET_TRANSACTIONS = 'GET-TRANSACTIONS'  # Request a list of hashes for transactions.
+        TRANSACTIONS = 'TRANSACTIONS'          # Send a list of hashes for transactions.
 
         HASHES = 'HASHES'
 

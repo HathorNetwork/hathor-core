@@ -10,14 +10,16 @@ from hathor.p2p.resources import StatusResource, MiningResource, TransactionReso
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 from hathor.p2p.manager import HathorManager
 from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage
-from hathor.wallet import Wallet
 from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, SendTokensResource
+from hathor.wallet import Wallet
 from hathor.transaction.resources import DecodeTxResource, PushTxResource, GraphvizResource
 import hathor
 
 import argparse
+import getpass
 import sys
 import json
+import os
 
 
 if __name__ == '__main__':
@@ -30,7 +32,7 @@ if __name__ == '__main__':
     parser.add_argument('--bootstrap', action='append', help='Address to connect to (eg: tcp:127.0.0.1:8000')
     parser.add_argument('--status', type=int, help='Port to run status server')
     parser.add_argument('--data', help='Data directory')
-    parser.add_argument('--wallet', help='Wallet directory')
+    parser.add_argument('--unlock-wallet', action='store_true', help='Ask for password to unlock wallet')
     args = parser.parse_args()
 
     log.startLogging(sys.stdout)
@@ -45,25 +47,27 @@ if __name__ == '__main__':
     print('My peer id is', peer_id.id)
 
     if args.data:
-        tx_storage = TransactionJSONStorage(path=args.data)
-        print('Using TransactionJSONStorage at {}'.format(args.data))
+        tx_dir = os.path.join(args.data, 'tx')
+        wallet_dir = args.data
+        tx_storage = TransactionJSONStorage(path=tx_dir)
+        wallet = Wallet(directory=wallet_dir)
+        print('Using TransactionJSONStorage at {}'.format(tx_dir))
+        print('Using Wallet at {}'.format(wallet_dir))
     else:
         tx_storage = TransactionMemoryStorage()
+        wallet = Wallet()
         print('Using TransactionMemoryStorage')
 
-    if args.wallet:
-        wallet = Wallet(directory=args.wallet)
-        wallet.read_keys_from_file()
-        print('Using wallet at {}'.format(args.wallet))
-    else:
-        wallet = Wallet()
+    if args.unlock_wallet:
+        wallet_passwd = getpass.getpass(prompt='Wallet password:')
+        wallet.unlock(wallet_passwd)
 
     network = 'testnet'
     server_factory = HathorServerFactory()
     client_factory = HathorClientFactory()
 
-    manager = HathorManager(server_factory, client_factory, peer_id=peer_id,
-                            network=network, hostname=args.hostname, tx_storage=tx_storage, wallet=wallet)
+    manager = HathorManager(server_factory, client_factory, peer_id=peer_id, network=network,
+                            hostname=args.hostname, tx_storage=tx_storage, wallet=wallet)
     manager.doStart()
 
     if args.testnet:
