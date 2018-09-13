@@ -60,7 +60,7 @@ class HathorManager(object):
         :type hostname: string
 
         :param pubsub: If not given, a new one is created.
-        :type pubsub: :py:class:`hathor.p2p.pubsub.PubSubManager`
+        :type pubsub: :py:class:`hathor.pubsub.PubSubManager`
 
         :param tx_storage: If not given, a :py:class:`TransactionMemoryStorage` one is created.
         :type tx_storage: :py:class:`hathor.transaction.storage.transaction_storage.TransactionStorage`
@@ -96,6 +96,7 @@ class HathorManager(object):
 
         self.node_sync_manager = NodeSyncLeftToRightManager(self)
         self.wallet = wallet
+        self.wallet.pubsub = self.pubsub
 
         self.my_peer = peer_id or PeerId()
         self.network = network or 'testnet'

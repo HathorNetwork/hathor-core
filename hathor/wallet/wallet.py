@@ -8,13 +8,14 @@ from hathor.transaction import TxInput, TxOutput
 from hathor.crypto.util import get_input_data, decode_input_data, \
                                get_address_b58_from_public_key_bytes, \
                                get_address_b58_from_bytes
+from hathor.pubsub import HathorEvents
 
 WalletInputInfo = namedtuple('WalletInputInfo', ['tx_id', 'index', 'private_key'])
 WalletOutputInfo = namedtuple('WalletOutputInfo', ['address', 'value'])
 
 
 class Wallet(object):
-    def __init__(self, keys=None, directory='./', filename='keys.json', history_file='history.json'):
+    def __init__(self, keys=None, directory='./', filename='keys.json', history_file='history.json', pubsub=None):
         """ A wallet will hold key pair objects and the unspent and
         spent transactions associated with the keys.
 
@@ -32,6 +33,9 @@ class Wallet(object):
 
         :param history_file: name of history file
         :type history_file: string
+
+        :param pubsub: If not given, a new one is created.
+        :type pubsub: :py:class:`hathor.pubsub.PubSubManager`
         """
         self.filepath = os.path.join(directory, filename)
         self.history_path = os.path.join(directory, history_file)
@@ -47,6 +51,9 @@ class Wallet(object):
         self.spent_txs = []
 
         self.balance = 0
+
+        self.pubsub = pubsub
+
         self.password = None
 
     def _manually_initialize(self):
@@ -78,10 +85,23 @@ class Wallet(object):
             json_file.write(json.dumps(data, indent=4))
 
     def unlock(self, password):
-        """Saves the password as bytes.
-        :type password: string
+        """ Validates if the password is valid
+            Then saves the password as bytes.
+            :type password: string
+            :raises IncorrectPassword: when the password is incorrect
         """
-        self.password = password.encode()
+        # Get one keypair
+        # XXX What if we don't have any keypair in the wallet?
+        password = password.encode()
+        keypair_values = list(self.keys.values())
+        if keypair_values:
+            keypair = keypair_values[0]
+
+            # Test if the password is correct
+            # If not correct IncorrectPassword exception is raised
+            keypair.get_private_key(password)
+
+        self.password = password
 
     def lock(self):
         self.password = None
@@ -121,6 +141,9 @@ class Wallet(object):
             key = KeyPair.create(self.password)
             self.keys[key.address] = key
             self.unused_keys.add(key.address)
+
+        # Publish to pubsub that new keys were generated
+        self.publish_update(HathorEvents.WALLET_KEYS_GENERATED, keys_count=count)
 
     def prepare_transaction(self, cls, inputs, outputs):
         """Prepares the tx inputs and outputs.
@@ -261,6 +284,13 @@ class Wallet(object):
                 self.keys[output_address].used = True
                 self.balance += output.value
                 updated = True
+                # publish new output and new balance
+                self.publish_update(
+                    HathorEvents.WALLET_OUTPUT_RECEIVED,
+                    total=self.get_total_tx(),
+                    output=utxo
+                )
+                self.publish_update(HathorEvents.WALLET_BALANCE_UPDATED, balance=self.balance)
 
         # check inputs
         for index, _input in enumerate(tx.inputs):
@@ -286,6 +316,9 @@ class Wallet(object):
                 self.spent_txs.append(spent)
                 self.balance -= old_utxo.value
                 updated = True
+                # publish spent output and new balance
+                self.publish_update(HathorEvents.WALLET_INPUT_SPENT, output_spent=spent)
+                self.publish_update(HathorEvents.WALLET_BALANCE_UPDATED, balance=self.balance)
 
         if updated:
             # TODO update history file?
@@ -339,6 +372,10 @@ class Wallet(object):
         # TODO update history file?
 
     def get_history(self, count=10, page=1):
+        """Return the last transactions in this wallet ordered by timestamp and the total
+
+        :rtype: tuple[list[SpentTx, UnspentTx], int]
+        """
         history = []
         unspent = self.unspent_txs.values()
         for obj in unspent:
@@ -352,6 +389,20 @@ class Wallet(object):
         end_index = start_index + count
 
         return ordered_history[start_index:end_index], total
+
+    def get_total_tx(self):
+        """Return the total number of transactions that happened in this wallet (to and from the wallet)
+
+        :rtype: int
+        """
+        total_unspent = sum([len(arr) for arr in self.unspent_txs.values()])
+        return total_unspent + len(self.spent_txs)
+
+    def publish_update(self, event, **kwargs):
+        """ Executes pubsub publish if pubsub is defined in the Wallet
+        """
+        if self.pubsub:
+            self.pubsub.publish(event, **kwargs)
 
 
 class UnspentTx:
