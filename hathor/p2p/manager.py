@@ -7,14 +7,14 @@ import twisted.names.client
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import PeerStorage
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
-from hathor.p2p.exceptions import InvalidBlockHashesSequence
+from hathor.p2p.node_sync import NodeSyncLeftToRightManager
 from hathor.transaction import Block, TxOutput
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.crypto.util import generate_privkey_crt_pem
 from hathor.pubsub import HathorEvents, PubSubManager
-from hathor.wallet import Wallet
+from hathor.exception import HathorError
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from enum import Enum
 from math import log
 import time
@@ -35,8 +35,10 @@ class HathorManager(object):
     synchonization, and so on.
     """
 
-    class NodeSyncState(Enum):
-        SYNCING = 'SYNCING'  # This node still synchronizing with the network
+    class NodeState(Enum):
+        INITIALIZING = 'INITIALIZING'  # This node is still initializing
+        WAITING_FOR_PEERS = 'WAITING_FOR_PEERS'
+        SYNCING = 'SYNCING'  # This node is still synchronizing with the network
         SYNCED = 'SYNCED'    # This node is up-to-date with the network
 
     def __init__(self, server_factory=None, client_factory=None, peer_id=None, network=None, hostname=None,
@@ -69,6 +71,8 @@ class HathorManager(object):
         :param default_port: Network default port. It is used when only ip addresses are discovered.
         :type default_port: int
         """
+        self.state = None
+
         # Factories.
         self.server_factory = server_factory or HathorServerFactory()
         self.server_factory.manager = self
@@ -90,32 +94,20 @@ class HathorManager(object):
         # Map of peer_id to the best block height reported by that peer.
         self.peer_best_heights = defaultdict(int)
 
-        self.wallet = wallet or Wallet()
+        self.node_sync_manager = NodeSyncLeftToRightManager(self)
+        self.wallet = wallet
 
         self.my_peer = peer_id or PeerId()
         self.network = network or 'testnet'
         self.default_port = default_port
 
         self.blocks_per_difficulty = 5
+        self.latest_blocks = deque()
         self.avg_time_between_blocks = 64  # in seconds
         self.min_block_weight = 10
         self.block_weight = 10  # starting difficulty (10 is too low for production)
         self.max_allowed_block_weight_change = 2
-
-        self.node_sync_state = self.NodeSyncState.SYNCING
-
-        # A set of blocks that we should download, according to peers.
-        self.blocks_to_download = set()
-
-        # A set of transactions that we want to download, to validate blocks we've received.
-        self.txs_to_download = set()
-
-        # Next peer to bother with download requests. TODO: Move to separate class.
-        self.prev_peer_idx = 0
-
-        # Temporary storage for transactions we're downloading while syncing. These transactions/blocks have not
-        # yet been connected with the genesis DAG. Once they connect, we move them to the main tx_storage.
-        self.tx_storage_sync = TransactionMemoryStorage()  # TODO: Should there be a file storage option?
+        self.tokens_issued_per_block = 10000
 
         # A timer to try to reconnect to the disconnect known peers.
         self.lc_reconnect = LoopingCall(self.reconnect_to_all)
@@ -123,6 +115,7 @@ class HathorManager(object):
     def doStart(self):
         """ A factory must be started only once. And it is usually automatically started.
         """
+        self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
 
         # Initialize manager's components.
@@ -146,10 +139,11 @@ class HathorManager(object):
 
         This method runs through all transactions, verifying them and updating our wallet.
         """
-        self.wallet._manually_initialize()
+        if self.wallet:
+            self.wallet._manually_initialize()
         for tx in self.tx_storage._topological_sort():
-            self.tx_storage._add_to_cache(tx)
-            self.wallet.on_new_tx(tx)
+            self.on_new_tx(tx)
+        self.state = self.NodeState.WAITING_FOR_PEERS
 
     def doStop(self):
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
@@ -179,11 +173,14 @@ class HathorManager(object):
     def propagate_tx(self, tx):
         """Push a new transaction to the network. It is used by both the wallet and the mining modules.
         """
-        self.tx_storage.save_transaction(tx)
+        if tx.storage:
+            assert tx.storage == self.tx_storage, 'Invalid tx storage'
+        else:
+            tx.storage = self.tx_storage
         self.on_new_tx(tx)
 
         # Only propagate transactions once we are sufficiently synced up with the rest of the network.
-        if self.node_sync_state == self.NodeSyncState.SYNCED:
+        if self.state == self.NodeState.SYNCED:
             for conn in self.connected_peers.values():
                 conn.state.send_data(tx)
 
@@ -193,38 +190,97 @@ class HathorManager(object):
         :return: The hashes of the parents for a new transaction.
         :rtype: List[bytes(hash)]
         """
-        parents = self.tx_storage.get_tip_transactions(count=2)
-        if len(parents) == 1:
-            pass
-        return parents
+        tips = self.tx_storage.get_tip_transactions(count=2)
+        ret = [x.hash for x in tips]
+        if len(tips) == 1:
+            # If there is only one tip, let's randomly choose one of its parents.
+            ret.append(random.choice(tips[0].parents))
+        return ret
 
     def generate_mining_block(self):
-        # TODO Cache to prevent unnecessary processing.
         address = self.wallet.get_unused_address_bytes(mark_as_used=False)
         # TODO Get maximum allowed amount.
-        amount = 10000
+        amount = self.tokens_issued_per_block
         tx_outputs = [
             TxOutput(amount, address)
         ]
-        tip_blocks = self.tx_storage.get_tip_blocks()
-        new_height = self.tx_storage.get_best_height() + 1
+        tip_blocks = self.tx_storage.get_tip_blocks_hashes()
         tip_txs = self.get_new_tx_parents()
         parents = tip_blocks + tip_txs
+        new_height = self.tx_storage.get_best_height() + 1
         return Block(weight=self.block_weight, outputs=tx_outputs, parents=parents, storage=self.tx_storage,
                      height=new_height)
 
-    def on_new_tx(self, tx, conn=None):
-        # XXX What if we receive a genesis?
+    def on_tips_received(self, tip_blocks, tip_transactions, conn=None):
+        self.node_sync_manager.on_tips_received(tip_blocks, tip_transactions, conn)
+
+    def validate_new_tx(self, tx):
+        """ Process incoming transaction during initialization.
+        These transactions came only from storage.
+        """
+        if self.state != self.NodeState.INITIALIZING:
+            if tx.is_genesis:
+                print('validate_new_tx(): Genesis? {}'.format(tx.hash.hex()))
+                return False
+
+            if self.tx_storage.transaction_exists_by_hash_bytes(tx.hash):
+                print('validate_new_tx(): Already have transaction {}'.format(tx.hash.hex()))
+                return False
+
+        for parent_hash in tx.parents:
+            if not self.tx_storage.transaction_exists_by_hash_bytes(parent_hash):
+                # All parents must exist.
+                print('validate_new_tx(): Invalid transaction with unknown parent tx={} parent={}'.format(
+                    tx.hash.hex(), parent_hash.hex()
+                ))
+                return False
+
+        try:
+            tx.verify()
+        except HathorError as e:
+            print('validate_new_tx(): Error verifying transaction {} tx={}'.format(e, tx.hash.hex()))
+            return False
+
         if tx.is_block:
             if tx.weight < self.block_weight:
-                print('Invalid new block: weight ({}) is smaller than the minimum block weight ({})'.format(
-                    tx.weight, self.block_weight)
+                print('Invalid new block {}: weight ({}) is smaller than the minimum block weight ({})'.format(
+                    tx.hash.hex(), tx.weight, self.block_weight)
                 )
-                return
-            print('New block found: {}'.format(tx.hash_hex))
+                return False
+            if tx.sum_outputs != self.tokens_issued_per_block:
+                print('Invalid number of issued tokens: {} <> {} (tx: {})'.format(
+                    tx.sum_outputs,
+                    self.tokens_issued_per_block,
+                    tx.hash.hex())
+                )
+
+        return True
+
+    def on_new_tx(self, tx, conn=None):
+        """This method is called when any transaction arrive.
+        """
+        if not self.validate_new_tx(tx):
+            # Discard invalid Transaction/block.
+            return
+
+        if self.wallet:
+            self.wallet.on_new_tx(tx)
+
+        if self.state == self.NodeState.INITIALIZING:
+            self.tx_storage._add_to_cache(tx)
+        else:
+            self.tx_storage.save_transaction(tx)
+            self.node_sync_manager.on_new_tx(tx, conn)
+
+        if tx.is_block:
+            self.latest_blocks.append(tx)
+            while len(self.latest_blocks) > self.blocks_per_difficulty:
+                self.latest_blocks.popleft()
+
+            print('New block found: {} weight={}'.format(tx.hash_hex, tx.weight))
             count_blocks = self.tx_storage.get_block_count()
             if count_blocks % self.blocks_per_difficulty == 0:
-                print('Adjusting difficulty...')
+                print('Adjusting mining difficulty...')
                 avg_dt, new_weight = self.calculate_block_difficulty()
                 print('Block weight updated: avg_dt={:.2f} target_avg_dt={:.2f} {:6.2f} -> {:6.2f}'.format(
                     avg_dt,
@@ -233,86 +289,24 @@ class HathorManager(object):
                     new_weight
                 ))
                 self.block_weight = new_weight
-
-        # Save the transaction if we don't have it.
-        if not self.tx_storage.transaction_exists_by_hash_bytes(tx.hash):
-            # However, if the transaction doesn't connect to the genesis DAG, just save in temporary storage.
-            if tx.compute_genesis_dag_connectivity(self.tx_storage, self.tx_storage_sync):
-                self.tx_storage.save_transaction(tx)
-            elif not self.tx_storage_sync.transaction_exists_by_hash_bytes(tx.hash):
-                self.tx_storage_sync.save_transaction(tx)
-
-        # meta = self.tx_storage.get_metadata_by_hash_bytes(tx.hash)
-        # meta.peers.add(conn.peer_id.id)
-        # self.tx_storage.save_metadata(meta)
-
-        # If we're still syncing, let's check if we're ready now.
-        if self.node_sync_state == self.NodeSyncState.SYNCING:
-            self.try_to_synchronize()
-
-        self.wallet.on_new_tx(tx)
-        print('New tx: {}'.format(tx.hash.hex()))
-
-    def on_best_height(self, best_height, conn=None):
-        """A "best height" value was received from a peer."""
-        self.peer_best_heights[conn.peer.id] = best_height
-
-        # If this is greater than our best height, request more blocks and transactions.
-        my_best_height = self.tx_storage.get_best_height()
-        if best_height > my_best_height:
-
-            # TODO: When does this state need to change? We can't trust this peer.
-            self.node_sync_state = self.NodeSyncState.SYNCING
-
-            # Send our latest block and request an inventory (list of hashes)
-            # conn.send_get_blocks()
-
-    def ERIC_on_block_hashes_received(self, block_hashes, conn=None):
-        """We have received a list of hashes of blocks we need to download, according to a peer."""
-        hash_set = set(x for x in block_hashes)
-        self.blocks_to_download.update(hash_set)  # Performs a union and stores in blocks_to_download.
-        for h in hash_set:
-            print('Need to download:', h)
+        else:
+            print('New tx: {}'.format(tx.hash.hex()))
 
     def on_block_hashes_received(self, block_hashes, conn=None):
         """We have received a list of hashes of blocks, according to a peer."""
+        self.node_sync_manager.on_block_hashes_received(block_hashes, conn)
 
-        # We receive hashes from right-to-left.
-        # Let's reverse it to work with hashes from left-to-right.
-        block_hashes = block_hashes[::-1]
+    def on_transactions_hashes_received(self, txs_hashes, conn=None):
+        """We have received a list of hashes of transactions, according to a peer."""
+        self.node_sync_manager.on_transactions_hashes_received(txs_hashes, conn)
 
-        # Let's check whether we know these received hashes.
-        for i, h in enumerate(block_hashes):
-            if not self.tx_storage.transaction_exists_by_hash(h):
-                first_unknown = i
-                break
-        else:
-            # All hashes are known. It seems we're sync'ed.
-            return
-
-        # Validate block hashes sequence.
-        for h in block_hashes[first_unknown:]:
-            if self.tx_storage.transaction_exists_by_hash(h):
-                # Something is wrong. We're supposed to unknown all hashes after the first unknown.
-                raise InvalidBlockHashesSequence
-
-        if first_unknown == 0:
-            # All hashes are unknown.
-            self.unknown_blocks.extend(block_hashes)
-            self.state.send_get_blocks(block_hashes[0])
-            return
-
-        # Part is known, part is unknown.
-        self.unknown_blocks.extend(block_hashes[first_unknown:])
-        # Now, self.unknown_blocks[0].parents are known.
-        # So, let's sync block after block.
-        raise NotImplementedError
-
-        self.try_to_synchronize()
+    def on_best_height(self, best_height, conn):
+        raise NotImplemented
 
     def calculate_block_difficulty(self):
-        blocks = self.tx_storage.get_latest_blocks(self.blocks_per_difficulty)
-        dt = blocks[0].timestamp - blocks[-1].timestamp
+        blocks = self.latest_blocks
+        assert len(blocks) == self.blocks_per_difficulty
+        dt = blocks[-1].timestamp - blocks[0].timestamp
 
         if dt <= 0:
             dt = 1  # Strange situation, so, let's just increase difficulty.
@@ -495,89 +489,3 @@ class HathorManager(object):
         #     address = x.payload.address
         #     host = socket.inet_ntop(socket.AF_INET6, address)
         raise NotImplemented()
-
-    def schedule_transaction_download(self, hash_hex):
-        """Schedule/request the download of the given transaction from peers.
-
-        Self-throttle to avoid spamming peers. Spread requests out across known peers.  Send retries
-        to different peers."""
-        # TODO: Refactor this functionality into a separate PeerRequestManager class.
-        # TODO: Throttle request rate.
-        # TODO: Send a repeat request to a different peer each time.
-
-        # Try to find a peer we haven't bothered recently.
-        for i in range(len(self.connected_peers)):
-            # Move to next peer.
-            next_peer_idx = (self.prev_peer_idx + 1) % len(self.connected_peers)
-            conn = list(self.connected_peers.values())[next_peer_idx]
-            self.prev_peer_idx = next_peer_idx
-
-            # Check how long it's been since we last bothered this peer.
-            cur_time = time.time()
-            dt_sec = cur_time - conn.last_request
-
-            if dt_sec > 0.5:  # TODO: Pick a good time. 0.5 seconds for now.
-                # Send request.
-                conn.send_get_data(hash_hex)
-                conn.last_request = cur_time
-                break
-        else:
-            # Couldn't find anyone to bother. Will try again later.
-            pass
-
-    def try_to_synchronize_blocks(self):
-        """Tries to perform sync to receive block data."""
-        hashes_to_remove = set()
-        for hash_hex in self.blocks_to_download:
-            # Check if we already have this hash, either in temp or permanent storage. If so, remove from list.
-            if (self.tx_storage.transaction_exists_by_hash(hash_hex) or
-                    self.tx_storage_sync.transaction_exists_by_hash(hash_hex)):
-                hashes_to_remove.add(hash_hex)
-                continue
-
-            # Need to download.
-            self.schedule_transaction_download(hash_hex)
-
-        # Remove blocks we already downloaded.
-        self.blocks_to_download.difference_update(hashes_to_remove)
-
-    def try_to_synchronize_transactions(self):
-        """Tries to perform sync for non-block transactions.
-
-        Move from genesis block towards the latest block, requesting all transactions required to confirm
-        each block before moving on to the next block.
-        """
-        # TODO(epnichols): Logic for moving through blocks by height.
-
-        # TODO(epnichols): Request transactions.
-        pass
-
-    def migrate_transactions_from_storage_sync(self):
-        """Move transactions from self.storage_sync to self.storage once they are verified and connect to the
-        genesis DAG."""
-        # TODO(epnichols).
-
-        pass
-
-    def try_to_synchronize(self):
-        """Checks the current blocks/transactions to determine if this nodes is sufficiently synced up with the rest
-        of the network.  If not, request the missing blocks/transactions.
-
-        Updates the NodeSyncState enum.
-        """
-        # print('sync attempt...')
-        if self.node_sync_state == self.NodeSyncState.SYNCED:
-            # Nothing to do.
-            return
-
-        self.try_to_synchronize_blocks()
-        self.try_to_synchronize_transactions()
-        self.migrate_transactions_from_storage_sync()
-
-        # We're up-to-date once our set of blocks and transactions to download is empty.
-        if not (self.blocks_to_download or self.txs_to_download):
-            self.node_sync_state = self.NodeSyncState.SYNCED
-            print('Done synchronizing!')
-        else:
-            # TODO(epnichols): This seems to call this function way too often...fix!
-            reactor.callLater(0.5, self.try_to_synchronize)

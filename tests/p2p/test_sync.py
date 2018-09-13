@@ -3,30 +3,30 @@ from twisted.python import log
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 from hathor.p2p.manager import HathorManager
-from hathor.wallet import Wallet, KeyPair
+from hathor.wallet import Wallet
 
 from tests import unittest
 
 import sys
+import tempfile
+import shutil
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):
     def generate_peer(self, network, peer_id=None):
         if peer_id is None:
             peer_id = PeerId()
+
         server_factory = HathorServerFactory()
         client_factory = HathorClientFactory()
-        wallet = self._create_wallet()
+
+        self.tmpdir = tempfile.mkdtemp(dir='/tmp/')
+        wallet = Wallet(directory=self.tmpdir)
+        wallet.unlock('teste')
+
         manager = HathorManager(server_factory, client_factory, peer_id=peer_id, network=network, wallet=wallet)
         manager.doStart()
         return manager
-
-    def _create_wallet(self):
-        keys = {}
-        for _i in range(20):
-            keypair = KeyPair.create(b'MYPASS')
-            keys[keypair.address] = keypair
-        return Wallet(keys=keys)
 
     def setUp(self):
         log.startLogging(sys.stdout)
@@ -37,6 +37,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
 
     def tearDown(self):
+        shutil.rmtree(self.tmpdir)
         self.clean_pending(required_to_quiesce=False)
 
     def _add_new_block(self):

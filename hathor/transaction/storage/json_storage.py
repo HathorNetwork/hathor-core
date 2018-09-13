@@ -29,6 +29,17 @@ class TransactionJSONStorage(TransactionStorage):
         return filepath
 
     def transaction_exists_by_hash(self, hash_hex):
+        """Return `True` if `hash_hex` exists.
+
+        :param hash_hex: Hash in hexa that will be checked.
+        :type hash_hex: str(hex)
+
+        :rtype: bool
+        """
+        hash_bytes = bytes.fromhex(hash_hex)
+        genesis = self.get_genesis_by_hash_bytes(hash_bytes)
+        if genesis:
+            return True
         filepath = self.generate_filepath(hash_hex)
         return os.path.isfile(filepath)
 
@@ -103,7 +114,7 @@ class TransactionJSONStorage(TransactionStorage):
 
         hash_hex = hash_bytes.hex()
         filepath = self.generate_filepath(hash_hex)
-        data = self.load_from_json(filepath, TransactionDoesNotExist)
+        data = self.load_from_json(filepath, TransactionDoesNotExist(hash_hex))
         return self.load(data)
 
     def get_transaction_by_hash(self, hash_hex):
@@ -117,9 +128,10 @@ class TransactionJSONStorage(TransactionStorage):
 
         nonce = data['nonce']
         timestamp = data['timestamp']
+        height = data['height']
         version = data['version']
         weight = data['weight']
-        hash_hex = bytes.fromhex(data['hash'])
+        hash_bytes = bytes.fromhex(data['hash'])
 
         parents = []
         for parent in data['parents']:
@@ -142,18 +154,21 @@ class TransactionJSONStorage(TransactionStorage):
             'nonce': nonce,
             'timestamp': timestamp,
             'version': version,
+            'height': height,
             'weight': weight,
             'outputs': outputs,
             'parents': parents,
-            'hash': hash_hex,
             'storage': self,
         }
 
         if len(inputs) == 0:
-            return Block(**kwargs)
+            tx = Block(**kwargs)
         else:
             kwargs['inputs'] = inputs
-            return Transaction(**kwargs)
+            tx = Transaction(**kwargs)
+        tx.update_hash()
+        assert tx.hash == hash_bytes, 'Hashes differ: {} != {}'.format(tx.hash.hex(), hash_bytes.hex())
+        return tx
 
     def save_metadata(self, metadata):
         data = self.serialize_metadata(metadata)

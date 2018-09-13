@@ -23,7 +23,6 @@ class MiningResource(resource.Resource):
         block_bytes_str = request.args[b'block_bytes'][0]
         block_bytes = base64.b64decode(block_bytes_str)
         block = Block.create_from_struct(block_bytes, storage=self.manager.tx_storage)
-        print('New block found: {}'.format(block.hash.hex()))
         self.manager.propagate_tx(block)
         return b''
 

@@ -64,6 +64,7 @@ class StatusResource(resource.Resource):
             'server': {
                 'id': self.manager.my_peer.id,
                 'app_version': app,
+                'state': self.manager.state.value,
                 'network': self.manager.network,
                 'uptime': time.time() - self.manager.start_time,
                 'entrypoints': self.manager.my_peer.entrypoints,
