@@ -1,6 +1,7 @@
 # encoding: utf-8
 
 from hathor.transaction.exceptions import PowError
+from hathor.transaction.scripts import P2PKH
 
 from enum import Enum
 import time
@@ -298,7 +299,7 @@ class BaseTransaction:
                 time.sleep(sleep_seconds)
         return None
 
-    def to_json(self):
+    def to_json(self, decode_script=False):
         data = {}
         data['hash'] = self.hash.hex()
         data['nonce'] = self.nonce
@@ -331,6 +332,8 @@ class BaseTransaction:
             # TODO use base58 and ripemd160
             data_output['value'] = output.value
             data_output['script'] = base64.b64encode(output.script).decode('utf-8')
+            if decode_script:
+                data_output['decoded'] = output.to_human_readable()
             data['outputs'].append(data_output)
 
         return data
@@ -363,6 +366,17 @@ class Output:
 
         self.value = value                  # int
         self.script = script                # bytes
+
+    def to_human_readable(self):
+        """Checks what kind of script this is and returns it in human readable form
+
+        We only have P2PKH for now.
+        """
+        p2pkh = P2PKH.verify_script(self.script)
+        ret = {}
+        if p2pkh:
+            ret = p2pkh.to_human_readable()
+        return ret
 
 
 def int_to_bytes(number, size, signed=False):

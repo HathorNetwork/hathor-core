@@ -58,9 +58,15 @@ class P2PKH:
         output script: <sig> <pubKey>
 
         :param address: address to send tokens
-        :type address: bytes
+        :type address: string(base58)
         """
         self.address = address
+
+    def to_human_readable(self):
+        ret = {}
+        ret['type'] = 'P2PKH'
+        ret['address'] = self.address
+        return ret
 
     @classmethod
     def create_output_script(cls, address):
