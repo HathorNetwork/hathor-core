@@ -21,9 +21,9 @@ def genesis_transactions(tx_storage):
         storage=tx_storage,
     )
 
-    GENESIS_OUTPUT = TxOutput(1000, bytes.fromhex('98f12b659336a1874ddbae37837fa8a39f66b53d'))
+    GENESIS_OUTPUT = TxOutput(1000, bytes.fromhex('76a91498f12b659336a1874ddbae37837fa8a39f66b53d88ac'))
     BLOCK_GENESIS = Block(
-        hash=bytes.fromhex('000000a0f82cfee5431e03b071364970861ffa1b0633f73ca7f462987ec34195'),
+        hash=bytes.fromhex('0000004947932aa8d9ef0285a4619e523dcf8ddcf6b2bc4bb60ba86bc11f4fc9'),
         nonce=3358544,
         timestamp=1533643200,
         weight=24,
