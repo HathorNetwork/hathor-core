@@ -9,6 +9,7 @@ from hathor.p2p.peer_storage import PeerStorage
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 from hathor.p2p.node_sync import NodeSyncLeftToRightManager
 from hathor.transaction import Block, TxOutput
+from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.crypto.util import generate_privkey_crt_pem
 from hathor.pubsub import HathorEvents, PubSubManager
@@ -201,8 +202,9 @@ class HathorManager(object):
     def generate_mining_block(self):
         address = self.wallet.get_unused_address_bytes(mark_as_used=False)
         amount = self.tokens_issued_per_block
+        output_script = P2PKH.create_output_script(address)
         tx_outputs = [
-            TxOutput(amount, address)
+            TxOutput(amount, output_script)
         ]
         tip_blocks = self.tx_storage.get_tip_blocks_hashes()
         tip_txs = self.get_new_tx_parents()

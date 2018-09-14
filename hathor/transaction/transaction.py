@@ -1,7 +1,8 @@
 from hathor.transaction.base_transaction import BaseTransaction, MAX_NUM_INPUTS, MAX_NUM_OUTPUTS
-from hathor.transaction.exceptions import InputOutputMismatch, TooManyInputs, TooManyOutputs, DoubleSpend
+from hathor.transaction.exceptions import InputOutputMismatch, TooManyInputs, TooManyOutputs, \
+                                          DoubleSpend, InvalidInputData
 from hathor.transaction.storage.exceptions import TransactionMetadataDoesNotExist
-from hathor.crypto.util import validate_signature, validate_script
+from hathor.transaction.scripts import script_eval
 from math import log
 
 
@@ -55,7 +56,6 @@ class Transaction(BaseTransaction):
             return
         self.verify_pow()
         self.verify_sum()
-        self.verify_inputs()
         self.verify_number_of_inputs()
         self.verify_number_of_outputs()
 
@@ -69,21 +69,6 @@ class Transaction(BaseTransaction):
         if len(self.outputs) > MAX_NUM_OUTPUTS:
             raise TooManyOutputs
 
-    def verify_inputs(self):
-        """Verify inputs signatures and ownership and unspent outputs"""
-        for input_tx in self.inputs:
-            self.verify_input_signature(input_tx)
-            self.verify_ownership_input(input_tx)
-            self.verify_unspent_output(input_tx)
-
-    def verify_input_signature(self, input_tx):
-        """
-            Verify one input signature
-            We validate that this signature can be verified by the public key of the input
-        """
-        # TODO What should we sign?
-        validate_signature(input_tx.data, input_tx.tx_id)
-
     def verify_sum(self):
         """Verify that the sum of outputs is equal of the sum of inputs"""
         sum_outputs = self.sum_outputs
@@ -95,10 +80,19 @@ class Transaction(BaseTransaction):
         if sum_outputs != sum_inputs:
             raise InputOutputMismatch
 
-    def verify_ownership_input(self, input_tx):
+    def verify_inputs(self):
+        """Verify inputs signatures and ownership and unspent outputs"""
+        for input_tx in self.inputs:
+            self.verify_script(input_tx)
+            self.verify_unspent_output(input_tx)
+
+    def verify_script(self, input_tx):
         spent_tx = self.get_spent_tx(input_tx)
         script_output = spent_tx.outputs[input_tx.index].script
-        validate_script(input_tx.data, script_output)
+        (ret, err) = script_eval(script_output, input_tx.data)
+        if not ret:
+            print(err)
+            raise InvalidInputData
 
     def verify_unspent_output(self, input_tx):
         try:

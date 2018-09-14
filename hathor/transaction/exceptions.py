@@ -9,6 +9,10 @@ class InputOutputMismatch(HathorError):
     """Input and output amounts are not equal"""
 
 
+class InvalidInputData(HathorError):
+    """Input data does not solve output script correctly"""
+
+
 class TooManyInputs(HathorError):
     """More than 256 inputs"""
 

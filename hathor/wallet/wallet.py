@@ -5,9 +5,7 @@ from collections import namedtuple
 from hathor.wallet.keypair import KeyPair
 from hathor.wallet.exceptions import WalletOutOfSync, InsuficientFunds, OutOfUnusedAddresses, PrivateKeyNotFound
 from hathor.transaction import TxInput, TxOutput
-from hathor.crypto.util import get_input_data, decode_input_data, \
-                               get_address_b58_from_public_key_bytes, \
-                               get_address_b58_from_bytes
+from hathor.transaction.scripts import P2PKH
 from hathor.pubsub import HathorEvents
 
 WalletInputInfo = namedtuple('WalletInputInfo', ['tx_id', 'index', 'private_key'])
@@ -119,13 +117,12 @@ class Wallet(object):
                 self.generate_keys()
                 updated = True
 
+        address = next(iter(self.unused_keys))
         if mark_as_used:
-            address = self.unused_keys.pop()
+            self.unused_keys.discard(address)
             keypair = self.keys[address]
             keypair.used = True
             updated = True
-        else:
-            address = next(iter(self.unused_keys))
 
         if updated:
             self._write_keys_to_file()
@@ -161,12 +158,11 @@ class Wallet(object):
         """
         tx_inputs = []
         for txin in inputs:
-            input_data = get_input_data(txin.tx_id, txin.private_key, txin.private_key.public_key())
-            tx_inputs.append(TxInput(txin.tx_id, txin.index, input_data))
+            tx_inputs.append(TxInput(txin.tx_id, txin.index, P2PKH.create_input_data(txin.private_key)))
 
         tx_outputs = []
         for txout in outputs:
-            tx_outputs.append(TxOutput(txout.value, txout.address))
+            tx_outputs.append(TxOutput(txout.value, P2PKH.create_output_script(txout.address)))
 
         return cls(inputs=tx_inputs, outputs=tx_outputs)
 
@@ -272,53 +268,59 @@ class Wallet(object):
 
         # check outputs
         for index, output in enumerate(tx.outputs):
-            # address this tokens were sent to
-            output_address = get_address_b58_from_bytes(output.script)
-            if output_address in self.keys:
-                # this wallet received tokens
-                utxo = UnspentTx(tx.hash, index, output.value, tx.timestamp)
-                utxo_list = self.unspent_txs.pop(output_address, [])
-                utxo_list.append(utxo)
-                self.unspent_txs[output_address] = utxo_list
-                # mark key as used
-                self.keys[output_address].used = True
-                self.balance += output.value
-                updated = True
-                # publish new output and new balance
-                self.publish_update(
-                    HathorEvents.WALLET_OUTPUT_RECEIVED,
-                    total=self.get_total_tx(),
-                    output=utxo
-                )
-                self.publish_update(HathorEvents.WALLET_BALANCE_UPDATED, balance=self.balance)
+            p2pkh_out = P2PKH.verify_script(output.script)
+            if p2pkh_out:
+                if p2pkh_out.address in self.keys:
+                    # this wallet received tokens
+                    utxo = UnspentTx(tx.hash, index, output.value, tx.timestamp)
+                    utxo_list = self.unspent_txs.pop(p2pkh_out.address, [])
+                    utxo_list.append(utxo)
+                    self.unspent_txs[p2pkh_out.address] = utxo_list
+                    # mark key as used
+                    self.keys[p2pkh_out.address].used = True
+                    self.unused_keys.discard(p2pkh_out.address)
+                    self.balance += output.value
+                    updated = True
+                    # publish new output and new balance
+                    self.publish_update(
+                        HathorEvents.WALLET_OUTPUT_RECEIVED,
+                        total=self.get_total_tx(),
+                        output=utxo
+                    )
+                    self.publish_update(HathorEvents.WALLET_BALANCE_UPDATED, balance=self.balance)
+            else:
+                # it's the only one we know, so log warning
+                print('unknown script')
 
         # check inputs
-        for index, _input in enumerate(tx.inputs):
-            (_, _, _, public_key) = decode_input_data(_input.data)
-            input_address = get_address_b58_from_public_key_bytes(public_key)
-            if input_address in self.keys:
-                # this wallet spent tokens
-                # remove from unspent_txs
-                utxo_list = self.unspent_txs.pop(input_address)
-                list_index = -1
-                for i, utxo in enumerate(utxo_list):
-                    if utxo.tx_id == _input.tx_id and utxo.index == _input.index:
-                        list_index = i
-                        break
-                if list_index == -1:
-                    # the wallet does not have the output referenced by this input
-                    raise WalletOutOfSync('{} {}'.format(_input.tx_id.hex(), _input.index))
-                old_utxo = utxo_list.pop(list_index)
-                if len(utxo_list) > 0:
-                    self.unspent_txs[input_address] = utxo_list
-                # add to spent_txs
-                spent = SpentTx(tx.hash, _input.tx_id, _input.index, old_utxo.value, tx.timestamp)
-                self.spent_txs.append(spent)
-                self.balance -= old_utxo.value
-                updated = True
-                # publish spent output and new balance
-                self.publish_update(HathorEvents.WALLET_INPUT_SPENT, output_spent=spent)
-                self.publish_update(HathorEvents.WALLET_BALANCE_UPDATED, balance=self.balance)
+        for _input in tx.inputs:
+            p2pkh_in = P2PKH.verify_input(_input.data)
+            if p2pkh_in:
+                if p2pkh_in.address in self.keys:
+                    # this wallet spent tokens
+                    # remove from unspent_txs
+                    utxo_list = self.unspent_txs.pop(p2pkh_in.address)
+                    list_index = -1
+                    for i, utxo in enumerate(utxo_list):
+                        if utxo.tx_id == _input.tx_id and utxo.index == _input.index:
+                            list_index = i
+                            break
+                    if list_index == -1:
+                        # the wallet does not have the output referenced by this input
+                        raise WalletOutOfSync('{} {}'.format(_input.tx_id.hex(), _input.index))
+                    old_utxo = utxo_list.pop(list_index)
+                    if len(utxo_list) > 0:
+                        self.unspent_txs[p2pkh_in.address] = utxo_list
+                    # add to spent_txs
+                    spent = SpentTx(tx.hash, _input.tx_id, _input.index, old_utxo.value, tx.timestamp)
+                    self.spent_txs.append(spent)
+                    self.balance -= old_utxo.value
+                    updated = True
+                    # publish spent output and new balance
+                    self.publish_update(HathorEvents.WALLET_INPUT_SPENT, output_spent=spent)
+                    self.publish_update(HathorEvents.WALLET_BALANCE_UPDATED, balance=self.balance)
+            else:
+                print('unknown input data')
 
         if updated:
             # TODO update history file?

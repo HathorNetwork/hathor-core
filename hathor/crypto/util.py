@@ -1,8 +1,5 @@
-import struct
 import hashlib
 import base58
-from hathor.crypto.exceptions import InputSignatureError, InputPublicKeyError
-from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
@@ -53,16 +50,30 @@ def sign_data(private_key, data_to_sign, sig_algorithm=ec.ECDSA(hashes.SHA256())
     return private_key.sign(data_to_sign, sig_algorithm)
 
 
-def get_address_from_public_key_bytes(public_key_bytes):
-    """Returns the adddress from a public key bytes.
+def get_hash160(public_key_bytes):
+    """The input is hashed twice: first with SHA-256 and then with RIPEMD-160
 
-    For now, we only do sha256 followed by ripmd160.
-    The return is in bytes
+    :type: bytes
+
+    :rtype: bytes
     """
     key_hash = hashlib.sha256(public_key_bytes)
     h = hashlib.new('ripemd160')
     h.update(key_hash.digest())
     return h.digest()
+
+
+def get_address_from_public_key_bytes(public_key_bytes):
+    """For now, we only do sha256 followed by ripmd160.
+
+    :param public_key_bytes: public key in bytes
+    :type public_key_bytes: bytes
+
+
+    :return: address associated to public key
+    :rtype: bytes
+    """
+    return get_hash160(public_key_bytes)
 
 
 def get_address_from_public_key(public_key):
@@ -89,54 +100,6 @@ def get_address_b58_from_public_key_bytes(public_key):
 
 def get_address_b58_from_bytes(address):
     return base58.b58encode(address).decode('utf-8')
-
-
-# private_key is ec.EllipticCurvePrivateKey
-# public_key is ec.EllipticCurvePublicKey
-def get_input_data(data_to_sign, private_key, public_key):
-    """Returns the input data for a transaction or block, in bytes"""
-    signature = sign_data(private_key, data_to_sign)
-    public_key_bytes = get_public_key_bytes(public_key)
-    format_str = 'B%dsB%ds' % (len(signature), len(public_key_bytes))
-    return struct.pack(
-        format_str,
-        len(signature),
-        signature,
-        len(public_key_bytes),
-        public_key_bytes
-    )
-
-
-def validate_signature(input_data, original_data):
-    """Validates the inputs data signature, given the input data and original signed data.
-
-    Both arguments are in bytes
-    """
-    (_, signature, _, public_key_bytes) = decode_input_data(input_data)
-    public_key = get_public_key_from_bytes(public_key_bytes)
-    try:
-        public_key.verify(signature, original_data, ec.ECDSA(hashes.SHA256()))
-    except InvalidSignature:
-        raise InputSignatureError
-
-
-def validate_script(input_data, script):
-    """Validates the input data contains the correct public key in the output script"""
-    (_, _, _, public_key_bytes) = decode_input_data(input_data)
-    # script is just address
-    if get_address_from_public_key_bytes(public_key_bytes) != script:
-        raise InputPublicKeyError
-
-
-def decode_input_data(input_data):
-    """Decodes the input data from bytes
-
-    Return is a tuple of the form (signature_len, signature, public_key_len, public_key)
-    """
-    signature_len = input_data[0]
-    public_key_len = len(input_data) - signature_len - 2
-    format_str = 'B%dsB%ds' % (signature_len, public_key_len)
-    return struct.unpack(format_str, input_data)
 
 
 def generate_privkey_crt_pem():
