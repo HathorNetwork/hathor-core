@@ -16,7 +16,7 @@ _INPUT_SIZE_BYTES = 32  # 256 bits
 # Version (H), weight (f), timestamp (I), height (Q), inputs len (H), outputs len (H) and
 # parents len (H).
 # H = unsigned short (2 bytes), f = float(4), I = unsigned int (4), Q = unsigned long long int (64)
-_TRANSACTION_FORMAT_STRING = '!HfIQHHH'  # Update code below if this changes.
+_TRANSACTION_FORMAT_STRING = '!HdIQHHH'  # Update code below if this changes.
 
 
 class BaseTransaction:
@@ -119,8 +119,7 @@ class BaseTransaction:
         """Sum of the value of the outputs"""
         return sum([output.value for output in self.outputs])
 
-    @property
-    def target(self):
+    def get_target(self):
         """Target to be achieved in the mining process"""
         return 2 ** (256 - self.weight) - 1
 
@@ -242,7 +241,7 @@ class BaseTransaction:
         """Verify proof-of-work and that the weight is correct"""
         # if abs(self.calculate_weight() - self.weight) > 1e-6:
         #     raise WeightError
-        if int(self.hash.hex(), 16) >= self.target:
+        if int(self.hash.hex(), 16) >= self.get_target():
             raise PowError
 
     def resolve(self):
@@ -280,7 +279,7 @@ class BaseTransaction:
         use it to reduce CPU usage.
         """
         pow_part1 = self.calculate_hash1()
-        target = self.target
+        target = self.get_target()
         self.nonce = start
         last_time = time.time()
         while self.nonce < end:

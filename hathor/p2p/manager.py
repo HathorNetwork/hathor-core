@@ -200,7 +200,6 @@ class HathorManager(object):
 
     def generate_mining_block(self):
         address = self.wallet.get_unused_address_bytes(mark_as_used=False)
-        # TODO Get maximum allowed amount.
         amount = self.tokens_issued_per_block
         tx_outputs = [
             TxOutput(amount, address)
@@ -208,7 +207,10 @@ class HathorManager(object):
         tip_blocks = self.tx_storage.get_tip_blocks_hashes()
         tip_txs = self.get_new_tx_parents()
         parents = tip_blocks + tip_txs
-        new_height = self.tx_storage.get_best_height() + 1
+
+        parents_tx = [self.tx_storage.get_transaction_by_hash_bytes(x) for x in parents]
+        new_height = max(x.height for x in parents_tx) + 1
+
         return Block(weight=self.block_weight, outputs=tx_outputs, parents=parents, storage=self.tx_storage,
                      height=new_height)
 

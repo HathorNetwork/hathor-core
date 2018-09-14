@@ -1,6 +1,5 @@
 from hathor.transaction.base_transaction import BaseTransaction
 from hathor.transaction.exceptions import BlockHeightError
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
 from math import log
 
@@ -38,10 +37,7 @@ class Block(BaseTransaction):
             return
 
         # Get all parents.
-        try:
-            parent_blocks = [self.storage.get_transaction_by_hash_bytes(h) for h in self.parents]
-        except TransactionDoesNotExist:
-            raise BlockHeightError
+        parent_blocks = [self.storage.get_transaction_by_hash_bytes(h) for h in self.parents]
 
         if self.height != max(x.height for x in parent_blocks) + 1:
             raise BlockHeightError
