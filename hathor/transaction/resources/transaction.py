@@ -26,6 +26,7 @@ class TransactionResource(resource.Resource):
 
             tx = self.manager.tx_storage.get_transaction_by_hash(request.args[b'id'][0].decode('utf-8'))
             data = tx.to_json()
+            data['raw'] = tx.get_struct().hex()
         else:
             # Get all tx
             page = int(request.args[b'page'][0])

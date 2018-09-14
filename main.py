@@ -7,14 +7,14 @@ from twisted.web.resource import Resource
 from autobahn.twisted.resource import WebSocketResource
 
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.resources import StatusResource, MiningResource, TransactionResource
+from hathor.p2p.resources import StatusResource, MiningResource
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 from hathor.p2p.manager import HathorManager
 from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage
 from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, \
                                     SendTokensResource, AuthWalletResource
 from hathor.wallet import Wallet
-from hathor.transaction.resources import DecodeTxResource, PushTxResource, GraphvizResource
+from hathor.transaction.resources import DecodeTxResource, PushTxResource, GraphvizResource, TransactionResource
 from hathor.websocket import HathorAdminWebsocketFactory
 import hathor
 
