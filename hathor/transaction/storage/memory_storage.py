@@ -13,30 +13,27 @@ class TransactionMemoryStorage(TransactionStorage):
 
     def save_transaction(self, tx):
         super().save_transaction(tx)
-        hash_hex = tx.hash.hex()
-        self.transactions[hash_hex] = tx
+        self.transactions[tx.hash] = tx
         if tx.is_block:
             self._blocks_by_height[tx.height].append(tx)
 
     def transaction_exists_by_hash(self, hash_hex):
         hash_bytes = bytes.fromhex(hash_hex)
+        return self.transaction_exists_by_hash_bytes(hash_bytes)
+
+    def transaction_exists_by_hash_bytes(self, hash_bytes):
         genesis = self.get_genesis_by_hash_bytes(hash_bytes)
         if genesis:
             return True
-        return hash_hex in self.transactions
-
-    def transaction_exists_by_hash_bytes(self, hash_bytes):
-        hash_hex = hash_bytes.hex()
-        return self.transaction_exists_by_hash(hash_hex)
+        return hash_bytes in self.transactions
 
     def get_transaction_by_hash_bytes(self, hash_bytes):
         genesis = self.get_genesis_by_hash_bytes(hash_bytes)
         if genesis:
             return genesis
 
-        hash_hex = hash_bytes.hex()
-        if hash_hex in self.transactions:
-            return self.transactions[hash_hex]
+        if hash_bytes in self.transactions:
+            return self.transactions[hash_bytes]
         else:
             raise TransactionDoesNotExist
 
@@ -45,18 +42,17 @@ class TransactionMemoryStorage(TransactionStorage):
         return self.get_transaction_by_hash_bytes(hash_bytes)
 
     def get_metadata_by_hash_bytes(self, hash_bytes):
-        hash_hex = hash_bytes.hex()
-        return self.get_metadata_by_hash(hash_hex)
-
-    def get_metadata_by_hash(self, hash_hex):
-        if hash_hex in self.metadata:
-            return self.metadata[hash_hex]
+        if hash_bytes in self.metadata:
+            return self.metadata[hash_bytes]
         else:
             raise TransactionMetadataDoesNotExist
 
+    def get_metadata_by_hash(self, hash_hex):
+        hash_bytes = bytes.fromhex(hash_hex)
+        return self.get_metadata_by_hash_bytes(self, hash_bytes)
+
     def save_metadata(self, metadata):
-        hash_hex = metadata.hash.hex()
-        self.metadata[hash_hex] = metadata
+        self.metadata[metadata.hash] = metadata
 
     def get_all_transactions(self):
         """Return all transactions that are not blocks"""
