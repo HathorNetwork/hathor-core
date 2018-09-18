@@ -1,8 +1,8 @@
 from twisted.python import log
+from twisted.internet.task import Clock
 
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
-from hathor.p2p.manager import HathorManager
+from hathor.manager import HathorManager
 from hathor.wallet import Wallet
 
 from tests import unittest
@@ -17,19 +17,17 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         if peer_id is None:
             peer_id = PeerId()
 
-        server_factory = HathorServerFactory()
-        client_factory = HathorClientFactory()
-
         self.tmpdir = tempfile.mkdtemp(dir='/tmp/')
         wallet = Wallet(directory=self.tmpdir)
         wallet.unlock('teste')
 
-        manager = HathorManager(server_factory, client_factory, peer_id=peer_id, network=network, wallet=wallet)
-        manager.doStart()
+        manager = HathorManager(self.reactor, peer_id=peer_id, network=network, wallet=wallet)
+        manager.start()
         return manager
 
     def setUp(self):
         log.startLogging(sys.stdout)
+        self.reactor = Clock()
         self.network = 'testnet'
         self.manager = self.generate_peer(self.network)
 

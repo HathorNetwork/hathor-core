@@ -21,13 +21,33 @@ class HathorServerFactory(protocol.ServerFactory):
     """
 
     protocol = MyServerProtocol
-    manager = None
+
+    def __init__(self, network, my_peer, connections=None, node=None):
+        """
+        :type network: string
+        :type my_peer: PeerId
+        :type connections: ConnectionsManager
+        :type node: HathorManager
+        """
+        super().__init__()
+        self.network = network
+        self.my_peer = my_peer
+        self.connections = connections
+        self.node = node
 
     def buildProtocol(self, addr):
-        return self.protocol(self, self.manager)
+        p = self.protocol(
+            network=self.network,
+            my_peer=self.my_peer,
+            connections=self.connections,
+            node=self.node,
+        )
+        p.factory = self
+        return p
 
 
 class HathorClientFactory(protocol.ClientFactory):
+
     """ HathorClientFactory is used to generate HathorProtocol objects when
     we connected to another peer.
 
@@ -35,8 +55,27 @@ class HathorClientFactory(protocol.ClientFactory):
     :type manager: :class:`hathor.p2p.manager.Manager`
     """
 
-    protocol = MyServerProtocol
-    manager = None
+    protocol = MyClientProtocol
+
+    def __init__(self, network, my_peer, connections=None, node=None):
+        """
+        :type network: string
+        :type my_peer: PeerId
+        :type connections: ConnectionsManager
+        :type node: HathorManager
+        """
+        super().__init__()
+        self.network = network
+        self.my_peer = my_peer
+        self.connections = connections
+        self.node = node
 
     def buildProtocol(self, addr):
-        return self.protocol(self, self.manager)
+        p = self.protocol(
+            network=self.network,
+            my_peer=self.my_peer,
+            connections=self.connections,
+            node=self.node,
+        )
+        p.factory = self
+        return p

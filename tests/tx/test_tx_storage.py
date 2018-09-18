@@ -1,6 +1,9 @@
 import unittest
 import tempfile
 import shutil
+
+from twisted.internet.task import Clock
+
 from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage, TransactionMetadata
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction import Block, Transaction, TxOutput, TxInput
@@ -11,18 +14,19 @@ class _BaseTransactionStorageTest:
 
     class _TransactionStorageTest(unittest.TestCase):
         def setUp(self, tx_storage):
+            self.reactor = Clock()
             self.tx_storage = tx_storage
             tx_storage._manually_initialize()
             self.genesis = self.tx_storage.get_all_genesis()
             self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
             self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
 
-            from hathor.p2p.manager import HathorManager
+            from hathor.manager import HathorManager
             from hathor.wallet import Wallet
             self.tmpdir = tempfile.mkdtemp(dir='/tmp/')
             wallet = Wallet(directory=self.tmpdir)
             wallet.unlock('teste')
-            self.manager = HathorManager(tx_storage=self.tx_storage, wallet=wallet)
+            self.manager = HathorManager(self.reactor, tx_storage=self.tx_storage, wallet=wallet)
 
             block_parents = [tx.hash for tx in self.genesis]
             output = TxOutput(200, bytes.fromhex('1e393a5ce2ff1c98d4ff6892f2175100f2dad049'))

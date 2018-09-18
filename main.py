@@ -8,14 +8,14 @@ from autobahn.twisted.resource import WebSocketResource
 
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.resources import StatusResource, MiningResource
-from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
-from hathor.p2p.manager import HathorManager
+from hathor.manager import HathorManager
 from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage
 from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, \
                                     SendTokensResource, AuthWalletResource
 from hathor.wallet import Wallet
 from hathor.transaction.resources import DecodeTxResource, PushTxResource, GraphvizResource, TransactionResource
 from hathor.websocket import HathorAdminWebsocketFactory
+from hathor.p2p.peer_discovery import DNSPeerDiscovery, BootstrapPeerDiscovery
 import hathor
 
 import argparse
@@ -66,27 +66,27 @@ if __name__ == '__main__':
         wallet.unlock(wallet_passwd)
 
     network = 'testnet'
-    server_factory = HathorServerFactory()
-    client_factory = HathorClientFactory()
-
-    manager = HathorManager(server_factory, client_factory, peer_id=peer_id, network=network,
+    manager = HathorManager(reactor, peer_id=peer_id, network=network,
                             hostname=args.hostname, tx_storage=tx_storage, wallet=wallet)
-    manager.doStart()
 
+    dns_hosts = []
     if args.testnet:
-        manager.dns_seed_lookup_text('testnet.hathor.network')
+        dns_hosts.append('testnet.hathor.network')
 
     if args.dns:
-        for host in args.dns:
-            manager.dns_seed_lookup(host)
+        dns_hosts.extend(dns_hosts)
+
+    if dns_hosts:
+        manager.add_peer_discovery(DNSPeerDiscovery(dns_hosts))
+
+    if args.bootstrap:
+        manager.add_peer_discovery(BootstrapPeerDiscovery(args.bootstrap))
+
+    manager.start()
 
     if args.listen:
         for description in args.listen:
             manager.listen(description)
-
-    if args.bootstrap:
-        for description in args.bootstrap:
-            manager.connect_to(description)
 
     if args.status:
         # TODO get this from a file. How should we do with the factory?
