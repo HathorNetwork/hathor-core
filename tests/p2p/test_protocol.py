@@ -1,9 +1,9 @@
 from twisted.test import proto_helpers
 from twisted.python import log
+from twisted.internet.task import Clock
 
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
-from hathor.p2p.manager import HathorManager
+from hathor.manager import HathorManager
 from hathor.wallet import Wallet, KeyPair
 
 from tests import unittest
@@ -15,15 +15,11 @@ class HathorProtocolTestCase(unittest.TestCase):
     def generate_peer(self, network, peer_id=None):
         if peer_id is None:
             peer_id = PeerId()
-        server_factory = HathorServerFactory()
-        client_factory = HathorClientFactory()
         wallet = self._create_wallet()
-        manager = HathorManager(server_factory, client_factory, peer_id=peer_id, network=network, wallet=wallet)
-        manager.doStart()
-        server_factory.doStart()
-        client_factory.doStart()
+        manager = HathorManager(self.reactor, peer_id=peer_id, network=network, wallet=wallet)
+        manager.start()
 
-        proto = server_factory.buildProtocol(('127.0.0.1', 0))
+        proto = manager.server_factory.buildProtocol(('127.0.0.1', 0))
         tr = proto_helpers.StringTransport()
         proto.makeConnection(tr)
         return proto, tr
@@ -37,10 +33,14 @@ class HathorProtocolTestCase(unittest.TestCase):
 
     def setUp(self):
         log.startLogging(sys.stdout)
+
+        self.reactor = Clock()
         self.network = 'testnet'
 
-        self.proto1, self.tr1 = self.generate_peer(self.network)
-        self.proto2, self.tr2 = self.generate_peer(self.network)
+        self.peer_id1 = PeerId()
+        self.peer_id2 = PeerId()
+        self.proto1, self.tr1 = self.generate_peer(self.network, peer_id=self.peer_id1)
+        self.proto2, self.tr2 = self.generate_peer(self.network, peer_id=self.peer_id2)
 
     def tearDown(self):
         self.clean_pending(required_to_quiesce=False)
@@ -109,7 +109,7 @@ class HathorProtocolTestCase(unittest.TestCase):
         self.assertFalse(self.tr2.disconnecting)
 
     def test_invalid_same_peer_id(self):
-        self.proto2.factory.manager.my_peer = self.proto1.factory.manager.my_peer
+        self.proto2, self.tr2 = self.generate_peer(self.network, peer_id=self.peer_id1)
         self._run_one_step()
         self._run_one_step()
         self._check_result_only_cmd(self.tr1.value(), b'ERROR')

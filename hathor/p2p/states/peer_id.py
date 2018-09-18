@@ -23,7 +23,7 @@ class PeerIdState(BaseState):
         """
         protocol = self.protocol
         nonce = protocol.hello_nonce_received
-        my_peer = protocol.manager.my_peer
+        my_peer = protocol.my_peer
         hello = {
             'id': my_peer.id,
             'pubKey': my_peer.get_public_key(),
@@ -48,7 +48,7 @@ class PeerIdState(BaseState):
         peer = PeerId.create_from_json(data)
         peer.validate()
 
-        if peer.id == protocol.manager.my_peer.id:
+        if peer.id == protocol.my_peer.id:
             protocol.send_error_and_close_connection('Are you my clone?!')
             return
 
@@ -57,7 +57,7 @@ class PeerIdState(BaseState):
             protocol.send_error_and_close_connection('Invalid signature.')
             return
 
-        if peer.id in protocol.manager.connected_peers:
+        if protocol.connections.is_peer_connected(peer.id):
             protocol.send_error_and_close_connection('We are already connected.')
             return
 

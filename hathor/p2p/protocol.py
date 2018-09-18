@@ -30,6 +30,13 @@ class HathorProtocol(object):
     The available states are listed in PeerState class.
     The available commands are listed in the ProtocolCommand class.
     """
+    class Metrics(object):
+        def __init__(self):
+            self.received_messages = 0
+            self.sent_messages = 0
+            self.received_bytes = 0
+            self.sent_bytes = 0
+
     class RateLimitKeys(Enum):
         GLOBAL = 'global'
 
@@ -38,10 +45,17 @@ class HathorProtocol(object):
         PEER_ID = PeerIdState
         READY = ReadyState
 
-    def __init__(self, factory, manager):
-        self.factory = factory
-        self.manager = manager
-        self.pubsub = self.manager.pubsub
+    def __init__(self, network, my_peer, connections=None, node=None):
+        """
+        :type network: string
+        :type my_peer: PeerId
+        :type connections: ConnectionsManager
+        :type manager: HathorManager
+        """
+        self.network = network
+        self.my_peer = my_peer
+        self.connections = connections
+        self.node = node
 
         self._state_instances = {}
 
@@ -50,11 +64,9 @@ class HathorProtocol(object):
         # The peer on the other side of the connection.
         self.peer = None
 
-        # It triggers an event to send a ping message if necessary.
-        self.lc_ping = None
-
         # The last time a message has been received from this peer.
         self.last_message = 0
+        self.metrics = self.Metrics()
 
         # The last time a request was send to this peer.
         self.last_request = 0
@@ -65,7 +77,7 @@ class HathorProtocol(object):
         # The current state of the connection.
         self.state = None
 
-        # Rate limit
+        # Default rate limit
         self.ratelimit = RateLimiter()
         self.ratelimit.set_limit(self.RateLimitKeys.GLOBAL, 120, 60)
 
@@ -94,7 +106,8 @@ class HathorProtocol(object):
         # The initial state is HELLO.
         self.change_state(self.PeerState.HELLO)
 
-        self.manager.on_peer_connect(self)
+        if self.connections:
+            self.connections.on_peer_connect(self)
 
     def on_disconnect(self, reason):
         """ Executed when the connection is lost.
@@ -104,7 +117,8 @@ class HathorProtocol(object):
         if self.state:
             self.state.on_exit()
             self.state = None
-        self.manager.on_peer_disconnect(self)
+        if self.connections:
+            self.connections.on_peer_disconnect(self)
 
     def send_message(self, cmd, payload):
         """ A generic message which must be implemented to send a message
@@ -163,6 +177,8 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
         self.on_disconnect(reason)
 
     def lineReceived(self, line):
+        self.metrics.received_messages += 1
+        self.metrics.received_bytes += len(line)
         try:
             line = line.decode('utf-8')
         except UnicodeDecodeError:
@@ -184,6 +200,8 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
             line = '{} {}'.format(cmd, payload).encode('utf-8')
         else:
             line = cmd.encode('utf-8')
+        self.metrics.sent_messages += 1
+        self.metrics.sent_bytes += len(line)
         self.sendLine(line)
 
 

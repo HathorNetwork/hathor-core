@@ -16,6 +16,10 @@ from collections import namedtuple
 class ReadyState(BaseState):
     def __init__(self, protocol):
         super().__init__(protocol)
+
+        # It triggers an event to send a ping message if necessary.
+        self.lc_ping = LoopingCall(self.send_ping_if_necessary)
+
         self.cmd_map.update({
             # p2p control messages
             self.ProtocolCommand.PING: self.handle_ping,
@@ -42,17 +46,15 @@ class ReadyState(BaseState):
         })
 
     def on_enter(self):
-        protocol = self.protocol
-        protocol.manager.on_peer_ready(protocol)
-        protocol.lc_ping = LoopingCall(self.send_ping_if_necessary)
-        protocol.lc_ping.start(1)
+        self.protocol.connections.on_peer_ready(self.protocol)
 
+        self.lc_ping.start(1)
         self.send_get_peers()
         self.send_get_tips()
 
     def on_exit(self):
-        protocol = self.protocol
-        protocol.lc_ping.stop()
+        if self.lc_ping.running:
+            self.lc_ping.stop()
 
     def send_get_tips(self):
         self.send_message(self.ProtocolCommand.GET_TIPS)
@@ -62,8 +64,8 @@ class ReadyState(BaseState):
 
     def send_tips(self):
         print('send_tips')
-        blocks = self.protocol.manager.tx_storage.get_tip_blocks()
-        transactions = self.protocol.manager.tx_storage.get_tip_transactions()
+        blocks = self.protocol.node.tx_storage.get_tip_blocks()
+        transactions = self.protocol.node.tx_storage.get_tip_transactions()
 
         def serialize(tx):
             return {
@@ -89,7 +91,7 @@ class ReadyState(BaseState):
 
         blocks = [deserialize(tx, True) for tx in tips['blocks']]
         transactions = [deserialize(tx, False) for tx in tips['transactions']]
-        self.protocol.manager.on_tips_received(blocks, transactions, self.protocol)
+        self.protocol.node.on_tips_received(blocks, transactions, self.protocol)
 
     def send_get_data(self, hash_hex):
         """ Send a GET-DATA message, requesting the data of a given hash.
@@ -101,7 +103,7 @@ class ReadyState(BaseState):
         hash_hex = payload
         print('handle_get_data', hash_hex)
         try:
-            tx = self.protocol.manager.tx_storage.get_transaction_by_hash(hash_hex)
+            tx = self.protocol.node.tx_storage.get_transaction_by_hash(hash_hex)
             self.send_data(tx)
         except TransactionDoesNotExist:
             # TODO Send NOT-FOUND?
@@ -126,25 +128,25 @@ class ReadyState(BaseState):
         else:
             raise ValueError('Unknown payload load')
 
-        if self.protocol.manager.tx_storage.get_genesis_by_hash_bytes(tx.hash):
+        if self.protocol.node.tx_storage.get_genesis_by_hash_bytes(tx.hash):
             # We just got the data of a genesis tx/block. What should we do?
             # Will it reduce peer reputation score?
             return
-        tx.storage = self.protocol.manager.tx_storage
-        self.protocol.manager.on_new_tx(tx, conn=self.protocol)
+        tx.storage = self.protocol.node.tx_storage
+        self.protocol.node.on_new_tx(tx, conn=self.protocol)
 
     def send_get_best_height(self):
         self.send_message(self.ProtocolCommand.GET_BEST_HEIGHT)
 
     def handle_get_best_height(self, unused_payload):
         print('handle_get_best_height')
-        payload = self.protocol.manager.tx_storage.get_best_height()
+        payload = self.protocol.node.tx_storage.get_best_height()
         self.send_message(self.ProtocolCommand.BEST_HEIGHT, str(payload))
 
     def handle_best_height(self, payload):
         print('handle_best_height:', payload)
         best_height = int(payload)
-        self.protocol.manager.on_best_height(best_height, conn=self.protocol)
+        self.protocol.node.on_best_height(best_height, conn=self.protocol)
 
     def send_get_blocks(self, hash_hex):
         self.send_message(self.ProtocolCommand.GET_BLOCKS, hash_hex)
@@ -152,7 +154,7 @@ class ReadyState(BaseState):
     def handle_get_blocks(self, payload):
         print('handle_get_blocks:', payload)
         hash_hex = payload
-        blocks = self.protocol.manager.tx_storage.get_blocks_before(hash_hex, num_blocks=20)
+        blocks = self.protocol.node.tx_storage.get_blocks_before(hash_hex, num_blocks=20)
         block_hashes_hex = [x.hash.hex() for x in blocks]
         output_payload = json.dumps(block_hashes_hex)
         self.send_message(self.ProtocolCommand.BLOCKS, output_payload)
@@ -160,7 +162,7 @@ class ReadyState(BaseState):
     def handle_blocks(self, payload):
         print('handle_blocks')
         block_hashes = json.loads(payload)
-        self.protocol.manager.on_block_hashes_received(block_hashes, conn=self.protocol)
+        self.protocol.node.on_block_hashes_received(block_hashes, conn=self.protocol)
 
     def send_get_transactions(self, hash_hex):
         self.send_message(self.ProtocolCommand.GET_TRANSACTIONS, hash_hex)
@@ -168,7 +170,7 @@ class ReadyState(BaseState):
     def handle_get_transactions(self, payload):
         print('handle_get_transactions:', payload)
         hash_hex = payload
-        transactions = self.protocol.manager.tx_storage.get_transactions_before(hash_hex, num_blocks=20)
+        transactions = self.protocol.node.tx_storage.get_transactions_before(hash_hex, num_blocks=20)
         txs_hashes_hex = [x.hash.hex() for x in transactions]
         output_payload = json.dumps(txs_hashes_hex)
         print('@@', output_payload)
@@ -177,7 +179,7 @@ class ReadyState(BaseState):
     def handle_transactions(self, payload):
         print('handle_transactions:', payload)
         txs_hashes = json.loads(payload)
-        self.protocol.manager.on_transactions_hashes_received(txs_hashes, conn=self.protocol)
+        self.protocol.node.on_transactions_hashes_received(txs_hashes, conn=self.protocol)
 
     def send_get_peers(self):
         """ Send a GET-PEERS command, requesting a list of nodes.
@@ -188,13 +190,13 @@ class ReadyState(BaseState):
         """ Executed when a GET-PEERS command is received. It just responds with
         a list of all known peers.
         """
-        self.send_peers()
+        self.send_peers(self.protocol.connections.get_ready_connections())
 
-    def send_peers(self):
+    def send_peers(self, connections):
         """ Send a PEERS command with a list of all known peers.
         """
         peers = []
-        for conn in self.protocol.manager.connected_peers.values():
+        for conn in connections:
             peers.append({
                 'id': conn.peer.id,
                 'entrypoints': conn.peer.entrypoints,
@@ -211,7 +213,7 @@ class ReadyState(BaseState):
         for data in received_peers:
             peer = PeerId.create_from_json(data)
             peer.validate()
-            self.protocol.manager.update_peer(peer)
+            self.protocol.connections.on_receive_peer(peer, origin=self)
         remote = self.protocol.transport.getPeer()
         print(remote, 'PEERS', payload)
 
