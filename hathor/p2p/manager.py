@@ -89,21 +89,6 @@ class ConnectionsManager:
         """
         return peer_id in self.connected_peers
 
-    def propagate_tx(self, tx):
-        """Push a new transaction to the network. It is used by both the wallet and the mining modules.
-        """
-        if tx.storage:
-            assert tx.storage == self.tx_storage, 'Invalid tx storage'
-        else:
-            tx.storage = self.tx_storage
-        self.on_new_tx(tx)
-
-        # Only propagate transactions once we are sufficiently synced up with the rest of the network.
-        # TODO Should we queue transactions?
-        if self.state == self.NodeState.SYNCED:
-            for conn in self.get_ready_connections():
-                conn.state.send_data(tx)
-
     def on_receive_peer(self, peer, origin=None):
         """ Update a peer information in our storage, and instantly attempt to connect
         to it if it is not connected yet.

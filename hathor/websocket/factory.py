@@ -43,8 +43,8 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         """ Receives the event and the args from the pubsub
             and serializes the data so it can be passed in the websocket
         """
+        # Ready events don't need extra serialization
         ready_events = [
-            HathorEvents.NETWORK_NEW_TX_ACCEPTED,
             HathorEvents.WALLET_BALANCE_UPDATED,
             HathorEvents.WALLET_KEYS_GENERATED
         ]
@@ -56,6 +56,11 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             return data
         elif event == HathorEvents.WALLET_INPUT_SPENT:
             data['output_spent'] = data['output_spent'].to_dict()
+            return data
+        elif event == HathorEvents.NETWORK_NEW_TX_ACCEPTED:
+            tx = data['tx']
+            data = tx.to_json()
+            data['is_block'] = tx.is_block
             return data
         else:
             raise ValueError('Should never have entered here! We dont know this event')

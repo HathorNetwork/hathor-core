@@ -13,7 +13,8 @@ from hathor.transaction.storage import TransactionJSONStorage, TransactionMemory
 from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, \
                                     SendTokensResource, AuthWalletResource
 from hathor.wallet import Wallet
-from hathor.transaction.resources import DecodeTxResource, PushTxResource, GraphvizResource, TransactionResource
+from hathor.transaction.resources import DecodeTxResource, PushTxResource, GraphvizResource, \
+                                        TransactionResource, DashboardTransactionResource
 from hathor.websocket import HathorAdminWebsocketFactory
 from hathor.p2p.peer_discovery import DNSPeerDiscovery, BootstrapPeerDiscovery
 import hathor
@@ -101,6 +102,7 @@ if __name__ == '__main__':
             (b'push_tx', PushTxResource(manager), root),
             (b'graphviz', GraphvizResource(manager), root),
             (b'transaction', TransactionResource(manager), root),
+            (b'dashboard_tx', DashboardTransactionResource(manager), root),
             (b'balance', BalanceResource(manager), wallet_resource),
             (b'history', HistoryResource(manager), wallet_resource),
             (b'address', AddressResource(manager), wallet_resource),

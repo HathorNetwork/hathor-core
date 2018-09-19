@@ -23,7 +23,7 @@ class StatusResource(resource.Resource):
         set_cors(request, 'GET')
 
         connecting_peers = []
-        for endpoint, deferred in self.manager.connecting_peers.items():
+        for endpoint, deferred in self.manager.connections.connecting_peers.items():
             host = getattr(endpoint, '_host', '')
             port = getattr(endpoint, '_port', '')
             connecting_peers.append({
@@ -32,7 +32,7 @@ class StatusResource(resource.Resource):
             })
 
         handshaking_peers = []
-        for conn in self.manager.handshaking_peers:
+        for conn in self.manager.connections.handshaking_peers:
             remote = conn.transport.getPeer()
             handshaking_peers.append({
                 'address': '{}:{}'.format(remote.host, remote.port),
@@ -42,7 +42,7 @@ class StatusResource(resource.Resource):
             })
 
         connected_peers = []
-        for conn in self.manager.connected_peers.values():
+        for conn in self.manager.connections.connected_peers.values():
             remote = conn.transport.getPeer()
             connected_peers.append({
                 'id': conn.peer.id,
@@ -53,7 +53,7 @@ class StatusResource(resource.Resource):
             })
 
         known_peers = []
-        for peer in self.manager.peer_storage.values():
+        for peer in self.manager.connections.peer_storage.values():
             known_peers.append({
                 'id': peer.id,
                 'entrypoints': peer.entrypoints,
@@ -62,12 +62,12 @@ class StatusResource(resource.Resource):
         app = 'Hathor v{}'.format(hathor.__version__)
         data = {
             'server': {
-                'id': self.manager.my_peer.id,
+                'id': self.manager.connections.my_peer.id,
                 'app_version': app,
                 'state': self.manager.state.value,
                 'network': self.manager.network,
                 'uptime': time.time() - self.manager.start_time,
-                'entrypoints': self.manager.my_peer.entrypoints,
+                'entrypoints': self.manager.connections.my_peer.entrypoints,
             },
             'known_peers': known_peers,
             'connected_peers': connected_peers,

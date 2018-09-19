@@ -217,6 +217,21 @@ class HathorManager(object):
 
         return True
 
+    def propagate_tx(self, tx):
+        """Push a new transaction to the network. It is used by both the wallet and the mining modules.
+        """
+        if tx.storage:
+            assert tx.storage == self.tx_storage, 'Invalid tx storage'
+        else:
+            tx.storage = self.tx_storage
+        self.on_new_tx(tx)
+
+        # Only propagate transactions once we are sufficiently synced up with the rest of the network.
+        # TODO Should we queue transactions?
+        if self.state == self.NodeState.SYNCED:
+            for conn in self.get_ready_connections():
+                conn.state.send_data(tx)
+
     def on_new_tx(self, tx, conn=None):
         """This method is called when any transaction arrive.
         """
@@ -252,6 +267,9 @@ class HathorManager(object):
                 self.block_weight = new_weight
         else:
             print('New tx: {}'.format(tx.hash.hex()))
+
+        # Publish to pubsub manager the new tx accepted
+        self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
 
     def on_block_hashes_received(self, block_hashes, conn=None):
         """We have received a list of hashes of blocks, according to a peer."""
