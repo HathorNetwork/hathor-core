@@ -3,6 +3,8 @@ from hathor.api_util import set_cors
 from hathor.transaction import Transaction
 
 import json
+import struct
+import re
 
 
 class DecodeTxResource(resource.Resource):
@@ -17,12 +19,28 @@ class DecodeTxResource(resource.Resource):
         self.manager = manager
 
     def render_GET(self, request):
+        """ Get request /decode_tx/ that returns the tx decoded, if success
+
+            Expects 'hex_tx' as GET parameter
+        """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        tx_bytes = bytes.fromhex(request.args[b'hex_tx'][0].decode('utf-8'))
+        requested_decode = request.args[b'hex_tx'][0].decode('utf-8')
 
-        data = {
-            'transaction': Transaction.create_from_struct(tx_bytes).to_json()
-        }
+        pattern = r'[a-fA-F\d]+'
+        if re.match(pattern, requested_decode) and len(requested_decode) % 2 == 0:
+            tx_bytes = bytes.fromhex(requested_decode)
+
+            try:
+                tx = Transaction.create_from_struct(tx_bytes)
+                data = {
+                    'transaction': tx.to_json(),
+                    'success': True
+                }
+            except struct.error:
+                data = {'success': False}
+
+        else:
+            data = {'success': False}
         return json.dumps(data, indent=4).encode('utf-8')

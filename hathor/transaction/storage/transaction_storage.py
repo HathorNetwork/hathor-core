@@ -289,6 +289,125 @@ class TransactionStorage:
         transactions = list(tx for tx in self.get_all_transactions())
         return self.get_latest(transactions=transactions, count=count, page=page)
 
+    def get_txs_after_hash(self, ref_hash=None, count=10):
+        """ Returns transactions after the ref_hash (quantity is defined by count parameter)
+            If ref_hash is not passed, we get the first (count) transactions
+
+            :param ref_hash: Hash in hex passed as reference, so we can return the transactions after this one
+            :type format: string
+
+            :param count: Quantity of transactions to return
+            :type format: int
+
+            :return: List of transactions and a boolean indicating if there are more txs after
+            :rtype: tuple[list[Transaction], bool]
+        """
+        txs = list(tx for tx in self.get_all_transactions() if not tx.is_block)
+        return self.get_all_after_hash(txs, ref_hash, count)
+
+    def get_blocks_after_hash(self, ref_hash=None, count=10):
+        """ Returns blocks after the ref_hash (quantity is defined by count parameter)
+            If ref_hash is not passed, we get the first (count) blocks
+
+            :param ref_hash: Hash in hex passed as reference, so we can return the blocks after this one
+            :type format: string
+
+            :param count: Quantity of blocks to return
+            :type format: int
+
+            :return: List of blocks and a boolean indicating if there are more blocks after
+            :rtype: tuple[list[Block], bool]
+        """
+        blocks = list(block for block in self.get_all_transactions() if block.is_block)
+        return self.get_all_after_hash(blocks, ref_hash, count)
+
+    def get_all_after_hash(self, transactions, ref_hash, count):
+        """ Receives the list of elements (txs or blocks) to be paginated.
+            We first order the elements by timestamp and then
+            If ref_hash is None, we return the first count elements
+            If ref_hash is not None, we calculate the elements after ref_hash and if we still have more
+
+            :param transactions: List of elements we need to paginate
+            :type format: list[Block, Transaction]
+
+            :param ref_hash: Hash in hex passed as reference, so we can return the blocks after this one
+            :type format: string
+
+            :param count: Quantity of elements to return
+            :type format: int
+
+            :return: List of blocks or txs and a boolean indicating if there are more blocks before
+            :rtype: tuple[list[Block, Transaction], bool]
+        """
+        # XXX This method is not optimized, we need to improve this search
+        txs = sorted(transactions, key=lambda t: t.timestamp, reverse=True)
+
+        total = len(txs)
+
+        if not ref_hash:
+            return txs[:count], total > count
+        else:
+            for idx, tx in enumerate(txs):
+                if tx.hash.hex() == ref_hash:
+                    start_idx = idx + 1
+                    end_idx = start_idx + count
+                    return txs[start_idx:end_idx], total > end_idx
+
+    def get_txs_before_hash(self, ref_hash, count=10):
+        """ Returns transactions before the ref_hash (quantity is defined by count parameter)
+
+            :param ref_hash: Hash in hex passed as reference, so we can return the txs before this one
+            :type format: string
+
+            :param count: Quantity of txs to return
+            :type format: int
+
+            :return: List of transactions and a boolean indicating if there are more transactions before
+            :rtype: tuple[list[Transaction], bool]
+        """
+        txs = list(tx for tx in self.get_all_transactions() if not tx.is_block)
+        return self.get_all_before_hash(txs, ref_hash, count)
+
+    def get_blocks_before_hash(self, ref_hash, count=10):
+        """ Returns blocks before the ref_hash (quantity is defined by count parameter)
+
+            :param ref_hash: Hash in hex passed as reference, so we can return the blocks before this one
+            :type format: string
+
+            :param count: Quantity of blocks to return
+            :type format: int
+
+            :return: List of blocks and a boolean indicating if there are more blocks before
+            :rtype: tuple[list[Block], bool]
+        """
+        blocks = list(block for block in self.get_all_transactions() if block.is_block)
+        return self.get_all_before_hash(blocks, ref_hash, count)
+
+    def get_all_before_hash(self, transactions, ref_hash, count):
+        """ Receives the list of elements (txs or blocks) to be paginated.
+            We first order the elements by timestamp and then
+            We calculate the elements before ref_hash and if we still have more before it
+
+            :param transactions: List of elements we need to paginate
+            :type format: list[Block, Transaction]
+
+            :param ref_hash: Hash in hex passed as reference, so we can return the blocks before this one
+            :type format: string
+
+            :param count: Quantity of elements to return
+            :type format: int
+
+            :return: List of blocks or txs and a boolean indicating if there are more blocks before
+            :rtype: tuple[list[Block, Transaction], bool]
+        """
+        # XXX This method is not optimized, we need to improve this search
+        txs = sorted(transactions, key=lambda t: t.timestamp, reverse=True)
+
+        for idx, tx in enumerate(txs):
+            if tx.hash.hex() == ref_hash:
+                start_idx = max(0, idx - count)
+                return txs[start_idx:idx], start_idx > 0
+
     def graphviz(self, format='pdf'):
         """Return a Graphviz object that can be rendered to generate a visualization of the DAG.
 
