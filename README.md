@@ -127,3 +127,27 @@ Recommended aliases to control `hathord`:
     alias status-hathord='sudo supervisorctl status hathord'
     alias restart-hathord='sudo supervisorctl restart hathord'
     alias p2p-hathord='curl http://localhost:8001/'
+
+
+Notes for running on Windows 10
+------
+A few additional steps are required to run the code on Windows:
+
+* If pip install has trouble installing `twisted`, install it from a wheel file appropriate for your environment. 
+
+    For example: download from a [repo of wheel files](https://www.lfd.uci.edu/~gohlke/pythonlibs/#twisted) and then:
+
+
+    pip install Twisted-18.7.0-cp36-cp36m-win_amd64.whl
+
+After this succeeds, you should be able to install the other requirements normally:
+
+    pip install -r requirements.txt
+
+
+* You may need to create a `\tmp` directory manually for the tests to run:
+
+
+    mkdir c:\tmp
+    
+    
