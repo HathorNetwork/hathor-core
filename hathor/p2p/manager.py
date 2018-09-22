@@ -68,7 +68,7 @@ class ConnectionsManager:
         # Notify other peers about this new peer connection.
         for conn in self.get_ready_connections():
             if conn != protocol:
-                conn.state.send_peer([protocol])
+                conn.state.send_peers([protocol])
 
     def on_peer_disconnect(self, protocol):
         print('on_peer_disconnect()', protocol)

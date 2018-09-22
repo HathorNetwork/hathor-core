@@ -167,7 +167,7 @@ class NodeSyncLeftToRightManager(object):
         """
         # TODO We should use PeerDataRequestManager to throttle messages.
         print('schedule_transaction_download({})'.format(hash_hex))
-        conn = random.choice(list(self.manager.connected_peers.values()))
+        conn = random.choice(list(self.manager.connections.connected_peers.values()))
         conn.state.send_get_data(hash_hex)
 
     def on_tips_received(self, tip_blocks, tip_transactions, conn=None):

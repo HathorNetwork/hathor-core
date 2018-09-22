@@ -50,7 +50,8 @@ class DNSPeerDiscovery(PeerDiscovery):
 
     def discover_and_connect(self, connect_to):
         self.connect_to = connect_to
-        self.dns_seed_lookup(self.hosts)
+        for host in self.hosts:
+            self.dns_seed_lookup(host)
 
     def dns_seed_lookup(self, host):
         """ Run a DNS lookup for TXT, A, and AAAA records to discover new peers.
