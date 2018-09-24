@@ -85,21 +85,27 @@ class Wallet(object):
     def unlock(self, password):
         """ Validates if the password is valid
             Then saves the password as bytes.
-            :type password: string
+
+            :type password: bytes
+
             :raises IncorrectPassword: when the password is incorrect
+
+            :raises ValueError: when the password parameter is not bytes
         """
         # Get one keypair
         # XXX What if we don't have any keypair in the wallet?
-        password = password.encode()
-        keypair_values = list(self.keys.values())
-        if keypair_values:
-            keypair = keypair_values[0]
+        if isinstance(password, bytes):
+            keypair_values = list(self.keys.values())
+            if keypair_values:
+                keypair = keypair_values[0]
 
-            # Test if the password is correct
-            # If not correct IncorrectPassword exception is raised
-            keypair.get_private_key(password)
+                # Test if the password is correct
+                # If not correct IncorrectPassword exception is raised
+                keypair.get_private_key(password)
 
-        self.password = password
+            self.password = password
+        else:
+            raise ValueError('Password must be in bytes')
 
     def lock(self):
         self.password = None

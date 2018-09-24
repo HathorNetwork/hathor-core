@@ -17,7 +17,7 @@ from cryptography.hazmat.primitives import serialization
 
 BLOCK_REWARD = 300
 
-PASSWORD = 'passwd'
+PASSWORD = b'passwd'
 
 
 class BasicWallet(unittest.TestCase):
@@ -34,7 +34,7 @@ class BasicWallet(unittest.TestCase):
         self.genesis_address = get_address_b58_from_public_key(self.genesis_private_key.public_key())
         self.genesis_private_key_bytes = get_private_key_bytes(
             self.genesis_private_key,
-            encryption_algorithm=serialization.BestAvailableEncryption(PASSWORD.encode())
+            encryption_algorithm=serialization.BestAvailableEncryption(PASSWORD)
         )
 
     def tearDown(self):
@@ -42,7 +42,7 @@ class BasicWallet(unittest.TestCase):
 
     def test_wallet_keys_storage(self):
         w = Wallet(directory=self.directory)
-        w.unlock('testpass')
+        w.unlock(b'testpass')
         w.generate_keys()
         w._write_keys_to_file()
         # wallet 2 will read from saved file

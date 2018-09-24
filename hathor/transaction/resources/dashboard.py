@@ -22,6 +22,8 @@ class DashboardTransactionResource(resource.Resource):
 
             'block': int that indicates de quantity of blocks I should return
             'tx': int that indicates de quantity of tx I should return
+
+            :rtype: string (json)
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')

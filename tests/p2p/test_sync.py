@@ -19,7 +19,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         self.tmpdir = tempfile.mkdtemp(dir='/tmp/')
         wallet = Wallet(directory=self.tmpdir)
-        wallet.unlock('teste')
+        wallet.unlock(b'teste')
 
         manager = HathorManager(self.reactor, peer_id=peer_id, network=network, wallet=wallet)
         manager.start()

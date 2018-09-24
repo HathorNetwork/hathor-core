@@ -19,6 +19,14 @@ class SendTokensResource(resource.Resource):
         self.manager = manager
 
     def render_POST(self, request):
+        """ POST request for /wallet/send_tokens/
+            We expect 'data' as request args
+            'data': stringified json with an array of inputs and array of outputs
+            If inputs array is empty we use 'prepare_transaction_compute_inputs', that calculate the inputs
+            We return success (bool)
+
+            :rtype: string (json)
+        """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
 

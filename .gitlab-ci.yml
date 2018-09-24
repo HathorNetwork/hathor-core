@@ -23,6 +23,8 @@ unit-tests:
         - dev
         - web
     before_script:
+        - apt update
+        - apt install -y graphviz
         - pip install -r requirements.txt
     script:
         - nosetests --with-coverage --cover-package=hathor

@@ -20,6 +20,12 @@ class MiningResource(resource.Resource):
         self.manager = manager
 
     def render_POST(self, request):
+        """ POST request /mining/
+            Expects a parameter 'block_bytes' that is the block in bytes
+            Create the block object from the bytes and propagate it
+
+            :rtype: bytes
+        """
         block_bytes_str = request.args[b'block_bytes'][0]
         block_bytes = base64.b64decode(block_bytes_str)
         block = Block.create_from_struct(block_bytes, storage=self.manager.tx_storage)
@@ -27,6 +33,12 @@ class MiningResource(resource.Resource):
         return b''
 
     def render_GET(self, request):
+        """ GET request /mining/
+            Generates a new block to be mined with correct parents
+            Returns a json with a list of parents hash and the block in bytes
+
+            :rtype: string (json)
+        """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
 
         block = self.manager.generate_mining_block()

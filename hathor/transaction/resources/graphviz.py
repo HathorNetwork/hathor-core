@@ -14,6 +14,11 @@ class GraphvizResource(resource.Resource):
         self.manager = manager
 
     def render_GET(self, request):
+        """ GET request /graphviz/
+            Expects 'format' parameter in request to set the content-type of the graph
+            Format options are 'pdf', 'png' and 'jpg'. Default format is 'pdf'
+            Returns the file
+        """
         set_cors(request, 'GET')
 
         contenttype = {

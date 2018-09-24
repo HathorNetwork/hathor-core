@@ -16,6 +16,11 @@ class BalanceResource(resource.Resource):
         self.manager = manager
 
     def render_GET(self, request):
+        """ GET request for /wallet/balance/
+            Returns the int balance of the wallet
+
+            :rtype: string (json)
+        """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 

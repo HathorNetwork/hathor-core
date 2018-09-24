@@ -4,7 +4,7 @@ from twisted.internet.task import Clock
 
 from hathor.p2p.peer_id import PeerId
 from hathor.manager import HathorManager
-from hathor.wallet import Wallet, KeyPair
+from tests.utils import create_test_wallet
 
 from tests import unittest
 
@@ -15,7 +15,7 @@ class HathorProtocolTestCase(unittest.TestCase):
     def generate_peer(self, network, peer_id=None):
         if peer_id is None:
             peer_id = PeerId()
-        wallet = self._create_wallet()
+        wallet = create_test_wallet()
         manager = HathorManager(self.reactor, peer_id=peer_id, network=network, wallet=wallet)
         manager.start()
 
@@ -23,13 +23,6 @@ class HathorProtocolTestCase(unittest.TestCase):
         tr = proto_helpers.StringTransport()
         proto.makeConnection(tr)
         return proto, tr
-
-    def _create_wallet(self):
-        keys = {}
-        for _i in range(20):
-            keypair = KeyPair.create(b'MYPASS')
-            keys[keypair.address] = keypair
-        return Wallet(keys=keys)
 
     def setUp(self):
         log.startLogging(sys.stdout)

@@ -27,6 +27,8 @@ class TransactionResource(resource.Resource):
             'count': int, to indicate the quantity of elements we should return
             'hash': string, the hash reference we are in the pagination
             'page': 'previous' or 'next', to indicate if the user wants after or before the hash reference
+
+            :rtype: string (json)
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
