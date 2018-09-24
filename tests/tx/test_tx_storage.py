@@ -7,7 +7,7 @@ from twisted.internet.task import Clock
 from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage, TransactionMetadata
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction import Block, Transaction, TxOutput, TxInput
-from hathor.wallet import Wallet, KeyPair
+from hathor.wallet import Wallet
 
 
 class _BaseTransactionStorageTest:
@@ -22,10 +22,9 @@ class _BaseTransactionStorageTest:
             self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
 
             from hathor.manager import HathorManager
-            from hathor.wallet import Wallet
             self.tmpdir = tempfile.mkdtemp(dir='/tmp/')
             wallet = Wallet(directory=self.tmpdir)
-            wallet.unlock('teste')
+            wallet.unlock(b'teste')
             self.manager = HathorManager(self.reactor, tx_storage=self.tx_storage, wallet=wallet)
 
             block_parents = [tx.hash for tx in self.genesis]
@@ -179,13 +178,6 @@ class _BaseTransactionStorageTest:
             self.assertTrue(block.resolve())
             self.manager.tx_storage.save_transaction(block)
             return block
-
-        def _create_wallet(self):
-            keys = {}
-            for _i in range(20):
-                keypair = KeyPair.create(b'MYPASS')
-                keys[keypair.address] = keypair
-            return Wallet(keys=keys)
 
 
 class TransactionJSONStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):

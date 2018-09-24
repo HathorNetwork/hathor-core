@@ -22,6 +22,8 @@ class DecodeTxResource(resource.Resource):
         """ Get request /decode_tx/ that returns the tx decoded, if success
 
             Expects 'hex_tx' as GET parameter
+
+            :rtype: string (json)
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')

@@ -16,6 +16,12 @@ class AddressResource(resource.Resource):
         self.manager = manager
 
     def render_GET(self, request):
+        """ GET request for /wallet/address/
+            Expects a parameter 'new' (boolean) that says if we should create a new address
+            Returns the address (new or old)
+
+            :rtype: string (json)
+        """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 

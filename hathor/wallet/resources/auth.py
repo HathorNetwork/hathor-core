@@ -20,6 +20,12 @@ class AuthWalletResource(resource.Resource):
         self.manager = manager
 
     def render_GET(self, request):
+        """ GET request for /wallet/auth/
+            Returns a boolean saying if the wallet is locked
+            'is_locked': True|False
+
+            :rtype: string (json)
+        """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
@@ -37,12 +43,12 @@ class AuthWalletResource(resource.Resource):
             :type password: string
 
             :return: Boolean if the user unlocked the wallet with success
-            :rtype: Dict['success', bool]
+            :rtype: string (json) Dict['success', bool]
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
 
-        password = request.args[b'password'][0].decode('utf-8')
+        password = request.args[b'password'][0]
         success = True
 
         try:

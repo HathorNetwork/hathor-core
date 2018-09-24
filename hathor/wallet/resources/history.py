@@ -13,11 +13,18 @@ class HistoryResource(resource.Resource):
     isLeaf = True
 
     def __init__(self, manager):
-        # Important to have the manager so we can know the tx_storage
-        # TODO Change manager to manager in all resources
         self.manager = manager
 
     def render_GET(self, request):
+        """ GET request for /wallet/history/
+            Expects 'page' and 'count' as request args
+            'page' is the pagination number
+            'count' is the number of elements in each page
+
+            Returns a history array (can be 'SpentTx' or 'UnspentTx') and the total number of pages
+
+            :rtype: string (json)
+        """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 

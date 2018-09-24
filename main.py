@@ -64,7 +64,7 @@ if __name__ == '__main__':
 
     if args.unlock_wallet:
         wallet_passwd = getpass.getpass(prompt='Wallet password:')
-        wallet.unlock(wallet_passwd)
+        wallet.unlock(wallet_passwd.encode())
 
     network = 'testnet'
     manager = HathorManager(reactor, peer_id=peer_id, network=network,
