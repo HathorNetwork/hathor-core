@@ -1,5 +1,5 @@
 from hathor.p2p.resources import MiningResource
-from hathor.wallet.resources import SendTokensResource, BalanceResource, AuthWalletResource, HistoryResource
+from hathor.wallet.resources import SendTokensResource, BalanceResource, HistoryResource
 from twisted.internet.defer import inlineCallbacks
 from tests.resources.base_resource import TestSite, _BaseResourceTest
 from tests.utils import resolve_block_bytes
@@ -13,7 +13,6 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.web = TestSite(SendTokensResource(self.manager))
         self.web_mining = TestSite(MiningResource(self.manager))
         self.web_balance = TestSite(BalanceResource(self.manager))
-        self.web_auth = TestSite(AuthWalletResource(self.manager))
         self.web_history = TestSite(HistoryResource(self.manager))
 
     @inlineCallbacks

@@ -11,7 +11,8 @@ from hathor.p2p.resources import StatusResource, MiningResource
 from hathor.manager import HathorManager
 from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage
 from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, \
-                                    SendTokensResource, AuthWalletResource
+                                    SendTokensResource, UnlockWalletResource, \
+                                    LockWalletResource, StateWalletResource
 from hathor.wallet import Wallet
 from hathor.transaction.resources import DecodeTxResource, PushTxResource, GraphvizResource, \
                                         TransactionResource, DashboardTransactionResource
@@ -107,7 +108,9 @@ if __name__ == '__main__':
             (b'history', HistoryResource(manager), wallet_resource),
             (b'address', AddressResource(manager), wallet_resource),
             (b'send_tokens', SendTokensResource(manager), wallet_resource),
-            (b'auth', AuthWalletResource(manager), wallet_resource),
+            (b'unlock', UnlockWalletResource(manager), wallet_resource),
+            (b'lock', LockWalletResource(manager), wallet_resource),
+            (b'state', StateWalletResource(manager), wallet_resource),
         )
         for url_path, resource, parent in resources:
             parent.putChild(url_path, resource)
