@@ -35,12 +35,22 @@ class PushTxResource(resource.Resource):
 
             try:
                 tx = Transaction.create_from_struct(tx_bytes)
-                # TODO should we validate the tx before propagate?
-                self.manager.propagate_tx(tx)
-                data = {'success': True}
+                if len(tx.inputs) == 0:
+                    # It's a block and we can't push blocks
+                    data = {
+                        'success': False,
+                        'message': 'This transaction is invalid. A transaction must have at least one input'
+                    }
+                else:
+                    # TODO should we validate the tx before propagate?
+                    self.manager.propagate_tx(tx)
+                    data = {'success': True}
             except struct.error:
-                data = {'success': False}
+                data = {
+                    'success': False,
+                    'message': 'This transaction is invalid. Try to decode it first to validate it.'
+                }
         else:
-            data = {'success': False}
+            data = {'success': False, 'message': 'This transaction is invalid. Try to decode it first to validate it.'}
 
         return json.dumps(data, indent=4).encode('utf-8')
