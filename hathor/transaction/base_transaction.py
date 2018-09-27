@@ -1,6 +1,8 @@
 # encoding: utf-8
 
 from hathor.transaction.exceptions import PowError
+from hathor.transaction.transaction_metadata import TransactionMetadata
+from hathor.transaction.storage.exceptions import TransactionMetadataDoesNotExist
 from hathor.transaction.scripts import P2PKH
 
 from enum import Enum
@@ -298,6 +300,33 @@ class BaseTransaction:
             if sleep_seconds > 0:
                 time.sleep(sleep_seconds)
         return None
+
+    def get_metadata(self):
+        """Return this tx's metadata.
+
+        It first looks in our cache (tx._metadata) and then tries the tx storage. If it doesn't
+        exist, returns a new TransactionMetadata object.
+
+        :rtype: :py:class:`hathor.transaction.TransactionMetadata`
+        """
+        # TODO Maybe we could use a TransactionCacheStorage in the future to reduce storage hit
+        metadata = getattr(self, '_metadata', None)
+        if not metadata:
+            try:
+                metadata = self.storage.get_metadata_by_hash_bytes(self.hash)
+            except TransactionMetadataDoesNotExist:
+                metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight)
+            self._metadata = metadata
+        return metadata
+
+    def update_accumulated_weight(self, increment):
+        """Increments the tx aggregated weight with the given value
+
+        :type increment: float
+        """
+        metadata = self.get_metadata()
+        metadata.accumulated_weight += increment
+        self.storage.save_metadata(metadata)
 
     def to_json(self, decode_script=False):
         data = {}

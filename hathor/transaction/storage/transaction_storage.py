@@ -77,6 +77,28 @@ class TransactionStorage:
                     parent = self.get_transaction_by_hash_bytes(parent_hash)
                     stack.append(parent)
 
+    def iter_bfs(self, root):
+        """Run a BFS starting from the giving transaction.
+
+        :param root: Starting point of the BFS, either a block or a transaction.
+        :type root: :py:class:`hathor.transaction.BaseTransaction`
+
+        :return: An iterable with the transactions
+        :rtype: Iterable[BaseTransaction]
+        """
+        to_visit = deque(root.parents)  # List[bytes(hash)]
+        seen = set(to_visit)    # Set[bytes(hash)]
+
+        while to_visit:
+            tx_hash = to_visit.popleft()
+            tx = self.get_transaction_by_hash_bytes(tx_hash)
+            yield tx
+            seen.add(tx_hash)
+            for parent_hash in tx.parents:
+                if parent_hash not in seen:
+                    to_visit.append(parent_hash)
+                    seen.add(parent_hash)
+
     def _add_to_cache(self, tx):
         if tx.is_block:
             self._cache_block_count += 1
@@ -109,6 +131,9 @@ class TransactionStorage:
         raise NotImplementedError
 
     def get_transaction_by_hash(self, hash_hex):
+        raise NotImplementedError
+
+    def save_metadata(self, metadata):
         raise NotImplementedError
 
     def update_metadata(self, hash_hex, data):
@@ -408,11 +433,17 @@ class TransactionStorage:
                 start_idx = max(0, idx - count)
                 return txs[start_idx:idx], start_idx > 0
 
-    def graphviz(self, format='pdf'):
+    def graphviz(self, format='pdf', weight=False, acc_weight=False):
         """Return a Graphviz object that can be rendered to generate a visualization of the DAG.
 
         :param format: Format of the visualization (pdf, png, or jpg)
         :type format: string
+
+        :param weight: Whether to display or not the tx weight
+        :type format: bool
+
+        :param acc_weight: Whether to display or not the tx accumulated weight
+        :type format: bool
 
         :return: A Graphviz object
         :rtype: :py:class:`graphviz.Digraph`
@@ -441,6 +472,15 @@ class TransactionStorage:
 
             if (tx.hash in self._cache_tip_blocks) or (tx.hash in self._cache_tip_transactions):
                 attrs_node.update(tx_tips_attrs)
+
+            if weight:
+                attrs_node.update(dict(label='{}\nw: {:.2f}'.format(attrs_node['label'], tx.weight)))
+
+            if acc_weight:
+                metadata = tx.get_metadata()
+                attrs_node.update(
+                    dict(label='{}\naw: {:.2f}'.format(attrs_node['label'], metadata.accumulated_weight))
+                )
 
             if tx.is_genesis:
                 attrs_node.update(dict(fillcolor='#87D37C', style='filled'))

@@ -1,6 +1,6 @@
 from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionMetadataDoesNotExist
-from hathor.transaction.storage.transaction_metadata import TransactionMetadata
+from hathor.transaction.transaction_metadata import TransactionMetadata
 
 import json
 import os
@@ -188,12 +188,14 @@ class TransactionJSONStorage(TransactionStorage):
         data = {}
         data['hash'] = metadata.hash.hex()
         data['spent_outputs'] = list(metadata.spent_outputs)
+        data['accumulated_weight'] = metadata.accumulated_weight
         return data
 
     def load_metadata(self, data):
         tm = TransactionMetadata()
         tm.hash = bytes.fromhex(data['hash'])
         tm.spent_outputs = set(data['spent_outputs'])
+        tm.accumulated_weight = data['accumulated_weight']
         return tm
 
     def get_all_transactions(self):
