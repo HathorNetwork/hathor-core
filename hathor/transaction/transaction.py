@@ -96,7 +96,7 @@ class Transaction(BaseTransaction):
 
     def verify_unspent_output(self, input_tx):
         try:
-            metadata = self.get_tx_metadata(input_tx)
+            metadata = self.storage.get_metadata_by_hash_bytes(input_tx)
             if input_tx.index in metadata.spent_outputs:
                 raise DoubleSpend
         except TransactionMetadataDoesNotExist:
@@ -111,25 +111,3 @@ class Transaction(BaseTransaction):
             spent_tx = self.storage.get_transaction_by_hash_bytes(input_tx.tx_id)
             input_tx._tx = spent_tx
         return spent_tx
-
-    def get_tx_metadata(self, input_tx):
-        # TODO Maybe we could use a TransactionCacheStorage in the future to reduce storage hit
-        try:
-            metadata = input_tx._metadata
-        except AttributeError:
-            metadata = self.storage.get_metadata_by_hash_bytes(input_tx.tx_id)
-            input_tx._metadata = metadata
-        return metadata
-
-    def execute(self):
-        for input_tx in self.inputs:
-            try:
-                metadata = self.get_tx_metadata(input_tx)
-                metadata.spent_outputs.add(input_tx.index)
-            except TransactionMetadataDoesNotExist:
-                from hathor.transaction.storage.transaction_metadata import TransactionMetadata
-                metadata = TransactionMetadata(hash=input_tx.tx_id, spent_outputs=[input_tx.index])
-
-            self.storage.save_metadata(metadata)
-
-        self.storage.save_transaction(self)

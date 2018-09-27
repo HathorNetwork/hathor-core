@@ -4,9 +4,9 @@ import shutil
 
 from twisted.internet.task import Clock
 
-from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage, TransactionMetadata
+from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.transaction import Block, Transaction, TxOutput, TxInput
+from hathor.transaction import Block, Transaction, TransactionMetadata, TxOutput, TxInput
 from hathor.wallet import Wallet
 
 
