@@ -2,7 +2,6 @@
 
 from twisted.internet import protocol
 
-
 from hathor.p2p.protocol import HathorLineReceiver
 MyServerProtocol = HathorLineReceiver
 MyClientProtocol = HathorLineReceiver

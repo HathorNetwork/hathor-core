@@ -314,12 +314,13 @@ class NodeSyncLeftToRightManager(object):
 
     def download_next_unknown_block(self, conn):
         if not self.unknown_blocks:
+            conn.state.send_get_tips()
             return
         hash_hex = self.unknown_blocks.pop(0)
         self.schedule_transaction_download(hash_hex)
 
 
-class NodeSyncManager(object):
+class NodeSyncManager(object):  # pragma: no cover
     """NodeSyncManager will handle the synchonization of blocks and transactions of this node.
 
     It will be used as soon as we connect to the p2p network. New transactions and blocks will be

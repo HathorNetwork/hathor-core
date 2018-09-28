@@ -1,8 +1,49 @@
 from twisted.trial import unittest
 from twisted.internet import reactor
 
+from hathor.p2p.peer_id import PeerId
+from hathor.manager import HathorManager
+from hathor.wallet import Wallet
+
+import tempfile
+import shutil
+
 
 class TestCase(unittest.TestCase):
+    def setUp(self):
+        self.tmpdirs = []
+
+    def tearDown(self):
+        self.clean_tmpdirs()
+
+    def create_test_wallet(self):
+        """ Generate a Wallet with a number of keypairs for testing
+            :rtype: Wallet
+        """
+        tmpdir = tempfile.mkdtemp(dir='/tmp/')
+        self.tmpdirs.append(tmpdir)
+
+        wallet = Wallet(directory=tmpdir)
+        wallet.unlock(b'MYPASS')
+        wallet.generate_keys(count=20)
+        wallet.lock()
+        return wallet
+
+    def create_peer(self, network, peer_id=None, unlock_wallet=True):
+        if peer_id is None:
+            peer_id = PeerId()
+        wallet = self.create_test_wallet()
+        if unlock_wallet:
+            wallet.unlock(b'MYPASS')
+        manager = HathorManager(self.clock, peer_id=peer_id, network=network, wallet=wallet)
+        manager.avg_time_between_blocks = 0.0001
+        manager.start()
+        return manager
+
+    def clean_tmpdirs(self):
+        for tmpdir in self.tmpdirs:
+            shutil.rmtree(tmpdir)
+
     def clean_pending(self, required_to_quiesce=True):
         """
         This handy method cleans all pending tasks from the reactor.

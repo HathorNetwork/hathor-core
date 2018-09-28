@@ -25,6 +25,7 @@ class GraphvizResource(resource.Resource):
             'pdf': b'application/pdf',
             'png': b'image/png',
             'jpg': b'image/jpeg',
+            'dot': b'application/dot',
         }
 
         dotformat = 'pdf'
@@ -40,6 +41,11 @@ class GraphvizResource(resource.Resource):
             acc_weight = self.parseBoolArg(request.args[b'acc_weight'][0].decode('utf-8'))
 
         dot = self.manager.tx_storage.graphviz(format=dotformat, weight=weight, acc_weight=acc_weight)
+
+        if dotformat == 'dot':
+            request.setHeader(b'content-type', contenttype[dotformat])
+            return str(dot).encode('utf-8')
+
         request.setHeader(b'content-type', contenttype[dotformat])
         return dot.pipe()
 

@@ -461,40 +461,39 @@ class TransactionStorage:
 
         dot.attr('node', shape='oval', style='')
         nodes_iter = self._topological_sort()
-        for i, tx in enumerate(nodes_iter):
-            name = tx.hash.hex()
-            attrs_node = {'label': tx.hash.hex()[-4:]}
-            attrs_edge = {}
 
-            if tx.is_block:
-                attrs_node.update(block_attrs)
-                attrs_edge.update(dict(pendiwth='4'))
+        with g_genesis as g_g, g_txs as g_t, g_blocks as g_b:
+            for i, tx in enumerate(nodes_iter):
+                name = tx.hash.hex()
+                attrs_node = {'label': tx.hash.hex()[-4:]}
+                attrs_edge = {}
 
-            if (tx.hash in self._cache_tip_blocks) or (tx.hash in self._cache_tip_transactions):
-                attrs_node.update(tx_tips_attrs)
+                if tx.is_block:
+                    attrs_node.update(block_attrs)
+                    attrs_edge.update(dict(pendiwth='4'))
 
-            if weight:
-                attrs_node.update(dict(label='{}\nw: {:.2f}'.format(attrs_node['label'], tx.weight)))
+                if (tx.hash in self._cache_tip_blocks) or (tx.hash in self._cache_tip_transactions):
+                    attrs_node.update(tx_tips_attrs)
 
-            if acc_weight:
-                metadata = tx.get_metadata()
-                attrs_node.update(
-                    dict(label='{}\naw: {:.2f}'.format(attrs_node['label'], metadata.accumulated_weight))
-                )
+                if weight:
+                    attrs_node.update(dict(label='{}\nw: {:.2f}'.format(attrs_node['label'], tx.weight)))
 
-            if tx.is_genesis:
-                attrs_node.update(dict(fillcolor='#87D37C', style='filled'))
-                with g_genesis as c:
-                    c.node(name, **attrs_node)
-            elif tx.is_block:
-                with g_blocks as c:
-                    c.node(name, **attrs_node)
-            else:
-                with g_txs as c:
-                    c.node(name, **attrs_node)
+                if acc_weight:
+                    metadata = tx.get_metadata()
+                    attrs_node.update(
+                        dict(label='{}\naw: {:.2f}'.format(attrs_node['label'], metadata.accumulated_weight))
+                    )
 
-            for parent_hash in tx.parents:
-                dot.edge(name, parent_hash.hex(), **attrs_edge)
+                if tx.is_genesis:
+                    attrs_node.update(dict(fillcolor='#87D37C', style='filled'))
+                    g_g.node(name, **attrs_node)
+                elif tx.is_block:
+                    g_b.node(name, **attrs_node)
+                else:
+                    g_t.node(name, **attrs_node)
+
+                for parent_hash in tx.parents:
+                    dot.edge(name, parent_hash.hex(), **attrs_edge)
 
         dot.attr(rankdir='RL')
         return dot
