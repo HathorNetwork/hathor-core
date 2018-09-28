@@ -113,6 +113,7 @@ class HathorManager(object):
         """
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
+        self.connections.start()
 
         # Initialize manager's components.
         self._initialize_components()
@@ -139,7 +140,6 @@ class HathorManager(object):
         self.state = self.NodeState.WAITING_FOR_PEERS
 
     def add_peer_discovery(self, peer_discovery):
-        self.connections.start()
         self.peer_discoveries.append(peer_discovery)
 
     def get_new_tx_parents(self):
@@ -199,7 +199,7 @@ class HathorManager(object):
         try:
             tx.verify()
         except HathorError as e:
-            print('validate_new_tx(): Error verifying transaction {} tx={}'.format(e, tx.hash.hex()))
+            print('validate_new_tx(): Error verifying transaction {} tx={}'.format(repr(e), tx.hash.hex()))
             return False
 
         if tx.is_block:
@@ -229,8 +229,7 @@ class HathorManager(object):
         # Only propagate transactions once we are sufficiently synced up with the rest of the network.
         # TODO Should we queue transactions?
         if self.state == self.NodeState.SYNCED:
-            for conn in self.get_ready_connections():
-                conn.state.send_data(tx)
+            self.connections.send_tx_to_peers(tx)
 
     def on_new_tx(self, tx, conn=None):
         """This method is called when any transaction arrive.
@@ -268,6 +267,10 @@ class HathorManager(object):
                 self.block_weight = new_weight
         else:
             print('New tx: {}'.format(tx.hash.hex()))
+
+        # Propagate to our peers.
+        if self.state == self.NodeState.SYNCED:
+            self.connections.send_tx_to_peers(tx)
 
         # Publish to pubsub manager the new tx accepted
         self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)

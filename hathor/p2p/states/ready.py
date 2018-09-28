@@ -9,7 +9,6 @@ from hathor.p2p.peer_id import PeerId
 
 import json
 import base64
-import time
 from collections import namedtuple
 
 
@@ -19,6 +18,7 @@ class ReadyState(BaseState):
 
         # It triggers an event to send a ping message if necessary.
         self.lc_ping = LoopingCall(self.send_ping_if_necessary)
+        self.lc_ping.clock = self.protocol.node.reactor
 
         self.cmd_map.update({
             # p2p control messages
@@ -220,7 +220,7 @@ class ReadyState(BaseState):
     def send_ping_if_necessary(self):
         """ Send a PING command if the connection has been idle for 3 seconds or more.
         """
-        dt = time.time() - self.protocol.last_message
+        dt = self.protocol.node.reactor.seconds() - self.protocol.last_message
         if dt > 3:
             self.send_ping()
 
@@ -245,4 +245,4 @@ class ReadyState(BaseState):
         """ Executed when a PONG message is received. It only updates
         the last time a message has been received by this peer.
         """
-        self.protocol.last_message = time.time()
+        self.protocol.last_message = self.protocol.node.reactor.seconds()

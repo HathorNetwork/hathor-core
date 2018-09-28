@@ -79,7 +79,7 @@ class HathorProtocol(object):
 
         # Default rate limit
         self.ratelimit = RateLimiter()
-        self.ratelimit.set_limit(self.RateLimitKeys.GLOBAL, 120, 60)
+        # self.ratelimit.set_limit(self.RateLimitKeys.GLOBAL, 120, 60)
 
     def change_state(self, state_enum):
         if state_enum not in self._state_instances:
@@ -130,7 +130,7 @@ class HathorProtocol(object):
     def recv_message(self, cmd, payload):
         """ Executed when a new message arrives.
         """
-        self.last_message = time.time()
+        self.last_message = self.node.reactor.seconds()
 
         if not self.ratelimit.add_hit(self.RateLimitKeys.GLOBAL):
             self.state.send_throttle(self.RateLimitKeys.GLOBAL)
@@ -144,7 +144,7 @@ class HathorProtocol(object):
                 print('Unhandled Exception:', e)
                 raise
         else:
-            self.send_error(self.ProtocolCommand.ERROR, 'Invalid Command: {}'.format(cmd))
+            self.send_error('Invalid Command: {}'.format(cmd))
 
     def send_error(self, msg):
         """ Send an error message to the peer.

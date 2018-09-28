@@ -13,6 +13,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     passwd = getpass.getpass(prompt='Wallet password:')
+    passwd = passwd.encode('utf-8')
 
     count = args.count
     directory = args.directory or './'

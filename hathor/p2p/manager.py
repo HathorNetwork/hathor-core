@@ -41,6 +41,7 @@ class ConnectionsManager:
 
         # A timer to try to reconnect to the disconnect known peers.
         self.lc_reconnect = LoopingCall(self.reconnect_to_all)
+        self.lc_reconnect.clock = self.reactor
 
     def start(self):
         self.lc_reconnect.start(5)
@@ -48,6 +49,14 @@ class ConnectionsManager:
     def stop(self):
         if self.lc_reconnect.running:
             self.lc_reconnect.stop()
+
+    def send_tx_to_peers(self, tx):
+        """ Send `tx` to all ready peers.
+
+        :param tx: py:class:`hathor.transaction.BaseTransaction`
+        """
+        for conn in self.get_ready_connections():
+            conn.state.send_data(tx)
 
     def on_connection_failure(self, failure, endpoint):
         print('Connection failure: address={}:{} message={}'.format(endpoint._host, endpoint._port, failure))
@@ -104,8 +113,6 @@ class ConnectionsManager:
 
         TODO(epnichols): Should we always conect to *all*? Should there be a max #?
         """
-        for peer in self.peer_storage.values():
-            self.connect_to_if_not_connected(peer)
         for peer in self.peer_storage.values():
             self.connect_to_if_not_connected(peer)
 
@@ -175,7 +182,7 @@ class ConnectionsManager:
             #     **options,
             # )
         else:
-            factory = self.client_factory
+            factory = self.server_factory
 
         endpoint.listen(factory)
         print('Listening to: {}...'.format(description))
