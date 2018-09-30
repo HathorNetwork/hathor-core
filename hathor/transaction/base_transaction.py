@@ -3,8 +3,8 @@
 from hathor.transaction.exceptions import PowError
 from hathor.transaction.scripts import P2PKH
 
-from math import log
 from enum import Enum
+from math import log
 import time
 import struct
 import hashlib
