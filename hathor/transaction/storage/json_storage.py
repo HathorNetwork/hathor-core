@@ -185,18 +185,10 @@ class TransactionJSONStorage(TransactionStorage):
         return self.get_metadata_by_hash(hash_hex)
 
     def serialize_metadata(self, metadata):
-        data = {}
-        data['hash'] = metadata.hash.hex()
-        data['spent_outputs'] = list(metadata.spent_outputs)
-        data['accumulated_weight'] = metadata.accumulated_weight
-        return data
+        return metadata.to_json()
 
     def load_metadata(self, data):
-        tm = TransactionMetadata()
-        tm.hash = bytes.fromhex(data['hash'])
-        tm.spent_outputs = set(data['spent_outputs'])
-        tm.accumulated_weight = data['accumulated_weight']
-        return tm
+        return TransactionMetadata.create_from_json(data)
 
     def get_all_transactions(self):
         from hathor.transaction.genesis import genesis_transactions

@@ -305,6 +305,8 @@ class Wallet(object):
                 if p2pkh_in.address in self.keys:
                     # this wallet spent tokens
                     # remove from unspent_txs
+                    if p2pkh_in.address not in self.unspent_txs:
+                        continue
                     utxo_list = self.unspent_txs.pop(p2pkh_in.address)
                     list_index = -1
                     for i, utxo in enumerate(utxo_list):

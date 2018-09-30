@@ -1,10 +1,9 @@
 # encoding: utf-8
 
 from hathor.transaction.exceptions import PowError
-from hathor.transaction.transaction_metadata import TransactionMetadata
-from hathor.transaction.storage.exceptions import TransactionMetadataDoesNotExist
 from hathor.transaction.scripts import P2PKH
 
+from math import log
 from enum import Enum
 import time
 import struct
@@ -20,6 +19,22 @@ _INPUT_SIZE_BYTES = 32  # 256 bits
 # parents len (H).
 # H = unsigned short (2 bytes), f = float(4), I = unsigned int (4), Q = unsigned long long int (64)
 _TRANSACTION_FORMAT_STRING = '!HdIQHHH'  # Update code below if this changes.
+
+
+def sum_weights(w1, w2):
+    a = max(w1, w2)
+    b = min(w1, w2)
+    if b == 0:
+        # Zero is a special acc_weight.
+        # We could use float('-inf'), but it is not serializable.
+        return a
+    return a + log(1 + 2**(b-a), 2)
+
+
+class TxConflictState(Enum):
+    NO_CONFLICT = 'no-conflict'
+    CONFLICT_WINNER = 'conflict-winner'
+    CONFLICT_VOIDED = 'conflict-voided'
 
 
 class BaseTransaction:
@@ -133,6 +148,61 @@ class BaseTransaction:
             if self == genesis:
                 return True
         return False
+
+    def mark_inputs_as_used(self):
+        for txin in self.inputs:
+            self.mark_input_as_used(txin)
+
+    def mark_input_as_used(self, txin):
+        spent_tx = self.storage.get_transaction_by_hash_bytes(txin.tx_id)
+        spent_meta = spent_tx.get_metadata()
+        spent_by = spent_meta.spent_outputs[txin.index]  # Set[bytes(hash)]
+        spent_by.add(self.hash)
+        self.storage.save_metadata(spent_meta)
+
+        if len(spent_by) > 1:
+            # Conflicting transaction.
+            meta_list = []
+            winner_set = set()
+            max_acc_weight = 0
+            for h in spent_by:
+                from hathor.transaction.storage.exceptions import TransactionMetadataDoesNotExist
+                try:
+                    meta = self.storage.get_metadata_by_hash_bytes(h)
+                except TransactionMetadataDoesNotExist:
+                    from hathor.transaction.transaction_metadata import TransactionMetadata
+                    meta = TransactionMetadata(hash=h)
+                meta_list.append(meta)
+
+                if meta.accumulated_weight == max_acc_weight:
+                    winner_set.add(meta.hash)
+                elif meta.accumulated_weight > max_acc_weight:
+                    max_acc_weight = meta.accumulated_weight
+                    winner_set = set([meta.hash])
+
+            if len(winner_set) > 1:
+                winner_set = set()
+
+            for meta in meta_list:
+                tx = self.storage.get_transaction_by_hash_bytes(meta.hash)
+                assert tx.hash == meta.hash
+                if tx.hash in winner_set:
+                    tx.mark_as_winner()
+                else:
+                    tx.mark_as_voided()
+
+    def mark_as_voided(self):
+        meta = self.storage.get_metadata_by_hash_bytes(self.hash)
+        meta.conflict = TxConflictState.CONFLICT_VOIDED
+        self.storage.save_metadata(meta)
+        self.storage._del_from_cache(self)
+
+    def mark_as_winner(self):
+        meta = self.storage.get_metadata_by_hash_bytes(self.hash)
+        meta.conflict = TxConflictState.CONFLICT_WINNER
+        self.storage.save_metadata(meta)
+        # TODO Add back to tip cache when it is a tip
+        # self.storage._add_to_cache(self)
 
     def compute_genesis_dag_connectivity(self, storage, storage_sync, use_memoized_negative_results=True):
         """Computes the connectivity state from this tx bach to the genesis transactions.
@@ -312,10 +382,12 @@ class BaseTransaction:
         # TODO Maybe we could use a TransactionCacheStorage in the future to reduce storage hit
         metadata = getattr(self, '_metadata', None)
         if not metadata:
+            from hathor.transaction.storage.exceptions import TransactionMetadataDoesNotExist
             try:
                 metadata = self.storage.get_metadata_by_hash_bytes(self.hash)
             except TransactionMetadataDoesNotExist:
-                metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight)
+                from hathor.transaction.transaction_metadata import TransactionMetadata
+                metadata = TransactionMetadata(hash=self.hash)
             self._metadata = metadata
         return metadata
 
@@ -325,7 +397,7 @@ class BaseTransaction:
         :type increment: float
         """
         metadata = self.get_metadata()
-        metadata.accumulated_weight += increment
+        metadata.accumulated_weight = sum_weights(metadata.accumulated_weight, increment)
         self.storage.save_metadata(metadata)
 
     def to_json(self, decode_script=False):
