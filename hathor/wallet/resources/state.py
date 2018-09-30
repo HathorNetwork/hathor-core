@@ -27,7 +27,8 @@ class StateWalletResource(resource.Resource):
         set_cors(request, 'GET')
 
         data = {
-            'is_locked': self.manager.wallet.password is None,
+            'is_locked': self.manager.wallet.is_locked(),
+            'type': self.manager.wallet.type.value
         }
 
         return json.dumps(data, indent=4).encode('utf-8')

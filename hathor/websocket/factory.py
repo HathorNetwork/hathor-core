@@ -25,7 +25,8 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             HathorEvents.WALLET_OUTPUT_RECEIVED,
             HathorEvents.WALLET_INPUT_SPENT,
             HathorEvents.WALLET_BALANCE_UPDATED,
-            HathorEvents.WALLET_KEYS_GENERATED
+            HathorEvents.WALLET_KEYS_GENERATED,
+            HathorEvents.WALLET_GAP_LIMIT,
         ]
 
         for event in events:
@@ -46,7 +47,8 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         # Ready events don't need extra serialization
         ready_events = [
             HathorEvents.WALLET_BALANCE_UPDATED,
-            HathorEvents.WALLET_KEYS_GENERATED
+            HathorEvents.WALLET_KEYS_GENERATED,
+            HathorEvents.WALLET_GAP_LIMIT,
         ]
         data = args.__dict__
         if event in ready_events:

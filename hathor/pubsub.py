@@ -39,6 +39,8 @@ class HathorEvents(Enum):
 
     WALLET_KEYS_GENERATED = 'wallet:keys_generated'
 
+    WALLET_GAP_LIMIT = 'wallet:gap_limit'
+
 
 class EventArguments(object):
     """Simple object for storing event arguments.

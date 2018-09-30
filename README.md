@@ -13,6 +13,12 @@ status server, open the brower in http://localhost:80001/.
 
 By default, it will listen in all interfaces (0.0.0.0).
 
+You have two wallet options: Hierarchical Deterministic Wallet (hd) and KeyPair simple wallet (keypair)
+
+To decide which wallet you are going to use run with --wallet hd, for example. Default value is 'hd'
+
+For hd wallet you can run --words and --passphrase to set the words and passphrase used to generate the initial seed
+
 
 
 Run a simple test in one computer

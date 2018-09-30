@@ -1,6 +1,6 @@
 from twisted.web import resource, server
 from hathor.api_util import set_cors
-from hathor.wallet.wallet import WalletOutputInfo, WalletInputInfo
+from hathor.wallet.base_wallet import WalletOutputInfo, WalletInputInfo
 from hathor.transaction import Transaction
 
 import json

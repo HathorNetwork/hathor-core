@@ -13,7 +13,7 @@ from hathor.transaction.storage import TransactionJSONStorage, TransactionMemory
 from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, \
                                     SendTokensResource, UnlockWalletResource, \
                                     LockWalletResource, StateWalletResource
-from hathor.wallet import Wallet
+from hathor.wallet import Wallet, HDWallet
 from hathor.transaction.resources import DecodeTxResource, PushTxResource, GraphvizResource, \
                                         TransactionResource, DashboardTransactionResource
 from hathor.websocket import HathorAdminWebsocketFactory
@@ -37,6 +37,13 @@ if __name__ == '__main__':
     parser.add_argument('--bootstrap', action='append', help='Address to connect to (eg: tcp:127.0.0.1:8000')
     parser.add_argument('--status', type=int, help='Port to run status server')
     parser.add_argument('--data', help='Data directory')
+    parser.add_argument(
+        '--wallet',
+        help='Set wallet type. Options are hd (Hierarchical Deterministic) or keypair',
+        default='hd'
+    )
+    parser.add_argument('--words', help='Words used to generate the seed for HD Wallet')
+    parser.add_argument('--passphrase', action='store_true', help='Passphrase used to generate the seed for HD Wallet')
     parser.add_argument('--unlock-wallet', action='store_true', help='Ask for password to unlock wallet')
     args = parser.parse_args()
 
@@ -51,21 +58,45 @@ if __name__ == '__main__':
     print('Hathor v{}'.format(hathor.__version__))
     print('My peer id is', peer_id.id)
 
+    def create_wallet():
+        if args.wallet == 'hd':
+            kwargs = {
+                'words': args.words,
+            }
+
+            if args.passphrase:
+                wallet_passphrase = getpass.getpass(prompt='HD Wallet passphrase:')
+                kwargs['passphrase'] = wallet_passphrase.encode()
+
+            if args.data:
+                kwargs['directory'] = args.data
+
+            return HDWallet(**kwargs)
+        elif args.wallet == 'keypair':
+            if args.data:
+                wallet = Wallet(directory=args.data)
+            else:
+                wallet = Wallet()
+
+            if args.unlock_wallet:
+                wallet_passwd = getpass.getpass(prompt='Wallet password:')
+                wallet.unlock(wallet_passwd.encode())
+
+            return wallet
+        else:
+            raise ValueError('Invalid type for wallet')
+
     if args.data:
         tx_dir = os.path.join(args.data, 'tx')
         wallet_dir = args.data
         tx_storage = TransactionJSONStorage(path=tx_dir)
-        wallet = Wallet(directory=wallet_dir)
         print('Using TransactionJSONStorage at {}'.format(tx_dir))
         print('Using Wallet at {}'.format(wallet_dir))
     else:
         tx_storage = TransactionMemoryStorage()
-        wallet = Wallet()
         print('Using TransactionMemoryStorage')
 
-    if args.unlock_wallet:
-        wallet_passwd = getpass.getpass(prompt='Wallet password:')
-        wallet.unlock(wallet_passwd.encode())
+    wallet = create_wallet()
 
     network = 'testnet'
     manager = HathorManager(reactor, peer_id=peer_id, network=network,
