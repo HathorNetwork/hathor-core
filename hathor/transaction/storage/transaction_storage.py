@@ -1,5 +1,6 @@
 # encoding: utf-8
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
+from hathor.transaction import TxConflictState
 
 from collections import deque
 import random
@@ -524,7 +525,7 @@ class TransactionStorage:
                     g_b.node(name, **attrs_node)
                 else:
                     meta = tx.get_metadata()
-                    if meta.conflict == meta.ConflictState.CONFLICT_VOIDED:
+                    if meta.conflict == TxConflictState.CONFLICT_VOIDED:
                         attrs_node.update(conflict_attrs)
                     g_t.node(name, **attrs_node)
 
