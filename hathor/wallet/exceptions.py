@@ -35,3 +35,8 @@ class InsuficientFunds(HathorWalletError):
 class OutOfUnusedAddresses(HathorWalletError):
     """Wallet does not have unused addresses and is locked (so it can't create new ones)
     """
+
+
+class InvalidWords(HathorWalletError):
+    """HD Wallet was initialized with invalid set of words
+    """

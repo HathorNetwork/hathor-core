@@ -23,7 +23,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
     def _add_new_tx(self, address, value):
         from hathor.transaction import Transaction
-        from hathor.wallet.wallet import WalletOutputInfo
+        from hathor.wallet.base_wallet import WalletOutputInfo
 
         outputs = []
         outputs.append(WalletOutputInfo(address=base58.b58decode(address), value=int(value)))

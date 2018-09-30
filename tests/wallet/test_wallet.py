@@ -9,7 +9,7 @@ from hathor.transaction import Transaction
 from hathor.transaction.genesis import genesis_transactions
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet import Wallet
-from hathor.wallet.wallet import WalletInputInfo, WalletOutputInfo
+from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.keypair import KeyPair
 from hathor.wallet.exceptions import WalletLocked, OutOfUnusedAddresses, InsuficientFunds
 from hathor.crypto.util import get_private_key_from_bytes, get_address_b58_from_public_key, get_private_key_bytes

@@ -13,5 +13,5 @@ __all__ = [
     'SendTokensResource',
     'UnlockWalletResource',
     'LockWalletResource',
-    'StateWalletResource'
+    'StateWalletResource',
 ]

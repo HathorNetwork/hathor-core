@@ -37,7 +37,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self._add_new_blocks(5)
 
         from hathor.transaction import Transaction
-        from hathor.wallet.wallet import WalletOutputInfo
+        from hathor.wallet.base_wallet import WalletOutputInfo
 
         address = '3JEcJKVsHddj1Td2KDjowZ1JqGF1'
         value = 1000

@@ -6,6 +6,9 @@ cryptography==2.3.1
 pyOpenSSL==18.0.0
 service-identity
 
+bip32utils==0.3.post3
+mnemonic==0.18
+
 graphviz==0.9
 
 requests
