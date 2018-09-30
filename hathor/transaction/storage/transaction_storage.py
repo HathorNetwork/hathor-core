@@ -86,7 +86,7 @@ class TransactionStorage:
         :return: An iterable with the transactions
         :rtype: Iterable[BaseTransaction]
         """
-        to_visit = deque(root.parents)  # List[bytes(hash)]
+        to_visit = deque([root.hash])  # List[bytes(hash)]
         seen = set(to_visit)    # Set[bytes(hash)]
 
         while to_visit:
@@ -111,6 +111,13 @@ class TransactionStorage:
             if parent_hash in cache:
                 cache.pop(parent_hash)
         cache[tx.hash] = tx
+
+    def _del_from_cache(self, tx):
+        if tx.is_block:
+            cache = self._cache_tip_blocks
+        else:
+            cache = self._cache_tip_transactions
+        cache.pop(tx.hash, None)
 
     def get_block_count(self):
         return self._cache_block_count
@@ -458,6 +465,7 @@ class TransactionStorage:
 
         tx_tips_attrs = dict(style='filled', fillcolor='#F5D76E')
         block_attrs = dict(shape='box', style='filled', fillcolor='#EC644B')
+        conflict_attrs = dict(style='dashed,filled', penwidth='0.25', fillcolor='#BDC3C7')
 
         dot.attr('node', shape='oval', style='')
         nodes_iter = self._topological_sort()
@@ -470,7 +478,7 @@ class TransactionStorage:
 
                 if tx.is_block:
                     attrs_node.update(block_attrs)
-                    attrs_edge.update(dict(pendiwth='4'))
+                    attrs_edge.update(dict(penwidth='4'))
 
                 if (tx.hash in self._cache_tip_blocks) or (tx.hash in self._cache_tip_transactions):
                     attrs_node.update(tx_tips_attrs)
@@ -490,6 +498,9 @@ class TransactionStorage:
                 elif tx.is_block:
                     g_b.node(name, **attrs_node)
                 else:
+                    meta = tx.get_metadata()
+                    if meta.conflict == meta.ConflictState.CONFLICT_VOIDED:
+                        attrs_node.update(conflict_attrs)
                     g_t.node(name, **attrs_node)
 
                 for parent_hash in tx.parents:

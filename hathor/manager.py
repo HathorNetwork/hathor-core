@@ -268,6 +268,8 @@ class HathorManager(object):
         else:
             print('New tx: {}'.format(tx.hash.hex()))
 
+        tx.mark_inputs_as_used()
+
         # Propagate to our peers.
         if self.state == self.NodeState.SYNCED:
             self.connections.send_tx_to_peers(tx)
