@@ -47,19 +47,22 @@ class TransactionMetadata:
     def to_json(self):
         data = {}
         data['hash'] = self.hash.hex()
-        data['spent_outputs'] = [(x, list(y)) for x, y in self.spent_outputs.items()]
+        data['spent_outputs'] = []
+        for idx, hashes in self.spent_outputs.items():
+            data['spent_outputs'].append([idx, [h_bytes.hex() for h_bytes in hashes]])
         data['received_by'] = list(self.received_by)
         data['children'] = list(self.children)
         data['conflict'] = self.conflict.value
         data['accumulated_weight'] = self.accumulated_weight
-
         return data
 
     @classmethod
     def create_from_json(cls, data):
         meta = cls()
         meta.hash = bytes.fromhex(data['hash'])
-        meta.spent_outputs = defaultdict(set, [(x, set(y)) for x, y in data['spent_outputs']])
+        for idx, hashes in data['spent_outputs']:
+            for h_hex in hashes:
+                meta.spent_outputs[idx].add(bytes.fromhex(h_hex))
         meta.received_by = set(data['received_by'])
         meta.children = set(data['children'])
         meta.conflict = TxConflictState(data['conflict'])
