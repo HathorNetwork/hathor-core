@@ -119,7 +119,7 @@ class _BaseTransactionStorageTest:
             metadata = TransactionMetadata(
                 hash=self.genesis_blocks[0].hash
             )
-            metadata.spent_outputs[1].add('123')
+            metadata.spent_outputs[1].add(self.genesis_blocks[0].hash)
             self.tx_storage.save_metadata(metadata)
             metadata_read = self.tx_storage.get_metadata_by_hash_bytes(self.genesis_blocks[0].hash)
             self.assertEqual(metadata, metadata_read)
