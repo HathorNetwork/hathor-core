@@ -259,6 +259,31 @@ class TransactionStorage:
         result = result[-num_blocks:]
         return result
 
+    def iter_bfs_ascendent_blocks(self, root, max_depth):
+        """ Iterate through all ascendents in a BFS algorithm, starting from `root` until reach `max_depth`.
+        Only blocks are yielded.
+
+        :param root: Start point of the BSF
+        :type root: :py:class:`hathor.transactions.BaseTransaction`
+
+        :return: An iterable of transactions
+        :rtype: Iterable[BaseTransaction]
+        """
+        pending_visits = deque([(1, parent_hash) for parent_hash in root.parents])
+        used = set(root.parents)
+        while pending_visits:
+            depth, tx_hash = pending_visits.popleft()
+            tx = self.get_transaction_by_hash_bytes(tx_hash)
+            if not tx.is_block:
+                continue
+            yield tx
+            if depth >= max_depth:
+                continue
+            for parent_hash in tx.parents:
+                if parent_hash not in used:
+                    used.add(parent_hash)
+                    pending_visits.append((depth+1, parent_hash))
+
     def get_blocks_before(self, hash_hex, num_blocks=100):
         """Run a BFS starting from the giving `hash_hex`.
 

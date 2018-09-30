@@ -3,7 +3,7 @@
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.node_sync import NodeSyncLeftToRightManager
 from hathor.p2p.manager import ConnectionsManager
-from hathor.transaction import Block, TxOutput
+from hathor.transaction import Block, TxOutput, sum_weights
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
@@ -104,7 +104,6 @@ class HathorManager(object):
         self.latest_blocks = deque()
         self.avg_time_between_blocks = 64  # in seconds
         self.min_block_weight = 10
-        self.block_weight = 10  # starting difficulty (10 is too low for production)
         self.max_allowed_block_weight_change = 2
         self.tokens_issued_per_block = 10000
 
@@ -156,6 +155,12 @@ class HathorManager(object):
         return ret
 
     def generate_mining_block(self):
+        """ Generates a block ready to be mined. The block includes new issued tokens,
+        parents, and the weight.
+
+        :return: A block ready to be mined
+        :rtype: :py:class:`hathor.transaction.Block`
+        """
         address = self.wallet.get_unused_address_bytes(mark_as_used=False)
         amount = self.tokens_issued_per_block
         output_script = P2PKH.create_output_script(address)
@@ -169,8 +174,9 @@ class HathorManager(object):
         parents_tx = [self.tx_storage.get_transaction_by_hash_bytes(x) for x in parents]
         new_height = max(x.height for x in parents_tx) + 1
 
-        return Block(weight=self.block_weight, outputs=tx_outputs, parents=parents, storage=self.tx_storage,
-                     height=new_height)
+        blk = Block(outputs=tx_outputs, parents=parents, storage=self.tx_storage, height=new_height)
+        blk.weight = self.calculate_block_difficulty(blk)
+        return blk
 
     def on_tips_received(self, tip_blocks, tip_transactions, conn=None):
         self.node_sync_manager.on_tips_received(tip_blocks, tip_transactions, conn)
@@ -203,9 +209,10 @@ class HathorManager(object):
             return False
 
         if tx.is_block:
-            if tx.weight < self.block_weight:
+            block_weight = self.calculate_block_difficulty(tx)
+            if tx.weight < block_weight:
                 print('Invalid new block {}: weight ({}) is smaller than the minimum block weight ({})'.format(
-                    tx.hash.hex(), tx.weight, self.block_weight)
+                    tx.hash.hex(), tx.weight, block_weight)
                 )
                 return False
             if tx.sum_outputs != self.tokens_issued_per_block:
@@ -249,22 +256,7 @@ class HathorManager(object):
             self.update_accumulated_weights(tx)
 
         if tx.is_block:
-            self.latest_blocks.append(tx)
-            while len(self.latest_blocks) > self.blocks_per_difficulty:
-                self.latest_blocks.popleft()
-
             print('New block found: {} weight={}'.format(tx.hash_hex, tx.weight))
-            count_blocks = self.tx_storage.get_block_count()
-            if count_blocks % self.blocks_per_difficulty == 0:
-                print('Adjusting mining difficulty...')
-                avg_dt, new_weight = self.calculate_block_difficulty()
-                print('Block weight updated: avg_dt={:.2f} target_avg_dt={:.2f} {:6.2f} -> {:6.2f}'.format(
-                    avg_dt,
-                    self.avg_time_between_blocks,
-                    self.block_weight,
-                    new_weight
-                ))
-                self.block_weight = new_weight
         else:
             print('New tx: {}'.format(tx.hash.hex()))
 
@@ -288,41 +280,40 @@ class HathorManager(object):
     def on_best_height(self, best_height, conn):
         raise NotImplemented
 
-    def calculate_block_difficulty(self):
-        """ Calculate block difficulty according to the latest blocks.
+    def calculate_block_difficulty(self, block):
+        """ Calculate block difficulty according to the ascendents of `block`.
 
         The new difficulty is calculated so that the average time between blocks will be
         `self.avg_time_between_blocks`. If the measured time between blocks is smaller than the target,
-        the difficulty increases. If it is higher than the target, the difficulty decreases.
+        the weight increases. If it is higher than the target, the weight decreases.
 
-        The difficulty change cannot be higher than `self.max_allowed_block_weight_change`, and
-        the new difficulty cannot be smaller than `self.min_block_weight`.
+        The new difficulty cannot be smaller than `self.min_block_weight`.
         """
-        blocks = self.latest_blocks
-        assert len(blocks) == self.blocks_per_difficulty
+        if block.is_genesis:
+            return 10
+
+        it = self.tx_storage.iter_bfs_ascendent_blocks(block, max_depth=10)
+        blocks = list(it)
+        blocks.sort(key=lambda tx: tx.timestamp)
+
+        if blocks[-1].is_genesis:
+            return 10
+
         dt = blocks[-1].timestamp - blocks[0].timestamp
 
         if dt <= 0:
             dt = 1  # Strange situation, so, let's just increase difficulty.
 
-        delta = (
-            log(self.avg_time_between_blocks, 2)
-            + log(self.blocks_per_difficulty, 2)
-            - log(dt, 2)
-        )
+        logH = 0
+        for blk in blocks:
+            logH = sum_weights(logH, blk.weight)
 
-        if delta > self.max_allowed_block_weight_change:
-            delta = self.max_allowed_block_weight_change
-        elif delta < -self.max_allowed_block_weight_change:
-            delta = -self.max_allowed_block_weight_change
+        weight = logH - log(dt, 2) + log(self.avg_time_between_blocks, 2)
 
-        new_weight = self.block_weight + delta
+        if weight < self.min_block_weight:
+            weight = self.min_block_weight
 
-        if new_weight < self.min_block_weight:
-            new_weight = self.min_block_weight
-
-        avg_dt = float(dt) / self.blocks_per_difficulty
-        return avg_dt, new_weight
+        return weight
 
     def update_accumulated_weights(self, tx):
         """Update all previous transactions' accumulated weight when a new one arrives
