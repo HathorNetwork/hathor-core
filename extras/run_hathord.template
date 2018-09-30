@@ -1,0 +1,4 @@
+#!/bin/bash
+cd ${INSTALL_DIR}/hathor-python/
+source ./venv/bin/activate
+exec python main.py --hostname ${NODE_HOST} --listen tcp:40403 --status 8001 --testnet --peer peer_id.json

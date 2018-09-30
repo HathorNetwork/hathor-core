@@ -1,0 +1,6 @@
+[program:hathord]
+command=${INSTALL_DIR}/hathor-python/run_hathord
+user=ubuntu
+directory=${INSTALL_DIR}/hathor-python/
+stdout_logfile=${INSTALL_DIR}/logs/hathord.log
+stderr_logfile=${INSTALL_DIR}/logs/hathord.err
