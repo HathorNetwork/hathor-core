@@ -4,3 +4,13 @@ user=ubuntu
 directory=${INSTALL_DIR}/hathor-python/
 stdout_logfile=${INSTALL_DIR}/logs/hathord.log
 stderr_logfile=${INSTALL_DIR}/logs/hathord.err
+
+[program:hathor-miner]
+command=${INSTALL_DIR}/hathor-python/run_miner
+user=ubuntu
+directory=${INSTALL_DIR}/hathor-python/
+stdout_logfile=${INSTALL_DIR}/logs/hathor-miner.log
+stderr_logfile=${INSTALL_DIR}/logs/hathor-miner.err
+
+[inet_http_server]
+port = 127.0.0.1:9001
