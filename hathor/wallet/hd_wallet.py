@@ -8,12 +8,14 @@ from hathor.wallet.exceptions import InvalidWords
 # TODO BIP32Key lib uses ecdsa library to generate key that does not use OpenSSL
 # We must check if this brings any security problem to us later
 
+WORD_COUNT_CHOICES = [12, 15, 18, 21, 24]
+
 
 class HDWallet(BaseWallet):
     """ Hierarchical Deterministic Wallet based in BIP32 (https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki)
     """
-    def __init__(self, words=None, language='english', passphrase=b'',
-                 gap_limit=20, directory='./', history_file='history.json', pubsub=None):
+    def __init__(self, words=None, language='english', passphrase=b'', gap_limit=20,
+                 word_count=24, directory='./', history_file='history.json', pubsub=None):
         """
         :param words: words to generate the seed. It's a string with the words separated by a single space.
         If None we generate new words when starting the wallet
@@ -28,6 +30,12 @@ class HDWallet(BaseWallet):
         :param gap_limit: maximum of unused addresses in sequence
         (default value based in https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki#address-gap-limit)
         :type gap_limit: int
+
+        :param word_count: quantity of words that are gonna generate the seed
+        Possible choices are [12, 15, 18, 21, 24]
+        :type word_count: int
+
+        :raises ValueError: Raised on invalid word_count
         """
         super().__init__(
             directory=directory,
@@ -57,6 +65,11 @@ class HDWallet(BaseWallet):
 
         # Used in admin frontend to know which wallet is being used
         self.type = self.WalletType.HD
+
+        # Validating word count
+        if word_count not in WORD_COUNT_CHOICES:
+            raise ValueError('Word count ({}) is not one of the options {}.'.format(word_count, WORD_COUNT_CHOICES))
+        self.word_count = word_count
 
     def _manually_initialize(self):
         """ Create words (if is None) and start seed and master node
@@ -210,7 +223,9 @@ class HDWallet(BaseWallet):
             # Decide to choose words automatically
             # Can be a different language than self.mnemonic
             m = Mnemonic(self.language)
-            words = m.generate()
+            # We can't pass the word_count to generate method, only the strength
+            # Multiplying by 10.67 gives the result we expect
+            words = m.generate(strength=int(self.word_count*10.67))
         self.words = words
         self.passphrase = passphrase
         self._manually_initialize()
