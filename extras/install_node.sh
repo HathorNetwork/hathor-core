@@ -2,19 +2,20 @@
 
 BASENAME=`basename $0`
 
-if [ $# -ne 2 ]; then
-	echo "usage: ${BASENAME} <install_dir> <node_host>"
+if [ $# -ne 3 ]; then
+	echo "usage: ${BASENAME} <install_dir> <node_host> <deploy_token>"
 	exit 1
 fi
 
 export INSTALL_DIR=$1
 export NODE_HOST=$2
+DEPLOY_TOKEN=$3
 
 BASEDIR=`pwd`
 
 cd ${INSTALL_DIR}
 
-git clone git@gitlab.com:HathorNetwork/hathor-python.git || exit 1
+git clone https://${DEPLOY_TOKEN}@gitlab.com/HathorNetwork/hathor-python.git || exit 1
 
 sudo apt update
 sudo apt install -y python3 python3-dev python3-pip python3-venv build-essential graphviz
@@ -30,6 +31,7 @@ mkdir data/
 cd hathor-python/
 python3 -m venv --prompt "venv/hathor" venv
 source ./venv/bin/activate
+pip install wheel
 pip install -r requirements.txt
 
 python gen_peer_id.py >peer_id.json
