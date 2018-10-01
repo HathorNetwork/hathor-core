@@ -4,9 +4,9 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
 
-from hathor.crypto.util import get_hash160, get_public_key_from_bytes, \
-                               get_public_key_bytes, get_address_b58_from_bytes, \
-                               get_address_b58_from_public_key_bytes
+from hathor.crypto.util import get_hash160, get_public_key_from_bytes_compressed, \
+                               get_public_key_bytes_compressed, get_address_b58_from_bytes, \
+                               get_address_b58_from_public_key_bytes_compressed
 
 # TODO what are we using for the signature?
 DATA_TO_SIGN = b'DATA_TO_SIGN'
@@ -101,7 +101,7 @@ class P2PKH:
 
         :rtype: bytes
         """
-        public_key_bytes = get_public_key_bytes(private_key.public_key())
+        public_key_bytes = get_public_key_bytes_compressed(private_key.public_key())
         signature = private_key.sign(DATA_TO_SIGN, ec.ECDSA(hashes.SHA256()))
         # return struct.pack(
         #     '!B{}sB{}s'.format(len(signature), len(public_key_bytes)),
@@ -171,7 +171,7 @@ class P2PKH:
         else:
             pos += 1
         public_key = input_data[pos+1:]
-        address = get_address_b58_from_public_key_bytes(public_key)
+        address = get_address_b58_from_public_key_bytes_compressed(public_key)
         return cls(address)
 
 
@@ -244,7 +244,7 @@ def script_eval(output_script, input_data):
                 break
             pubkey = stack.pop()
             signature = stack.pop()
-            public_key = get_public_key_from_bytes(pubkey)
+            public_key = get_public_key_from_bytes_compressed(pubkey)
             try:
                 public_key.verify(signature, DATA_TO_SIGN, ec.ECDSA(hashes.SHA256()))
                 # valid, push true to stack

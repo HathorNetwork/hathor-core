@@ -147,3 +147,39 @@ def generate_privkey_crt_pem():
     cert.set_pubkey(key)
     cert.sign(key, 'sha256')
     return dump_privatekey(FILETYPE_PEM, key) + dump_certificate(FILETYPE_PEM, cert)
+
+
+def get_public_key_bytes_compressed(public_key):
+    """ Returns the bytes from a cryptography ec.EllipticCurvePublicKey in a compressed format
+
+        :param public_key: Public key object
+        :type public_key: ec.EllipticCurvePublicKey
+
+        :rtype: bytes
+    """
+    pn = public_key.public_numbers()
+    return pn.encode_point(compressed=True)
+
+
+def get_public_key_from_bytes_compressed(public_key_bytes, backend=default_backend()):
+    """ Returns the cryptography public key from the compressed bytes format
+
+        :param public_key_bytes: Compressed format of public key in bytes
+        :type public_key_bytes: bytes
+
+        :rtype: ec.EllipticCurvePublicKey
+    """
+    return ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), public_key_bytes, backend)
+
+
+def get_address_b58_from_public_key_bytes_compressed(public_key_bytes_compressed):
+    """ Gets the b58 address from the compressed bytes of a public key
+
+        :param public_key_bytes_compressed: Compressed format of public key in bytes
+        :type public_key_bytes_compressed: bytes
+
+        :return: the b58-encoded address
+        :rtype: string
+    """
+    public_key = get_public_key_from_bytes_compressed(public_key_bytes_compressed)
+    return get_address_b58_from_public_key(public_key)
