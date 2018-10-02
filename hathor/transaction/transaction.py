@@ -62,12 +62,12 @@ class Transaction(BaseTransaction):
     def verify_number_of_inputs(self):
         """Verify number of inputs does not exceeds the limit"""
         if len(self.inputs) > MAX_NUM_INPUTS:
-            raise TooManyInputs
+            raise TooManyInputs('Maximum number of inputs exceeded')
 
     def verify_number_of_outputs(self):
         """Verify number of outputs does not exceeds the limit"""
         if len(self.outputs) > MAX_NUM_OUTPUTS:
-            raise TooManyOutputs
+            raise TooManyOutputs('Maximum number of outputs exceeded')
 
     def verify_sum(self):
         """Verify that the sum of outputs is equal of the sum of inputs"""
@@ -78,7 +78,7 @@ class Transaction(BaseTransaction):
             sum_inputs += spent_tx.outputs[input_tx.index].value
 
         if sum_outputs != sum_inputs:
-            raise InputOutputMismatch
+            raise InputOutputMismatch('Sum of inputs is different than the sum of outputs')
 
     def verify_inputs(self):
         """Verify inputs signatures and ownership and unspent outputs"""

@@ -28,8 +28,9 @@ class Block(BaseTransaction):
 
     def verify_height(self):
         """Verify that the height is correct (should be parent + 1)."""
+        error_height_message = 'Invalid height of block'
         if self.is_genesis and self.height != 1:
-            raise BlockHeightError
+            raise BlockHeightError(error_height_message)
 
         # TODO: How to verify parent height stuff without access to storage?
         if not self.storage:
@@ -40,7 +41,7 @@ class Block(BaseTransaction):
         parent_blocks = [self.storage.get_transaction_by_hash_bytes(h) for h in self.parents]
 
         if self.height != max(x.height for x in parent_blocks) + 1:
-            raise BlockHeightError
+            raise BlockHeightError(error_height_message)
 
     def verify(self):
         """
