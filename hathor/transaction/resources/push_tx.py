@@ -39,18 +39,34 @@ class PushTxResource(resource.Resource):
                     # It's a block and we can't push blocks
                     data = {
                         'success': False,
-                        'message': 'This transaction is invalid. A transaction must have at least one input'
+                        'message': 'This transaction is invalid. A transaction must have at least one input',
+                        'can_force': False
                     }
                 else:
-                    # TODO should we validate the tx before propagate?
-                    self.manager.propagate_tx(tx)
-                    data = {'success': True}
+                    tx.storage = self.manager.tx_storage
+                    success, message = tx.validate_tx_error()
+
+                    force = b'force' in request.args and request.args[b'force'][0].decode('utf-8') == 'true'
+                    if success or force:
+                        self.manager.propagate_tx(tx)
+                        data = {'success': True}
+                    else:
+                        data = {
+                            'success': success,
+                            'message': message,
+                            'can_force': True
+                        }
             except struct.error:
                 data = {
                     'success': False,
-                    'message': 'This transaction is invalid. Try to decode it first to validate it.'
+                    'message': 'This transaction is invalid. Try to decode it first to validate it.',
+                    'can_force': False
                 }
         else:
-            data = {'success': False, 'message': 'This transaction is invalid. Try to decode it first to validate it.'}
+            data = {
+                'success': False,
+                'message': 'This transaction is invalid. Try to decode it first to validate it.',
+                'can_force': False
+            }
 
         return json.dumps(data, indent=4).encode('utf-8')

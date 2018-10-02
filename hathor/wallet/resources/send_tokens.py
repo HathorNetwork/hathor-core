@@ -1,6 +1,7 @@
 from twisted.web import resource, server
 from hathor.api_util import set_cors
 from hathor.wallet.base_wallet import WalletOutputInfo, WalletInputInfo
+from hathor.wallet.exceptions import InsuficientFunds, PrivateKeyNotFound
 from hathor.transaction import Transaction
 
 import json
@@ -44,7 +45,10 @@ class SendTokensResource(resource.Resource):
             outputs.append(WalletOutputInfo(address=address, value=value))
 
         if len(data['inputs']) == 0:
-            tx = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+            try:
+                tx = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+            except InsuficientFunds:
+                return self.return_POST(False, 'Insufficient funds')
         else:
             inputs = []
             for input_tx in data['inputs']:
@@ -52,16 +56,38 @@ class SendTokensResource(resource.Resource):
                 input_tx['index'] = int(input_tx['index'])
                 input_tx['tx_id'] = bytes.fromhex(input_tx['tx_id'])
                 inputs.append(WalletInputInfo(**input_tx))
-            tx = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
+            try:
+                tx = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
+            except PrivateKeyNotFound:
+                return self.return_POST(False, 'Invalid input to create transaction')
 
         # TODO Send tx to be mined
         tx.weight = 10
         tx.parents = self.manager.get_new_tx_parents()
+        tx.storage = self.manager.tx_storage
         tx.resolve()
-        self.manager.propagate_tx(tx)
 
+        success, message = tx.validate_tx_error()
+
+        if success:
+            self.manager.propagate_tx(tx)
+
+        return self.return_POST(success, message)
+
+    def return_POST(self, success, message):
+        """ Auxiliar method to return result of POST method
+
+            :param success: If tx was created successfully
+            :type success: bool
+
+            :param message: Message in case of error
+            :type success: string
+
+            :rtype: string (json)
+        """
         ret = {
-            'success': True
+            'success': success,
+            'message': message,
         }
         return json.dumps(ret, indent=4).encode('utf-8')
 

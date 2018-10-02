@@ -16,7 +16,9 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         data_success = response_success.json_value()
 
         self.assertTrue(data_success['success'])
-        self.assertEqual(data_success['transaction'], genesis_tx.to_json())
+        data_genesis = genesis_tx.to_json(decode_script=True)
+        data_genesis['accumulated_weight'] = genesis_tx.get_metadata().accumulated_weight
+        self.assertEqual(data_success['transaction'], data_genesis)
 
         # Invalid hex
         response_error1 = yield self.web.get("decode_tx", {b'hex_tx': b'XXXX'})

@@ -48,7 +48,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         data_history = response_history.json_value()
         input_hash = data_history['history'][0]['tx_id']
 
-        # Sending token to random address with input
+        # Sending token to random address with input wrong amount
         data_json = {
             "outputs": [{"address": "1234", "value": 500}],
             "inputs": [{"tx_id": input_hash, "index": 0}]
@@ -58,4 +58,16 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
             {b'data': bytes(json.dumps(data_json), 'utf-8')}
         )
         data2 = response2.json_value()
-        self.assertTrue(data2['success'])
+        self.assertFalse(data2['success'])
+
+        # Sending token to random address with input right amount
+        data_json2 = {
+            "outputs": [{"address": "1234", "value": 9500}],
+            "inputs": [{"tx_id": input_hash, "index": 0}]
+        }
+        response3 = yield self.web.post(
+            "wallet/send_tokens",
+            {b'data': bytes(json.dumps(data_json2), 'utf-8')}
+        )
+        data3 = response3.json_value()
+        self.assertTrue(data3['success'])

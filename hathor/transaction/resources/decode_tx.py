@@ -36,8 +36,11 @@ class DecodeTxResource(resource.Resource):
 
             try:
                 tx = Transaction.create_from_struct(tx_bytes)
+                tx_data = tx.to_json(decode_script=True)
+                tx.storage = self.manager.tx_storage
+                tx_data['accumulated_weight'] = tx.get_metadata().accumulated_weight
                 data = {
-                    'transaction': tx.to_json(),
+                    'transaction': tx_data,
                     'success': True
                 }
             except struct.error:

@@ -1,6 +1,7 @@
 # encoding: utf-8
 
-from hathor.transaction.exceptions import PowError
+from hathor.transaction.exceptions import PowError, InputOutputMismatch, TooManyInputs, \
+                                          TooManyOutputs, BlockHeightError
 from hathor.transaction.scripts import P2PKH
 
 from enum import Enum
@@ -315,7 +316,7 @@ class BaseTransaction:
         # if abs(self.calculate_weight() - self.weight) > 1e-6:
         #     raise WeightError
         if int(self.hash.hex(), 16) >= self.get_target():
-            raise PowError
+            raise PowError('Transaction has invalid data')
 
     def resolve(self):
         """Start mining to achieve the target"""
@@ -438,6 +439,27 @@ class BaseTransaction:
             data['outputs'].append(data_output)
 
         return data
+
+    def validate_tx_error(self):
+        """ Verify if tx is valid and return success and possible error message
+
+            :return: Success if tx is valid and possible error message, if not
+            :rtype: tuple[bool, str]
+        """
+        success = True
+        message = ''
+        try:
+            self.verify()
+        except (
+            PowError,
+            InputOutputMismatch,
+            TooManyOutputs,
+            TooManyInputs,
+            BlockHeightError
+        ) as e:
+            success = False
+            message = str(e)
+        return success, message
 
 
 class Input:
