@@ -2,7 +2,7 @@ import os
 import json
 import base58
 from collections import namedtuple
-from hathor.wallet.exceptions import WalletOutOfSync, InsuficientFunds, PrivateKeyNotFound
+from hathor.wallet.exceptions import WalletOutOfSync, InsuficientFunds, PrivateKeyNotFound, InputDuplicated
 from hathor.transaction import TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
 from hathor.pubsub import HathorEvents
@@ -100,6 +100,9 @@ class BaseWallet:
         :raises PrivateKeyNotFound: when trying to spend output and we don't have the corresponding
             key in our wallet
         """
+        if len(inputs) != len(set(inputs)):
+            # Same input is used more than once
+            raise InputDuplicated
         new_inputs = []
         for _input in inputs:
             found = False
