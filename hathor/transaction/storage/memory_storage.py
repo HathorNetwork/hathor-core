@@ -45,7 +45,7 @@ class TransactionMemoryStorage(TransactionStorage):
         if hash_bytes in self.metadata:
             return self.metadata[hash_bytes]
         else:
-            raise TransactionMetadataDoesNotExist
+            raise TransactionMetadataDoesNotExist(hash_bytes.hex())
 
     def get_metadata_by_hash(self, hash_hex):
         hash_bytes = bytes.fromhex(hash_hex)

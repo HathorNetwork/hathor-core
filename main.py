@@ -79,6 +79,8 @@ if __name__ == '__main__':
             else:
                 wallet = Wallet()
 
+            wallet.flush_to_disk_interval = 5  # seconds
+
             if args.unlock_wallet:
                 wallet_passwd = getpass.getpass(prompt='Wallet password:')
                 wallet.unlock(wallet_passwd.encode())
