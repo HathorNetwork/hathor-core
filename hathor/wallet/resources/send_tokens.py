@@ -1,7 +1,7 @@
 from twisted.web import resource, server
 from hathor.api_util import set_cors
 from hathor.wallet.base_wallet import WalletOutputInfo, WalletInputInfo
-from hathor.wallet.exceptions import InsuficientFunds, PrivateKeyNotFound
+from hathor.wallet.exceptions import InsuficientFunds, PrivateKeyNotFound, InputDuplicated
 from hathor.transaction import Transaction
 
 import json
@@ -58,7 +58,7 @@ class SendTokensResource(resource.Resource):
                 inputs.append(WalletInputInfo(**input_tx))
             try:
                 tx = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
-            except PrivateKeyNotFound:
+            except (PrivateKeyNotFound, InputDuplicated):
                 return self.return_POST(False, 'Invalid input to create transaction')
 
         # TODO Send tx to be mined

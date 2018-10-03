@@ -40,3 +40,8 @@ class OutOfUnusedAddresses(HathorWalletError):
 class InvalidWords(HathorWalletError):
     """HD Wallet was initialized with invalid set of words
     """
+
+
+class InputDuplicated(HathorWalletError):
+    """User is trying to use same input more than one time
+    """
