@@ -18,7 +18,7 @@ cd ${INSTALL_DIR}
 git clone https://${DEPLOY_TOKEN}@gitlab.com/HathorNetwork/hathor-python.git || exit 1
 
 sudo apt update
-sudo apt install -y python3 python3-dev python3-pip python3-venv build-essential graphviz
+sudo apt install -y python3 python3-dev python3-pip python3-venv build-essential graphviz libssl-dev
 sudo apt install -y supervisor
 
 envsubst < ${BASEDIR}/supervisor.conf.template > supervisor.conf
