@@ -196,15 +196,17 @@ class TransactionJSONStorage(TransactionStorage):
             yield tx
 
         path = self.path
-        files = os.listdir(path)
         pattern = r'tx_[\dabcdef]{64}\.json'
+        re_pattern = re.compile(pattern)
 
-        for f in files:
-            if re.match(pattern, f):
-                # TODO Return a proxy that will load the transaction only when it is used.
-                hash_hex = f[3:-5]
-                transaction = self.get_transaction_by_hash(hash_hex)
-                yield transaction
+        with os.scandir(path) as it:
+            for f in it:
+                if re_pattern.match(f.name):
+                    # TODO Return a proxy that will load the transaction only when it is used.
+                    with open(f.path, 'r') as json_file:
+                        dict_data = json.loads(json_file.read())
+                    transaction = self.load(dict_data)
+                    yield transaction
 
     def get_count_tx_blocks(self):
         from hathor.transaction.genesis import genesis_transactions
