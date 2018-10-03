@@ -21,6 +21,7 @@ class KeyPair(object):
         self.private_key_bytes = private_key_bytes
         self.address = address
         self.used = used
+        self._cache_priv_key_unlock = None
 
     def __eq__(self, other):
         """Override the default Equals behavior"""
@@ -32,6 +33,11 @@ class KeyPair(object):
         :rtype: string(base64)
         """
         return base64.b64encode(self.private_key_bytes).decode('utf-8')
+
+    def clear_cache(self):
+        """ Clear cache of the unencrypted private key
+        """
+        self._cache_priv_key_unlock = None
 
     def get_private_key(self, password):
         """
@@ -46,10 +52,12 @@ class KeyPair(object):
         """
         if not password:
             raise WalletLocked
-        try:
-            return get_private_key_from_bytes(self.private_key_bytes, password=password)
-        except ValueError:
-            raise IncorrectPassword
+        if self._cache_priv_key_unlock is None:
+            try:
+                self._cache_priv_key_unlock = get_private_key_from_bytes(self.private_key_bytes, password=password)
+            except ValueError:
+                raise IncorrectPassword
+        return self._cache_priv_key_unlock
 
     def to_json(self):
         return {

@@ -7,7 +7,8 @@ from hathor.pubsub import HathorEvents
 
 
 class Wallet(BaseWallet):
-    def __init__(self, keys=None, directory='./', filename='keys.json', history_file='history.json', pubsub=None):
+    def __init__(self, keys=None, directory='./', filename='keys.json', history_file='history.json',
+                 pubsub=None, reactor=None):
         """ A wallet will hold key pair objects and the unspent and
         spent transactions associated with the keys.
 
@@ -46,6 +47,17 @@ class Wallet(BaseWallet):
         # Used in admin frontend to know which wallet is being used
         self.type = self.WalletType.KEY_PAIR
 
+        # :py:class:`twisted.internet.Reactor`
+        if reactor is None:
+            from twisted.internet import reactor
+        self.reactor = reactor
+
+        # int(seconds)
+        # 0=flush every change
+        self.flush_to_disk_interval = 0
+        self.last_flush_time = 0
+        self.flush_schedule = None
+
     def _manually_initialize(self):
         if os.path.isfile(self.filepath):
             print('Loading keys...')
@@ -69,10 +81,24 @@ class Wallet(BaseWallet):
 
         self.keys.update(new_keys)
 
+    def _write_keys_to_file_or_delay(self):
+        dt = self.reactor.seconds() - self.last_flush_time
+        if dt > self.flush_to_disk_interval:
+            self._write_keys_to_file()
+        else:
+            if self.flush_schedule is None:
+                remaining = self.flush_to_disk_interval - dt
+                print('Wallet: Flush delayed {} seconds...'.format(remaining))
+                assert remaining > 0
+                self.flush_schedule = self.reactor.callLater(remaining, self._write_keys_to_file)
+
     def _write_keys_to_file(self):
+        self.flush_schedule = None
+        self.last_flush_time = self.reactor.seconds()
         data = [keypair.to_json() for keypair in self.keys.values()]
         with open(self.filepath, 'w') as json_file:
             json_file.write(json.dumps(data, indent=4))
+        print('Wallet: Keys successfully written to disk.')
 
     def unlock(self, password):
         """ Validates if the password is valid
@@ -100,7 +126,11 @@ class Wallet(BaseWallet):
             raise ValueError('Password must be in bytes')
 
     def lock(self):
+        """ Lock wallet and clear all caches.
+        """
         self.password = None
+        for keypair in self.keys.values():
+            keypair.clear_cache()
 
     def get_unused_address(self, mark_as_used=True):
         """
@@ -123,7 +153,7 @@ class Wallet(BaseWallet):
             updated = True
 
         if updated:
-            self._write_keys_to_file()
+            self._write_keys_to_file_or_delay()
 
         return address
 
