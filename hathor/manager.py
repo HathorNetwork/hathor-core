@@ -73,6 +73,7 @@ class HathorManager(object):
         """
         self.reactor = reactor
         self.state = None
+        self.profiler = None
 
         # Hostname, used to be accessed by other peers.
         self.hostname = hostname
@@ -125,6 +126,26 @@ class HathorManager(object):
     def stop(self):
         self.connections.stop()
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
+
+    def start_profiler(self):
+        """
+        Start profiler. It can be activated from a web resource, as well.
+        """
+        if not self.profiler:
+            import cProfile
+            self.profiler = cProfile.Profile()
+        self.profiler.enable()
+
+    def stop_profiler(self, save_to=None):
+        """
+        Stop the profile and optionally save the results for future analysis.
+
+        :param save_to: path where the results will be saved
+        :type save_to: str
+        """
+        self.profiler.disable()
+        if save_to:
+            self.profiler.dump_stats(save_to)
 
     def _initialize_components(self):
         """You are not supposed to run this method manually. You should run `doStart()` to initialize the

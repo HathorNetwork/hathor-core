@@ -13,6 +13,7 @@ from hathor.transaction.storage import TransactionJSONStorage, TransactionMemory
 from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, \
                                     SendTokensResource, UnlockWalletResource, \
                                     LockWalletResource, StateWalletResource
+from hathor.resources import ProfilerResource
 from hathor.wallet import Wallet, HDWallet
 from hathor.transaction.resources import DecodeTxResource, PushTxResource, GraphvizResource, \
                                         TransactionResource, DashboardTransactionResource
@@ -135,6 +136,7 @@ if __name__ == '__main__':
             (b'graphviz', GraphvizResource(manager), root),
             (b'transaction', TransactionResource(manager), root),
             (b'dashboard_tx', DashboardTransactionResource(manager), root),
+            (b'profiler', ProfilerResource(manager), root),
             (b'balance', BalanceResource(manager), wallet_resource),
             (b'history', HistoryResource(manager), wallet_resource),
             (b'address', AddressResource(manager), wallet_resource),
