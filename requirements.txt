@@ -7,8 +7,9 @@ autobahn==18.8.1
 pyOpenSSL==18.0.0
 service-identity
 
-bip32utils==0.3.post3
+ecdsa==0.13
 mnemonic==0.18
+pycoin==0.80
 
 graphviz==0.9
 
