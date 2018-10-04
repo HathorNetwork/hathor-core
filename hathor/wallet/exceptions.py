@@ -45,3 +45,8 @@ class InvalidWords(HathorWalletError):
 class InputDuplicated(HathorWalletError):
     """User is trying to use same input more than one time
     """
+
+
+class InvalidAddress(HathorWalletError):
+    """Address used in the wallet is invalid
+    """
