@@ -1,11 +1,11 @@
 from mnemonic import Mnemonic
-from ecdsa import SigningKey, SECP256k1
-from pycoin.key.BIP32Node import BIP32Node
-from pycoin.encoding import to_bytes_32
+from pycoin.networks.registry import network_for_netcode
 from hathor.wallet import BaseWallet
-from hathor.crypto.util import get_private_key_from_bytes, get_address_b58_from_public_key_bytes_compressed
+from hathor.crypto.util import get_address_b58_from_public_key_bytes_compressed
 from hathor.pubsub import HathorEvents
 from hathor.wallet.exceptions import InvalidWords
+from hathor.transaction.scripts import DATA_TO_SIGN
+import hashlib
 
 # TODO pycoin BIP32 uses their own ecdsa library to generate key that does not use OpenSSL
 # We must check if this brings any security problem to us later
@@ -17,7 +17,7 @@ class HDWallet(BaseWallet):
     """ Hierarchical Deterministic Wallet based in BIP32 (https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki)
     """
     def __init__(self, words=None, language='english', passphrase=b'', gap_limit=20,
-                 word_count=24, directory='./', history_file='history.json', pubsub=None):
+                 word_count=24, directory='./', history_file='history.json', pubsub=None, initial_key_generation=None):
         """
         :param words: words to generate the seed. It's a string with the words separated by a single space.
         If None we generate new words when starting the wallet
@@ -36,6 +36,10 @@ class HDWallet(BaseWallet):
         :param word_count: quantity of words that are gonna generate the seed
         Possible choices are [12, 15, 18, 21, 24]
         :type word_count: int
+
+        :param initial_key_generation: number of keys that will be generated in the initialization
+        If not set we make it equal to gap_limit
+        :type initial_key_generation: int
 
         :raises ValueError: Raised on invalid word_count
         """
@@ -73,6 +77,9 @@ class HDWallet(BaseWallet):
             raise ValueError('Word count ({}) is not one of the options {}.'.format(word_count, WORD_COUNT_CHOICES))
         self.word_count = word_count
 
+        # Number of keys that will be generated in the initialization
+        self.initial_key_generation = initial_key_generation or gap_limit
+
     def _manually_initialize(self):
         """ Create words (if is None) and start seed and master node
             Then we generate the first addresses, so we can check if we already have transactions
@@ -92,7 +99,9 @@ class HDWallet(BaseWallet):
         seed = self.mnemonic.to_seed(self.words, self.passphrase.decode('utf-8'))
 
         # Master node
-        key = BIP32Node.from_master_secret(seed)
+        # TODO Change to hathor code in the future (we will need to fork this lib)
+        network = network_for_netcode('btc')
+        key = network.extras.BIP32Node.from_master_secret(seed)
 
         # Until account key should be hardened
         # Chain path = 44'/0'/0'/0
@@ -102,8 +111,8 @@ class HDWallet(BaseWallet):
         # 0 -> Chain
         self.chain_key = key.subkey_for_path('44H/0H/0H/0')
 
-        for idx in range(self.gap_limit):
-            self.generate_new_key(idx)
+        for key in self.chain_key.children(self.initial_key_generation, 0, False):
+            self._key_generated(key, key.child_index())
 
     def get_private_key(self, address58):
         """ We get the private key bytes and generate the cryptography object
@@ -114,9 +123,7 @@ class HDWallet(BaseWallet):
             :return: Private key object.
             :rtype: :py:class:`cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey`
         """
-        my_key = self.keys[address58]
-        signing_key = SigningKey.from_string(to_bytes_32(my_key.secret_exponent()), curve=SECP256k1)
-        return get_private_key_from_bytes(signing_key.to_der())
+        return self.keys[address58]
 
     def generate_new_key(self, index):
         """ Generate a new key in the tree at defined index
@@ -126,7 +133,18 @@ class HDWallet(BaseWallet):
             :type index: int
         """
         new_key = self.chain_key.subkey(index)
-        self.keys[self.get_address(new_key)] = new_key
+        self._key_generated(new_key, index)
+
+    def _key_generated(self, key, index):
+        """ Add generated key to self.keys and set last_generated_index
+
+            :param key: generated key of hd wallet
+            :type key: pycoin.key.Key.Key
+
+            :param index: index to generate the key
+            :type index: int
+        """
+        self.keys[self.get_address(key)] = key
         self.last_generated_index = index
 
     def get_address(self, new_key):
@@ -257,3 +275,16 @@ class HDWallet(BaseWallet):
         """
         if not self.words or not self.mnemonic.check(self.words):
             raise InvalidWords
+
+    def get_input_aux_data(self, private_key):
+        """ Sign the data to be used in input and get public key compressed in bytes
+
+            :param private_key: private key to sign data
+            :type private_key: pycoin.key.Key.Key
+
+            :return: public key compressed in bytes and signature
+            :rtype: tuple[bytes, bytes]
+        """
+        prehashed_msg = hashlib.sha256(DATA_TO_SIGN).digest()
+        signature = private_key.sign(prehashed_msg)
+        return private_key.sec(), signature

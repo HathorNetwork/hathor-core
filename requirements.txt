@@ -7,9 +7,8 @@ autobahn==18.8.1
 pyOpenSSL==18.0.0
 service-identity
 
-ecdsa==0.13
 mnemonic==0.18
-pycoin==0.80
+-e git+https://github.com/richardkiss/pycoin#egg=pycoin
 
 graphviz==0.9
 

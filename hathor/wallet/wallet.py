@@ -4,6 +4,11 @@ from hathor.wallet.keypair import KeyPair
 from hathor.wallet.exceptions import OutOfUnusedAddresses
 from hathor.wallet import BaseWallet
 from hathor.pubsub import HathorEvents
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import hashes
+from hathor.transaction.scripts import DATA_TO_SIGN
+
+from hathor.crypto.util import get_public_key_bytes_compressed
 
 
 class Wallet(BaseWallet):
@@ -190,3 +195,16 @@ class Wallet(BaseWallet):
 
     def is_locked(self):
         return self.password is None
+
+    def get_input_aux_data(self, private_key):
+        """ Sign the data to be used in input and get public key compressed in bytes
+
+            :param private_key: private key to sign data
+            :type private_key: pycoin.key.Key.Key
+
+            :return: public key compressed in bytes and signature
+            :rtype: tuple[bytes, bytes]
+        """
+        public_key_bytes = get_public_key_bytes_compressed(private_key.public_key())
+        signature = private_key.sign(DATA_TO_SIGN, ec.ECDSA(hashes.SHA256()))
+        return public_key_bytes, signature

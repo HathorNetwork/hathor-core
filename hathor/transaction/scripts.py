@@ -5,8 +5,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
 
 from hathor.crypto.util import get_hash160, get_public_key_from_bytes_compressed, \
-                               get_public_key_bytes_compressed, get_address_b58_from_bytes, \
-                               get_address_b58_from_public_key_bytes_compressed
+                               get_address_b58_from_bytes, get_address_b58_from_public_key_bytes_compressed
 
 # TODO what are we using for the signature?
 DATA_TO_SIGN = b'DATA_TO_SIGN'
@@ -94,15 +93,13 @@ class P2PKH:
         return s.data
 
     @classmethod
-    def create_input_data(cls, private_key):
+    def create_input_data(cls, public_key_bytes, signature):
         """
         :param private_key: key corresponding to the address we want to spend tokens from
         :type private_key: :py:class:`cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey`
 
         :rtype: bytes
         """
-        public_key_bytes = get_public_key_bytes_compressed(private_key.public_key())
-        signature = private_key.sign(DATA_TO_SIGN, ec.ECDSA(hashes.SHA256()))
         # return struct.pack(
         #     '!B{}sB{}s'.format(len(signature), len(public_key_bytes)),
         #     len(signature),
