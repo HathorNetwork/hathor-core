@@ -73,3 +73,10 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         payload = json.dumps(data).encode('utf-8')
         for c in self.connections:
             c.sendMessage(payload, False)
+
+    def handle_message(self, connection, data):
+        message = json.loads(data.decode('utf-8'))
+        # we only handle ping messages for now
+        if message['type'] == 'ping':
+            payload = json.dumps({'type': 'pong'}).encode('utf-8')
+            connection.sendMessage(payload, False)
