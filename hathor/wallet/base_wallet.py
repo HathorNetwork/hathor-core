@@ -63,6 +63,9 @@ class BaseWallet:
     def get_private_key(self, address58):
         raise NotImplementedError
 
+    def get_input_aux_data(self, private_key):
+        raise NotImplementedError
+
     def prepare_transaction(self, cls, inputs, outputs):
         """Prepares the tx inputs and outputs.
 
@@ -79,7 +82,8 @@ class BaseWallet:
         """
         tx_inputs = []
         for txin in inputs:
-            tx_inputs.append(TxInput(txin.tx_id, txin.index, P2PKH.create_input_data(txin.private_key)))
+            public_key_bytes, signature = self.get_input_aux_data(txin.private_key)
+            tx_inputs.append(TxInput(txin.tx_id, txin.index, P2PKH.create_input_data(public_key_bytes, signature)))
 
         tx_outputs = []
         for txout in outputs:

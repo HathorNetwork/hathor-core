@@ -2,6 +2,7 @@ import unittest
 import os
 import json
 import base64
+from hathor.wallet import Wallet
 from hathor.transaction import Transaction, TxInput, TxOutput, MAX_NUM_INPUTS, MAX_NUM_OUTPUTS
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.transaction.exceptions import InputOutputMismatch, TooManyInputs, TooManyOutputs, InvalidInputData
@@ -11,6 +12,7 @@ from hathor.crypto.util import get_private_key_from_bytes, get_public_key_from_b
 
 class BasicTransaction(unittest.TestCase):
     def setUp(self):
+        self.wallet = Wallet()
         self.tx_storage = TransactionMemoryStorage()
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
@@ -58,7 +60,9 @@ class BasicTransaction(unittest.TestCase):
     def test_input_output_match(self):
         genesis_block = self.genesis_blocks[0]
 
-        data = P2PKH.create_input_data(self.genesis_private_key)
+        public_bytes, signature = self.wallet.get_input_aux_data(self.genesis_private_key)
+
+        data = P2PKH.create_input_data(public_bytes, signature)
         _input = TxInput(genesis_block.hash, 0, data)
 
         # spend less than what was generated
@@ -79,7 +83,9 @@ class BasicTransaction(unittest.TestCase):
         genesis_block = self.genesis_blocks[0]
 
         # create input data with incorrect private key
-        data_wrong = P2PKH.create_input_data(self.private_key_random)
+        public_bytes, signature = self.wallet.get_input_aux_data(self.private_key_random)
+
+        data_wrong = P2PKH.create_input_data(public_bytes, signature)
         _input = TxInput(genesis_block.hash, 0, data_wrong)
         value = genesis_block.outputs[0].value
 
@@ -128,7 +134,8 @@ class BasicTransaction(unittest.TestCase):
         parents = [tx.hash for tx in self.genesis_txs]
         genesis_block = self.genesis_blocks[0]
 
-        data = P2PKH.create_input_data(self.genesis_private_key)
+        public_bytes, signature = self.wallet.get_input_aux_data(self.genesis_private_key)
+        data = P2PKH.create_input_data(public_bytes, signature)
         _input = TxInput(genesis_block.hash, 0, data)
 
         value = genesis_block.outputs[0].value
