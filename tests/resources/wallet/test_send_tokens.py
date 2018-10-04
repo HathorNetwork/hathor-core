@@ -28,7 +28,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         # Sending token to random address without input
         data_json = {
-            "outputs": [{"address": "1234", "value": 500}],
+            "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 500}],
             "inputs": []
         }
         response = yield self.web.post(
@@ -50,7 +50,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         # Sending token to random address with input wrong amount
         data_json = {
-            "outputs": [{"address": "1234", "value": 500}],
+            "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 500}],
             "inputs": [{"tx_id": input_hash, "index": 0}]
         }
         response2 = yield self.web.post(
@@ -62,7 +62,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         # Sending token to random address with input right amount
         data_json2 = {
-            "outputs": [{"address": "1234", "value": 9500}],
+            "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 9500}],
             "inputs": [{"tx_id": input_hash, "index": 0}]
         }
         response3 = yield self.web.post(
@@ -71,3 +71,26 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         )
         data3 = response3.json_value()
         self.assertTrue(data3['success'])
+
+        # Sending token to invalid addresses
+        data_json3 = {
+            "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZil", "value": 500}],
+            "inputs": []
+        }
+        response_error1 = yield self.web.post(
+            "wallet/send_tokens",
+            {b'data': bytes(json.dumps(data_json3), 'utf-8')}
+        )
+        data_error1 = response_error1.json_value()
+        self.assertFalse(data_error1['success'])
+
+        data_json4 = {
+            "outputs": [{"address": "1234", "value": 500}],
+            "inputs": []
+        }
+        response_error2 = yield self.web.post(
+            "wallet/send_tokens",
+            {b'data': bytes(json.dumps(data_json4), 'utf-8')}
+        )
+        data_error2 = response_error2.json_value()
+        self.assertFalse(data_error2['success'])
