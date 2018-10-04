@@ -47,16 +47,16 @@ Proof:
 (<=) Suppose there is a vertex X that exists in DAG_A but does not exist in DAG_B. Then, there is a path from $T \in tips_A$ such as $T -> ... -> X -> ... -> genesis$. But, this tip $T$ cannot be in tips_B, otherwise, X would belong to at least one subDAG_i of tips_B, and thus $X$ would belong to DAG_B. This is a contradiction because tips_A = tips_B.
 
 
-
-
 Theorem 3: Let A be a DAG, and L a list of all vertices of A. Then, any permutation :math:`[x_1, x_2, \dots, x_n]` of L such that :math:`\text{height}(x_i) \le \text{height}(x_j) \, \forall i < j` is a valid topological sort of A.
 
 
 Theorem 4: Let A and B be DAGs. If A(d) = B(d), then A(i) = B(i) for i < d.
+
 Proof: i<d implies that A(i) is a subDAG of A(d) and B(i) is a subDAG of B(d), which implies that A(i) = B(i).
 
 
 Theorem 5: Let A and B be DAGs. If A(d) != B(d), then A(i+1) != B(i+1) for i > d.
+
 Proof: Suppose A(i+1) = B(i+1). Then, as A(d) is a subDAG of A(i+1) and B(d) is a subDAG of B(i+1), we would have A(d) = B(d), which is a contradiction.
 
 
