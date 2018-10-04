@@ -400,7 +400,8 @@ class BaseTransaction:
             metadata = TransactionMetadata(hash=hash_bytes)
         return metadata
 
-    def update_accumulated_weight(self, increment):
+    # deprecated
+    def _old_update_accumulated_weight(self, increment):
         """Increments the tx aggregated weight with the given value
 
         :type increment: float
@@ -409,8 +410,27 @@ class BaseTransaction:
         metadata.accumulated_weight = sum_weights(metadata.accumulated_weight, increment)
         self.storage.save_metadata(metadata)
 
+    def update_accumulated_weight(self):
+        """Calculates the tx's accumulated weight and update its metadata.
+
+        It starts at the current transaction and does a BFS to the tips. In the
+        end, updates the accumulated weight on metadata
+
+        :return: transaction accumulated weight
+        :rtype: int
+        """
+        accumulated_weight = self.weight
+        for tx in self.storage.iter_bfs_children(self):
+            accumulated_weight = sum_weights(accumulated_weight, tx.weight)
+
+        metadata = self.get_metadata()
+        metadata.accumulated_weight = accumulated_weight
+        self.storage.save_metadata(metadata)
+
+        return accumulated_weight
+
     def update_parents(self):
-        """Parents should have on their metadata all their children.
+        """Update the tx's parents to add the current tx as their child.
 
         :rtype None
         """

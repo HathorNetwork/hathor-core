@@ -79,12 +79,12 @@ class TransactionStorage:
                     stack.append(parent)
 
     def iter_bfs(self, root):
-        """Run a BFS starting from the giving transaction.
+        """Run a BFS starting from the given transaction to genesis (right_to_left)
 
         :param root: Starting point of the BFS, either a block or a transaction.
         :type root: :py:class:`hathor.transaction.BaseTransaction`
 
-        :return: An iterable with the transactions
+        :return: An iterable with the transactions (with the root)
         :rtype: Iterable[BaseTransaction]
         """
         to_visit = deque([root.hash])  # List[bytes(hash)]
@@ -99,6 +99,29 @@ class TransactionStorage:
                 if parent_hash not in seen:
                     to_visit.append(parent_hash)
                     seen.add(parent_hash)
+
+    def iter_bfs_children(self, root):
+        """Run a BFS starting from the given transaction to the tips (left-to-right)
+
+        :param root: Starting point of the BFS, either a block or a transaction.
+        :type root: :py:class:`hathor.transaction.BaseTransaction`
+
+        :return: An iterable with the transactions (without the root)
+        :rtype: Iterable[BaseTransaction]
+        """
+        to_visit = deque(root.get_metadata().children)  # List[bytes(hash)]
+        seen = set(to_visit)    # Set[bytes(hash)]
+
+        while to_visit:
+            tx_hash = to_visit.popleft()
+            tx = self.get_transaction_by_hash(tx_hash)
+            yield tx
+            seen.add(tx_hash)
+            for children_hash in tx.get_metadata().children:
+                print()
+                if children_hash not in seen:
+                    to_visit.append(children_hash)
+                    seen.add(children_hash)
 
     def _add_to_cache(self, tx):
         if tx.is_block:
