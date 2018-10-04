@@ -274,7 +274,8 @@ class HathorManager(object):
         else:
             self.tx_storage.save_transaction(tx)
             self.node_sync_manager.on_new_tx(tx, conn)
-            self.update_accumulated_weights(tx)
+            tx.update_parents()
+            #self.update_accumulated_weights(tx)
 
         if tx.is_block:
             print('New block found: {} weight={}'.format(tx.hash_hex, tx.weight))

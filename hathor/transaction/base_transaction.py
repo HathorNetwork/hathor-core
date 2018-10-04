@@ -167,12 +167,7 @@ class BaseTransaction:
             winner_set = set()
             max_acc_weight = 0
             for h in spent_by:
-                from hathor.transaction.storage.exceptions import TransactionMetadataDoesNotExist
-                try:
-                    meta = self.storage.get_metadata_by_hash_bytes(h)
-                except TransactionMetadataDoesNotExist:
-                    from hathor.transaction.transaction_metadata import TransactionMetadata
-                    meta = TransactionMetadata(hash=h)
+                meta = self._get_metadata_from_storage(h)
                 meta_list.append(meta)
 
                 if meta.accumulated_weight == max_acc_weight:
@@ -383,13 +378,26 @@ class BaseTransaction:
         # TODO Maybe we could use a TransactionCacheStorage in the future to reduce storage hit
         metadata = getattr(self, '_metadata', None)
         if not metadata:
-            from hathor.transaction.storage.exceptions import TransactionMetadataDoesNotExist
-            try:
-                metadata = self.storage.get_metadata_by_hash_bytes(self.hash)
-            except TransactionMetadataDoesNotExist:
-                from hathor.transaction.transaction_metadata import TransactionMetadata
-                metadata = TransactionMetadata(hash=self.hash)
+            metadata = self._get_metadata_from_storage(self.hash)
             self._metadata = metadata
+        return metadata
+
+    def _get_metadata_from_storage(self, hash_bytes):
+        """Return the metadata for tx identified by hash_bytes.
+
+        If there's no such metadata on storage, create a new object and return it.
+
+        :param hash_bytes: hash of the tx to get metadata
+        :type hash_bytes: bytes
+
+        :rtype: :py:class:`hathor.transaction.TransactionMetadata`
+        """
+        from hathor.transaction.storage.exceptions import TransactionMetadataDoesNotExist
+        try:
+            metadata = self.storage.get_metadata_by_hash_bytes(hash_bytes)
+        except TransactionMetadataDoesNotExist:
+            from hathor.transaction.transaction_metadata import TransactionMetadata
+            metadata = TransactionMetadata(hash=hash_bytes)
         return metadata
 
     def update_accumulated_weight(self, increment):
@@ -400,6 +408,16 @@ class BaseTransaction:
         metadata = self.get_metadata()
         metadata.accumulated_weight = sum_weights(metadata.accumulated_weight, increment)
         self.storage.save_metadata(metadata)
+
+    def update_parents(self):
+        """Parents should have on their metadata all their children.
+
+        :rtype None
+        """
+        for parent in self.parents:
+            metadata = self._get_metadata_from_storage(parent)
+            metadata.children.add(self.hash_hex)
+            self.storage.save_metadata(metadata)
 
     def to_json(self, decode_script=False):
         data = {}
