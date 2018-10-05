@@ -61,8 +61,9 @@ class SendTokensResource(resource.Resource):
                 return self.return_POST(False, 'Invalid input to create transaction')
 
         # TODO Send tx to be mined
+        tx.timestamp = int(self.manager.reactor.seconds())
         tx.weight = 10
-        tx.parents = self.manager.get_new_tx_parents()
+        tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
         tx.storage = self.manager.tx_storage
         tx.resolve()
 

@@ -1,6 +1,14 @@
 from hathor.exception import HathorError
 
 
+class ParentDoesNotExist(HathorError):
+    """A parent does not exist"""
+
+
+class TimestampError(HathorError):
+    """Transaction timestamp is smaller or equal to one parent's timestamp"""
+
+
 class DoubleSpend(HathorError):
     """Some input has already been spent"""
 
