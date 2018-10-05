@@ -37,6 +37,14 @@ class Transaction(BaseTransaction):
         amount = self.sum_outputs + 1
         return log(size, 2) + log(amount, 2) + 0.5
 
+    def verify_without_storage(self):
+        """ Run all verifications that do not need a storage.
+        """
+        self.verify_pow()
+        self.verify_sum()
+        self.verify_number_of_inputs()
+        self.verify_number_of_outputs()
+
     def verify(self):
         """
             We have to do 8 verifications:
@@ -50,14 +58,12 @@ class Transaction(BaseTransaction):
             (viii) validates public key and output (of the inputs) addresses
               (ix) validate that both parents are valid
         """
-        # TODO (i), (v), (viii), and (ix)
+        # TODO (i), (v), (viii)
         if self.is_genesis:
             # TODO do genesis validation
             return
-        self.verify_pow()
-        self.verify_sum()
-        self.verify_number_of_inputs()
-        self.verify_number_of_outputs()
+        self.verify_without_storage()
+        self.verify_parents()  # (ix)
 
     def verify_number_of_inputs(self):
         """Verify number of inputs does not exceeds the limit"""

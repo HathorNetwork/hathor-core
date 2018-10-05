@@ -43,12 +43,31 @@ class Block(BaseTransaction):
         if self.height != max(x.height for x in parent_blocks) + 1:
             raise BlockHeightError(error_height_message)
 
+    def calculate_height(self):
+        """ Calculate block height according to its parents
+
+        :return: Block height
+        :rtype: int
+        """
+        if self.is_genesis:
+            return 1
+        parents_tx = [self.storage.get_transaction_by_hash_bytes(h) for h in self.parents]
+        height = max(x.height for x in parents_tx) + 1
+        return height
+
+    def verify_without_storage(self):
+        """ Run all verifications that do not need a storage.
+        """
+        self.verify_pow()
+        self.verify_height()
+
     def verify(self):
         """
             (1) confirms at least two pending transactions and references last block
             (2) solves the pow with the correct weight
             (3) creates the correct amount of tokens in the output
             (4) height of block == height of previous block + 1
+            (5) all parents must exist and have timestamp smaller than ours
         """
         # TODO Should we validate a limit of outputs?
         # TODO (1) and (3)
@@ -56,8 +75,7 @@ class Block(BaseTransaction):
             # TODO do genesis validation
             return
 
-        # (2)
-        self.verify_pow()
+        self.verify_without_storage()
 
-        # (4)
-        self.verify_height()
+        # (5)
+        self.verify_parents()
