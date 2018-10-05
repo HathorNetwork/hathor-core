@@ -163,12 +163,14 @@ class BaseTransaction:
 
         if len(spent_by) > 1:
             # Conflicting transaction.
-            meta_list = []
+            tx_meta_list = []
             winner_set = set()
             max_acc_weight = 0
             for h in spent_by:
-                meta = self._get_metadata_from_storage(h)
-                meta_list.append(meta)
+                # now we need to update accumulated weight and get new metadata info
+                tx = self.storage.get_transaction_by_hash_bytes(h)
+                meta = tx.update_accumulated_weight(save_file=False)
+                tx_meta_list.append((tx, meta))
 
                 if meta.accumulated_weight == max_acc_weight:
                     winner_set.add(meta.hash)
@@ -179,22 +181,22 @@ class BaseTransaction:
             if len(winner_set) > 1:
                 winner_set = set()
 
-            for meta in meta_list:
-                tx = self.storage.get_transaction_by_hash_bytes(meta.hash)
-                assert tx.hash == meta.hash
+            for (tx, meta) in tx_meta_list:
                 if tx.hash in winner_set:
-                    tx.mark_as_winner()
+                    tx.mark_as_winner(meta)
                 else:
-                    tx.mark_as_voided()
+                    tx.mark_as_voided(meta)
 
-    def mark_as_voided(self):
-        meta = self.storage.get_metadata_by_hash_bytes(self.hash)
+    def mark_as_voided(self, meta=None):
+        if not meta:
+            meta = self.storage.get_metadata_by_hash_bytes(self.hash)
         meta.conflict = TxConflictState.CONFLICT_VOIDED
         self.storage.save_metadata(meta)
         self.storage._del_from_cache(self)
 
-    def mark_as_winner(self):
-        meta = self.storage.get_metadata_by_hash_bytes(self.hash)
+    def mark_as_winner(self, meta=None):
+        if not meta:
+            meta = self.storage.get_metadata_by_hash_bytes(self.hash)
         meta.conflict = TxConflictState.CONFLICT_WINNER
         self.storage.save_metadata(meta)
         # TODO Add back to tip cache when it is a tip
@@ -410,14 +412,14 @@ class BaseTransaction:
         metadata.accumulated_weight = sum_weights(metadata.accumulated_weight, increment)
         self.storage.save_metadata(metadata)
 
-    def update_accumulated_weight(self):
+    def update_accumulated_weight(self, save_file=True):
         """Calculates the tx's accumulated weight and update its metadata.
 
         It starts at the current transaction and does a BFS to the tips. In the
         end, updates the accumulated weight on metadata
 
-        :return: transaction accumulated weight
-        :rtype: int
+        :return: transaction metadata
+        :rtype: :py:class:`hathor.transaction.TransactionMetadata`
         """
         accumulated_weight = self.weight
         for tx in self.storage.iter_bfs_children(self):
@@ -425,9 +427,11 @@ class BaseTransaction:
 
         metadata = self.get_metadata()
         metadata.accumulated_weight = accumulated_weight
-        self.storage.save_metadata(metadata)
 
-        return accumulated_weight
+        if save_file:
+            self.storage.save_metadata(metadata)
+
+        return metadata
 
     def update_parents(self):
         """Update the tx's parents to add the current tx as their child.
