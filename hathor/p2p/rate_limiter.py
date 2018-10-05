@@ -1,7 +1,6 @@
 # encoding: utf-8
 
 from collections import namedtuple
-import time
 
 RateLimiterLimit = namedtuple('RateLimiterLimit', 'max_hits window_seconds')
 
@@ -10,7 +9,7 @@ class RateLimiter(object):
     """ Implement a multi-key rate limiter using the leaky bucket algorithm.
     """
 
-    def __init__(self):
+    def __init__(self, reactor=None):
         # Stores the keys that are being limited and it's RateLimit
         # Dict[string, RateLimiterLimit]
         self.keys = {}
@@ -18,6 +17,11 @@ class RateLimiter(object):
         # Stores the last hit for each key
         # Dict[string, RateLimiterLimit]
         self.hits = {}
+
+        # :py:class:`twisted.internet.Reactor`
+        if reactor is None:
+            from twisted.internet import reactor
+        self.reactor = reactor
 
     def set_limit(self, key, max_hits, window_seconds):
         """ Set a limit to a given key, e.g., `max_hits = 10` and
@@ -65,12 +69,12 @@ class RateLimiter(object):
         (max_hits, window_seconds) = self.keys[key]
 
         if key not in self.hits:
-            self.hits[key] = RateLimiterLimit(weight, time.time())
+            self.hits[key] = RateLimiterLimit(weight, self.reactor.seconds())
             return True
 
         hits, latest_time = self.hits[key]
 
-        dt = time.time() - latest_time
+        dt = self.reactor.seconds() - latest_time
 
         # rate = max_hits / window_seconds (hits per second)
         # x = dt * rate
