@@ -52,7 +52,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         super().__init__()
 
         # Limit the send message rate for specific type of data
-        self.rate_limiter = RateLimiter()
+        self.rate_limiter = RateLimiter(reactor=reactor)
         # Stores the buffer of messages that exceeded the rate limit and will be sent
         self.buffer_deques = {}
 
