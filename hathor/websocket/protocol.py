@@ -21,3 +21,6 @@ class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
     def onClose(self, wasClean, code, reason):
         self.factory.connections.remove(self)
         print("Websocket closed: {}".format(reason))
+
+    def onMessage(self, payload, isBinary):
+        self.factory.handle_message(self, payload)

@@ -6,7 +6,6 @@ from hathor.transaction import TxConflictState
 from tests import unittest
 
 import sys
-import base58
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):
@@ -43,7 +42,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         value = 1000
 
         outputs = []
-        outputs.append(WalletOutputInfo(address=base58.b58decode(address), value=int(value)))
+        outputs.append(WalletOutputInfo(address=self.manager1.wallet.decode_address(address), value=int(value)))
 
         tx1 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
         tx1.weight = 10

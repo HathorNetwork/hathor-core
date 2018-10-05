@@ -2,7 +2,8 @@ import os
 import json
 import base58
 from collections import namedtuple
-from hathor.wallet.exceptions import WalletOutOfSync, InsuficientFunds, PrivateKeyNotFound, InputDuplicated
+from hathor.wallet.exceptions import WalletOutOfSync, InsuficientFunds, PrivateKeyNotFound, \
+                                     InputDuplicated, InvalidAddress
 from hathor.transaction import TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
 from hathor.pubsub import HathorEvents
@@ -53,9 +54,32 @@ class BaseWallet:
     def get_unused_address(self, mark_as_used=True):
         raise NotImplementedError
 
+    def decode_address(self, address58):
+        """ Decode address in base58 to bytes
+
+            :param address58: Wallet address in base58
+            :type address58: string
+
+            :raises InvalidAddress: if address58 is not a valid base58 string or not a valid address
+
+            :return: Address in bytes
+            :rtype: bytes
+        """
+        try:
+            decoded_address = base58.b58decode(address58)
+        except ValueError:
+            # Invalid base58 string
+            raise InvalidAddress
+        # Validate address size (right now our address is 20 bytes)
+        # XXX In the future we will probably change how the address is generated
+        # so the byte size will also change
+        if len(decoded_address) != 20:
+            raise InvalidAddress
+        return decoded_address
+
     def get_unused_address_bytes(self, mark_as_used=True):
         address_str = self.get_unused_address(mark_as_used)
-        return base58.b58decode(address_str)
+        return self.decode_address(address_str)
 
     def tokens_received(self, address58):
         raise NotImplementedError
@@ -149,7 +173,7 @@ class BaseWallet:
         if sum_inputs > sum_outputs:
             difference = sum_inputs - sum_outputs
             address_b58 = self.get_unused_address()
-            address = base58.b58decode(address_b58)
+            address = self.decode_address(address_b58)
             new_output = WalletOutputInfo(address, difference)
             return new_output
         return None

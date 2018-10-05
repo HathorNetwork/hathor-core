@@ -6,7 +6,6 @@ from tests import unittest
 
 import sys
 import random
-import base58
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):
@@ -26,7 +25,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         from hathor.wallet.base_wallet import WalletOutputInfo
 
         outputs = []
-        outputs.append(WalletOutputInfo(address=base58.b58decode(address), value=int(value)))
+        outputs.append(WalletOutputInfo(address=self.manager1.wallet.decode_address(address), value=int(value)))
 
         tx = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
         tx.weight = 10
