@@ -1,11 +1,10 @@
 from twisted.web import resource, server
 from hathor.api_util import set_cors
 from hathor.wallet.base_wallet import WalletOutputInfo, WalletInputInfo
-from hathor.wallet.exceptions import InsuficientFunds, PrivateKeyNotFound, InputDuplicated
+from hathor.wallet.exceptions import InsuficientFunds, PrivateKeyNotFound, InputDuplicated, InvalidAddress
 from hathor.transaction import Transaction
 
 import json
-import base58
 
 
 class SendTokensResource(resource.Resource):
@@ -34,13 +33,13 @@ class SendTokensResource(resource.Resource):
         data_bytes = request.args[b'data'][0]
         data = json.loads(data_bytes.decode('utf-8'))
 
-        # TODO Handling errors
-        # Outputs or inputs invalids
-        # Getting errors from methods and handling them
         outputs = []
         for output in data['outputs']:
-            # TODO refactor: move to something like wallet.decode_address
-            address = base58.b58decode(output['address'])  # bytes
+            try:
+                address = self.manager.wallet.decode_address(output['address'])  # bytes
+            except InvalidAddress:
+                return self.return_POST(False, 'The address {} is invalid'.format(output['address']))
+
             value = int(output['value'])
             outputs.append(WalletOutputInfo(address=address, value=value))
 
@@ -62,8 +61,9 @@ class SendTokensResource(resource.Resource):
                 return self.return_POST(False, 'Invalid input to create transaction')
 
         # TODO Send tx to be mined
+        tx.timestamp = int(self.manager.reactor.seconds())
         tx.weight = 10
-        tx.parents = self.manager.get_new_tx_parents()
+        tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
         tx.storage = self.manager.tx_storage
         tx.resolve()
 

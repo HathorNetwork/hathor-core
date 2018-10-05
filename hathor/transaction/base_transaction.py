@@ -1,7 +1,8 @@
 # encoding: utf-8
 
 from hathor.transaction.exceptions import PowError, InputOutputMismatch, TooManyInputs, \
-                                          TooManyOutputs, BlockHeightError
+                                          TooManyOutputs, BlockHeightError, ParentDoesNotExist, \
+                                          TimestampError
 from hathor.transaction.scripts import P2PKH
 
 from enum import Enum
@@ -85,6 +86,14 @@ class BaseTransaction:
 
     @classmethod
     def create_from_struct(cls, struct_bytes, storage=None):
+        """ Create a transaction from its bytes.
+
+        :param struct_bytes: Bytes of a serialized transaction
+        :type struct_bytes: bytes
+
+        :return: A transaction or a block, depending on the class `cls`
+        :rtype: Union[Transaction, Block]
+        """
         def unpack(fmt, buf):
             size = struct.calcsize(fmt)
             return struct.unpack(fmt, buf[:size]), buf[size:]
@@ -125,8 +134,20 @@ class BaseTransaction:
         return tx
 
     def __eq__(self, other):
-        """Override the default Equals behavior"""
-        return self.hash == other.hash
+        """Two transactions are equal when their hash matches
+
+        :raises NotImplement: when one of the transactions do not have a calculated hash
+        """
+        if self.hash and other.hash:
+            return self.hash == other.hash
+        return False
+
+    def __bytes__(self):
+        """Returns a byte representation of the transaction
+
+        :rtype: bytes
+        """
+        return self.get_struct()
 
     @property
     def hash_hex(self):
@@ -144,6 +165,10 @@ class BaseTransaction:
 
     @property
     def is_genesis(self):
+        """ Check whether this transaction is a genesis transaction
+
+        :rtype: bool
+        """
         from hathor.transaction.genesis import genesis_transactions
         for genesis in genesis_transactions(self.storage):
             if self == genesis:
@@ -151,10 +176,14 @@ class BaseTransaction:
         return False
 
     def mark_inputs_as_used(self):
+        """ Mark all its inputs as used
+        """
         for txin in self.inputs:
             self.mark_input_as_used(txin)
 
     def mark_input_as_used(self, txin):
+        """ Mark a given input as used
+        """
         spent_tx = self.storage.get_transaction_by_hash_bytes(txin.tx_id)
         spent_meta = spent_tx.get_metadata()
         spent_by = spent_meta.spent_outputs[txin.index]  # Set[bytes(hash)]
@@ -188,6 +217,12 @@ class BaseTransaction:
                     tx.mark_as_voided(meta)
 
     def mark_as_voided(self, meta=None):
+        """ Mark a transaction as voided when it has a conflict and its aggregated weight
+        is NOT the greatest one.
+
+        :param meta: the tx's metadata object. If we already have it, there's no need to read from storage
+        :type meta: :py:class:`hathor.transaction.TransactionMetadata`
+        """
         if not meta:
             meta = self.storage.get_metadata_by_hash_bytes(self.hash)
         meta.conflict = TxConflictState.CONFLICT_VOIDED
@@ -195,6 +230,12 @@ class BaseTransaction:
         self.storage._del_from_cache(self)
 
     def mark_as_winner(self, meta=None):
+        """ Mark a transaction as winner when it has a conflict and its aggregated weight
+        is the greatest one.
+
+        :param meta: the tx's metadata object. If we already have it, there's no need to read from storage
+        :type meta: :py:class:`hathor.transaction.TransactionMetadata`
+        """
         if not meta:
             meta = self.storage.get_metadata_by_hash_bytes(self.hash)
         meta.conflict = TxConflictState.CONFLICT_WINNER
@@ -267,7 +308,11 @@ class BaseTransaction:
         raise NotImplementedError
 
     def get_struct_without_nonce(self):
-        """Return the struct of the transaction without the nonce field"""
+        """Return a partial serialization of the transaction, without including the nonce field
+
+        :return: Partial serialization of the transaction
+        :rtype: bytes
+        """
         struct_bytes = struct.pack(
             _TRANSACTION_FORMAT_STRING,
             self.version,
@@ -300,7 +345,10 @@ class BaseTransaction:
         return struct_bytes
 
     def get_struct(self):
-        """Return the full struct of the transaction (with the nonce)"""
+        """Return the complete serialization of the transaction
+
+        :rtype: bytes
+        """
         struct_bytes = self.get_struct_without_nonce()
         struct_bytes += int_to_bytes(self.nonce, 4)
         return struct_bytes
@@ -308,15 +356,44 @@ class BaseTransaction:
     def verify(self):
         raise NotImplementedError
 
+    def verify_parents(self):
+        """All parents must exist and their timestamps must be smaller than ours.
+
+        :raises TimestampError: when our timestamp is less or equal than our parent's timestamp
+        :raises ParentDoesNotExist: when at least one of our parents does not exist
+        """
+        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+        for parent_hash in self.parents:
+            try:
+                parent = self.storage.get_transaction_by_hash_bytes(parent_hash)
+                if self.timestamp <= parent.timestamp:
+                    raise TimestampError('tx={} timestamp={}, parent={} timestamp={}'.format(
+                        self.hash.hex(),
+                        self.timestamp,
+                        parent.hash.hex(),
+                        parent.timestamp,
+                    ))
+            except TransactionDoesNotExist:
+                raise ParentDoesNotExist('tx={} parent={}'.format(self.hash.hex(), parent_hash))
+
     def verify_pow(self):
-        """Verify proof-of-work and that the weight is correct"""
+        """Verify proof-of-work and that the weight is correct
+
+        :raises PowError: when the hash is equal or greater than the target
+        """
         # if abs(self.calculate_weight() - self.weight) > 1e-6:
         #     raise WeightError
         if int(self.hash.hex(), 16) >= self.get_target():
             raise PowError('Transaction has invalid data')
 
     def resolve(self):
-        """Start mining to achieve the target"""
+        """Run a CPU mining looking for the nonce that solves the proof-of-work
+
+        The `self.weight` must be set before calling this method.
+
+        :return: True if a solution was found
+        :rtype: bool
+        """
         hash_bytes = self.start_mining()
         if hash_bytes:
             self.hash = hash_bytes
@@ -325,29 +402,59 @@ class BaseTransaction:
             return False
 
     def calculate_hash1(self):
-        """Returns the fixed part of the hash"""
+        """Return the sha256 of the transaction without including the `nonce`
+
+        :return: A partial hash of the transaction
+        :rtype: :py:class:`_hashlib.HASH`
+        """
         calculate_hash1 = hashlib.sha256()
         calculate_hash1.update(self.get_struct_without_nonce())
         return calculate_hash1
 
     def calculate_hash2(self, part1):
-        """Returns the full hash of the hash from first part"""
+        """Return the hash of the transaction, starting from a partial hash
+
+        The hash of the transactions is the `sha256(sha256(bytes(tx))`.
+
+        :param part1: A partial hash of the transaction, usually from `calculate_hash1`
+        :type part1: :py:class:`_hashlib.HASH`
+
+        :return: The transaction hash
+        :rtype: bytes
+        """
         part1.update(self.nonce.to_bytes(4, byteorder='big', signed=False))
         return hashlib.sha256(part1.digest()).digest()
 
     def calculate_hash(self):
-        """Returns the full hash of the hash"""
+        """Return the full hash of the transaction
+
+        It is the same as calling `self.calculate_hash2(self.calculate_hash1())`.
+
+        :return: The hash transaction
+        :rtype: bytes
+        """
         part1 = self.calculate_hash1()
         return self.calculate_hash2(part1)
 
     def update_hash(self):
+        """ Update the hash of the transaction.
+        """
         self.hash = self.calculate_hash()
 
     def start_mining(self, start=0, end=MAX_NONCE, sleep_seconds=0):
-        """Starts mining until it solves the problem (finds the nonce that satisfies the conditions).
+        """Starts mining until it solves the problem, i.e., finds the nonce that satisfies the conditions
 
-        `sleep_seconds` is the number of seconds the mining algorithm will sleep every attempt. You should
-        use it to reduce CPU usage.
+        :param start: beginning of the search interval
+        :type start: int
+
+        :param end: end of the search interval
+        :type end: int
+
+        :param sleep_seconds: the number of seconds it will sleep after each attempt
+        :type sleep_seconds: float
+
+        :return The hash of the solved PoW or None when it is not found
+        :type Union[bytes, None]
         """
         pow_part1 = self.calculate_hash1()
         target = self.get_target()

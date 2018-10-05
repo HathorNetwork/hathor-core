@@ -8,6 +8,7 @@ from hathor.manager import HathorManager
 
 from tests import unittest
 import json
+import time
 
 
 class _BaseResourceTest:
@@ -17,9 +18,10 @@ class _BaseResourceTest:
 
             peer_id = PeerId()
             wallet = self.create_test_wallet()
-            reactor = Clock()
+            self.reactor = Clock()
+            self.reactor.advance(time.time())
             network = 'testnet'
-            self.manager = HathorManager(reactor, peer_id=peer_id, network=network, wallet=wallet)
+            self.manager = HathorManager(self.reactor, peer_id=peer_id, network=network, wallet=wallet)
             self.manager.start()
 
 

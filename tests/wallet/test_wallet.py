@@ -1,7 +1,6 @@
 import unittest
 import os
 import json
-import base58
 import base64
 import tempfile
 import shutil
@@ -70,7 +69,7 @@ class BasicWallet(unittest.TestCase):
 
         # create transaction spending this value, but sending to same wallet
         new_address = w.get_unused_address()
-        out = WalletOutputInfo(base58.b58decode(new_address), 100)
+        out = WalletOutputInfo(w.decode_address(new_address), 100)
         tx1 = w.prepare_transaction_compute_inputs(Transaction, outputs=[out])
         tx1.update_hash()
         w.on_new_tx(tx1)
@@ -82,7 +81,7 @@ class BasicWallet(unittest.TestCase):
         input_info = WalletInputInfo(tx1.hash, 1, None)
         new_address = w.get_unused_address()
         key2 = w.keys[new_address]
-        out = WalletOutputInfo(base58.b58decode(key2.address), 100)
+        out = WalletOutputInfo(w.decode_address(key2.address), 100)
         tx2 = w.prepare_transaction_incomplete_inputs(Transaction, inputs=[input_info], outputs=[out])
         tx2.update_hash()
         w.on_new_tx(tx2)
@@ -103,7 +102,7 @@ class BasicWallet(unittest.TestCase):
         w.unlock(PASSWORD)
         new_address = w.get_unused_address()
         key = w.keys[new_address]
-        out = WalletOutputInfo(base58.b58decode(key.address), BLOCK_REWARD)
+        out = WalletOutputInfo(w.decode_address(key.address), BLOCK_REWARD)
         tx = w.prepare_transaction(Transaction, inputs=[], outputs=[out])
         tx.update_hash()
         w.on_new_tx(tx)
@@ -152,7 +151,7 @@ class BasicWallet(unittest.TestCase):
 
         # create transaction spending some value
         new_address = w.get_unused_address()
-        out = WalletOutputInfo(base58.b58decode(new_address), 100)
+        out = WalletOutputInfo(w.decode_address(new_address), 100)
         with self.assertRaises(InsuficientFunds):
             w.prepare_transaction_compute_inputs(Transaction, outputs=[out])
 

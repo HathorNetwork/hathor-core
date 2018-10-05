@@ -58,7 +58,7 @@ if __name__ == '__main__':
         block.nonce = q_out.get()
         block.update_hash()
         try:
-            block.verify()
+            block.verify_without_storage()
         except HathorError as e:
             pass
         else:

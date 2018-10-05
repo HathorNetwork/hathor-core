@@ -104,7 +104,7 @@ class HathorManager(object):
         self.blocks_per_difficulty = 5
         self.latest_blocks = deque()
         self.avg_time_between_blocks = 64  # in seconds
-        self.min_block_weight = 10
+        self.min_block_weight = 14
         self.max_allowed_block_weight_change = 2
         self.tokens_issued_per_block = 10000
 
@@ -162,15 +162,19 @@ class HathorManager(object):
     def add_peer_discovery(self, peer_discovery):
         self.peer_discoveries.append(peer_discovery)
 
-    def get_new_tx_parents(self):
+    def get_new_tx_parents(self, timestamp=None):
         """Select which transactions will be confirmed by a new transaction.
 
         :return: The hashes of the parents for a new transaction.
         :rtype: List[bytes(hash)]
         """
-        tips = self.tx_storage.get_tip_transactions(count=2)
-        ret = [x.hash for x in tips]
-        if len(tips) == 1:
+        if timestamp is None:
+            timestamp = self.reactor.seconds()
+        tips = self.tx_storage.get_tip_transactions()
+        ret = [x.hash for x in tips if x.timestamp < timestamp][:2]
+        if len(ret) == 0:
+            ret = tips[0].parents
+        elif len(ret) == 1:
             # If there is only one tip, let's randomly choose one of its parents.
             ret.append(random.choice(tips[0].parents))
         return ret
@@ -195,7 +199,11 @@ class HathorManager(object):
         parents_tx = [self.tx_storage.get_transaction_by_hash_bytes(x) for x in parents]
         new_height = max(x.height for x in parents_tx) + 1
 
+        timestamp1 = int(self.reactor.seconds())
+        timestamp2 = max(x.timestamp for x in parents_tx) + 1
+
         blk = Block(outputs=tx_outputs, parents=parents, storage=self.tx_storage, height=new_height)
+        blk.timestamp = max(timestamp1, timestamp2)
         blk.weight = self.calculate_block_difficulty(blk)
         return blk
 
