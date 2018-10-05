@@ -6,6 +6,7 @@ from tests import unittest
 
 import sys
 import random
+import time
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):
@@ -14,8 +15,10 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         log.startLogging(sys.stdout)
         self.clock = Clock()
+        self.clock.advance(time.time())
         self.network = 'testnet'
         self.manager1 = self.create_peer(self.network, unlock_wallet=True)
+        self.manager1.reactor = self.clock
 
         self.genesis = self.manager1.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
@@ -28,10 +31,14 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         outputs.append(WalletOutputInfo(address=self.manager1.wallet.decode_address(address), value=int(value)))
 
         tx = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+        tx.timestamp = int(self.clock.seconds())
+        tx.storage = self.manager1.tx_storage
         tx.weight = 10
         tx.parents = self.manager1.get_new_tx_parents()
         tx.resolve()
+        tx.verify()
         self.manager1.propagate_tx(tx)
+        self.clock.advance(10)
 
     def _add_new_transactions(self, num_txs):
         txs = []
@@ -45,7 +52,9 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
     def _add_new_block(self):
         block = self.manager1.generate_mining_block()
         self.assertTrue(block.resolve())
+        block.verify()
         self.manager1.propagate_tx(block)
+        self.clock.advance(10)
         return block
 
     def _add_new_blocks(self, num_blocks):

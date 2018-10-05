@@ -1,6 +1,7 @@
 import unittest
 import tempfile
 import shutil
+import time
 
 from twisted.internet.task import Clock
 
@@ -15,6 +16,7 @@ class _BaseTransactionStorageTest:
     class _TransactionStorageTest(unittest.TestCase):
         def setUp(self, tx_storage):
             self.reactor = Clock()
+            self.reactor.advance(time.time())
             self.tx_storage = tx_storage
             tx_storage._manually_initialize()
             self.genesis = self.tx_storage.get_all_genesis()
@@ -174,9 +176,12 @@ class _BaseTransactionStorageTest:
             block = self.manager.generate_mining_block()
             if parents is not None:
                 block.parents = parents
+                block.height = block.calculate_height()
             block.weight = 10
             self.assertTrue(block.resolve())
+            block.verify()
             self.manager.tx_storage.save_transaction(block)
+            self.reactor.advance(5)
             return block
 
 

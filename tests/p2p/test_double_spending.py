@@ -6,6 +6,7 @@ from hathor.transaction import TxConflictState
 from tests import unittest
 
 import sys
+import time
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):
@@ -14,6 +15,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         log.startLogging(sys.stdout)
         self.clock = Clock()
+        self.clock.advance(time.time())
         self.network = 'testnet'
         self.manager1 = self.create_peer(self.network, unlock_wallet=True)
 
