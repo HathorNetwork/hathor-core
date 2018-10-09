@@ -151,7 +151,7 @@ if __name__ == '__main__':
             parent.putChild(url_path, resource)
 
         # Websocket resource
-        ws_factory = HathorAdminWebsocketFactory()
+        ws_factory = HathorAdminWebsocketFactory(metrics=manager.metrics)
         resource = WebSocketResource(ws_factory)
         root.putChild(b"ws", resource)
 

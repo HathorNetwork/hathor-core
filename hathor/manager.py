@@ -8,6 +8,7 @@ from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.metrics import Metrics
 from hathor.exception import HathorError
 
 from collections import defaultdict, deque
@@ -87,6 +88,8 @@ class HathorManager(object):
         # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
         self.tx_storage = tx_storage or TransactionMemoryStorage()
         self.pubsub = pubsub or PubSubManager()
+
+        self.metrics = Metrics(pubsub=self.pubsub)
 
         self.peer_discoveries = []
 
