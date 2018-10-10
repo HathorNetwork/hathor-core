@@ -49,6 +49,8 @@ class StatusResource(resource.Resource):
                 status[plugin.get_name()] = plugin.get_status()
             connected_peers.append({
                 'id': conn.peer.id,
+                'app_version': conn.app_version,
+                'uptime': time.time() - conn.connection_time,
                 'address': '{}:{}'.format(remote.host, remote.port),
                 'state': conn.state.state_name,
                 # 'received_bytes': conn.received_bytes,
@@ -73,13 +75,14 @@ class StatusResource(resource.Resource):
                 'uptime': time.time() - self.manager.start_time,
                 'entrypoints': self.manager.connections.my_peer.entrypoints,
             },
+            'known_peers': known_peers,
             'connections': {
-                'known_peers': known_peers,
                 'connected_peers': connected_peers,
                 'handshaking_peers': handshaking_peers,
                 'connecting_peers': connecting_peers,
             },
             'dag': {
+                'first_timestamp': self.manager.first_timestamp,
                 'latest_timestamp': self.manager.latest_timestamp,
             }
         }
