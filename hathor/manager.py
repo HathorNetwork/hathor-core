@@ -1,16 +1,17 @@
 # encoding: utf-8
 
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.node_sync import NodeSyncLeftToRightManager
 from hathor.p2p.manager import ConnectionsManager
 from hathor.transaction import Block, TxOutput, sum_weights
+from hathor.transaction.genesis import genesis_transactions
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.exception import HathorError
+from hathor.indexes import TimestampIndex
 
-from collections import defaultdict, deque
+from collections import defaultdict
 from enum import Enum
 from math import log
 import time
@@ -97,16 +98,17 @@ class HathorManager(object):
         # Map of peer_id to the best block height reported by that peer.
         self.peer_best_heights = defaultdict(int)
 
-        self.node_sync_manager = NodeSyncLeftToRightManager(self)
         self.wallet = wallet
         self.wallet.pubsub = self.pubsub
 
-        self.blocks_per_difficulty = 5
-        self.latest_blocks = deque()
         self.avg_time_between_blocks = 64  # in seconds
         self.min_block_weight = 14
-        self.max_allowed_block_weight_change = 2
         self.tokens_issued_per_block = 10000
+
+        self.block_tips_index = TimestampIndex()
+        self.tx_tips_index = TimestampIndex()
+        self.latest_timestamp = 0
+        self.first_timestamp = min(x.timestamp for x in genesis_transactions(self.tx_storage))
 
     def start(self):
         """ A factory must be started only once. And it is usually automatically started.
@@ -168,18 +170,18 @@ class HathorManager(object):
         :return: The hashes of the parents for a new transaction.
         :rtype: List[bytes(hash)]
         """
-        if timestamp is None:
-            timestamp = self.reactor.seconds()
-        tips = self.tx_storage.get_tip_transactions()
-        ret = [x.hash for x in tips if x.timestamp < timestamp][:2]
-        if len(ret) == 0:
-            ret = tips[0].parents
-        elif len(ret) == 1:
+        timestamp = timestamp or self.reactor.seconds()
+        ret = list(self.tx_tips_index[timestamp-1])
+        random.shuffle(ret)
+        ret = ret[:2]
+        if len(ret) == 1:
             # If there is only one tip, let's randomly choose one of its parents.
-            ret.append(random.choice(tips[0].parents))
-        return ret
+            parents = list(self.tx_tips_index[ret[0].begin - 1])
+            ret.append(random.choice(parents))
+        assert len(ret) == 2
+        return [x.data for x in ret]
 
-    def generate_mining_block(self):
+    def generate_mining_block(self, timestamp=None):
         """ Generates a block ready to be mined. The block includes new issued tokens,
         parents, and the weight.
 
@@ -192,8 +194,14 @@ class HathorManager(object):
         tx_outputs = [
             TxOutput(amount, output_script)
         ]
-        tip_blocks = self.tx_storage.get_tip_blocks_hashes()
-        tip_txs = self.get_new_tx_parents()
+
+        timestamp = timestamp or self.reactor.seconds()
+        tip_blocks = [x.data for x in self.block_tips_index[timestamp]]
+        tip_txs = self.get_new_tx_parents(timestamp)
+
+        assert len(tip_blocks) >= 1
+        assert len(tip_txs) == 2
+
         parents = tip_blocks + tip_txs
 
         parents_tx = [self.tx_storage.get_transaction_by_hash_bytes(x) for x in parents]
@@ -208,7 +216,7 @@ class HathorManager(object):
         return blk
 
     def on_tips_received(self, tip_blocks, tip_transactions, conn=None):
-        self.node_sync_manager.on_tips_received(tip_blocks, tip_transactions, conn)
+        pass
 
     def validate_new_tx(self, tx):
         """ Process incoming transaction during initialization.
@@ -277,12 +285,15 @@ class HathorManager(object):
         if self.wallet:
             self.wallet.on_new_tx(tx)
 
-        if self.state == self.NodeState.INITIALIZING:
-            self.tx_storage._add_to_cache(tx)
+        if tx.is_block:
+            self.block_tips_index.add_tx(tx)
         else:
+            self.tx_tips_index.add_tx(tx)
+
+        self.latest_timestamp = max(self.latest_timestamp, tx.timestamp)
+
+        if self.state != self.NodeState.INITIALIZING:
             self.tx_storage.save_transaction(tx)
-            self.node_sync_manager.on_new_tx(tx, conn)
-            self.update_accumulated_weights(tx)
 
         if tx.is_block:
             print('New block found: {} weight={}'.format(tx.hash_hex, tx.weight))
@@ -300,11 +311,11 @@ class HathorManager(object):
 
     def on_block_hashes_received(self, block_hashes, conn=None):
         """We have received a list of hashes of blocks, according to a peer."""
-        self.node_sync_manager.on_block_hashes_received(block_hashes, conn)
+        pass
 
     def on_transactions_hashes_received(self, txs_hashes, conn=None):
         """We have received a list of hashes of transactions, according to a peer."""
-        self.node_sync_manager.on_transactions_hashes_received(txs_hashes, conn)
+        pass
 
     def on_best_height(self, best_height, conn):
         raise NotImplemented

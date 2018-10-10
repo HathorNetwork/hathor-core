@@ -1,6 +1,7 @@
 # encoding: utf-8
 
 from hathor.p2p.states.base import BaseState
+from hathor.p2p.messages import ProtocolMessages
 import hathor
 
 import json
@@ -11,7 +12,7 @@ class HelloState(BaseState):
     def __init__(self, protocol):
         super().__init__(protocol)
         self.cmd_map.update({
-            self.ProtocolCommand.HELLO: self.handle_hello,
+            ProtocolMessages.HELLO: self.handle_hello,
         })
 
     def on_enter(self):
@@ -34,7 +35,7 @@ class HelloState(BaseState):
             'remote_address': '{}:{}'.format(remote.host, remote.port),
             'nonce': protocol.hello_nonce_sent,
         }
-        self.send_message(self.ProtocolCommand.HELLO, json.dumps(data))
+        self.send_message(ProtocolMessages.HELLO, json.dumps(data))
 
     def handle_hello(self, payload):
         """ Executed when a HELLO message is received. It basically

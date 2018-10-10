@@ -6,6 +6,7 @@ from autobahn.twisted.websocket import WebSocketServerProtocol
 from autobahn.twisted.websocket import WebSocketClientProtocol
 
 from hathor.p2p.states import HelloState, PeerIdState, ReadyState
+from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.rate_limiter import RateLimiter
 
 from enum import Enum
@@ -28,7 +29,7 @@ class HathorProtocol(object):
     After the PEER-ID message, the peer is ready to communicate.
 
     The available states are listed in PeerState class.
-    The available commands are listed in the ProtocolCommand class.
+    The available commands are listed in the ProtocolMessages class.
     """
     class Metrics(object):
         def __init__(self):
@@ -50,7 +51,7 @@ class HathorProtocol(object):
         :type network: string
         :type my_peer: PeerId
         :type connections: ConnectionsManager
-        :type manager: HathorManager
+        :type node: HathorManager
         """
         self.network = network
         self.my_peer = my_peer
@@ -149,7 +150,7 @@ class HathorProtocol(object):
     def send_error(self, msg):
         """ Send an error message to the peer.
         """
-        self.send_message(self.state.ProtocolCommand.ERROR, msg)
+        self.send_message(ProtocolMessages.ERROR, msg)
 
     def send_error_and_close_connection(self, msg):
         """ Send an ERROR message to the peer, and then closes the connection.
@@ -187,7 +188,7 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
 
         msgtype, _, msgdata = line.partition(' ')
         try:
-            cmd = self.state.ProtocolCommand(msgtype)
+            cmd = ProtocolMessages(msgtype)
         except ValueError:
             self.transport.loseConnection()
             return

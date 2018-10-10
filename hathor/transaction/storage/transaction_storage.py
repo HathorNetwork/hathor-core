@@ -3,7 +3,6 @@ from hathor.transaction.storage.exceptions import TransactionIsNotABlock
 from hathor.transaction import TxConflictState
 
 from collections import deque
-import random
 
 
 class TransactionStorage:
@@ -16,8 +15,6 @@ class TransactionStorage:
         """Reset all caches. This function should not be called unless you know
         what you are doing.
         """
-        self._cache_tip_blocks = {}        # Dict[bytes(hash), Block]
-        self._cache_tip_transactions = {}  # Dict[bytes(hash), Transaction]
         self._cache_block_count = 0
         self._cache_tx_count = 0
 
@@ -103,22 +100,8 @@ class TransactionStorage:
     def _add_to_cache(self, tx):
         if tx.is_block:
             self._cache_block_count += 1
-            cache = self._cache_tip_blocks
         else:
             self._cache_tx_count += 1
-            cache = self._cache_tip_transactions
-
-        for parent_hash in tx.parents:
-            if parent_hash in cache:
-                cache.pop(parent_hash)
-        cache[tx.hash] = tx
-
-    def _del_from_cache(self, tx):
-        if tx.is_block:
-            cache = self._cache_tip_blocks
-        else:
-            cache = self._cache_tip_transactions
-        cache.pop(tx.hash, None)
 
     def get_block_count(self):
         return self._cache_block_count
@@ -127,7 +110,7 @@ class TransactionStorage:
         return self._cache_tx_count
 
     def save_transaction(self, tx):
-        self._add_to_cache(tx)
+        pass
 
     def transaction_exists_by_hash(self, hash_hex):
         raise NotImplementedError
@@ -169,62 +152,6 @@ class TransactionStorage:
 
     def get_count_tx_blocks(self):
         raise NotImplementedError
-
-    def get_tip_blocks(self):
-        """
-        Return the blocks which have not been confirmed yet.
-
-        :return: A list of blocks.
-        :rtype: List[Block]
-        """
-        return list(self._cache_tip_blocks.values())
-
-    def get_tip_blocks_hashes(self):
-        """
-        Return the hashes of the blocks which have not been confirmed yet.
-
-        :return: A list of block hashes.
-        :rtype: List[bytes(hash)]
-        """
-        return list(self._cache_tip_blocks.keys())
-
-    def get_tip_transactions(self, count=None):
-        """
-        Return the transactions which have not been confirmed yet.
-
-        :return: A list of transactions.
-        :type: List[Transaction]
-        """
-        ret = list(self._cache_tip_transactions.values())
-        if count is None:
-            return ret
-        # If there are many tip transactions, we randomly choose among them.
-        # Instead of implementing an algorithm to choose without repetition,
-        # I just shuffled the options and get the firsts. Another approach
-        # would be to stop shuffling after `count` steps.
-        random.shuffle(ret)
-        return ret[:count]
-
-    def get_tip_transactions_hashes(self, count=None):
-        """
-        Return the hashes of the transactions which have not been confirmed yet.
-
-        :return: A list of transaction hashes.
-        :type: List[bytes(hash)]
-        """
-        ret = list(self._cache_tip_transactions.keys())
-        if count is None:
-            return ret
-        random.shuffle(ret)
-        return ret[:count]
-
-    def get_latest_block(self):
-        blocks = self.get_latest_blocks(5)
-
-        assert blocks, 'No tip blocks available, not even genesis!'
-
-        sorted_blocks = sorted(blocks, key=lambda b: b.height, reverse=True)
-        return sorted_blocks[0]
 
     def get_best_height(self):
         """Returns the height for the most recent block."""
