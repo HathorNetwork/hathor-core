@@ -88,15 +88,15 @@ class NodeSyncTimestamp(object):
             self.call_later_id.cancel()
 
     def send_tx_to_peer_if_possible(self, tx):
-        if self.synced_timestamp is None:
-            return
-        if tx.timestamp <= self.peer_timestamp:
-            return
-        for parent_hash in tx.parents:
-            parent = self.protocol.node.tx_storage.get_transaction_by_hash_bytes(parent_hash)
-            if parent.timestamp > self.synced_timestamp:
-                # print('send_tx_to_peer_if_possible(): discarded')
-                return
+        #if self.synced_timestamp is None:
+        #    return
+        #if tx.timestamp <= self.peer_timestamp:
+        #    return
+        #for parent_hash in tx.parents:
+        #    parent = self.protocol.node.tx_storage.get_transaction_by_hash_bytes(parent_hash)
+        #    if parent.timestamp > self.synced_timestamp:
+        #        # print('send_tx_to_peer_if_possible(): discarded')
+        #        return
         # print('send_tx_to_peer_if_possible(): SEND-DATA')
         self.send_data(tx)
 
