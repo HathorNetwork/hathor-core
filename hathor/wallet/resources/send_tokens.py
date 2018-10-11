@@ -62,7 +62,7 @@ class SendTokensResource(resource.Resource):
 
         # TODO Send tx to be mined
         tx.timestamp = int(self.manager.reactor.seconds())
-        tx.weight = 10
+        tx.weight = 1
         tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
         tx.storage = self.manager.tx_storage
         tx.resolve()

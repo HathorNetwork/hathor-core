@@ -456,8 +456,8 @@ class TransactionStorage:
                     attrs_node.update(block_attrs)
                     attrs_edge.update(dict(penwidth='4'))
 
-                if (tx.hash in self._cache_tip_blocks) or (tx.hash in self._cache_tip_transactions):
-                    attrs_node.update(tx_tips_attrs)
+                # if (tx.hash in self._cache_tip_blocks) or (tx.hash in self._cache_tip_transactions):
+                #     attrs_node.update(tx_tips_attrs)
 
                 if weight:
                     attrs_node.update(dict(label='{}\nw: {:.2f}'.format(attrs_node['label'], tx.weight)))
