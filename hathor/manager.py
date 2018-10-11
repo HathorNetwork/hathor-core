@@ -286,7 +286,7 @@ class HathorManager(object):
 
         if self.state != self.NodeState.INITIALIZING:
             self.tx_storage.save_transaction(tx)
-            tx.update_parents()
+            #tx.update_parents()
 
         if tx.is_block:
             print('New block found: {} weight={}'.format(tx.hash_hex, tx.weight))
