@@ -297,6 +297,7 @@ class HathorManager(object):
 
         if self.state != self.NodeState.INITIALIZING:
             self.tx_storage.save_transaction(tx)
+            tx.update_parents()
 
         if tx.is_block:
             print('New block found: {} weight={}'.format(tx.hash_hex, tx.weight))
@@ -357,17 +358,6 @@ class HathorManager(object):
             weight = self.min_block_weight
 
         return weight
-
-    def update_accumulated_weights(self, tx):
-        """Update all previous transactions' accumulated weight when a new one arrives
-
-        :param tx: the new transaction/block
-        :type tx: :py:class:`hathor.transaction.Transaction` or :py:class:`hathor.transaction.Block`
-
-        :rtype: None
-        """
-        for _tx in self.tx_storage.iter_bfs(tx):
-            _tx.update_accumulated_weight(tx.weight)
 
     def listen(self, description, ssl=False):
         endpoint = self.connections.listen(description, ssl)
