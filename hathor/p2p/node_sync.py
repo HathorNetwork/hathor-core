@@ -229,9 +229,12 @@ class NodeSyncTimestamp(object):
         self.is_running = 'sync_at_timestamp'
         # print('Syncing at {}'.format(timestamp))
         tips = yield self.get_peer_tips(timestamp, include_hashes=True)
+        pending = []
         for h in tips.hashes:
             if not self.manager.tx_storage.transaction_exists_by_hash_bytes(h):
-                yield self.get_data(h)
+                pending.append(self.get_data(h))
+        for deferred in pending:
+            yield deferred
         self.is_running = None
         return tips.next_timestamp
 
