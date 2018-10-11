@@ -83,6 +83,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             'transactions': self.metrics.transactions,
             'blocks': self.metrics.blocks,
             'type': 'dashboard:metrics',
+            'time': reactor.seconds(),
         }
         self.broadcast_message(data)
         self._schedule_metric_sender()
