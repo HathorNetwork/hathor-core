@@ -90,7 +90,7 @@ class HathorManager(object):
         self.tx_storage = tx_storage or TransactionMemoryStorage()
         self.pubsub = pubsub or PubSubManager()
 
-        self.metrics = Metrics(pubsub=self.pubsub)
+        self.metrics = Metrics(pubsub=self.pubsub, tx_storage=tx_storage)
 
         self.peer_discoveries = []
 
