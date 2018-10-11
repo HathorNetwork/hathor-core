@@ -50,7 +50,7 @@ if __name__ == '__main__':
 
     while True:
         address = random.choice(args.addresses)
-        value = random.randint(10, 100)
+        value = 10000  # random.randint(10, 100)
         #print('Sending {} tokens to {}...'.format(address, value))
 
         data = {

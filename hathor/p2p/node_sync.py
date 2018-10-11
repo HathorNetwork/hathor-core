@@ -132,6 +132,7 @@ class NodeSyncTimestamp(object):
         """
         if self.latest_deferred is not None:
             raise Exception('latest_deferred is not None')
+        #self.reactor.callLater(1, self.send_get_data, hash_bytes.hex())
         self.send_get_data(hash_bytes.hex())
         self.latest_deferred = Deferred()
         return self.latest_deferred
