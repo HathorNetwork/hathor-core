@@ -12,6 +12,8 @@ mnemonic==0.18
 
 graphviz==0.9
 
+intervaltree==2.1.0
+
 requests
 
 flake8
