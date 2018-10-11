@@ -37,14 +37,8 @@ class HathorManager(object):
         # This node is still initializing
         INITIALIZING = 'INITIALIZING'
 
-        # This node is waiting for peers to decide whether it is sync'ed or not.
-        WAITING_FOR_PEERS = 'WAITING_FOR_PEERS'
-
-        # This node is still synchronizing with the network
-        SYNCING = 'SYNCING'
-
-        # This node is up-to-date with the network
-        SYNCED = 'SYNCED'
+        # This node is ready to establish new connections, sync, and exchange transactions.
+        READY = 'READY'
 
     def __init__(self, reactor, peer_id=None, network=None, hostname=None,
                  pubsub=None, wallet=None, tx_storage=None, peer_storage=None, default_port=40403):
@@ -162,7 +156,7 @@ class HathorManager(object):
             self.wallet._manually_initialize()
         for tx in self.tx_storage._topological_sort():
             self.on_new_tx(tx)
-        self.state = self.NodeState.WAITING_FOR_PEERS
+        self.state = self.NodeState.READY
 
     def add_peer_discovery(self, peer_discovery):
         self.peer_discoveries.append(peer_discovery)
@@ -273,11 +267,6 @@ class HathorManager(object):
             tx.storage = self.tx_storage
         self.on_new_tx(tx)
 
-        # Only propagate transactions once we are sufficiently synced up with the rest of the network.
-        # TODO Should we queue transactions?
-        if self.state == self.NodeState.SYNCED:
-            self.connections.send_tx_to_peers(tx)
-
     def on_new_tx(self, tx, conn=None):
         """This method is called when any transaction arrive.
         """
@@ -307,8 +296,7 @@ class HathorManager(object):
         tx.mark_inputs_as_used()
 
         # Propagate to our peers.
-        if self.state == self.NodeState.SYNCED:
-            self.connections.send_tx_to_peers(tx)
+        self.connections.send_tx_to_peers(tx)
 
         # Publish to pubsub manager the new tx accepted
         self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)

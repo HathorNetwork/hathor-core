@@ -57,6 +57,9 @@ class ReadyState(BaseState):
     def send_get_best_height(self):
         self.send_message(ProtocolMessages.GET_BEST_HEIGHT)
 
+    def send_tx_to_peer(self, tx):
+        self.plugins['node-sync-timestamp'].send_tx_to_peer_if_possible(tx)
+
     def handle_get_best_height(self, unused_payload):
         print('handle_get_best_height')
         payload = self.protocol.node.tx_storage.get_best_height()

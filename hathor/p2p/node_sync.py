@@ -44,7 +44,7 @@ class NodeSyncTimestamp(object):
         self.previous_timestamp = None
 
         # Latest deferred waiting for a reply.
-        self.latest_deferred = None
+        self.deferred_by_key = {}  # Dict[str, Deferred]
 
         # Latest timestamp in which we're synced.
         self.synced_timestamp = None
@@ -87,6 +87,19 @@ class NodeSyncTimestamp(object):
         if self.call_later_id and self.call_later_id.active():
             self.call_later_id.cancel()
 
+    def send_tx_to_peer_if_possible(self, tx):
+        if self.synced_timestamp is None:
+            return
+        if tx.timestamp <= self.peer_timestamp:
+            return
+        for parent_hash in tx.parents:
+            parent = self.protocol.node.tx_storage.get_transaction_by_hash_bytes(parent_hash)
+            if parent.timestamp > self.synced_timestamp:
+                # print('send_tx_to_peer_if_possible(): discarded')
+                return
+        # print('send_tx_to_peer_if_possible(): SEND-DATA')
+        self.send_data(tx)
+
     def get_merkle_tree(self, timestamp):
         """ Generate a hash to check whether the DAG is the same at that timestamp.
 
@@ -116,11 +129,13 @@ class NodeSyncTimestamp(object):
 
         :rtype: Deferred
         """
-        if self.latest_deferred is not None:
+        key = 'tips'
+        if self.deferred_by_key.get(key, None) is not None:
             raise Exception('latest_deferred is not None')
         self.send_get_tips(timestamp, include_hashes)
-        self.latest_deferred = Deferred()
-        return self.latest_deferred
+        deferred = Deferred()
+        self.deferred_by_key[key] = deferred
+        return deferred
 
     def get_data(self, hash_bytes):
         """ A helper that returns a deferred that is called when the peer replies.
@@ -130,12 +145,14 @@ class NodeSyncTimestamp(object):
 
         :rtype: Deferred
         """
-        if self.latest_deferred is not None:
+        key = 'get-data-{}'.format(hash_bytes)
+        if self.deferred_by_key.get(key, None) is not None:
             raise Exception('latest_deferred is not None')
         #self.reactor.callLater(1, self.send_get_data, hash_bytes.hex())
         self.send_get_data(hash_bytes.hex())
-        self.latest_deferred = Deferred()
-        return self.latest_deferred
+        deferred = Deferred()
+        self.deferred_by_key[key] = deferred
+        return deferred
 
     @inlineCallbacks
     def find_synced_timestamp(self):
@@ -143,7 +160,7 @@ class NodeSyncTimestamp(object):
 
         It uses an exponential search followed by a binary search.
         """
-        print('Running find_synced_timestamp...')
+        # print('Running find_synced_timestamp...')
         self.is_running = 'find_synced_timestamp'
 
         tips = yield self.get_peer_tips()
@@ -185,7 +202,7 @@ class NodeSyncTimestamp(object):
 
         self.next_timestamp = tips.next_timestamp
         self.is_running = None
-        print('Synced at {} (latest timestamp {})'.format(self.synced_timestamp, self.peer_timestamp))
+        # print('Synced at {} (latest timestamp {})'.format(self.synced_timestamp, self.peer_timestamp))
 
     @inlineCallbacks
     def sync_until_timestamp(self, timestamp):
@@ -210,7 +227,7 @@ class NodeSyncTimestamp(object):
         :type timestamp: int
         """
         self.is_running = 'sync_at_timestamp'
-        print('Syncing at {}'.format(timestamp))
+        # print('Syncing at {}'.format(timestamp))
         tips = yield self.get_peer_tips(timestamp, include_hashes=True)
         for h in tips.hashes:
             if not self.manager.tx_storage.transaction_exists_by_hash_bytes(h):
@@ -223,7 +240,7 @@ class NodeSyncTimestamp(object):
         """
         if self.is_running is not None:
             # Already running...
-            print('Already running: {}'.format(self.is_running))
+            # print('Already running: {}'.format(self.is_running))
             return
 
         if self.peer_timestamp is None:
@@ -324,9 +341,11 @@ class NodeSyncTimestamp(object):
         data['merkle_tree'] = bytes.fromhex(data['merkle_tree'])
         data['hashes'] = [bytes.fromhex(h) for h in data['hashes']]
         args = TipsPayload(**data)
-        deferred = self.latest_deferred
-        self.latest_deferred = None
-        deferred.callback(args)
+
+        key = 'tips'
+        deferred = self.deferred_by_key.pop(key, None)
+        if deferred:
+            deferred.callback(args)
 
     def send_notify_data(self, tx):
         """ Send a NOTIFY-DATA message, notifying a peer about a new hash.
@@ -366,19 +385,21 @@ class NodeSyncTimestamp(object):
         """ Handle a received GET-DATA message.
         """
         hash_hex = payload
-        print('handle_get_data', hash_hex)
+        # print('handle_get_data', hash_hex)
         try:
             tx = self.protocol.node.tx_storage.get_transaction_by_hash(hash_hex)
             self.send_data(tx)
         except TransactionDoesNotExist:
             # TODO Send NOT-FOUND?
-            self.send_data('')
+            #self.send_data('')
+            pass
         except Exception as e:
             print(e)
 
     def send_data(self, tx):
         """ Send a DATA message.
         """
+        print('Sending {}...'.format(tx.hash.hex()))
         payload_type = 'tx' if not tx.is_block else 'block'
         payload = base64.b64encode(tx.get_struct()).decode('ascii')
         self.send_message(ProtocolMessages.DATA, '{}:{}'.format(payload_type, payload))
@@ -403,9 +424,11 @@ class NodeSyncTimestamp(object):
             return
         tx.storage = self.protocol.node.tx_storage
         self.manager.on_new_tx(tx, conn=self.protocol)
-        deferred = self.latest_deferred
-        self.latest_deferred = None
-        deferred.callback(tx)
+
+        key = 'get-data-{}'.format(tx.hash)
+        deferred = self.deferred_by_key.pop(key, None)
+        if deferred:
+            deferred.callback(tx)
 
 
 class NodeSyncLeftToRightManager(object):  # pragma: no cover
