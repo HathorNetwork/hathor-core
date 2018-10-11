@@ -44,12 +44,18 @@ class StatusResource(resource.Resource):
         connected_peers = []
         for conn in self.manager.connections.connected_peers.values():
             remote = conn.transport.getPeer()
+            status = {}
+            for plugin in conn.state.plugins.values():
+                status[plugin.get_name()] = plugin.get_status()
             connected_peers.append({
                 'id': conn.peer.id,
+                'app_version': conn.app_version,
+                'uptime': time.time() - conn.connection_time,
                 'address': '{}:{}'.format(remote.host, remote.port),
                 'state': conn.state.state_name,
                 # 'received_bytes': conn.received_bytes,
                 'last_message': time.time() - conn.last_message,
+                'plugins': status,
             })
 
         known_peers = []
@@ -70,8 +76,14 @@ class StatusResource(resource.Resource):
                 'entrypoints': self.manager.connections.my_peer.entrypoints,
             },
             'known_peers': known_peers,
-            'connected_peers': connected_peers,
-            'handshaking_peers': handshaking_peers,
-            'connecting_peers': connecting_peers,
+            'connections': {
+                'connected_peers': connected_peers,
+                'handshaking_peers': handshaking_peers,
+                'connecting_peers': connecting_peers,
+            },
+            'dag': {
+                'first_timestamp': self.manager.first_timestamp,
+                'latest_timestamp': self.manager.latest_timestamp,
+            }
         }
         return json.dumps(data, indent=4).encode('utf-8')

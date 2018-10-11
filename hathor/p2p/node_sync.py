@@ -1,15 +1,413 @@
 # encoding: utf-8
 
 from twisted.internet import reactor
+from twisted.internet.defer import inlineCallbacks, Deferred
 
 from hathor.p2p.exceptions import InvalidBlockHashesSequence
-from hathor.p2p.peer_data_requests_manager import PeerDataRequestsManager
+from hathor.transaction import Block, Transaction
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
+from hathor.p2p.messages import ProtocolMessages, GetTipsPayload, TipsPayload
 
+import base64
+import hashlib
 import random
+import json
 
 
-class NodeSyncLeftToRightManager(object):
+class NodeSyncTimestamp(object):
+    """ An algorithm to sync the DAG between two peers using the timestamp of the transactions.
+    """
+
+    def __init__(self, protocol, reactor=None):
+        """
+        :param protocol: Protocol of the connection.
+        :type protocol: HathorProtocol
+
+        :param reactor: Reactor to schedule later calls. (default=twisted.internet.reactor)
+        :type reactor: Reactor
+        """
+        self.protocol = protocol
+        self.manager = protocol.node
+
+        if reactor is None:
+            from twisted.internet import reactor
+        self.reactor = reactor
+
+        self.call_later_id = None
+        self.call_later_interval = 1  # seconds
+
+        # Latest data timestamp of the peer.
+        self.peer_timestamp = None  # Unknown
+        self.peer_merkle_hash = None  # Unkwnown
+        self.next_timestamp = None
+        self.previous_timestamp = None
+
+        # Latest deferred waiting for a reply.
+        self.latest_deferred = None
+
+        # Latest timestamp in which we're synced.
+        self.synced_timestamp = None
+
+        self.is_running = None
+
+    def get_status(self):
+        """ Return the status of the sync.
+        """
+        return {
+            'latest_timestamp': self.peer_timestamp,
+            'synced_timestamp': self.synced_timestamp,
+        }
+
+    def get_name(self):
+        """ Return the name of the plugin.
+        """
+        return 'node-sync-timestamp'
+
+    def get_cmd_dict(self):
+        """ Return a dict of messages of the plugin.
+        """
+        return {
+            ProtocolMessages.NOTIFY_DATA: self.handle_notify_data,
+            ProtocolMessages.GET_DATA: self.handle_get_data,
+            ProtocolMessages.DATA: self.handle_data,
+
+            ProtocolMessages.GET_TIPS: self.handle_get_tips,
+            ProtocolMessages.TIPS: self.handle_tips,
+        }
+
+    def start(self):
+        """ Start sync.
+        """
+        self.next_step()
+
+    def stop(self):
+        """ Stop sync.
+        """
+        if self.call_later_id and self.call_later_id.active():
+            self.call_later_id.cancel()
+
+    def get_merkle_tree(self, timestamp):
+        """ Generate a hash to check whether the DAG is the same at that timestamp.
+
+        :rtype: Tuple[bytes(hash), List[bytes(hash)]]
+        """
+        tx_intervals = self.manager.tx_tips_index[timestamp]
+        blk_intervals = self.manager.block_tips_index[timestamp]
+
+        hashes = [x.data for x in tx_intervals]
+        hashes.extend(x.data for x in blk_intervals)
+        hashes.sort()
+
+        merkle = hashlib.sha256()
+        for h in hashes:
+            merkle.update(h)
+
+        return merkle.digest(), hashes
+
+    def get_peer_tips(self, timestamp=None, include_hashes=False):
+        """ A helper that returns a deferred that is called when the peer replies.
+
+        :param timestamp: Timestamp of the GET-TIPS message
+        :type timestamp: int
+
+        :param include_hashes: Indicates whether the tx/blk hashes should be included
+        :type include_hashes: bool
+
+        :rtype: Deferred
+        """
+        if self.latest_deferred is not None:
+            raise Exception('latest_deferred is not None')
+        self.send_get_tips(timestamp, include_hashes)
+        self.latest_deferred = Deferred()
+        return self.latest_deferred
+
+    def get_data(self, hash_bytes):
+        """ A helper that returns a deferred that is called when the peer replies.
+
+        :param hash_bytes: Hash of the data to be downloaded
+        :type hash_bytes: bytes(hash)
+
+        :rtype: Deferred
+        """
+        if self.latest_deferred is not None:
+            raise Exception('latest_deferred is not None')
+        self.send_get_data(hash_bytes.hex())
+        self.latest_deferred = Deferred()
+        return self.latest_deferred
+
+    @inlineCallbacks
+    def find_synced_timestamp(self):
+        """ Search time highest timestamp in which we are synced.
+
+        It uses an exponential search followed by a binary search.
+        """
+        print('Running find_synced_timestamp...')
+        self.is_running = 'find_synced_timestamp'
+
+        tips = yield self.get_peer_tips()
+        if self.peer_timestamp is not None:
+            assert tips.timestamp >= self.peer_timestamp
+        self.peer_timestamp = tips.timestamp
+
+        # Exponential search to find an interval.
+        cur = tips.timestamp
+        local_merkle_tree, _ = self.get_merkle_tree(cur)
+        step = 1
+        while tips.merkle_tree != local_merkle_tree:
+            if cur == self.manager.first_timestamp:
+                raise Exception('Should never happen.')
+            cur = max(cur - step, self.manager.first_timestamp)
+            tips = yield self.get_peer_tips(cur)
+            local_merkle_tree, _ = self.get_merkle_tree(cur)
+            step *= 2
+
+        # Binary search to find inside the interval.
+        low = cur
+        high = cur + step - 1
+        while low < high:
+            mid = (low + high + 1) // 2
+            tips = yield self.get_peer_tips(mid)
+            local_merkle_tree, _ = self.get_merkle_tree(mid)
+            if tips.merkle_tree == local_merkle_tree:
+                low = mid
+            else:
+                high = tips.prev_timestamp
+
+        # Timestamp found.
+        assert low == high
+        self.synced_timestamp = low
+
+        tips = yield self.get_peer_tips(self.synced_timestamp)
+        local_merkle_tree, _ = self.get_merkle_tree(self.synced_timestamp)
+        assert tips.merkle_tree == local_merkle_tree
+
+        self.next_timestamp = tips.next_timestamp
+        self.is_running = None
+        print('Synced at {} (latest timestamp {})'.format(self.synced_timestamp, self.peer_timestamp))
+
+    @inlineCallbacks
+    def sync_until_timestamp(self, timestamp):
+        """ Download all unknown hashes until synced timestamp reaches `timestamp`.
+
+        :param timestamp: Timestamp to be reached
+        :type timestamp: int
+        """
+        while self.synced_timestamp < timestamp:
+            assert self.next_timestamp > self.synced_timestamp
+            next_timestamp = yield self.sync_at_timestamp(self.next_timestamp)
+            assert next_timestamp > self.next_timestamp
+            self.synced_timestamp = self.next_timestamp
+            self.next_timestamp = next_timestamp
+        self.peer_timestamp = self.synced_timestamp
+
+    @inlineCallbacks
+    def sync_at_timestamp(self, timestamp):
+        """ Download all unknown hashes at a given timestamp.
+
+        :param timestamp: Timestamp to be synced
+        :type timestamp: int
+        """
+        self.is_running = 'sync_at_timestamp'
+        print('Syncing at {}'.format(timestamp))
+        tips = yield self.get_peer_tips(timestamp, include_hashes=True)
+        for h in tips.hashes:
+            if not self.manager.tx_storage.transaction_exists_by_hash_bytes(h):
+                yield self.get_data(h)
+        self.is_running = None
+        return tips.next_timestamp
+
+    def _next_step(self):
+        """ Run the next step to keep nodes synced.
+        """
+        if self.is_running is not None:
+            # Already running...
+            print('Already running: {}'.format(self.is_running))
+            return
+
+        if self.peer_timestamp is None:
+            self.find_synced_timestamp()
+            return
+
+        if self.synced_timestamp is None:
+            self.find_synced_timestamp()
+            return
+
+        delta = self.peer_timestamp - self.synced_timestamp
+        assert delta >= 0
+
+        if delta > 0:
+            assert self.next_timestamp <= self.peer_timestamp
+            assert self.next_timestamp > self.synced_timestamp
+            self.sync_until_timestamp(self.peer_timestamp)
+            return
+
+        else:
+            # We always find our synced timestamp, does not matter whether we are behind or in front of our peer.
+            self.find_synced_timestamp()
+
+    def next_step(self):
+        """ Execute next step and schedule next execution.
+        """
+        self._next_step()
+
+        if self.call_later_id and self.call_later_id.active():
+            self.call_later_id.cancel()
+        self.call_later_id = self.reactor.callLater(self.call_later_interval, self.next_step)
+
+    def send_message(self, cmd, payload=None):
+        """ Helper to send a message.
+        """
+        return self.protocol.state.send_message(cmd, payload)
+
+    def send_get_tips(self, timestamp=None, include_hashes=False):
+        """ Send a GET-TIPS message.
+        """
+        if timestamp is None:
+            self.send_message(ProtocolMessages.GET_TIPS)
+        else:
+            payload = json.dumps(dict(
+                timestamp=timestamp,
+                include_hashes=include_hashes,
+            ))
+            self.send_message(ProtocolMessages.GET_TIPS, payload)
+
+    def handle_get_tips(self, payload):
+        """ Handle a received GET-TIPS message.
+        """
+        if not payload:
+            self.send_tips()
+        else:
+            data = json.loads(payload)
+            args = GetTipsPayload(**data)
+            self.send_tips(args.timestamp, args.include_hashes)
+
+    def send_tips(self, timestamp=None, include_hashes=False):
+        """ Send a TIPS message.
+        """
+        if timestamp is None:
+            timestamp = self.manager.latest_timestamp
+
+        # All tips
+        tx_intervals = self.manager.tx_tips_index[timestamp]
+        blk_intervals = self.manager.block_tips_index[timestamp]
+        intervals = tx_intervals.union(blk_intervals)
+
+        # Previous timestamp in which tips have changed
+        max_begin = max(x.begin for x in intervals)
+
+        # Next timestamp in which tips have changed
+        min_end = min(x.end for x in intervals)
+
+        # Calculate list of hashes to be sent
+        merkle_tree, hashes = self.get_merkle_tree(timestamp)
+
+        if not include_hashes:
+            hashes = []
+
+        data = {
+            'length': len(intervals),
+            'timestamp': timestamp,
+            'prev_timestamp': max_begin - 1,
+            'next_timestamp': min_end,
+            'merkle_tree': merkle_tree.hex(),
+            'hashes': [h.hex() for h in hashes],
+        }
+
+        self.send_message(ProtocolMessages.TIPS, json.dumps(data))
+
+    def handle_tips(self, payload):
+        """ Handle a received TIPS messages.
+        """
+        data = json.loads(payload)
+        data['merkle_tree'] = bytes.fromhex(data['merkle_tree'])
+        data['hashes'] = [bytes.fromhex(h) for h in data['hashes']]
+        args = TipsPayload(**data)
+        deferred = self.latest_deferred
+        self.latest_deferred = None
+        deferred.callback(args)
+
+    def send_notify_data(self, tx):
+        """ Send a NOTIFY-DATA message, notifying a peer about a new hash.
+
+        TODO Send timestamp and parents.
+        """
+        payload = '{} {} {}'.format(
+            tx.timestamp,
+            tx.hash.hex(),
+            json.dumps(x.hex() for x in tx.parents),
+        )
+        self.send_message(ProtocolMessages.NOTIFY_DATA, payload)
+
+    def handle_notify_data(self, payload):
+        """ Send a NOTIFY-DATA message, notifying a peer about a new hash.
+        """
+        timestamp, _, payload2 = payload.partition(' ')
+        hash_hex, _, parents_json = payload2.partition(' ')
+        parents = json.loads(parents_json)
+
+        if self.protocol.tx_storage.transaction_exists_by_hash(hash_hex):
+            return
+
+        for parent_hash in parents:
+            if not self.protocol.tx_storage.transaction_exists_by_hash(parent_hash):
+                # Are we out-of-sync with this peer?
+                return
+
+        self.send_get_data(hash_hex)
+
+    def send_get_data(self, hash_hex):
+        """ Send a GET-DATA message, requesting the data of a given hash.
+        """
+        self.send_message(ProtocolMessages.GET_DATA, hash_hex)
+
+    def handle_get_data(self, payload):
+        """ Handle a received GET-DATA message.
+        """
+        hash_hex = payload
+        print('handle_get_data', hash_hex)
+        try:
+            tx = self.protocol.node.tx_storage.get_transaction_by_hash(hash_hex)
+            self.send_data(tx)
+        except TransactionDoesNotExist:
+            # TODO Send NOT-FOUND?
+            self.send_data('')
+        except Exception as e:
+            print(e)
+
+    def send_data(self, tx):
+        """ Send a DATA message.
+        """
+        payload_type = 'tx' if not tx.is_block else 'block'
+        payload = base64.b64encode(tx.get_struct()).decode('ascii')
+        self.send_message(ProtocolMessages.DATA, '{}:{}'.format(payload_type, payload))
+
+    def handle_data(self, payload):
+        """ Handle a received DATA message.
+        """
+        if not payload:
+            return
+        payload_type, _, payload = payload.partition(':')
+        data = base64.b64decode(payload)
+        if payload_type == 'tx':
+            tx = Transaction.create_from_struct(data)
+        elif payload_type == 'block':
+            tx = Block.create_from_struct(data)
+        else:
+            raise ValueError('Unknown payload load')
+
+        if self.protocol.node.tx_storage.get_genesis_by_hash_bytes(tx.hash):
+            # We just got the data of a genesis tx/block. What should we do?
+            # Will it reduce peer reputation score?
+            return
+        tx.storage = self.protocol.node.tx_storage
+        self.manager.on_new_tx(tx, conn=self.protocol)
+        deferred = self.latest_deferred
+        self.latest_deferred = None
+        deferred.callback(tx)
+
+
+class NodeSyncLeftToRightManager(object):  # pragma: no cover
     """NodeSyncManager will handle the synchonization of blocks and transactions of this node.
     It will do from left to right, which means it will discover a path with one known transactions
     and a sequence of unknown transactions.

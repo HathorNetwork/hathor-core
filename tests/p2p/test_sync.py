@@ -18,6 +18,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.clock.advance(time.time())
         self.network = 'testnet'
         self.manager1 = self.create_peer(self.network, unlock_wallet=True)
+        self.manager1.avg_time_between_blocks = 4
         self.manager1.reactor = self.clock
 
         self.genesis = self.manager1.tx_storage.get_all_genesis()
