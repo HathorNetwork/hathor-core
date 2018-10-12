@@ -60,11 +60,13 @@ class SendTokensResource(resource.Resource):
             except (PrivateKeyNotFound, InputDuplicated):
                 return self.return_POST(False, 'Invalid input to create transaction')
 
-        # TODO Send tx to be mined
-        tx.timestamp = int(self.manager.reactor.seconds())
-        tx.weight = 1
-        tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
         tx.storage = self.manager.tx_storage
+        # TODO Send tx to be mined
+        tx.weight = 1
+
+        max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
+        tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
+        tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
         tx.resolve()
 
         success, message = tx.validate_tx_error()
