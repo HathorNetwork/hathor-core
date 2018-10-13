@@ -200,8 +200,7 @@ class NodeSyncTimestamp(object):
         local_merkle_tree, _ = self.get_merkle_tree(self.synced_timestamp)
         assert tips.merkle_tree == local_merkle_tree
 
-        #self.next_timestamp = tips.next_timestamp
-        self.next_timestamp = self.synced_timestamp + 1
+        self.next_timestamp = tips.next_timestamp
         self.is_running = None
         # print('Synced at {} (latest timestamp {})'.format(self.synced_timestamp, self.peer_timestamp))
 
