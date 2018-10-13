@@ -5,6 +5,7 @@ from collections import namedtuple
 GetTipsPayload = namedtuple('GetTipsPayload', [
     'timestamp',  # int
     'include_hashes',  # bool
+    'offset',  # int, default=0
 ])
 
 TipsPayload = namedtuple('TipsPayload', [
@@ -14,6 +15,7 @@ TipsPayload = namedtuple('TipsPayload', [
     'next_timestamp',  # int
     'merkle_tree',  # str(hash)
     'hashes',  # List[str(hash)]
+    'has_more',  # bool
 ])
 
 

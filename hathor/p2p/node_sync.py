@@ -228,11 +228,16 @@ class NodeSyncTimestamp(object):
         """
         self.is_running = 'sync_at_timestamp'
         # print('Syncing at {}'.format(timestamp))
-        tips = yield self.get_peer_tips(timestamp, include_hashes=True)
         pending = []
-        for h in tips.hashes:
-            if not self.manager.tx_storage.transaction_exists_by_hash_bytes(h):
-                pending.append(self.get_data(h))
+        offset = 0
+        while True:
+            tips = yield self.get_peer_tips(timestamp, include_hashes=True, offset=offset)
+            for h in tips.hashes:
+                if not self.manager.tx_storage.transaction_exists_by_hash_bytes(h):
+                    pending.append(self.get_data(h))
+            if not tips.has_more:
+                break
+            offset += len(tips.hashes)
         for deferred in pending:
             yield deferred
         self.is_running = None
@@ -285,7 +290,7 @@ class NodeSyncTimestamp(object):
         """
         return self.protocol.state.send_message(cmd, payload)
 
-    def send_get_tips(self, timestamp=None, include_hashes=False):
+    def send_get_tips(self, timestamp=None, include_hashes=False, offset=0):
         """ Send a GET-TIPS message.
         """
         if timestamp is None:
@@ -294,6 +299,7 @@ class NodeSyncTimestamp(object):
             payload = json.dumps(dict(
                 timestamp=timestamp,
                 include_hashes=include_hashes,
+                offset=offset,
             ))
             self.send_message(ProtocolMessages.GET_TIPS, payload)
 
@@ -305,9 +311,9 @@ class NodeSyncTimestamp(object):
         else:
             data = json.loads(payload)
             args = GetTipsPayload(**data)
-            self.send_tips(args.timestamp, args.include_hashes)
+            self.send_tips(args.timestamp, args.include_hashes, args.offset)
 
-    def send_tips(self, timestamp=None, include_hashes=False):
+    def send_tips(self, timestamp=None, include_hashes=False, offset=0):
         """ Send a TIPS message.
         """
         if timestamp is None:
@@ -326,9 +332,16 @@ class NodeSyncTimestamp(object):
 
         # Calculate list of hashes to be sent
         merkle_tree, hashes = self.get_merkle_tree(timestamp)
+        has_more = False
 
         if not include_hashes:
             hashes = []
+
+        else:
+            hashes = hashes[offset:]
+            if len(hashes) > 40:
+                hashes = hashes[:40]
+                has_more = True
 
         data = {
             'length': len(intervals),
@@ -338,6 +351,7 @@ class NodeSyncTimestamp(object):
             'next_timestamp': timestamp + 1,
             'merkle_tree': merkle_tree.hex(),
             'hashes': [h.hex() for h in hashes],
+            'has_more': has_more,
         }
 
         self.send_message(ProtocolMessages.TIPS, json.dumps(data))
