@@ -13,6 +13,7 @@ import base64
 import hashlib
 import random
 import json
+from math import inf
 
 
 class NodeSyncTimestamp(object):
