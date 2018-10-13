@@ -271,7 +271,11 @@ class NodeSyncTimestamp(object):
     def next_step(self):
         """ Execute next step and schedule next execution.
         """
-        self._next_step()
+        try:
+            self._next_step()
+        except Exception as e:
+            print('Exception:', repr(e))
+            raise
 
         if self.call_later_id and self.call_later_id.active():
             self.call_later_id.cancel()
