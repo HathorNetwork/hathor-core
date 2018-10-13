@@ -18,6 +18,7 @@ import json
 class NodeSyncTimestamp(object):
     """ An algorithm to sync the DAG between two peers using the timestamp of the transactions.
     """
+    MAX_HASHES = 40
 
     def __init__(self, protocol, reactor=None):
         """
@@ -118,7 +119,7 @@ class NodeSyncTimestamp(object):
 
         return merkle.digest(), hashes
 
-    def get_peer_tips(self, timestamp=None, include_hashes=False):
+    def get_peer_tips(self, timestamp=None, include_hashes=False, offset=0):
         """ A helper that returns a deferred that is called when the peer replies.
 
         :param timestamp: Timestamp of the GET-TIPS message
@@ -132,7 +133,7 @@ class NodeSyncTimestamp(object):
         key = 'tips'
         if self.deferred_by_key.get(key, None) is not None:
             raise Exception('latest_deferred is not None')
-        self.send_get_tips(timestamp, include_hashes)
+        self.send_get_tips(timestamp, include_hashes, offset)
         deferred = Deferred()
         self.deferred_by_key[key] = deferred
         return deferred
@@ -328,7 +329,17 @@ class NodeSyncTimestamp(object):
         max_begin = max(x.begin for x in intervals)
 
         # Next timestamp in which tips have changed
-        # min_end = min(x.end for x in intervals)
+        min_end = min(x.end for x in intervals)
+
+        # Look for transactions confirming already confirmed transactions
+        while min_end != inf:
+            tx_tmp = self.manager.tx_tips_index[min_end - 1]
+            blk_tmp = self.manager.block_tips_index[min_end - 1]
+            tmp = tx_tmp.union(blk_tmp)
+            tmp.difference_update(intervals)
+            if not tmp:
+                break
+            min_end = min(x.begin for x in tmp)
 
         # Calculate list of hashes to be sent
         merkle_tree, hashes = self.get_merkle_tree(timestamp)
@@ -336,19 +347,17 @@ class NodeSyncTimestamp(object):
 
         if not include_hashes:
             hashes = []
-
         else:
             hashes = hashes[offset:]
-            if len(hashes) > 40:
-                hashes = hashes[:40]
+            if len(hashes) > self.MAX_HASHES:
+                hashes = hashes[:self.MAX_HASHES]
                 has_more = True
 
         data = {
             'length': len(intervals),
             'timestamp': timestamp,
             'prev_timestamp': max_begin - 1,
-            # 'next_timestamp': min_end,
-            'next_timestamp': timestamp + 1,
+            'next_timestamp': min_end,
             'merkle_tree': merkle_tree.hex(),
             'hashes': [h.hex() for h in hashes],
             'has_more': has_more,
