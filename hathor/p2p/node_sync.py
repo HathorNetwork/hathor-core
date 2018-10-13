@@ -217,7 +217,7 @@ class NodeSyncTimestamp(object):
             next_timestamp = yield self.sync_at_timestamp(self.next_timestamp)
             assert next_timestamp > self.next_timestamp
             self.synced_timestamp = self.next_timestamp
-            self.next_timestamp = self.synced_timestamp + 1
+            self.next_timestamp = next_timestamp
         self.peer_timestamp = self.synced_timestamp
 
     @inlineCallbacks
@@ -323,7 +323,7 @@ class NodeSyncTimestamp(object):
         max_begin = max(x.begin for x in intervals)
 
         # Next timestamp in which tips have changed
-        min_end = min(x.end for x in intervals)
+        # min_end = min(x.end for x in intervals)
 
         # Calculate list of hashes to be sent
         merkle_tree, hashes = self.get_merkle_tree(timestamp)
@@ -335,7 +335,8 @@ class NodeSyncTimestamp(object):
             'length': len(intervals),
             'timestamp': timestamp,
             'prev_timestamp': max_begin - 1,
-            'next_timestamp': min_end,
+            # 'next_timestamp': min_end,
+            'next_timestamp': timestamp + 1,
             'merkle_tree': merkle_tree.hex(),
             'hashes': [h.hex() for h in hashes],
         }
