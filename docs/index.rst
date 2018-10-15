@@ -12,6 +12,7 @@ Welcome to Hathor Network's documentation!
    :caption: Contents:
 
    quickstart
+   sync
    ref/index
 
 

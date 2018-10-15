@@ -56,7 +56,7 @@ class ConnectionsManager:
         :param tx: py:class:`hathor.transaction.BaseTransaction`
         """
         for conn in self.get_ready_connections():
-            conn.state.send_data(tx)
+            conn.state.send_tx_to_peer(tx)
 
     def on_connection_failure(self, failure, endpoint):
         print('Connection failure: address={}:{} message={}'.format(endpoint._host, endpoint._port, failure))
