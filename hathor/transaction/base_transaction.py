@@ -225,7 +225,7 @@ class BaseTransaction:
         """ Mark a transaction as voided when it has a conflict and its aggregated weight
         is NOT the greatest one.
         """
-        meta = self.storage.get_metadata_by_hash_bytes(self.hash)
+        meta = self.get_metadata()
         meta.conflict = TxConflictState.CONFLICT_VOIDED
         self.storage.save_metadata(meta)
         self.storage._del_from_cache(self)
@@ -234,7 +234,7 @@ class BaseTransaction:
         """ Mark a transaction as winner when it has a conflict and its aggregated weight
         is the greatest one.
         """
-        meta = self.storage.get_metadata_by_hash_bytes(self.hash)
+        meta = self.get_metadata()
         meta.conflict = TxConflictState.CONFLICT_WINNER
         self.storage.save_metadata(meta)
         # TODO Add back to tip cache when it is a tip

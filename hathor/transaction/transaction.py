@@ -1,6 +1,6 @@
 from hathor.transaction.base_transaction import BaseTransaction, MAX_NUM_INPUTS, MAX_NUM_OUTPUTS
 from hathor.transaction.exceptions import InputOutputMismatch, TooManyInputs, TooManyOutputs, \
-                                          DoubleSpend, InvalidInputData
+                                          DoubleSpend, InvalidInputData, TimestampError
 from hathor.transaction.storage.exceptions import TransactionMetadataDoesNotExist
 from hathor.transaction.scripts import script_eval
 from math import log
@@ -57,6 +57,7 @@ class Transaction(BaseTransaction):
              (vii) validates signature of inputs
             (viii) validates public key and output (of the inputs) addresses
               (ix) validate that both parents are valid
+               (x) validate input's timestamps
         """
         # TODO (i), (v), (viii)
         if self.is_genesis:
@@ -91,6 +92,15 @@ class Transaction(BaseTransaction):
         for input_tx in self.inputs:
             self.verify_script(input_tx)
             self.verify_unspent_output(input_tx)
+
+            spent_tx = self.get_spent_tx(input_tx)
+            if self.timestamp <= spent_tx.timestamp:
+                raise TimestampError('tx={} timestamp={}, parent={} timestamp={}'.format(
+                    self.hash.hex(),
+                    self.timestamp,
+                    spent_tx.hash.hex(),
+                    spent_tx.timestamp,
+                ))
 
     def verify_script(self, input_tx):
         spent_tx = self.get_spent_tx(input_tx)

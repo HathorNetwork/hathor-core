@@ -1,6 +1,7 @@
 base58==1.0.0
 Twisted==18.7.0
 autobahn==18.8.1
+intervaltree
 
 -e git+https://github.com/earonesty/cryptography.git@compressed-point-support#egg=cryptography
 

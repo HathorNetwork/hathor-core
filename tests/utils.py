@@ -52,3 +52,6 @@ class FakeConnection:
         self.proto1.connectionLost(reason)
         self.tr2.loseConnection()
         self.proto2.connectionLost(reason)
+
+    def is_empty(self):
+        return not self.tr1.value() and not self.tr2.value()

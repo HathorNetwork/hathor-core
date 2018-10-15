@@ -81,8 +81,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
             spent_meta = spent_tx.get_metadata()
             self.assertEqual({tx1.hash, tx2.hash}, spent_meta.spent_outputs[txin.index])
 
-        self.assertNotIn(tx1.hash, self.manager1.tx_storage.get_tip_transactions_hashes())
-        self.assertNotIn(tx2.hash, self.manager1.tx_storage.get_tip_transactions_hashes())
+        self.assertNotIn(tx1.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
+        self.assertNotIn(tx2.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
 
         # Propagate another conflicting transaction, but with higher weight.
         self.manager1.propagate_tx(tx3)
@@ -101,6 +101,6 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
             spent_meta = spent_tx.get_metadata()
             self.assertEqual({tx1.hash, tx2.hash, tx3.hash}, spent_meta.spent_outputs[txin.index])
 
-        self.assertNotIn(tx1.hash, self.manager1.tx_storage.get_tip_transactions_hashes())
-        self.assertNotIn(tx2.hash, self.manager1.tx_storage.get_tip_transactions_hashes())
-        self.assertIn(tx3.hash, self.manager1.tx_storage.get_tip_transactions_hashes())
+        self.assertNotIn(tx1.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
+        self.assertNotIn(tx2.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
+        self.assertIn(tx3.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
