@@ -270,11 +270,12 @@ class NodeSyncTimestamp(object):
         except Exception as e:
             print('Exception:', repr(e))
             raise
-        finally:
-            self.is_running = False
+        else:
             if self.call_later_id and self.call_later_id.active():
                 self.call_later_id.cancel()
             self.call_later_id = self.reactor.callLater(self.call_later_interval, self.next_step)
+        finally:
+            self.is_running = False
 
     def send_message(self, cmd, payload=None):
         """ Helper to send a message.
