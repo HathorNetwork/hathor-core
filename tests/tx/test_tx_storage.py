@@ -32,7 +32,7 @@ class _BaseTransactionStorageTest:
             block_parents = [tx.hash for tx in self.genesis]
             output = TxOutput(200, bytes.fromhex('1e393a5ce2ff1c98d4ff6892f2175100f2dad049'))
             self.block = Block(
-                timestamp=1535885967,
+                timestamp=1539271491,
                 weight=12,
                 outputs=[output],
                 parents=block_parents,
@@ -53,7 +53,7 @@ class _BaseTransactionStorageTest:
             )
 
             self.tx = Transaction(
-                timestamp=1535886380,
+                timestamp=1539271493,
                 weight=10,
                 nonce=932049,
                 inputs=[tx_input],
