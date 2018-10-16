@@ -11,7 +11,7 @@ import json
 
 
 class ReadyState(BaseState):
-    SYNC_PLUGIN_NAME = 'node-sync'
+    SYNC_PLUGIN_NAME = 'node-sync-timestamp'
 
     def __init__(self, protocol):
         super().__init__(protocol)

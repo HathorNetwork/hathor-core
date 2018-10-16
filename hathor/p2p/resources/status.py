@@ -45,8 +45,8 @@ class StatusResource(resource.Resource):
         for conn in self.manager.connections.connected_peers.values():
             remote = conn.transport.getPeer()
             status = {}
-            for plugin in conn.state.plugins.values():
-                status[plugin.get_name()] = plugin.get_status()
+            for name, plugin in conn.state.plugins.items():
+                status[name] = plugin.get_status()
             connected_peers.append({
                 'id': conn.peer.id,
                 'app_version': conn.app_version,
