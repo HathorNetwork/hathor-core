@@ -1,0 +1,27 @@
+#!/bin/bash
+
+if [ ! -f envvars ]; then
+	echo "Error. Can't load envvars. You can run \"cp envvars.sample envvars\" and configure it with your paths."
+	exit 1
+fi
+
+source ./envvars
+
+BASEDIR=`pwd`
+
+echo WEBADMIN PATH: $WEBADMIN_PATH
+echo NODE PATH: $NODE_PATH
+
+mkdir -p _build/
+
+cp ${NODE_PATH}/requirements.txt _build/
+cp ${NODE_PATH}/main.py _build/
+cp ${NODE_PATH}/mining.py _build/
+
+export REACT_APP_BASE_URL="/api/"
+export REACT_APP_WS_URL="/api/ws/"
+
+(cd ${WEBADMIN_PATH} && npm run build && tar cvzf ${BASEDIR}/_build/hathor-webadmin.tar.gz -C build/ .)
+(cd ${NODE_PATH} && python setup.py build sdist && cp dist/hathor-*.tar.gz ${BASEDIR}/_build/hathor.tar.gz)
+
+docker build --tag hathor:`git describe` .
