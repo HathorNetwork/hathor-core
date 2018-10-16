@@ -157,6 +157,36 @@ class BasicTransaction(unittest.TestCase):
 
         self.assertEqual(tx, tx_read)
 
+    def test_children_update(self):
+        parents = [tx.hash for tx in self.genesis_txs]
+        genesis_block = self.genesis_blocks[0]
+
+        public_bytes, signature = self.wallet.get_input_aux_data(self.genesis_private_key)
+        data = P2PKH.create_input_data(public_bytes, signature)
+        _input = TxInput(genesis_block.hash, 0, data)
+
+        value = genesis_block.outputs[0].value
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+        output = TxOutput(value, script)
+
+        tx = Transaction(
+            nonce=100,
+            inputs=[_input],
+            outputs=[output],
+            parents=parents,
+            storage=self.tx_storage
+        )
+        tx.update_hash()
+
+        tx.update_parents()
+
+        # genesis transactions should have only this tx in their chidlren set
+        for parent_hash in parents:
+            metadata = tx.storage.get_metadata_by_hash_bytes(parent_hash)
+            self.assertEqual(len(metadata.children), 1)
+            self.assertEqual(metadata.children.pop(), tx.hash_hex)
+
 
 if __name__ == '__main__':
     unittest.main()
