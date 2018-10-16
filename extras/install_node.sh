@@ -36,6 +36,8 @@ pip install -r requirements.txt
 
 python gen_peer_id.py >peer_id.json
 
+export WALLET_WORDS=`python tools/generate_valid_words.py`
+
 envsubst < ${BASEDIR}/run_hathord.template > run_hathord
 envsubst < ${BASEDIR}/run_miner.template > run_miner
 
