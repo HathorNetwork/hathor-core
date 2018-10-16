@@ -121,8 +121,9 @@ if __name__ == '__main__':
     manager.start()
 
     if args.listen:
-        for description in args.listen:
-            manager.listen(description)
+        manager.listen(env=os.environ)
+        #for description in args.listen:
+        #    manager.listen(description)
 
     if args.status:
         # TODO get this from a file. How should we do with the factory?

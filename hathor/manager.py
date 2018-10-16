@@ -3,6 +3,7 @@
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.node_sync import NodeSyncLeftToRightManager
 from hathor.p2p.manager import ConnectionsManager
+from hathor.process_protocol import ProcessProtocolFactory
 from hathor.transaction import Block, TxOutput, sum_weights
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
@@ -15,6 +16,7 @@ from enum import Enum
 from math import log
 import time
 import random
+import sys
 
 from hathor.p2p.protocol import HathorLineReceiver
 MyServerProtocol = HathorLineReceiver
@@ -24,6 +26,10 @@ MyClientProtocol = HathorLineReceiver
 # MyServerProtocol = HathorWebSocketServerProtocol
 # MyClientProtocol = HathorWebSocketClientProtocol
 
+#from hathor.test_protocol import TestLineReceiver, TestFactory
+from twisted.internet.endpoints import ProcessEndpoint
+#from twisted.internet import protocol
+#from os import environ
 
 class HathorManager(object):
     """ HathorManager manages the node with the help of other specialized classes.
@@ -71,6 +77,7 @@ class HathorManager(object):
         :param default_port: Network default port. It is used when only ip addresses are discovered.
         :type default_port: int
         """
+        self.args = sys.argv[1:]
         self.reactor = reactor
         self.state = None
         self.profiler = None
@@ -90,9 +97,9 @@ class HathorManager(object):
 
         self.peer_discoveries = []
 
-        self.server_factory = HathorServerFactory(self.network, self.my_peer, node=self)
-        self.client_factory = HathorClientFactory(self.network, self.my_peer, node=self)
-        self.connections = ConnectionsManager(self.reactor, self.my_peer, self.server_factory, self.client_factory)
+        #self.server_factory = HathorServerFactory(self.network, self.my_peer, node=self)
+        #self.client_factory = HathorClientFactory(self.network, self.my_peer, node=self)
+        #self.connections = ConnectionsManager(self.reactor, self.my_peer, self.server_factory, self.client_factory)
 
         # Map of peer_id to the best block height reported by that peer.
         self.peer_best_heights = defaultdict(int)
@@ -108,23 +115,25 @@ class HathorManager(object):
         self.max_allowed_block_weight_change = 2
         self.tokens_issued_per_block = 10000
 
+        self.processFactory = None
+
     def start(self):
         """ A factory must be started only once. And it is usually automatically started.
         """
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
-        self.connections.start()
+        #self.connections.start()
 
         # Initialize manager's components.
         self._initialize_components()
 
-        for peer_discovery in self.peer_discoveries:
-            peer_discovery.discover_and_connect(self.connections.connect_to)
+        #for peer_discovery in self.peer_discoveries:
+        #    peer_discovery.discover_and_connect(self.connections.connect_to)
 
         self.start_time = time.time()
 
     def stop(self):
-        self.connections.stop()
+        #self.connections.stop()
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
 
     def start_profiler(self):
@@ -265,7 +274,8 @@ class HathorManager(object):
         # Only propagate transactions once we are sufficiently synced up with the rest of the network.
         # TODO Should we queue transactions?
         if self.state == self.NodeState.SYNCED:
-            self.connections.send_tx_to_peers(tx)
+            #self.connections.send_tx_to_peers(tx)
+            self.processFactory.send_message('new tx ' + tx.hash_hex)
 
     def on_new_tx(self, tx, conn=None):
         """This method is called when any transaction arrive.
@@ -290,10 +300,13 @@ class HathorManager(object):
             print('New tx: {}'.format(tx.hash.hex()))
 
         tx.mark_inputs_as_used()
+        if self.processFactory:
+            self.processFactory.send_message('new tx ' + tx.hash_hex)
 
         # Propagate to our peers.
         if self.state == self.NodeState.SYNCED:
-            self.connections.send_tx_to_peers(tx)
+            #self.connections.send_tx_to_peers(tx)
+            self.processFactory.send_message('new tx ' + tx.hash_hex)
 
         # Publish to pubsub manager the new tx accepted
         self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
@@ -355,10 +368,34 @@ class HathorManager(object):
         for _tx in self.tx_storage.iter_bfs(tx):
             _tx.update_accumulated_weight(tx.weight)
 
-    def listen(self, description, ssl=False):
-        endpoint = self.connections.listen(description, ssl)
+   # def listen(self, description, ssl=False):
+   #     endpoint = self.connections.listen(description, ssl)
 
-        if self.hostname:
-            proto, _, _ = description.partition(':')
-            address = '{}:{}:{}'.format(proto, self.hostname, endpoint._port)
-            self.my_peer.entrypoints.append(address)
+   #     if self.hostname:
+   #         proto, _, _ = description.partition(':')
+   #         address = '{}:{}:{}'.format(proto, self.hostname, endpoint._port)
+   #         self.my_peer.entrypoints.append(address)
+
+   #     commandAndArgs = ["python", "/Users/yan/dev/hathor/hathor-python/test.py", "arg1", "arg2", "arg3"]
+   #     testEndpoint = ProcessEndpoint(self.reactor, commandAndArgs[0], commandAndArgs, env=environ)
+   #     #testFactory = protocol.Factory()
+   #     #testFactory.protocol = TestLineReceiver
+   #     self.testFactory = TestFactory()
+   #     testEndpoint.connect(self.testFactory)
+    def listen(self, env=None):
+        #commandAndArgs = ["python", "/Users/yan/dev/hathor/hathor-python/hathor/p2p/main.py"]
+        #commandAndArgs = ["python", "/Users/yan/dev/hathor/hathor-python/yan.py"]
+        #commandAndArgs.extend(self.args)
+        BOOTSTRAP = """\
+import sys
+from hathor.p2p.main import main
+
+main('%s')
+        """ % (' '.join(self.args))
+
+        endpoint = ProcessEndpoint(self.reactor, sys.executable, [sys.executable, "-c", BOOTSTRAP], env=env)
+        self.processFactory = ProcessProtocolFactory(self)
+        endpoint.connect(self.processFactory)
+
+    def handleProcessMessage(msg):
+        print("Received message in manager: ", msg)
