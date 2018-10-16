@@ -3,13 +3,13 @@ Twisted==18.7.0
 autobahn==18.8.1
 intervaltree
 
--e git+https://github.com/earonesty/cryptography.git@compressed-point-support#egg=cryptography
+https://github.com/earonesty/cryptography/archive/compressed-point-support.zip#egg=cryptography
 
 pyOpenSSL==18.0.0
 service-identity
 
 mnemonic==0.18
--e git+https://github.com/richardkiss/pycoin#egg=pycoin
+https://github.com/richardkiss/pycoin/archive/master.zip#egg=pycoin
 
 graphviz==0.9
 
