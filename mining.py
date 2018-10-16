@@ -73,4 +73,4 @@ if __name__ == '__main__':
             ))
             print('')
 
-            requests.post(args.url, data={'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
+            requests.post(args.url, json={'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})

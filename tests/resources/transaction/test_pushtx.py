@@ -6,7 +6,6 @@ from tests.resources.base_resource import TestSite, _BaseResourceTest
 from hathor.transaction.genesis import genesis_transactions
 from tests.utils import resolve_block_bytes
 import base64
-import json
 
 
 class DecodeTxTest(_BaseResourceTest._ResourceTest):
@@ -24,7 +23,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         response_mining = yield self.web_mining.get('mining')
         data_mining = response_mining.json_value()
         block_bytes = resolve_block_bytes(block_bytes=data_mining['block_bytes'])
-        yield self.web_mining.post('mining', {b'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
+        yield self.web_mining.post('mining', {'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
 
         # Unlocking wallet
         self.manager.wallet.unlock(b'MYPASS')
@@ -36,7 +35,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         }
         yield self.web_tokens.post(
             'wallet/send_tokens',
-            {b'data': bytes(json.dumps(data_json), 'utf-8')}
+            {'data': data_json}
         )
 
         # Valid

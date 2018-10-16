@@ -21,5 +21,5 @@ class MiningTest(_BaseResourceTest._ResourceTest):
         data_get = response_get.json_value()
         block_bytes = data_get.get('block_bytes')
 
-        response_post = yield self.web.post('mining', {b'block_bytes': bytes(block_bytes, 'utf-8')})
+        response_post = yield self.web.post('mining', {'block_bytes': block_bytes})
         self.assertEqual(response_post.written[0], b'')

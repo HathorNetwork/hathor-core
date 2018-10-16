@@ -30,8 +30,8 @@ class SendTokensResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
 
-        data_bytes = request.args[b'data'][0]
-        data = json.loads(data_bytes.decode('utf-8'))
+        post_data = json.loads(request.content.read().decode('utf-8'))
+        data = post_data['data']
 
         outputs = []
         for output in data['outputs']:

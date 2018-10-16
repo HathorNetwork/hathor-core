@@ -1,6 +1,6 @@
 from twisted.internet.defer import succeed
 from twisted.web import server
-from twisted.web.test.test_web import DummyRequest
+from twisted.web.test.requesthelper import DummyRequest
 from twisted.internet.task import Clock
 
 from hathor.p2p.peer_id import PeerId
@@ -25,11 +25,26 @@ class _BaseResourceTest:
             self.manager.start()
 
 
+class RequestBody(object):
+    """
+    Dummy request body object to represent content
+    """
+    def __init__(self):
+        self.content = None
+
+    def setvalue(self, value):
+        self.content = value
+
+    def read(self):
+        return self.content
+
+
 class TestDummyRequest(DummyRequest):
     def __init__(self, method, url, args=None, headers=None):
         DummyRequest.__init__(self, url.split('/'))
         self.method = method
         self.headers = headers or {}
+        self.content = RequestBody()
 
         # Set request args
         args = args or {}
@@ -49,6 +64,9 @@ class TestSite(server.Site):
 
     def _request(self, method, url, args, headers):
         request = TestDummyRequest(method, url, args, headers)
+        if method == 'POST' and args:
+            # Creating post content exactly the same as twisted resource
+            request.content.setvalue(bytes(json.dumps(args), 'utf-8'))
         resource = self.getResourceFor(request)
         result = resource.render(request)
         return self._resolveResult(request, result)

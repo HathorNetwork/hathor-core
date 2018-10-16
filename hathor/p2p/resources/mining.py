@@ -26,7 +26,8 @@ class MiningResource(resource.Resource):
 
             :rtype: bytes
         """
-        block_bytes_str = request.args[b'block_bytes'][0]
+        post_data = json.loads(request.content.read().decode('utf-8'))
+        block_bytes_str = post_data['block_bytes']
         block_bytes = base64.b64decode(block_bytes_str)
         block = Block.create_from_struct(block_bytes, storage=self.manager.tx_storage)
         self.manager.propagate_tx(block)

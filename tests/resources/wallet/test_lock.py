@@ -18,7 +18,7 @@ class LockTest(_BaseResourceTest._ResourceTest):
         self.assertTrue(data['is_locked'])
 
         # Unlock it
-        response_success = yield self.web_unlock.post('wallet/unlock', {b'password': b'MYPASS'})
+        response_success = yield self.web_unlock.post('wallet/unlock', {'password': 'MYPASS'})
         data_success = response_success.json_value()
         self.assertTrue(data_success['success'])
 
