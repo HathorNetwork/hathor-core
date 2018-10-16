@@ -1,5 +1,6 @@
 from hathor.pubsub import HathorEvents
 from hathor.websocket import HathorAdminWebsocketProtocol
+from hathor.metrics import Metrics
 from twisted.internet import reactor
 from autobahn.twisted.websocket import WebSocketServerFactory
 import json
@@ -46,7 +47,11 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
     def buildProtocol(self, addr):
         return self.protocol(self)
 
-    def __init__(self):
+    def __init__(self, metrics=None):
+        """
+        :param metrics: If not given, a new one is created.
+        :type metrics: :py:class:`hathor.metrics.Metrics`
+        """
         # Opened websocket connections so I can broadcast messages later
         self.connections = set()
         super().__init__()
@@ -56,8 +61,13 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         # Stores the buffer of messages that exceeded the rate limit and will be sent
         self.buffer_deques = {}
 
+        self.metrics = metrics or Metrics()
+
         # Start limiter
         self._setup_rate_limit()
+
+        # Start metric sender
+        self._schedule_and_send_metric()
 
     def _setup_rate_limit(self):
         """ Set the limit of the RateLimiter and start the buffer deques with BUFFER_SIZE
@@ -65,6 +75,22 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         for control_type, config in CONTROLLED_TYPES.items():
             self.rate_limiter.set_limit(control_type, config['max_hits'], config['hits_window_seconds'])
             self.buffer_deques[control_type] = deque(maxlen=config['buffer_size'])
+
+    def _schedule_and_send_metric(self):
+        """ Send dashboard metric to websocket and schedule next message
+        """
+        data = {
+            'transactions': self.metrics.transactions,
+            'blocks': self.metrics.blocks,
+            'type': 'dashboard:metrics',
+            'time': reactor.seconds(),
+        }
+        self.broadcast_message(data)
+        # Schedule next message
+        reactor.callLater(
+            1,
+            self._schedule_and_send_metric
+        )
 
     def subscribe(self, pubsub):
         """ Subscribe to defined events for the pubsub received

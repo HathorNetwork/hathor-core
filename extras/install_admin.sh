@@ -34,4 +34,3 @@ sudo /etc/init.d/nginx reload
 cd admin-frontend/
 npm install
 npm run-script build
-

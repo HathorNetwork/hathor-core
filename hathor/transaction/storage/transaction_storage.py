@@ -1,9 +1,9 @@
 # encoding: utf-8
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
 from hathor.transaction import TxConflictState
+from hathor.indexes import TimestampIndex
 
 from collections import deque
-import random
 
 
 class TransactionStorage:
@@ -16,10 +16,24 @@ class TransactionStorage:
         """Reset all caches. This function should not be called unless you know
         what you are doing.
         """
-        self._cache_tip_blocks = {}        # Dict[bytes(hash), Block]
-        self._cache_tip_transactions = {}  # Dict[bytes(hash), Transaction]
         self._cache_block_count = 0
         self._cache_tx_count = 0
+
+        self.block_tips_index = TimestampIndex()
+        self.tx_tips_index = TimestampIndex()
+        self.latest_timestamp = 0
+        from hathor.transaction.genesis import genesis_transactions
+        self.first_timestamp = min(x.timestamp for x in genesis_transactions(self))
+
+    def get_block_tips(self, timestamp=None):
+        if timestamp is None:
+            timestamp = self.latest_timestamp
+        return self.block_tips_index[timestamp]
+
+    def get_tx_tips(self, timestamp=None):
+        if timestamp is None:
+            timestamp = self.latest_timestamp
+        return self.tx_tips_index[timestamp]
 
     def _manually_initialize(self):
         """Caches must be initialized. This function should not be called, because
@@ -79,12 +93,12 @@ class TransactionStorage:
                     stack.append(parent)
 
     def iter_bfs(self, root):
-        """Run a BFS starting from the giving transaction.
+        """Run a BFS starting from the given transaction to genesis (right_to_left)
 
         :param root: Starting point of the BFS, either a block or a transaction.
         :type root: :py:class:`hathor.transaction.BaseTransaction`
 
-        :return: An iterable with the transactions
+        :return: An iterable with the transactions (with the root)
         :rtype: Iterable[BaseTransaction]
         """
         to_visit = deque([root.hash])  # List[bytes(hash)]
@@ -100,25 +114,44 @@ class TransactionStorage:
                     to_visit.append(parent_hash)
                     seen.add(parent_hash)
 
+    def iter_bfs_children(self, root):
+        """Run a BFS starting from the given transaction to the tips (left-to-right)
+
+        :param root: Starting point of the BFS, either a block or a transaction.
+        :type root: :py:class:`hathor.transaction.BaseTransaction`
+
+        :return: An iterable with the transactions (without the root)
+        :rtype: Iterable[BaseTransaction]
+        """
+        to_visit = deque(root.get_metadata().children)  # List[bytes(hash)]
+        seen = set(to_visit)    # Set[bytes(hash)]
+
+        while to_visit:
+            tx_hash = to_visit.popleft()
+            tx = self.get_transaction_by_hash(tx_hash)
+            yield tx
+            seen.add(tx_hash)
+            for children_hash in tx.get_metadata().children:
+                if children_hash not in seen:
+                    to_visit.append(children_hash)
+                    seen.add(children_hash)
+
     def _add_to_cache(self, tx):
+        self.latest_timestamp = max(self.latest_timestamp, tx.timestamp)
         if tx.is_block:
             self._cache_block_count += 1
-            cache = self._cache_tip_blocks
+            self.block_tips_index.add_tx(tx)
         else:
             self._cache_tx_count += 1
-            cache = self._cache_tip_transactions
-
-        for parent_hash in tx.parents:
-            if parent_hash in cache:
-                cache.pop(parent_hash)
-        cache[tx.hash] = tx
+            self.tx_tips_index.add_tx(tx)
 
     def _del_from_cache(self, tx):
         if tx.is_block:
-            cache = self._cache_tip_blocks
+            self._cache_block_count -= 1
+            self.block_tips_index.del_tx(tx)
         else:
-            cache = self._cache_tip_transactions
-        cache.pop(tx.hash, None)
+            self._cache_tx_count -= 1
+            self.tx_tips_index.del_tx(tx)
 
     def get_block_count(self):
         return self._cache_block_count
@@ -169,62 +202,6 @@ class TransactionStorage:
 
     def get_count_tx_blocks(self):
         raise NotImplementedError
-
-    def get_tip_blocks(self):
-        """
-        Return the blocks which have not been confirmed yet.
-
-        :return: A list of blocks.
-        :rtype: List[Block]
-        """
-        return list(self._cache_tip_blocks.values())
-
-    def get_tip_blocks_hashes(self):
-        """
-        Return the hashes of the blocks which have not been confirmed yet.
-
-        :return: A list of block hashes.
-        :rtype: List[bytes(hash)]
-        """
-        return list(self._cache_tip_blocks.keys())
-
-    def get_tip_transactions(self, count=None):
-        """
-        Return the transactions which have not been confirmed yet.
-
-        :return: A list of transactions.
-        :type: List[Transaction]
-        """
-        ret = list(self._cache_tip_transactions.values())
-        if count is None:
-            return ret
-        # If there are many tip transactions, we randomly choose among them.
-        # Instead of implementing an algorithm to choose without repetition,
-        # I just shuffled the options and get the firsts. Another approach
-        # would be to stop shuffling after `count` steps.
-        random.shuffle(ret)
-        return ret[:count]
-
-    def get_tip_transactions_hashes(self, count=None):
-        """
-        Return the hashes of the transactions which have not been confirmed yet.
-
-        :return: A list of transaction hashes.
-        :type: List[bytes(hash)]
-        """
-        ret = list(self._cache_tip_transactions.keys())
-        if count is None:
-            return ret
-        random.shuffle(ret)
-        return ret[:count]
-
-    def get_latest_block(self):
-        blocks = self.get_latest_blocks(5)
-
-        assert blocks, 'No tip blocks available, not even genesis!'
-
-        sorted_blocks = sorted(blocks, key=lambda b: b.height, reverse=True)
-        return sorted_blocks[0]
 
     def get_best_height(self):
         """Returns the height for the most recent block."""
@@ -496,6 +473,9 @@ class TransactionStorage:
         dot.attr('node', shape='oval', style='')
         nodes_iter = self._topological_sort()
 
+        block_tips = set(x.data for x in self.get_block_tips())
+        tx_tips = set(x.data for x in self.get_tx_tips())
+
         with g_genesis as g_g, g_txs as g_t, g_blocks as g_b:
             for i, tx in enumerate(nodes_iter):
                 name = tx.hash.hex()
@@ -506,7 +486,7 @@ class TransactionStorage:
                     attrs_node.update(block_attrs)
                     attrs_edge.update(dict(penwidth='4'))
 
-                if (tx.hash in self._cache_tip_blocks) or (tx.hash in self._cache_tip_transactions):
+                if (tx.hash in block_tips) or (tx.hash in tx_tips):
                     attrs_node.update(tx_tips_attrs)
 
                 if weight:

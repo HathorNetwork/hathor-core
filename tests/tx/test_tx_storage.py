@@ -32,7 +32,7 @@ class _BaseTransactionStorageTest:
             block_parents = [tx.hash for tx in self.genesis]
             output = TxOutput(200, bytes.fromhex('1e393a5ce2ff1c98d4ff6892f2175100f2dad049'))
             self.block = Block(
-                timestamp=1535885967,
+                timestamp=1539271491,
                 weight=12,
                 outputs=[output],
                 parents=block_parents,
@@ -53,7 +53,7 @@ class _BaseTransactionStorageTest:
             )
 
             self.tx = Transaction(
-                timestamp=1535886380,
+                timestamp=1539271493,
                 weight=10,
                 nonce=932049,
                 inputs=[tx_input],
@@ -83,11 +83,11 @@ class _BaseTransactionStorageTest:
             self.assertEqual(1, self.tx_storage.get_block_count())
             self.assertEqual(2, self.tx_storage.get_tx_count())
 
-            block_parents_hash = self.tx_storage.get_tip_blocks_hashes()
+            block_parents_hash = [x.data for x in self.tx_storage.get_block_tips()]
             self.assertEqual(1, len(block_parents_hash))
-            self.assertEqual(block_parents_hash[0], self.genesis_blocks[0].hash)
+            self.assertEqual(block_parents_hash, [self.genesis_blocks[0].hash])
 
-            tx_parents_hash = self.tx_storage.get_tip_transactions_hashes()
+            tx_parents_hash = [x.data for x in self.tx_storage.get_tx_tips()]
             self.assertEqual(2, len(tx_parents_hash))
             self.assertEqual(set(tx_parents_hash), {self.genesis_txs[0].hash, self.genesis_txs[1].hash})
 
@@ -146,30 +146,30 @@ class _BaseTransactionStorageTest:
             self.assertEqual(latest_tx[2].hash, self.genesis_txs[0].hash)
 
         def test_storage_new_blocks(self):
-            tip_blocks = self.tx_storage.get_tip_blocks_hashes()
+            tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
             self.assertEqual(tip_blocks, [self.genesis_blocks[0].hash])
 
             block1 = self._add_new_block()
-            tip_blocks = self.tx_storage.get_tip_blocks_hashes()
+            tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
             self.assertEqual(tip_blocks, [block1.hash])
 
             block2 = self._add_new_block()
-            tip_blocks = self.tx_storage.get_tip_blocks_hashes()
+            tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
             self.assertEqual(tip_blocks, [block2.hash])
 
             # Block3 has the same parents as block2.
             block3 = self._add_new_block(parents=block2.parents)
-            tip_blocks = self.tx_storage.get_tip_blocks_hashes()
+            tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
             self.assertEqual(set(tip_blocks), {block2.hash, block3.hash})
 
             # Re-generate caches to test topological sort.
             self.tx_storage._manually_initialize()
-            tip_blocks = self.tx_storage.get_tip_blocks_hashes()
+            tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
             self.assertEqual(set(tip_blocks), {block2.hash, block3.hash})
 
             # Block4 has both blocks as parents
             block4 = self._add_new_block()
-            tip_blocks = self.tx_storage.get_tip_blocks_hashes()
+            tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
             self.assertEqual(tip_blocks, [block4.hash])
 
         def _add_new_block(self, parents=None):

@@ -1,7 +1,6 @@
 # encoding: utf-8
 
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.node_sync import NodeSyncLeftToRightManager
 from hathor.p2p.manager import ConnectionsManager
 from hathor.process_protocol import ProcessProtocolFactory
 from hathor.transaction import Block, TxOutput, sum_weights
@@ -9,9 +8,10 @@ from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.metrics import Metrics
 from hathor.exception import HathorError
 
-from collections import defaultdict, deque
+from collections import defaultdict
 from enum import Enum
 from math import log
 import time
@@ -41,14 +41,8 @@ class HathorManager(object):
         # This node is still initializing
         INITIALIZING = 'INITIALIZING'
 
-        # This node is waiting for peers to decide whether it is sync'ed or not.
-        WAITING_FOR_PEERS = 'WAITING_FOR_PEERS'
-
-        # This node is still synchronizing with the network
-        SYNCING = 'SYNCING'
-
-        # This node is up-to-date with the network
-        SYNCED = 'SYNCED'
+        # This node is ready to establish new connections, sync, and exchange transactions.
+        READY = 'READY'
 
     def __init__(self, reactor, peer_id=None, network=None, hostname=None,
                  pubsub=None, wallet=None, tx_storage=None, peer_storage=None, default_port=40403):
@@ -95,6 +89,8 @@ class HathorManager(object):
         self.tx_storage = tx_storage or TransactionMemoryStorage()
         self.pubsub = pubsub or PubSubManager()
 
+        self.metrics = Metrics(pubsub=self.pubsub, tx_storage=tx_storage)
+
         self.peer_discoveries = []
 
         #self.server_factory = HathorServerFactory(self.network, self.my_peer, node=self)
@@ -104,15 +100,11 @@ class HathorManager(object):
         # Map of peer_id to the best block height reported by that peer.
         self.peer_best_heights = defaultdict(int)
 
-        self.node_sync_manager = NodeSyncLeftToRightManager(self)
         self.wallet = wallet
         self.wallet.pubsub = self.pubsub
 
-        self.blocks_per_difficulty = 5
-        self.latest_blocks = deque()
         self.avg_time_between_blocks = 64  # in seconds
         self.min_block_weight = 14
-        self.max_allowed_block_weight_change = 2
         self.tokens_issued_per_block = 10000
 
         self.processFactory = None
@@ -166,7 +158,7 @@ class HathorManager(object):
             self.wallet._manually_initialize()
         for tx in self.tx_storage._topological_sort():
             self.on_new_tx(tx)
-        self.state = self.NodeState.WAITING_FOR_PEERS
+        self.state = self.NodeState.READY
 
     def add_peer_discovery(self, peer_discovery):
         self.peer_discoveries.append(peer_discovery)
@@ -177,18 +169,18 @@ class HathorManager(object):
         :return: The hashes of the parents for a new transaction.
         :rtype: List[bytes(hash)]
         """
-        if timestamp is None:
-            timestamp = self.reactor.seconds()
-        tips = self.tx_storage.get_tip_transactions()
-        ret = [x.hash for x in tips if x.timestamp < timestamp][:2]
-        if len(ret) == 0:
-            ret = tips[0].parents
-        elif len(ret) == 1:
+        timestamp = timestamp or self.reactor.seconds()
+        ret = list(self.tx_storage.get_tx_tips(timestamp-1))
+        random.shuffle(ret)
+        ret = ret[:2]
+        if len(ret) == 1:
             # If there is only one tip, let's randomly choose one of its parents.
-            ret.append(random.choice(tips[0].parents))
-        return ret
+            parents = list(self.tx_storage.get_tx_tips(ret[0].begin - 1))
+            ret.append(random.choice(parents))
+        assert len(ret) == 2
+        return [x.data for x in ret]
 
-    def generate_mining_block(self):
+    def generate_mining_block(self, timestamp=None):
         """ Generates a block ready to be mined. The block includes new issued tokens,
         parents, and the weight.
 
@@ -201,8 +193,14 @@ class HathorManager(object):
         tx_outputs = [
             TxOutput(amount, output_script)
         ]
-        tip_blocks = self.tx_storage.get_tip_blocks_hashes()
-        tip_txs = self.get_new_tx_parents()
+
+        timestamp = timestamp or self.reactor.seconds()
+        tip_blocks = [x.data for x in self.tx_storage.get_block_tips(timestamp)]
+        tip_txs = self.get_new_tx_parents(timestamp)
+
+        assert len(tip_blocks) >= 1
+        assert len(tip_txs) == 2
+
         parents = tip_blocks + tip_txs
 
         parents_tx = [self.tx_storage.get_transaction_by_hash_bytes(x) for x in parents]
@@ -215,9 +213,6 @@ class HathorManager(object):
         blk.timestamp = max(timestamp1, timestamp2)
         blk.weight = self.calculate_block_difficulty(blk)
         return blk
-
-    def on_tips_received(self, tip_blocks, tip_transactions, conn=None):
-        self.node_sync_manager.on_tips_received(tip_blocks, tip_transactions, conn)
 
     def validate_new_tx(self, tx):
         """ Process incoming transaction during initialization.
@@ -271,12 +266,6 @@ class HathorManager(object):
             tx.storage = self.tx_storage
         self.on_new_tx(tx)
 
-        # Only propagate transactions once we are sufficiently synced up with the rest of the network.
-        # TODO Should we queue transactions?
-        if self.state == self.NodeState.SYNCED:
-            #self.connections.send_tx_to_peers(tx)
-            self.processFactory.send_message('new tx ' + tx.hash_hex)
-
     def on_new_tx(self, tx, conn=None):
         """This method is called when any transaction arrive.
         """
@@ -287,12 +276,11 @@ class HathorManager(object):
         if self.wallet:
             self.wallet.on_new_tx(tx)
 
-        if self.state == self.NodeState.INITIALIZING:
-            self.tx_storage._add_to_cache(tx)
-        else:
+        if self.state != self.NodeState.INITIALIZING:
             self.tx_storage.save_transaction(tx)
-            self.node_sync_manager.on_new_tx(tx, conn)
-            self.update_accumulated_weights(tx)
+            tx.update_parents()
+        else:
+            self.tx_storage._add_to_cache(tx)
 
         if tx.is_block:
             print('New block found: {} weight={}'.format(tx.hash_hex, tx.weight))
@@ -304,23 +292,15 @@ class HathorManager(object):
             self.processFactory.send_message('new tx ' + tx.hash_hex)
 
         # Propagate to our peers.
-        if self.state == self.NodeState.SYNCED:
-            #self.connections.send_tx_to_peers(tx)
+        # TODO uncomment
+        #self.connections.send_tx_to_peers(tx)
+
+        # TODO remove
+        if self.processFactory:
             self.processFactory.send_message('new tx ' + tx.hash_hex)
 
         # Publish to pubsub manager the new tx accepted
         self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
-
-    def on_block_hashes_received(self, block_hashes, conn=None):
-        """We have received a list of hashes of blocks, according to a peer."""
-        self.node_sync_manager.on_block_hashes_received(block_hashes, conn)
-
-    def on_transactions_hashes_received(self, txs_hashes, conn=None):
-        """We have received a list of hashes of transactions, according to a peer."""
-        self.node_sync_manager.on_transactions_hashes_received(txs_hashes, conn)
-
-    def on_best_height(self, best_height, conn):
-        raise NotImplemented
 
     def calculate_block_difficulty(self, block):
         """ Calculate block difficulty according to the ascendents of `block`.
@@ -357,17 +337,6 @@ class HathorManager(object):
 
         return weight
 
-    def update_accumulated_weights(self, tx):
-        """Update all previous transactions' accumulated weight when a new one arrives
-
-        :param tx: the new transaction/block
-        :type tx: :py:class:`hathor.transaction.Transaction` or :py:class:`hathor.transaction.Block`
-
-        :rtype: None
-        """
-        for _tx in self.tx_storage.iter_bfs(tx):
-            _tx.update_accumulated_weight(tx.weight)
-
    # def listen(self, description, ssl=False):
    #     endpoint = self.connections.listen(description, ssl)
 
@@ -376,16 +345,7 @@ class HathorManager(object):
    #         address = '{}:{}:{}'.format(proto, self.hostname, endpoint._port)
    #         self.my_peer.entrypoints.append(address)
 
-   #     commandAndArgs = ["python", "/Users/yan/dev/hathor/hathor-python/test.py", "arg1", "arg2", "arg3"]
-   #     testEndpoint = ProcessEndpoint(self.reactor, commandAndArgs[0], commandAndArgs, env=environ)
-   #     #testFactory = protocol.Factory()
-   #     #testFactory.protocol = TestLineReceiver
-   #     self.testFactory = TestFactory()
-   #     testEndpoint.connect(self.testFactory)
     def listen(self, env=None):
-        #commandAndArgs = ["python", "/Users/yan/dev/hathor/hathor-python/hathor/p2p/main.py"]
-        #commandAndArgs = ["python", "/Users/yan/dev/hathor/hathor-python/yan.py"]
-        #commandAndArgs.extend(self.args)
         BOOTSTRAP = """\
 import sys
 from hathor.p2p.main import main

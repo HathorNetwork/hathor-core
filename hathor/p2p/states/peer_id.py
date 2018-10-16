@@ -2,6 +2,7 @@
 
 from hathor.p2p.states.base import BaseState
 from hathor.p2p.peer_id import PeerId
+from hathor.p2p.messages import ProtocolMessages
 
 import base64
 import json
@@ -11,7 +12,7 @@ class PeerIdState(BaseState):
     def __init__(self, protocol):
         super().__init__(protocol)
         self.cmd_map.update({
-            self.ProtocolCommand.PEER_ID: self.handle_peer_id,
+            ProtocolMessages.PEER_ID: self.handle_peer_id,
         })
 
     def on_enter(self):
@@ -31,7 +32,7 @@ class PeerIdState(BaseState):
             'nonce': nonce,
             'signature': base64.b64encode(my_peer.sign(nonce.encode('ascii'))).decode('ascii'),
         }
-        self.send_message(self.ProtocolCommand.PEER_ID, json.dumps(hello))
+        self.send_message(ProtocolMessages.PEER_ID, json.dumps(hello))
 
     def handle_peer_id(self, payload):
         """ Executed when a PEER-ID is received. It basically checks

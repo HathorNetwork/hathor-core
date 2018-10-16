@@ -41,8 +41,11 @@ class HathorProtocolTestCase(unittest.TestCase):
         proto.dataReceived(line)
 
     def _check_result_only_cmd(self, result, expected_cmd):
-        cmd, _, _ = result.partition(b' ')
-        self.assertEqual(cmd, expected_cmd)
+        cmd_list = []
+        for line in expected_cmd.split(b'\r\n'):
+            cmd, _, _ = line.partition(b' ')
+            cmd_list.append(cmd)
+        self.assertIn(expected_cmd, cmd_list)
 
     def test_on_connect(self):
         self._check_result_only_cmd(self.conn1.tr1.value(), b'HELLO')

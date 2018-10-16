@@ -54,7 +54,8 @@ class TransactionResource(resource.Resource):
                 tx = self.manager.tx_storage.get_transaction_by_hash(requested_hash)
                 serialized = tx.to_json(decode_script=True)
                 serialized['raw'] = tx.get_struct().hex()
-                serialized['accumulated_weight'] = tx.get_metadata().accumulated_weight
+                meta = tx.update_accumulated_weight()
+                serialized['accumulated_weight'] = meta.accumulated_weight
 
                 data = {
                     'success': True,

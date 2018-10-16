@@ -28,20 +28,21 @@ class UnlockWalletResource(resource.Resource):
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
+        post_data = json.loads(request.content.read().decode('utf-8'))
 
-        if b'password' in request.args:
+        if 'password' in post_data:
             # Wallet keypair
-            return self.unlock_wallet_keypair(request)
+            return self.unlock_wallet_keypair(post_data)
         else:
             # Wallet HD
-            return self.unlock_wallet_hd(request)
+            return self.unlock_wallet_hd(post_data)
 
-    def unlock_wallet_hd(self, request):
+    def unlock_wallet_hd(self, data):
         words = None
-        if b'words' in request.args:
-            words = request.args[b'words'][0].decode('utf-8')
+        if 'words' in data:
+            words = data['words']
 
-        passphrase = request.args[b'passphrase'][0]
+        passphrase = bytes(data['passphrase'], 'utf-8')
         ret = {'success': True}
 
         try:
@@ -55,8 +56,8 @@ class UnlockWalletResource(resource.Resource):
 
         return json.dumps(ret, indent=4).encode('utf-8')
 
-    def unlock_wallet_keypair(self, request):
-        password = request.args[b'password'][0]
+    def unlock_wallet_keypair(self, data):
+        password = bytes(data['password'], 'utf-8')
         success = True
 
         try:

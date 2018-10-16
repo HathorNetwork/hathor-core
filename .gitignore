@@ -7,3 +7,6 @@ docs/_build/
 
 .coverage
 cover/
+
+extras/docker/_build/
+extras/docker/envvars
