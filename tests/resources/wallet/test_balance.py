@@ -22,7 +22,7 @@ class BalanceTest(_BaseResourceTest._ResourceTest):
         response_mining = yield self.web_mining.get("mining")
         data_mining = response_mining.json_value()
         block_bytes = resolve_block_bytes(block_bytes=data_mining['block_bytes'])
-        yield self.web_mining.post("mining", {b'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
+        yield self.web_mining.post("mining", {'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
 
         # Get new balance after block
         response2 = yield self.web.get("wallet/balance")

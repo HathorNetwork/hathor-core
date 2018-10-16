@@ -4,7 +4,6 @@ from twisted.internet.defer import inlineCallbacks
 from tests.resources.base_resource import TestSite, _BaseResourceTest
 from tests.utils import resolve_block_bytes
 import base64
-import json
 
 
 class SendTokensTest(_BaseResourceTest._ResourceTest):
@@ -21,7 +20,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         response_mining = yield self.web_mining.get("mining")
         data_mining = response_mining.json_value()
         block_bytes = resolve_block_bytes(block_bytes=data_mining['block_bytes'])
-        yield self.web_mining.post("mining", {b'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
+        yield self.web_mining.post("mining", {'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
         self.reactor.advance(10)
 
         # Unlocking wallet
@@ -34,7 +33,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         }
         response = yield self.web.post(
             "wallet/send_tokens",
-            {b'data': bytes(json.dumps(data_json), 'utf-8')}
+            {'data': data_json}
         )
         data = response.json_value()
         self.assertTrue(data['success'])
@@ -57,7 +56,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         }
         response2 = yield self.web.post(
             "wallet/send_tokens",
-            {b'data': bytes(json.dumps(data_json), 'utf-8')}
+            {'data': data_json}
         )
         data2 = response2.json_value()
         self.assertFalse(data2['success'])
@@ -70,7 +69,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         }
         response3 = yield self.web.post(
             "wallet/send_tokens",
-            {b'data': bytes(json.dumps(data_json2), 'utf-8')}
+            {'data': data_json2}
         )
         data3 = response3.json_value()
         self.assertTrue(data3['success'])
@@ -82,7 +81,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         }
         response_error1 = yield self.web.post(
             "wallet/send_tokens",
-            {b'data': bytes(json.dumps(data_json3), 'utf-8')}
+            {'data': data_json3}
         )
         data_error1 = response_error1.json_value()
         self.assertFalse(data_error1['success'])
@@ -93,7 +92,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         }
         response_error2 = yield self.web.post(
             "wallet/send_tokens",
-            {b'data': bytes(json.dumps(data_json4), 'utf-8')}
+            {'data': data_json4}
         )
         data_error2 = response_error2.json_value()
         self.assertFalse(data_error2['success'])
