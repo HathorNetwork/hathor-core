@@ -192,17 +192,14 @@ class BaseTransaction:
 
         if len(spent_by) > 1:
             # Conflicting transaction.
-            meta_list = []
+            tx_list = []
             winner_set = set()
             max_acc_weight = 0
             for h in spent_by:
-                from hathor.transaction.storage.exceptions import TransactionMetadataDoesNotExist
-                try:
-                    meta = self.storage.get_metadata_by_hash_bytes(h)
-                except TransactionMetadataDoesNotExist:
-                    from hathor.transaction.transaction_metadata import TransactionMetadata
-                    meta = TransactionMetadata(hash=h)
-                meta_list.append(meta)
+                # now we need to update accumulated weight and get new metadata info
+                tx = self.storage.get_transaction_by_hash_bytes(h)
+                meta = tx.update_accumulated_weight(save_file=False)
+                tx_list.append(tx)
 
                 if meta.accumulated_weight == max_acc_weight:
                     winner_set.add(meta.hash)
@@ -213,9 +210,7 @@ class BaseTransaction:
             if len(winner_set) > 1:
                 winner_set = set()
 
-            for meta in meta_list:
-                tx = self.storage.get_transaction_by_hash_bytes(meta.hash)
-                assert tx.hash == meta.hash
+            for tx in tx_list:
                 if tx.hash in winner_set:
                     tx.mark_as_winner()
                 else:
@@ -484,16 +479,30 @@ class BaseTransaction:
         # TODO Maybe we could use a TransactionCacheStorage in the future to reduce storage hit
         metadata = getattr(self, '_metadata', None)
         if not metadata:
-            from hathor.transaction.storage.exceptions import TransactionMetadataDoesNotExist
-            try:
-                metadata = self.storage.get_metadata_by_hash_bytes(self.hash)
-            except TransactionMetadataDoesNotExist:
-                from hathor.transaction.transaction_metadata import TransactionMetadata
-                metadata = TransactionMetadata(hash=self.hash)
+            metadata = self._get_metadata_from_storage(self.hash)
             self._metadata = metadata
         return metadata
 
-    def update_accumulated_weight(self, increment):
+    def _get_metadata_from_storage(self, hash_bytes):
+        """Return the metadata for tx identified by hash_bytes.
+
+        If there's no such metadata on storage, create a new object and return it.
+
+        :param hash_bytes: hash of the tx to get metadata
+        :type hash_bytes: bytes
+
+        :rtype: :py:class:`hathor.transaction.TransactionMetadata`
+        """
+        from hathor.transaction.storage.exceptions import TransactionMetadataDoesNotExist
+        try:
+            metadata = self.storage.get_metadata_by_hash_bytes(hash_bytes)
+        except TransactionMetadataDoesNotExist:
+            from hathor.transaction.transaction_metadata import TransactionMetadata
+            metadata = TransactionMetadata(hash=hash_bytes)
+        return metadata
+
+    # deprecated
+    def _old_update_accumulated_weight(self, increment):
         """Increments the tx aggregated weight with the given value
 
         :type increment: float
@@ -501,6 +510,37 @@ class BaseTransaction:
         metadata = self.get_metadata()
         metadata.accumulated_weight = sum_weights(metadata.accumulated_weight, increment)
         self.storage.save_metadata(metadata)
+
+    def update_accumulated_weight(self, save_file=True):
+        """Calculates the tx's accumulated weight and update its metadata.
+
+        It starts at the current transaction and does a BFS to the tips. In the
+        end, updates the accumulated weight on metadata
+
+        :return: transaction metadata
+        :rtype: :py:class:`hathor.transaction.TransactionMetadata`
+        """
+        accumulated_weight = self.weight
+        for tx in self.storage.iter_bfs_children(self):
+            accumulated_weight = sum_weights(accumulated_weight, tx.weight)
+
+        metadata = self.get_metadata()
+        metadata.accumulated_weight = accumulated_weight
+
+        if save_file:
+            self.storage.save_metadata(metadata)
+
+        return metadata
+
+    def update_parents(self):
+        """Update the tx's parents to add the current tx as their child.
+
+        :rtype None
+        """
+        for parent in self.parents:
+            metadata = self._get_metadata_from_storage(parent)
+            metadata.children.add(self.hash_hex)
+            self.storage.save_metadata(metadata)
 
     def to_json(self, decode_script=False):
         data = {}
