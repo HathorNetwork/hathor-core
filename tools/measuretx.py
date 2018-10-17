@@ -57,8 +57,7 @@ if __name__ == '__main__':
             'outputs': [{'address': address, 'value': value}],
             'inputs': []
         }
-        data_bytes = json.dumps(data).encode('utf-8')
-        response = requests.post(send_tokens_url, data={'data': data_bytes})
+        response = requests.post(send_tokens_url, json={'data': data})
         try:
             data = response.json()
             assert data['success']

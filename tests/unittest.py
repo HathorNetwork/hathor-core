@@ -16,7 +16,7 @@ class TestCase(unittest.TestCase):
     def tearDown(self):
         self.clean_tmpdirs()
 
-    def create_test_wallet(self):
+    def _create_test_wallet(self):
         """ Generate a Wallet with a number of keypairs for testing
             :rtype: Wallet
         """
@@ -32,7 +32,7 @@ class TestCase(unittest.TestCase):
     def create_peer(self, network, peer_id=None, unlock_wallet=True):
         if peer_id is None:
             peer_id = PeerId()
-        wallet = self.create_test_wallet()
+        wallet = self._create_test_wallet()
         if unlock_wallet:
             wallet.unlock(b'MYPASS')
         manager = HathorManager(self.clock, peer_id=peer_id, network=network, wallet=wallet)

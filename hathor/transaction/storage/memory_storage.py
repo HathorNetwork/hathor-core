@@ -35,7 +35,7 @@ class TransactionMemoryStorage(TransactionStorage):
         if hash_bytes in self.transactions:
             return self.transactions[hash_bytes]
         else:
-            raise TransactionDoesNotExist
+            raise TransactionDoesNotExist(hash_bytes.hex())
 
     def get_transaction_by_hash(self, hash_hex):
         hash_bytes = bytes.fromhex(hash_hex)

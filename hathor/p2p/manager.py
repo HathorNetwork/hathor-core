@@ -53,9 +53,16 @@ class ConnectionsManager:
     def send_tx_to_peers(self, tx):
         """ Send `tx` to all ready peers.
 
-        :param tx: py:class:`hathor.transaction.BaseTransaction`
+        The connections are shuffled to fairly propagate among peers.
+        It seems to be a good approach for a small number of peers. We need to analyze
+        the best approach when the number of peers increase.
+
+        :param tx: BaseTransaction to be sent.
+        :type tx: py:class:`hathor.transaction.BaseTransaction`
         """
-        for conn in self.get_ready_connections():
+        connections = list(self.get_ready_connections())
+        random.shuffle(connections)
+        for conn in connections:
             conn.state.send_tx_to_peer(tx)
 
     def on_connection_failure(self, failure, endpoint):
