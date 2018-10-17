@@ -162,11 +162,11 @@ class NodeSyncTimestamp(object):
         self.peer_timestamp = tips.timestamp
 
         # Exponential search to find an interval.
-        cur = tips.timestamp
+        cur = min(self.manager.tx_storage.latest_timestamp, tips.timestamp)
         local_merkle_tree, _ = self.get_merkle_tree(cur)
         step = 1
         while tips.merkle_tree != local_merkle_tree:
-            if cur == self.manager.tx_storage.first_timestamp:
+            if cur <= self.manager.tx_storage.first_timestamp:
                 raise Exception('Should never happen.')
             cur = max(cur - step, self.manager.tx_storage.first_timestamp)
             tips = yield self.get_peer_tips(cur)
@@ -203,13 +203,17 @@ class NodeSyncTimestamp(object):
         :param timestamp: Timestamp to be reached
         :type timestamp: int
         """
+        assert self.next_timestamp < inf
         while self.synced_timestamp < timestamp:
             assert self.next_timestamp > self.synced_timestamp
-            next_timestamp = yield self.sync_at_timestamp(self.next_timestamp)
+            next_timestamp, count = yield self.sync_at_timestamp(self.next_timestamp)
             assert next_timestamp > self.next_timestamp
             self.synced_timestamp = self.next_timestamp
             self.next_timestamp = next_timestamp
-        self.peer_timestamp = self.synced_timestamp
+            if count == 0:
+                break
+        if self.synced_timestamp > self.peer_timestamp:
+            self.peer_timestamp = self.synced_timestamp
 
     @inlineCallbacks
     def sync_at_timestamp(self, timestamp):
@@ -223,6 +227,9 @@ class NodeSyncTimestamp(object):
         offset = 0
         while True:
             tips = yield self.get_peer_tips(timestamp, include_hashes=True, offset=offset)
+            local_merkle_tree, _ = self.get_merkle_tree(timestamp)
+            if tips.merkle_tree == local_merkle_tree:
+                break
             for h in tips.hashes:
                 if not self.manager.tx_storage.transaction_exists_by_hash_bytes(h):
                     pending.append(self.get_data(h))
@@ -231,17 +238,13 @@ class NodeSyncTimestamp(object):
             offset += len(tips.hashes)
         for deferred in pending:
             yield deferred
-        return tips.next_timestamp
+        return tips.next_timestamp, len(pending)
 
     @inlineCallbacks
     def _next_step(self):
         """ Run the next step to keep nodes synced.
         """
-        if self.peer_timestamp is None:
-            yield self.find_synced_timestamp()
-
-        if self.synced_timestamp is None:
-            yield self.find_synced_timestamp()
+        yield self.find_synced_timestamp()
 
         delta = self.peer_timestamp - self.synced_timestamp
         assert delta >= 0
@@ -250,10 +253,6 @@ class NodeSyncTimestamp(object):
             assert self.next_timestamp <= self.peer_timestamp
             assert self.next_timestamp > self.synced_timestamp
             yield self.sync_until_timestamp(self.peer_timestamp)
-
-        else:
-            # We always find our synced timestamp, does not matter whether we are behind or in front of our peer.
-            yield self.find_synced_timestamp()
 
     @inlineCallbacks
     def next_step(self):
@@ -315,6 +314,9 @@ class NodeSyncTimestamp(object):
         tx_intervals = self.manager.tx_storage.get_tx_tips(timestamp)
         blk_intervals = self.manager.tx_storage.get_block_tips(timestamp)
         intervals = tx_intervals.union(blk_intervals)
+
+        if len(intervals) == 0:
+            raise Exception('No tips for timestamp {}'.format(timestamp))
 
         # Previous timestamp in which tips have changed
         max_begin = max(x.begin for x in intervals)

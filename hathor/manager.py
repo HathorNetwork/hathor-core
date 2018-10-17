@@ -15,6 +15,7 @@ from enum import Enum
 from math import log
 import time
 import random
+import datetime
 
 from hathor.p2p.protocol import HathorLineReceiver
 MyServerProtocol = HathorLineReceiver
@@ -273,10 +274,16 @@ class HathorManager(object):
         else:
             self.tx_storage._add_to_cache(tx)
 
+        ts_date = datetime.datetime.fromtimestamp(tx.timestamp)
         if tx.is_block:
-            print('New block found: {} weight={}'.format(tx.hash_hex, tx.weight))
+            print('New block: {} timestamp={} ({}) weight={}'.format(
+                tx.hash_hex,
+                ts_date,
+                tx.get_time_from_now(),
+                tx.weight)
+            )
         else:
-            print('New tx: {}'.format(tx.hash.hex()))
+            print('New tx: {} timestamp={} ({})'.format(tx.hash.hex(), ts_date, tx.get_time_from_now()))
 
         tx.mark_inputs_as_used()
 
