@@ -19,6 +19,7 @@ from hathor.transaction.resources import DecodeTxResource, PushTxResource, Graph
                                         TransactionResource, DashboardTransactionResource
 from hathor.websocket import HathorAdminWebsocketFactory
 from hathor.p2p.peer_discovery import DNSPeerDiscovery, BootstrapPeerDiscovery
+from hathor.prometheus import PrometheusMetricsExporter
 import hathor
 
 import argparse
@@ -46,6 +47,7 @@ if __name__ == '__main__':
     parser.add_argument('--words', help='Words used to generate the seed for HD Wallet')
     parser.add_argument('--passphrase', action='store_true', help='Passphrase used to generate the seed for HD Wallet')
     parser.add_argument('--unlock-wallet', action='store_true', help='Ask for password to unlock wallet')
+    parser.add_argument('--prometheus', action='store_true', help='Send metric data to Prometheus')
     args = parser.parse_args()
 
     log.startLogging(sys.stdout)
@@ -123,6 +125,17 @@ if __name__ == '__main__':
     if args.listen:
         for description in args.listen:
             manager.listen(description)
+
+    if args.prometheus:
+        kwargs = {'metrics': manager.metrics}
+
+        if args.data:
+            kwargs['path'] = os.path.join(args.data, 'prometheus')
+        else:
+            raise ValueError('To run prometheus exporter you must have a data path')
+
+        prometheus = PrometheusMetricsExporter(**kwargs)
+        prometheus.start()
 
     if args.status:
         # TODO get this from a file. How should we do with the factory?
