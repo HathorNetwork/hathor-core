@@ -117,7 +117,6 @@ class HathorProtocol(object):
         log.msg('HathorProtocol.connectionLost()', remote, reason)
         if self.state:
             self.state.on_exit()
-            self.state = None
         if self.connections:
             self.connections.on_peer_disconnect(self)
 

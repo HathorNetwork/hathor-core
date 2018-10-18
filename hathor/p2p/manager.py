@@ -7,12 +7,13 @@ from twisted.internet.task import LoopingCall
 
 from hathor.crypto.util import generate_privkey_crt_pem
 from hathor.p2p.peer_storage import PeerStorage
+from hathor.pubsub import HathorEvents
 
 
 class ConnectionsManager:
     """ It manages all peer-to-peer connections and events related to control messages.
     """
-    def __init__(self, reactor, my_peer, server_factory, client_factory):
+    def __init__(self, reactor, my_peer, server_factory, client_factory, pubsub):
         self.reactor = reactor
         self.my_peer = my_peer
 
@@ -42,6 +43,9 @@ class ConnectionsManager:
         # A timer to try to reconnect to the disconnect known peers.
         self.lc_reconnect = LoopingCall(self.reconnect_to_all)
         self.lc_reconnect.clock = self.reactor
+
+        # Pubsub object to publish events
+        self.pubsub = pubsub
 
     def start(self):
         self.lc_reconnect.start(5)
@@ -86,12 +90,16 @@ class ConnectionsManager:
             if conn != protocol:
                 conn.state.send_peers([protocol])
 
+        self.pubsub.publish(HathorEvents.NETWORK_PEER_CONNECTED, protocol=protocol)
+
     def on_peer_disconnect(self, protocol):
         print('on_peer_disconnect()', protocol)
         if protocol.peer:
             self.connected_peers.pop(protocol.peer.id)
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
+
+        self.pubsub.publish(HathorEvents.NETWORK_PEER_DISCONNECTED, protocol=protocol)
 
     def get_ready_connections(self):
         """
