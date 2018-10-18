@@ -83,23 +83,33 @@ class HathorManager(object):
         self.tx_storage = tx_storage or TransactionMemoryStorage()
         self.pubsub = pubsub or PubSubManager()
 
-        self.metrics = Metrics(pubsub=self.pubsub, tx_storage=tx_storage)
+        self.avg_time_between_blocks = 64  # in seconds
+        self.min_block_weight = 14
+        self.tokens_issued_per_block = 10000
+
+        self.metrics = Metrics(
+            pubsub=self.pubsub,
+            avg_time_between_blocks=self.avg_time_between_blocks,
+            tx_storage=tx_storage
+        )
 
         self.peer_discoveries = []
 
         self.server_factory = HathorServerFactory(self.network, self.my_peer, node=self)
         self.client_factory = HathorClientFactory(self.network, self.my_peer, node=self)
-        self.connections = ConnectionsManager(self.reactor, self.my_peer, self.server_factory, self.client_factory)
+        self.connections = ConnectionsManager(
+            self.reactor,
+            self.my_peer,
+            self.server_factory,
+            self.client_factory,
+            self.pubsub
+        )
 
         # Map of peer_id to the best block height reported by that peer.
         self.peer_best_heights = defaultdict(int)
 
         self.wallet = wallet
         self.wallet.pubsub = self.pubsub
-
-        self.avg_time_between_blocks = 64  # in seconds
-        self.min_block_weight = 14
-        self.tokens_issued_per_block = 10000
 
     def start(self):
         """ A factory must be started only once. And it is usually automatically started.

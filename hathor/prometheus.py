@@ -5,7 +5,9 @@ import os
 # Define prometheus metrics and it's explanation
 METRIC_INFO = {
     'transactions': 'Number of transactions',
-    'blocks': 'Number of blocks'
+    'blocks': 'Number of blocks',
+    'hash_rate': 'Hash rate of the network',
+    'peers': 'Peers connected in the network'
 }
 
 
