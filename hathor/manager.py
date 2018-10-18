@@ -3,6 +3,7 @@
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.manager import ConnectionsManager
 from hathor.process_protocol import ProcessProtocolFactory
+from hathor.amp_protocol import HathorAMPFactory, HathorAMP, AMPConnector, SendTx
 from hathor.transaction import Block, TxOutput, sum_weights
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
@@ -27,7 +28,7 @@ MyClientProtocol = HathorLineReceiver
 # MyClientProtocol = HathorWebSocketClientProtocol
 
 #from hathor.test_protocol import TestLineReceiver, TestFactory
-from twisted.internet.endpoints import ProcessEndpoint
+from twisted.internet.endpoints import ProcessEndpoint, connectProtocol
 #from twisted.internet import protocol
 #from os import environ
 
@@ -107,7 +108,7 @@ class HathorManager(object):
         self.min_block_weight = 14
         self.tokens_issued_per_block = 10000
 
-        self.processFactory = None
+        self.remoteConnection = None
 
     def start(self):
         """ A factory must be started only once. And it is usually automatically started.
@@ -288,16 +289,12 @@ class HathorManager(object):
             print('New tx: {}'.format(tx.hash.hex()))
 
         tx.mark_inputs_as_used()
-        if self.processFactory:
-            self.processFactory.send_message('new tx ' + tx.hash_hex)
 
         # Propagate to our peers.
-        # TODO uncomment
-        #self.connections.send_tx_to_peers(tx)
-
-        # TODO remove
-        if self.processFactory:
-            self.processFactory.send_message('new tx ' + tx.hash_hex)
+        # self.connections.send_tx_to_peers(tx)
+        if self.remoteConnection:
+            tx_type = 'block' if tx.is_block else 'tx'
+            self.remoteConnection.callRemote(SendTx, tx_type=tx_type, tx_bytes=bytes(tx))
 
         # Publish to pubsub manager the new tx accepted
         self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
@@ -346,16 +343,23 @@ class HathorManager(object):
    #         self.my_peer.entrypoints.append(address)
 
     def listen(self, env=None):
-        BOOTSTRAP = """\
-import sys
-from hathor.p2p.main import main
+#        BOOTSTRAP = """\
+#import sys
+#from hathor.p2p.main import main
+#
+#main('%s')
+#        """ % (' '.join(self.args))
 
-main('%s')
-        """ % (' '.join(self.args))
+        #self.processFactory = ProcessProtocolFactory(self)
+        #endpoint = ProcessEndpoint(self.reactor, sys.executable, [sys.executable, "-c", BOOTSTRAP], env=env)
+        #endpoint.connect(AMPProtocolFactory(self)).addCallback(lambda p : print(p, type(p)))
 
-        endpoint = ProcessEndpoint(self.reactor, sys.executable, [sys.executable, "-c", BOOTSTRAP], env=env)
-        self.processFactory = ProcessProtocolFactory(self)
-        endpoint.connect(self.processFactory)
+        #d = connectProtocol(endpoint, AMPProtocol(self))
+
+        #self.reactor.spawnProcess(AMPConnector(AMPProtocol(self), 'testprocess'), sys.executable, [sys.executable, "-c", BOOTSTRAP], env=env)
+
+        self.reactor.listenUNIX('/tmp/file.sock', HathorAMPFactory(self))
+
 
     def handleProcessMessage(msg):
         print("Received message in manager: ", msg)

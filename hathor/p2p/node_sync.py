@@ -96,13 +96,14 @@ class NodeSyncTimestamp(object):
         #         return
         self.send_data(tx)
 
+    @inlineCallbacks
     def get_merkle_tree(self, timestamp):
         """ Generate a hash to check whether the DAG is the same at that timestamp.
 
         :rtype: Tuple[bytes(hash), List[bytes(hash)]]
         """
-        tx_intervals = self.manager.tx_storage.get_tx_tips(timestamp)
-        blk_intervals = self.manager.tx_storage.get_block_tips(timestamp)
+        tx_intervals = yield self.manager.get_tx_tips(timestamp)
+        blk_intervals = yield self.manager.get_block_tips(timestamp)
 
         hashes = [x.data for x in tx_intervals]
         hashes.extend(x.data for x in blk_intervals)
@@ -163,14 +164,14 @@ class NodeSyncTimestamp(object):
 
         # Exponential search to find an interval.
         cur = tips.timestamp
-        local_merkle_tree, _ = self.get_merkle_tree(cur)
+        local_merkle_tree, _ = yield self.get_merkle_tree(cur)
         step = 1
         while tips.merkle_tree != local_merkle_tree:
             if cur == self.manager.tx_storage.first_timestamp:
                 raise Exception('Should never happen.')
             cur = max(cur - step, self.manager.tx_storage.first_timestamp)
             tips = yield self.get_peer_tips(cur)
-            local_merkle_tree, _ = self.get_merkle_tree(cur)
+            local_merkle_tree, _ = yield self.get_merkle_tree(cur)
             step *= 2
 
         # Binary search to find inside the interval.
@@ -179,7 +180,7 @@ class NodeSyncTimestamp(object):
         while low < high:
             mid = (low + high + 1) // 2
             tips = yield self.get_peer_tips(mid)
-            local_merkle_tree, _ = self.get_merkle_tree(mid)
+            local_merkle_tree, _ = yield self.get_merkle_tree(mid)
             if tips.merkle_tree == local_merkle_tree:
                 low = mid
             else:
@@ -190,7 +191,7 @@ class NodeSyncTimestamp(object):
         self.synced_timestamp = low
 
         tips = yield self.get_peer_tips(self.synced_timestamp)
-        local_merkle_tree, _ = self.get_merkle_tree(self.synced_timestamp)
+        local_merkle_tree, _ = yield self.get_merkle_tree(self.synced_timestamp)
         assert tips.merkle_tree == local_merkle_tree
 
         self.next_timestamp = tips.next_timestamp
@@ -224,7 +225,7 @@ class NodeSyncTimestamp(object):
         while True:
             tips = yield self.get_peer_tips(timestamp, include_hashes=True, offset=offset)
             for h in tips.hashes:
-                if not self.manager.tx_storage.transaction_exists_by_hash_bytes(h):
+                if not self.manager.transaction_exists_by_hash_bytes(h):
                     pending.append(self.get_data(h))
             if not tips.has_more:
                 break
@@ -305,15 +306,16 @@ class NodeSyncTimestamp(object):
             args = GetTipsPayload(**data)
             self.send_tips(args.timestamp, args.include_hashes, args.offset)
 
+    @inlineCallbacks
     def send_tips(self, timestamp=None, include_hashes=False, offset=0):
         """ Send a TIPS message.
         """
         if timestamp is None:
-            timestamp = self.manager.tx_storage.latest_timestamp
+            timestamp = yield self.manager.get_latest_timestamp()
 
         # All tips
-        tx_intervals = self.manager.tx_storage.get_tx_tips(timestamp)
-        blk_intervals = self.manager.tx_storage.get_block_tips(timestamp)
+        tx_intervals = yield self.manager.get_tx_tips(timestamp)
+        blk_intervals = yield self.manager.get_block_tips(timestamp)
         intervals = tx_intervals.union(blk_intervals)
 
         # Previous timestamp in which tips have changed
@@ -324,8 +326,8 @@ class NodeSyncTimestamp(object):
 
         # Look for transactions confirming already confirmed transactions
         while min_end != inf:
-            tx_tmp = self.manager.tx_storage.get_tx_tips(min_end - 1)
-            blk_tmp = self.manager.tx_storage.get_block_tips(min_end - 1)
+            tx_tmp = yield self.manager.get_tx_tips(min_end - 1)
+            blk_tmp = yield self.manager.get_block_tips(min_end - 1)
             tmp = tx_tmp.union(blk_tmp)
             tmp.difference_update(intervals)
             if not tmp:
@@ -333,7 +335,7 @@ class NodeSyncTimestamp(object):
             min_end = min(x.begin for x in tmp)
 
         # Calculate list of hashes to be sent
-        merkle_tree, hashes = self.get_merkle_tree(timestamp)
+        merkle_tree, hashes = yield self.get_merkle_tree(timestamp)
         has_more = False
 
         if not include_hashes:
@@ -388,11 +390,11 @@ class NodeSyncTimestamp(object):
         hash_hex, _, parents_json = payload2.partition(' ')
         parents = json.loads(parents_json)
 
-        if self.protocol.tx_storage.transaction_exists_by_hash(hash_hex):
+        if self.manager.transaction_exists_by_hash(hash_hex):
             return
 
         for parent_hash in parents:
-            if not self.protocol.tx_storage.transaction_exists_by_hash(parent_hash):
+            if not self.manager.transaction_exists_by_hash(parent_hash):
                 # Are we out-of-sync with this peer?
                 return
 
@@ -442,7 +444,8 @@ class NodeSyncTimestamp(object):
             # Will it reduce peer reputation score?
             return
         tx.storage = self.protocol.node.tx_storage
-        self.manager.on_new_tx(tx, conn=self.protocol)
+        #self.manager.on_new_tx(tx, conn=self.protocol)
+        self.manager.on_new_tx(tx)
 
         key = 'get-data-{}'.format(tx.hash)
         deferred = self.deferred_by_key.pop(key, None)
@@ -578,12 +581,12 @@ class NodeSyncLeftToRightManager(object):  # pragma: no cover
         """
         def are_parents_known(tip):
             for parent_hash in tip.parents:
-                if not self.manager.tx_storage.transaction_exists_by_hash_bytes(parent_hash):
+                if not self.manager.transaction_exists_by_hash_bytes(parent_hash):
                     return False
             return True
 
         def is_known(tip):
-            if not self.manager.tx_storage.transaction_exists_by_hash_bytes(tip.hash):
+            if not self.manager.transaction_exists_by_hash_bytes(tip.hash):
                 return False
             return True
 
@@ -643,7 +646,7 @@ class NodeSyncLeftToRightManager(object):  # pragma: no cover
 
         print('on_tips_received(): All blocks are known. Checking tip transactions...')
         for tip in tip_transactions:
-            if not self.manager.tx_storage.transaction_exists_by_hash(tip.hash.hex()):
+            if not self.manager.transaction_exists_by_hash_bytes(tip.hash):
                 print('on_tips_received(): Syncing transactions...')
                 conn.state.send_get_transactions(tip.hash.hex())
                 self.manager.state = self.manager.NodeState.SYNCING
@@ -669,7 +672,7 @@ class NodeSyncLeftToRightManager(object):  # pragma: no cover
 
         # Let's check whether we know these received hashes.
         for i, h in enumerate(block_hashes):
-            if not self.manager.tx_storage.transaction_exists_by_hash(h):
+            if not self.manager.transaction_exists_by_hash(h):
                 first_unknown = i
                 break
         else:
@@ -679,7 +682,7 @@ class NodeSyncLeftToRightManager(object):  # pragma: no cover
 
         # Validate block hashes sequence.
         for h in block_hashes[first_unknown:]:
-            if self.manager.tx_storage.transaction_exists_by_hash(h):
+            if self.manager.transaction_exists_by_hash(h):
                 # Something is wrong. We're supposed to unknown all hashes after the first unknown.
                 raise InvalidBlockHashesSequence()
 
@@ -708,7 +711,7 @@ class NodeSyncLeftToRightManager(object):  # pragma: no cover
 
         # Let's check whether we know these received hashes.
         for i, h in enumerate(txs_hashes):
-            if not self.manager.tx_storage.transaction_exists_by_hash(h):
+            if not self.manager.transaction_exists_by_hash(h):
                 first_unknown = i
                 break
         else:
@@ -719,7 +722,7 @@ class NodeSyncLeftToRightManager(object):  # pragma: no cover
 
         # Validate block hashes sequence.
         for h in txs_hashes[first_unknown:]:
-            if self.manager.tx_storage.transaction_exists_by_hash(h):
+            if self.manager.transaction_exists_by_hash(h):
                 # Something is wrong. We're supposed to unknown all hashes after the first unknown.
                 raise InvalidBlockHashesSequence(h)
 
@@ -832,11 +835,11 @@ class NodeSyncManager(object):  # pragma: no cover
         """
 
         # Save the transaction if we don't have it.
-        if not self.manager.tx_storage.transaction_exists_by_hash_bytes(tx.hash):
+        if not self.manager.transaction_exists_by_hash_bytes(tx.hash):
             # However, if the transaction doesn't connect to the genesis DAG, just save in temporary storage.
             if tx.compute_genesis_dag_connectivity(self.manager.tx_storage, self.tx_storage_sync):
                 self.manager.tx_storage.save_transaction(tx)
-            elif not self.tx_storage_sync.transaction_exists_by_hash_bytes(tx.hash):
+            elif not self.transaction_exists_by_hash_bytes(tx.hash):
                 self.tx_storage_sync.save_transaction(tx)
 
         # meta = self.tx_storage.get_metadata_by_hash_bytes(tx.hash)
@@ -855,7 +858,7 @@ class NodeSyncManager(object):  # pragma: no cover
         hashes_to_remove = set()
         for hash_hex in self.blocks_to_download:
             # Check if we already have this hash, either in temp or permanent storage. If so, remove from list.
-            if (self.manager.tx_storage.transaction_exists_by_hash(hash_hex) or
+            if (self.manager.transaction_exists_by_hash(hash_hex) or
                     self.tx_storage_sync.transaction_exists_by_hash(hash_hex)):
                 hashes_to_remove.add(hash_hex)
                 continue
@@ -886,7 +889,7 @@ class NodeSyncManager(object):  # pragma: no cover
                 continue
             for parent_hash_bytes in tx.parents:
                 # Find the parent.
-                if not self.manager.tx_storage.transaction_exists_by_hash_bytes(parent_hash_bytes):
+                if not self.manager.transaction_exists_by_hash_bytes(parent_hash_bytes):
                     # If the parent isn't in the main storage, it's not confirmed.
                     continue
                 # The parent is in storage. Get the data.

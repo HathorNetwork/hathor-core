@@ -77,12 +77,12 @@ class BaseTransaction:
         return ('%s(nonce=%d, timestamp=%s, version=%s, weight=%f, height=%d, inputs=%s, outputs=%s, parents=%s, '
                 'hash=%s, storage=%s)' %
                 (class_name, self.nonce, self.timestamp, self.version, self.weight, self.height,
-                 repr(self.inputs), repr(self.outputs), repr(self.parents), self.hash, repr(self.storage)))
+                 repr(self.inputs), repr(self.outputs), repr(self.parents), self.hash_hex, repr(self.storage)))
 
     def __str__(self):
         class_name = 'Block' if self.is_block else 'Transaction'
         return ('%s(nonce=%d, timestamp=%s, version=%s, weight=%f, height=%d, hash=%s)' % (class_name, self.nonce,
-                self.timestamp, self.version, self.weight, self.height, self.hash))
+                self.timestamp, self.version, self.weight, self.height, self.hash_hex))
 
     @classmethod
     def create_from_struct(cls, struct_bytes, storage=None):
