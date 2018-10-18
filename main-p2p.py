@@ -5,14 +5,11 @@ from twisted.python import log
 
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.process_manager import ProcessManager
-from hathor.manager import HathorManager
-from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage
 from hathor.p2p.peer_discovery import DNSPeerDiscovery, BootstrapPeerDiscovery
 
 import argparse
 import sys
 import json
-import os
 
 
 def main(stringArgs):
@@ -37,16 +34,17 @@ def main(stringArgs):
     print('My peer id is', peer_id.id)
 
     if args.data:
-        tx_dir = os.path.join(args.data, 'tx')
-        tx_storage = TransactionJSONStorage(path=tx_dir)
-        print('Using TransactionJSONStorage at {}'.format(tx_dir))
+        # tx_dir = os.path.join(args.data, 'tx')
+        # tx_storage = TransactionJSONStorage(path=tx_dir)
+        # print('Using TransactionJSONStorage at {}'.format(tx_dir))
+        pass
     else:
-        tx_storage = TransactionMemoryStorage()
-        print('Using TransactionMemoryStorage')
+        # tx_storage = TransactionMemoryStorage()
+        # print('Using TransactionMemoryStorage')
+        pass
 
     network = 'testnet'
-    manager = ProcessManager(reactor, peer_id=peer_id, network=network,
-                             hostname=args.hostname, tx_storage=tx_storage)
+    manager = ProcessManager(reactor, peer_id=peer_id, network=network, hostname=args.hostname)
 
     dns_hosts = []
     if args.testnet:
@@ -73,4 +71,3 @@ def main(stringArgs):
 if __name__ == '__main__':
     args = sys.argv[1:]
     main(' '.join(args))
-

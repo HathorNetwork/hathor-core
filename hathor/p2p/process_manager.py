@@ -1,30 +1,16 @@
 # encoding: utf-8
 
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.node_sync import NodeSyncLeftToRightManager
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
-from hathor.process_protocol import ProcessProtocolFactory
-from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
-from hathor.pubsub import HathorEvents, PubSubManager
-from hathor.exception import HathorError
+from hathor.transaction.genesis import genesis_transactions
+from hathor.transaction import Block, Transaction
+from hathor.amp_protocol import HathorAMP, GetTx, TxExists, GetTips, GetLatestTimestamp, OnNewTx
 
-from collections import defaultdict, deque
-from enum import Enum
-from math import log
-import time
-import random
-import pickle
-
-#from hathor.test_protocol import TestLineReceiver, TestFactory
-from twisted.internet.endpoints import ProcessEndpoint, StandardIOEndpoint
-from twisted.internet import stdio
 from twisted.internet.endpoints import UNIXClientEndpoint, connectProtocol
-from hathor.amp_protocol import HathorAMPFactory, AMPConnector, HathorAMP, \
-                                GetTx, SendTx, TxExists, GetTips, GetLatestTimestamp, OnNewTx
-from twisted.internet import protocol
-from os import environ
 from twisted.internet.defer import inlineCallbacks
+
+import pickle
 
 
 class ProcessManager(object):
@@ -33,8 +19,7 @@ class ProcessManager(object):
     Its primary objective is to handle DAG-related matters, ensuring that the DAG is always valid and connected.
     """
 
-    def __init__(self, reactor, peer_id=None, network=None, hostname=None,
-                 pubsub=None, wallet=None, tx_storage=None, default_port=40403):
+    def __init__(self, reactor, peer_id=None, network=None, hostname=None, default_port=40403):
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :type reactor: :py:class:`twisted.internet.Reactor`
@@ -47,12 +32,6 @@ class ProcessManager(object):
 
         :param hostname: The hostname of this node. It is used to generate its entrypoints.
         :type hostname: string
-
-        :param pubsub: If not given, a new one is created.
-        :type pubsub: :py:class:`hathor.pubsub.PubSubManager`
-
-        :param tx_storage: If not given, a :py:class:`TransactionMemoryStorage` one is created.
-        :type tx_storage: :py:class:`hathor.transaction.storage.transaction_storage.TransactionStorage`
 
         :param default_port: Network default port. It is used when only ip addresses are discovered.
         :type default_port: int
@@ -68,18 +47,15 @@ class ProcessManager(object):
         self.my_peer = peer_id or PeerId()
         self.network = network or 'testnet'
 
-        # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
-        self.tx_storage = tx_storage or TransactionMemoryStorage()
-
         self.peer_discoveries = []
 
         self.server_factory = HathorServerFactory(self.network, self.my_peer, node=self)
         self.client_factory = HathorClientFactory(self.network, self.my_peer, node=self)
         self.connections = ConnectionsManager(self.reactor, self.my_peer, self.server_factory, self.client_factory)
 
-        #self.node_sync_manager = NodeSyncLeftToRightManager(self)
-        self.remoteProcess = None
         self.remoteConnection = None
+
+        self.genesis_hashes = []
 
     def start(self):
         """ A factory must be started only once. And it is usually automatically started.
@@ -89,21 +65,17 @@ class ProcessManager(object):
         for peer_discovery in self.peer_discoveries:
             peer_discovery.discover_and_connect(self.connections.connect_to)
 
-
-        #serverEndpoint = StandardIOEndpoint(self.reactor)
-        #def myprint(p):
-        #    logging.debug(type(p))
-        #d = serverEndpoint.listen(AMPProtocolFactory(self))
-        #d.addCallback(myprint)
-
-        #stdio.StandardIO(AMPConnector(AMPProtocol(self)))
-
         endpoint = UNIXClientEndpoint(self.reactor, '/tmp/file.sock')
-        #connected = endpoint.connect(AMPProtocolFactory(self))
         d = connectProtocol(endpoint, HathorAMP(self))
+
         def handleConn(p):
-            self.remoteProcess = p
+            self.remoteConnection = p
         d.addCallback(handleConn)
+
+        genesis = genesis_transactions(None)
+        for g in genesis:
+            self.genesis_hashes.append(g.hash)
+        self.first_timestamp = min(x.timestamp for x in genesis_transactions(None))
 
     def stop(self):
         self.connections.stop()
@@ -145,9 +117,21 @@ class ProcessManager(object):
     @inlineCallbacks
     def get_latest_timestamp(self):
         ret = yield self.remoteConnection.callRemote(GetLatestTimestamp)
-        print('getlatesttimestamp')
         return ret['timestamp']
 
     def on_new_tx(self, tx):
         tx_type = 'block' if tx.is_block else 'tx'
         self.remoteConnection.callRemote(OnNewTx, tx_type=tx_type, tx_bytes=bytes(tx))
+
+    @inlineCallbacks
+    def get_transaction_by_hash(self, hash_hex):
+        ret = yield self.remoteConnection.callRemote(GetTx, hash_hex=hash_hex)
+        tx_type = ret['tx_type']
+        if tx_type == 'block':
+            tx = Block.create_from_struct(ret['tx_bytes'])
+        else:
+            tx = Transaction.create_from_struct(ret['tx_bytes'])
+        return tx
+
+    def is_genesis(self, hash):
+        return hash in self.genesis_hashes

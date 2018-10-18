@@ -1,13 +1,9 @@
 # encoding: utf-8
 
-from hathor.p2p.peer_id import PeerId
-from hathor.p2p.manager import ConnectionsManager
-from hathor.process_protocol import ProcessProtocolFactory
-from hathor.amp_protocol import HathorAMPFactory, HathorAMP, AMPConnector, SendTx
+from hathor.amp_protocol import HathorAMPFactory, SendTx
 from hathor.transaction import Block, TxOutput, sum_weights
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
-from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.metrics import Metrics
 from hathor.exception import HathorError
@@ -17,7 +13,6 @@ from enum import Enum
 from math import log
 import time
 import random
-import sys
 
 from hathor.p2p.protocol import HathorLineReceiver
 MyServerProtocol = HathorLineReceiver
@@ -27,10 +22,6 @@ MyClientProtocol = HathorLineReceiver
 # MyServerProtocol = HathorWebSocketServerProtocol
 # MyClientProtocol = HathorWebSocketClientProtocol
 
-#from hathor.test_protocol import TestLineReceiver, TestFactory
-from twisted.internet.endpoints import ProcessEndpoint, connectProtocol
-#from twisted.internet import protocol
-#from os import environ
 
 class HathorManager(object):
     """ HathorManager manages the node with the help of other specialized classes.
@@ -45,58 +36,26 @@ class HathorManager(object):
         # This node is ready to establish new connections, sync, and exchange transactions.
         READY = 'READY'
 
-    def __init__(self, reactor, peer_id=None, network=None, hostname=None,
-                 pubsub=None, wallet=None, tx_storage=None, peer_storage=None, default_port=40403):
+    def __init__(self, reactor, pubsub=None, wallet=None, tx_storage=None):
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :type reactor: :py:class:`twisted.internet.Reactor`
-
-        :param peer_id: Id of this node. If not given, a new one is created.
-        :type peer_id: :py:class:`hathor.p2p.peer_id.PeerId`
-
-        :param network: Name of the network this node participates. Usually it is either testnet or mainnet.
-        :type network: string
-
-        :param hostname: The hostname of this node. It is used to generate its entrypoints.
-        :type hostname: string
 
         :param pubsub: If not given, a new one is created.
         :type pubsub: :py:class:`hathor.pubsub.PubSubManager`
 
         :param tx_storage: If not given, a :py:class:`TransactionMemoryStorage` one is created.
         :type tx_storage: :py:class:`hathor.transaction.storage.transaction_storage.TransactionStorage`
-
-        :param peer_storage: If not given, a new one is created.
-        :type peer_storage: :py:class:`hathor.p2p.peer_storage.PeerStorage`
-
-        :param default_port: Network default port. It is used when only ip addresses are discovered.
-        :type default_port: int
         """
-        self.args = sys.argv[1:]
         self.reactor = reactor
         self.state = None
         self.profiler = None
-
-        # Hostname, used to be accessed by other peers.
-        self.hostname = hostname
-
-        # Remote address, which can be different from local address.
-        self.remote_address = None
-
-        self.my_peer = peer_id or PeerId()
-        self.network = network or 'testnet'
 
         # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
         self.tx_storage = tx_storage or TransactionMemoryStorage()
         self.pubsub = pubsub or PubSubManager()
 
         self.metrics = Metrics(pubsub=self.pubsub, tx_storage=tx_storage)
-
-        self.peer_discoveries = []
-
-        #self.server_factory = HathorServerFactory(self.network, self.my_peer, node=self)
-        #self.client_factory = HathorClientFactory(self.network, self.my_peer, node=self)
-        #self.connections = ConnectionsManager(self.reactor, self.my_peer, self.server_factory, self.client_factory)
 
         # Map of peer_id to the best block height reported by that peer.
         self.peer_best_heights = defaultdict(int)
@@ -115,18 +74,15 @@ class HathorManager(object):
         """
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
-        #self.connections.start()
 
         # Initialize manager's components.
         self._initialize_components()
 
-        #for peer_discovery in self.peer_discoveries:
-        #    peer_discovery.discover_and_connect(self.connections.connect_to)
-
         self.start_time = time.time()
 
+        self.reactor.listenUNIX('/tmp/file.sock', HathorAMPFactory(self))
+
     def stop(self):
-        #self.connections.stop()
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
 
     def start_profiler(self):
@@ -161,9 +117,6 @@ class HathorManager(object):
             self.on_new_tx(tx)
         self.state = self.NodeState.READY
 
-    def add_peer_discovery(self, peer_discovery):
-        self.peer_discoveries.append(peer_discovery)
-
     def get_new_tx_parents(self, timestamp=None):
         """Select which transactions will be confirmed by a new transaction.
 
@@ -171,7 +124,7 @@ class HathorManager(object):
         :rtype: List[bytes(hash)]
         """
         timestamp = timestamp or self.reactor.seconds()
-        ret = list(self.tx_storage.get_tx_tips(timestamp-1))
+        ret = list(self.tx_storage.get_tx_tips(timestamp - 1))
         random.shuffle(ret)
         ret = ret[:2]
         if len(ret) == 1:
@@ -291,9 +244,9 @@ class HathorManager(object):
         tx.mark_inputs_as_used()
 
         # Propagate to our peers.
-        # self.connections.send_tx_to_peers(tx)
         if self.remoteConnection:
             tx_type = 'block' if tx.is_block else 'tx'
+            # we don't need the result of send_tx call, so no need to yield or get the deferred
             self.remoteConnection.callRemote(SendTx, tx_type=tx_type, tx_bytes=bytes(tx))
 
         # Publish to pubsub manager the new tx accepted
@@ -333,33 +286,3 @@ class HathorManager(object):
             weight = self.min_block_weight
 
         return weight
-
-   # def listen(self, description, ssl=False):
-   #     endpoint = self.connections.listen(description, ssl)
-
-   #     if self.hostname:
-   #         proto, _, _ = description.partition(':')
-   #         address = '{}:{}:{}'.format(proto, self.hostname, endpoint._port)
-   #         self.my_peer.entrypoints.append(address)
-
-    def listen(self, env=None):
-#        BOOTSTRAP = """\
-#import sys
-#from hathor.p2p.main import main
-#
-#main('%s')
-#        """ % (' '.join(self.args))
-
-        #self.processFactory = ProcessProtocolFactory(self)
-        #endpoint = ProcessEndpoint(self.reactor, sys.executable, [sys.executable, "-c", BOOTSTRAP], env=env)
-        #endpoint.connect(AMPProtocolFactory(self)).addCallback(lambda p : print(p, type(p)))
-
-        #d = connectProtocol(endpoint, AMPProtocol(self))
-
-        #self.reactor.spawnProcess(AMPConnector(AMPProtocol(self), 'testprocess'), sys.executable, [sys.executable, "-c", BOOTSTRAP], env=env)
-
-        self.reactor.listenUNIX('/tmp/file.sock', HathorAMPFactory(self))
-
-
-    def handleProcessMessage(msg):
-        print("Received message in manager: ", msg)

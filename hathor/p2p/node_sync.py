@@ -167,9 +167,9 @@ class NodeSyncTimestamp(object):
         local_merkle_tree, _ = yield self.get_merkle_tree(cur)
         step = 1
         while tips.merkle_tree != local_merkle_tree:
-            if cur == self.manager.tx_storage.first_timestamp:
+            if cur == self.manager.first_timestamp:
                 raise Exception('Should never happen.')
-            cur = max(cur - step, self.manager.tx_storage.first_timestamp)
+            cur = max(cur - step, self.manager.first_timestamp)
             tips = yield self.get_peer_tips(cur)
             local_merkle_tree, _ = yield self.get_merkle_tree(cur)
             step *= 2
@@ -405,13 +405,14 @@ class NodeSyncTimestamp(object):
         """
         self.send_message(ProtocolMessages.GET_DATA, hash_hex)
 
+    @inlineCallbacks
     def handle_get_data(self, payload):
         """ Handle a received GET-DATA message.
         """
         hash_hex = payload
         # print('handle_get_data', hash_hex)
         try:
-            tx = self.protocol.node.tx_storage.get_transaction_by_hash(hash_hex)
+            tx = yield self.protocol.node.get_transaction_by_hash(hash_hex)
             self.send_data(tx)
         except TransactionDoesNotExist:
             # TODO Send NOT-FOUND?
@@ -439,12 +440,10 @@ class NodeSyncTimestamp(object):
         else:
             raise ValueError('Unknown payload load')
 
-        if self.protocol.node.tx_storage.get_genesis_by_hash_bytes(tx.hash):
+        if self.manager.is_genesis(tx.hash):
             # We just got the data of a genesis tx/block. What should we do?
             # Will it reduce peer reputation score?
             return
-        tx.storage = self.protocol.node.tx_storage
-        #self.manager.on_new_tx(tx, conn=self.protocol)
         self.manager.on_new_tx(tx)
 
         key = 'get-data-{}'.format(tx.hash)

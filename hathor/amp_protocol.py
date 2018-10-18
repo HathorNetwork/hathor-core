@@ -1,7 +1,6 @@
 # encoding: utf-8
 
 from twisted.internet.protocol import Factory
-from twisted.internet import protocol
 from twisted.protocols import amp
 
 from hathor.transaction import Transaction, Block
@@ -10,7 +9,7 @@ import pickle
 
 
 class GetTx(amp.Command):
-    arguments = [(b'hash', amp.String())]
+    arguments = [(b'hash_hex', amp.Unicode())]
     response = [(b'tx_type', amp.Unicode()),
                 (b'tx_bytes', amp.String())]
 
@@ -52,7 +51,8 @@ class HathorAMP(amp.AMP):
 
     def get_tx(self, hash_hex):
         tx = self.node.tx_storage.get_transaction_by_hash(hash_hex)
-        return {'tx': tx.to_json()}
+        tx_type = 'block' if tx.is_block else 'tx'
+        return {'tx_type': tx_type, 'tx_bytes': bytes(tx)}
     GetTx.responder(get_tx)
 
     def tx_exists(self, hash_hex):
@@ -88,6 +88,7 @@ class HathorAMP(amp.AMP):
             tx = Block.create_from_struct(tx_bytes)
         else:
             tx = Transaction.create_from_struct(tx_bytes)
+        tx.storage = self.node.tx_storage
         self.node.on_new_tx(tx)
         return {'ret': 0}
     OnNewTx.responder(on_new_tx)
@@ -103,65 +104,3 @@ class HathorAMPFactory(Factory):
 
     def buildProtocol(self, addr):
         return HathorAMP(self.node)
-
-
-class AMPConnector(protocol.ProcessProtocol):
-    """
-    A L{ProcessProtocol} subclass that can understand and speak AMP.
-    """
-
-    def __init__(self, proto, name):
-        """
-        @param proto: An instance or subclass of L{amp.AMP}
-        @type proto: L{amp.AMP}
-
-        @param name: optional name of the subprocess.
-        @type name: int
-        """
-        #self.finished = defer.Deferred()
-        self.amp = proto
-        self.name = name
-
-    def signalProcess(self, signalID):
-        """
-        Send the signal signalID to the child process
-
-        @param signalID: The signal ID that you want to send to the
-                        corresponding child
-        @type signalID: C{str} or C{int}
-        """
-        return self.transport.signalProcess(signalID)
-
-    def connectionMade(self):
-        print("Subprocess %s started." % (self.name,))
-        self.amp.makeConnection(self)
-
-    # Transport
-    disconnecting = False
-
-    def write(self, data):
-        self.transport.write(data)
-
-    def loseConnection(self):
-        self.transport.loseConnection()
-
-    def getPeer(self):
-        return ('subprocess',)
-
-    def getHost(self):
-        return ('no host',)
-
-    def childDataReceived(self, childFD, data):
-        self.amp.dataReceived(data)
-
-    def errReceived(self, data):
-        for line in data.strip().splitlines():
-            print("FROM %s: %s" % (self.name, line))
-
-    def processEnded(self, status):
-        print("Process: %s ended" % (self.name,))
-        self.amp.connectionLost(status)
-        #if status.check(error.ProcessDone):
-        #    self.finished.callback('')
-        #    return
-        #self.finished.errback(status)
