@@ -14,11 +14,18 @@ from enum import Enum
 from math import log
 import time
 import random
+import pickle
 
 #from hathor.test_protocol import TestLineReceiver, TestFactory
 from twisted.internet.endpoints import ProcessEndpoint, StandardIOEndpoint
+from twisted.internet import stdio
+from twisted.internet.endpoints import UNIXClientEndpoint, connectProtocol
+from hathor.amp_protocol import HathorAMPFactory, AMPConnector, HathorAMP, \
+                                GetTx, SendTx, TxExists, GetTips, GetLatestTimestamp, OnNewTx
 from twisted.internet import protocol
 from os import environ
+from twisted.internet.defer import inlineCallbacks
+
 
 class ProcessManager(object):
     """ HathorManager manages the node with the help of other specialized classes.
@@ -71,9 +78,8 @@ class ProcessManager(object):
         self.connections = ConnectionsManager(self.reactor, self.my_peer, self.server_factory, self.client_factory)
 
         #self.node_sync_manager = NodeSyncLeftToRightManager(self)
-
-        #self.testFactory = None
-        self.processFactory = None
+        self.remoteProcess = None
+        self.remoteConnection = None
 
     def start(self):
         """ A factory must be started only once. And it is usually automatically started.
@@ -83,9 +89,21 @@ class ProcessManager(object):
         for peer_discovery in self.peer_discoveries:
             peer_discovery.discover_and_connect(self.connections.connect_to)
 
-        serverEndpoint = StandardIOEndpoint(self.reactor)
-        self.processFactory = ProcessProtocolFactory(self)
-        serverEndpoint.listen(self.processFactory)
+
+        #serverEndpoint = StandardIOEndpoint(self.reactor)
+        #def myprint(p):
+        #    logging.debug(type(p))
+        #d = serverEndpoint.listen(AMPProtocolFactory(self))
+        #d.addCallback(myprint)
+
+        #stdio.StandardIO(AMPConnector(AMPProtocol(self)))
+
+        endpoint = UNIXClientEndpoint(self.reactor, '/tmp/file.sock')
+        #connected = endpoint.connect(AMPProtocolFactory(self))
+        d = connectProtocol(endpoint, HathorAMP(self))
+        def handleConn(p):
+            self.remoteProcess = p
+        d.addCallback(handleConn)
 
     def stop(self):
         self.connections.stop()
@@ -104,5 +122,32 @@ class ProcessManager(object):
             address = '{}:{}:{}'.format(proto, self.hostname, endpoint._port)
             self.my_peer.entrypoints.append(address)
 
-    def handleProcessMessage(self, msg):
-        print("handleProcessMessage", msg)
+    @inlineCallbacks
+    def transaction_exists_by_hash(self, hash_hex):
+        ret = yield self.remoteConnection.callRemote(TxExists, hash_hex=hash_hex)
+        return ret['ret']
+
+    @inlineCallbacks
+    def transaction_exists_by_hash_bytes(self, hash):
+        ret = yield self.transaction_exists_by_hash(hash.hex())
+        return ret
+
+    @inlineCallbacks
+    def get_tx_tips(self, timestamp):
+        ret = yield self.remoteConnection.callRemote(GetTips, timestamp=timestamp, type='tx')
+        return pickle.loads(ret['tips'])
+
+    @inlineCallbacks
+    def get_block_tips(self, timestamp):
+        ret = yield self.remoteConnection.callRemote(GetTips, timestamp=timestamp, type='block')
+        return pickle.loads(ret['tips'])
+
+    @inlineCallbacks
+    def get_latest_timestamp(self):
+        ret = yield self.remoteConnection.callRemote(GetLatestTimestamp)
+        print('getlatesttimestamp')
+        return ret['timestamp']
+
+    def on_new_tx(self, tx):
+        tx_type = 'block' if tx.is_block else 'tx'
+        self.remoteConnection.callRemote(OnNewTx, tx_type=tx_type, tx_bytes=bytes(tx))

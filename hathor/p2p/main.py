@@ -15,6 +15,10 @@ import json
 import os
 
 
+if __name__ == '__main__':
+    args = sys.argv[1:]
+    main(' '.join(args))
+
 def main(stringArgs):
     parser = argparse.ArgumentParser()
     parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
