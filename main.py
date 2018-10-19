@@ -80,13 +80,17 @@ if __name__ == '__main__':
         tx_storage = TransactionJSONStorage(path=tx_dir)
         print('Using TransactionJSONStorage at {}'.format(tx_dir))
         print('Using Wallet at {}'.format(wallet_dir))
+        # unix socket
+        unix_socket = os.path.join(args.data, 'hathor.sock')
     else:
         tx_storage = TransactionMemoryStorage()
         print('Using TransactionMemoryStorage')
+        # unix socket
+        unix_socket = '/tmp/hathor.sock'
 
     wallet = create_wallet()
 
-    manager = HathorManager(reactor, tx_storage=tx_storage, wallet=wallet)
+    manager = HathorManager(reactor, tx_storage=tx_storage, wallet=wallet, unix_socket=unix_socket)
 
     manager.start()
 

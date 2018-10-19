@@ -10,6 +10,7 @@ from hathor.p2p.peer_discovery import DNSPeerDiscovery, BootstrapPeerDiscovery
 import argparse
 import sys
 import json
+import os
 
 
 def main(stringArgs):
@@ -34,17 +35,12 @@ def main(stringArgs):
     print('My peer id is', peer_id.id)
 
     if args.data:
-        # tx_dir = os.path.join(args.data, 'tx')
-        # tx_storage = TransactionJSONStorage(path=tx_dir)
-        # print('Using TransactionJSONStorage at {}'.format(tx_dir))
-        pass
+        unix_socket = os.path.join(args.data, 'hathor.sock')
     else:
-        # tx_storage = TransactionMemoryStorage()
-        # print('Using TransactionMemoryStorage')
-        pass
+        unix_socket = '/tmp/hathor.sock'
 
     network = 'testnet'
-    manager = ProcessManager(reactor, peer_id=peer_id, network=network, hostname=args.hostname)
+    manager = ProcessManager(reactor, peer_id=peer_id, network=network, hostname=args.hostname, unix_socket=unix_socket)
 
     dns_hosts = []
     if args.testnet:

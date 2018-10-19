@@ -36,7 +36,7 @@ class HathorManager(object):
         # This node is ready to establish new connections, sync, and exchange transactions.
         READY = 'READY'
 
-    def __init__(self, reactor, pubsub=None, wallet=None, tx_storage=None):
+    def __init__(self, reactor, pubsub=None, wallet=None, tx_storage=None, unix_socket=None):
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :type reactor: :py:class:`twisted.internet.Reactor`
@@ -68,6 +68,7 @@ class HathorManager(object):
         self.tokens_issued_per_block = 10000
 
         self.remoteConnection = None
+        self.unix_socket = unix_socket
 
     def start(self):
         """ A factory must be started only once. And it is usually automatically started.
@@ -80,7 +81,7 @@ class HathorManager(object):
 
         self.start_time = time.time()
 
-        self.reactor.listenUNIX('/tmp/file.sock', HathorAMPFactory(self))
+        self.reactor.listenUNIX(self.unix_socket, HathorAMPFactory(self))
 
     def stop(self):
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)

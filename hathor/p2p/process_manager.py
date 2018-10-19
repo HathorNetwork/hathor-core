@@ -19,7 +19,7 @@ class ProcessManager(object):
     Its primary objective is to handle DAG-related matters, ensuring that the DAG is always valid and connected.
     """
 
-    def __init__(self, reactor, peer_id=None, network=None, hostname=None, default_port=40403):
+    def __init__(self, reactor, peer_id=None, network=None, hostname=None, default_port=40403, unix_socket=None):
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :type reactor: :py:class:`twisted.internet.Reactor`
@@ -54,6 +54,7 @@ class ProcessManager(object):
         self.connections = ConnectionsManager(self.reactor, self.my_peer, self.server_factory, self.client_factory)
 
         self.remoteConnection = None
+        self.unix_socket = unix_socket
 
         self.genesis_hashes = []
 
@@ -65,7 +66,7 @@ class ProcessManager(object):
         for peer_discovery in self.peer_discoveries:
             peer_discovery.discover_and_connect(self.connections.connect_to)
 
-        endpoint = UNIXClientEndpoint(self.reactor, '/tmp/file.sock')
+        endpoint = UNIXClientEndpoint(self.reactor, self.unix_socket)
         d = connectProtocol(endpoint, HathorAMP(self))
 
         def handleConn(p):
