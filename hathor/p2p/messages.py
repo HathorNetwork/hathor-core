@@ -1,6 +1,17 @@
 from enum import Enum
 from collections import namedtuple
 
+GetNextPayload = namedtuple('GetNextPayload', [
+    'timestamp',  # int
+    'offset',  # int, default=0
+])
+
+NextPayload = namedtuple('NextPayload', [
+    'timestamp',  # int
+    'next_timestamp',  # int
+    'next_offset',  # int
+    'hashes',  # List[str(hash)]
+])
 
 GetTipsPayload = namedtuple('GetTipsPayload', [
     'timestamp',  # int
@@ -60,6 +71,9 @@ class ProtocolMessages(Enum):
 
     GET_TIPS = 'GET-TIPS'
     TIPS = 'TIPS'
+
+    GET_NEXT = 'GET-NEXT'
+    NEXT = 'NEXT'
 
     GET_BLOCKS = 'GET-BLOCKS'  # Request a list of hashes for blocks. Payload is the current latest block.
     BLOCKS = 'BLOCKS'          # Send a list of hashes for blocks. Payload is a list of hashes.

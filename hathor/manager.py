@@ -273,7 +273,7 @@ class HathorManager(object):
         """
         if not self.validate_new_tx(tx):
             # Discard invalid Transaction/block.
-            return
+            return False
 
         if self.wallet:
             self.wallet.on_new_tx(tx)
@@ -286,10 +286,11 @@ class HathorManager(object):
 
         ts_date = datetime.datetime.fromtimestamp(tx.timestamp)
         if tx.is_block:
-            print('New block: {} timestamp={} ({}) weight={}'.format(
+            print('New block: {} timestamp={} ({}) ({}) weight={}'.format(
                 tx.hash_hex,
                 ts_date,
                 tx.get_time_from_now(),
+                tx.timestamp,
                 tx.weight)
             )
         else:
@@ -302,6 +303,7 @@ class HathorManager(object):
 
         # Publish to pubsub manager the new tx accepted
         self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
+        return True
 
     def calculate_block_difficulty(self, block):
         """ Calculate block difficulty according to the ascendents of `block`.
