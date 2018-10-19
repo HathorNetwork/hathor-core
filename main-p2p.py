@@ -4,8 +4,10 @@ from twisted.internet import reactor
 from twisted.python import log
 
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.process_manager import ProcessManager
+from hathor.p2p.dag_proxy import DAGProxy
+from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_discovery import DNSPeerDiscovery, BootstrapPeerDiscovery
+from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 
 import argparse
 import sys
@@ -13,7 +15,7 @@ import json
 import os
 
 
-def main(stringArgs):
+if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
     parser.add_argument('--testnet', action='store_true', help='Connect to Hathor testnet')
@@ -22,7 +24,7 @@ def main(stringArgs):
     parser.add_argument('--listen', action='append', help='Address to listen for new connections (eg: tcp:8000)')
     parser.add_argument('--bootstrap', action='append', help='Address to connect to (eg: tcp:127.0.0.1:8000')
     parser.add_argument('--data', help='Data directory')
-    args, unknown = parser.parse_known_args(stringArgs.split(' '))
+    args, unknown = parser.parse_known_args()
 
     log.startLogging(sys.stdout)
 
@@ -40,21 +42,26 @@ def main(stringArgs):
         unix_socket = '/tmp/hathor.sock'
 
     network = 'testnet'
-    manager = ProcessManager(reactor, peer_id=peer_id, network=network, hostname=args.hostname, unix_socket=unix_socket)
+
+    dag_proxy = DAGProxy(reactor, unix_socket=unix_socket)
+
+    server_factory = HathorServerFactory(network, peer_id, node=dag_proxy)
+    client_factory = HathorClientFactory(network, peer_id, node=dag_proxy)
+    manager = ConnectionsManager(reactor, peer_id, args.hostname, server_factory, client_factory)
 
     dns_hosts = []
     if args.testnet:
         dns_hosts.append('testnet.hathor.network')
-
     if args.dns:
         dns_hosts.extend(dns_hosts)
 
     if dns_hosts:
         manager.add_peer_discovery(DNSPeerDiscovery(dns_hosts))
-
     if args.bootstrap:
         manager.add_peer_discovery(BootstrapPeerDiscovery(args.bootstrap))
 
+    dag_proxy.connections = manager
+    dag_proxy.start()
     manager.start()
 
     if args.listen:
@@ -62,8 +69,3 @@ def main(stringArgs):
             manager.listen(description)
 
     reactor.run()
-
-
-if __name__ == '__main__':
-    args = sys.argv[1:]
-    main(' '.join(args))

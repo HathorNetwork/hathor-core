@@ -12,9 +12,10 @@ from hathor.p2p.peer_storage import PeerStorage
 class ConnectionsManager:
     """ It manages all peer-to-peer connections and events related to control messages.
     """
-    def __init__(self, reactor, my_peer, server_factory, client_factory):
+    def __init__(self, reactor, my_peer, hostname, server_factory, client_factory):
         self.reactor = reactor
         self.my_peer = my_peer
+        self.hostname = hostname
 
         # Factories.
         self.server_factory = server_factory
@@ -43,12 +44,20 @@ class ConnectionsManager:
         self.lc_reconnect = LoopingCall(self.reconnect_to_all)
         self.lc_reconnect.clock = self.reactor
 
+        self.peer_discoveries = []
+
     def start(self):
         self.lc_reconnect.start(5)
+
+        for peer_discovery in self.peer_discoveries:
+            peer_discovery.discover_and_connect(self.connect_to)
 
     def stop(self):
         if self.lc_reconnect.running:
             self.lc_reconnect.stop()
+
+    def add_peer_discovery(self, peer_discovery):
+        self.peer_discoveries.append(peer_discovery)
 
     def send_tx_to_peers(self, tx):
         """ Send `tx` to all ready peers.
@@ -186,4 +195,10 @@ class ConnectionsManager:
 
         endpoint.listen(factory)
         print('Listening to: {}...'.format(description))
+
+        if self.hostname:
+            proto, _, _ = description.partition(':')
+            address = '{}:{}:{}'.format(proto, self.hostname, endpoint._port)
+            self.my_peer.entrypoints.append(address)
+
         return endpoint

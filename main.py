@@ -22,7 +22,6 @@ import hathor
 import argparse
 import getpass
 import sys
-import json
 import os
 
 
