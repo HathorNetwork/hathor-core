@@ -35,6 +35,7 @@ if __name__ == '__main__':
         default='hd'
     )
     parser.add_argument('--words', help='Words used to generate the seed for HD Wallet')
+    parser.add_argument('--listen', action='append', help='Address to listen for new connections (eg: tcp:8000)')
     parser.add_argument('--passphrase', action='store_true', help='Passphrase used to generate the seed for HD Wallet')
     parser.add_argument('--unlock-wallet', action='store_true', help='Ask for password to unlock wallet')
     args, unknown = parser.parse_known_args()
@@ -90,8 +91,16 @@ if __name__ == '__main__':
     wallet = create_wallet()
 
     manager = HathorManager(reactor, tx_storage=tx_storage, wallet=wallet, unix_socket=unix_socket)
-
     manager.start()
+
+    if args.listen:
+        # start subprocess to handle p2p
+        newpid = os.fork()
+        if newpid == 0:
+            # new_args should be a list like ['python', 'main-p2p.py', arg1, arg2, ...]
+            new_args = [sys.executable, 'main-p2p.py']
+            new_args.extend(sys.argv[1:])
+            os.execv(sys.executable, new_args)
 
     if args.status:
         # TODO get this from a file. How should we do with the factory?
