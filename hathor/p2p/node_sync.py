@@ -7,7 +7,7 @@ from hathor.p2p.exceptions import InvalidBlockHashesSequence
 from hathor.transaction import Block, Transaction
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
-from hathor.p2p.messages import ProtocolMessages, GetTipsPayload, TipsPayload
+from hathor.p2p.messages import ProtocolMessages, GetTipsPayload, TipsPayload, GetNextPayload, NextPayload
 
 import base64
 import hashlib
@@ -71,6 +71,9 @@ class NodeSyncTimestamp(object):
 
             ProtocolMessages.GET_TIPS: self.handle_get_tips,
             ProtocolMessages.TIPS: self.handle_tips,
+
+            ProtocolMessages.GET_NEXT: self.handle_get_next,
+            ProtocolMessages.NEXT: self.handle_next,
         }
 
     def start(self):
@@ -114,6 +117,22 @@ class NodeSyncTimestamp(object):
 
         return merkle.digest(), hashes
 
+    def get_peer_next(self, timestamp=None, offset=0):
+        """ A helper that returns a deferred that is called when the peer replies.
+
+        :param timestamp: Timestamp of the GET-NEXT message
+        :type timestamp: int
+
+        :rtype: Deferred
+        """
+        key = 'next'
+        if self.deferred_by_key.get(key, None) is not None:
+            raise Exception('latest_deferred is not None')
+        self.send_get_next(timestamp, offset)
+        deferred = Deferred()
+        self.deferred_by_key[key] = deferred
+        return deferred
+
     def get_peer_tips(self, timestamp=None, include_hashes=False, offset=0):
         """ A helper that returns a deferred that is called when the peer replies.
 
@@ -141,7 +160,7 @@ class NodeSyncTimestamp(object):
 
         :rtype: Deferred
         """
-        key = 'get-data-{}'.format(hash_bytes)
+        key = 'get-data-{}'.format(hash_bytes.hex())
         if self.deferred_by_key.get(key, None) is not None:
             raise Exception('latest_deferred is not None')
         self.send_get_data(hash_bytes.hex())
@@ -158,7 +177,7 @@ class NodeSyncTimestamp(object):
         # print('Running find_synced_timestamp...')
         tips = yield self.get_peer_tips()
         if self.peer_timestamp is not None:
-            assert tips.timestamp >= self.peer_timestamp
+            assert tips.timestamp >= self.peer_timestamp, '{} < {}'.format(tips.timestamp, self.peer_timestamp)
         self.peer_timestamp = tips.timestamp
 
         # Exponential search to find an interval.
@@ -203,15 +222,28 @@ class NodeSyncTimestamp(object):
         :param timestamp: Timestamp to be reached
         :type timestamp: int
         """
+        print('Syncing at {}'.format(timestamp))
         assert self.next_timestamp < inf
-        while self.synced_timestamp < timestamp:
-            assert self.next_timestamp > self.synced_timestamp
-            next_timestamp, count = yield self.sync_at_timestamp(self.next_timestamp)
-            assert next_timestamp > self.next_timestamp
-            self.synced_timestamp = self.next_timestamp
-            self.next_timestamp = next_timestamp
+        pending = []
+        next_timestamp = self.next_timestamp
+        next_offset = 0
+        while True:
+            payload = yield self.get_peer_next(next_timestamp, offset=next_offset)
+            count = 0
+            for h in payload.hashes:
+                if not self.manager.tx_storage.transaction_exists_by_hash_bytes(h):
+                    pending.append(self.get_data(h))
+                    count += 1
             if count == 0:
                 break
+            next_timestamp = payload.next_timestamp
+            next_offset = payload.next_offset
+            if next_timestamp == inf:
+                break
+            if next_timestamp > self.peer_timestamp:
+                self.peer_timestamp = next_timestamp
+        for deferred in pending:
+            yield deferred
         if self.synced_timestamp > self.peer_timestamp:
             self.peer_timestamp = self.synced_timestamp
 
@@ -222,23 +254,6 @@ class NodeSyncTimestamp(object):
         :param timestamp: Timestamp to be synced
         :type timestamp: int
         """
-        # print('Syncing at {}'.format(timestamp))
-        pending = []
-        offset = 0
-        while True:
-            tips = yield self.get_peer_tips(timestamp, include_hashes=True, offset=offset)
-            local_merkle_tree, _ = self.get_merkle_tree(timestamp)
-            if tips.merkle_tree == local_merkle_tree:
-                break
-            for h in tips.hashes:
-                if not self.manager.tx_storage.transaction_exists_by_hash_bytes(h):
-                    pending.append(self.get_data(h))
-            if not tips.has_more:
-                break
-            offset += len(tips.hashes)
-        for deferred in pending:
-            yield deferred
-        return tips.next_timestamp, len(pending)
 
     @inlineCallbacks
     def _next_step(self):
@@ -280,6 +295,95 @@ class NodeSyncTimestamp(object):
         """ Helper to send a message.
         """
         return self.protocol.state.send_message(cmd, payload)
+
+    def send_get_next(self, timestamp, offset=0):
+        """ Send a GET-NEXT message.
+        """
+        payload = json.dumps(dict(
+            timestamp=timestamp,
+            offset=offset,
+        ))
+        self.send_message(ProtocolMessages.GET_NEXT, payload)
+
+    def handle_get_next(self, payload):
+        """ Handle a received GET-NEXT message.
+        """
+        data = json.loads(payload)
+        args = GetNextPayload(**data)
+        self.send_next(args.timestamp, args.offset)
+
+    def send_next(self, timestamp, offset=0):
+        """ Send a NEXT message.
+        """
+        # Tips that won't be sent.
+        ignore_intervals = self.manager.tx_storage.get_tx_tips(timestamp - 1)
+        ignore_intervals.update(self.manager.tx_storage.get_block_tips(timestamp - 1))
+        ignore_hashes = set(x.data for x in ignore_intervals)
+
+        hashes = []
+
+        next_timestamp = timestamp
+        next_offset = 0
+        while True:
+            partial = self.manager.tx_storage.get_tx_tips(next_timestamp)
+            partial.update(self.manager.tx_storage.get_block_tips(next_timestamp))
+
+            if len(partial) == 0:
+                break
+
+            partial_hashes = [x.data for x in partial]
+            partial_hashes.sort()
+            if offset > 0:
+                partial_hashes = partial_hashes[offset:]
+                offset = 0
+            for idx, h in enumerate(partial_hashes):
+                if h not in ignore_hashes:
+                    ignore_hashes.add(h)
+                    hashes.append(h)
+                    assert len(hashes) <= self.MAX_HASHES
+                    if len(hashes) == self.MAX_HASHES:
+                        next_offset = idx
+                        break
+
+            # Next timestamp in which tips have changed
+            min_end = min(x.end for x in partial)
+
+            # Look for transactions confirming already confirmed transactions
+            while min_end != inf:
+                tmp = self.manager.tx_storage.get_tx_tips(min_end - 1)
+                tmp.update(self.manager.tx_storage.get_block_tips(min_end - 1))
+                tmp.difference_update(partial)
+                if not tmp:
+                    break
+                min_end = min(x.begin for x in tmp)
+
+            if len(hashes) == self.MAX_HASHES:
+                if next_offset == len(partial_hashes):
+                    next_timestamp = min_end
+                    next_offset = 0
+                break
+
+            next_timestamp = min_end
+
+        data = {
+            'timestamp': timestamp,
+            'next_timestamp': next_timestamp,
+            'next_offset': next_offset,
+            'hashes': [h.hex() for h in hashes],
+        }
+        self.send_message(ProtocolMessages.NEXT, json.dumps(data))
+
+    def handle_next(self, payload):
+        """ Handle a received NEXT messages.
+        """
+        data = json.loads(payload)
+        data['hashes'] = [bytes.fromhex(h) for h in data['hashes']]
+        args = NextPayload(**data)
+
+        key = 'next'
+        deferred = self.deferred_by_key.pop(key, None)
+        if deferred:
+            deferred.callback(args)
 
     def send_get_tips(self, timestamp=None, include_hashes=False, offset=0):
         """ Send a GET-TIPS message.
@@ -444,12 +548,14 @@ class NodeSyncTimestamp(object):
             # Will it reduce peer reputation score?
             return
         tx.storage = self.protocol.node.tx_storage
-        self.manager.on_new_tx(tx, conn=self.protocol)
+        result = self.manager.on_new_tx(tx, conn=self.protocol)
 
-        key = 'get-data-{}'.format(tx.hash)
+        key = 'get-data-{}'.format(tx.hash.hex())
         deferred = self.deferred_by_key.pop(key, None)
         if deferred:
-            deferred.callback(tx)
+            if tx.timestamp - 1 > self.synced_timestamp:
+                self.synced_timestamp = tx.timestamp - 1
+            deferred.callback((tx, result))
 
 
 class NodeSyncLeftToRightManager(object):  # pragma: no cover
