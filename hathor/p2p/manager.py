@@ -7,12 +7,13 @@ from twisted.internet.task import LoopingCall
 
 from hathor.crypto.util import generate_privkey_crt_pem
 from hathor.p2p.peer_storage import PeerStorage
+from hathor.pubsub import HathorEvents
 
 
 class ConnectionsManager:
     """ It manages all peer-to-peer connections and events related to control messages.
     """
-    def __init__(self, reactor, my_peer, hostname, server_factory, client_factory):
+    def __init__(self, reactor, my_peer, hostname, server_factory, client_factory, pubsub):
         self.reactor = reactor
         self.my_peer = my_peer
         self.hostname = hostname
@@ -46,6 +47,9 @@ class ConnectionsManager:
 
         self.peer_discoveries = []
 
+        # Pubsub object to publish events
+        self.pubsub = pubsub
+
     def start(self):
         self.lc_reconnect.start(5)
 
@@ -62,9 +66,16 @@ class ConnectionsManager:
     def send_tx_to_peers(self, tx):
         """ Send `tx` to all ready peers.
 
-        :param tx: py:class:`hathor.transaction.BaseTransaction`
+        The connections are shuffled to fairly propagate among peers.
+        It seems to be a good approach for a small number of peers. We need to analyze
+        the best approach when the number of peers increase.
+
+        :param tx: BaseTransaction to be sent.
+        :type tx: py:class:`hathor.transaction.BaseTransaction`
         """
-        for conn in self.get_ready_connections():
+        connections = list(self.get_ready_connections())
+        random.shuffle(connections)
+        for conn in connections:
             conn.state.send_tx_to_peer(tx)
 
     def on_connection_failure(self, failure, endpoint):
@@ -88,12 +99,16 @@ class ConnectionsManager:
             if conn != protocol:
                 conn.state.send_peers([protocol])
 
+        self.pubsub.publish(HathorEvents.NETWORK_PEER_CONNECTED, protocol=protocol)
+
     def on_peer_disconnect(self, protocol):
         print('on_peer_disconnect()', protocol)
         if protocol.peer:
             self.connected_peers.pop(protocol.peer.id)
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
+
+        self.pubsub.publish(HathorEvents.NETWORK_PEER_DISCONNECTED, protocol=protocol)
 
     def get_ready_connections(self):
         """

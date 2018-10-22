@@ -11,6 +11,7 @@ import time
 import struct
 import hashlib
 import base64
+import datetime
 
 MAX_NONCE = 2 ** 32
 MAX_NUM_INPUTS = MAX_NUM_OUTPUTS = 256
@@ -162,6 +163,30 @@ class BaseTransaction:
     def get_target(self):
         """Target to be achieved in the mining process"""
         return 2 ** (256 - self.weight) - 1
+
+    def get_time_from_now(self, now=None):
+        """ Return a the time difference between now and the tx's timestamp
+
+        :return: String in the format "0 days, 00:00:00"
+        :rtype: str
+        """
+        if now is None:
+            now = datetime.datetime.now()
+        ts = datetime.datetime.fromtimestamp(self.timestamp)
+        dt = now - ts
+        seconds = dt.seconds
+        hours, seconds = divmod(seconds, 3600)
+        minutes, seconds = divmod(seconds, 60)
+        return '{} days, {:02d}:{:02d}:{:02d}'.format(dt.days, hours, minutes, seconds)
+
+    def get_parents(self):
+        """Return an iterator of the parents
+
+        :return: An iterator of the parents
+        :rtype: Iter[BaseTransaction]
+        """
+        for parent_hash in self.parents:
+            yield self.storage.get_transaction_by_hash_bytes(parent_hash)
 
     @property
     def is_genesis(self):

@@ -10,6 +10,14 @@ class HathorEvents(Enum):
             Triggered when a new tx/block is accepted in the network
             Publishes a tx/block object
 
+        NETWORK_PEER_CONNECTED:
+            Triggered when a new peer connects to the network
+            Publishes the peer protocol
+
+        NETWORK_PEER_DISCONNECTED:
+            Triggered when a peer disconnects from the network
+            Publishes the peer protocol
+
         WALLET_OUTPUT_RECEIVED:
             Triggered when a wallet receives a new output
             Publishes an UnspentTx object and the new total number of tx in the Wallet (total=int, output=UnspentTx)
@@ -28,6 +36,10 @@ class HathorEvents(Enum):
     """
     MANAGER_ON_START = 'manager:on_start'
     MANAGER_ON_STOP = 'manager:on_stop'
+
+    NETWORK_PEER_CONNECTED = 'network:peer_connected'
+
+    NETWORK_PEER_DISCONNECTED = 'network:peer_disconnected'
 
     NETWORK_NEW_TX_ACCEPTED = 'network:new_tx_accepted'
 

@@ -17,7 +17,7 @@ class _BaseResourceTest:
             super().setUp()
 
             peer_id = PeerId()
-            wallet = self.create_test_wallet()
+            wallet = self._create_test_wallet()
             self.reactor = Clock()
             self.reactor.advance(time.time())
             network = 'testnet'

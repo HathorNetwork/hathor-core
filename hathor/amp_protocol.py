@@ -39,7 +39,7 @@ class GetLatestTimestamp(amp.Command):
 class OnNewTx(amp.Command):
     arguments = [(b'tx_type', amp.Unicode()),
                  (b'tx_bytes', amp.String())]
-    response = [(b'ret', amp.Integer())]
+    response = [(b'ret', amp.Boolean())]
 
 
 class HathorAMP(amp.AMP):
@@ -89,8 +89,8 @@ class HathorAMP(amp.AMP):
         else:
             tx = Transaction.create_from_struct(tx_bytes)
         tx.storage = self.node.tx_storage
-        self.node.on_new_tx(tx)
-        return {'ret': 0}
+        ret = self.node.on_new_tx(tx)
+        return {'ret': ret}
     OnNewTx.responder(on_new_tx)
 
 

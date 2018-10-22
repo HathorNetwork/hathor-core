@@ -8,6 +8,7 @@ from hathor.p2p.dag_proxy import DAGProxy
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_discovery import DNSPeerDiscovery, BootstrapPeerDiscovery
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
+from hathor.pubsub import PubSubManager
 
 import argparse
 import sys
@@ -47,7 +48,7 @@ if __name__ == '__main__':
 
     server_factory = HathorServerFactory(network, peer_id, node=dag_proxy)
     client_factory = HathorClientFactory(network, peer_id, node=dag_proxy)
-    manager = ConnectionsManager(reactor, peer_id, args.hostname, server_factory, client_factory)
+    manager = ConnectionsManager(reactor, peer_id, args.hostname, server_factory, client_factory, PubSubManager())
 
     dns_hosts = []
     if args.testnet:

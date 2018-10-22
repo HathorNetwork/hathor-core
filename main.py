@@ -17,6 +17,7 @@ from hathor.wallet import Wallet, HDWallet
 from hathor.transaction.resources import DecodeTxResource, PushTxResource, GraphvizResource, \
                                         TransactionResource, DashboardTransactionResource
 from hathor.websocket import HathorAdminWebsocketFactory
+from hathor.prometheus import PrometheusMetricsExporter
 import hathor
 
 import argparse
@@ -38,6 +39,7 @@ if __name__ == '__main__':
     parser.add_argument('--listen', action='append', help='Address to listen for new connections (eg: tcp:8000)')
     parser.add_argument('--passphrase', action='store_true', help='Passphrase used to generate the seed for HD Wallet')
     parser.add_argument('--unlock-wallet', action='store_true', help='Ask for password to unlock wallet')
+    parser.add_argument('--prometheus', action='store_true', help='Send metric data to Prometheus')
     args, unknown = parser.parse_known_args()
 
     log.startLogging(sys.stdout)
@@ -101,6 +103,17 @@ if __name__ == '__main__':
             new_args = [sys.executable, 'main-p2p.py']
             new_args.extend(sys.argv[1:])
             os.execv(sys.executable, new_args)
+
+    if args.prometheus:
+        kwargs = {'metrics': manager.metrics}
+
+        if args.data:
+            kwargs['path'] = os.path.join(args.data, 'prometheus')
+        else:
+            raise ValueError('To run prometheus exporter you must have a data path')
+
+        prometheus = PrometheusMetricsExporter(**kwargs)
+        prometheus.start()
 
     if args.status:
         # TODO get this from a file. How should we do with the factory?

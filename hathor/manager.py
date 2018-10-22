@@ -13,6 +13,7 @@ from enum import Enum
 from math import log
 import time
 import random
+import datetime
 
 from hathor.p2p.protocol import HathorLineReceiver
 MyServerProtocol = HathorLineReceiver
@@ -55,17 +56,21 @@ class HathorManager(object):
         self.tx_storage = tx_storage or TransactionMemoryStorage()
         self.pubsub = pubsub or PubSubManager()
 
-        self.metrics = Metrics(pubsub=self.pubsub, tx_storage=tx_storage)
+        self.avg_time_between_blocks = 64  # in seconds
+        self.min_block_weight = 14
+        self.tokens_issued_per_block = 10000
+
+        self.metrics = Metrics(
+            pubsub=self.pubsub,
+            avg_time_between_blocks=self.avg_time_between_blocks,
+            tx_storage=tx_storage
+        )
 
         # Map of peer_id to the best block height reported by that peer.
         self.peer_best_heights = defaultdict(int)
 
         self.wallet = wallet
         self.wallet.pubsub = self.pubsub
-
-        self.avg_time_between_blocks = 64  # in seconds
-        self.min_block_weight = 14
-        self.tokens_issued_per_block = 10000
 
         self.remoteConnection = None
         self.unix_socket = unix_socket
@@ -226,7 +231,7 @@ class HathorManager(object):
         """
         if not self.validate_new_tx(tx):
             # Discard invalid Transaction/block.
-            return
+            return False
 
         if self.wallet:
             self.wallet.on_new_tx(tx)
@@ -237,10 +242,17 @@ class HathorManager(object):
         else:
             self.tx_storage._add_to_cache(tx)
 
+        ts_date = datetime.datetime.fromtimestamp(tx.timestamp)
         if tx.is_block:
-            print('New block found: {} weight={}'.format(tx.hash_hex, tx.weight))
+            print('New block: {} timestamp={} ({}) ({}) weight={}'.format(
+                tx.hash_hex,
+                ts_date,
+                tx.get_time_from_now(),
+                tx.timestamp,
+                tx.weight)
+            )
         else:
-            print('New tx: {}'.format(tx.hash.hex()))
+            print('New tx: {} timestamp={} ({})'.format(tx.hash.hex(), ts_date, tx.get_time_from_now()))
 
         tx.mark_inputs_as_used()
 
@@ -252,6 +264,7 @@ class HathorManager(object):
 
         # Publish to pubsub manager the new tx accepted
         self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
+        return True
 
     def calculate_block_difficulty(self, block):
         """ Calculate block difficulty according to the ascendents of `block`.

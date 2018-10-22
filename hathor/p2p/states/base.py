@@ -12,6 +12,9 @@ class BaseState(object):
         }
         self.cmd_map = {}
 
+        # This variable is set by HathorProtocol after instantiating the state
+        self.state_name = None
+
     def handle_error(self, payload):
         self.protocol.handle_error(payload)
 

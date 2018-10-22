@@ -72,9 +72,11 @@ class DAGProxy:
         ret = yield self.remoteConnection.callRemote(GetLatestTimestamp)
         return ret['timestamp']
 
+    @inlineCallbacks
     def on_new_tx(self, tx):
         tx_type = 'block' if tx.is_block else 'tx'
-        self.remoteConnection.callRemote(OnNewTx, tx_type=tx_type, tx_bytes=bytes(tx))
+        ret = self.remoteConnection.callRemote(OnNewTx, tx_type=tx_type, tx_bytes=bytes(tx))
+        return ret['ret']
 
     @inlineCallbacks
     def get_transaction_by_hash(self, hash_hex):

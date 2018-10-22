@@ -82,6 +82,8 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         data = {
             'transactions': self.metrics.transactions,
             'blocks': self.metrics.blocks,
+            'hash_rate': self.metrics.hash_rate,
+            'peers': self.metrics.peers,
             'type': 'dashboard:metrics',
             'time': reactor.seconds(),
         }
