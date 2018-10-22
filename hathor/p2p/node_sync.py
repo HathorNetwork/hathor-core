@@ -105,8 +105,11 @@ class NodeSyncTimestamp(object):
 
         :rtype: Tuple[bytes(hash), List[bytes(hash)]]
         """
-        tx_intervals = yield self.manager.get_tx_tips(timestamp)
-        blk_intervals = yield self.manager.get_block_tips(timestamp)
+        # we do both calls first and then yield so the calls can happen in parallel
+        tx1 = self.manager.get_tx_tips(timestamp)
+        blk1 = self.manager.get_block_tips(timestamp)
+        tx_intervals = yield tx1
+        blk_intervals = yield blk1
 
         hashes = [x.data for x in tx_intervals]
         hashes.extend(x.data for x in blk_intervals)
@@ -190,8 +193,10 @@ class NodeSyncTimestamp(object):
             if cur <= self.manager.first_timestamp:
                 raise Exception('Should never happen.')
             cur = max(cur - step, self.manager.first_timestamp)
-            tips = yield self.get_peer_tips(cur)
-            local_merkle_tree, _ = yield self.get_merkle_tree(cur)
+            _tips = self.get_peer_tips(cur)
+            _merkle_tree = self.get_merkle_tree(cur)
+            tips = yield _tips
+            local_merkle_tree, _ = yield _merkle_tree
             step *= 2
 
         # Binary search to find inside the interval.
@@ -199,8 +204,10 @@ class NodeSyncTimestamp(object):
         high = cur + step - 1
         while low < high:
             mid = (low + high + 1) // 2
-            tips = yield self.get_peer_tips(mid)
-            local_merkle_tree, _ = yield self.get_merkle_tree(mid)
+            _tips = self.get_peer_tips(mid)
+            _merkle_tree = self.get_merkle_tree(mid)
+            tips = yield _tips
+            local_merkle_tree, _ = yield _merkle_tree
             if tips.merkle_tree == local_merkle_tree:
                 low = mid
             else:
@@ -210,8 +217,10 @@ class NodeSyncTimestamp(object):
         assert low == high
         self.synced_timestamp = low
 
-        tips = yield self.get_peer_tips(self.synced_timestamp)
-        local_merkle_tree, _ = yield self.get_merkle_tree(self.synced_timestamp)
+        _tips = self.get_peer_tips(self.synced_timestamp)
+        _merkle_tree = self.get_merkle_tree(self.synced_timestamp)
+        tips = yield _tips
+        local_merkle_tree, _ = yield _merkle_tree
         assert tips.merkle_tree == local_merkle_tree
 
         self.next_timestamp = tips.next_timestamp
@@ -320,8 +329,10 @@ class NodeSyncTimestamp(object):
         """ Send a NEXT message.
         """
         # Tips that won't be sent.
-        ignore_intervals = yield self.manager.get_tx_tips(timestamp - 1)
-        ignore_blocks = yield self.manager.get_block_tips(timestamp - 1)
+        _ignore_intervals = self.manager.get_tx_tips(timestamp - 1)
+        _ignore_blocks = self.manager.get_block_tips(timestamp - 1)
+        ignore_intervals = yield _ignore_intervals
+        ignore_blocks = yield _ignore_blocks
         ignore_intervals.update(ignore_blocks)
         ignore_hashes = set(x.data for x in ignore_intervals)
 
@@ -330,8 +341,10 @@ class NodeSyncTimestamp(object):
         next_timestamp = timestamp
         next_offset = 0
         while True:
-            partial = yield self.manager.get_tx_tips(next_timestamp)
-            partial2 = yield self.manager.get_block_tips(next_timestamp)
+            _partial = self.manager.get_tx_tips(next_timestamp)
+            _partial2 = self.manager.get_block_tips(next_timestamp)
+            partial = yield _partial
+            partial2 = yield _partial2
             partial.update(partial2)
 
             if len(partial) == 0:
@@ -356,8 +369,10 @@ class NodeSyncTimestamp(object):
 
             # Look for transactions confirming already confirmed transactions
             while min_end != inf:
-                tmp = yield self.manager.get_tx_tips(min_end - 1)
-                tmp2 = yield self.manager.get_block_tips(min_end - 1)
+                _tmp = self.manager.get_tx_tips(min_end - 1)
+                _tmp2 = self.manager.get_block_tips(min_end - 1)
+                tmp = yield _tmp
+                tmp2 = yield _tmp2
                 tmp.update(tmp2)
                 tmp.difference_update(partial)
                 if not tmp:
@@ -423,8 +438,10 @@ class NodeSyncTimestamp(object):
             timestamp = yield self.manager.get_latest_timestamp()
 
         # All tips
-        tx_intervals = yield self.manager.get_tx_tips(timestamp)
-        blk_intervals = yield self.manager.get_block_tips(timestamp)
+        _tx_intervals = self.manager.get_tx_tips(timestamp)
+        _blk_intervals = self.manager.get_block_tips(timestamp)
+        tx_intervals = yield _tx_intervals
+        blk_intervals = yield _blk_intervals
         intervals = tx_intervals.union(blk_intervals)
 
         if len(intervals) == 0:
@@ -438,8 +455,10 @@ class NodeSyncTimestamp(object):
 
         # Look for transactions confirming already confirmed transactions
         while min_end != inf:
-            tx_tmp = yield self.manager.get_tx_tips(min_end - 1)
-            blk_tmp = yield self.manager.get_block_tips(min_end - 1)
+            _tx_tmp = self.manager.get_tx_tips(min_end - 1)
+            _blk_tmp = self.manager.get_block_tips(min_end - 1)
+            tx_tmp = yield _tx_tmp
+            blk_tmp = yield _blk_tmp
             tmp = tx_tmp.union(blk_tmp)
             tmp.difference_update(intervals)
             if not tmp:
