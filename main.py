@@ -3,20 +3,10 @@
 from twisted.internet import reactor
 from twisted.web import server
 from twisted.python import log
-from twisted.web.resource import Resource
-from autobahn.twisted.resource import WebSocketResource
 
-from hathor.p2p.resources import StatusResource, MiningResource
 from hathor.manager import HathorManager
 from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage
-from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, \
-                                    SendTokensResource, UnlockWalletResource, \
-                                    LockWalletResource, StateWalletResource
-from hathor.resources import ProfilerResource
 from hathor.wallet import Wallet, HDWallet
-from hathor.transaction.resources import DecodeTxResource, PushTxResource, GraphvizResource, \
-                                        TransactionResource, DashboardTransactionResource
-from hathor.websocket import HathorAdminWebsocketFactory
 from hathor.prometheus import PrometheusMetricsExporter
 import hathor
 
@@ -28,7 +18,6 @@ import os
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--status', type=int, help='Port to run status server')
     parser.add_argument('--data', help='Data directory')
     parser.add_argument(
         '--wallet',
@@ -36,7 +25,6 @@ if __name__ == '__main__':
         default='hd'
     )
     parser.add_argument('--words', help='Words used to generate the seed for HD Wallet')
-    parser.add_argument('--listen', action='append', help='Address to listen for new connections (eg: tcp:8000)')
     parser.add_argument('--passphrase', action='store_true', help='Passphrase used to generate the seed for HD Wallet')
     parser.add_argument('--unlock-wallet', action='store_true', help='Ask for password to unlock wallet')
     parser.add_argument('--prometheus', action='store_true', help='Send metric data to Prometheus')
@@ -95,14 +83,13 @@ if __name__ == '__main__':
     manager = HathorManager(reactor, tx_storage=tx_storage, wallet=wallet, unix_socket=unix_socket)
     manager.start()
 
-    if args.listen:
-        # start subprocess to handle p2p
-        newpid = os.fork()
-        if newpid == 0:
-            # new_args should be a list like ['python', 'main-p2p.py', arg1, arg2, ...]
-            new_args = [sys.executable, 'main-p2p.py']
-            new_args.extend(sys.argv[1:])
-            os.execv(sys.executable, new_args)
+    # start subprocess to handle p2p
+    newpid = os.fork()
+    if newpid == 0:
+        # new_args should be a list like ['python', 'main-p2p.py', arg1, arg2, ...]
+        new_args = [sys.executable, 'main-p2p.py']
+        new_args.extend(sys.argv[1:])
+        os.execv(sys.executable, new_args)
 
     if args.prometheus:
         kwargs = {'metrics': manager.metrics}
@@ -114,41 +101,5 @@ if __name__ == '__main__':
 
         prometheus = PrometheusMetricsExporter(**kwargs)
         prometheus.start()
-
-    if args.status:
-        # TODO get this from a file. How should we do with the factory?
-        root = Resource()
-        wallet_resource = Resource()
-        root.putChild(b'wallet', wallet_resource)
-
-        resources = (
-            (b'status', StatusResource(manager), root),
-            (b'mining', MiningResource(manager), root),
-            (b'decode_tx', DecodeTxResource(manager), root),
-            (b'push_tx', PushTxResource(manager), root),
-            (b'graphviz', GraphvizResource(manager), root),
-            (b'transaction', TransactionResource(manager), root),
-            (b'dashboard_tx', DashboardTransactionResource(manager), root),
-            (b'profiler', ProfilerResource(manager), root),
-            (b'balance', BalanceResource(manager), wallet_resource),
-            (b'history', HistoryResource(manager), wallet_resource),
-            (b'address', AddressResource(manager), wallet_resource),
-            (b'send_tokens', SendTokensResource(manager), wallet_resource),
-            (b'unlock', UnlockWalletResource(manager), wallet_resource),
-            (b'lock', LockWalletResource(manager), wallet_resource),
-            (b'state', StateWalletResource(manager), wallet_resource),
-        )
-        for url_path, resource, parent in resources:
-            parent.putChild(url_path, resource)
-
-        # Websocket resource
-        ws_factory = HathorAdminWebsocketFactory(metrics=manager.metrics)
-        resource = WebSocketResource(ws_factory)
-        root.putChild(b"ws", resource)
-
-        ws_factory.subscribe(manager.pubsub)
-
-        status_server = server.Site(root)
-        reactor.listenTCP(args.status, status_server)
 
     reactor.run()

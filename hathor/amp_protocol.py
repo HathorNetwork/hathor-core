@@ -43,6 +43,13 @@ class OnNewTx(amp.Command):
                  (b'tx_bytes', amp.String())]
     response = [(b'ret', amp.Boolean())]
 
+class GetMetrics(amp.Command):
+    arguments = []
+    response = [(b'transactions', amp.Integer()),
+                (b'blocks', amp.Integer()),
+                (b'hash_rate', amp.Float()),
+                (b'peers', amp.Integer())]
+
 
 class HathorAMP(amp.AMP):
     def __init__(self, node):
@@ -97,11 +104,20 @@ class HathorAMP(amp.AMP):
         return {'ret': ret}
     OnNewTx.responder(on_new_tx)
 
+    def get_metrics(self):
+        metrics = self.node.metrics
+        return {'transactions': metrics.transactions,
+                'blocks': metrics.blocks,
+                'hash_rate': metrics.hash_rate,
+                'peers': metrics.peers
+               }
+    GetMetrics.responder(get_metrics)
+
 
 class HathorAMPFactory(Factory):
     def __init__(self, node):
         """
-        :type node: HathorManager or ProcessManager
+        :type node: HathorManager or NetworkManager
         """
         super().__init__()
         self.node = node
