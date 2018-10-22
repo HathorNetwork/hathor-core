@@ -21,6 +21,11 @@ To sync at `T`, the nodes send a *GET-TIPS* message with the hashes of the tips 
 Every one second, the nodes check whether they are still synced using the node's latest timestamp. If they are not synced, they start to sync again.
 
 
+Example
+-------
+.. image:: images/syncing-example.png
+
+
 Definitions
 -----------
 
