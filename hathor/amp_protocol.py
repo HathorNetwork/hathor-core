@@ -6,6 +6,7 @@ from twisted.protocols import amp
 from hathor.transaction import Transaction, Block
 
 import pickle
+from math import inf
 
 
 class GetTx(amp.Command):
@@ -26,8 +27,9 @@ class TxExists(amp.Command):
 
 
 class GetTips(amp.Command):
-    arguments = [(b'timestamp', amp.Integer()),
-                 (b'type', amp.Unicode())]
+    arguments = [(b'type', amp.Unicode()),
+                 (b'timestamp', amp.Integer()),
+                 (b'infinity', amp.Boolean())]
     response = [(b'tips', amp.String())]
 
 
@@ -69,7 +71,9 @@ class HathorAMP(amp.AMP):
         return {'ret': 0}
     SendTx.responder(send_tx)
 
-    def get_tips(self, timestamp, type):
+    def get_tips(self, type, timestamp, infinity):
+        if infinity:
+            timestamp = inf
         if type == 'block':
             ret = self.node.tx_storage.get_block_tips(timestamp)
         else:

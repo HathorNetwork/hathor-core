@@ -1,219 +1,151 @@
 # encoding: utf-8
 
-import random
+from hathor.p2p.connections_manager import ConnectionsManager
+from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
+from hathor.transaction.genesis import genesis_transactions
+from hathor.transaction import Block, Transaction
+from hathor.amp_protocol import HathorAMP, GetTx, TxExists, GetTips, GetLatestTimestamp, OnNewTx
+from hathor.pubsub import HathorEvents, PubSubManager
 
-from twisted.internet import endpoints
-from twisted.internet.task import LoopingCall
+from twisted.internet.endpoints import UNIXClientEndpoint, connectProtocol
+from twisted.internet.defer import inlineCallbacks
 
-from hathor.crypto.util import generate_privkey_crt_pem
-from hathor.p2p.peer_storage import PeerStorage
-from hathor.pubsub import HathorEvents
+import pickle
+from math import inf
 
 
-class ConnectionsManager:
-    """ It manages all peer-to-peer connections and events related to control messages.
+class NetworkManager:
+    """ NetworkManager handles starting the P2P network and communicating with
+    the DAG process.
     """
-    def __init__(self, reactor, my_peer, hostname, server_factory, client_factory, pubsub):
+
+    def __init__(self, reactor, peer_id=None, network=None, hostname=None, pubsub=None, unix_socket=None):
+        """
+        :param reactor: Twisted reactor which handles the mainloop and the events.
+        :type reactor: :py:class:`twisted.internet.Reactor`
+
+        :param peer_id: Id of this node. If not given, a new one is created.
+        :type peer_id: :py:class:`hathor.p2p.peer_id.PeerId`
+
+        :param network: Name of the network this node participates. Usually it is either testnet or mainnet.
+        :type network: string
+
+        :param hostname: The hostname of this node. It is used to generate its entrypoints.
+        :type hostname: string
+
+        :param pubsub: If not given, a new one is created.
+        :type pubsub: :py:class:`hathor.pubsub.PubSubManager`
+
+        :param unix_socket: path to the unix socket
+        :type unix_socket: string
+        """
         self.reactor = reactor
-        self.my_peer = my_peer
+
+        self.my_peer = peer_id or PeerId()
+        self.network = network or 'testnet'
+
+        # Hostname, used to be accessed by other peers.
         self.hostname = hostname
 
-        # Factories.
-        self.server_factory = server_factory
-        self.server_factory.connections = self
-
-        self.client_factory = client_factory
-        self.client_factory.connections = self
-
-        # List of pending connections.
-        self.connecting_peers = {}  # Dict[IStreamClientEndpoint, twisted.internet.defer.Deferred]
-
-        # List of peers connected but still not ready to communicate.
-        self.handshaking_peers = set()  # Set[HathorProtocol]
-
-        # List of peers connected and ready to communicate.
-        self.connected_peers = {}  # Dict[string (peer.id), HathorProtocol]
-
-        # List of peers received from the network.
-        # We cannot trust their identity before we connect to them.
-        self.received_peer_storage = PeerStorage()  # Dict[string (peer.id), PeerId]
-
-        # List of known peers.
-        self.peer_storage = PeerStorage()  # Dict[string (peer.id), PeerId]
-
-        # A timer to try to reconnect to the disconnect known peers.
-        self.lc_reconnect = LoopingCall(self.reconnect_to_all)
-        self.lc_reconnect.clock = self.reactor
+        self.pubsub = pubsub or PubSubManager()
 
         self.peer_discoveries = []
 
-        # Pubsub object to publish events
-        self.pubsub = pubsub
+        self.server_factory = HathorServerFactory(self.network, self.my_peer, node=self)
+        self.client_factory = HathorClientFactory(self.network, self.my_peer, node=self)
+        self.connections = ConnectionsManager(
+            self.reactor,
+            self.my_peer,
+            self.server_factory,
+            self.client_factory,
+            self.pubsub
+        )
+
+        self.remoteConnection = None
+        self.unix_socket = unix_socket
+
+        self.genesis_hashes = []
 
     def start(self):
-        self.lc_reconnect.start(5)
+        endpoint = UNIXClientEndpoint(self.reactor, self.unix_socket)
+        d = connectProtocol(endpoint, HathorAMP(self))
+
+        def handleConn(p):
+            self.remoteConnection = p
+        d.addCallback(handleConn)
+
+        genesis = genesis_transactions(None)
+        for g in genesis:
+            self.genesis_hashes.append(g.hash)
+        self.first_timestamp = min(x.timestamp for x in genesis_transactions(None))
+
+        self.connections.start()
 
         for peer_discovery in self.peer_discoveries:
-            peer_discovery.discover_and_connect(self.connect_to)
+            peer_discovery.discover_and_connect(self.connections.connect_to)
 
     def stop(self):
-        if self.lc_reconnect.running:
-            self.lc_reconnect.stop()
+        self.connections.stop()
 
     def add_peer_discovery(self, peer_discovery):
         self.peer_discoveries.append(peer_discovery)
 
-    def send_tx_to_peers(self, tx):
-        """ Send `tx` to all ready peers.
-
-        The connections are shuffled to fairly propagate among peers.
-        It seems to be a good approach for a small number of peers. We need to analyze
-        the best approach when the number of peers increase.
-
-        :param tx: BaseTransaction to be sent.
-        :type tx: py:class:`hathor.transaction.BaseTransaction`
-        """
-        connections = list(self.get_ready_connections())
-        random.shuffle(connections)
-        for conn in connections:
-            conn.state.send_tx_to_peer(tx)
-
-    def on_connection_failure(self, failure, endpoint):
-        print('Connection failure: address={}:{} message={}'.format(endpoint._host, endpoint._port, failure))
-        self.connecting_peers.pop(endpoint)
-
-    def on_peer_connect(self, protocol):
-        print('on_peer_connect()', protocol)
-        self.handshaking_peers.add(protocol)
-
-    def on_peer_ready(self, protocol):
-        print('on_peer_ready()', protocol)
-        self.handshaking_peers.remove(protocol)
-        self.received_peer_storage.pop(protocol.peer.id, None)
-
-        self.peer_storage.add_or_merge(protocol.peer)
-        self.connected_peers[protocol.peer.id] = protocol
-
-        # Notify other peers about this new peer connection.
-        for conn in self.get_ready_connections():
-            if conn != protocol:
-                conn.state.send_peers([protocol])
-
-        self.pubsub.publish(HathorEvents.NETWORK_PEER_CONNECTED, protocol=protocol)
-
-    def on_peer_disconnect(self, protocol):
-        print('on_peer_disconnect()', protocol)
-        if protocol.peer:
-            self.connected_peers.pop(protocol.peer.id)
-        if protocol in self.handshaking_peers:
-            self.handshaking_peers.remove(protocol)
-
-        self.pubsub.publish(HathorEvents.NETWORK_PEER_DISCONNECTED, protocol=protocol)
-
-    def get_ready_connections(self):
-        """
-        :rtype: Iter[HathorProtocol]
-        """
-        return self.connected_peers.values()
-
-    def is_peer_connected(self, peer_id):
-        """
-        :type peer_id: string (peer.id)
-        """
-        return peer_id in self.connected_peers
-
-    def on_receive_peer(self, peer, origin=None):
-        """ Update a peer information in our storage, and instantly attempt to connect
-        to it if it is not connected yet.
-        """
-        if peer.id == self.my_peer.id:
-            return
-        self.received_peer_storage.add_or_merge(peer)
-        self.connect_to_if_not_connected(peer)
-
-    def reconnect_to_all(self):
-        """ It is called by the `lc_reconnect` timer and tries to connect to all known
-        peers.
-
-        TODO(epnichols): Should we always conect to *all*? Should there be a max #?
-        """
-        for peer in self.peer_storage.values():
-            self.connect_to_if_not_connected(peer)
-
-    def connect_to_if_not_connected(self, peer):
-        """ Attempts to connect if it is not connected to the peer.
-        """
-        if not peer.entrypoints:
-            return
-        if peer.id in self.connected_peers:
-            return
-        self.connect_to(random.choice(peer.entrypoints))
-
-    def _connect_to_callback(self, protocol, endpoint):
-        self.connecting_peers.pop(endpoint)
-
-    def connect_to(self, description, ssl=False):
-        """ Attempt to connect to a peer, even if a connection already exists.
-        Usually you should call `connect_to_if_not_connected`.
-
-        If `ssl` is True, then the connection will be wraped by a TLS.
-        """
-        endpoint = endpoints.clientFromString(self.reactor, description)
-
-        if ssl:
-            from twisted.internet import ssl
-            from twisted.protocols.tls import TLSMemoryBIOFactory
-            context = ssl.ClientContextFactory()
-            factory = TLSMemoryBIOFactory(context, True, self.client_factory)
-        else:
-            factory = self.client_factory
-
-        deferred = endpoint.connect(factory)
-        self.connecting_peers[endpoint] = deferred
-
-        deferred.addCallback(self._connect_to_callback, endpoint)
-        deferred.addErrback(self.on_connection_failure, endpoint)
-        print('Connecting to: {}...'.format(description))
-
     def listen(self, description, ssl=False):
-        """ Start to listen to new connection according to the description.
-
-        If `ssl` is True, then the connection will be wraped by a TLS.
-
-        :Example:
-
-        `manager.listen(description='tcp:8000')`
-
-        :param description: A description of the protocol and its parameters.
-        :type description: str
-        """
-        endpoint = endpoints.serverFromString(self.reactor, description)
-
-        if ssl:
-            # XXX Is it safe to generate a new certificate for each connection?
-            #     What about CPU usage when many new connections arrive?
-            from twisted.internet.ssl import PrivateCertificate
-            from twisted.protocols.tls import TLSMemoryBIOFactory
-            certificate = PrivateCertificate.loadPEM(generate_privkey_crt_pem())
-            contextFactory = certificate.options()
-            factory = TLSMemoryBIOFactory(contextFactory, False, self.server_factory)
-
-            # from twisted.internet.ssl import CertificateOptions, TLSVersion
-            # options = dict(privateKey=certificate.privateKey.original, certificate=certificate.original)
-            # contextFactory = CertificateOptions(
-            #     insecurelyLowerMinimumTo=TLSVersion.TLSv1_2,
-            #     lowerMaximumSecurityTo=TLSVersion.TLSv1_3,
-            #     **options,
-            # )
-        else:
-            factory = self.server_factory
-
-        endpoint.listen(factory)
-        print('Listening to: {}...'.format(description))
+        endpoint = self.connections.listen(description, ssl)
 
         if self.hostname:
             proto, _, _ = description.partition(':')
             address = '{}:{}:{}'.format(proto, self.hostname, endpoint._port)
             self.my_peer.entrypoints.append(address)
 
-        return endpoint
+    @inlineCallbacks
+    def transaction_exists_by_hash(self, hash_hex):
+        ret = yield self.remoteConnection.callRemote(TxExists, hash_hex=hash_hex)
+        return ret['ret']
+
+    @inlineCallbacks
+    def transaction_exists_by_hash_bytes(self, hash):
+        ret = yield self.transaction_exists_by_hash(hash.hex())
+        return ret
+
+    @inlineCallbacks
+    def get_tx_tips(self, timestamp):
+        infinity = False
+        if timestamp == inf:
+            infinity = True
+            timestamp = 0
+        ret = yield self.remoteConnection.callRemote(GetTips, type='tx', timestamp=timestamp, infinity=infinity)
+        return pickle.loads(ret['tips'])
+
+    @inlineCallbacks
+    def get_block_tips(self, timestamp):
+        infinity = False
+        if timestamp == inf:
+            infinity = True
+            timestamp = 0
+        ret = yield self.remoteConnection.callRemote(GetTips, type='block', timestamp=timestamp, infinity=infinity)
+        return pickle.loads(ret['tips'])
+
+    @inlineCallbacks
+    def get_latest_timestamp(self):
+        ret = yield self.remoteConnection.callRemote(GetLatestTimestamp)
+        return ret['timestamp']
+
+    @inlineCallbacks
+    def on_new_tx(self, tx):
+        tx_type = 'block' if tx.is_block else 'tx'
+        ret = yield self.remoteConnection.callRemote(OnNewTx, tx_type=tx_type, tx_bytes=bytes(tx))
+        return ret['ret']
+
+    @inlineCallbacks
+    def get_transaction_by_hash(self, hash_hex):
+        ret = yield self.remoteConnection.callRemote(GetTx, hash_hex=hash_hex)
+        tx_type = ret['tx_type']
+        if tx_type == 'block':
+            tx = Block.create_from_struct(ret['tx_bytes'])
+        else:
+            tx = Transaction.create_from_struct(ret['tx_bytes'])
+        return tx
+
+    def is_genesis(self, hash):
+        return hash in self.genesis_hashes

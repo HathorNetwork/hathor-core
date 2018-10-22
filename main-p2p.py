@@ -4,11 +4,10 @@ from twisted.internet import reactor
 from twisted.python import log
 
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.dag_proxy import DAGProxy
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_discovery import DNSPeerDiscovery, BootstrapPeerDiscovery
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
-from hathor.pubsub import PubSubManager
+from hathor.p2p.manager import NetworkManager
 
 import argparse
 import sys
@@ -44,11 +43,7 @@ if __name__ == '__main__':
 
     network = 'testnet'
 
-    dag_proxy = DAGProxy(reactor, unix_socket=unix_socket)
-
-    server_factory = HathorServerFactory(network, peer_id, node=dag_proxy)
-    client_factory = HathorClientFactory(network, peer_id, node=dag_proxy)
-    manager = ConnectionsManager(reactor, peer_id, args.hostname, server_factory, client_factory, PubSubManager())
+    manager = NetworkManager(reactor, peer_id=peer_id, hostname=args.hostname, unix_socket=unix_socket)
 
     dns_hosts = []
     if args.testnet:
@@ -61,8 +56,6 @@ if __name__ == '__main__':
     if args.bootstrap:
         manager.add_peer_discovery(BootstrapPeerDiscovery(args.bootstrap))
 
-    dag_proxy.connections = manager
-    dag_proxy.start()
     manager.start()
 
     if args.listen:

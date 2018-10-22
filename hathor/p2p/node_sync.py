@@ -233,7 +233,8 @@ class NodeSyncTimestamp(object):
             payload = yield self.get_peer_next(next_timestamp, offset=next_offset)
             count = 0
             for h in payload.hashes:
-                if not self.manager.tx_storage.transaction_exists_by_hash_bytes(h):
+                tx_exists = yield self.manager.transaction_exists_by_hash_bytes(h)
+                if not tx_exists:
                     pending.append(self.get_data(h))
                     count += 1
             if count == 0:
@@ -314,12 +315,14 @@ class NodeSyncTimestamp(object):
         args = GetNextPayload(**data)
         self.send_next(args.timestamp, args.offset)
 
+    @inlineCallbacks
     def send_next(self, timestamp, offset=0):
         """ Send a NEXT message.
         """
         # Tips that won't be sent.
-        ignore_intervals = self.manager.tx_storage.get_tx_tips(timestamp - 1)
-        ignore_intervals.update(self.manager.tx_storage.get_block_tips(timestamp - 1))
+        ignore_intervals = yield self.manager.get_tx_tips(timestamp - 1)
+        ignore_blocks = yield self.manager.get_block_tips(timestamp - 1)
+        ignore_intervals.update(ignore_blocks)
         ignore_hashes = set(x.data for x in ignore_intervals)
 
         hashes = []
@@ -327,8 +330,9 @@ class NodeSyncTimestamp(object):
         next_timestamp = timestamp
         next_offset = 0
         while True:
-            partial = self.manager.tx_storage.get_tx_tips(next_timestamp)
-            partial.update(self.manager.tx_storage.get_block_tips(next_timestamp))
+            partial = yield self.manager.get_tx_tips(next_timestamp)
+            partial2 = yield self.manager.get_block_tips(next_timestamp)
+            partial.update(partial2)
 
             if len(partial) == 0:
                 break
@@ -352,8 +356,9 @@ class NodeSyncTimestamp(object):
 
             # Look for transactions confirming already confirmed transactions
             while min_end != inf:
-                tmp = self.manager.tx_storage.get_tx_tips(min_end - 1)
-                tmp.update(self.manager.tx_storage.get_block_tips(min_end - 1))
+                tmp = yield self.manager.get_tx_tips(min_end - 1)
+                tmp2 = yield self.manager.get_block_tips(min_end - 1)
+                tmp.update(tmp2)
                 tmp.difference_update(partial)
                 if not tmp:
                     break
@@ -497,11 +502,13 @@ class NodeSyncTimestamp(object):
         hash_hex, _, parents_json = payload2.partition(' ')
         parents = json.loads(parents_json)
 
-        if self.manager.transaction_exists_by_hash(hash_hex):
+        tx_exists = yield self.manager.transaction_exists_by_hash(hash_hex)
+        if tx_exists:
             return
 
         for parent_hash in parents:
-            if not self.manager.transaction_exists_by_hash(parent_hash):
+            tx_exists = yield self.manager.transaction_exists_by_hash(parent_hash)
+            if not tx_exists:
                 # Are we out-of-sync with this peer?
                 return
 

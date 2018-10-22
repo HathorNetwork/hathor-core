@@ -103,3 +103,6 @@ class PubSubManager(object):
         args = EventArguments(**kwargs)
         for fn in self._subscribers[key]:
             fn(key, args)
+
+    def test(self, key, **kwargs):
+        return EventArguments(**kwargs)
