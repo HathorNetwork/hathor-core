@@ -1,0 +1,32 @@
+[
+    {
+        "name": "Node 1",
+        "host": "node1.testnet.hathor.network",
+        "port": "9100",
+        "job": "node1"
+    },
+    {
+        "name": "Node 2",
+        "host": "node2.testnet.hathor.network",
+        "port": "9100",
+        "job": "node1"
+    },
+    {
+        "name": "Node 3",
+        "host": "node3.testnet.hathor.network",
+        "port": "9100",
+        "job": "node1"
+    },
+    {
+        "name": "Node 4",
+        "host": "node4.testnet.hathor.network",
+        "port": "9100",
+        "job": "node1"
+    },
+    {
+        "name": "Node 5",
+        "host": "node5.testnet.hathor.network",
+        "port": "9100",
+        "job": "node1"
+    }
+]
