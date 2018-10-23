@@ -70,9 +70,7 @@ class NetworkManager:
         endpoint = UNIXClientEndpoint(self.reactor, self.unix_socket)
         d = connectProtocol(endpoint, HathorAMP(self))
 
-        print('****** STARTING ****')
         def handleConn(p):
-            print('**** GOT CONNECTION **********')
             self.remoteConnection = p
         d.addCallback(handleConn)
 

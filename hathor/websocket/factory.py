@@ -1,6 +1,5 @@
 from autobahn.twisted.websocket import WebSocketServerFactory
 from twisted.internet import reactor
-from twisted.internet.defer import inlineCallbacks
 
 from hathor.pubsub import HathorEvents
 from hathor.websocket import HathorAdminWebsocketProtocol
@@ -50,7 +49,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
     def buildProtocol(self, addr):
         return self.protocol(self)
 
-    def __init__(self, manager):
+    def __init__(self, metrics=None):
         """
         :param metrics: If not given, a new one is created.
         :type metrics: :py:class:`hathor.metrics.Metrics`
@@ -64,7 +63,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         # Stores the buffer of messages that exceeded the rate limit and will be sent
         self.buffer_deques = {}
 
-        self.manager = manager
+        self.metrics = metrics or Metrics()
 
         # Start limiter
         self._setup_rate_limit()
@@ -79,22 +78,18 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             self.rate_limiter.set_limit(control_type, config['max_hits'], config['hits_window_seconds'])
             self.buffer_deques[control_type] = deque(maxlen=config['buffer_size'])
 
-    @inlineCallbacks
     def _schedule_and_send_metric(self):
         """ Send dashboard metric to websocket and schedule next message
         """
-        metrics = yield self.manager.get_metrics()
-
-        if metrics:
-            data = {
-                'transactions': metrics['transactions'] ,
-                'blocks': metrics['blocks'],
-                'hash_rate': metrics['hash_rate'],
-                'peers': metrics['peers'],
-                'type': 'dashboard:metrics',
-                'time': reactor.seconds(),
-            }
-            self.broadcast_message(data)
+        data = {
+            'transactions': self.metrics.transactions,
+            'blocks': self.metrics.blocks,
+            'hash_rate': self.metrics.hash_rate,
+            'peers': self.metrics.peers,
+            'type': 'dashboard:metrics',
+            'time': reactor.seconds(),
+        }
+        self.broadcast_message(data)
 
         # Schedule next message
         reactor.callLater(
