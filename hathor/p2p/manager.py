@@ -1,11 +1,12 @@
 # encoding: utf-8
 
+from hathor.p2p.peer_id import PeerId
 from hathor.p2p.connections_manager import ConnectionsManager
 from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
 from hathor.transaction.genesis import genesis_transactions
 from hathor.transaction import Block, Transaction
-from hathor.amp_protocol import HathorAMP, GetTx, TxExists, GetTips, GetLatestTimestamp, OnNewTx, GetMetrics
-from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.amp_protocol import HathorAMP, GetTx, TxExists, GetTips, GetLatestTimestamp, OnNewTx
+from hathor.pubsub import PubSubManager
 
 from twisted.internet.endpoints import UNIXClientEndpoint, connectProtocol
 from twisted.internet.defer import inlineCallbacks
@@ -149,10 +150,3 @@ class NetworkManager:
 
     def is_genesis(self, hash):
         return hash in self.genesis_hashes
-
-    @inlineCallbacks
-    def get_metrics(self):
-        if self.remoteConnection:
-            ret = yield self.remoteConnection.callRemote(GetMetrics)
-            return ret
-

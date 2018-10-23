@@ -4,9 +4,7 @@ from twisted.internet import reactor
 from twisted.python import log
 
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_discovery import DNSPeerDiscovery, BootstrapPeerDiscovery
-from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 from hathor.p2p.manager import NetworkManager
 
 import argparse
@@ -39,8 +37,6 @@ if __name__ == '__main__':
         unix_socket = os.path.join(args.data, 'hathor.sock')
     else:
         unix_socket = '/tmp/hathor.sock'
-
-    network = 'testnet'
 
     manager = NetworkManager(reactor, peer_id=peer_id, hostname=args.hostname, unix_socket=unix_socket)
 

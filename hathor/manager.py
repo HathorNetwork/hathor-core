@@ -1,6 +1,8 @@
 # encoding: utf-8
 
-from hathor.amp_protocol import HathorAMPFactory, SendTx
+from twisted.internet.defer import inlineCallbacks
+
+from hathor.amp_protocol import HathorAMPFactory, SendTx, GetNetworkStatus
 from hathor.transaction import Block, TxOutput, sum_weights
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
@@ -14,6 +16,7 @@ from math import log
 import time
 import random
 import datetime
+import pickle
 
 from hathor.p2p.protocol import HathorLineReceiver
 MyServerProtocol = HathorLineReceiver
@@ -37,10 +40,13 @@ class HathorManager(object):
         # This node is ready to establish new connections, sync, and exchange transactions.
         READY = 'READY'
 
-    def __init__(self, reactor, pubsub=None, wallet=None, tx_storage=None, unix_socket=None):
+    def __init__(self, reactor, pubsub=None, network=None, wallet=None, tx_storage=None, unix_socket=None):
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :type reactor: :py:class:`twisted.internet.Reactor`
+
+        :param network: Name of the network this node participates. Usually it is either testnet or mainnet.
+        :type network: string
 
         :param pubsub: If not given, a new one is created.
         :type pubsub: :py:class:`hathor.pubsub.PubSubManager`
@@ -51,6 +57,7 @@ class HathorManager(object):
         self.reactor = reactor
         self.state = None
         self.profiler = None
+        self.network = network or 'testnet'
 
         # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
         self.tx_storage = tx_storage or TransactionMemoryStorage()
@@ -300,3 +307,10 @@ class HathorManager(object):
             weight = self.min_block_weight
 
         return weight
+
+    @inlineCallbacks
+    def get_network_status(self):
+        if self.remoteConnection:
+            ret = yield self.remoteConnection.callRemote(GetNetworkStatus)
+            ret['status'] = pickle.loads(ret['status'])
+            return ret

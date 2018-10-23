@@ -6,6 +6,7 @@ from twisted.protocols import amp
 from hathor.transaction import Transaction, Block
 
 import pickle
+import time
 from math import inf
 
 
@@ -43,12 +44,12 @@ class OnNewTx(amp.Command):
                  (b'tx_bytes', amp.String())]
     response = [(b'ret', amp.Boolean())]
 
-class GetMetrics(amp.Command):
+
+class GetNetworkStatus(amp.Command):
     arguments = []
-    response = [(b'transactions', amp.Integer()),
-                (b'blocks', amp.Integer()),
-                (b'hash_rate', amp.Float()),
-                (b'peers', amp.Integer())]
+    response = [(b'status', amp.String()),
+                (b'id', amp.Unicode()),
+                (b'entrypoints', amp.ListOf(amp.Unicode()))]
 
 
 class HathorAMP(amp.AMP):
@@ -104,14 +105,59 @@ class HathorAMP(amp.AMP):
         return {'ret': ret}
     OnNewTx.responder(on_new_tx)
 
-    def get_metrics(self):
-        metrics = self.node.metrics
-        return {'transactions': metrics.transactions,
-                'blocks': metrics.blocks,
-                'hash_rate': metrics.hash_rate,
-                'peers': metrics.peers
-               }
-    GetMetrics.responder(get_metrics)
+    def get_network_status(self):
+        connecting_peers = []
+        for endpoint, deferred in self.node.connections.connecting_peers.items():
+            host = getattr(endpoint, '_host', '')
+            port = getattr(endpoint, '_port', '')
+            connecting_peers.append({
+                'deferred': str(deferred),
+                'address': '{}:{}'.format(host, port)
+            })
+
+        handshaking_peers = []
+        for conn in self.node.connections.handshaking_peers:
+            remote = conn.transport.getPeer()
+            handshaking_peers.append({
+                'address': '{}:{}'.format(remote.host, remote.port),
+                'state': conn.state.state_name,
+                'uptime': time.time() - conn.connection_time,
+                'app_version': conn.app_version,
+            })
+
+        connected_peers = []
+        for conn in self.node.connections.connected_peers.values():
+            remote = conn.transport.getPeer()
+            status = {}
+            for name, plugin in conn.state.plugins.items():
+                status[name] = plugin.get_status()
+            connected_peers.append({
+                'id': conn.peer.id,
+                'app_version': conn.app_version,
+                'uptime': time.time() - conn.connection_time,
+                'address': '{}:{}'.format(remote.host, remote.port),
+                'state': conn.state.state_name,
+                # 'received_bytes': conn.received_bytes,
+                'last_message': time.time() - conn.last_message,
+                'plugins': status,
+            })
+
+        known_peers = []
+        for peer in self.node.connections.peer_storage.values():
+            known_peers.append({
+                'id': peer.id,
+                'entrypoints': peer.entrypoints,
+            })
+
+        status = {}
+        status['connecting_peers'] = connecting_peers
+        status['handshaking_peers'] = handshaking_peers
+        status['connected_peers'] = connected_peers
+        status['known_peers'] = known_peers
+        return {'status': pickle.dumps(status),
+                'id': self.node.connections.my_peer.id,
+                'entrypoints': self.node.connections.my_peer.entrypoints}
+    GetNetworkStatus.responder(get_network_status)
 
 
 class HathorAMPFactory(Factory):

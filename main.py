@@ -91,7 +91,7 @@ if __name__ == '__main__':
 
     wallet = create_wallet()
 
-    manager = HathorManager(reactor, tx_storage=tx_storage, wallet=wallet, unix_socket=unix_socket)
+    manager = HathorManager(reactor, tx_storage=tx_storage, network='testnet', wallet=wallet, unix_socket=unix_socket)
     manager.start()
 
     # start subprocess to handle p2p
