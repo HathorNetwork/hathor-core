@@ -1,0 +1,25 @@
+{
+    "title": "CPU Usage",
+    "type": "graph",
+    "params": {
+        "targets": [
+            {
+                "expr": "irate(node_cpu_seconds_total{{instance='{0}:{1}', mode!='idle'}}[5m])",
+                "format": "time_series",
+                "hide": false,
+                "instant": false,
+                "interval": "",
+                "intervalFactor": 2,
+                "legendFormat": "{{mode}}",
+                "refId": "A",
+                "step": 40,
+                "target": ""
+            }
+        ],
+        "stack": true,
+        "y_format": "percentunit",
+        "y_min": 0,
+        "y_max": 1
+    },
+    "height": 4
+}

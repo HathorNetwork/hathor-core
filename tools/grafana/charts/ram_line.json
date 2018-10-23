@@ -1,0 +1,47 @@
+{
+    "title": "RAM Used",
+    "type": "graph",
+    "params": {
+        "targets": [
+            {
+                "expr": "node_memory_MemTotal_bytes{{instance='{0}:{1}'}} - node_memory_MemFree_bytes{{instance='{0}:{1}'}} - node_memory_Cached_bytes{{instance='{0}:{1}'}} - node_memory_Buffers_bytes{{instance='{0}:{1}'}} - node_memory_Slab_bytes{{instance='{0}:{1}'}}",
+                "format": "time_series",
+                "intervalFactor": 2,
+                "legendFormat": "Used",
+                "metric": "memo",
+                "refId": "A",
+                "step": 40,
+                "target": ""
+            },
+            {
+              "expr": "node_memory_Buffers_bytes{{instance='{0}:{1}'}}",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "Buffers",
+              "refId": "C",
+              "step": 40
+            },
+            {
+              "expr": "node_memory_Cached_bytes{{instance='{0}:{1}'}} + node_memory_Slab_bytes{{instance='{0}:{1}'}}",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "Cached",
+              "refId": "D",
+              "step": 40
+            },
+            {
+              "expr": "node_memory_MemFree_bytes{{instance='{0}:{1}'}}",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 2,
+              "legendFormat": "Free",
+              "refId": "B",
+              "step": 40
+            }
+        ],
+        "stack": true,
+        "y_format": "bytes",
+        "y_min": "0"
+    },
+    "height": 4
+}
