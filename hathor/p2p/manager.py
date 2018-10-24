@@ -62,7 +62,7 @@ class NetworkManager:
             self.pubsub
         )
 
-        self.remoteConnection = None
+        self.remote_connection = None
         self.unix_socket = unix_socket
 
         self.genesis_hashes = []
@@ -73,7 +73,7 @@ class NetworkManager:
         d = connectProtocol(endpoint, HathorAMP(self))
 
         def handleConn(p):
-            self.remoteConnection = p
+            self.remote_connection = p
         d.addCallback(handleConn)
 
         genesis = genesis_transactions(None)
@@ -100,9 +100,12 @@ class NetworkManager:
             address = '{}:{}:{}'.format(proto, self.hostname, endpoint._port)
             self.my_peer.entrypoints.append(address)
 
+    def is_genesis(self, hash):
+        return hash in self.genesis_hashes
+
     @inlineCallbacks
     def transaction_exists_by_hash(self, hash_hex):
-        ret = yield self.remoteConnection.callRemote(TxExists, hash_hex=hash_hex)
+        ret = yield self.remote_connection.callRemote(TxExists, hash_hex=hash_hex)
         return ret['ret']
 
     @inlineCallbacks
@@ -116,7 +119,7 @@ class NetworkManager:
         if timestamp == inf:
             infinity = True
             timestamp = 0
-        ret = yield self.remoteConnection.callRemote(GetTips, type='tx', timestamp=timestamp, infinity=infinity)
+        ret = yield self.remote_connection.callRemote(GetTips, type='tx', timestamp=timestamp, infinity=infinity)
         return pickle.loads(ret['tips'])
 
     @inlineCallbacks
@@ -125,29 +128,26 @@ class NetworkManager:
         if timestamp == inf:
             infinity = True
             timestamp = 0
-        ret = yield self.remoteConnection.callRemote(GetTips, type='block', timestamp=timestamp, infinity=infinity)
+        ret = yield self.remote_connection.callRemote(GetTips, type='block', timestamp=timestamp, infinity=infinity)
         return pickle.loads(ret['tips'])
 
     @inlineCallbacks
     def get_latest_timestamp(self):
-        ret = yield self.remoteConnection.callRemote(GetLatestTimestamp)
+        ret = yield self.remote_connection.callRemote(GetLatestTimestamp)
         return ret['timestamp']
 
     @inlineCallbacks
     def on_new_tx(self, tx):
         tx_type = 'block' if tx.is_block else 'tx'
-        ret = yield self.remoteConnection.callRemote(OnNewTx, tx_type=tx_type, tx_bytes=bytes(tx))
+        ret = yield self.remote_connection.callRemote(OnNewTx, tx_type=tx_type, tx_bytes=bytes(tx))
         return ret['ret']
 
     @inlineCallbacks
     def get_transaction_by_hash(self, hash_hex):
-        ret = yield self.remoteConnection.callRemote(GetTx, hash_hex=hash_hex)
+        ret = yield self.remote_connection.callRemote(GetTx, hash_hex=hash_hex)
         tx_type = ret['tx_type']
         if tx_type == 'block':
             tx = Block.create_from_struct(ret['tx_bytes'])
         else:
             tx = Transaction.create_from_struct(ret['tx_bytes'])
         return tx
-
-    def is_genesis(self, hash):
-        return hash in self.genesis_hashes

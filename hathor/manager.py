@@ -79,7 +79,7 @@ class HathorManager(object):
         self.wallet = wallet
         self.wallet.pubsub = self.pubsub
 
-        self.remoteConnection = None
+        self.remote_connection = None
         self.unix_socket = unix_socket
 
     def start(self):
@@ -264,9 +264,9 @@ class HathorManager(object):
         tx.mark_inputs_as_used()
 
         # Propagate to our peers.
-        if self.remoteConnection:
+        if self.remote_connection:
             tx_type = 'block' if tx.is_block else 'tx'
-            self.remoteConnection.callRemote(SendTx, tx_type=tx_type, tx_bytes=bytes(tx))
+            self.remote_connection.callRemote(SendTx, tx_type=tx_type, tx_bytes=bytes(tx))
 
         # Publish to pubsub manager the new tx accepted
         self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
@@ -309,7 +309,7 @@ class HathorManager(object):
 
     @inlineCallbacks
     def get_network_status(self):
-        if self.remoteConnection:
-            ret = yield self.remoteConnection.callRemote(GetNetworkStatus)
+        if self.remote_connection:
+            ret = yield self.remote_connection.callRemote(GetNetworkStatus)
             ret['status'] = pickle.loads(ret['status'])
             return ret
