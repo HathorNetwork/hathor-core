@@ -1,3 +1,5 @@
+.DS_Store
+
 __pycache__/
 *.py[cod]
 
@@ -10,3 +12,7 @@ cover/
 
 extras/docker/_build/
 extras/docker/envvars
+
+build/
+dist/
+*.egg-info

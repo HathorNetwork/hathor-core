@@ -314,7 +314,7 @@ def get_method_to_call(chart_type):
     return CHART_TO_METHOD[chart_type]
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('title', help='Title of the dashboard')
     parser.add_argument('--data_source', help='Name of data source')
@@ -329,3 +329,7 @@ if __name__ == '__main__':
         kwargs['data_source'] = args.data_source
 
     print(get_grafana_dashboard_json(**kwargs))
+
+
+if __name__ == '__main__':
+    main()

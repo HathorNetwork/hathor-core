@@ -15,6 +15,9 @@ setup(
     author_email='contact@hathor.network',
     url='https://hathor.network/',
     license='Proprietary',
+    entry_points={
+        'console_scripts': ['hathor-cli=hathor.cli.main:main'],
+    },
     classifiers=[
         'Programming Language :: Python :: 3',
         'Operating System :: OS Independent',

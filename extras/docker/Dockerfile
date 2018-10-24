@@ -22,8 +22,6 @@ RUN /tmp/install.sh && \
     rm -f /tmp/install.sh /tmp/hathor.tar.gz /tmp/hathor-webadmin.tar.gz && \
     rm -f /etc/nginx/sites-enabled/default
 
-COPY ./_build/main.py ${HTR_PATH_HOME}/main.py
-COPY ./_build/mining.py ${HTR_PATH_HOME}/mining.py
 COPY ./nginx.conf /etc/nginx/sites-available/hathor-webadmin
 COPY ./run.sh /run.sh
 
