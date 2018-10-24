@@ -1,0 +1,21 @@
+{
+    "title": "Disk Space Used",
+    "type": "graph",
+    "params": {
+        "targets": [
+            {
+                "expr": "node_filesystem_size_bytes{{instance='{0}:{1}',job='{2}',device=~'/dev/.*'}} - node_filesystem_avail_bytes{{instance='{0}:{1}',job='{2}',device=~'/dev/.*'}}",
+                "format": "time_series",
+                "instant": false,
+                "intervalFactor": 2,
+                "legendFormat": "{{mountpoint}}",
+                "refId": "A",
+                "step": 1800
+            }
+        ],
+        "stack": false,
+        "y_format": "bytes",
+        "y_min": "0"
+    },
+    "height": 4
+}

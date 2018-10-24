@@ -8,7 +8,7 @@ tests:
 
 .PHONY: pep8
 pep8:
-	flake8 hathor/ tests/ *.py
+	flake8 hathor/ tests/ tools/ *.py
 
 
 

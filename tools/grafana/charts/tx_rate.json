@@ -1,0 +1,15 @@
+{
+    "title": "Transactions per seconds",
+    "type": "graph",
+    "params": {
+        "targets": [
+            {
+                "expr": "rate(transactions{{instance='{0}:{1}',job='{2}'}}[10s])",
+                "format": "time_series",
+                "intervalFactor": 1,
+                "refId": "A"
+            }
+        ]
+    },
+    "height": 4
+}

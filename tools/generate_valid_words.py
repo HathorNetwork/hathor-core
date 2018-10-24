@@ -3,6 +3,7 @@ def generate_words(language='english', count=24):
     mnemonic = Mnemonic(language)
     return mnemonic.generate(strength=int(count*10.67))
 
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()

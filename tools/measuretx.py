@@ -1,6 +1,5 @@
 # encoding: utf-8
 
-import json
 import requests
 import time
 import argparse
@@ -26,11 +25,11 @@ if __name__ == '__main__':
     print('URL: {}'.format(args.url))
     print('Send tokens URL: {}'.format(send_tokens_url))
 
-    #unlock_wallet_url = urllib.parse.urljoin(args.url, '/wallet/unlock/')
-    #response = requests.post(unlock_wallet_url, data={'passphrase': 'abc'})
-    #print(response.text)
-    #print('Wallet successfully unlocked')
-    #print('')
+    # unlock_wallet_url = urllib.parse.urljoin(args.url, '/wallet/unlock/')
+    # response = requests.post(unlock_wallet_url, data={'passphrase': 'abc'})
+    # print(response.text)
+    # print('Wallet successfully unlocked')
+    # print('')
 
     profiler_url = urllib.parse.urljoin(args.url, '/profiler/')
     response = requests.post(profiler_url + '?start')
@@ -51,7 +50,7 @@ if __name__ == '__main__':
     while True:
         address = random.choice(args.addresses)
         value = random.randint(10, 100)
-        #print('Sending {} tokens to {}...'.format(address, value))
+        # print('Sending {} tokens to {}...'.format(address, value))
 
         data = {
             'outputs': [{'address': address, 'value': value}],
@@ -68,7 +67,7 @@ if __name__ == '__main__':
             print('Waiting %d seconds to try again...' % _SLEEP_ON_ERROR_SECONDS)
             time.sleep(_SLEEP_ON_ERROR_SECONDS)
         else:
-            #print('Response:', data)
+            # print('Response:', data)
             if args.interval:
                 time.sleep(args.interval)
             count += 1
@@ -79,4 +78,3 @@ if __name__ == '__main__':
                 print('')
                 count = 0
                 t0 = t1
-

@@ -1,0 +1,15 @@
+{
+    "title": "Transactions",
+    "type": "graph",
+    "params": {
+        "targets": [
+            {
+                "expr": "transactions{{instance='{0}:{1}',job='{2}'}}",
+                "format": "time_series",
+                "intervalFactor": 1,
+                "refId": "A"
+            }
+        ]
+    },
+    "height": 4
+}
