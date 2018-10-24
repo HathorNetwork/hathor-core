@@ -1,0 +1,8 @@
+#!/bin/bash
+
+exec -a "$0" python -c "
+import sys
+import runpy
+sys.argv[0] = \"$0\"
+runpy.run_module('hathor.cli.main', run_name='__main__')
+" $@

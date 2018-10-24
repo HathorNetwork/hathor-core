@@ -11,7 +11,7 @@ from json.decoder import JSONDecodeError
 _SLEEP_ON_ERROR_SECONDS = 5
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('url', help='URL to get mining bytes')
     parser.add_argument('addresses', nargs='*')
@@ -24,12 +24,6 @@ if __name__ == '__main__':
     print('Hathor TX Sender v1.0.0')
     print('URL: {}'.format(args.url))
     print('Send tokens URL: {}'.format(send_tokens_url))
-
-    # unlock_wallet_url = urllib.parse.urljoin(args.url, '/wallet/unlock/')
-    # response = requests.post(unlock_wallet_url, data={'passphrase': 'abc'})
-    # print(response.text)
-    # print('Wallet successfully unlocked')
-    # print('')
 
     profiler_url = urllib.parse.urljoin(args.url, '/profiler/')
     response = requests.post(profiler_url + '?start')
@@ -47,6 +41,7 @@ if __name__ == '__main__':
         sys.exit(0)
     signal.signal(signal.SIGINT, signal_handler)
 
+    xt0 = time.time()
     while True:
         address = random.choice(args.addresses)
         value = random.randint(10, 100)
@@ -69,7 +64,11 @@ if __name__ == '__main__':
         else:
             # print('Response:', data)
             if args.interval:
-                time.sleep(args.interval)
+                xt1 = time.time()
+                interval = args.interval - (xt1 - xt0)
+                if interval > 0:
+                    time.sleep(interval)
+                xt0 = xt1
             count += 1
             t1 = time.time()
             if t1 - t0 > 5:

@@ -29,7 +29,7 @@ import json
 import os
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
     parser.add_argument('--testnet', action='store_true', help='Connect to Hathor testnet')

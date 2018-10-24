@@ -8,7 +8,7 @@ from hathor.p2p.peer_id import PeerId
 import json
 
 
-if __name__ == '__main__':
+def main():
     peer_id = PeerId()
     data = peer_id.to_json(include_private_key=True)
     txt = json.dumps(data, indent=4)

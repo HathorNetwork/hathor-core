@@ -125,7 +125,7 @@ class HathorProtocol(object):
         to the peer. It depends on the underlying protocol in which
         HathorProtocol is running.
         """
-        raise NotImplemented()
+        raise NotImplementedError
 
     def recv_message(self, cmd, payload):
         """ Executed when a new message arrives.

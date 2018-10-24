@@ -15,6 +15,7 @@ graphviz==0.9
 prometheus-client==0.4.2
 
 requests
+colorama
 
 flake8
 nose

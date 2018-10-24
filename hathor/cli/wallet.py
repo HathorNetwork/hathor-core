@@ -6,7 +6,7 @@ import argparse
 import getpass
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--count', type=int, default=20, help='Number of keys/addresses (default=20)')
     parser.add_argument('--directory', help='Wallet directory')

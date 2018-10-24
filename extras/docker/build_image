@@ -15,8 +15,6 @@ echo NODE PATH: $NODE_PATH
 mkdir -p _build/
 
 cp ${NODE_PATH}/requirements.txt _build/
-cp ${NODE_PATH}/main.py _build/
-cp ${NODE_PATH}/mining.py _build/
 
 export REACT_APP_BASE_URL="/api/"
 export REACT_APP_WS_URL="/api/ws/"

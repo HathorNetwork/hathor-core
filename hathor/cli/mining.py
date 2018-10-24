@@ -21,7 +21,7 @@ def worker(q_in, q_out):
     q_out.put(block.nonce)
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('url', help='URL to get mining bytes')
     parser.add_argument('--sleep', type=float, help='Sleep every 2 seconds (in seconds)')
@@ -59,7 +59,7 @@ if __name__ == '__main__':
         block.update_hash()
         try:
             block.verify_without_storage()
-        except HathorError as e:
+        except HathorError:
             pass
         else:
             block_bytes = block.get_struct()

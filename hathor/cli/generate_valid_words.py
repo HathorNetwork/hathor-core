@@ -4,7 +4,7 @@ def generate_words(language='english', count=24):
     return mnemonic.generate(strength=int(count*10.67))
 
 
-if __name__ == '__main__':
+def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--language', help='Words language')
@@ -19,3 +19,7 @@ if __name__ == '__main__':
         kwargs['count'] = args.count
 
     print(generate_words(**kwargs))
+
+
+if __name__ == '__main__':
+    main()
