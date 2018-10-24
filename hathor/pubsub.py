@@ -112,13 +112,15 @@ class PubSubManager(object):
         if self.manager.remoteConnection:
             # when the node is first started, the connection on unix socket might not have been created yet
             self.manager.remoteConnection.callRemote(PublishEvent, event_type=key.value,
-                                                     event_data=self.serializeArgs(key, args))
+                                                     event_data=self.serialize_args(key, args))
 
-    def publish_from_process(self, key, args):
+    def publish_from_process(self, event_type, event_data):
+        key = HathorEvents(event_type)
+        args = self.deserialize_data(key, event_data)
         for fn in self._subscribers[key]:
             fn(key, args)
 
-    def serializeArgs(self, evt_type, data):
+    def serialize_args(self, evt_type, data):
         if evt_type == HathorEvents.NETWORK_NEW_TX_ACCEPTED:
             tx = data.tx
             tx_type = 'block' if tx.is_block else 'tx'
@@ -127,7 +129,7 @@ class PubSubManager(object):
 
         return pickle.dumps(data)
 
-    def deserializeData(self, evt_type, data):
+    def deserialize_data(self, evt_type, data):
         obj = pickle.loads(data)
         if evt_type == HathorEvents.NETWORK_NEW_TX_ACCEPTED:
             (tx_type, tx_data) = obj

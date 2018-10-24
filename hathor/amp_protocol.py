@@ -166,10 +166,7 @@ class HathorAMP(amp.AMP):
     GetNetworkStatus.responder(get_network_status)
 
     def publish_event(self, event_type, event_data):
-        from hathor.pubsub import HathorEvents
-        event = HathorEvents(event_type)
-        data = self.node.pubsub.deserializeData(event, event_data)
-        self.node.pubsub.publish_from_process(event_type, data)
+        self.node.pubsub.publish_from_process(event_type, event_data)
         return {'ret': True}
     PublishEvent.responder(publish_event)
 
