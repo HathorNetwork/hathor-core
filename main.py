@@ -92,7 +92,6 @@ if __name__ == '__main__':
     wallet = create_wallet()
 
     manager = HathorManager(reactor, tx_storage=tx_storage, network='testnet', wallet=wallet, unix_socket=unix_socket)
-    manager.start()
 
     # start subprocess to handle p2p
     newpid = os.fork()
@@ -101,6 +100,8 @@ if __name__ == '__main__':
         new_args = [sys.executable, 'main-p2p.py']
         new_args.extend(sys.argv[1:])
         os.execv(sys.executable, new_args)
+
+    manager.start()
 
     if args.prometheus:
         kwargs = {'metrics': manager.metrics}

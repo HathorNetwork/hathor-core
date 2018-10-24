@@ -2,7 +2,7 @@
 
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.amp_protocol import HathorAMPFactory, SendTx, GetNetworkStatus, PublishEvent
+from hathor.amp_protocol import HathorAMPFactory, SendTx, GetNetworkStatus
 from hathor.transaction import Block, TxOutput, sum_weights
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
@@ -86,14 +86,14 @@ class HathorManager(object):
         """ A factory must be started only once. And it is usually automatically started.
         """
         self.state = self.NodeState.INITIALIZING
-        #self.pubsub.publish(HathorEvents.MANAGER_ON_START)
-
-        # Initialize manager's components.
-        self._initialize_components()
 
         self.start_time = time.time()
 
         self.reactor.listenUNIX(self.unix_socket, HathorAMPFactory(self))
+
+        # Initialize manager's components.
+        self._initialize_components()
+        self.pubsub.publish(HathorEvents.MANAGER_ON_START)
 
     def stop(self):
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
@@ -266,7 +266,6 @@ class HathorManager(object):
         # Propagate to our peers.
         if self.remoteConnection:
             tx_type = 'block' if tx.is_block else 'tx'
-            # we don't need the result of send_tx call, so no need to yield or get the deferred
             self.remoteConnection.callRemote(SendTx, tx_type=tx_type, tx_bytes=bytes(tx))
 
         # Publish to pubsub manager the new tx accepted

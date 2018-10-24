@@ -69,6 +69,7 @@ class NetworkManager:
 
     def start(self):
         endpoint = UNIXClientEndpoint(self.reactor, self.unix_socket)
+        # TODO should we have connection retry?
         d = connectProtocol(endpoint, HathorAMP(self))
 
         def handleConn(p):

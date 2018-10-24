@@ -110,7 +110,9 @@ class PubSubManager(object):
             fn(key, args)
 
         if self.manager.remoteConnection:
-            self.manager.remoteConnection.callRemote(PublishEvent, event_type=key.value, event_data=self.serializeArgs(key, args))
+            # when the node is first started, the connection on unix socket might not have been created yet
+            self.manager.remoteConnection.callRemote(PublishEvent, event_type=key.value,
+                                                     event_data=self.serializeArgs(key, args))
 
     def publish_from_process(self, key, args):
         for fn in self._subscribers[key]:
