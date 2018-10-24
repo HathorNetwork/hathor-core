@@ -5,4 +5,4 @@ import sys
 import runpy
 sys.argv[0] = \"$0\"
 runpy.run_module('hathor.cli.main', run_name='__main__')
-" $@
+" "$@"
