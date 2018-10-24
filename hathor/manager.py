@@ -2,7 +2,7 @@
 
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.amp_protocol import HathorAMPFactory, SendTx, GetNetworkStatus
+from hathor.amp_protocol import HathorAMPFactory, SendTx, GetNetworkStatus, PublishEvent
 from hathor.transaction import Block, TxOutput, sum_weights
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
@@ -61,7 +61,7 @@ class HathorManager(object):
 
         # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
         self.tx_storage = tx_storage or TransactionMemoryStorage()
-        self.pubsub = pubsub or PubSubManager()
+        self.pubsub = pubsub or PubSubManager(self)
 
         self.avg_time_between_blocks = 64  # in seconds
         self.min_block_weight = 14
@@ -86,7 +86,7 @@ class HathorManager(object):
         """ A factory must be started only once. And it is usually automatically started.
         """
         self.state = self.NodeState.INITIALIZING
-        self.pubsub.publish(HathorEvents.MANAGER_ON_START)
+        #self.pubsub.publish(HathorEvents.MANAGER_ON_START)
 
         # Initialize manager's components.
         self._initialize_components()

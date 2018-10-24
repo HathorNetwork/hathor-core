@@ -48,7 +48,7 @@ class NetworkManager:
         # Hostname, used to be accessed by other peers.
         self.hostname = hostname
 
-        self.pubsub = pubsub or PubSubManager()
+        self.pubsub = pubsub or PubSubManager(self)
 
         self.peer_discoveries = []
 

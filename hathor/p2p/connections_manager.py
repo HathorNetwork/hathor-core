@@ -90,7 +90,7 @@ class ConnectionsManager:
             if conn != protocol:
                 conn.state.send_peers([protocol])
 
-        self.pubsub.publish(HathorEvents.NETWORK_PEER_CONNECTED, protocol=protocol)
+        self.pubsub.publish(HathorEvents.NETWORK_PEER_CONNECTED, state_name=protocol.state.state_name)
 
     def on_peer_disconnect(self, protocol):
         print('on_peer_disconnect()', protocol)
@@ -99,7 +99,7 @@ class ConnectionsManager:
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
 
-        self.pubsub.publish(HathorEvents.NETWORK_PEER_DISCONNECTED, protocol=protocol)
+        self.pubsub.publish(HathorEvents.NETWORK_PEER_DISCONNECTED, state_name=protocol.state.state_name)
 
     def get_ready_connections(self):
         """

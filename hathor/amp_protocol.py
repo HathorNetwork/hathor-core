@@ -52,6 +52,12 @@ class GetNetworkStatus(amp.Command):
                 (b'entrypoints', amp.ListOf(amp.Unicode()))]
 
 
+class PublishEvent(amp.Command):
+    arguments = [(b'event_type', amp.Unicode()),
+                 (b'event_data', amp.String())]
+    response = [(b'ret', amp.Boolean())]
+
+
 class HathorAMP(amp.AMP):
     def __init__(self, node):
         self.node = node
@@ -158,6 +164,14 @@ class HathorAMP(amp.AMP):
                 'id': self.node.connections.my_peer.id,
                 'entrypoints': self.node.connections.my_peer.entrypoints}
     GetNetworkStatus.responder(get_network_status)
+
+    def publish_event(self, event_type, event_data):
+        from hathor.pubsub import HathorEvents
+        event = HathorEvents(event_type)
+        data = self.node.pubsub.deserializeData(event, event_data)
+        self.node.pubsub.publish_from_process(event_type, data)
+        return {'ret': True}
+    PublishEvent.responder(publish_event)
 
 
 class HathorAMPFactory(Factory):

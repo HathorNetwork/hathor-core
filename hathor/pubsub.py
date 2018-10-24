@@ -2,11 +2,15 @@
 
 from collections import defaultdict
 from enum import Enum
+import pickle
+
+from hathor.amp_protocol import PublishEvent
+from hathor.transaction import Transaction, Block
 
 
 class HathorEvents(Enum):
     """
-        NETWORK_NEW_ACCEPTED:
+        NETWORK_NEW_TX_ACCEPTED:
             Triggered when a new tx/block is accepted in the network
             Publishes a tx/block object
 
@@ -70,8 +74,9 @@ class PubSubManager(object):
 
     It is used to let independent objects respond to events.
     """
-    def __init__(self):
+    def __init__(self, manager):
         self._subscribers = defaultdict(list)
+        self.manager = manager
 
     def subscribe(self, key, fn):
         """Subscribe to a specific event.
@@ -103,6 +108,34 @@ class PubSubManager(object):
         args = EventArguments(**kwargs)
         for fn in self._subscribers[key]:
             fn(key, args)
+
+        if self.manager.remoteConnection:
+            self.manager.remoteConnection.callRemote(PublishEvent, event_type=key.value, event_data=self.serializeArgs(key, args))
+
+    def publish_from_process(self, key, args):
+        for fn in self._subscribers[key]:
+            fn(key, args)
+
+    def serializeArgs(self, evt_type, data):
+        if evt_type == HathorEvents.NETWORK_NEW_TX_ACCEPTED:
+            tx = data.tx
+            tx_type = 'block' if tx.is_block else 'tx'
+            tx_data = bytes(tx)
+            data = (tx_type, tx_data)
+
+        return pickle.dumps(data)
+
+    def deserializeData(self, evt_type, data):
+        obj = pickle.loads(data)
+        if evt_type == HathorEvents.NETWORK_NEW_TX_ACCEPTED:
+            (tx_type, tx_data) = obj
+            tx_storage = getattr(self.manager, 'tx_storage', None)
+            if tx_type == 'block':
+                tx = Block.create_from_struct(tx_data, tx_storage)
+            else:
+                tx = Transaction.create_from_struct(tx_data, tx_storage)
+            obj = EventArguments(tx=tx)
+        return obj
 
     def test(self, key, **kwargs):
         return EventArguments(**kwargs)
