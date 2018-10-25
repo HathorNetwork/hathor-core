@@ -1,3 +1,4 @@
 #!/bin/bash
 
-exec python ../mining.py http://localhost:8080/mining --sleep 0.0001
+cd ../
+exec ./hathor-cli run_miner http://localhost:8080/mining --sleep 0.0001

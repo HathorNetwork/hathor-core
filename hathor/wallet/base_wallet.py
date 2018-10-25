@@ -167,6 +167,15 @@ class BaseWallet:
 
     def handle_change_tx(self, sum_inputs, outputs):
         """Creates an output transaction with the change value
+
+        :param sum_inputs: Sum of the input amounts
+        :type sum_inputs: int
+
+        :param outputs: A list of WalletOutputInfo
+        :type outputs: List[WalletOutputInfo]
+
+        :return: Return an output with the change
+        :rtype: :py:class:`hathor.wallet.base_wallet.WalletOutputInfo`
         """
         sum_outputs = sum([output.value for output in outputs])
 

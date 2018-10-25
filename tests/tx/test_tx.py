@@ -185,7 +185,7 @@ class BasicTransaction(unittest.TestCase):
         for parent_hash in parents:
             metadata = tx.storage.get_metadata_by_hash_bytes(parent_hash)
             self.assertEqual(len(metadata.children), 1)
-            self.assertEqual(metadata.children.pop(), tx.hash_hex)
+            self.assertEqual(metadata.children.pop(), tx.hash)
 
 
 if __name__ == '__main__':

@@ -7,6 +7,7 @@ from hathor.transaction.scripts import P2PKH
 
 from enum import Enum
 from math import log
+from itertools import chain
 import time
 import struct
 import hashlib
@@ -32,12 +33,6 @@ def sum_weights(w1, w2):
         # We could use float('-inf'), but it is not serializable.
         return a
     return a + log(1 + 2**(b-a), 2)
-
-
-class TxConflictState(Enum):
-    NO_CONFLICT = 'no-conflict'
-    CONFLICT_WINNER = 'conflict-winner'
-    CONFLICT_VOIDED = 'conflict-voided'
 
 
 class BaseTransaction:
@@ -200,6 +195,34 @@ class BaseTransaction:
                 return True
         return False
 
+    def update_voided_info(self):
+        """ Transaction's voided_by must equal the union of the voided_by of both its parents and its inputs.
+        """
+        voided_by = set()
+
+        for parent in self.get_parents():
+            parent_meta = parent.get_metadata()
+            voided_by.update(parent_meta.voided_by)
+
+        for txin in self.inputs:
+            spent_tx = self.storage.get_transaction_by_hash_bytes(txin.tx_id)
+            spent_meta = spent_tx.get_metadata()
+            voided_by.update(spent_meta.voided_by)
+
+        meta = self.get_metadata()
+        if self.hash in meta.voided_by:
+            voided_by.add(self.hash)
+
+        if meta.voided_by != voided_by:
+            meta.voided_by = voided_by.copy()
+            self.storage.save_metadata(meta)
+
+        for h in voided_by:
+            if h == self.hash:
+                continue
+            tx = self.storage.get_transaction_by_hash_bytes(h)
+            tx.check_conflicts()
+
     def mark_inputs_as_used(self):
         """ Mark all its inputs as used
         """
@@ -216,49 +239,120 @@ class BaseTransaction:
         self.storage.save_metadata(spent_meta)
 
         if len(spent_by) > 1:
-            # Conflicting transaction.
-            tx_list = []
-            winner_set = set()
-            max_acc_weight = 0
             for h in spent_by:
-                # now we need to update accumulated weight and get new metadata info
                 tx = self.storage.get_transaction_by_hash_bytes(h)
-                meta = tx.update_accumulated_weight(save_file=False)
-                tx_list.append(tx)
+                meta = tx.get_metadata()
+                meta.conflict_with.update(spent_by)
+                meta.conflict_with.discard(tx.hash)
+                tx.storage.save_metadata(meta)
 
-                if meta.accumulated_weight == max_acc_weight:
-                    winner_set.add(meta.hash)
-                elif meta.accumulated_weight > max_acc_weight:
-                    max_acc_weight = meta.accumulated_weight
-                    winner_set = set([meta.hash])
+        self.check_conflicts()
 
-            if len(winner_set) > 1:
-                winner_set = set()
+    def check_conflicts(self):
+        """ Check which transaction is the winner of a conflict, the remaining are voided.
+        """
+        meta = self.get_metadata()
+        if not meta.conflict_with:
+            return
 
-            for tx in tx_list:
-                if tx.hash in winner_set:
-                    tx.mark_as_winner()
-                else:
-                    tx.mark_as_voided()
+        meta = self.update_accumulated_weight()
+
+        # Conflicting transaction.
+        tx_list = [self]
+        winner_set = set()
+        max_acc_weight = 0
+
+        if len(meta.voided_by - set([self.hash])) == 0:
+            winner_set.add(self.hash)
+            max_acc_weight = meta.accumulated_weight
+
+        for h in meta.conflict_with:
+            # now we need to update accumulated weight and get new metadata info
+            tx = self.storage.get_transaction_by_hash_bytes(h)
+            meta = tx.update_accumulated_weight()
+            tx_list.append(tx)
+
+            if len(meta.voided_by - set([tx.hash])) > 0:
+                continue
+
+            if meta.accumulated_weight == max_acc_weight:
+                winner_set.add(meta.hash)
+            elif meta.accumulated_weight > max_acc_weight:
+                max_acc_weight = meta.accumulated_weight
+                winner_set = set([meta.hash])
+
+        if len(winner_set) > 1:
+            winner_set = set()
+
+        for tx in tx_list:
+            if tx.hash in winner_set:
+                tx.mark_as_winner()
+            else:
+                tx.mark_as_voided()
 
     def mark_as_voided(self):
         """ Mark a transaction as voided when it has a conflict and its aggregated weight
         is NOT the greatest one.
         """
         meta = self.get_metadata()
-        meta.conflict = TxConflictState.CONFLICT_VOIDED
+        assert(len(meta.conflict_with) > 0)
+
+        meta.voided_by.add(self.hash)
         self.storage.save_metadata(meta)
         self.storage._del_from_cache(self)
+        self.storage._add_to_voided(self)
+
+        used = set()
+        # TODO FIXME Run in topological sort.
+        it = chain(
+            self.storage.iter_bfs_children(self),
+            self.storage.iter_bfs_spent_by(self),
+        )
+        for tx in it:
+            if tx.hash in used:
+                continue
+            used.add(tx.hash)
+            meta = tx.get_metadata()
+
+            check_conflicts = False
+            if meta.conflict_with and not meta.voided_by:
+                check_conflicts = True
+
+            meta.voided_by.add(self.hash)
+            self.storage.save_metadata(meta)
+            self.storage._del_from_cache(tx)
+            self.storage._add_to_voided(tx)
+
+            if check_conflicts:
+                tx.check_conflicts()
 
     def mark_as_winner(self):
         """ Mark a transaction as winner when it has a conflict and its aggregated weight
         is the greatest one.
         """
         meta = self.get_metadata()
-        meta.conflict = TxConflictState.CONFLICT_WINNER
+        assert(len(meta.conflict_with) > 0)
+
+        meta.voided_by.discard(self.hash)
         self.storage.save_metadata(meta)
-        # TODO Add back to tip cache when it is a tip
-        # self.storage._add_to_cache(self)
+        self.storage._del_from_voided(self)
+        self.storage._add_to_cache(self)
+
+        used = set()
+        # TODO FIXME Run in topological sort.
+        it = chain(
+            self.storage.iter_bfs_children(self),
+            self.storage.iter_bfs_spent_by(self),
+        )
+        for tx in it:
+            if tx.hash in used:
+                continue
+            used.add(tx.hash)
+            meta = tx.get_metadata()
+            meta.voided_by.discard(self.hash)
+            self.storage.save_metadata(meta)
+            self.storage._del_from_voided(tx)
+            self.storage._add_to_cache(tx)
 
     def compute_genesis_dag_connectivity(self, storage, storage_sync, use_memoized_negative_results=True):
         """Computes the connectivity state from this tx bach to the genesis transactions.
@@ -564,7 +658,7 @@ class BaseTransaction:
         """
         for parent in self.parents:
             metadata = self._get_metadata_from_storage(parent)
-            metadata.children.add(self.hash_hex)
+            metadata.children.add(self.hash)
             self.storage.save_metadata(metadata)
 
     def to_json(self, decode_script=False):

@@ -1,7 +1,7 @@
 
 from hathor.transaction.base_transaction import Input as TxInput, Output as TxOutput
 from hathor.transaction.base_transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS
-from hathor.transaction.base_transaction import TxConflictState, sum_weights
+from hathor.transaction.base_transaction import sum_weights
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.block import Block
@@ -15,5 +15,4 @@ __all__ = [
     'MAX_NUM_INPUTS',
     'MAX_NUM_OUTPUTS',
     'sum_weights',
-    'TxConflictState',
 ]

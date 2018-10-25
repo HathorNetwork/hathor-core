@@ -216,6 +216,8 @@ def script_eval(output_script, input_data):
             pos += length
             continue
 
+        # print('!!', pos, opcode, Opcode(opcode))
+
         # this is an opcode manipulating the stack
         if opcode == Opcode.OP_DUP:
             if not len(stack):
@@ -231,7 +233,7 @@ def script_eval(output_script, input_data):
             elem1 = stack.pop()
             elem2 = stack.pop()
             if elem1 != elem2:
-                err = 'OP_EQUALVERIFY: failed'
+                err = 'OP_EQUALVERIFY: failed {} {}'.format(elem1.hex(), elem2.hex())
                 ret = False
                 break
         elif opcode == Opcode.OP_CHECKSIG:
@@ -265,7 +267,7 @@ def script_eval(output_script, input_data):
             break
 
         pos += 1
-    if len(stack) > 0:
+    if ret and len(stack) > 0:
         if stack.pop() != 1:
             # stack left with non zero value
             err = 'value left on stack is not true'

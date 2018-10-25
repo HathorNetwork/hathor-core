@@ -1,9 +1,9 @@
 # encoding: utf-8
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
-from hathor.transaction import TxConflictState
 from hathor.indexes import TimestampIndex
 
 from collections import deque
+from itertools import chain
 
 
 class TransactionStorage:
@@ -21,6 +21,8 @@ class TransactionStorage:
 
         self.block_tips_index = TimestampIndex()
         self.tx_tips_index = TimestampIndex()
+        self.voided_tips_index = TimestampIndex()
+
         self.latest_timestamp = 0
         from hathor.transaction.genesis import genesis_transactions
         self.first_timestamp = min(x.timestamp for x in genesis_transactions(self))
@@ -128,13 +130,41 @@ class TransactionStorage:
 
         while to_visit:
             tx_hash = to_visit.popleft()
-            tx = self.get_transaction_by_hash(tx_hash)
+            tx = self.get_transaction_by_hash_bytes(tx_hash)
             yield tx
             seen.add(tx_hash)
             for children_hash in tx.get_metadata().children:
                 if children_hash not in seen:
                     to_visit.append(children_hash)
                     seen.add(children_hash)
+
+    def iter_bfs_spent_by(self, root):
+        """Run a BFS starting from the given transaction (left-to-right)
+
+        :param root: Starting point of the BFS, either a block or a transaction.
+        :type root: :py:class:`hathor.transaction.BaseTransaction`
+
+        :return: An iterable with the transactions (without the root)
+        :rtype: Iterable[BaseTransaction]
+        """
+        to_visit = deque(*root.get_metadata().spent_outputs.values())  # List[bytes(hash)]
+        seen = set(to_visit)    # Set[bytes(hash)]
+
+        while to_visit:
+            tx_hash = to_visit.popleft()
+            tx = self.get_transaction_by_hash_bytes(tx_hash)
+            yield tx
+            seen.add(tx_hash)
+            for spent_hash in chain(*tx.get_metadata().spent_outputs.values()):
+                if spent_hash not in seen:
+                    to_visit.append(spent_hash)
+                    seen.add(spent_hash)
+
+    def _add_to_voided(self, tx):
+        self.voided_tips_index.add_tx(tx)
+
+    def _del_from_voided(self, tx):
+        self.voided_tips_index.del_tx(tx)
 
     def _add_to_cache(self, tx):
         self.latest_timestamp = max(self.latest_timestamp, tx.timestamp)
@@ -505,7 +535,7 @@ class TransactionStorage:
                     g_b.node(name, **attrs_node)
                 else:
                     meta = tx.get_metadata()
-                    if meta.conflict == TxConflictState.CONFLICT_VOIDED:
+                    if meta.voided_by:
                         attrs_node.update(conflict_attrs)
                     g_t.node(name, **attrs_node)
 

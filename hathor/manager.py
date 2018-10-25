@@ -87,6 +87,8 @@ class HathorManager(object):
         self.min_block_weight = 14
         self.tokens_issued_per_block = 10000
 
+        self.max_future_timestamp_allowed = 3600  # in seconds
+
         self.metrics = Metrics(
             pubsub=self.pubsub,
             avg_time_between_blocks=self.avg_time_between_blocks,
@@ -229,6 +231,10 @@ class HathorManager(object):
                 print('validate_new_tx(): Already have transaction {}'.format(tx.hash.hex()))
                 return False
 
+        if tx.timestamp - self.reactor.seconds() > self.max_future_timestamp_allowed:
+            print('validate_new_tx(): Ignoring transaction in the future {}'.format(tx.hash.hex()))
+            return False
+
         for parent_hash in tx.parents:
             if not self.tx_storage.transaction_exists_by_hash_bytes(parent_hash):
                 # All parents must exist.
@@ -261,15 +267,21 @@ class HathorManager(object):
 
     def propagate_tx(self, tx):
         """Push a new transaction to the network. It is used by both the wallet and the mining modules.
+
+        :return: True if the transaction was accepted
+        :rtype: bool
         """
         if tx.storage:
             assert tx.storage == self.tx_storage, 'Invalid tx storage'
         else:
             tx.storage = self.tx_storage
-        self.on_new_tx(tx)
+        return self.on_new_tx(tx)
 
     def on_new_tx(self, tx, conn=None):
         """This method is called when any transaction arrive.
+
+        :return: True if the transaction was accepted
+        :rtype: bool
         """
         if not self.validate_new_tx(tx):
             # Discard invalid Transaction/block.
@@ -297,6 +309,7 @@ class HathorManager(object):
             print('New tx: {} timestamp={} ({})'.format(tx.hash.hex(), ts_date, tx.get_time_from_now()))
 
         tx.mark_inputs_as_used()
+        tx.update_voided_info()
 
         # Propagate to our peers.
         self.connections.send_tx_to_peers(tx)
