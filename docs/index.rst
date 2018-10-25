@@ -12,6 +12,9 @@ Welcome to Hathor Network's documentation!
    :caption: Contents:
 
    quickstart
+   glossary
+   tx-maleability
+   conflict-resolution
    sync
    ref/index
 

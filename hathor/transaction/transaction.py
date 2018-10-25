@@ -42,6 +42,7 @@ class Transaction(BaseTransaction):
         """
         self.verify_pow()
         self.verify_sum()
+        # self.verify_inputs()
         self.verify_number_of_inputs()
         self.verify_number_of_outputs()
 
@@ -107,8 +108,7 @@ class Transaction(BaseTransaction):
         script_output = spent_tx.outputs[input_tx.index].script
         (ret, err) = script_eval(script_output, input_tx.data)
         if not ret:
-            print(err)
-            raise InvalidInputData
+            raise InvalidInputData(err)
 
     def verify_unspent_output(self, input_tx):
         try:

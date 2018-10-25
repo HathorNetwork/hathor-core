@@ -1,8 +1,6 @@
 from twisted.python import log
 from twisted.internet.task import Clock
 
-from hathor.transaction import TxConflictState
-
 from tests import unittest
 
 import sys
@@ -26,6 +24,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         block = self.manager1.generate_mining_block()
         self.assertTrue(block.resolve())
         self.manager1.propagate_tx(block)
+        self.clock.advance(15)
         return block
 
     def _add_new_blocks(self, num_blocks):
@@ -65,16 +64,19 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         self.manager1.propagate_tx(tx1)
         meta1 = tx1.get_metadata()
-        self.assertEqual(meta1.conflict, TxConflictState.NO_CONFLICT)
+        self.assertEqual(meta1.conflict_with, set())
+        self.assertEqual(meta1.voided_by, set())
 
         # Propagate a conflicting transaction.
         self.manager1.propagate_tx(tx2)
 
         meta1 = tx1.get_metadata()
-        self.assertEqual(meta1.conflict, TxConflictState.CONFLICT_VOIDED)
+        self.assertEqual(meta1.conflict_with, {tx2.hash})
+        self.assertEqual(meta1.voided_by, {tx1.hash})
 
         meta2 = tx2.get_metadata()
-        self.assertEqual(meta2.conflict, TxConflictState.CONFLICT_VOIDED)
+        self.assertEqual(meta2.conflict_with, {tx1.hash})
+        self.assertEqual(meta2.voided_by, {tx2.hash})
 
         for txin in tx1.inputs:
             spent_tx = self.manager1.tx_storage.get_transaction_by_hash_bytes(txin.tx_id)
@@ -88,13 +90,16 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.manager1.propagate_tx(tx3)
 
         meta1 = tx1.get_metadata()
-        self.assertEqual(meta1.conflict, TxConflictState.CONFLICT_VOIDED)
+        self.assertEqual(meta1.conflict_with, {tx2.hash, tx3.hash})
+        self.assertEqual(meta1.voided_by, {tx1.hash})
 
         meta2 = tx2.get_metadata()
-        self.assertEqual(meta2.conflict, TxConflictState.CONFLICT_VOIDED)
+        self.assertEqual(meta2.conflict_with, {tx1.hash, tx3.hash})
+        self.assertEqual(meta2.voided_by, {tx2.hash})
 
         meta3 = tx3.get_metadata()
-        self.assertEqual(meta3.conflict, TxConflictState.CONFLICT_WINNER)
+        self.assertEqual(meta3.conflict_with, {tx1.hash, tx2.hash})
+        self.assertEqual(meta3.voided_by, set())
 
         for txin in tx1.inputs:
             spent_tx = self.manager1.tx_storage.get_transaction_by_hash_bytes(txin.tx_id)
@@ -104,3 +109,183 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.assertNotIn(tx1.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
         self.assertNotIn(tx2.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
         self.assertIn(tx3.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
+
+    def test_double_spending_propagation(self):
+        blocks = self._add_new_blocks(5)
+
+        from hathor.transaction import Transaction
+        from hathor.wallet.base_wallet import WalletOutputInfo, WalletInputInfo
+
+        # ---
+        # tx1 and tx4 spends the same output (double spending)
+        # tx2 spends one tx1's input
+        # tx3 verifies tx1, but does not spend any of tx1's inputs
+        # tx5 spends one tx4's input
+        # tx6 is a twin of t3, but verifying t4 and t5
+        # tx7 verifies tx4, but does not spend any of tx4's inputs
+        # ---
+
+        address = self.manager1.wallet.get_unused_address_bytes()
+        value = 1000
+        outputs = [
+            WalletOutputInfo(address=address, value=int(value))
+        ]
+        tx1 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+        tx1.weight = 5
+        tx1.parents = self.manager1.get_new_tx_parents()
+        tx1.resolve()
+
+        address = self.manager1.wallet.get_unused_address_bytes()
+        value = 10000
+        outputs = [
+            WalletOutputInfo(address=address, value=int(value))
+        ]
+        tx4 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+        tx4.weight = 5
+        tx4.parents = self.manager1.get_new_tx_parents()
+        tx4.resolve()
+
+        self.assertEqual(tx1.inputs[0].tx_id, tx4.inputs[0].tx_id)
+        self.assertEqual(tx1.inputs[0].index, tx4.inputs[0].index)
+
+        # ---
+
+        self.clock.advance(15)
+        self.assertTrue(self.manager1.propagate_tx(tx1))
+        print('tx1', tx1.hash.hex())
+        self.clock.advance(15)
+
+        # ---
+
+        address = self.manager1.wallet.get_unused_address_bytes()
+        value = 1000
+        inputs = [
+            WalletInputInfo(tx_id=tx1.hash, index=1, private_key=None)
+        ]
+        outputs = [
+            WalletOutputInfo(address=address, value=int(value))
+        ]
+        tx2 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
+        tx2.weight = 5
+        tx2.parents = tx1.parents
+        tx2.timestamp = int(self.clock.seconds())
+        tx2.resolve()
+        self.clock.advance(15)
+        self.manager1.propagate_tx(tx2)
+        print('tx2', tx2.hash.hex())
+        self.clock.advance(15)
+
+        self.assertGreater(tx2.timestamp, tx1.timestamp)
+
+        # ---
+
+        address = self.manager1.wallet.get_unused_address_bytes()
+        value = 5000
+        outputs = [
+            WalletOutputInfo(address=address, value=int(value))
+        ]
+        tx3 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+        self.assertNotEqual(tx3.inputs[0].tx_id, tx1.hash)
+        self.assertNotEqual(tx3.inputs[0].tx_id, tx2.hash)
+        tx3.weight = 5
+        tx3.parents = [tx1.hash, tx1.parents[0]]
+        tx3.timestamp = int(self.clock.seconds())
+        tx3.resolve()
+        self.clock.advance(15)
+        self.assertTrue(self.manager1.propagate_tx(tx3))
+        print('tx3', tx3.hash.hex())
+        self.clock.advance(15)
+
+        # ---
+
+        self.clock.advance(15)
+        self.manager1.propagate_tx(tx4)
+        print('tx4', tx4.hash.hex())
+        self.clock.advance(15)
+
+        meta1 = tx1.get_metadata()
+        meta4 = tx4.get_metadata()
+        self.assertEqual(meta1.conflict_with, set([tx4.hash]))
+        self.assertEqual(meta1.voided_by, set())
+        self.assertEqual(meta4.conflict_with, set([tx1.hash]))
+        self.assertEqual(meta4.voided_by, set([tx4.hash]))
+
+        # ---
+
+        address = self.manager1.wallet.get_unused_address_bytes()
+        value = 10000
+        inputs = [
+            WalletInputInfo(tx_id=tx4.hash, index=0, private_key=None)
+        ]
+        outputs = [
+            WalletOutputInfo(address=address, value=int(value))
+        ]
+        tx5 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
+        tx5.weight = 5
+        tx5.parents = tx1.parents
+        tx5.timestamp = int(self.clock.seconds())
+        tx5.resolve()
+        self.clock.advance(15)
+        self.manager1.propagate_tx(tx5)
+        print('tx5', tx5.hash.hex())
+        self.clock.advance(15)
+
+        meta5 = tx5.get_metadata()
+        self.assertEqual(meta5.conflict_with, set())
+        self.assertEqual(meta5.voided_by, set([tx4.hash]))
+
+        # ---
+
+        tx6 = Transaction.create_from_struct(tx3.get_struct())
+        tx6.weight = 1
+        tx6.parents = [tx4.hash, tx5.hash]
+        tx6.timestamp = int(self.clock.seconds())
+        tx6.resolve()
+        self.clock.advance(15)
+        self.manager1.propagate_tx(tx6)
+        print('tx6', tx6.hash.hex())
+        self.clock.advance(15)
+
+        meta6 = tx6.get_metadata()
+        self.assertEqual(meta6.conflict_with, set([tx3.hash]))
+        self.assertEqual(meta6.voided_by, set([tx4.hash, tx6.hash]))
+
+        # ---
+
+        address = self.manager1.wallet.get_unused_address_bytes()
+        value = 10000
+        inputs = [
+            WalletInputInfo(tx_id=blocks[3].hash, index=0, private_key=None)
+        ]
+        outputs = [
+            WalletOutputInfo(address=address, value=int(value))
+        ]
+        tx7 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
+        tx7.weight = 10
+        tx7.parents = [tx4.hash, tx5.hash]
+        tx7.timestamp = int(self.clock.seconds())
+        tx7.resolve()
+        self.clock.advance(15)
+        self.manager1.propagate_tx(tx7)
+        print('tx7', tx7.hash.hex())
+        self.clock.advance(15)
+
+        meta1 = tx1.get_metadata()
+        meta2 = tx2.get_metadata()
+        meta3 = tx3.get_metadata()
+        self.assertEqual(meta1.voided_by, set([tx1.hash]))
+        self.assertEqual(meta2.voided_by, set([tx1.hash]))
+        self.assertEqual(meta3.voided_by, set([tx1.hash, tx3.hash]))
+
+        meta4 = tx4.get_metadata()
+        meta5 = tx5.get_metadata()
+        meta6 = tx6.get_metadata()
+        meta7 = tx7.get_metadata()
+        self.assertEqual(meta4.voided_by, set())
+        self.assertEqual(meta5.voided_by, set())
+        self.assertEqual(meta6.voided_by, set())
+        self.assertEqual(meta7.voided_by, set())
+
+        # ---
+        # dot1 = self.manager1.tx_storage.graphviz(format='pdf')
+        # dot1.render('dot1')

@@ -5,6 +5,7 @@ from hathor.p2p.peer_id import PeerId
 from tests.utils import FakeConnection
 from tests import unittest
 
+import time
 import sys
 
 
@@ -14,6 +15,7 @@ class HathorProtocolTestCase(unittest.TestCase):
         log.startLogging(sys.stdout)
 
         self.clock = Clock()
+        self.clock.advance(time.time())
         self.network = 'testnet'
 
         self.peer_id1 = PeerId()

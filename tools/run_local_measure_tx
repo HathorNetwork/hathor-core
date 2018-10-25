@@ -1,3 +1,4 @@
 #!/bin/bash
 
-exec python measuretx.py http://localhost:8080 $@
+cd ../
+exec ./hathor-cli gen_rand_tx http://localhost:8080 $@

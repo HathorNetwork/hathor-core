@@ -56,6 +56,10 @@ class TransactionResource(resource.Resource):
                 serialized['raw'] = tx.get_struct().hex()
                 meta = tx.update_accumulated_weight()
                 serialized['accumulated_weight'] = meta.accumulated_weight
+                if meta.conflict_with:
+                    serialized['conflict_with'] = [h.hex() for h in meta.conflict_with]
+                if meta.voided_by:
+                    serialized['voided_by'] = [h.hex() for h in meta.voided_by]
 
                 data = {
                     'success': True,
