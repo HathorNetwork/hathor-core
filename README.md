@@ -6,7 +6,7 @@ Connect to Hathor testnet
 
 Run:
 
-    python main.py --listen tcp:8000:interface=0.0.0.0 --testnet
+    hathor-cli run_node --listen tcp:8000:interface=0.0.0.0 --testnet
 
 You can include `--status 8001` to run a status web server in port 8001. To access your
 status server, open the brower in http://localhost:80001/.
@@ -26,22 +26,22 @@ Run a simple test in one computer
 
 First run a server which listens for new connections:
 
-    python main.py --listen tcp:8000
+    hathor-cli run_node --listen tcp:8000
 
 Then, run a client which connects to the server. You may run as many clients as you want.
 
-    python main.py --bootstrap tcp:127.0.0.1:8000
+    hathor-cli run_node --bootstrap tcp:127.0.0.1:8000
 
 To run multiple nodes in one server:
 
-	python main.py --hostname localhost --listen tcp:8000 --status 8080 --peer peer0.json --data ./peer0/data/
-	python main.py --hostname localhost --listen tcp:8001 --status 8081 --peer peer1.json --data ./peer1/data/ --bootstrap tcp:127.0.0.1:8000
+	hathor-cli run_node --hostname localhost --listen tcp:8000 --status 8080 --peer peer0.json --data ./peer0/data/
+	hathor-cli run_node --hostname localhost --listen tcp:8001 --status 8081 --peer peer1.json --data ./peer1/data/ --bootstrap tcp:127.0.0.1:8000
 
 
 Run a simple miner
 ------
 
-    python mining.py http://localhost:8080/mining 1
+    hathor-cli run_miner http://localhost:8080/mining 1
 
 If you're running a miner, make sure you start the node with `--wallet /mywallet` parameter to specify the wallet directory. You can create a wallet using the `generate_wallet.py` script.
 
@@ -53,11 +53,11 @@ Generate a peer id
 
 To generate a random peer id, run:
 
-    python gen_peer_id.py > mypeer.json
+    hathor-cli gen_peer_id >peer_id.json
 
 Then, you can use this id in any server or client through the `--peer` parameter. For instance:
 
-    python main.py --listen tcp:8000 --peer mypeer.json
+    hathor-cli run_node --listen tcp:8000 --peer mypeer.json
 
 
 
@@ -102,7 +102,7 @@ Then, install `hathor-python`:
 
 Then, generate your `peer_id.json`:
 
-    python gen_peer_id.py >peer_id.json
+    hathor-cli gen_peer_id >peer_id.json
 
 Finally, you can run your node.
 
@@ -115,7 +115,7 @@ Create a `run_hathord` with execution permission:
 
     #!/bin/bash
     source ./venv/bin/activate
-    exec python main.py --hostname <YOUR_HOSTNAME_OR_PUBLIC_IP_ADDRESS> --listen tcp:40403 --status 8001 --testnet --peer peer_id.json
+    exec hathor-cli run_node --hostname <YOUR_HOSTNAME_OR_PUBLIC_IP_ADDRESS> --listen tcp:40403 --status 8001 --testnet --peer peer_id.json
 
 There follows a configuration template to Supervisor:
 
@@ -155,5 +155,4 @@ After this succeeds, you should be able to install the other requirements normal
 
 
     mkdir c:\tmp
-    
     

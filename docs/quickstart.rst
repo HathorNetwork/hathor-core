@@ -9,7 +9,7 @@ Run:
 
 .. code-block:: shell
 
-    python main.py --listen tcp:8000:interface=0.0.0.0 --testnet
+    hathor-cli run_node --listen tcp:8000:interface=0.0.0.0 --testnet
 
 You can include `--status 8001` to run a status web server in port 8001. To access your
 status server, open the brower in http://localhost:80001/.
@@ -25,20 +25,20 @@ First run a server which listens for new connections:
 
 .. code-block:: shell
 
-    python main.py --listen tcp:8000
+    hathor-cli run_node --listen tcp:8000
 
 Then, run a client which connects to the server. You may run as many clients as you want.
 
 .. code-block:: shell
 
-    python main.py --bootstrap tcp:127.0.0.1:8000
+    hathor-cli run_node --bootstrap tcp:127.0.0.1:8000
 
 To run multiple nodes in one server:
 
 .. code-block:: shell
 
-	python main.py --hostname localhost --listen tcp:8000 --status 8080 --peer peer0.json --data ./peer0/data/
-	python main.py --hostname localhost --listen tcp:8001 --status 8081 --peer peer1.json --data ./peer1/data/ --bootstrap tcp:127.0.0.1:8000
+	hathor-cli run_node --hostname localhost --listen tcp:8000 --status 8080 --peer peer0.json --data ./peer0/data/
+	hathor-cli run_node --hostname localhost --listen tcp:8001 --status 8081 --peer peer1.json --data ./peer1/data/ --bootstrap tcp:127.0.0.1:8000
 
 
 Run a simple miner
@@ -46,7 +46,7 @@ Run a simple miner
 
 .. code-block:: shell
 
-    python mining.py http://localhost:8080/mining --sleep 0.0001
+    hathor-cli run_miner http://localhost:8080/mining --sleep 0.0001
 
 
 Generate a peer id
@@ -56,13 +56,13 @@ To generate a random peer id, run:
 
 .. code-block:: shell
 
-    python gen_peer_id.py > mypeer.json
+    hathor-cli gen_peer_id > mypeer.json
 
 Then, you can use this id in any server or client through the `--peer` parameter. For instance:
 
 .. code-block:: shell
 
-    python main.py --listen tcp:8000 --peer mypeer.json
+    hathor-cli run_node --listen tcp:8000 --peer mypeer.json
 
 
 
@@ -110,7 +110,7 @@ Then, generate your `peer_id.json`:
 
 .. code-block:: shell
 
-    python gen_peer_id.py >peer_id.json
+    hathor-cli gen_peer_id >peer_id.json
 
 Finally, you can run your node.
 
@@ -125,7 +125,7 @@ Create a `run_hathord` with execution permission:
 
     #!/bin/bash
     source ./venv/bin/activate
-    exec python main.py --hostname <YOUR_HOSTNAME_OR_PUBLIC_IP_ADDRESS> --listen tcp:40403 --status 8001 --testnet --peer peer_id.json
+    exec hathor-cli run_node --hostname <YOUR_HOSTNAME_OR_PUBLIC_IP_ADDRESS> --listen tcp:40403 --status 8001 --testnet --peer peer_id.json
 
 There follows a configuration template to Supervisor:
 
