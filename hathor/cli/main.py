@@ -59,7 +59,7 @@ class CliManager:
             return 0
 
         cmd = sys.argv.pop(1)
-        if cmd == '--help':
+        if cmd == 'help':
             self.help()
             return 0
 
