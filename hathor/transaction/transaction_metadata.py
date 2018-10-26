@@ -55,7 +55,7 @@ class TransactionMetadata:
         for idx, hashes in self.spent_outputs.items():
             data['spent_outputs'].append([idx, [h_bytes.hex() for h_bytes in hashes]])
         data['received_by'] = list(self.received_by)
-        data['children'] = list(self.children)
+        data['children'] = [x.hex() for x in self.children]
         data['conflict_with'] = [x.hex() for x in self.conflict_with]
         data['voided_by'] = [x.hex() for x in self.voided_by]
         data['accumulated_weight'] = self.accumulated_weight
@@ -69,7 +69,7 @@ class TransactionMetadata:
             for h_hex in hashes:
                 meta.spent_outputs[idx].add(bytes.fromhex(h_hex))
         meta.received_by = set(data['received_by'])
-        meta.children = set(data['children'])
+        meta.children = set(bytes.fromhex(h) for h in data['children'])
 
         if 'conflict_with' in data:
             meta.conflict_with = set(bytes.fromhex(h) for h in data['conflict_with'])
