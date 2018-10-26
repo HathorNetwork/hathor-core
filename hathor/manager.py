@@ -198,7 +198,8 @@ class HathorManager(object):
             TxOutput(amount, output_script)
         ]
 
-        timestamp = timestamp or self.reactor.seconds()
+        if not timestamp:
+            timestamp = max(self.tx_storage.latest_timestamp, self.reactor.seconds())
         tip_blocks = [x.data for x in self.tx_storage.get_block_tips(timestamp)]
         tip_txs = self.get_new_tx_parents(timestamp)
 
