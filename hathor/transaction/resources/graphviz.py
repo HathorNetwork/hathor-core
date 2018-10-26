@@ -1,4 +1,6 @@
 from twisted.web import resource
+from twisted.internet import threads
+
 from hathor.api_util import set_cors
 
 
@@ -13,7 +15,7 @@ class GraphvizResource(resource.Resource):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
-    def render_GET(self, request):
+    def _render_GET_thread(self, request):
         """ GET request /graphviz/
             Expects 'format' parameter in request to set the content-type of the graph
             Format options are 'pdf', 'png' and 'jpg'. Default format is 'pdf'
@@ -48,6 +50,25 @@ class GraphvizResource(resource.Resource):
 
         request.setHeader(b'content-type', contenttype[dotformat])
         return dot.pipe()
+
+    def render_GET(self, request):
+        deferred = threads.deferToThread(self._render_GET_thread, request)
+        deferred.addCallback(self._cb_tx_resolve, request)
+        deferred.addErrback(self._err_tx_resolve, request)
+
+        from twisted.web.server import NOT_DONE_YET
+        return NOT_DONE_YET
+
+    def _cb_tx_resolve(self, result, request):
+        """ Called when `_render_GET_thread` finishes
+        """
+        request.write(result)
+        request.finish()
+
+    def _err_tx_resolve(self, reason, request):
+        """ Called when an error occur in `_render_GET_thread`
+        """
+        request.processingFailed(reason)
 
     def parseBoolArg(self, arg):
         """Returns a boolean object for the given parameter
