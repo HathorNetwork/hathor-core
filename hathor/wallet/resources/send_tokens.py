@@ -1,4 +1,6 @@
 from twisted.web import resource, server
+from twisted.internet import threads
+
 from hathor.api_util import set_cors
 from hathor.wallet.base_wallet import WalletOutputInfo, WalletInputInfo
 from hathor.wallet.exceptions import InsuficientFunds, PrivateKeyNotFound, InputDuplicated, InvalidAddress
@@ -18,7 +20,7 @@ class SendTokensResource(resource.Resource):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
-    def render_POST(self, request):
+    def _render_POST_thread(self, request):
         """ POST request for /wallet/send_tokens/
             We expect 'data' as request args
             'data': stringified json with an array of inputs and array of outputs
@@ -70,11 +72,29 @@ class SendTokensResource(resource.Resource):
         tx.resolve()
 
         success, message = tx.validate_tx_error()
-
         if success:
             self.manager.propagate_tx(tx)
 
         return self.return_POST(success, message)
+
+    def render_POST(self, request):
+        deferred = threads.deferToThread(self._render_POST_thread, request)
+        deferred.addCallback(self._cb_tx_resolve, request)
+        deferred.addErrback(self._err_tx_resolve, request)
+
+        from twisted.web.server import NOT_DONE_YET
+        return NOT_DONE_YET
+
+    def _cb_tx_resolve(self, result, request):
+        """ Called when `_render_POST_thread` finishes
+        """
+        request.write(result)
+        request.finish()
+
+    def _err_tx_resolve(self, reason, request):
+        """ Called when an error occur in `_render_POST_thread`
+        """
+        request.processingFailed(reason)
 
     def return_POST(self, success, message):
         """ Auxiliar method to return result of POST method

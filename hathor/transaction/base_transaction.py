@@ -506,6 +506,7 @@ class BaseTransaction:
         :rtype: bool
         """
         hash_bytes = self.start_mining()
+
         if hash_bytes:
             self.hash = hash_bytes
             return True
