@@ -92,7 +92,8 @@ class HathorManager(object):
         self.metrics = Metrics(
             pubsub=self.pubsub,
             avg_time_between_blocks=self.avg_time_between_blocks,
-            tx_storage=tx_storage
+            tx_storage=tx_storage,
+            reactor=self.reactor,
         )
 
         self.peer_discoveries = []
@@ -128,9 +129,15 @@ class HathorManager(object):
 
         self.start_time = time.time()
 
+        # Metric starts to capture data
+        self.metrics.start()
+
     def stop(self):
         self.connections.stop()
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
+
+        # Metric stops to capture data
+        self.metrics.stop()
 
     def start_profiler(self):
         """

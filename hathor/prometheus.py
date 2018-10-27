@@ -6,8 +6,10 @@ import os
 METRIC_INFO = {
     'transactions': 'Number of transactions',
     'blocks': 'Number of blocks',
-    'hash_rate': 'Hash rate of the network',
-    'peers': 'Peers connected in the network'
+    'hash_rate': 'Hash rate of blocks with old calculus',
+    'peers': 'Peers connected in the network',
+    'block_hash_rate': 'Hash rate of blocks',
+    'tx_hash_rate': 'Hash rate of tx'
 }
 
 

@@ -26,13 +26,23 @@ _TRANSACTION_FORMAT_STRING = '!HdIQHHH'  # Update code below if this changes.
 
 
 def sum_weights(w1, w2):
+    return aux_calc_weight(w1, w2, 1)
+
+
+def sub_weights(w1, w2):
+    if w1 == w2:
+        return 0
+    return aux_calc_weight(w1, w2, -1)
+
+
+def aux_calc_weight(w1, w2, multiplier):
     a = max(w1, w2)
     b = min(w1, w2)
     if b == 0:
         # Zero is a special acc_weight.
         # We could use float('-inf'), but it is not serializable.
         return a
-    return a + log(1 + 2**(b-a), 2)
+    return a + log(1 + 2**(b-a)*multiplier, 2)
 
 
 class BaseTransaction:
