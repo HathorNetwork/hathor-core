@@ -1,5 +1,7 @@
 from enum import IntEnum
 
+from twisted.logger import Logger
+
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
@@ -30,6 +32,8 @@ class HathorScript:
 
     pushData abstracts this differences and presents an unique interface.
     """
+    log = Logger()
+
     def __init__(self):
         self.data = b''
 
@@ -216,7 +220,7 @@ def script_eval(output_script, input_data):
             pos += length
             continue
 
-        # print('!!', pos, opcode, Opcode(opcode))
+        # self.log.debug('!! pos={} opcode={} {}'.format(pos, opcode, Opcode(opcode)))
 
         # this is an opcode manipulating the stack
         if opcode == Opcode.OP_DUP:

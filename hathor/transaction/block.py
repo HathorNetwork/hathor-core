@@ -1,10 +1,14 @@
 from hathor.transaction.base_transaction import BaseTransaction
 from hathor.transaction.exceptions import BlockHeightError
 
+from twisted.logger import Logger
+
 from math import log
 
 
 class Block(BaseTransaction):
+    log = Logger()
+
     def __init__(self, nonce=0, timestamp=None, version=1, weight=0, height=0,
                  outputs=None, parents=None, hash=None, storage=None):
         super().__init__(
@@ -34,7 +38,7 @@ class Block(BaseTransaction):
 
         # TODO: How to verify parent height stuff without access to storage?
         if not self.storage:
-            print("WARNING(transaction/block.py): Can't verify block height without transaction storage.")
+            self.log.warn("WARNING(transaction/block.py): Can't verify block height without transaction storage.")
             return
 
         # Get all parents.

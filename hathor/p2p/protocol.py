@@ -2,6 +2,7 @@
 
 from twisted.protocols.basic import LineReceiver
 from twisted.python import log
+from twisted.logger import Logger
 from autobahn.twisted.websocket import WebSocketServerProtocol
 from autobahn.twisted.websocket import WebSocketClientProtocol
 
@@ -31,6 +32,8 @@ class HathorProtocol(object):
     The available states are listed in PeerState class.
     The available commands are listed in the ProtocolMessages class.
     """
+    log = Logger()
+
     class Metrics(object):
         def __init__(self):
             self.received_messages = 0
@@ -141,7 +144,7 @@ class HathorProtocol(object):
             try:
                 fn(payload)
             except Exception as e:
-                print('Unhandled Exception:', e)
+                self.log.warn('Unhandled Exception: {}'.format(e))
                 raise
         else:
             self.send_error('Invalid Command: {}'.format(cmd))
@@ -160,7 +163,7 @@ class HathorProtocol(object):
     def handle_error(self, payload):
         """ Executed when an ERROR command is received.
         """
-        print('ERROR', payload)
+        self.log.warn('ERROR {}'.format(payload))
 
 
 class HathorLineReceiver(HathorProtocol, LineReceiver):
