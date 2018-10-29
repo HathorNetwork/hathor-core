@@ -1,17 +1,22 @@
 import os
 import json
+
+from twisted.logger import Logger
+
 from hathor.wallet.keypair import KeyPair
 from hathor.wallet.exceptions import OutOfUnusedAddresses
 from hathor.wallet import BaseWallet
 from hathor.pubsub import HathorEvents
+from hathor.transaction.scripts import DATA_TO_SIGN
+from hathor.crypto.util import get_public_key_bytes_compressed
+
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
-from hathor.transaction.scripts import DATA_TO_SIGN
-
-from hathor.crypto.util import get_public_key_bytes_compressed
 
 
 class Wallet(BaseWallet):
+    log = Logger()
+
     def __init__(self, keys=None, directory='./', filename='keys.json', history_file='history.json',
                  pubsub=None, reactor=None):
         """ A wallet will hold key pair objects and the unspent and
@@ -65,7 +70,7 @@ class Wallet(BaseWallet):
 
     def _manually_initialize(self):
         if os.path.isfile(self.filepath):
-            print('Loading keys...')
+            self.log.info('Loading keys...')
             self.read_keys_from_file()
 
     def read_keys_from_file(self):
@@ -93,7 +98,7 @@ class Wallet(BaseWallet):
         else:
             if self.flush_schedule is None:
                 remaining = self.flush_to_disk_interval - dt
-                print('Wallet: Flush delayed {} seconds...'.format(remaining))
+                self.log.info('Wallet: Flush delayed {} seconds...'.format(remaining))
                 assert remaining > 0
                 self.flush_schedule = self.reactor.callLater(remaining, self._write_keys_to_file)
 
@@ -103,7 +108,7 @@ class Wallet(BaseWallet):
         data = [keypair.to_json() for keypair in self.keys.values()]
         with open(self.filepath, 'w') as json_file:
             json_file.write(json.dumps(data, indent=4))
-        print('Wallet: Keys successfully written to disk.')
+        self.log.info('Wallet: Keys successfully written to disk.')
 
     def unlock(self, password):
         """ Validates if the password is valid

@@ -3,6 +3,7 @@
 import random
 
 from twisted.internet import endpoints
+from twisted.logger import Logger
 from twisted.internet.task import LoopingCall
 
 from hathor.crypto.util import generate_privkey_crt_pem
@@ -13,6 +14,8 @@ from hathor.pubsub import HathorEvents
 class ConnectionsManager:
     """ It manages all peer-to-peer connections and events related to control messages.
     """
+    log = Logger()
+
     def __init__(self, reactor, my_peer, server_factory, client_factory, pubsub):
         self.reactor = reactor
         self.my_peer = my_peer
@@ -70,15 +73,15 @@ class ConnectionsManager:
             conn.state.send_tx_to_peer(tx)
 
     def on_connection_failure(self, failure, endpoint):
-        print('Connection failure: address={}:{} message={}'.format(endpoint._host, endpoint._port, failure))
+        self.log.info('Connection failure: address={}:{} message={}'.format(endpoint._host, endpoint._port, failure))
         self.connecting_peers.pop(endpoint)
 
     def on_peer_connect(self, protocol):
-        print('on_peer_connect()', protocol)
+        self.log.info('on_peer_connect() {}'.format(protocol))
         self.handshaking_peers.add(protocol)
 
     def on_peer_ready(self, protocol):
-        print('on_peer_ready()', protocol)
+        self.log.info('on_peer_ready() {}'.format(protocol))
         self.handshaking_peers.remove(protocol)
         self.received_peer_storage.pop(protocol.peer.id, None)
 
@@ -93,7 +96,7 @@ class ConnectionsManager:
         self.pubsub.publish(HathorEvents.NETWORK_PEER_CONNECTED, protocol=protocol)
 
     def on_peer_disconnect(self, protocol):
-        print('on_peer_disconnect()', protocol)
+        self.log.info('on_peer_disconnect() {}'.format(protocol))
         if protocol.peer:
             self.connected_peers.pop(protocol.peer.id)
         if protocol in self.handshaking_peers:
@@ -164,7 +167,7 @@ class ConnectionsManager:
 
         deferred.addCallback(self._connect_to_callback, endpoint)
         deferred.addErrback(self.on_connection_failure, endpoint)
-        print('Connecting to: {}...'.format(description))
+        self.log.info('Connecting to: {}...'.format(description))
 
     def listen(self, description, ssl=False):
         """ Start to listen to new connection according to the description.
@@ -200,5 +203,5 @@ class ConnectionsManager:
             factory = self.server_factory
 
         endpoint.listen(factory)
-        print('Listening to: {}...'.format(description))
+        self.log.info('Listening to: {}...'.format(description))
         return endpoint

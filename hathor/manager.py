@@ -10,6 +10,8 @@ from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.metrics import Metrics
 from hathor.exception import HathorError
 
+from twisted.logger import Logger
+
 from collections import defaultdict
 from enum import Enum
 from math import log
@@ -31,6 +33,7 @@ class HathorManager(object):
 
     Its primary objective is to handle DAG-related matters, ensuring that the DAG is always valid and connected.
     """
+    log = Logger()
 
     class NodeState(Enum):
         # This node is still initializing
@@ -232,21 +235,25 @@ class HathorManager(object):
         """
         if self.state != self.NodeState.INITIALIZING:
             if tx.is_genesis:
-                print('validate_new_tx(): Genesis? {}'.format(tx.hash.hex()))
+                self.log.debug('validate_new_tx(): Genesis? {}'.format(tx.hash.hex()))
                 return False
 
             if self.tx_storage.transaction_exists_by_hash_bytes(tx.hash):
-                print('validate_new_tx(): Already have transaction {}'.format(tx.hash.hex()))
+                self.log.debug('validate_new_tx(): Already have transaction {}'.format(tx.hash.hex()))
                 return False
 
+        else:
+            if tx.is_genesis:
+                return True
+
         if tx.timestamp - self.reactor.seconds() > self.max_future_timestamp_allowed:
-            print('validate_new_tx(): Ignoring transaction in the future {}'.format(tx.hash.hex()))
+            self.log.debug('validate_new_tx(): Ignoring transaction in the future {}'.format(tx.hash.hex()))
             return False
 
         for parent_hash in tx.parents:
             if not self.tx_storage.transaction_exists_by_hash_bytes(parent_hash):
                 # All parents must exist.
-                print('validate_new_tx(): Invalid transaction with unknown parent tx={} parent={}'.format(
+                self.log.debug('validate_new_tx(): Invalid transaction with unknown parent tx={} parent={}'.format(
                     tx.hash.hex(), parent_hash.hex()
                 ))
                 return False
@@ -254,21 +261,22 @@ class HathorManager(object):
         try:
             tx.verify()
         except HathorError as e:
-            print('validate_new_tx(): Error verifying transaction {} tx={}'.format(repr(e), tx.hash.hex()))
+            self.log.debug('validate_new_tx(): Error verifying transaction {} tx={}'.format(repr(e), tx.hash.hex()))
             return False
 
         if tx.is_block:
             block_weight = self.calculate_block_difficulty(tx)
             if tx.weight < block_weight:
-                print('Invalid new block {}: weight ({}) is smaller than the minimum block weight ({})'.format(
+                self.log.debug('Invalid new block {}: weight ({}) is smaller than the minimum weight ({})'.format(
                     tx.hash.hex(), tx.weight, block_weight)
                 )
                 return False
             if tx.sum_outputs != self.tokens_issued_per_block:
-                print('Invalid number of issued tokens: {} <> {} (tx: {})'.format(
-                    tx.sum_outputs,
-                    self.tokens_issued_per_block,
-                    tx.hash.hex())
+                self.log.info(
+                    'Invalid number of issued tokens tag=invalid_issued_tokens'
+                    ' tx.hash={tx.hash_hex} issued={tx.sum_outputs} allowed={allowed}',
+                    tx=tx,
+                    allowed=self.tokens_issued_per_block,
                 )
 
         return True
@@ -293,6 +301,7 @@ class HathorManager(object):
         """
         if not self.validate_new_tx(tx):
             # Discard invalid Transaction/block.
+            self.log.info('Transaction/Block discarded {}'.format(tx.hash_hex))
             return False
 
         if self.wallet:
@@ -306,15 +315,19 @@ class HathorManager(object):
 
         ts_date = datetime.datetime.fromtimestamp(tx.timestamp)
         if tx.is_block:
-            print('New block: {} timestamp={} ({}) ({}) weight={}'.format(
-                tx.hash_hex,
-                ts_date,
-                tx.get_time_from_now(),
-                tx.timestamp,
-                tx.weight)
+            self.log.info(
+                'New block found tag=new_block hash={tx.hash_hex}'
+                ' weight={tx.weight} timestamp={tx.timestamp} datetime={ts_date} from_now={time_from_now}',
+                tx=tx, ts_date=ts_date, time_from_now=tx.get_time_from_now()
             )
         else:
-            print('New tx: {} timestamp={} ({})'.format(tx.hash.hex(), ts_date, tx.get_time_from_now()))
+            self.log.info(
+                'New transaction tag=new_tx hash={tx.hash_hex}'
+                ' timestamp={tx.timestamp} datetime={ts_date} from_now={time_from_now}',
+                tx=tx,
+                ts_date=ts_date,
+                time_from_now=tx.get_time_from_now()
+            )
 
         tx.mark_inputs_as_used()
         tx.update_voided_info()

@@ -54,7 +54,7 @@ class HelloState(BaseState):
 
         app = 'Hathor v{}'.format(hathor.__version__)
         if data['app'] != app:
-            print('WARNING Different app versions:', data['app'])
+            self.log.info('WARNING Different app versions: {}'.format(data['app']))
             protocol.send_error_and_close_connection('Different version.')
 
         if data['network'] != protocol.network:

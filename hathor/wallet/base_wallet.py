@@ -2,6 +2,8 @@ import os
 import json
 import base58
 from collections import namedtuple
+from twisted.logger import Logger
+
 from hathor.wallet.exceptions import WalletOutOfSync, InsuficientFunds, PrivateKeyNotFound, \
                                      InputDuplicated, InvalidAddress
 from hathor.transaction import TxInput, TxOutput
@@ -14,6 +16,8 @@ WalletOutputInfo = namedtuple('WalletOutputInfo', ['address', 'value'])
 
 
 class BaseWallet:
+    log = Logger()
+
     class WalletType(Enum):
         # Hierarchical Deterministic Wallet
         HD = 'hd'
@@ -250,7 +254,7 @@ class BaseWallet:
                     self.publish_update(HathorEvents.WALLET_BALANCE_UPDATED, balance=self.balance)
             else:
                 # it's the only one we know, so log warning
-                print('unknown script')
+                self.log.warn('unknown script')
 
         # check inputs
         for _input in tx.inputs:
@@ -282,7 +286,7 @@ class BaseWallet:
                     self.publish_update(HathorEvents.WALLET_INPUT_SPENT, output_spent=spent)
                     self.publish_update(HathorEvents.WALLET_BALANCE_UPDATED, balance=self.balance)
             else:
-                print('unknown input data')
+                self.log.warn('unknown input data')
 
         if updated:
             # TODO update history file?

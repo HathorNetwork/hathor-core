@@ -2,7 +2,8 @@
 
 from twisted.internet import reactor
 from twisted.web import server
-from twisted.python import log
+from twisted.logger import FileLogObserver, formatEventAsClassicLogText
+from twisted.logger import globalLogPublisher, FilteringLogObserver, LogLevelFilterPredicate, LogLevel
 from twisted.web.resource import Resource
 from autobahn.twisted.resource import WebSocketResource
 
@@ -29,6 +30,10 @@ import json
 import os
 
 
+def formatLogEvent(event):
+    return formatEventAsClassicLogText(event)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
@@ -50,7 +55,13 @@ def main():
     parser.add_argument('--prometheus', action='store_true', help='Send metric data to Prometheus')
     args = parser.parse_args()
 
-    log.startLogging(sys.stdout)
+    loglevel_filter = LogLevelFilterPredicate(LogLevel.debug)
+    loglevel_filter.setLogLevelForNamespace('hathor.websocket.protocol.HathorAdminWebsocketProtocol', LogLevel.warn)
+    observer = FilteringLogObserver(
+        FileLogObserver(sys.stdout, formatLogEvent),
+        [loglevel_filter],
+    )
+    globalLogPublisher.addObserver(observer)
 
     if not args.peer:
         peer_id = PeerId()

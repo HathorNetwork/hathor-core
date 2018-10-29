@@ -2,6 +2,7 @@
 
 from twisted.internet import reactor
 from twisted.internet.defer import inlineCallbacks, Deferred
+from twisted.logger import Logger
 
 from hathor.p2p.exceptions import InvalidBlockHashesSequence
 from hathor.transaction import Block, Transaction
@@ -19,6 +20,8 @@ from math import inf
 class NodeSyncTimestamp(object):
     """ An algorithm to sync the DAG between two peers using the timestamp of the transactions.
     """
+    log = Logger()
+
     MAX_HASHES = 40
 
     def __init__(self, protocol, reactor=None):
@@ -174,7 +177,7 @@ class NodeSyncTimestamp(object):
 
         It uses an exponential search followed by a binary search.
         """
-        # print('Running find_synced_timestamp...')
+        # self.log.debug('Running find_synced_timestamp...')
         tips = yield self.get_peer_tips()
         if self.peer_timestamp is not None:
             assert tips.timestamp >= self.peer_timestamp, '{} < {}'.format(tips.timestamp, self.peer_timestamp)
@@ -213,7 +216,7 @@ class NodeSyncTimestamp(object):
         assert tips.merkle_tree == local_merkle_tree
 
         self.next_timestamp = tips.next_timestamp
-        # print('Synced at {} (latest timestamp {})'.format(self.synced_timestamp, self.peer_timestamp))
+        # self.log.debug('Synced at {} (latest timestamp {})'.format(self.synced_timestamp, self.peer_timestamp))
 
     @inlineCallbacks
     def sync_until_timestamp(self, timestamp):
@@ -222,7 +225,7 @@ class NodeSyncTimestamp(object):
         :param timestamp: Timestamp to be reached
         :type timestamp: int
         """
-        print('Syncing at {}'.format(timestamp))
+        # self.log.debug('Syncing at {}'.format(timestamp))
         assert self.next_timestamp < inf
         pending = []
         next_timestamp = self.next_timestamp
@@ -275,14 +278,14 @@ class NodeSyncTimestamp(object):
         """
         if self.is_running:
             # Already running...
-            # print('Already running: {}'.format(self.is_running))
+            # self.log.debug('Already running: {}'.format(self.is_running))
             return
 
         try:
             self.is_running = True
             yield self._next_step()
         except Exception as e:
-            print('Exception:', repr(e))
+            self.log.warn('Exception: {}'.format(repr(e)))
             raise
         else:
             if self.call_later_id and self.call_later_id.active():
@@ -513,7 +516,7 @@ class NodeSyncTimestamp(object):
         """ Handle a received GET-DATA message.
         """
         hash_hex = payload
-        # print('handle_get_data', hash_hex)
+        # self.log.debug('handle_get_data {}'.format(hash_hex))
         try:
             tx = self.protocol.node.tx_storage.get_transaction_by_hash(hash_hex)
             self.send_data(tx)
@@ -524,7 +527,7 @@ class NodeSyncTimestamp(object):
     def send_data(self, tx):
         """ Send a DATA message.
         """
-        # print('Sending {}...'.format(tx.hash.hex()))
+        # self.log.debug('Sending {}...'.format(tx.hash.hex()))
         payload_type = 'tx' if not tx.is_block else 'block'
         payload = base64.b64encode(tx.get_struct()).decode('ascii')
         self.send_message(ProtocolMessages.DATA, '{}:{}'.format(payload_type, payload))

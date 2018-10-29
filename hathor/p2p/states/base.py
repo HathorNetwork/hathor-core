@@ -1,9 +1,12 @@
 # encoding: utf-8
 
 from hathor.p2p.messages import ProtocolMessages
+from twisted.logger import Logger
 
 
 class BaseState(object):
+    log = Logger()
+
     def __init__(self, protocol):
         self.protocol = protocol
         self.base_cmd_map = {
@@ -19,7 +22,7 @@ class BaseState(object):
         self.protocol.handle_error(payload)
 
     def handle_throttle(self, payload):
-        print('Got throttled!', payload)
+        self.log.info('Got throttled: {}'.format(payload))
 
     def send_message(self, cmd, payload=None):
         self.protocol.send_message(cmd, payload)

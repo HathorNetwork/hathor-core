@@ -1,6 +1,7 @@
 # encoding: utf-8
 
 from twisted.internet.task import LoopingCall
+from twisted.logger import Logger
 
 from hathor.p2p.states.base import BaseState
 from hathor.p2p.peer_id import PeerId
@@ -11,6 +12,8 @@ import json
 
 
 class ReadyState(BaseState):
+    log = Logger()
+
     SYNC_PLUGIN_NAME = 'node-sync-timestamp'
 
     def __init__(self, protocol):
@@ -86,7 +89,7 @@ class ReadyState(BaseState):
                 'last_message': conn.last_message,
             })
         self.send_message(ProtocolMessages.PEERS, json.dumps(peers))
-        print('Peers: %s' % str(peers))
+        self.log.debug('Peers: {}'.format(str(peers)))
 
     def handle_peers(self, payload):
         """ Executed when a PEERS command is received. It updates the list
@@ -98,7 +101,7 @@ class ReadyState(BaseState):
             peer.validate()
             self.protocol.connections.on_receive_peer(peer, origin=self)
         remote = self.protocol.transport.getPeer()
-        print(remote, 'PEERS', payload)
+        self.log.info('{} PEERS {}'.format(remote, payload))
 
     def send_ping_if_necessary(self):
         """ Send a PING command if the connection has been idle for 3 seconds or more.

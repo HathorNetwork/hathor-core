@@ -3,6 +3,7 @@
 import socket
 
 import twisted.names.client
+from twisted.logger import Logger
 
 
 class PeerDiscovery:
@@ -20,6 +21,8 @@ class PeerDiscovery:
 class BootstrapPeerDiscovery(PeerDiscovery):
     """ It implements a bootstrap peer discovery, which receives a static list of peers.
     """
+    log = Logger()
+
     def __init__(self, descriptions):
         """
         :param descriptions: Descriptions of peers to connect to.
@@ -36,6 +39,8 @@ class BootstrapPeerDiscovery(PeerDiscovery):
 class DNSPeerDiscovery(PeerDiscovery):
     """ It implements a DNS peer discovery, which looks for peers in A, AAA, and TXT records.
     """
+    log = Logger()
+
     def __init__(self, hosts, default_port=40403):
         """
         :param hosts: List of hosts to be queried
@@ -87,10 +92,10 @@ class DNSPeerDiscovery(PeerDiscovery):
             for txt in data:
                 txt = txt.decode('utf-8')
                 try:
-                    print('Seed DNS TXT: "{}" found'.format(txt))
+                    self.log.info('Seed DNS TXT: "{}" found'.format(txt))
                     self.connect_to(txt)
                 except ValueError:
-                    print('Seed DNS TXT: Error parsing "{}"'.format(txt))
+                    self.log.info('Seed DNS TXT: Error parsing "{}"'.format(txt))
 
     def on_dns_seed_found_ipv4(self, results):
         """ Executed only when a new peer is discovered by `dns_seed_lookup_address`.
@@ -100,7 +105,7 @@ class DNSPeerDiscovery(PeerDiscovery):
             address = x.payload.address
             host = socket.inet_ntoa(address)
             self.connect_to('tcp:{}:{}'.format(host, self.default_port))
-            print('Seed DNS A: "{}" found'.format(host))
+            self.log.info('Seed DNS A: "{}" found'.format(host))
 
     def on_dns_seed_found_ipv6(self, results):
         """ Executed only when a new peer is discovered by `dns_seed_lookup_ipv6_address`.
