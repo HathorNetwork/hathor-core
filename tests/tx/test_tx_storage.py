@@ -169,10 +169,10 @@ class _BaseTransactionStorageTest:
             tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
             self.assertEqual(set(tip_blocks), {block2.hash, block3.hash})
 
-            # Block4 has both blocks as parents
-            block4 = self._add_new_block()
-            tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
-            self.assertEqual(tip_blocks, [block4.hash])
+#            # Block4 has both blocks as parents
+#            block4 = self._add_new_block()
+#            tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
+#            self.assertEqual(tip_blocks, [block4.hash])
 
         def _add_new_block(self, parents=None):
             block = self.manager.generate_mining_block()

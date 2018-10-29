@@ -5,10 +5,10 @@ from hathor.p2p.manager import ConnectionsManager
 from hathor.transaction import Block, TxOutput, sum_weights
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
+from hathor.transaction.exceptions import TxValidationError
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.metrics import Metrics
-from hathor.exception import HathorError
 
 from twisted.logger import Logger
 
@@ -260,7 +260,7 @@ class HathorManager(object):
 
         try:
             tx.verify()
-        except HathorError as e:
+        except TxValidationError as e:
             self.log.debug('validate_new_tx(): Error verifying transaction {} tx={}'.format(repr(e), tx.hash.hex()))
             return False
 
