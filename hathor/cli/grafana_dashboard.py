@@ -34,7 +34,7 @@ CHARTS_ARRAY = [
     'transactions',
     'blocks',
     'tx_rate',
-    'hash_rate',
+    'hash_rate_stacked',
     'peers',
     'cpu',
     'cpu_load1m',
