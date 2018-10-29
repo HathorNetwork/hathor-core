@@ -1,6 +1,6 @@
 #!/bin/bash
 
-exec -a "$0" python -c "
+exec python -c "
 import sys
 import runpy
 sys.argv[0] = \"$0\"

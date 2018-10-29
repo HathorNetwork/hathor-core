@@ -216,7 +216,7 @@ class HathorManager(object):
         assert len(tip_blocks) >= 1
         assert len(tip_txs) == 2
 
-        parents = tip_blocks + tip_txs
+        parents = [random.choice(tip_blocks)] + tip_txs
 
         parents_tx = [self.tx_storage.get_transaction_by_hash_bytes(x) for x in parents]
         new_height = max(x.height for x in parents_tx) + 1

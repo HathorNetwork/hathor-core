@@ -4,4 +4,4 @@ source ./venv/bin/activate
 
 WORDS=${WALLET_WORDS}
 
-exec python main.py --hostname ${NODE_HOST} --listen tcp:40403 --status 8001 --testnet --peer peer_id.json --data ${INSTALL_DIR}/data --words "$${EMPTY}WORDS"
+exec ./hathor-cli run_node --hostname ${NODE_HOST} --listen tcp:40403 --status 8001 --testnet --peer peer_id.json --data ${INSTALL_DIR}/data --words "$${EMPTY}WORDS"
