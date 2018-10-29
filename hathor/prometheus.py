@@ -27,6 +27,9 @@ class PrometheusMetricsExporter:
         """
         self.metrics = metrics
 
+        # Create full directory, if does not exist
+        os.makedirs(path, exist_ok=True)
+
         # Full filepath with filename
         self.filepath = os.path.join(path, 'hathor.prom')
 
