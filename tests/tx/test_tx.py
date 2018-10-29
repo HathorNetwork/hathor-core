@@ -3,9 +3,11 @@ import os
 import json
 import base64
 from hathor.wallet import Wallet
-from hathor.transaction import Transaction, TxInput, TxOutput, MAX_NUM_INPUTS, MAX_NUM_OUTPUTS
+from hathor.transaction import Transaction, Block, TxInput, TxOutput, MAX_NUM_INPUTS, MAX_NUM_OUTPUTS
 from hathor.transaction.storage import TransactionMemoryStorage
-from hathor.transaction.exceptions import InputOutputMismatch, TooManyInputs, TooManyOutputs, InvalidInputData
+from hathor.transaction.exceptions import InputOutputMismatch, TooManyInputs, TooManyOutputs, ConflictingInputs, \
+                                          InvalidInputData, BlockWithInputs, IncorrectParents, InexistentInput, \
+                                          DuplicatedParents
 from hathor.transaction.scripts import P2PKH
 from hathor.crypto.util import get_private_key_from_bytes, get_public_key_from_bytes, get_address_from_public_key
 
@@ -181,11 +183,219 @@ class BasicTransaction(unittest.TestCase):
 
         tx.update_parents()
 
-        # genesis transactions should have only this tx in their chidlren set
+        # genesis transactions should have only this tx in their children set
         for parent_hash in parents:
             metadata = tx.storage.get_metadata_by_hash_bytes(parent_hash)
             self.assertEqual(len(metadata.children), 1)
             self.assertEqual(metadata.children.pop(), tx.hash)
+
+    def test_block_inputs(self):
+        # a block with inputs should be invalid
+        parents = [tx.hash for tx in self.genesis]
+        genesis_block = self.genesis_blocks[0]
+
+        public_bytes, signature = self.wallet.get_input_aux_data(self.genesis_private_key)
+        data = P2PKH.create_input_data(public_bytes, signature)
+        tx_inputs = [
+            TxInput(genesis_block.hash, 0, data)
+        ]
+
+        address = get_address_from_public_key(self.genesis_public_key)
+        output_script = P2PKH.create_output_script(address)
+        tx_outputs = [
+            TxOutput(100, output_script)
+        ]
+
+        block = Block(
+            nonce=100,
+            outputs=tx_outputs,
+            parents=parents,
+            height=genesis_block.height+1,
+            weight=1,               # low weight so we don't waste time with PoW
+            storage=self.tx_storage
+        )
+
+        block.inputs = tx_inputs
+        block.resolve()
+
+        with self.assertRaises(BlockWithInputs):
+            block.verify()
+
+    def test_tx_number_parents(self):
+        genesis_block = self.genesis_blocks[0]
+
+        public_bytes, signature = self.wallet.get_input_aux_data(self.genesis_private_key)
+        data = P2PKH.create_input_data(public_bytes, signature)
+        _input = TxInput(genesis_block.hash, 0, data)
+
+        value = genesis_block.outputs[0].value
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+        output = TxOutput(value, script)
+
+        parents = [self.genesis_txs[0].hash]
+        tx = Transaction(
+            weight=1,
+            inputs=[_input],
+            outputs=[output],
+            parents=parents,
+            storage=self.tx_storage
+        )
+
+        # in first test, only with 1 parent
+        tx.resolve()
+        with self.assertRaises(IncorrectParents):
+            tx.verify()
+
+        # test with 3 parents
+        parents = [tx.hash for tx in self.genesis]
+        tx.parents = parents
+        tx.resolve()
+        with self.assertRaises(IncorrectParents):
+            tx.verify()
+
+        # 2 parents, 1 tx and 1 block
+        parents = [self.genesis_txs[0].hash, self.genesis_blocks[0].hash]
+        tx.parents = parents
+        tx.resolve()
+        with self.assertRaises(IncorrectParents):
+            tx.verify()
+
+    def test_block_number_parents(self):
+        genesis_block = self.genesis_blocks[0]
+
+        address = get_address_from_public_key(self.genesis_public_key)
+        output_script = P2PKH.create_output_script(address)
+        tx_outputs = [
+            TxOutput(100, output_script)
+        ]
+
+        parents = [tx.hash for tx in self.genesis_txs]
+
+        block = Block(
+            nonce=100,
+            outputs=tx_outputs,
+            parents=parents,
+            height=genesis_block.height+1,
+            weight=1,               # low weight so we don't waste time with PoW
+            storage=self.tx_storage
+        )
+
+        block.resolve()
+        with self.assertRaises(IncorrectParents):
+            block.verify()
+
+    def test_tx_inputs_out_of_range(self):
+        # we'll try to spend output 3 from genesis transaction, which does not exist
+        parents = [tx.hash for tx in self.genesis_txs]
+        genesis_block = self.genesis_blocks[0]
+
+        public_bytes, signature = self.wallet.get_input_aux_data(self.genesis_private_key)
+        data = P2PKH.create_input_data(public_bytes, signature)
+
+        value = genesis_block.outputs[0].value
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+        output = TxOutput(value, script)
+
+        _input = TxInput(genesis_block.hash, 3, data)
+        tx = Transaction(
+            weight=1,
+            inputs=[_input],
+            outputs=[output],
+            parents=parents,
+            storage=self.tx_storage
+        )
+
+        # test with an inexistent index
+        tx.resolve()
+        with self.assertRaises(InexistentInput):
+            tx.verify()
+
+        # now with inexistent tx hash
+        random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
+        _input = [TxInput(random_bytes, 3, data)]
+        tx.inputs = _input
+        tx.resolve()
+        with self.assertRaises(InexistentInput):
+            tx.verify()
+
+    def test_tx_inputs_conflict(self):
+        # the new tx inputs will try to spend the same output
+        parents = [tx.hash for tx in self.genesis_txs]
+        genesis_block = self.genesis_blocks[0]
+
+        public_bytes, signature = self.wallet.get_input_aux_data(self.genesis_private_key)
+        data = P2PKH.create_input_data(public_bytes, signature)
+
+        value = genesis_block.outputs[0].value
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+        output = TxOutput(2*value, script)
+
+        _input = TxInput(genesis_block.hash, 0, data)
+        tx = Transaction(
+            weight=1,
+            inputs=[_input, _input],
+            outputs=[output],
+            parents=parents,
+            storage=self.tx_storage
+        )
+
+        tx.resolve()
+        with self.assertRaises(ConflictingInputs):
+            tx.verify()
+
+    def test_regular_tx(self):
+        # this should succeed
+        parents = [tx.hash for tx in self.genesis_txs]
+        genesis_block = self.genesis_blocks[0]
+
+        public_bytes, signature = self.wallet.get_input_aux_data(self.genesis_private_key)
+        data = P2PKH.create_input_data(public_bytes, signature)
+
+        value = genesis_block.outputs[0].value
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+        output = TxOutput(value, script)
+
+        _input = TxInput(genesis_block.hash, 0, data)
+        tx = Transaction(
+            weight=1,
+            inputs=[_input],
+            outputs=[output],
+            parents=parents,
+            storage=self.tx_storage
+        )
+
+        tx.resolve()
+        tx.verify()
+
+    def test_tx_duplicated_parents(self):
+        # the new tx will confirm the same tx twice
+        parents = [self.genesis_txs[0].hash, self.genesis_txs[0].hash]
+        genesis_block = self.genesis_blocks[0]
+
+        public_bytes, signature = self.wallet.get_input_aux_data(self.genesis_private_key)
+        data = P2PKH.create_input_data(public_bytes, signature)
+
+        value = genesis_block.outputs[0].value
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+        output = TxOutput(value, script)
+
+        _input = TxInput(genesis_block.hash, 0, data)
+        tx = Transaction(
+            weight=1,
+            inputs=[_input],
+            outputs=[output],
+            parents=parents,
+            storage=self.tx_storage
+        )
+
+        tx.resolve()
+        with self.assertRaises(DuplicatedParents):
+            tx.verify()
 
 
 if __name__ == '__main__':

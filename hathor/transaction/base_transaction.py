@@ -1,8 +1,7 @@
 # encoding: utf-8
 
-from hathor.transaction.exceptions import PowError, InputOutputMismatch, TooManyInputs, \
-                                          TooManyOutputs, BlockHeightError, ParentDoesNotExist, \
-                                          TimestampError
+from hathor.transaction.exceptions import TxValidationError, ParentDoesNotExist, TimestampError, \
+                                          IncorrectParents, DuplicatedParents, PowError
 from hathor.transaction.scripts import P2PKH
 
 from enum import Enum
@@ -23,6 +22,14 @@ _INPUT_SIZE_BYTES = 32  # 256 bits
 # parents len (H).
 # H = unsigned short (2 bytes), f = float(4), I = unsigned int (4), Q = unsigned long long int (64)
 _TRANSACTION_FORMAT_STRING = '!HdIQHHH'  # Update code below if this changes.
+
+# tx should have 2 parents, both other transactions
+_TX_PARENTS_TXS = 2
+_TX_PARENTS_BLOCKS = 0
+
+# blocks have 3 parents, 2 txs and 1 block
+_BLOCK_PARENTS_TXS = 2
+_BLOCK_PARENTS_BLOCKS = 1
 
 
 def sum_weights(w1, w2):
@@ -480,11 +487,24 @@ class BaseTransaction:
     def verify_parents(self):
         """All parents must exist and their timestamps must be smaller than ours.
 
+        Also, txs should have 2 other txs as parents, while blocks should have 2 txs + 1 block.
+
         :raises TimestampError: when our timestamp is less or equal than our parent's timestamp
         :raises ParentDoesNotExist: when at least one of our parents does not exist
+        :raises IncorrectParents: when tx does not confirm the correct number/type of parent txs
         """
         from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+
+        # check if parents are duplicated   # TODO should we have parents as a set to begin with?
+        parents_set = set(self.parents)
+        if len(self.parents) > len(parents_set):
+            raise DuplicatedParents('Tx has duplicated parents: {}', [tx_hash.hex() for tx_hash in self.parents])
+
+        my_parents_txs = 0      # number of tx parents
+        my_parents_blocks = 0   # number of block parents
+
         for parent_hash in self.parents:
+            # TODO should check repeated hashes in parents?
             try:
                 parent = self.storage.get_transaction_by_hash_bytes(parent_hash)
                 if self.timestamp <= parent.timestamp:
@@ -494,8 +514,27 @@ class BaseTransaction:
                         parent.hash.hex(),
                         parent.timestamp,
                     ))
+
+                if parent.is_block:
+                    my_parents_blocks += 1
+                else:
+                    my_parents_txs += 1
             except TransactionDoesNotExist:
                 raise ParentDoesNotExist('tx={} parent={}'.format(self.hash.hex(), parent_hash))
+
+        # check for correct number of parents
+        if self.is_block:
+            parents_txs = _BLOCK_PARENTS_TXS
+            parents_blocks = _BLOCK_PARENTS_BLOCKS
+        else:
+            parents_txs = _TX_PARENTS_TXS
+            parents_blocks = _TX_PARENTS_BLOCKS
+        if my_parents_blocks != parents_blocks:
+            raise IncorrectParents('wrong number of parents (block type): {}, expecting {}'
+                                   .format(my_parents_blocks, parents_blocks))
+        if my_parents_txs != parents_txs:
+            raise IncorrectParents('wrong number of parents (tx type): {}, expecting {}'
+                                   .format(my_parents_txs, parents_txs))
 
     def verify_pow(self):
         """Verify proof-of-work and that the weight is correct
@@ -721,13 +760,7 @@ class BaseTransaction:
         message = ''
         try:
             self.verify()
-        except (
-            PowError,
-            InputOutputMismatch,
-            TooManyOutputs,
-            TooManyInputs,
-            BlockHeightError
-        ) as e:
+        except TxValidationError as e:
             success = False
             message = str(e)
         return success, message

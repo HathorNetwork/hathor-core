@@ -1,5 +1,5 @@
 from hathor.transaction.base_transaction import BaseTransaction
-from hathor.transaction.exceptions import BlockHeightError
+from hathor.transaction.exceptions import BlockHeightError, BlockWithInputs
 
 from twisted.logger import Logger
 
@@ -47,6 +47,11 @@ class Block(BaseTransaction):
         if self.height != max(x.height for x in parent_blocks) + 1:
             raise BlockHeightError(error_height_message)
 
+    def verify_no_inputs(self):
+        inputs = getattr(self, 'inputs', None)
+        if inputs:
+            raise BlockWithInputs('number of inputs {}'.format(len(inputs)))
+
     def calculate_height(self):
         """ Calculate block height according to its parents
 
@@ -64,6 +69,7 @@ class Block(BaseTransaction):
         """
         self.verify_pow()
         self.verify_height()
+        self.verify_no_inputs()
 
     def verify(self):
         """

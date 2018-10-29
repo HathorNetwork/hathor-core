@@ -6,20 +6,6 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 
 
-def get_public_key_bytes(public_key, encoding=serialization.Encoding.DER,
-                         format=serialization.PublicFormat.SubjectPublicKeyInfo):
-    """Returns the bytes from a cryptography ec.EllipticCurvePublicKey
-
-    TODO: secp256k1 public keys generated with cryptography are
-    not 32/33 bytes long as expected. We'd have to manually convert
-    the public numbers to get it
-    """
-    return public_key.public_bytes(
-        encoding,
-        format
-    )
-
-
 def get_private_key_bytes(private_key,
                           encoding=serialization.Encoding.DER,
                           format=serialization.PrivateFormat.PKCS8,
@@ -31,14 +17,14 @@ def get_private_key_bytes(private_key,
     )
 
 
-def get_public_key_from_bytes(public_key_bytes, backend=default_backend()):
-    """Returns the cryptography ec.EllipticCurvePublicKey from bytes"""
-    return serialization.load_der_public_key(public_key_bytes, backend)
-
-
 def get_private_key_from_bytes(private_key_bytes, password=None, backend=default_backend()):
     """Returns the cryptography ec.EllipticCurvePrivateKey from bytes"""
     return serialization.load_der_private_key(private_key_bytes, password, backend)
+
+
+def get_public_key_from_bytes(public_key_bytes, backend=default_backend()):
+    """Returns the cryptography ec.EllipticCurvePublicKey from bytes"""
+    return serialization.load_der_public_key(public_key_bytes, backend)
 
 
 def sign_data(private_key, data_to_sign, sig_algorithm=ec.ECDSA(hashes.SHA256())):
@@ -80,7 +66,7 @@ def get_address_from_public_key(public_key):
     """Wrapper function to pass a cryptography ec.EllipticCurvePrivateKey object
     to the function above
     """
-    public_key_bytes = get_public_key_bytes(public_key)
+    public_key_bytes = get_public_key_bytes_compressed(public_key)
     return get_address_from_public_key_bytes(public_key_bytes)
 
 

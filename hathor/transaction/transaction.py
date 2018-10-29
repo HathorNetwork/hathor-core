@@ -1,7 +1,8 @@
 from hathor.transaction.base_transaction import BaseTransaction, MAX_NUM_INPUTS, MAX_NUM_OUTPUTS
 from hathor.transaction.exceptions import InputOutputMismatch, TooManyInputs, TooManyOutputs, \
-                                          DoubleSpend, InvalidInputData, TimestampError
-from hathor.transaction.storage.exceptions import TransactionMetadataDoesNotExist
+                                          InvalidInputData, TimestampError, \
+                                          InexistentInput, ConflictingInputs
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.scripts import script_eval
 from math import log
 
@@ -37,15 +38,6 @@ class Transaction(BaseTransaction):
         amount = self.sum_outputs + 1
         return log(size, 2) + log(amount, 2) + 0.5
 
-    def verify_without_storage(self):
-        """ Run all verifications that do not need a storage.
-        """
-        self.verify_pow()
-        self.verify_sum()
-        # self.verify_inputs()
-        self.verify_number_of_inputs()
-        self.verify_number_of_outputs()
-
     def verify(self):
         """
             We have to do 8 verifications:
@@ -60,12 +52,20 @@ class Transaction(BaseTransaction):
               (ix) validate that both parents are valid
                (x) validate input's timestamps
         """
-        # TODO (i), (v), (viii)
         if self.is_genesis:
             # TODO do genesis validation
             return
         self.verify_without_storage()
-        self.verify_parents()  # (ix)
+        self.verify_inputs()        # need to run verify_inputs first to check if all inputs exist
+        self.verify_sum()
+        self.verify_parents()
+
+    def verify_without_storage(self):
+        """ Run all verifications that do not need a storage.
+        """
+        self.verify_pow()
+        self.verify_number_of_inputs()
+        self.verify_number_of_outputs()
 
     def verify_number_of_inputs(self):
         """Verify number of inputs does not exceeds the limit"""
@@ -84,17 +84,24 @@ class Transaction(BaseTransaction):
         for input_tx in self.inputs:
             spent_tx = self.get_spent_tx(input_tx)
             sum_inputs += spent_tx.outputs[input_tx.index].value
-
         if sum_outputs != sum_inputs:
             raise InputOutputMismatch('Sum of inputs is different than the sum of outputs')
 
     def verify_inputs(self):
-        """Verify inputs signatures and ownership and unspent outputs"""
+        """Verify inputs signatures and ownership and all inputs actually exist"""
+        spent_outputs = set()
         for input_tx in self.inputs:
-            self.verify_script(input_tx)
-            self.verify_unspent_output(input_tx)
+            try:
+                spent_tx = self.get_spent_tx(input_tx)
+                if input_tx.index > len(spent_tx.outputs):
+                    raise InexistentInput('Output spent by this input does not exist: {} index {}'
+                                          .format(input_tx.tx_id.hex(), input_tx.index))
+            except TransactionDoesNotExist:
+                raise InexistentInput('Input tx does not exist: {}'.format(input_tx.tx_id.hex()))
 
-            spent_tx = self.get_spent_tx(input_tx)
+            self.verify_script(input_tx, spent_tx)
+            # self.verify_unspent_output(input_tx)
+
             if self.timestamp <= spent_tx.timestamp:
                 raise TimestampError('tx={} timestamp={}, parent={} timestamp={}'.format(
                     self.hash.hex(),
@@ -103,21 +110,27 @@ class Transaction(BaseTransaction):
                     spent_tx.timestamp,
                 ))
 
-    def verify_script(self, input_tx):
-        spent_tx = self.get_spent_tx(input_tx)
+            # check if any other input in this tx is spending the same output
+            key = (input_tx.tx_id, input_tx.index)
+            if key in spent_outputs:
+                raise ConflictingInputs('tx {} inputs spend the same output: {} index {}'
+                                        .format(self.hash_hex, input_tx.tx_id.hex(), input_tx.index))
+            spent_outputs.add(key)
+
+    def verify_script(self, input_tx, spent_tx):
         script_output = spent_tx.outputs[input_tx.index].script
         (ret, err) = script_eval(script_output, input_tx.data)
         if not ret:
             raise InvalidInputData(err)
 
-    def verify_unspent_output(self, input_tx):
-        try:
-            metadata = self.storage.get_metadata_by_hash_bytes(input_tx)
-            if input_tx.index in metadata.spent_outputs:
-                raise DoubleSpend
-        except TransactionMetadataDoesNotExist:
-            # No output was spent in this transaction
-            pass
+#    def verify_unspent_output(self, input_tx):
+#        try:
+#            metadata = self.storage.get_metadata_by_hash_bytes(input_tx.tx_id)
+#            if input_tx.index in metadata.spent_outputs:
+#                raise DoubleSpend
+#        except TransactionMetadataDoesNotExist:
+#            # No output was spent in this transaction
+#            pass
 
     def get_spent_tx(self, input_tx):
         # TODO Maybe we could use a TransactionCacheStorage in the future to reduce storage hit
