@@ -1,0 +1,22 @@
+{
+    "title": "Hash Rate",
+    "type": "graph",
+    "params": {
+      "targets": [
+        {
+          "expr": "block_hash_rate{{instance='{0}:{1}',job='{2}'}}",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "refId": "A"
+        },
+        {
+          "expr": "tx_hash_rate{{instance='{0}:{1}',job='{2}'}}",
+          "format": "time_series",
+          "intervalFactor": 1,
+          "refId": "B"
+        }
+      ],
+        "stack": true
+    },
+    "height": 4
+}
