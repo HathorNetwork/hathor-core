@@ -55,7 +55,7 @@ def main():
     parser.add_argument('--prometheus', action='store_true', help='Send metric data to Prometheus')
     args = parser.parse_args()
 
-    loglevel_filter = LogLevelFilterPredicate(LogLevel.debug)
+    loglevel_filter = LogLevelFilterPredicate(LogLevel.info)
     loglevel_filter.setLogLevelForNamespace('hathor.websocket.protocol.HathorAdminWebsocketProtocol', LogLevel.warn)
     observer = FilteringLogObserver(
         FileLogObserver(sys.stdout, formatLogEvent),
