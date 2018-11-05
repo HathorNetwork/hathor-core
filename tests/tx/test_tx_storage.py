@@ -5,7 +5,7 @@ import time
 
 from twisted.internet.task import Clock
 
-from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage
+from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage, TransactionBinaryStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction import Block, Transaction, TransactionMetadata, TxOutput, TxInput
 from hathor.wallet import Wallet
@@ -185,6 +185,16 @@ class _BaseTransactionStorageTest:
             self.manager.tx_storage.save_transaction(block)
             self.reactor.advance(5)
             return block
+
+
+class TransactionBinaryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
+    def setUp(self):
+        self.directory = tempfile.mkdtemp(dir='/tmp/')
+        super().setUp(TransactionBinaryStorage(self.directory))
+
+    def tearDown(self):
+        shutil.rmtree(self.directory)
+        super().tearDown()
 
 
 class TransactionJSONStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
