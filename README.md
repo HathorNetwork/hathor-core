@@ -20,6 +20,11 @@ To decide which wallet you are going to use run with --wallet hd, for example. D
 For hd wallet you can run --words and --passphrase to set the words and passphrase used to generate the initial seed
 
 
+Build for pypy on MacOS with Brew
+------
+
+    pip install -r requirements.txt --global-option=build_ext --global-option="-L/usr/local/opt/openssl/lib" --global-option="-I/usr/local/opt/openssl/include"
+
 
 Run a simple test in one computer
 ------

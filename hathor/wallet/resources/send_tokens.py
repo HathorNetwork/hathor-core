@@ -64,7 +64,7 @@ class SendTokensResource(resource.Resource):
 
         tx.storage = self.manager.tx_storage
         # TODO Send tx to be mined
-        tx.weight = 10
+        tx.weight = data.get('weight', 10)
 
         max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
         tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
@@ -75,7 +75,7 @@ class SendTokensResource(resource.Resource):
         if success:
             self.manager.propagate_tx(tx)
 
-        return self.return_POST(success, message)
+        return self.return_POST(success, message, tx=tx)
 
     def render_POST(self, request):
         deferred = threads.deferToThread(self._render_POST_thread, request)
@@ -96,7 +96,7 @@ class SendTokensResource(resource.Resource):
         """
         request.processingFailed(reason)
 
-    def return_POST(self, success, message):
+    def return_POST(self, success, message, tx=None):
         """ Auxiliar method to return result of POST method
 
             :param success: If tx was created successfully
@@ -111,6 +111,8 @@ class SendTokensResource(resource.Resource):
             'success': success,
             'message': message,
         }
+        if tx:
+            ret['tx'] = tx.to_json()
         return json.dumps(ret, indent=4).encode('utf-8')
 
     def render_OPTIONS(self, request):

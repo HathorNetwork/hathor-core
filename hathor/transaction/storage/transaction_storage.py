@@ -9,6 +9,7 @@ from itertools import chain
 class TransactionStorage:
     def __init__(self):
         self._reset_cache()
+        self._genesis_cache = None
         if self.__class__ == TransactionStorage:
             raise Exception('You cannot directly create an instance of this class.')
 
@@ -310,12 +311,12 @@ class TransactionStorage:
         """
             Returning hardcoded genesis block and transactions
         """
-        from hathor.transaction.genesis import genesis_transactions
-        for genesis in genesis_transactions(self):
-            if hash_bytes == genesis.hash:
-                return genesis
-
-        return None
+        if not self._genesis_cache:
+            from hathor.transaction.genesis import genesis_transactions
+            self._genesis_cache = {}
+            for genesis in genesis_transactions(self):
+                self._genesis_cache[genesis.hash] = genesis
+        return self._genesis_cache.get(hash_bytes, None)
 
     def get_all_transactions(self):
         raise NotImplementedError
