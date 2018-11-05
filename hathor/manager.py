@@ -70,6 +70,9 @@ class HathorManager(object):
         :type default_port: int
         """
         self.reactor = reactor
+        if hasattr(self.reactor, 'addSystemEventTrigger'):
+            self.reactor.addSystemEventTrigger('after', 'shutdown', self.stop)
+
         self.state = None
         self.profiler = None
 
@@ -120,6 +123,7 @@ class HathorManager(object):
     def start(self):
         """ A factory must be started only once. And it is usually automatically started.
         """
+        self.log.info('Starting HathorManager...')
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
         self.connections.start()
@@ -136,6 +140,7 @@ class HathorManager(object):
         self.metrics.start()
 
     def stop(self):
+        self.log.info('Stopping HathorManager...')
         self.connections.stop()
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
 
@@ -168,11 +173,27 @@ class HathorManager(object):
 
         This method runs through all transactions, verifying them and updating our wallet.
         """
+        self.log.info('Initializing node...')
         if self.wallet:
             self.wallet._manually_initialize()
+        t0 = time.time()
+        t1 = t0
+        cnt = 0
         for tx in self.tx_storage._topological_sort():
-            self.on_new_tx(tx)
+            t2 = time.time()
+            if t2 - t1 > 5:
+                # self.start_profiler()
+                ts_date = datetime.datetime.fromtimestamp(self.tx_storage.latest_timestamp)
+                self.log.info(
+                    'Verifying transations in storage...'
+                    ' avg={:.4f} tx/s total={} (latest timedate: {})'.format(cnt / (t2 - t0), cnt, ts_date)
+                )
+                t1 = t2
+            cnt += 1
+            self.on_new_tx(tx, quiet=True)
+        # self.stop_profiler(save_to='initializing.prof')
         self.state = self.NodeState.READY
+        self.log.info('Node successfully initialized ({} seconds).'.format(t2 - t0))
 
     def add_peer_discovery(self, peer_discovery):
         self.peer_discoveries.append(peer_discovery)
@@ -250,14 +271,6 @@ class HathorManager(object):
             self.log.debug('validate_new_tx(): Ignoring transaction in the future {}'.format(tx.hash.hex()))
             return False
 
-        for parent_hash in tx.parents:
-            if not self.tx_storage.transaction_exists_by_hash_bytes(parent_hash):
-                # All parents must exist.
-                self.log.debug('validate_new_tx(): Invalid transaction with unknown parent tx={} parent={}'.format(
-                    tx.hash.hex(), parent_hash.hex()
-                ))
-                return False
-
         try:
             tx.verify()
         except TxValidationError as e:
@@ -293,7 +306,7 @@ class HathorManager(object):
             tx.storage = self.tx_storage
         return self.on_new_tx(tx)
 
-    def on_new_tx(self, tx, conn=None):
+    def on_new_tx(self, tx, conn=None, quiet=False):
         """This method is called when any transaction arrive.
 
         :return: True if the transaction was accepted
@@ -313,21 +326,22 @@ class HathorManager(object):
         else:
             self.tx_storage._add_to_cache(tx)
 
-        ts_date = datetime.datetime.fromtimestamp(tx.timestamp)
-        if tx.is_block:
-            self.log.info(
-                'New block found tag=new_block hash={tx.hash_hex}'
-                ' weight={tx.weight} timestamp={tx.timestamp} datetime={ts_date} from_now={time_from_now}',
-                tx=tx, ts_date=ts_date, time_from_now=tx.get_time_from_now()
-            )
-        else:
-            self.log.info(
-                'New transaction tag=new_tx hash={tx.hash_hex}'
-                ' timestamp={tx.timestamp} datetime={ts_date} from_now={time_from_now}',
-                tx=tx,
-                ts_date=ts_date,
-                time_from_now=tx.get_time_from_now()
-            )
+        if not quiet:
+            ts_date = datetime.datetime.fromtimestamp(tx.timestamp)
+            if tx.is_block:
+                self.log.info(
+                    'New block found tag=new_block hash={tx.hash_hex}'
+                    ' weight={tx.weight} timestamp={tx.timestamp} datetime={ts_date} from_now={time_from_now}',
+                    tx=tx, ts_date=ts_date, time_from_now=tx.get_time_from_now()
+                )
+            else:
+                self.log.info(
+                    'New transaction tag=new_tx hash={tx.hash_hex}'
+                    ' timestamp={tx.timestamp} datetime={ts_date} from_now={time_from_now}',
+                    tx=tx,
+                    ts_date=ts_date,
+                    time_from_now=tx.get_time_from_now()
+                )
 
         tx.mark_inputs_as_used()
         tx.update_voided_info()

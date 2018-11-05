@@ -258,10 +258,10 @@ class BaseTransaction:
         if len(spent_by) > 1:
             for h in spent_by:
                 tx = self.storage.get_transaction_by_hash_bytes(h)
-                meta = tx.get_metadata()
-                meta.conflict_with.update(spent_by)
-                meta.conflict_with.discard(tx.hash)
-                tx.storage.save_metadata(meta)
+                tx_meta = tx.get_metadata()
+                tx_meta.conflict_with.update(spent_by)
+                tx_meta.conflict_with.discard(tx.hash)
+                tx.storage.save_metadata(tx_meta)
 
         self.check_conflicts()
 
