@@ -32,10 +32,10 @@ class DashboardTransactionResource(resource.Resource):
         block_count = int(request.args[b'block'][0])
         tx_count = int(request.args[b'tx'][0])
 
-        transactions = self.manager.tx_storage.get_latest_transactions(count=tx_count)
+        transactions, _ = self.manager.tx_storage.get_newest_txs(count=tx_count)
         serialized_tx = [tx.to_json() for tx in transactions]
 
-        blocks = self.manager.tx_storage.get_latest_blocks(count=block_count)
+        blocks, _ = self.manager.tx_storage.get_newest_blocks(count=block_count)
         serialized_blocks = [block.to_json() for block in blocks]
 
         data = {

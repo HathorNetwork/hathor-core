@@ -78,6 +78,7 @@ class TransactionResource(resource.Resource):
             'type': 'block' or 'tx', to indicate if we should return a list of blocks or tx
             'count': int, to indicate the quantity of elements we should return
             'hash': string, the hash reference we are in the pagination
+            'timestamp': int, the timestamp reference we are in the pagination
             'page': 'previous' or 'next', to indicate if the user wants after or before the hash reference
         """
         count = int(request.args[b'count'][0])
@@ -86,22 +87,43 @@ class TransactionResource(resource.Resource):
         page = ''
         if b'hash' in request.args:
             ref_hash = request.args[b'hash'][0].decode('utf-8')
+            ref_timestamp = int(request.args[b'timestamp'][0].decode('utf-8'))
             page = request.args[b'page'][0].decode('utf-8')
 
-        if type_tx == 'block':
-            if page == 'previous':
-                blocks, has_more = self.manager.tx_storage.get_blocks_before_hash(ref_hash, count)
-            else:
-                blocks, has_more = self.manager.tx_storage.get_blocks_after_hash(ref_hash, count)
+            if type_tx == 'block':
+                if page == 'previous':
+                    elements, has_more = self.manager.tx_storage.get_newer_blocks_after(
+                        ref_timestamp,
+                        bytes.fromhex(ref_hash),
+                        count
+                    )
+                else:
+                    elements, has_more = self.manager.tx_storage.get_older_blocks_after(
+                        ref_timestamp,
+                        bytes.fromhex(ref_hash),
+                        count
+                    )
 
-            serialized = [block.to_json() for block in blocks]
+            else:
+                if page == 'previous':
+                    elements, has_more = self.manager.tx_storage.get_newer_txs_after(
+                        ref_timestamp,
+                        bytes.fromhex(ref_hash),
+                        count
+                    )
+                else:
+                    elements, has_more = self.manager.tx_storage.get_older_txs_after(
+                        ref_timestamp,
+                        bytes.fromhex(ref_hash),
+                        count
+                    )
         else:
-            if page == 'previous':
-                transactions, has_more = self.manager.tx_storage.get_txs_before_hash(ref_hash, count)
+            if type_tx == 'block':
+                elements, has_more = self.manager.tx_storage.get_newest_blocks(count=count)
             else:
-                transactions, has_more = self.manager.tx_storage.get_txs_after_hash(ref_hash, count)
+                elements, has_more = self.manager.tx_storage.get_newest_txs(count=count)
 
-            serialized = [tx.to_json() for tx in transactions]
+        serialized = [element.to_json() for element in elements]
 
         data = {
             'transactions': serialized,
