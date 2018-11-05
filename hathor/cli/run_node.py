@@ -17,7 +17,8 @@ from hathor.wallet.resources import BalanceResource, HistoryResource, AddressRes
 from hathor.resources import ProfilerResource
 from hathor.wallet import Wallet, HDWallet
 from hathor.transaction.resources import DecodeTxResource, PushTxResource, GraphvizResource, \
-                                        TransactionResource, DashboardTransactionResource
+                                        TransactionResource, DashboardTransactionResource, \
+                                        TipsHistogramResource
 from hathor.websocket import HathorAdminWebsocketFactory
 from hathor.p2p.peer_discovery import DNSPeerDiscovery, BootstrapPeerDiscovery
 from hathor.prometheus import PrometheusMetricsExporter
@@ -160,6 +161,7 @@ def main():
             (b'decode_tx', DecodeTxResource(manager), root),
             (b'push_tx', PushTxResource(manager), root),
             (b'graphviz', GraphvizResource(manager), root),
+            (b'tips-histogram', TipsHistogramResource(manager), root),
             (b'transaction', TransactionResource(manager), root),
             (b'dashboard_tx', DashboardTransactionResource(manager), root),
             (b'profiler', ProfilerResource(manager), root),

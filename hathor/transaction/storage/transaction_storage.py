@@ -237,7 +237,7 @@ class TransactionStorage:
         :return: An iterable with the transactions (without the root)
         :rtype: Iterable[BaseTransaction]
         """
-        to_visit = deque(*root.get_metadata().spent_outputs.values())  # List[bytes(hash)]
+        to_visit = deque(chain(*root.get_metadata().spent_outputs.values()))  # Deque[bytes(hash)]
         seen = set(to_visit)    # Set[bytes(hash)]
 
         while to_visit:
@@ -588,7 +588,9 @@ class TransactionStorage:
 
         tx_tips_attrs = dict(style='filled', fillcolor='#F5D76E')
         block_attrs = dict(shape='box', style='filled', fillcolor='#EC644B')
-        conflict_attrs = dict(style='dashed,filled', penwidth='0.25', fillcolor='#BDC3C7')
+
+        voided_attrs = dict(style='dashed,filled', penwidth='0.25', fillcolor='#BDC3C7')
+        conflict_attrs = dict(style='dashed,filled', penwidth='2.0', fillcolor='#BDC3C7')
 
         dot.attr('node', shape='oval', style='')
         nodes_iter = self._topological_sort()
@@ -625,12 +627,90 @@ class TransactionStorage:
                     g_b.node(name, **attrs_node)
                 else:
                     meta = tx.get_metadata()
-                    if meta.voided_by:
-                        attrs_node.update(conflict_attrs)
+                    if len(meta.voided_by) > 0:
+                        attrs_node.update(voided_attrs)
+                        if tx.hash in meta.voided_by:
+                            attrs_node.update(conflict_attrs)
                     g_t.node(name, **attrs_node)
 
                 for parent_hash in tx.parents:
                     dot.edge(name, parent_hash.hex(), **attrs_edge)
+
+        dot.attr(rankdir='RL')
+        return dot
+
+    def graphviz_funds(self, format='pdf', weight=False, acc_weight=False):
+        """Return a Graphviz object that can be rendered to generate a visualization of the DAG.
+
+        :param format: Format of the visualization (pdf, png, or jpg)
+        :type format: string
+
+        :param weight: Whether to display or not the tx weight
+        :type format: bool
+
+        :param acc_weight: Whether to display or not the tx accumulated weight
+        :type format: bool
+
+        :return: A Graphviz object
+        :rtype: :py:class:`graphviz.Digraph`
+        """
+        from graphviz import Digraph
+
+        dot = Digraph(format=format)
+
+        g_blocks = dot.subgraph(name='blocks')
+        g_txs = dot.subgraph(name='txs')
+        g_genesis = dot.subgraph(name='genesis')
+
+        tx_tips_attrs = dict(style='filled', fillcolor='#F5D76E')
+        block_attrs = dict(shape='box', style='filled', fillcolor='#EC644B')
+
+        voided_attrs = dict(style='dashed,filled', penwidth='0.25', fillcolor='#BDC3C7')
+        conflict_attrs = dict(style='dashed,filled', penwidth='2.0', fillcolor='#BDC3C7')
+
+        dot.attr('node', shape='oval', style='')
+        nodes_iter = self._topological_sort()
+
+        block_tips = set(x.data for x in self.get_block_tips())
+        tx_tips = set(x.data for x in self.get_tx_tips())
+
+        with g_genesis as g_g, g_txs as g_t, g_blocks as g_b:
+            for i, tx in enumerate(nodes_iter):
+                name = tx.hash.hex()
+                attrs_node = {'label': tx.hash.hex()[-4:]}
+                attrs_edge = {}
+
+                if tx.is_block:
+                    attrs_node.update(block_attrs)
+                    attrs_edge.update(dict(penwidth='4'))
+
+                if (tx.hash in block_tips) or (tx.hash in tx_tips):
+                    attrs_node.update(tx_tips_attrs)
+
+                if weight:
+                    attrs_node.update(dict(label='{}\nw: {:.2f}'.format(attrs_node['label'], tx.weight)))
+
+                if acc_weight:
+                    metadata = tx.get_metadata()
+                    attrs_node.update(
+                        dict(label='{}\naw: {:.2f}'.format(attrs_node['label'], metadata.accumulated_weight))
+                    )
+
+                if tx.is_genesis:
+                    attrs_node.update(dict(fillcolor='#87D37C', style='filled'))
+                    g_g.node(name, **attrs_node)
+                elif tx.is_block:
+                    g_b.node(name, **attrs_node)
+                else:
+                    meta = tx.get_metadata()
+                    if len(meta.voided_by) > 0:
+                        attrs_node.update(voided_attrs)
+                        if tx.hash in meta.voided_by:
+                            attrs_node.update(conflict_attrs)
+                    g_t.node(name, **attrs_node)
+
+                for txin in tx.inputs:
+                    dot.edge(name, txin.tx_id.hex(), **attrs_edge)
 
         dot.attr(rankdir='RL')
         return dot

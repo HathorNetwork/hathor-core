@@ -72,7 +72,7 @@ def add_new_transactions(manager, num_txs):
     return txs
 
 
-def add_new_block(manager):
+def add_new_block(manager, advance_clock=None):
     """ Create, resolve and propagate a new block
 
         :param manager: Manager object to handle the creation
@@ -85,10 +85,12 @@ def add_new_block(manager):
     block.resolve()
     block.verify()
     manager.propagate_tx(block)
+    if advance_clock:
+        manager.reactor.advance(advance_clock)
     return block
 
 
-def add_new_blocks(manager, num_blocks):
+def add_new_blocks(manager, num_blocks, advance_clock=None):
     """ Create, resolve and propagate some blocks
 
         :param manager: Manager object to handle the creation
@@ -102,7 +104,7 @@ def add_new_blocks(manager, num_blocks):
     """
     blocks = []
     for _ in range(num_blocks):
-        blocks.append(add_new_block(manager))
+        blocks.append(add_new_block(manager, advance_clock))
     return blocks
 
 

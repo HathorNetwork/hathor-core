@@ -2,9 +2,11 @@ from twisted.python import log
 from twisted.internet.task import Clock
 
 from tests import unittest
+from tests.utils import add_new_blocks, add_new_tx
 
 import sys
 import time
+import random
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):
@@ -20,21 +22,17 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.genesis = self.manager1.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
 
-    def _add_new_block(self):
-        block = self.manager1.generate_mining_block()
-        self.assertTrue(block.resolve())
-        self.manager1.propagate_tx(block)
-        self.clock.advance(15)
-        return block
-
-    def _add_new_blocks(self, num_blocks):
-        blocks = []
-        for _ in range(num_blocks):
-            blocks.append(self._add_new_block())
-        return blocks
+    def _add_new_transactions(self, manager, num_txs):
+        txs = []
+        for _ in range(num_txs):
+            address = '3JEcJKVsHddj1Td2KDjowZ1JqGF1'
+            value = random.choice([5, 10, 50, 100, 120])
+            tx = add_new_tx(manager, address, value)
+            txs.append(tx)
+        return txs
 
     def test_simple_double_spending(self):
-        self._add_new_blocks(5)
+        add_new_blocks(self.manager1, 5, advance_clock=15)
 
         from hathor.transaction import Transaction
         from hathor.wallet.base_wallet import WalletOutputInfo
@@ -114,7 +112,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.assertIn(tx3.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
 
     def test_double_spending_propagation(self):
-        blocks = self._add_new_blocks(5)
+        blocks = add_new_blocks(self.manager1, 4, advance_clock=15)
 
         from hathor.transaction import Transaction
         from hathor.wallet.base_wallet import WalletOutputInfo, WalletInputInfo
@@ -298,6 +296,15 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(meta6.voided_by, set())
         self.assertEqual(meta7.voided_by, set())
 
+        blocks = add_new_blocks(self.manager1, 1, advance_clock=15)
+        self._add_new_transactions(self.manager1, 10)
+        blocks = add_new_blocks(self.manager1, 1, advance_clock=15)
+        self._add_new_transactions(self.manager1, 10)
+        blocks = add_new_blocks(self.manager1, 1, advance_clock=15)
+
         # ---
-        # dot1 = self.manager1.tx_storage.graphviz(format='pdf')
+        # dot1 = self.manager1.tx_storage.graphviz(format='pdf', acc_weight=True)
         # dot1.render('dot1')
+
+        # dot2 = self.manager1.tx_storage.graphviz_funds(format='pdf', acc_weight=True)
+        # dot2.render('dot2')
