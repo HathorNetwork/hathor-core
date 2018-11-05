@@ -42,7 +42,14 @@ class GraphvizResource(resource.Resource):
         if b'acc_weight' in request.args:
             acc_weight = self.parseBoolArg(request.args[b'acc_weight'][0].decode('utf-8'))
 
-        dot = self.manager.tx_storage.graphviz(format=dotformat, weight=weight, acc_weight=acc_weight)
+        funds = False
+        if b'funds' in request.args:
+            funds = self.parseBoolArg(request.args[b'funds'][0].decode('utf-8'))
+
+        if not funds:
+            dot = self.manager.tx_storage.graphviz(format=dotformat, weight=weight, acc_weight=acc_weight)
+        else:
+            dot = self.manager.tx_storage.graphviz_funds(format=dotformat, weight=weight, acc_weight=acc_weight)
 
         if dotformat == 'dot':
             request.setHeader(b'content-type', contenttype[dotformat])
