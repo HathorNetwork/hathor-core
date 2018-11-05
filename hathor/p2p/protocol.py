@@ -170,6 +170,8 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
     """ Implements HathorProtocol in a LineReceiver protocol.
     It is simply a TCP connection which sends one message per line.
     """
+    MAX_LENGTH = 65536
+
     def connectionMade(self):
         super(HathorLineReceiver, self).connectionMade()
         self.setLineMode()
@@ -178,6 +180,10 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
     def connectionLost(self, reason):
         super(HathorLineReceiver, self).connectionMade()
         self.on_disconnect(reason)
+
+    def lineLengthExceeded(self, line):
+        self.log.warn('lineLengthExceeded {} > {}: {}'.format(len(line), self.MAX_LENGTH, line))
+        super(HathorLineReceiver, self).lineLengthExceeded(line)
 
     def lineReceived(self, line):
         self.metrics.received_messages += 1

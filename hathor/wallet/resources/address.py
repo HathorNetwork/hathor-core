@@ -25,7 +25,10 @@ class AddressResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        new = request.args[b'new'][0].decode('utf-8') == 'true'
+        if b'new' in request.args:
+            new = request.args[b'new'][0].decode('utf-8') == 'true'
+        else:
+            new = False
 
         if new:
             # When user clicks 'Generate new address' we have to mark the old one

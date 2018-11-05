@@ -314,7 +314,7 @@ class HathorManager(object):
         """
         if not self.validate_new_tx(tx):
             # Discard invalid Transaction/block.
-            self.log.info('Transaction/Block discarded {}'.format(tx.hash_hex))
+            self.log.debug('Transaction/Block discarded {}'.format(tx.hash_hex))
             return False
 
         if self.wallet:

@@ -58,6 +58,7 @@ def main():
 
     loglevel_filter = LogLevelFilterPredicate(LogLevel.info)
     loglevel_filter.setLogLevelForNamespace('hathor.websocket.protocol.HathorAdminWebsocketProtocol', LogLevel.warn)
+    loglevel_filter.setLogLevelForNamespace('twisted.python.log', LogLevel.warn)
     observer = FilteringLogObserver(
         FileLogObserver(sys.stdout, formatLogEvent),
         [loglevel_filter],
