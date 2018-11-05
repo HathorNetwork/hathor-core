@@ -1,6 +1,6 @@
 # encoding: utf-8
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
-from hathor.indexes import TimestampIndex
+from hathor.indexes import TipsIndex, IndexesManager
 
 from collections import deque
 from itertools import chain
@@ -19,9 +19,9 @@ class TransactionStorage:
         self._cache_block_count = 0
         self._cache_tx_count = 0
 
-        self.block_tips_index = TimestampIndex()
-        self.tx_tips_index = TimestampIndex()
-        self.voided_tips_index = TimestampIndex()
+        self.block_index = IndexesManager()
+        self.tx_index = IndexesManager()
+        self.voided_tips_index = TipsIndex()
 
         self.latest_timestamp = 0
         from hathor.transaction.genesis import genesis_transactions
@@ -30,12 +30,102 @@ class TransactionStorage:
     def get_block_tips(self, timestamp=None):
         if timestamp is None:
             timestamp = self.latest_timestamp
-        return self.block_tips_index[timestamp]
+        return self.block_index.tips_index[timestamp]
 
     def get_tx_tips(self, timestamp=None):
         if timestamp is None:
             timestamp = self.latest_timestamp
-        return self.tx_tips_index[timestamp]
+        return self.tx_index.tips_index[timestamp]
+
+    def get_newest_blocks(self, count):
+        """ Get blocks from the newest to the oldest
+
+            :param count: Number of blocks to be returned
+            :type count: int
+
+            :return: List of blocks and a boolean indicating if has more blocks
+            :rtype: Tuple[List[Transaction], bool]
+        """
+        return self.block_index.get_newest(count)
+
+    def get_newest_txs(self, count):
+        """ Get transactions from the newest to the oldest
+
+            :param count: Number of transactions to be returned
+            :type count: int
+
+            :return: List of transactions and a boolean indicating if has more txs
+            :rtype: Tuple[List[Transaction], bool]
+        """
+        return self.tx_index.get_newest(count)
+
+    def get_older_blocks_after(self, timestamp, hash_bytes, count):
+        """ Get blocks from the timestamp/hash_bytes reference to the oldest
+
+            :param timestamp: Timestamp reference to start the search
+            :type timestamp: int
+
+            :param hash_bytes: Hash reference to start the search
+            :type hash_bytes: bytes
+
+            :param count: Number of blocks to be returned
+            :type count: int
+
+            :return: List of blocks and a boolean indicating if has more blocks
+            :rtype: Tuple[List[Transaction], bool]
+        """
+        return self.block_index.get_older(timestamp, hash_bytes, count)
+
+    def get_newer_blocks_after(self, timestamp, hash_bytes, count):
+        """ Get blocks from the timestamp/hash_bytes reference to the newest
+
+            :param timestamp: Timestamp reference to start the search
+            :type timestamp: int
+
+            :param hash_bytes: Hash reference to start the search
+            :type hash_bytes: bytes
+
+            :param count: Number of blocks to be returned
+            :type count: int
+
+            :return: List of blocks and a boolean indicating if has more blocks
+            :rtype: Tuple[List[Transaction], bool]
+        """
+        return self.block_index.get_newer(timestamp, hash_bytes, count)
+
+    def get_older_txs_after(self, timestamp, hash_bytes, count):
+        """ Get transactions from the timestamp/hash_bytes reference to the oldest
+
+            :param timestamp: Timestamp reference to start the search
+            :type timestamp: int
+
+            :param hash_bytes: Hash reference to start the search
+            :type hash_bytes: bytes
+
+            :param count: Number of transactions to be returned
+            :type count: int
+
+            :return: List of transactions and a boolean indicating if has more txs
+            :rtype: Tuple[List[Transaction], bool]
+        """
+        return self.tx_index.get_older(timestamp, hash_bytes, count)
+
+    def get_newer_txs_after(self, timestamp, hash_bytes, count):
+        """ Get transactions from the timestamp/hash_bytes reference to the newest
+
+            :param timestamp: Timestamp reference to start the search
+            :type timestamp: int
+
+            :param hash_bytes: Hash reference to start the search
+            :type hash_bytes: bytes
+
+            :param count: Number of transactions to be returned
+            :type count: int
+
+            :return: List of transactions and a boolean indicating if has more txs
+            :rtype: Tuple[List[Transaction], bool]
+        """
+        return self.tx_index.get_newer(timestamp, hash_bytes, count)
 
     def _manually_initialize(self):
         """Caches must be initialized. This function should not be called, because
@@ -170,18 +260,18 @@ class TransactionStorage:
         self.latest_timestamp = max(self.latest_timestamp, tx.timestamp)
         if tx.is_block:
             self._cache_block_count += 1
-            self.block_tips_index.add_tx(tx)
+            self.block_index.add_tx(tx)
         else:
             self._cache_tx_count += 1
-            self.tx_tips_index.add_tx(tx)
+            self.tx_index.add_tx(tx)
 
     def _del_from_cache(self, tx):
         if tx.is_block:
             self._cache_block_count -= 1
-            self.block_tips_index.del_tx(tx)
+            self.block_index.del_tx(tx)
         else:
             self._cache_tx_count -= 1
-            self.tx_tips_index.del_tx(tx)
+            self.tx_index.del_tx(tx)
 
     def get_block_count(self):
         return self._cache_block_count

@@ -1,7 +1,7 @@
 from twisted.python import log
 from twisted.internet.task import Clock
 
-from tests.utils import FakeConnection
+from tests.utils import FakeConnection, add_new_block, add_new_transactions
 from tests import unittest
 
 import sys
@@ -17,47 +17,6 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.clock = Clock()
         self.clock.advance(time.time())
         self.network = 'testnet'
-
-    def _add_new_tx(self, manager, address, value):
-        from hathor.transaction import Transaction
-        from hathor.wallet.base_wallet import WalletOutputInfo
-
-        outputs = []
-        outputs.append(WalletOutputInfo(address=manager.wallet.decode_address(address), value=int(value)))
-
-        tx = manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
-        tx.storage = manager.tx_storage
-
-        max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
-        tx.timestamp = max(max_ts_spent_tx + 1, int(manager.reactor.seconds()))
-
-        tx.weight = 1
-        tx.parents = manager.get_new_tx_parents(tx.timestamp)
-        tx.resolve()
-        tx.verify()
-        manager.propagate_tx(tx)
-
-    def _add_new_transactions(self, manager, num_txs):
-        txs = []
-        for _ in range(num_txs):
-            address = '3JEcJKVsHddj1Td2KDjowZ1JqGF1'
-            value = random.choice([5, 10, 50, 100, 120])
-            tx = self._add_new_tx(manager, address, value)
-            txs.append(tx)
-        return txs
-
-    def _add_new_block(self, manager):
-        block = manager.generate_mining_block()
-        self.assertTrue(block.resolve())
-        block.verify()
-        manager.propagate_tx(block)
-        return block
-
-    def _add_new_blocks(self, manager, num_blocks):
-        blocks = []
-        for _ in range(num_blocks):
-            blocks.append(self._add_new_block(manager))
-        return blocks
 
     def assertTipsEqual(self, manager1, manager2):
         s1 = set(manager1.tx_storage.get_tx_tips())
@@ -78,12 +37,12 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         manager2.reactor = self.clock
 
         for _ in range(10):
-            self._add_new_block(manager1)
-            self._add_new_block(manager2)
+            add_new_block(manager1)
+            add_new_block(manager2)
             self.clock.advance(10)
             for _ in range(random.randint(3, 10)):
-                self._add_new_transactions(manager1, random.randint(2, 4))
-                self._add_new_transactions(manager2, random.randint(3, 7))
+                add_new_transactions(manager1, random.randint(2, 4))
+                add_new_transactions(manager2, random.randint(3, 7))
                 self.clock.advance(10)
 
         self.clock.advance(20)

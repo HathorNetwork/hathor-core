@@ -1,4 +1,5 @@
 from twisted.test import proto_helpers
+import random
 
 
 def resolve_block_bytes(block_bytes):
@@ -13,6 +14,96 @@ def resolve_block_bytes(block_bytes):
     block.weight = 10
     block.resolve()
     return block.get_struct()
+
+
+def add_new_tx(manager, address, value):
+    """ Create, resolve and propagate a new tx
+
+        :param manager: Manager object to handle the creation
+        :type manager: :py:class:`hathor.manager.HathorManager`
+
+        :param address: Address of the output
+        :type address: str
+
+        :param value: Value of the output
+        :type value: int
+
+        :return: Transaction created
+        :rtype: :py:class:`hathor.transaction.transaction.Transaction`
+    """
+    from hathor.transaction import Transaction
+    from hathor.wallet.base_wallet import WalletOutputInfo
+
+    outputs = []
+    outputs.append(WalletOutputInfo(address=manager.wallet.decode_address(address), value=int(value)))
+
+    tx = manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+    tx.storage = manager.tx_storage
+
+    max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
+    tx.timestamp = max(max_ts_spent_tx + 1, int(manager.reactor.seconds()))
+
+    tx.weight = 1
+    tx.parents = manager.get_new_tx_parents(tx.timestamp)
+    tx.resolve()
+    tx.verify()
+    manager.propagate_tx(tx)
+    return tx
+
+
+def add_new_transactions(manager, num_txs):
+    """ Create, resolve and propagate some transactions
+
+        :param manager: Manager object to handle the creation
+        :type manager: :py:class:`hathor.manager.HathorManager`
+
+        :param num_txs: Quantity of txs to be created
+        :type num_txs: int
+
+        :return: Transactions created
+        :rtype: List[Transaction]
+    """
+    txs = []
+    for _ in range(num_txs):
+        address = '3JEcJKVsHddj1Td2KDjowZ1JqGF1'
+        value = random.choice([5, 10, 50, 100, 120])
+        tx = add_new_tx(manager, address, value)
+        txs.append(tx)
+    return txs
+
+
+def add_new_block(manager):
+    """ Create, resolve and propagate a new block
+
+        :param manager: Manager object to handle the creation
+        :type manager: :py:class:`hathor.manager.HathorManager`
+
+        :return: Block created
+        :rtype: :py:class:`hathor.transaction.block.Block`
+    """
+    block = manager.generate_mining_block()
+    block.resolve()
+    block.verify()
+    manager.propagate_tx(block)
+    return block
+
+
+def add_new_blocks(manager, num_blocks):
+    """ Create, resolve and propagate some blocks
+
+        :param manager: Manager object to handle the creation
+        :type manager: :py:class:`hathor.manager.HathorManager`
+
+        :param num_blocks: Quantity of blocks to be created
+        :type num_blocks: int
+
+        :return: Blocks created
+        :rtype: List[Block]
+    """
+    blocks = []
+    for _ in range(num_blocks):
+        blocks.append(add_new_block(manager))
+    return blocks
 
 
 class FakeConnection:

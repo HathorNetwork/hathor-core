@@ -3,6 +3,8 @@ from twisted.internet.defer import inlineCallbacks
 from tests.resources.base_resource import TestSite, _BaseResourceTest
 from hathor.transaction.genesis import genesis_transactions
 
+from tests.utils import add_new_blocks, add_new_transactions
+
 
 class TransactionTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
@@ -38,19 +40,81 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_get_many(self):
-        genesis = genesis_transactions(self.manager.tx_storage)
-        # Many blocks
-        response_block = yield self.web.get("transaction", {b'count': b'10', b'type': b'block'})
-        data_block = response_block.json_value()
-        self.assertFalse(data_block['has_more'])
-        result_block = [x.to_json() for x in genesis if x.is_block]
-        self.assertEqual(data_block['transactions'], result_block)
+        self.manager.wallet.unlock(b'MYPASS')
 
-        # Many txs
-        response_tx = yield self.web.get("transaction", {b'count': b'10', b'type': b'tx'})
-        data_tx = response_tx.json_value()
-        self.assertFalse(data_tx['has_more'])
-        result_tx = [x.to_json() for x in genesis if not x.is_block]
-        # Inverse order from the timestamp
-        result_tx.reverse()
-        self.assertEqual(data_tx['transactions'], result_tx)
+        # Add some blocks and txs and get them in timestamp order
+        blocks = sorted(add_new_blocks(self.manager, 4), key=lambda x: (x.timestamp, x.hash))
+        txs = sorted(add_new_transactions(self.manager, 25), key=lambda x: (x.timestamp, x.hash))
+
+        # Get last 5 blocks
+        expected1 = blocks[-2:]
+        expected1.reverse()
+
+        response1 = yield self.web.get(
+            "transaction",
+            {b'count': b'2', b'type': b'block'}
+        )
+        data1 = response1.json_value()
+
+        for expected, result in zip(expected1, data1['transactions']):
+            self.assertEqual(expected.timestamp, result['timestamp'])
+            self.assertEqual(expected.hash.hex(), result['hash'])
+
+        self.assertTrue(data1['has_more'])
+
+        # Get last 8 txs
+        expected2 = txs[-8:]
+        expected2.reverse()
+
+        response2 = yield self.web.get(
+            "transaction",
+            {b'count': b'8', b'type': b'tx'}
+        )
+        data2 = response2.json_value()
+
+        for expected, result in zip(expected2, data2['transactions']):
+            self.assertEqual(expected.timestamp, result['timestamp'])
+            self.assertEqual(expected.hash.hex(), result['hash'])
+
+        self.assertTrue(data2['has_more'])
+
+        # Get blocks with hash reference
+        expected3 = blocks[:2]
+        expected3.reverse()
+
+        response3 = yield self.web.get(
+            "transaction",
+            {
+                b'count': b'3',
+                b'type': b'block',
+                b'timestamp': bytes(str(expected1[-1].timestamp), 'utf-8'),
+                b'hash': bytes(expected1[-1].hash.hex(), 'utf-8'),
+                b'page': b'next'
+            }
+        )
+        data3 = response3.json_value()
+
+        for expected, result in zip(expected3, data3['transactions']):
+            self.assertEqual(expected.timestamp, result['timestamp'])
+            self.assertEqual(expected.hash.hex(), result['hash'])
+
+        self.assertFalse(data3['has_more'])
+
+        # Get txs with hash reference
+        response4 = yield self.web.get(
+            "transaction",
+            {
+                b'count': b'16',
+                b'type': b'tx',
+                b'timestamp': bytes(str(txs[-9].timestamp), 'utf-8'),
+                b'hash': bytes(txs[-9].hash.hex(), 'utf-8'),
+                b'page': b'previous'
+            }
+        )
+        data4 = response4.json_value()
+
+        for expected, result in zip(expected2, data4['transactions']):
+            self.assertEqual(expected.timestamp, result['timestamp'])
+            self.assertEqual(expected.hash.hex(), result['hash'])
+
+        self.assertFalse(data4['has_more'])
