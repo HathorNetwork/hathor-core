@@ -184,8 +184,8 @@ class BasicTransaction(unittest.TestCase):
         tx.update_parents()
 
         # genesis transactions should have only this tx in their children set
-        for parent_hash in parents:
-            metadata = tx.storage.get_metadata_by_hash_bytes(parent_hash)
+        for parent in tx.get_parents():
+            metadata = parent.get_metadata()
             self.assertEqual(len(metadata.children), 1)
             self.assertEqual(metadata.children.pop(), tx.hash)
 

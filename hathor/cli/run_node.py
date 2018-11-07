@@ -10,7 +10,7 @@ from autobahn.twisted.resource import WebSocketResource
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.resources import StatusResource, MiningResource
 from hathor.manager import HathorManager
-from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage
+from hathor.transaction.storage import TransactionCompactStorage, TransactionMemoryStorage, TransactionCacheStorage
 from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, \
                                     SendTokensResource, UnlockWalletResource, \
                                     LockWalletResource, StateWalletResource
@@ -54,6 +54,9 @@ def main():
     parser.add_argument('--passphrase', action='store_true', help='Passphrase used to generate the seed for HD Wallet')
     parser.add_argument('--unlock-wallet', action='store_true', help='Ask for password to unlock wallet')
     parser.add_argument('--prometheus', action='store_true', help='Send metric data to Prometheus')
+    parser.add_argument('--cache', action='store_true', help='Use cache for tx storage')
+    parser.add_argument('--cache-size', type=int, help='Number of txs to keep on cache')
+    parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
     args = parser.parse_args()
 
     loglevel_filter = LogLevelFilterPredicate(LogLevel.info)
@@ -107,10 +110,20 @@ def main():
     if args.data:
         tx_dir = os.path.join(args.data, 'tx')
         wallet_dir = args.data
-        tx_storage = TransactionJSONStorage(path=tx_dir)
-        print('Using TransactionJSONStorage at {}'.format(tx_dir))
         print('Using Wallet at {}'.format(wallet_dir))
+        print('Using TransactionCompactStorage at {}'.format(tx_dir))
+        tx_storage = TransactionCompactStorage(path=tx_dir, with_index=(not args.cache))
+        if args.cache:
+            tx_storage = TransactionCacheStorage(tx_storage, reactor)
+            if args.cache_size:
+                tx_storage.capacity = args.cache_size
+            if args.cache_interval:
+                tx_storage.interval = args.cache_interval
+            print('Using TransactionCacheStorage, capacity {}, interval {}s'
+                  .format(tx_storage.capacity, tx_storage.interval))
+            tx_storage.start()
     else:
+        # if using MemoryStorage, no need to have cache
         tx_storage = TransactionMemoryStorage()
         print('Using TransactionMemoryStorage')
 

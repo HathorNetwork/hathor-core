@@ -8,8 +8,12 @@ import re
 import base64
 
 
-class TransactionJSONStorage(TransactionStorage):
-    def __init__(self, path='./',  with_index=True):
+class TransactionCompactStorage(TransactionStorage):
+    """This storage saves tx and metadata in the same file.
+
+    It also uses JSON format. Saved file is of format {'tx': {...}, 'meta': {...}}
+    """
+    def __init__(self, path='./', with_index=True):
         self.mkdir_if_needed(path)
         self.path = path
         super().__init__(with_index=with_index)
@@ -20,11 +24,6 @@ class TransactionJSONStorage(TransactionStorage):
 
     def generate_filepath(self, hash_hex):
         filename = 'tx_{}.json'.format(hash_hex)
-        filepath = os.path.join(self.path, filename)
-        return filepath
-
-    def generate_metadata_filepath(self, hash_hex):
-        filename = 'tx_{}_metadata.json'.format(hash_hex)
         filepath = os.path.join(self.path, filename)
         return filepath
 
@@ -49,7 +48,7 @@ class TransactionJSONStorage(TransactionStorage):
 
     def save_to_json(self, filepath, data):
         with open(filepath, 'w') as json_file:
-            json_file.write(json.dumps(data, indent=4))
+            json_file.write(json.dumps(data))
 
     def load_from_json(self, filepath, error):
         if os.path.isfile(filepath):
@@ -64,38 +63,13 @@ class TransactionJSONStorage(TransactionStorage):
         self._save_transaction(tx)
 
     def _save_transaction(self, tx):
-        data = tx.to_json()
-        filepath = self.generate_filepath(data['hash'])
+        data = {}
+        data['tx'] = tx.to_json()
+        meta = getattr(tx, '_metadata', None)
+        if meta:
+            data['meta'] = tx._metadata.to_json()
+        filepath = self.generate_filepath(data['tx']['hash'])
         self.save_to_json(filepath, data)
-        if tx.is_block:
-            self._save_blockhash_by_height(tx)
-
-    def generate_blocks_at_height_filepath(self, height):
-        filename = 'blks_h_{}.json'.format(height)
-        filepath = os.path.join(self.path, filename)
-        return filepath
-
-    def _save_blockhash_by_height(self, block):
-        """Adds the given block's hash string to the list of block hashes at the given height.
-
-        Input is a block object, but only the hash is saved, in a file with name based on the height of the block.
-        """
-        # Load existing blocks at height, if any.
-        height = block.height
-        data, filepath = self._get_block_hashes_at_height(height)
-        hash_hex = block.hash.hex()
-        if hash_hex not in data:
-            data.append(hash_hex)
-            self.save_to_json(filepath, data)
-
-    def _get_block_hashes_at_height(self, height):
-        """Returns a tuple of list of hashes of blocks at the given height and the storage filename."""
-        filepath = self.generate_blocks_at_height_filepath(height)
-        try:
-            data = self.load_from_json(filepath, FileNotFoundError)
-        except FileNotFoundError:
-            data = []
-        return data, filepath
 
     def get_transaction_by_hash_bytes(self, hash_bytes):
         genesis = self.get_genesis_by_hash_bytes(hash_bytes)
@@ -105,22 +79,15 @@ class TransactionJSONStorage(TransactionStorage):
         hash_hex = hash_bytes.hex()
         filepath = self.generate_filepath(hash_hex)
         data = self.load_from_json(filepath, TransactionDoesNotExist(hash_hex))
-        tx = self.load(data)
-        try:
-            meta = self._get_metadata_by_hash(hash_hex)
+        tx = self.load(data['tx'])
+        if 'meta' in data.keys():
+            meta = TransactionMetadata.create_from_json(data['meta'])
             tx._metadata = meta
-        except TransactionMetadataDoesNotExist:
-            pass
         return tx
 
     def get_transaction_by_hash(self, hash_hex):
         hash_bytes = bytes.fromhex(hash_hex)
         return self.get_transaction_by_hash_bytes(hash_bytes)
-
-    def _get_metadata_by_hash(self, hash_hex):
-        filepath = self.generate_metadata_filepath(hash_hex)
-        data = self.load_from_json(filepath, TransactionMetadataDoesNotExist)
-        return self.load_metadata(data)
 
     def load(self, data):
         from hathor.transaction.transaction import Transaction
@@ -173,19 +140,16 @@ class TransactionJSONStorage(TransactionStorage):
 
     def save_metadata(self, tx):
         # genesis txs and metadata are kept in memory
-        if tx.is_genesis:
-            return
+        if not tx.is_genesis:
+            self._save_transaction(tx)
 
-        metadata = tx._metadata
-        data = self.serialize_metadata(metadata)
-        filepath = self.generate_metadata_filepath(data['hash'])
-        self.save_to_json(filepath, data)
-
-    def serialize_metadata(self, metadata):
-        return metadata.to_json()
-
-    def load_metadata(self, data):
-        return TransactionMetadata.create_from_json(data)
+    def _get_metadata_by_hash(self, hash_hex):
+        tx = self.get_transaction_by_hash(hash_hex)
+        meta = getattr(tx, '_metadata', None)
+        if meta:
+            return meta
+        else:
+            raise TransactionMetadataDoesNotExist
 
     def get_all_transactions(self):
         for tx in self.get_all_genesis():
@@ -199,10 +163,12 @@ class TransactionJSONStorage(TransactionStorage):
             for f in it:
                 if re_pattern.match(f.name):
                     # TODO Return a proxy that will load the transaction only when it is used.
-                    with open(f.path, 'r') as json_file:
-                        dict_data = json.loads(json_file.read())
-                    transaction = self.load(dict_data)
-                    yield transaction
+                    data = self.load_from_json(f.path, TransactionDoesNotExist())
+                    tx = self.load(data['tx'])
+                    if 'meta' in data.keys():
+                        meta = TransactionMetadata.create_from_json(data['meta'])
+                        tx._metadata = meta
+                    yield tx
 
     def get_count_tx_blocks(self):
         genesis_len = len(self.get_all_genesis())

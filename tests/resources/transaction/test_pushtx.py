@@ -39,7 +39,8 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         )
 
         # Valid
-        valid_tx = self.manager.tx_storage.get_latest_transactions(count=1)[0]
+        (valid_tx, _) = self.manager.tx_storage.get_newest_txs(count=1)
+        valid_tx = valid_tx[0]
         response_success = yield self.web.get('push_tx', {b'hex_tx': bytes(valid_tx.get_struct().hex(), 'utf-8')})
         data_success = response_success.json_value()
         self.assertTrue(data_success['success'])

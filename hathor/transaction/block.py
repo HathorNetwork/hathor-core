@@ -42,7 +42,7 @@ class Block(BaseTransaction):
             return
 
         # Get all parents.
-        parent_blocks = [self.storage.get_transaction_by_hash_bytes(h) for h in self.parents]
+        parent_blocks = [parent for parent in self.get_parents()]
 
         if self.height != max(x.height for x in parent_blocks) + 1:
             raise BlockHeightError(error_height_message)

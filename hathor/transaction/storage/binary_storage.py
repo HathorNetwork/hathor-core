@@ -8,10 +8,10 @@ import re
 
 
 class TransactionBinaryStorage(TransactionStorage):
-    def __init__(self, path='./'):
+    def __init__(self, path='./',  with_index=True):
         os.makedirs(path, exist_ok=True)
         self.path = path
-        super().__init__()
+        super().__init__(with_index=with_index)
 
     def generate_filepath(self, hash_hex):
         filename = 'tx_{}.bin'.format(hash_hex)
@@ -56,6 +56,9 @@ class TransactionBinaryStorage(TransactionStorage):
 
     def save_transaction(self, tx):
         super().save_transaction(tx)
+        self._save_transaction(tx)
+
+    def _save_transaction(self, tx):
         tx_bytes = tx.get_struct()
         filepath = self.generate_filepath(tx.hash_hex)
         with open(filepath, 'wb') as fp:
@@ -90,19 +93,6 @@ class TransactionBinaryStorage(TransactionStorage):
             data = []
         return data, filepath
 
-    def get_block_hashes_at_height(self, height):
-        """Returns a tuple of list of hashes of blocks at the given height and the storage filename."""
-        data, _ = self._get_block_hashes_at_height(height)
-        return data
-
-    def get_blocks_at_height(self, height):
-        """Returns a list of blocks at the given height."""
-        hashes, _ = self._get_block_hashes_at_height(height)
-        data = []
-        for hash_hex in hashes:
-            data.append(self.get_transaction_by_hash(hash_hex))
-        return data
-
     def _load_transaction_from_filepath(self, filepath):
         try:
             with open(filepath, 'rb') as fp:
@@ -126,26 +116,34 @@ class TransactionBinaryStorage(TransactionStorage):
         genesis = self.get_genesis_by_hash_bytes(hash_bytes)
         if genesis:
             return genesis
+
         hash_hex = hash_bytes.hex()
-        return self.load_transaction(hash_hex)
+        tx = self.load_transaction(hash_hex)
+        try:
+            meta = self._get_metadata_by_hash(hash_hex)
+            tx._metadata = meta
+        except TransactionMetadataDoesNotExist:
+            pass
+        return tx
 
     def get_transaction_by_hash(self, hash_hex):
         hash_bytes = bytes.fromhex(hash_hex)
         return self.get_transaction_by_hash_bytes(hash_bytes)
 
-    def save_metadata(self, metadata):
+    def save_metadata(self, tx):
+        # genesis txs and metadata are kept in memory
+        if tx.is_genesis:
+            return
+
+        metadata = tx._metadata
         data = self.serialize_metadata(metadata)
         filepath = self.generate_metadata_filepath(data['hash'])
         self.save_to_json(filepath, data)
 
-    def get_metadata_by_hash(self, hash_hex):
+    def _get_metadata_by_hash(self, hash_hex):
         filepath = self.generate_metadata_filepath(hash_hex)
         data = self.load_from_json(filepath, TransactionMetadataDoesNotExist)
         return self.load_metadata(data)
-
-    def get_metadata_by_hash_bytes(self, hash_bytes):
-        hash_hex = hash_bytes.hex()
-        return self.get_metadata_by_hash(hash_hex)
 
     def serialize_metadata(self, metadata):
         return metadata.to_json()
@@ -154,8 +152,7 @@ class TransactionBinaryStorage(TransactionStorage):
         return TransactionMetadata.create_from_json(data)
 
     def get_all_transactions(self):
-        from hathor.transaction.genesis import genesis_transactions
-        for tx in genesis_transactions(self):
+        for tx in self.get_all_genesis():
             yield tx
 
         path = self.path
@@ -170,8 +167,7 @@ class TransactionBinaryStorage(TransactionStorage):
                     yield tx
 
     def get_count_tx_blocks(self):
-        from hathor.transaction.genesis import genesis_transactions
-        genesis_len = len([tx for tx in genesis_transactions(self)])
+        genesis_len = len(self.get_all_genesis())
         path = self.path
         files = os.listdir(path)
         return len(files) + genesis_len
