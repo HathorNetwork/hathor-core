@@ -5,7 +5,8 @@ import time
 
 from twisted.internet.task import Clock
 
-from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage, TransactionBinaryStorage
+from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage, \
+                                       TransactionCompactStorage, TransactionCacheStorage, TransactionBinaryStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction import Block, Transaction, TransactionMetadata, TxOutput, TxInput
 from hathor.wallet import Wallet
@@ -14,8 +15,11 @@ from hathor.wallet import Wallet
 class _BaseTransactionStorageTest:
 
     class _TransactionStorageTest(unittest.TestCase):
-        def setUp(self, tx_storage):
-            self.reactor = Clock()
+        def setUp(self, tx_storage, reactor=None):
+            if not reactor:
+                self.reactor = Clock()
+            else:
+                self.reactor = reactor
             self.reactor.advance(time.time())
             self.tx_storage = tx_storage
             tx_storage._manually_initialize()
@@ -118,34 +122,17 @@ class _BaseTransactionStorageTest:
                 self.tx_storage.get_transaction_by_hash(hex_error)
 
         def test_save_metadata(self):
+            tx = self.block
             metadata = TransactionMetadata(
-                hash=self.genesis_blocks[0].hash
+                hash=tx.hash
             )
             metadata.spent_outputs[1].add(self.genesis_blocks[0].hash)
             random_tx = bytes.fromhex('0000222e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0f2222')
             metadata.children.add(random_tx)
-            self.tx_storage.save_metadata(metadata)
-            metadata_read = self.tx_storage.get_metadata_by_hash_bytes(self.genesis_blocks[0].hash)
+            tx._metadata = metadata
+            self.tx_storage.save_metadata(tx)
+            metadata_read = self.tx_storage._get_metadata_by_hash(tx.hash_hex)
             self.assertEqual(metadata, metadata_read)
-
-        def test_get_latest_blocks(self):
-            self.tx_storage.save_transaction(self.block)
-
-            latest_blocks = self.tx_storage.get_latest_blocks(count=3)
-
-            self.assertEqual(len(latest_blocks), 2)
-            self.assertEqual(latest_blocks[0].hash, self.block.hash)
-            self.assertEqual(latest_blocks[1].hash, self.genesis_blocks[0].hash)
-
-        def test_get_latest_tx(self):
-            self.tx_storage.save_transaction(self.tx)
-
-            latest_tx = self.tx_storage.get_latest_transactions(count=3)
-
-            self.assertEqual(len(latest_tx), 3)
-            self.assertEqual(latest_tx[0].hash, self.tx.hash)
-            self.assertEqual(latest_tx[1].hash, self.genesis_txs[1].hash)
-            self.assertEqual(latest_tx[2].hash, self.genesis_txs[0].hash)
 
         def test_storage_new_blocks(self):
             tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
@@ -207,6 +194,23 @@ class TransactionJSONStorageTest(_BaseTransactionStorageTest._TransactionStorage
         super().tearDown()
 
 
+class TransactionCompactStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
+    def setUp(self):
+        self.directory = tempfile.mkdtemp(dir='/tmp/')
+        super().setUp(TransactionCompactStorage(self.directory))
+
+    def tearDown(self):
+        shutil.rmtree(self.directory)
+        super().tearDown()
+
+
 class TransactionMemoryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
     def setUp(self):
         super().setUp(TransactionMemoryStorage())
+
+
+class CacheMemoryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
+    def setUp(self):
+        store = TransactionMemoryStorage()
+        reactor = Clock()
+        super().setUp(TransactionCacheStorage(store, reactor, capacity=5))

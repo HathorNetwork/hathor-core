@@ -206,11 +206,18 @@ class BaseTransaction:
 
         :rtype: bool
         """
-        from hathor.transaction.genesis import genesis_transactions
-        for genesis in genesis_transactions(self.storage):
-            if self == genesis:
+        if self.storage:
+            genesis = self.storage.get_genesis_by_hash_bytes(self.hash)
+            if genesis:
                 return True
-        return False
+            else:
+                return False
+        else:
+            from hathor.transaction.genesis import genesis_transactions
+            for genesis in genesis_transactions(self.storage):
+                if self == genesis:
+                    return True
+            return False
 
     def update_voided_info(self):
         """ Transaction's voided_by must equal the union of the voided_by of both its parents and its inputs.
@@ -232,7 +239,7 @@ class BaseTransaction:
 
         if meta.voided_by != voided_by:
             meta.voided_by = voided_by.copy()
-            self.storage.save_metadata(meta)
+            self.storage.save_metadata(self)
 
         for h in voided_by:
             if h == self.hash:
@@ -253,7 +260,7 @@ class BaseTransaction:
         spent_meta = spent_tx.get_metadata()
         spent_by = spent_meta.spent_outputs[txin.index]  # Set[bytes(hash)]
         spent_by.add(self.hash)
-        self.storage.save_metadata(spent_meta)
+        self.storage.save_metadata(spent_tx)
 
         if len(spent_by) > 1:
             for h in spent_by:
@@ -261,7 +268,7 @@ class BaseTransaction:
                 tx_meta = tx.get_metadata()
                 tx_meta.conflict_with.update(spent_by)
                 tx_meta.conflict_with.discard(tx.hash)
-                tx.storage.save_metadata(tx_meta)
+                tx.storage.save_metadata(tx)
 
         self.check_conflicts()
 
@@ -315,7 +322,7 @@ class BaseTransaction:
         assert(len(meta.conflict_with) > 0)
 
         meta.voided_by.add(self.hash)
-        self.storage.save_metadata(meta)
+        self.storage.save_metadata(self)
         self.storage._del_from_cache(self)
         self.storage._add_to_voided(self)
 
@@ -336,7 +343,7 @@ class BaseTransaction:
                 check_conflicts = True
 
             meta.voided_by.add(self.hash)
-            self.storage.save_metadata(meta)
+            self.storage.save_metadata(tx)
             self.storage._del_from_cache(tx)
             self.storage._add_to_voided(tx)
 
@@ -351,7 +358,7 @@ class BaseTransaction:
         assert(len(meta.conflict_with) > 0)
 
         meta.voided_by.discard(self.hash)
-        self.storage.save_metadata(meta)
+        self.storage.save_metadata(self)
         self.storage._del_from_voided(self)
         self.storage._add_to_cache(self)
 
@@ -367,7 +374,7 @@ class BaseTransaction:
             used.add(tx.hash)
             meta = tx.get_metadata()
             meta.voided_by.discard(self.hash)
-            self.storage.save_metadata(meta)
+            self.storage.save_metadata(tx)
             self.storage._del_from_voided(tx)
             self.storage._add_to_cache(tx)
 
@@ -645,40 +652,12 @@ class BaseTransaction:
 
         :rtype: :py:class:`hathor.transaction.TransactionMetadata`
         """
-        # TODO Maybe we could use a TransactionCacheStorage in the future to reduce storage hit
         metadata = getattr(self, '_metadata', None)
         if not metadata:
-            metadata = self._get_metadata_from_storage(self.hash)
+            from hathor.transaction.transaction_metadata import TransactionMetadata
+            metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight)
             self._metadata = metadata
         return metadata
-
-    def _get_metadata_from_storage(self, hash_bytes):
-        """Return the metadata for tx identified by hash_bytes.
-
-        If there's no such metadata on storage, create a new object and return it.
-
-        :param hash_bytes: hash of the tx to get metadata
-        :type hash_bytes: bytes
-
-        :rtype: :py:class:`hathor.transaction.TransactionMetadata`
-        """
-        from hathor.transaction.storage.exceptions import TransactionMetadataDoesNotExist
-        try:
-            metadata = self.storage.get_metadata_by_hash_bytes(hash_bytes)
-        except TransactionMetadataDoesNotExist:
-            from hathor.transaction.transaction_metadata import TransactionMetadata
-            metadata = TransactionMetadata(hash=hash_bytes)
-        return metadata
-
-    # deprecated
-    def _old_update_accumulated_weight(self, increment):
-        """Increments the tx aggregated weight with the given value
-
-        :type increment: float
-        """
-        metadata = self.get_metadata()
-        metadata.accumulated_weight = sum_weights(metadata.accumulated_weight, increment)
-        self.storage.save_metadata(metadata)
 
     def update_accumulated_weight(self, save_file=True):
         """Calculates the tx's accumulated weight and update its metadata.
@@ -697,7 +676,7 @@ class BaseTransaction:
         metadata.accumulated_weight = accumulated_weight
 
         if save_file:
-            self.storage.save_metadata(metadata)
+            self.storage.save_metadata(self)
 
         return metadata
 
@@ -706,10 +685,10 @@ class BaseTransaction:
 
         :rtype None
         """
-        for parent in self.parents:
-            metadata = self._get_metadata_from_storage(parent)
+        for parent in self.get_parents():
+            metadata = parent.get_metadata()
             metadata.children.add(self.hash)
-            self.storage.save_metadata(metadata)
+            self.storage.save_metadata(parent)
 
     def to_json(self, decode_script=False):
         data = {}

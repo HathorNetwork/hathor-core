@@ -7,8 +7,10 @@ from itertools import chain
 
 
 class TransactionStorage:
-    def __init__(self):
-        self._reset_cache()
+    def __init__(self, with_index=True):
+        self.with_index = with_index
+        if with_index:
+            self._reset_cache()
         self._genesis_cache = None
         if self.__class__ == TransactionStorage:
             raise Exception('You cannot directly create an instance of this class.')
@@ -17,6 +19,8 @@ class TransactionStorage:
         """Reset all caches. This function should not be called unless you know
         what you are doing.
         """
+        if not self.with_index:
+            raise NotImplementedError
         self._cache_block_count = 0
         self._cache_tx_count = 0
 
@@ -28,12 +32,24 @@ class TransactionStorage:
         from hathor.transaction.genesis import genesis_transactions
         self.first_timestamp = min(x.timestamp for x in genesis_transactions(self))
 
+    def remove_cache(self):
+        """Remove all caches in case we don't need it
+        """
+        self.with_index = False
+        self.block_index = None
+        self.tx_index = None
+        self.voided_tips_index = None
+
     def get_block_tips(self, timestamp=None):
+        if not self.with_index:
+            raise NotImplementedError
         if timestamp is None:
             timestamp = self.latest_timestamp
         return self.block_index.tips_index[timestamp]
 
     def get_tx_tips(self, timestamp=None):
+        if not self.with_index:
+            raise NotImplementedError
         if timestamp is None:
             timestamp = self.latest_timestamp
         return self.tx_index.tips_index[timestamp]
@@ -47,6 +63,8 @@ class TransactionStorage:
             :return: List of blocks and a boolean indicating if has more blocks
             :rtype: Tuple[List[Transaction], bool]
         """
+        if not self.with_index:
+            raise NotImplementedError
         return self.block_index.get_newest(count)
 
     def get_newest_txs(self, count):
@@ -58,6 +76,8 @@ class TransactionStorage:
             :return: List of transactions and a boolean indicating if has more txs
             :rtype: Tuple[List[Transaction], bool]
         """
+        if not self.with_index:
+            raise NotImplementedError
         return self.tx_index.get_newest(count)
 
     def get_older_blocks_after(self, timestamp, hash_bytes, count):
@@ -75,6 +95,8 @@ class TransactionStorage:
             :return: List of blocks and a boolean indicating if has more blocks
             :rtype: Tuple[List[Transaction], bool]
         """
+        if not self.with_index:
+            raise NotImplementedError
         return self.block_index.get_older(timestamp, hash_bytes, count)
 
     def get_newer_blocks_after(self, timestamp, hash_bytes, count):
@@ -92,6 +114,8 @@ class TransactionStorage:
             :return: List of blocks and a boolean indicating if has more blocks
             :rtype: Tuple[List[Transaction], bool]
         """
+        if not self.with_index:
+            raise NotImplementedError
         return self.block_index.get_newer(timestamp, hash_bytes, count)
 
     def get_older_txs_after(self, timestamp, hash_bytes, count):
@@ -109,6 +133,8 @@ class TransactionStorage:
             :return: List of transactions and a boolean indicating if has more txs
             :rtype: Tuple[List[Transaction], bool]
         """
+        if not self.with_index:
+            raise NotImplementedError
         return self.tx_index.get_older(timestamp, hash_bytes, count)
 
     def get_newer_txs_after(self, timestamp, hash_bytes, count):
@@ -126,6 +152,8 @@ class TransactionStorage:
             :return: List of transactions and a boolean indicating if has more txs
             :rtype: Tuple[List[Transaction], bool]
         """
+        if not self.with_index:
+            raise NotImplementedError
         return self.tx_index.get_newer(timestamp, hash_bytes, count)
 
     def _manually_initialize(self):
@@ -252,12 +280,18 @@ class TransactionStorage:
                     seen.add(spent_hash)
 
     def _add_to_voided(self, tx):
+        if not self.with_index:
+            raise NotImplementedError
         self.voided_tips_index.add_tx(tx)
 
     def _del_from_voided(self, tx):
+        if not self.with_index:
+            raise NotImplementedError
         self.voided_tips_index.del_tx(tx)
 
     def _add_to_cache(self, tx):
+        if not self.with_index:
+            raise NotImplementedError
         self.latest_timestamp = max(self.latest_timestamp, tx.timestamp)
         if tx.is_block:
             self._cache_block_count += 1
@@ -267,6 +301,8 @@ class TransactionStorage:
             self.tx_index.add_tx(tx)
 
     def _del_from_cache(self, tx):
+        if not self.with_index:
+            raise NotImplementedError
         if tx.is_block:
             self._cache_block_count -= 1
             self.block_index.del_tx(tx)
@@ -275,13 +311,18 @@ class TransactionStorage:
             self.tx_index.del_tx(tx)
 
     def get_block_count(self):
+        if not self.with_index:
+            raise NotImplementedError
         return self._cache_block_count
 
     def get_tx_count(self):
+        if not self.with_index:
+            raise NotImplementedError
         return self._cache_tx_count
 
     def save_transaction(self, tx):
-        self._add_to_cache(tx)
+        if self.with_index:
+            self._add_to_cache(tx)
 
     def transaction_exists_by_hash(self, hash_hex):
         raise NotImplementedError
@@ -301,22 +342,24 @@ class TransactionStorage:
     def update_metadata(self, hash_hex, data):
         raise NotImplementedError
 
-    def get_metadata_by_hash(self, hash_hex):
-        raise NotImplementedError
-
-    def get_metadata_by_hash_bytes(self, hash_bytes):
-        raise NotImplementedError
-
     def get_genesis_by_hash_bytes(self, hash_bytes):
         """
             Returning hardcoded genesis block and transactions
         """
         if not self._genesis_cache:
-            from hathor.transaction.genesis import genesis_transactions
-            self._genesis_cache = {}
-            for genesis in genesis_transactions(self):
-                self._genesis_cache[genesis.hash] = genesis
+            self._create_genesis_cache()
         return self._genesis_cache.get(hash_bytes, None)
+
+    def get_all_genesis(self):
+        if not self._genesis_cache:
+            self._create_genesis_cache()
+        return self._genesis_cache.values()
+
+    def _create_genesis_cache(self):
+        from hathor.transaction.genesis import genesis_transactions
+        self._genesis_cache = {}
+        for genesis in genesis_transactions(self):
+            self._genesis_cache[genesis.hash] = genesis
 
     def get_all_transactions(self):
         raise NotImplementedError
@@ -328,20 +371,6 @@ class TransactionStorage:
         """Returns the height for the most recent block."""
         latest_block = self.get_latest_block()
         return latest_block.height
-
-    def get_latest_blocks(self, count=2):
-        # XXX Just for testing, transforming generator into list would be impossible with many transactions
-        blocks = list(tx for tx in self.get_all_transactions() if tx.is_block)
-        blocks = sorted(blocks, key=lambda t: t.timestamp, reverse=True)
-        return blocks[:count]
-
-    def get_blocks_at_height(self, height):
-        """Returns a list of all stored block objects with the given height."""
-        raise NotImplementedError
-
-    def get_block_hashes_at_height(self, height):
-        """Returns a list of all stored block objects with the given height."""
-        raise NotImplementedError
 
     def get_transactions_before(self, hash_hex, num_blocks=100):
         """Run a BFS starting from the giving `hash_hex`.
@@ -423,10 +452,6 @@ class TransactionStorage:
                 hashes.append(h)
         return hashes
 
-    def get_all_genesis(self):
-        from hathor.transaction.genesis import genesis_transactions
-        return genesis_transactions(self)
-
     def get_latest(self, transactions, count=2, page=1):
         transactions = sorted(transactions, key=lambda t: t.timestamp, reverse=True)
 
@@ -434,48 +459,6 @@ class TransactionStorage:
         start_index = (page - 1) * count
         end_index = start_index + count
         return transactions[start_index:end_index]
-
-    def get_latest_transactions(self, count=2, page=1):
-        # XXX Just for testing, transforming generator into list would be impossible with many transactions
-        transactions = list(tx for tx in self.get_all_transactions() if not tx.is_block)
-        return self.get_latest(transactions=transactions, count=count, page=page)
-
-    def get_latest_tx_blocks(self, count=2, page=1):
-        # XXX Just for testing, transforming generator into list would be impossible with many transactions
-        transactions = list(tx for tx in self.get_all_transactions())
-        return self.get_latest(transactions=transactions, count=count, page=page)
-
-    def get_txs_after_hash(self, ref_hash=None, count=10):
-        """ Returns transactions after the ref_hash (quantity is defined by count parameter)
-            If ref_hash is not passed, we get the first (count) transactions
-
-            :param ref_hash: Hash in hex passed as reference, so we can return the transactions after this one
-            :type format: string
-
-            :param count: Quantity of transactions to return
-            :type format: int
-
-            :return: List of transactions and a boolean indicating if there are more txs after
-            :rtype: tuple[list[Transaction], bool]
-        """
-        txs = list(tx for tx in self.get_all_transactions() if not tx.is_block)
-        return self.get_all_after_hash(txs, ref_hash, count)
-
-    def get_blocks_after_hash(self, ref_hash=None, count=10):
-        """ Returns blocks after the ref_hash (quantity is defined by count parameter)
-            If ref_hash is not passed, we get the first (count) blocks
-
-            :param ref_hash: Hash in hex passed as reference, so we can return the blocks after this one
-            :type format: string
-
-            :param count: Quantity of blocks to return
-            :type format: int
-
-            :return: List of blocks and a boolean indicating if there are more blocks after
-            :rtype: tuple[list[Block], bool]
-        """
-        blocks = list(block for block in self.get_all_transactions() if block.is_block)
-        return self.get_all_after_hash(blocks, ref_hash, count)
 
     def get_all_after_hash(self, transactions, ref_hash, count):
         """ Receives the list of elements (txs or blocks) to be paginated.
@@ -508,36 +491,6 @@ class TransactionStorage:
                     start_idx = idx + 1
                     end_idx = start_idx + count
                     return txs[start_idx:end_idx], total > end_idx
-
-    def get_txs_before_hash(self, ref_hash, count=10):
-        """ Returns transactions before the ref_hash (quantity is defined by count parameter)
-
-            :param ref_hash: Hash in hex passed as reference, so we can return the txs before this one
-            :type format: string
-
-            :param count: Quantity of txs to return
-            :type format: int
-
-            :return: List of transactions and a boolean indicating if there are more transactions before
-            :rtype: tuple[list[Transaction], bool]
-        """
-        txs = list(tx for tx in self.get_all_transactions() if not tx.is_block)
-        return self.get_all_before_hash(txs, ref_hash, count)
-
-    def get_blocks_before_hash(self, ref_hash, count=10):
-        """ Returns blocks before the ref_hash (quantity is defined by count parameter)
-
-            :param ref_hash: Hash in hex passed as reference, so we can return the blocks before this one
-            :type format: string
-
-            :param count: Quantity of blocks to return
-            :type format: int
-
-            :return: List of blocks and a boolean indicating if there are more blocks before
-            :rtype: tuple[list[Block], bool]
-        """
-        blocks = list(block for block in self.get_all_transactions() if block.is_block)
-        return self.get_all_before_hash(blocks, ref_hash, count)
 
     def get_all_before_hash(self, transactions, ref_hash, count):
         """ Receives the list of elements (txs or blocks) to be paginated.

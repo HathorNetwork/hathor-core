@@ -95,7 +95,7 @@ class Metrics:
         self.transactions = self.tx_storage.get_tx_count()
         self.blocks = self.tx_storage.get_block_count()
 
-        last_block = self.tx_storage.get_latest_blocks(count=1)
+        (last_block, _) = self.tx_storage.get_newest_blocks(count=1)
         if last_block:
             self.hash_rate = self.calculate_new_hashrate(last_block[0])
 
