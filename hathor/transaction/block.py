@@ -68,7 +68,6 @@ class Block(BaseTransaction):
         """ Run all verifications that do not need a storage.
         """
         self.verify_pow()
-        self.verify_height()
         self.verify_no_inputs()
 
     def verify(self):
@@ -76,8 +75,8 @@ class Block(BaseTransaction):
             (1) confirms at least two pending transactions and references last block
             (2) solves the pow with the correct weight
             (3) creates the correct amount of tokens in the output
-            (4) height of block == height of previous block + 1
-            (5) all parents must exist and have timestamp smaller than ours
+            (4) all parents must exist and have timestamp smaller than ours
+            (5) height of block == height of previous block + 1
         """
         # TODO Should we validate a limit of outputs?
         # TODO (1) and (3)
@@ -87,5 +86,6 @@ class Block(BaseTransaction):
 
         self.verify_without_storage()
 
-        # (5)
+        # (4) and (5)
         self.verify_parents()
+        self.verify_height()
