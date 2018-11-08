@@ -2,12 +2,13 @@ import unittest
 import os
 import json
 import base64
+import hashlib
 from hathor.wallet import Wallet
 from hathor.transaction import Transaction, Block, TxInput, TxOutput, MAX_NUM_INPUTS, MAX_NUM_OUTPUTS
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.transaction.exceptions import InputOutputMismatch, TooManyInputs, TooManyOutputs, ConflictingInputs, \
                                           InvalidInputData, BlockWithInputs, IncorrectParents, InexistentInput, \
-                                          DuplicatedParents
+                                          DuplicatedParents, ParentDoesNotExist
 from hathor.transaction.scripts import P2PKH
 from hathor.crypto.util import get_private_key_from_bytes, get_public_key_from_bytes, get_address_from_public_key
 
@@ -260,6 +261,31 @@ class BasicTransaction(unittest.TestCase):
         tx.resolve()
         with self.assertRaises(IncorrectParents):
             tx.verify()
+
+    def test_block_unknown_parent(self):
+        genesis_block = self.genesis_blocks[0]
+
+        address = get_address_from_public_key(self.genesis_public_key)
+        output_script = P2PKH.create_output_script(address)
+        tx_outputs = [
+            TxOutput(100, output_script)
+        ]
+
+        # Random unknown parent
+        parents = [hashlib.sha256().digest()]
+
+        block = Block(
+            nonce=100,
+            outputs=tx_outputs,
+            parents=parents,
+            height=genesis_block.height+1,
+            weight=1,               # low weight so we don't waste time with PoW
+            storage=self.tx_storage
+        )
+
+        block.resolve()
+        with self.assertRaises(ParentDoesNotExist):
+            block.verify()
 
     def test_block_number_parents(self):
         genesis_block = self.genesis_blocks[0]
