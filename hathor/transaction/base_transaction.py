@@ -243,7 +243,7 @@ class BaseTransaction:
 
         if meta.voided_by != voided_by:
             meta.voided_by = voided_by.copy()
-            self.storage.save_metadata(self)
+            self.storage.save_transaction(self, only_metadata=True)
 
         for h in voided_by:
             if h == self.hash:
@@ -264,7 +264,7 @@ class BaseTransaction:
         spent_meta = spent_tx.get_metadata()
         spent_by = spent_meta.spent_outputs[txin.index]  # Set[bytes(hash)]
         spent_by.add(self.hash)
-        self.storage.save_metadata(spent_tx)
+        self.storage.save_transaction(spent_tx, only_metadata=True)
 
         if len(spent_by) > 1:
             for h in spent_by:
@@ -272,7 +272,7 @@ class BaseTransaction:
                 tx_meta = tx.get_metadata()
                 tx_meta.conflict_with.update(spent_by)
                 tx_meta.conflict_with.discard(tx.hash)
-                tx.storage.save_metadata(tx)
+                tx.storage.save_transaction(tx, only_metadata=True)
 
         self.check_conflicts()
 
@@ -326,7 +326,7 @@ class BaseTransaction:
         assert(len(meta.conflict_with) > 0)
 
         meta.voided_by.add(self.hash)
-        self.storage.save_metadata(self)
+        self.storage.save_transaction(self, only_metadata=True)
         self.storage._del_from_cache(self)
         self.storage._add_to_voided(self)
 
@@ -347,7 +347,7 @@ class BaseTransaction:
                 check_conflicts = True
 
             meta.voided_by.add(self.hash)
-            self.storage.save_metadata(tx)
+            self.storage.save_transaction(tx, only_metadata=True)
             self.storage._del_from_cache(tx)
             self.storage._add_to_voided(tx)
 
@@ -362,7 +362,7 @@ class BaseTransaction:
         assert(len(meta.conflict_with) > 0)
 
         meta.voided_by.discard(self.hash)
-        self.storage.save_metadata(self)
+        self.storage.save_transaction(self, only_metadata=True)
         self.storage._del_from_voided(self)
         self.storage._add_to_cache(self)
 
@@ -378,7 +378,7 @@ class BaseTransaction:
             used.add(tx.hash)
             meta = tx.get_metadata()
             meta.voided_by.discard(self.hash)
-            self.storage.save_metadata(tx)
+            self.storage.save_transaction(tx, only_metadata=True)
             self.storage._del_from_voided(tx)
             self.storage._add_to_cache(tx)
 
@@ -435,9 +435,9 @@ class BaseTransaction:
                 meta.twins.add(tx.hash)
                 tx_meta = tx.get_metadata()
                 tx_meta.twins.add(self.hash)
-                self.storage.save_metadata(tx)
+                self.storage.save_transaction(tx, only_metadata=True)
 
-        self.storage.save_metadata(self)
+        self.storage.save_transaction(self, only_metadata=True)
 
     def compute_genesis_dag_connectivity(self, storage, storage_sync, use_memoized_negative_results=True):
         """Computes the connectivity state from this tx bach to the genesis transactions.
@@ -770,7 +770,7 @@ class BaseTransaction:
         metadata.accumulated_weight = accumulated_weight
 
         if save_file:
-            self.storage.save_metadata(self)
+            self.storage.save_transaction(self, only_metadata=True)
 
         return metadata
 
@@ -782,7 +782,7 @@ class BaseTransaction:
         for parent in self.get_parents():
             metadata = parent.get_metadata()
             metadata.children.add(self.hash)
-            self.storage.save_metadata(parent)
+            self.storage.save_transaction(parent, only_metadata=True)
 
     def to_json(self, decode_script=False):
         data = {}

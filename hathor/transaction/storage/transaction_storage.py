@@ -1,29 +1,242 @@
 # encoding: utf-8
-from hathor.transaction.storage.exceptions import TransactionIsNotABlock
-from hathor.indexes import TipsIndex, IndexesManager
-
-from hathor.pubsub import HathorEvents
-
+from abc import ABC, abstractmethod
 from collections import deque
 from itertools import chain
 
+from twisted.internet.defer import succeed
 
-class TransactionStorage:
+from hathor.transaction.storage.exceptions import TransactionIsNotABlock
+from hathor.indexes import TipsIndex, IndexesManager
+from hathor.util import deprecated, skip_warning
+from hathor.pubsub import HathorEvents
+
+
+class TransactionStorageSync(ABC):
+    """Legacy sync interface, please copy @deprecated decorator when implementing methods."""
+
+    @abstractmethod
+    @deprecated('Use save_transaction_deferred instead')
+    def save_transaction(self, tx, *, only_metadata=False):
+        # XXX: although this method is abstract (because a subclass must implement it) the implementer
+        #      should call the base implementation for correctly interacting with the index
+        """Saves the tx.
+
+        :param tx: Transaction to save
+        :type tx: :py:class:`hathor.transaction.BaseTransaction`
+
+        :param only_metadata: Don't save the transaction, only the metadata of this transaction
+        :type only_metadata: bool
+
+        :rtype: None
+        """
+        if self.with_index and not only_metadata:
+            self._add_to_cache(tx)
+
+    @abstractmethod
+    @deprecated('Use transaction_exists_by_hash_deferred instead')
+    def transaction_exists_by_hash(self, hash_hex):
+        """Returns `True` if transaction with hash `hash_hex` exists.
+
+        The default implementation delegates to `transaction_exists_by_hash_bytes`.
+
+        :param hash_hex: Hash in hexadecimal that will be checked.
+        :type hash_hex: str(hex)
+
+        :rtype: bool
+        """
+        return skip_warning(self.transaction_exists_by_hash_bytes)(bytes.fromhex(hash_hex))
+
+    @abstractmethod
+    @deprecated('Use transaction_exists_by_hash_bytes_deferred instead')
+    def transaction_exists_by_hash_bytes(self, hash_bytes):
+        """Returns `True` if transaction with hash `hash_bytes` exists.
+
+        The default implementation delegates to `transaction_exists_by_hash`.
+
+        :param hash_bytes: Hash in bytes that will be checked.
+        :type hash_bytes: bytes
+
+        :rtype: bool
+        """
+        return skip_warning(self.transaction_exists_by_hash)(hash_bytes.hex())
+
+    @abstractmethod
+    @deprecated('Use get_transaction_by_hash_deferred instead')
+    def get_transaction_by_hash(self, hash_hex):
+        """Returns the transaction with hash `hash_hex`.
+
+        The default implementation delegates to `get_transaction_by_hash_bytes`.
+
+        :param hash_hex: Hash in hexadecimal that will be checked.
+        :type hash_hex: str(hex)
+
+        :rtype :py:class:`hathor.transaction.BaseTransaction`
+        """
+        return skip_warning(self.get_transaction_by_hash_bytes)(bytes.fromhex(hash_hex))
+
+    @abstractmethod
+    @deprecated('Use get_transaction_by_hash_bytes_deferred instead')
+    def get_transaction_by_hash_bytes(self, hash_bytes):
+        """Returns the transaction with hash `hash_bytes`.
+
+        The default implementation delegates to `get_transaction_by_hash`.
+
+        :param hash_bytes: Hash in bytes that will be checked.
+        :type hash_bytes: bytes
+
+        :rtype :py:class:`hathor.transaction.BaseTransaction`
+        """
+        return skip_warning(self.get_transaction_by_hash)(hash_bytes.hex())
+
+    @abstractmethod
+    @deprecated('Use get_all_transactions_deferred instead')
+    def get_all_transactions(self):
+        # TODO: verify the following claim:
+        """Return all transactions that are not blocks.
+
+        :rtype :py:class:`typing.Iterable[hathor.transaction.BaseTransaction]`
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    @deprecated('Use get_count_tx_blocks_deferred instead')
+    def get_count_tx_blocks(self):
+        # TODO: verify the following claim:
+        """Return the number of transactions/blocks stored.
+
+        :rtype int
+        """
+        raise NotImplementedError
+
+
+class TransactionStorageAsync(ABC):
+    """Async interface, all methods mirrorred from TransactionStorageSync, but suffixed with `_deferred`."""
+
+    @abstractmethod
+    def save_transaction_deferred(self, tx, *, only_metadata=False):
+        """Saves the tx.
+
+        :param tx: Transaction to save
+        :type tx: :py:class:`hathor.transaction.BaseTransaction`
+
+        :param only_metadata: Don't save the transaction, only the metadata of this transaction
+        :type only_metadata: bool
+
+        :rtype :py:class:`twisted.internet.defer.Deferred[None]`
+        """
+        if self.with_index:
+            self._add_to_cache(tx)
+        return succeed(None)
+
+    @abstractmethod
+    def transaction_exists_by_hash_deferred(self, hash_hex):
+        """Returns `True` if transaction with hash `hash_hex` exists.
+
+        The default implementation delegates to `transaction_exists_by_hash_bytes`.
+
+        :param hash_hex: Hash in hexadecimal that will be checked.
+        :type hash_hex: str(hex)
+
+        :rtype :py:class:`twisted.internet.defer.Deferred[bool]`
+        """
+        return self.transaction_exists_by_hash_bytes_deferred(bytes.fromhex(hash_hex))
+
+    @abstractmethod
+    def transaction_exists_by_hash_bytes_deferred(self, hash_bytes):
+        """Returns `True` if transaction with hash `hash_bytes` exists.
+
+        The default implementation delegates to `transaction_exists_by_hash`.
+
+        :param hash_bytes: Hash in bytes that will be checked.
+        :type hash_bytes: bytes
+
+        :rtype :py:class:`twisted.internet.defer.Deferred[bool]`
+        """
+        return self.transaction_exists_by_hash_deferred(hash_bytes.hex())
+
+    @abstractmethod
+    def get_transaction_by_hash_deferred(self, hash_hex):
+        """Returns the transaction with hash `hash_hex`.
+
+        The default implementation delegates to `get_transaction_by_hash_bytes`.
+
+        :param hash_hex: Hash in hexadecimal that will be checked.
+        :type hash_hex: str(hex)
+
+        :rtype :py:class:`twisted.internet.defer.Deferred[hathor.transaction.BaseTransaction]`
+        """
+        return self.get_transaction_by_hash_bytes_deferred(bytes.fromhex(hash_hex))
+
+    @abstractmethod
+    def get_transaction_by_hash_bytes_deferred(self, hash_bytes):
+        """Returns the transaction with hash `hash_bytes`.
+
+        The default implementation delegates to `get_transaction_by_hash`.
+
+        :param hash_bytes: Hash in bytes that will be checked.
+        :type hash_bytes: bytes
+
+        :rtype :py:class:`twisted.internet.defer.Deferred[hathor.transaction.BaseTransaction]`
+        """
+        return self.get_transaction_by_hash_deferred(hash_bytes.hex())
+
+    @abstractmethod
+    def get_all_transactions_deferred(self):
+        # TODO: find an `async generator` type
+        # TODO: verify the following claim:
+        """Return all transactions that are not blocks.
+
+        :rtype :py:class:`twisted.internet.defer.Deferred[typing.Iterable[hathor.transaction.BaseTransaction]]`
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_count_tx_blocks_deferred(self):
+        # TODO: verify the following claim:
+        """Return the number of transactions/blocks stored.
+
+        :rtype :py:class:`twisted.internet.defer.Deferred[int]`
+        """
+        raise NotImplementedError
+
+
+class TransactionStorageAsyncFromSync(TransactionStorageAsync):
+    """Implement async interface from sync interface, for legacy implementations."""
+
+    def save_transaction_deferred(self, tx, *, only_metadata=False):
+        return succeed(skip_warning(self.save_transaction)(tx, only_metadata=only_metadata))
+
+    def transaction_exists_by_hash_deferred(self, hash_hex):
+        return succeed(skip_warning(self.transaction_exists_by_hash)(hash_hex))
+
+    def transaction_exists_by_hash_bytes_deferred(self, hash_bytes):
+        return succeed(skip_warning(self.transaction_exists_by_hash_bytes)(hash_bytes))
+
+    def get_transaction_by_hash_deferred(self, hash_hex):
+        return succeed(skip_warning(self.get_transaction_by_hash)(hash_hex))
+
+    def get_transaction_by_hash_bytes_deferred(self, hash_bytes):
+        return succeed(skip_warning(self.get_transaction_by_hash_bytes)(hash_bytes))
+
+    def get_all_transactions_deferred(self):
+        return succeed(skip_warning(self.get_all_transactions)())
+
+    def get_count_tx_blocks_deferred(self):
+        return succeed(skip_warning(self.get_count_tx_blocks)(self))
+
+
+class TransactionStorage(TransactionStorageSync, TransactionStorageAsync):
     def __init__(self, with_index=True, pubsub=None):
         self.with_index = with_index
         if with_index:
             self._reset_cache()
         self._genesis_cache = None
-        if self.__class__ == TransactionStorage:
-            raise Exception('You cannot directly create an instance of this class.')
 
         # Pubsub is used to publish tx voided and winner but it's optional
         self.pubsub = pubsub
 
     def _reset_cache(self):
-        """Reset all caches. This function should not be called unless you know
-        what you are doing.
-        """
+        """Reset all caches. This function should not be called unless you know what you are doing."""
         if not self.with_index:
             raise NotImplementedError
         self._cache_block_count = 0
@@ -38,8 +251,7 @@ class TransactionStorage:
         self.first_timestamp = min(x.timestamp for x in genesis_transactions(self))
 
     def remove_cache(self):
-        """Remove all caches in case we don't need it
-        """
+        """Remove all caches in case we don't need it."""
         self.with_index = False
         self.block_index = None
         self.tx_index = None
@@ -62,11 +274,11 @@ class TransactionStorage:
     def get_newest_blocks(self, count):
         """ Get blocks from the newest to the oldest
 
-            :param count: Number of blocks to be returned
-            :type count: int
+        :param count: Number of blocks to be returned
+        :type count: int
 
-            :return: List of blocks and a boolean indicating if has more blocks
-            :rtype: Tuple[List[Transaction], bool]
+        :return: List of blocks and a boolean indicating if has more blocks
+        :rtype: Tuple[List[Transaction], bool]
         """
         if not self.with_index:
             raise NotImplementedError
@@ -77,11 +289,11 @@ class TransactionStorage:
     def get_newest_txs(self, count):
         """ Get transactions from the newest to the oldest
 
-            :param count: Number of transactions to be returned
-            :type count: int
+        :param count: Number of transactions to be returned
+        :type count: int
 
-            :return: List of transactions and a boolean indicating if has more txs
-            :rtype: Tuple[List[Transaction], bool]
+        :return: List of transactions and a boolean indicating if has more txs
+        :rtype: Tuple[List[Transaction], bool]
         """
         if not self.with_index:
             raise NotImplementedError
@@ -92,17 +304,17 @@ class TransactionStorage:
     def get_older_blocks_after(self, timestamp, hash_bytes, count):
         """ Get blocks from the timestamp/hash_bytes reference to the oldest
 
-            :param timestamp: Timestamp reference to start the search
-            :type timestamp: int
+        :param timestamp: Timestamp reference to start the search
+        :type timestamp: int
 
-            :param hash_bytes: Hash reference to start the search
-            :type hash_bytes: bytes
+        :param hash_bytes: Hash reference to start the search
+        :type hash_bytes: bytes
 
-            :param count: Number of blocks to be returned
-            :type count: int
+        :param count: Number of blocks to be returned
+        :type count: int
 
-            :return: List of blocks and a boolean indicating if has more blocks
-            :rtype: Tuple[List[Transaction], bool]
+        :return: List of blocks and a boolean indicating if has more blocks
+        :rtype: Tuple[List[Transaction], bool]
         """
         if not self.with_index:
             raise NotImplementedError
@@ -113,17 +325,17 @@ class TransactionStorage:
     def get_newer_blocks_after(self, timestamp, hash_bytes, count):
         """ Get blocks from the timestamp/hash_bytes reference to the newest
 
-            :param timestamp: Timestamp reference to start the search
-            :type timestamp: int
+        :param timestamp: Timestamp reference to start the search
+        :type timestamp: int
 
-            :param hash_bytes: Hash reference to start the search
-            :type hash_bytes: bytes
+        :param hash_bytes: Hash reference to start the search
+        :type hash_bytes: bytes
 
-            :param count: Number of blocks to be returned
-            :type count: int
+        :param count: Number of blocks to be returned
+        :type count: int
 
-            :return: List of blocks and a boolean indicating if has more blocks
-            :rtype: Tuple[List[Transaction], bool]
+        :return: List of blocks and a boolean indicating if has more blocks
+        :rtype: Tuple[List[Transaction], bool]
         """
         if not self.with_index:
             raise NotImplementedError
@@ -134,17 +346,17 @@ class TransactionStorage:
     def get_older_txs_after(self, timestamp, hash_bytes, count):
         """ Get transactions from the timestamp/hash_bytes reference to the oldest
 
-            :param timestamp: Timestamp reference to start the search
-            :type timestamp: int
+        :param timestamp: Timestamp reference to start the search
+        :type timestamp: int
 
-            :param hash_bytes: Hash reference to start the search
-            :type hash_bytes: bytes
+        :param hash_bytes: Hash reference to start the search
+        :type hash_bytes: bytes
 
-            :param count: Number of transactions to be returned
-            :type count: int
+        :param count: Number of transactions to be returned
+        :type count: int
 
-            :return: List of transactions and a boolean indicating if has more txs
-            :rtype: Tuple[List[Transaction], bool]
+        :return: List of transactions and a boolean indicating if has more txs
+        :rtype: Tuple[List[Transaction], bool]
         """
         if not self.with_index:
             raise NotImplementedError
@@ -155,17 +367,17 @@ class TransactionStorage:
     def get_newer_txs_after(self, timestamp, hash_bytes, count):
         """ Get transactions from the timestamp/hash_bytes reference to the newest
 
-            :param timestamp: Timestamp reference to start the search
-            :type timestamp: int
+        :param timestamp: Timestamp reference to start the search
+        :type timestamp: int
 
-            :param hash_bytes: Hash reference to start the search
-            :type hash_bytes: bytes
+        :param hash_bytes: Hash reference to start the search
+        :type hash_bytes: bytes
 
-            :param count: Number of transactions to be returned
-            :type count: int
+        :param count: Number of transactions to be returned
+        :type count: int
 
-            :return: List of transactions and a boolean indicating if has more txs
-            :rtype: Tuple[List[Transaction], bool]
+        :return: List of transactions and a boolean indicating if has more txs
+        :rtype: Tuple[List[Transaction], bool]
         """
         if not self.with_index:
             raise NotImplementedError
@@ -341,32 +553,8 @@ class TransactionStorage:
             raise NotImplementedError
         return self._cache_tx_count
 
-    def save_transaction(self, tx):
-        if self.with_index:
-            self._add_to_cache(tx)
-
-    def transaction_exists_by_hash(self, hash_hex):
-        raise NotImplementedError
-
-    def transaction_exists_by_hash_bytes(self, hash_bytes):
-        raise NotImplementedError
-
-    def get_transaction_by_hash_bytes(self, hash_bytes):
-        raise NotImplementedError
-
-    def get_transaction_by_hash(self, hash_hex):
-        raise NotImplementedError
-
-    def save_metadata(self, metadata):
-        raise NotImplementedError
-
-    def update_metadata(self, hash_hex, data):
-        raise NotImplementedError
-
     def get_genesis_by_hash_bytes(self, hash_bytes):
-        """
-            Returning hardcoded genesis block and transactions
-        """
+        """Returning hardcoded genesis block and transactions."""
         if not self._genesis_cache:
             self._create_genesis_cache()
         return self._genesis_cache.get(hash_bytes, None)
@@ -381,12 +569,6 @@ class TransactionStorage:
         self._genesis_cache = {}
         for genesis in genesis_transactions(self):
             self._genesis_cache[genesis.hash] = genesis
-
-    def get_all_transactions(self):
-        raise NotImplementedError
-
-    def get_count_tx_blocks(self):
-        raise NotImplementedError
 
     def get_best_height(self):
         """Returns the height for the most recent block."""
@@ -410,6 +592,7 @@ class TransactionStorage:
 
     def iter_bfs_ascendent_blocks(self, root, max_depth):
         """ Iterate through all ascendents in a BFS algorithm, starting from `root` until reach `max_depth`.
+
         Only blocks are yielded.
 
         :param root: Start point of the BSF
@@ -483,21 +666,22 @@ class TransactionStorage:
 
     def get_all_after_hash(self, transactions, ref_hash, count):
         """ Receives the list of elements (txs or blocks) to be paginated.
-            We first order the elements by timestamp and then
-            If ref_hash is None, we return the first count elements
-            If ref_hash is not None, we calculate the elements after ref_hash and if we still have more
 
-            :param transactions: List of elements we need to paginate
-            :type format: list[Block, Transaction]
+        We first order the elements by timestamp and then
+        If ref_hash is None, we return the first count elements
+        If ref_hash is not None, we calculate the elements after ref_hash and if we still have more
 
-            :param ref_hash: Hash in hex passed as reference, so we can return the blocks after this one
-            :type format: string
+        :param transactions: List of elements we need to paginate
+        :type format: list[Block, Transaction]
 
-            :param count: Quantity of elements to return
-            :type format: int
+        :param ref_hash: Hash in hex passed as reference, so we can return the blocks after this one
+        :type format: string
 
-            :return: List of blocks or txs and a boolean indicating if there are more blocks before
-            :rtype: tuple[list[Block, Transaction], bool]
+        :param count: Quantity of elements to return
+        :type format: int
+
+        :return: List of blocks or txs and a boolean indicating if there are more blocks before
+        :rtype: tuple[list[Block, Transaction], bool]
         """
         # XXX This method is not optimized, we need to improve this search
         txs = sorted(transactions, key=lambda t: t.timestamp, reverse=True)
@@ -515,20 +699,21 @@ class TransactionStorage:
 
     def get_all_before_hash(self, transactions, ref_hash, count):
         """ Receives the list of elements (txs or blocks) to be paginated.
-            We first order the elements by timestamp and then
-            We calculate the elements before ref_hash and if we still have more before it
 
-            :param transactions: List of elements we need to paginate
-            :type format: list[Block, Transaction]
+        We first order the elements by timestamp and then
+        We calculate the elements before ref_hash and if we still have more before it
 
-            :param ref_hash: Hash in hex passed as reference, so we can return the blocks before this one
-            :type format: string
+        :param transactions: List of elements we need to paginate
+        :type format: list[Block, Transaction]
 
-            :param count: Quantity of elements to return
-            :type format: int
+        :param ref_hash: Hash in hex passed as reference, so we can return the blocks before this one
+        :type format: string
 
-            :return: List of blocks or txs and a boolean indicating if there are more blocks before
-            :rtype: tuple[list[Block, Transaction], bool]
+        :param count: Quantity of elements to return
+        :type format: int
+
+        :return: List of blocks or txs and a boolean indicating if there are more blocks before
+        :rtype: tuple[list[Block, Transaction], bool]
         """
         # XXX This method is not optimized, we need to improve this search
         txs = sorted(transactions, key=lambda t: t.timestamp, reverse=True)

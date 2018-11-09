@@ -1,6 +1,7 @@
-from hathor.transaction.storage.transaction_storage import TransactionStorage
+from hathor.transaction.storage.transaction_storage import TransactionStorage, TransactionStorageAsyncFromSync
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionMetadataDoesNotExist
 from hathor.transaction.transaction_metadata import TransactionMetadata
+from hathor.util import deprecated, skip_warning
 
 import json
 import os
@@ -8,33 +9,40 @@ import re
 import base64
 
 
-class TransactionCompactStorage(TransactionStorage):
+class TransactionCompactStorage(TransactionStorage, TransactionStorageAsyncFromSync):
     """This storage saves tx and metadata in the same file.
 
     It also uses JSON format. Saved file is of format {'tx': {...}, 'meta': {...}}
     """
     def __init__(self, path='./', with_index=True):
-        self.mkdir_if_needed(path)
+        os.makedirs(path, exist_ok=True)
         self.path = path
         super().__init__(with_index=with_index)
 
-    def mkdir_if_needed(self, path):
-        if not os.path.isdir(path):
-            os.makedirs(path)
+    @deprecated('Use save_transaction_deferred instead')
+    def save_transaction(self, tx, *, only_metadata=False):
+        skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
+        # genesis txs and metadata are kept in memory
+        if tx.is_genesis and only_metadata:
+            return
+        self._save_transaction(tx)
+
+    def _save_transaction(self, tx):
+        data = {}
+        data['tx'] = tx.to_json()
+        meta = getattr(tx, '_metadata', None)
+        if meta:
+            data['meta'] = tx._metadata.to_json()
+        filepath = self.generate_filepath(data['tx']['hash'])
+        self.save_to_json(filepath, data)
 
     def generate_filepath(self, hash_hex):
         filename = 'tx_{}.json'.format(hash_hex)
         filepath = os.path.join(self.path, filename)
         return filepath
 
+    @deprecated('Use transaction_exists_by_hash_deferred instead')
     def transaction_exists_by_hash(self, hash_hex):
-        """Return `True` if `hash_hex` exists.
-
-        :param hash_hex: Hash in hexa that will be checked.
-        :type hash_hex: str(hex)
-
-        :rtype: bool
-        """
         hash_bytes = bytes.fromhex(hash_hex)
         genesis = self.get_genesis_by_hash_bytes(hash_bytes)
         if genesis:
@@ -42,9 +50,9 @@ class TransactionCompactStorage(TransactionStorage):
         filepath = self.generate_filepath(hash_hex)
         return os.path.isfile(filepath)
 
+    @deprecated('Use transaction_exists_by_hash_bytes_deferred instead')
     def transaction_exists_by_hash_bytes(self, hash_bytes):
-        hash_hex = hash_bytes.hex()
-        return self.transaction_exists_by_hash(hash_hex)
+        return skip_warning(super().transaction_exists_by_hash_bytes)(hash_bytes)
 
     def save_to_json(self, filepath, data):
         with open(filepath, 'w') as json_file:
@@ -57,37 +65,6 @@ class TransactionCompactStorage(TransactionStorage):
                 return dict_data
         else:
             raise error
-
-    def save_transaction(self, tx):
-        super().save_transaction(tx)
-        self._save_transaction(tx)
-
-    def _save_transaction(self, tx):
-        data = {}
-        data['tx'] = tx.to_json()
-        meta = getattr(tx, '_metadata', None)
-        if meta:
-            data['meta'] = tx._metadata.to_json()
-        filepath = self.generate_filepath(data['tx']['hash'])
-        self.save_to_json(filepath, data)
-
-    def get_transaction_by_hash_bytes(self, hash_bytes):
-        genesis = self.get_genesis_by_hash_bytes(hash_bytes)
-        if genesis:
-            return genesis
-
-        hash_hex = hash_bytes.hex()
-        filepath = self.generate_filepath(hash_hex)
-        data = self.load_from_json(filepath, TransactionDoesNotExist(hash_hex))
-        tx = self.load(data['tx'])
-        if 'meta' in data.keys():
-            meta = TransactionMetadata.create_from_json(data['meta'])
-            tx._metadata = meta
-        return tx
-
-    def get_transaction_by_hash(self, hash_hex):
-        hash_bytes = bytes.fromhex(hash_hex)
-        return self.get_transaction_by_hash_bytes(hash_bytes)
 
     def load(self, data):
         from hathor.transaction.transaction import Transaction
@@ -138,10 +115,24 @@ class TransactionCompactStorage(TransactionStorage):
         assert tx.hash == hash_bytes, 'Hashes differ: {} != {}'.format(tx.hash.hex(), hash_bytes.hex())
         return tx
 
-    def save_metadata(self, tx):
-        # genesis txs and metadata are kept in memory
-        if not tx.is_genesis:
-            self._save_transaction(tx)
+    @deprecated('Use get_transaction_by_hash_deferred instead')
+    def get_transaction_by_hash(self, hash_hex):
+        return skip_warning(super().get_transaction_by_hash)(hash_hex)
+
+    @deprecated('Use get_transaction_by_hash_bytes_deferred instead')
+    def get_transaction_by_hash_bytes(self, hash_bytes):
+        genesis = self.get_genesis_by_hash_bytes(hash_bytes)
+        if genesis:
+            return genesis
+
+        hash_hex = hash_bytes.hex()
+        filepath = self.generate_filepath(hash_hex)
+        data = self.load_from_json(filepath, TransactionDoesNotExist(hash_hex))
+        tx = self.load(data['tx'])
+        if 'meta' in data.keys():
+            meta = TransactionMetadata.create_from_json(data['meta'])
+            tx._metadata = meta
+        return tx
 
     def _get_metadata_by_hash(self, hash_hex):
         tx = self.get_transaction_by_hash(hash_hex)
@@ -151,6 +142,7 @@ class TransactionCompactStorage(TransactionStorage):
         else:
             raise TransactionMetadataDoesNotExist
 
+    @deprecated('Use get_all_transactions_deferred instead')
     def get_all_transactions(self):
         for tx in self.get_all_genesis():
             yield tx
@@ -170,6 +162,7 @@ class TransactionCompactStorage(TransactionStorage):
                         tx._metadata = meta
                     yield tx
 
+    @deprecated('Use get_count_tx_blocks_deferred instead')
     def get_count_tx_blocks(self):
         genesis_len = len(self.get_all_genesis())
         path = self.path

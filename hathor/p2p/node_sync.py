@@ -952,7 +952,7 @@ class NodeSyncManager(object):  # pragma: no cover
 
         # meta = self.tx_storage.get_metadata_by_hash_bytes(tx.hash)
         # meta.peers.add(conn.peer_id.id)
-        # self.tx_storage.save_metadata(meta)
+        # self.tx_storage.save_transaction(tx, only_metadata=True)
 
         # If we're still syncing, let's check if we're ready now.
         # if self.node_sync_state == self.manager.NodeSyncState.SYNCING:

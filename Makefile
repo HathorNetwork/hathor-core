@@ -4,7 +4,7 @@ all: tests pep8
 
 .PHONY: tests
 tests:
-	pytest --cov=hathor --cov-fail-under=70 ./tests
+	pytest --cov=hathor --cov-fail-under=70 -p no:warnings ./tests
 
 .PHONY: pep8
 pep8:

@@ -8,7 +8,7 @@ from twisted.internet.task import Clock
 from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage, \
                                        TransactionCompactStorage, TransactionCacheStorage, TransactionBinaryStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.transaction import Block, Transaction, TransactionMetadata, TxOutput, TxInput
+from hathor.transaction import Block, Transaction, TxOutput, TxInput
 from hathor.wallet import Wallet
 
 
@@ -122,16 +122,14 @@ class _BaseTransactionStorageTest:
 
         def test_save_metadata(self):
             tx = self.block
-            metadata = TransactionMetadata(
-                hash=tx.hash
-            )
+            metadata = tx.get_metadata()
             metadata.spent_outputs[1].add(self.genesis_blocks[0].hash)
             random_tx = bytes.fromhex('0000222e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0f2222')
             metadata.children.add(random_tx)
-            tx._metadata = metadata
-            self.tx_storage.save_metadata(tx)
-            metadata_read = self.tx_storage._get_metadata_by_hash(tx.hash_hex)
-            self.assertEqual(metadata, metadata_read)
+            self.tx_storage.save_transaction(tx)
+            tx2 = self.tx_storage.get_transaction_by_hash(tx.hash_hex)
+            metadata2 = tx2.get_metadata()
+            self.assertEqual(metadata, metadata2)
 
         def test_storage_new_blocks(self):
             tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
