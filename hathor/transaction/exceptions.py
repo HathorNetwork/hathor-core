@@ -70,3 +70,23 @@ class BlockHeightError(BlockError):
 
 class BlockWithInputs(BlockError):
     """Block has inputs"""
+
+
+class ScriptError(HathorError):
+    """Base class for script evaluation errors"""
+
+
+class OutOfData(ScriptError):
+    """PUSHDATA operation with more bytes than we have available"""
+
+
+class MissingStackItems(ScriptError):
+    """Operation requires more items than what is on stack"""
+
+
+class EqualVerifyFailed(ScriptError):
+    """OP_EQUALVERIFY failed"""
+
+
+class FinalStackInvalid(ScriptError):
+    """Value left on stack is not true"""
