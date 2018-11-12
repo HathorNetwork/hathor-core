@@ -27,4 +27,4 @@ class BalanceTest(_BaseResourceTest._ResourceTest):
         # Get new balance after block
         response2 = yield self.web.get("wallet/balance")
         data2 = response2.json_value()
-        self.assertEqual(data2['balance'], 10000)
+        self.assertEqual(data2['balance'], 2000)

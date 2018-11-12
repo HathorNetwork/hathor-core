@@ -28,7 +28,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         # Sending token to random address without input
         data_json = {
-            "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 500}],
+            "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 505}],
             "inputs": []
         }
         response = yield self.web.post(
@@ -42,7 +42,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         # Asserting new balance
         response_balance = yield self.web_balance.get("wallet/balance")
         data_balance = response_balance.json_value()
-        self.assertEqual(data_balance['balance'], 9500)
+        self.assertEqual(data_balance['balance'], 1495)
 
         # Getting history, so we can get the input
         response_history = yield self.web_history.get("wallet/history", {b'page': 1, b'count': 10})
@@ -64,7 +64,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         # Sending token to random address with input right amount
         data_json2 = {
-            "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 9500}],
+            "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 1495}],
             "inputs": [{"tx_id": input_hash, "index": 0}]
         }
         response3 = yield self.web.post(

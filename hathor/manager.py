@@ -9,6 +9,7 @@ from hathor.transaction.exceptions import TxValidationError
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.metrics import Metrics
+from hathor.constants import TOKENS_PER_BLOCK, DECIMAL_PLACES
 
 from twisted.logger import Logger
 
@@ -91,7 +92,7 @@ class HathorManager(object):
 
         self.avg_time_between_blocks = 64  # in seconds
         self.min_block_weight = 14
-        self.tokens_issued_per_block = 10000
+        self.tokens_issued_per_block = TOKENS_PER_BLOCK * (10**DECIMAL_PLACES)
 
         self.max_future_timestamp_allowed = 3600  # in seconds
 

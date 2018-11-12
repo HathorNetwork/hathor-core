@@ -1,5 +1,7 @@
 from hathor.transaction import Transaction, TxOutput
 from hathor.transaction.block import Block
+from hathor.constants import GENESIS_TOKENS, MAX_VALUE
+import math
 
 
 def genesis_transactions(tx_storage):
@@ -21,14 +23,24 @@ def genesis_transactions(tx_storage):
         storage=tx_storage,
     )
 
-    GENESIS_OUTPUT = TxOutput(1000, bytes.fromhex('76a914fd05059b6006249543b82f36876a17c73fd2267b88ac'))
+    # Genesis will have 2B tokens (we use 200B because of two decimal places)
+    # We separate in outputs of 2B tokens because our value is only 4 bytes
+    GENESIS_OUTPUTS = []
+    num_outputs = math.ceil(GENESIS_TOKENS / MAX_VALUE)
+    total_tokens = GENESIS_TOKENS
+    for x in range(0, num_outputs):
+        value = min(total_tokens, MAX_VALUE)
+        GENESIS_OUTPUTS.append(
+            TxOutput(value, bytes.fromhex('76a914fd05059b6006249543b82f36876a17c73fd2267b88ac'))
+        )
+        total_tokens -= value
     BLOCK_GENESIS = Block(
-        hash=bytes.fromhex('00001b2d0587429e36b9093bf8a22b934a2ddfbfb1b06859bb2080895532f339'),
-        nonce=4401,
+        hash=bytes.fromhex('0001242057660788e83008a985fa0ef60adb2652bfd70955016992a3d1ad38d7'),
+        nonce=5448,
         timestamp=1539271481,
         weight=14,
         height=1,
-        outputs=[GENESIS_OUTPUT],
+        outputs=GENESIS_OUTPUTS,
         storage=tx_storage,
     )
     return [

@@ -73,7 +73,6 @@ class _BaseTransactionStorageTest:
         def test_genesis(self):
             self.assertEqual(1, len(self.genesis_blocks))
             self.assertEqual(2, len(self.genesis_txs))
-            self.assertEqual(1, len(self.genesis_blocks[0].outputs))
             for tx in self.genesis:
                 tx.verify()
 

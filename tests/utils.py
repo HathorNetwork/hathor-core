@@ -66,7 +66,7 @@ def add_new_transactions(manager, num_txs):
     txs = []
     for _ in range(num_txs):
         address = '3JEcJKVsHddj1Td2KDjowZ1JqGF1'
-        value = random.choice([5, 10, 50, 100, 120])
+        value = random.choice([5, 10, 15, 20])
         tx = add_new_tx(manager, address, value)
         txs.append(tx)
     return txs
