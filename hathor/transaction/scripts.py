@@ -8,6 +8,8 @@ from cryptography.hazmat.primitives import hashes
 
 from hathor.crypto.util import get_hash160, get_public_key_from_bytes_compressed, \
                                get_address_b58_from_bytes, get_address_b58_from_public_key_bytes_compressed
+from hathor.transaction.exceptions import ScriptError, OutOfData, MissingStackItems, \
+                                          EqualVerifyFailed, FinalStackInvalid
 
 # TODO what are we using for the signature?
 DATA_TO_SIGN = b'DATA_TO_SIGN'
@@ -186,94 +188,170 @@ def script_eval(output_script, input_data):
     :param input_data: the tx input data
     :type input_data: bytes
 
-    :return: True if valid, otherwise False + error string
-    :rtype: (Boolean, string or None)
+    :raises ScriptError: if script verification fails
     """
     stack = []
     # merge input_data and output_script
     full_data = input_data + output_script
     data_len = len(full_data)
     pos = 0
-    ret = True
     err = None
-    while pos < len(full_data):
+    while pos < data_len:
         opcode = full_data[pos]
         if (opcode >= 1 and opcode <= 75):
-            # this is a pushdata opcode, indicating data length
-            if (pos + opcode) > data_len:
-                ret = False
-                err = 'PUSHDATA overruns script script length'
-                break
-            pos += 1
-            stack.append(full_data[pos:pos+opcode])
-            pos += opcode
+            pos = op_pushdata(pos, full_data, stack)
             continue
         elif opcode == Opcode.OP_PUSHDATA1:
-            if pos >= len(full_data):
-                ret = False
-                err = 'PUSHDATA overruns script script length'
-                break
-            pos += 1
-            length = full_data[pos]
-            pos += 1
-            stack.append(full_data[pos:pos+length])
-            pos += length
+            pos = op_pushdata1(pos, full_data, stack)
             continue
 
         # self.log.debug('!! pos={} opcode={} {}'.format(pos, opcode, Opcode(opcode)))
 
         # this is an opcode manipulating the stack
         if opcode == Opcode.OP_DUP:
-            if not len(stack):
-                err = 'OP_DUP: empty stack'
-                ret = False
-                break
-            stack.append(stack[-1])
+            op_dup(stack)
         elif opcode == Opcode.OP_EQUALVERIFY:
-            if len(stack) < 2:
-                err = 'OP_EQUALVERIFY: need 2 elements on stack, currently {}'.format(len(stack))
-                ret = False
-                break
-            elem1 = stack.pop()
-            elem2 = stack.pop()
-            if elem1 != elem2:
-                err = 'OP_EQUALVERIFY: failed {} {}'.format(elem1.hex(), elem2.hex())
-                ret = False
-                break
+            op_equalverify(stack)
         elif opcode == Opcode.OP_CHECKSIG:
-            if len(stack) < 2:
-                err = 'OP_EQUALVERIFY: need 2 elements on stack, currently {}'.format(len(stack))
-                ret = False
-                break
-            pubkey = stack.pop()
-            signature = stack.pop()
-            public_key = get_public_key_from_bytes_compressed(pubkey)
-            try:
-                public_key.verify(signature, DATA_TO_SIGN, ec.ECDSA(hashes.SHA256()))
-                # valid, push true to stack
-                stack.append(1)
-            except InvalidSignature:
-                # invalid, push false to stack
-                err = 'OP_CHECKSIG: failed'
-                stack.append(0)
+            err = op_checksig(stack)
         elif opcode == Opcode.OP_HASH160:
-            if not len(stack):
-                err = 'OP_HASH160: empty stack'
-                ret = False
-                break
-            elem1 = stack.pop()
-            new_elem = get_hash160(elem1)
-            stack.append(new_elem)
+            op_hash160(stack)
         else:
             # throw error
-            err = 'unhandled opcode'
-            ret = False
-            break
+            raise ScriptError('unknown opcode')
 
         pos += 1
-    if ret and len(stack) > 0:
+    if len(stack) > 0:
         if stack.pop() != 1:
             # stack left with non zero value
-            err = 'value left on stack is not true'
-            ret = False
-    return (ret, err)
+            raise FinalStackInvalid(err)
+
+
+def op_pushdata(position, full_data, stack):
+    """Pushes to stack when data is up to 75 bytes
+
+    :param position: current position we're reading from full_data
+    :type input_data: int
+
+    :param full_data: input data + output script combined
+    :type full_data: bytes
+
+    :param stack: the stack used when evaluating the script
+    :type stack: List[]
+
+    :raises OutOfData: if can't read data to be pushed
+
+    :return: new position to be read from full_data
+    :rtype: int
+    """
+    length = full_data[position]
+    position += 1
+    if (position + length) > len(full_data):
+        raise OutOfData('trying to read {} bytes starting at {}, available {}'
+                        .format(length, position, len(full_data)))
+    stack.append(full_data[position:position+length])
+    return position + length
+
+
+def op_pushdata1(position, full_data, stack):
+    """Pushes data to stack; next byte contains number of bytes to be pushed
+
+    :param position: current position we're reading from full_data
+    :type input_data: int
+
+    :param full_data: input data + output script combined
+    :type full_data: bytes
+
+    :param stack: the stack used when evaluating the script
+    :type stack: List[]
+
+    :raises OutOfData: if can't read data to be pushed
+
+    :return: new position to be read from full_data
+    :rtype: int
+    """
+    data_len = len(full_data)
+    # next position is data length to push
+    position += 1
+    if position >= data_len:
+        raise OutOfData('trying to read byte {}, available {}'.format(position, data_len))
+    length = full_data[position]
+    if (position + length) >= data_len:
+        raise OutOfData('trying to read {} bytes starting at {}, available {}'.format(length, position, data_len))
+    position += 1
+    stack.append(full_data[position:position+length])
+    return position + length
+
+
+def op_dup(stack):
+    """Duplicates item on top of stack
+
+    :param stack: the stack used when evaluating the script
+    :type stack: List[]
+
+    :raises MissingStackItems: if there's no element on stack
+    """
+    if not len(stack):
+        raise MissingStackItems('OP_DUP: empty stack')
+    stack.append(stack[-1])
+
+
+def op_equalverify(stack):
+    """Verifies top 2 elements from stack are equal
+
+    :param stack: the stack used when evaluating the script
+    :type stack: List[]
+
+    :raises MissingStackItems: if there aren't 2 element on stack
+    :raises EqualVerifyFailed: items don't match
+    """
+    if len(stack) < 2:
+        raise MissingStackItems('OP_EQUALVERIFY: need 2 elements on stack, currently {}')
+    elem1 = stack.pop()
+    elem2 = stack.pop()
+    if elem1 != elem2:
+        raise EqualVerifyFailed('elements: {} {}'.format(elem1.hex(), elem2.hex()))
+
+
+def op_checksig(stack):
+    """Verifies public key and signature match. Expects public key to be on top of stack, followed
+    by signature. If they match, put 1 on stack (meaning True); otherwise, push 0 (False)
+
+    :param stack: the stack used when evaluating the script
+    :type stack: List[]
+
+    :raises MissingStackItems: if there aren't 2 element on stack
+
+    :return: if they don't match, return error message
+    :rtype: string
+    """
+    if len(stack) < 2:
+        raise MissingStackItems('OP_CHECKSIG: need 2 elements on stack, currently {}'.format(len(stack)))
+    pubkey = stack.pop()
+    signature = stack.pop()
+    public_key = get_public_key_from_bytes_compressed(pubkey)
+    try:
+        public_key.verify(signature, DATA_TO_SIGN, ec.ECDSA(hashes.SHA256()))
+        # valid, push true to stack
+        stack.append(1)
+        return None
+    except InvalidSignature:
+        # invalid, push false to stack
+        stack.append(0)
+        return 'OP_CHECKSIG: failed'
+
+
+def op_hash160(stack):
+    """Top stack item is hashed twice: first with SHA-256 and then with RIPEMD-160.
+    Result is pushed back to stack.
+
+    :param stack: the stack used when evaluating the script
+    :type stack: List[]
+
+    :raises MissingStackItems: if there's no element on stack
+    """
+    if not len(stack):
+        raise MissingStackItems('OP_HASH160: empty stack')
+    elem1 = stack.pop()
+    new_elem = get_hash160(elem1)
+    stack.append(new_elem)

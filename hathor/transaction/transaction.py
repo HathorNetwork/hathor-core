@@ -1,7 +1,7 @@
 from hathor.transaction.base_transaction import BaseTransaction, MAX_NUM_INPUTS, MAX_NUM_OUTPUTS
 from hathor.transaction.exceptions import InputOutputMismatch, TooManyInputs, TooManyOutputs, \
-                                          InvalidInputData, TimestampError, \
-                                          InexistentInput, ConflictingInputs
+                                          InvalidInputData, TimestampError, InexistentInput, \
+                                          ConflictingInputs, ScriptError
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.scripts import script_eval
 from math import log
@@ -119,9 +119,10 @@ class Transaction(BaseTransaction):
 
     def verify_script(self, input_tx, spent_tx):
         script_output = spent_tx.outputs[input_tx.index].script
-        (ret, err) = script_eval(script_output, input_tx.data)
-        if not ret:
-            raise InvalidInputData(err)
+        try:
+            script_eval(script_output, input_tx.data)
+        except ScriptError as e:
+            raise InvalidInputData from e
 
 #    def verify_unspent_output(self, input_tx):
 #        try:
