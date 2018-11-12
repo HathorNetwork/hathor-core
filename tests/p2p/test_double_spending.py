@@ -26,7 +26,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         txs = []
         for _ in range(num_txs):
             address = '3JEcJKVsHddj1Td2KDjowZ1JqGF1'
-            value = random.choice([5, 10, 50, 100, 120])
+            value = random.choice([5, 10, 15, 20])
             tx = add_new_tx(manager, address, value)
             txs.append(tx)
         return txs
@@ -127,7 +127,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # ---
 
         address = self.manager1.wallet.get_unused_address_bytes()
-        value = 1000
+        value = 100
         outputs = [
             WalletOutputInfo(address=address, value=int(value))
         ]
@@ -139,7 +139,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx1.resolve()
 
         address = self.manager1.wallet.get_unused_address_bytes()
-        value = 10000
+        value = 1000
         outputs = [
             WalletOutputInfo(address=address, value=int(value))
         ]
@@ -163,7 +163,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # ---
 
         address = self.manager1.wallet.get_unused_address_bytes()
-        value = 1000
+        value = 100
         inputs = [
             WalletInputInfo(tx_id=tx1.hash, index=1, private_key=None)
         ]
@@ -186,7 +186,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # ---
 
         address = self.manager1.wallet.get_unused_address_bytes()
-        value = 5000
+        value = 500
         outputs = [
             WalletOutputInfo(address=address, value=int(value))
         ]
@@ -220,7 +220,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # ---
 
         address = self.manager1.wallet.get_unused_address_bytes()
-        value = 10000
+        value = 1000
         inputs = [
             WalletInputInfo(tx_id=tx4.hash, index=0, private_key=None)
         ]
@@ -262,7 +262,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # ---
 
         address = self.manager1.wallet.get_unused_address_bytes()
-        value = 10000
+        value = 2000
         inputs = [
             WalletInputInfo(tx_id=blocks[3].hash, index=0, private_key=None)
         ]

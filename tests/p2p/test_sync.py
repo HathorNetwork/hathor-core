@@ -45,7 +45,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         txs = []
         for _ in range(num_txs):
             address = '3JEcJKVsHddj1Td2KDjowZ1JqGF1'
-            value = random.choice([500, 1000, 5000, 10000, 12000])
+            value = random.choice([5, 10, 50, 100, 120])
             tx = self._add_new_tx(address, value)
             txs.append(tx)
         return txs

@@ -60,11 +60,11 @@ class BasicWallet(unittest.TestCase):
         w.unlock(PASSWORD)
         genesis_blocks = [tx for tx in genesis_transactions(None) if tx.is_block]
         genesis_block = genesis_blocks[0]
-        genesis_value = genesis_block.outputs[0].value
+        genesis_value = sum([output.value for output in genesis_block.outputs])
 
         # wallet will receive genesis block and store in unspent_tx
         w.on_new_tx(genesis_block)
-        self.assertEqual(len(list(w.unspent_txs.values())[0]), 1)
+        self.assertEqual(len(list(w.unspent_txs.values())[0]), len(genesis_block.outputs))
         self.assertEqual(w.balance, genesis_value)
 
         # create transaction spending this value, but sending to same wallet
@@ -118,12 +118,12 @@ class BasicWallet(unittest.TestCase):
         w.unlock(PASSWORD)
         genesis_blocks = [tx for tx in genesis_transactions(None) if tx.is_block]
         genesis_block = genesis_blocks[0]
-        genesis_value = genesis_block.outputs[0].value
+        genesis_value = sum([output.value for output in genesis_block.outputs])
 
         # memory storage will only have genesis transactions
         memory_storage = TransactionMemoryStorage()
         w.replay_from_storage(memory_storage)
-        self.assertEqual(len(w.unspent_txs[key_pair.address]), 1)
+        self.assertEqual(len(list(w.unspent_txs.values())[0]), len(genesis_block.outputs))
         self.assertEqual(w.balance, genesis_value)
 
     def test_locked(self):

@@ -324,7 +324,7 @@ class BasicTransaction(unittest.TestCase):
         script = P2PKH.create_output_script(address)
         output = TxOutput(value, script)
 
-        _input = TxInput(genesis_block.hash, 3, data)
+        _input = TxInput(genesis_block.hash, len(genesis_block.outputs) + 1, data)
         tx = Transaction(
             weight=1,
             inputs=[_input],
@@ -333,6 +333,14 @@ class BasicTransaction(unittest.TestCase):
             storage=self.tx_storage
         )
 
+        # test with an inexistent index
+        tx.resolve()
+        with self.assertRaises(InexistentInput):
+            tx.verify()
+
+        # now with index equals of len of outputs
+        _input = [TxInput(genesis_block.hash, len(genesis_block.outputs), data)]
+        tx.inputs = _input
         # test with an inexistent index
         tx.resolve()
         with self.assertRaises(InexistentInput):
@@ -357,13 +365,14 @@ class BasicTransaction(unittest.TestCase):
         value = genesis_block.outputs[0].value
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
-        output = TxOutput(2*value, script)
+        # We can't only duplicate the value because genesis is using the max value possible
+        outputs = [TxOutput(value, script), TxOutput(value, script)]
 
         _input = TxInput(genesis_block.hash, 0, data)
         tx = Transaction(
             weight=1,
             inputs=[_input, _input],
-            outputs=[output],
+            outputs=outputs,
             parents=parents,
             storage=self.tx_storage
         )

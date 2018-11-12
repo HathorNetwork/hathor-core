@@ -93,7 +93,7 @@ class Transaction(BaseTransaction):
         for input_tx in self.inputs:
             try:
                 spent_tx = self.get_spent_tx(input_tx)
-                if input_tx.index > len(spent_tx.outputs):
+                if input_tx.index >= len(spent_tx.outputs):
                     raise InexistentInput('Output spent by this input does not exist: {} index {}'
                                           .format(input_tx.tx_id.hex(), input_tx.index))
             except TransactionDoesNotExist:
