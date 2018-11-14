@@ -2,10 +2,14 @@ import unittest
 import os
 import json
 import base64
+import struct
 
-from hathor.transaction.scripts import HathorScript, op_pushdata, DATA_TO_SIGN, \
-                                       op_pushdata1, op_dup, op_equalverify, op_checksig, op_hash160
-from hathor.transaction.exceptions import OutOfData, MissingStackItems, EqualVerifyFailed
+from hathor.transaction.scripts import (
+    HathorScript, op_pushdata, DATA_TO_SIGN, ScriptExtras,
+    op_pushdata1, op_dup, op_equalverify, op_checksig, op_hash160,
+    op_greaterthan_timestamp
+)
+from hathor.transaction.exceptions import OutOfData, MissingStackItems, EqualVerifyFailed, TimeLocked
 from hathor.crypto.util import get_private_key_from_bytes, get_public_key_from_bytes, \
                                get_public_key_bytes_compressed, get_hash160
 
@@ -42,21 +46,21 @@ class BasicTransaction(unittest.TestCase):
 
     def test_dup(self):
         with self.assertRaises(MissingStackItems):
-            op_dup([])
+            op_dup([], log=[], extras=None)
 
         stack = [1]
-        op_dup(stack)
+        op_dup(stack, log=[], extras=None)
         self.assertEqual(stack[-1], stack[-2])
 
     def test_equalverify(self):
         elem = b'a'
         with self.assertRaises(MissingStackItems):
-            op_equalverify([elem])
+            op_equalverify([elem], log=[], extras=None)
 
-        op_equalverify([elem, elem])
+        op_equalverify([elem, elem], log=[], extras=None)
 
         with self.assertRaises(EqualVerifyFailed):
-            op_equalverify([elem, b'aaaa'])
+            op_equalverify([elem, b'aaaa'], log=[], extras=None)
 
     def test_checksig(self):
         filepath = os.path.join(os.getcwd(), 'hathor/wallet/genesis_keys.json')
@@ -71,27 +75,51 @@ class BasicTransaction(unittest.TestCase):
         genesis_public_key = get_public_key_from_bytes(public_key_bytes)
 
         with self.assertRaises(MissingStackItems):
-            op_checksig([1])
+            op_checksig([1], log=[], extras=None)
 
         signature = genesis_private_key.sign(DATA_TO_SIGN, ec.ECDSA(hashes.SHA256()))
         pubkey_bytes = get_public_key_bytes_compressed(genesis_public_key)
         stack = [signature, pubkey_bytes]
-        op_checksig(stack)
+        op_checksig(stack, log=[], extras=None)
         self.assertEqual(1, stack.pop())
 
         stack = [b'aaaaaaaaa', pubkey_bytes]
-        op_checksig(stack)
+        op_checksig(stack, log=[], extras=None)
         self.assertEqual(0, stack.pop())
 
     def test_hash160(self):
         with self.assertRaises(MissingStackItems):
-            op_checksig([])
+            op_checksig([], log=[], extras=None)
 
         elem = b'aaaaaaaa'
         hash160 = get_hash160(elem)
         stack = [elem]
-        op_hash160(stack)
+        op_hash160(stack, log=[], extras=None)
         self.assertEqual(hash160, stack.pop())
+
+    def test_greaterthan_timestamp(self):
+        with self.assertRaises(MissingStackItems):
+            op_greaterthan_timestamp([], log=[], extras=None)
+
+        timestamp = 1234567
+
+        from hathor.transaction import Transaction
+        tx = Transaction()
+
+        stack = [struct.pack('!I', timestamp)]
+        extras = ScriptExtras(tx=tx, txin=None, spent_tx=None)
+
+        with self.assertRaises(TimeLocked):
+            tx.timestamp = timestamp - 1
+            op_greaterthan_timestamp(list(stack), log=[], extras=extras)
+
+        with self.assertRaises(TimeLocked):
+            tx.timestamp = timestamp
+            op_greaterthan_timestamp(list(stack), log=[], extras=extras)
+
+        tx.timestamp = timestamp + 1
+        op_greaterthan_timestamp(stack, log=[], extras=extras)
+        self.assertEqual(len(stack), 0)
 
 
 if __name__ == '__main__':

@@ -1,4 +1,6 @@
 from enum import IntEnum
+from collections import namedtuple
+import struct
 
 from twisted.logger import Logger
 
@@ -9,10 +11,12 @@ from cryptography.hazmat.primitives import hashes
 from hathor.crypto.util import get_hash160, get_public_key_from_bytes_compressed, \
                                get_address_b58_from_bytes, get_address_b58_from_public_key_bytes_compressed
 from hathor.transaction.exceptions import ScriptError, OutOfData, MissingStackItems, \
-                                          EqualVerifyFailed, FinalStackInvalid
+                                          EqualVerifyFailed, FinalStackInvalid, TimeLocked
 
 # TODO what are we using for the signature?
 DATA_TO_SIGN = b'DATA_TO_SIGN'
+
+ScriptExtras = namedtuple('ScriptExtras', 'tx txin spent_tx')
 
 
 class Opcode(IntEnum):
@@ -21,6 +25,7 @@ class Opcode(IntEnum):
     OP_CHECKSIG = 0xAC
     OP_HASH160 = 0xA9
     OP_PUSHDATA1 = 0x4C
+    OP_GREATERTHAN_TIMESTAMP = 0x6F
 
 
 class HathorScript:
@@ -178,7 +183,7 @@ class P2PKH:
         return cls(address)
 
 
-def script_eval(output_script, input_data):
+def script_eval(output_script, input_data, tx, txin, spent_tx):
     """Evaluates the output script and input data according to
     a very limited subset of Bitcoin's scripting language.
 
@@ -195,7 +200,8 @@ def script_eval(output_script, input_data):
     full_data = input_data + output_script
     data_len = len(full_data)
     pos = 0
-    err = None
+    log = []
+    extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
     while pos < data_len:
         opcode = full_data[pos]
         if (opcode >= 1 and opcode <= 75):
@@ -208,23 +214,18 @@ def script_eval(output_script, input_data):
         # self.log.debug('!! pos={} opcode={} {}'.format(pos, opcode, Opcode(opcode)))
 
         # this is an opcode manipulating the stack
-        if opcode == Opcode.OP_DUP:
-            op_dup(stack)
-        elif opcode == Opcode.OP_EQUALVERIFY:
-            op_equalverify(stack)
-        elif opcode == Opcode.OP_CHECKSIG:
-            err = op_checksig(stack)
-        elif opcode == Opcode.OP_HASH160:
-            op_hash160(stack)
-        else:
+        fn = MAP_OPCODE_TO_FN.get(opcode, None)
+        if fn is None:
             # throw error
             raise ScriptError('unknown opcode')
 
+        fn(stack, log, extras)
         pos += 1
+
     if len(stack) > 0:
         if stack.pop() != 1:
             # stack left with non zero value
-            raise FinalStackInvalid(err)
+            raise FinalStackInvalid('\n'.join(log))
 
 
 def op_pushdata(position, full_data, stack):
@@ -245,6 +246,7 @@ def op_pushdata(position, full_data, stack):
     :rtype: int
     """
     length = full_data[position]
+    assert length <= 75
     position += 1
     if (position + length) > len(full_data):
         raise OutOfData('trying to read {} bytes starting at {}, available {}'
@@ -283,7 +285,7 @@ def op_pushdata1(position, full_data, stack):
     return position + length
 
 
-def op_dup(stack):
+def op_dup(stack, log, extras):
     """Duplicates item on top of stack
 
     :param stack: the stack used when evaluating the script
@@ -296,7 +298,25 @@ def op_dup(stack):
     stack.append(stack[-1])
 
 
-def op_equalverify(stack):
+def op_greaterthan_timestamp(stack, log, extras):
+    """Check whether transaction's timestamp is greater than the top of stack
+
+    The top of stack must be a big-endian u32int.
+
+    :param stack: the stack used when evaluating the script
+    :type stack: List[]
+
+    :raises MissingStackItems: if there's no element on stack
+    """
+    if not len(stack):
+        raise MissingStackItems('OP_GREATERTHAN_TIMESTAMP: empty stack')
+    buf = stack.pop()
+    (timelock,) = struct.unpack('!I', buf)
+    if extras.tx.timestamp <= timelock:
+        raise TimeLocked('tx.timestamp ({}) < {}'.format(extras.tx.timestamp, timelock))
+
+
+def op_equalverify(stack, log, extras):
     """Verifies top 2 elements from stack are equal
 
     :param stack: the stack used when evaluating the script
@@ -313,7 +333,7 @@ def op_equalverify(stack):
         raise EqualVerifyFailed('elements: {} {}'.format(elem1.hex(), elem2.hex()))
 
 
-def op_checksig(stack):
+def op_checksig(stack, log, extras):
     """Verifies public key and signature match. Expects public key to be on top of stack, followed
     by signature. If they match, put 1 on stack (meaning True); otherwise, push 0 (False)
 
@@ -334,14 +354,13 @@ def op_checksig(stack):
         public_key.verify(signature, DATA_TO_SIGN, ec.ECDSA(hashes.SHA256()))
         # valid, push true to stack
         stack.append(1)
-        return None
     except InvalidSignature:
         # invalid, push false to stack
         stack.append(0)
-        return 'OP_CHECKSIG: failed'
+        log.append('OP_CHECKSIG: failed')
 
 
-def op_hash160(stack):
+def op_hash160(stack, log, extras):
     """Top stack item is hashed twice: first with SHA-256 and then with RIPEMD-160.
     Result is pushed back to stack.
 
@@ -355,3 +374,12 @@ def op_hash160(stack):
     elem1 = stack.pop()
     new_elem = get_hash160(elem1)
     stack.append(new_elem)
+
+
+MAP_OPCODE_TO_FN = {
+    Opcode.OP_DUP: op_dup,
+    Opcode.OP_EQUALVERIFY: op_equalverify,
+    Opcode.OP_CHECKSIG: op_checksig,
+    Opcode.OP_HASH160: op_hash160,
+    Opcode.OP_GREATERTHAN_TIMESTAMP: op_greaterthan_timestamp,
+}
