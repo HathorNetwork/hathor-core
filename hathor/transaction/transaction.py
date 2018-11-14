@@ -89,7 +89,7 @@ class Transaction(BaseTransaction):
 
     def verify_inputs(self):
         """Verify inputs signatures and ownership and all inputs actually exist"""
-        spent_outputs = set()
+        spent_outputs = set()  # Set[Tuple[bytes(hash), int]]
         for input_tx in self.inputs:
             try:
                 spent_tx = self.get_spent_tx(input_tx)
@@ -100,7 +100,6 @@ class Transaction(BaseTransaction):
                 raise InexistentInput('Input tx does not exist: {}'.format(input_tx.tx_id.hex()))
 
             self.verify_script(input_tx, spent_tx)
-            # self.verify_unspent_output(input_tx)
 
             if self.timestamp <= spent_tx.timestamp:
                 raise TimestampError('tx={} timestamp={}, parent={} timestamp={}'.format(
@@ -118,20 +117,15 @@ class Transaction(BaseTransaction):
             spent_outputs.add(key)
 
     def verify_script(self, input_tx, spent_tx):
+        """
+        :type input_tx: Input
+        :type spent_tx: Transaction
+        """
         script_output = spent_tx.outputs[input_tx.index].script
         try:
-            script_eval(script_output, input_tx.data)
+            script_eval(script_output, input_tx.data, tx=self, txin=input_tx, spent_tx=spent_tx)
         except ScriptError as e:
             raise InvalidInputData from e
-
-#    def verify_unspent_output(self, input_tx):
-#        try:
-#            metadata = self.storage.get_metadata_by_hash_bytes(input_tx.tx_id)
-#            if input_tx.index in metadata.spent_outputs:
-#                raise DoubleSpend
-#        except TransactionMetadataDoesNotExist:
-#            # No output was spent in this transaction
-#            pass
 
     def get_spent_tx(self, input_tx):
         # TODO Maybe we could use a TransactionCacheStorage in the future to reduce storage hit

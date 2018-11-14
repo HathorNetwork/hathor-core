@@ -90,3 +90,7 @@ class EqualVerifyFailed(ScriptError):
 
 class FinalStackInvalid(ScriptError):
     """Value left on stack is not true"""
+
+
+class TimeLocked(ScriptError):
+    """Transaction is invalid because it is time locked"""
