@@ -7,6 +7,7 @@ from hathor.wallet.exceptions import InsuficientFunds, PrivateKeyNotFound, Input
 from hathor.transaction import Transaction
 
 import json
+from threading import Lock
 
 
 class SendTokensResource(resource.Resource):
@@ -19,6 +20,7 @@ class SendTokensResource(resource.Resource):
     def __init__(self, manager):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
+        self.lock = Lock()
 
     def _render_POST_thread(self, request):
         """ POST request for /wallet/send_tokens/
@@ -29,51 +31,56 @@ class SendTokensResource(resource.Resource):
 
             :rtype: string (json)
         """
-        request.setHeader(b'content-type', b'application/json; charset=utf-8')
-        set_cors(request, 'POST')
+        with self.lock:
+            request.setHeader(b'content-type', b'application/json; charset=utf-8')
+            set_cors(request, 'POST')
 
-        post_data = json.loads(request.content.read().decode('utf-8'))
-        data = post_data['data']
+            post_data = json.loads(request.content.read().decode('utf-8'))
+            data = post_data['data']
 
-        outputs = []
-        for output in data['outputs']:
-            try:
-                address = self.manager.wallet.decode_address(output['address'])  # bytes
-            except InvalidAddress:
-                return self.return_POST(False, 'The address {} is invalid'.format(output['address']))
+            outputs = []
+            for output in data['outputs']:
+                try:
+                    address = self.manager.wallet.decode_address(output['address'])  # bytes
+                except InvalidAddress:
+                    return self.return_POST(False, 'The address {} is invalid'.format(output['address']))
 
-            value = int(output['value'])
-            outputs.append(WalletOutputInfo(address=address, value=value))
+                value = int(output['value'])
+                outputs.append(WalletOutputInfo(address=address, value=value))
 
-        if len(data['inputs']) == 0:
-            try:
-                tx = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
-            except InsuficientFunds:
-                return self.return_POST(False, 'Insufficient funds')
-        else:
-            inputs = []
-            for input_tx in data['inputs']:
-                input_tx['private_key'] = None
-                input_tx['index'] = int(input_tx['index'])
-                input_tx['tx_id'] = bytes.fromhex(input_tx['tx_id'])
-                inputs.append(WalletInputInfo(**input_tx))
-            try:
-                tx = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
-            except (PrivateKeyNotFound, InputDuplicated):
-                return self.return_POST(False, 'Invalid input to create transaction')
+            if len(data['inputs']) == 0:
+                try:
+                    tx = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+                except InsuficientFunds:
+                    return self.return_POST(False, 'Insufficient funds')
+            else:
+                inputs = []
+                for input_tx in data['inputs']:
+                    input_tx['private_key'] = None
+                    input_tx['index'] = int(input_tx['index'])
+                    input_tx['tx_id'] = bytes.fromhex(input_tx['tx_id'])
+                    inputs.append(WalletInputInfo(**input_tx))
+                try:
+                    tx = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
+                except (PrivateKeyNotFound, InputDuplicated):
+                    return self.return_POST(False, 'Invalid input to create transaction')
 
-        tx.storage = self.manager.tx_storage
-        # TODO Send tx to be mined
-        tx.weight = data.get('weight', 10)
+            tx.storage = self.manager.tx_storage
+            # TODO Send tx to be mined
+            tx.weight = data.get('weight', 10)
 
-        max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
-        tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
-        tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
+            max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
+            tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
+            tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
+
+        # There is no need to synchonize this slow part.
         tx.resolve()
 
-        success, message = tx.validate_tx_error()
-        if success:
-            self.manager.propagate_tx(tx)
+        # Then, we synchonize again.
+        with self.lock:
+            success, message = tx.validate_tx_error()
+            if success:
+                self.manager.propagate_tx(tx)
 
         return self.return_POST(success, message, tx=tx)
 
