@@ -169,6 +169,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
                 # If I am already with a buffer or if I hit the limit now, I enqueue for later
                 self.enqueue_for_later(data)
             else:
+                data['throttled'] = False
                 self.broadcast_message(data)
         else:
             self.broadcast_message(data)
@@ -182,6 +183,8 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         """
         # Add data to deque
         # We always add the new messages in the end
+        # Adding parameter deque=True, so the admin can know this message was delayed
+        data['throttled'] = True
         self.buffer_deques[data['type']].append(data)
         if len(self.buffer_deques[data['type']]) == 1:
             # If it's the first time we hit the limit (only one message in deque), we schedule process_deque
@@ -201,6 +204,8 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             if self.rate_limiter.add_hit(data_type):
                 # We always process the older message first
                 data = self.buffer_deques[data_type].popleft()
+                if len(self.buffer_deques[data_type]) == 0:
+                    data['throttled'] = False
                 self.broadcast_message(data)
             else:
                 reactor.callLater(
