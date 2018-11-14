@@ -213,7 +213,10 @@ class HathorManager(object):
             # If there is only one tip, let's randomly choose one of its parents.
             parents = list(self.tx_storage.get_tx_tips(ret[0].begin - 1))
             ret.append(random.choice(parents))
-        assert len(ret) == 2
+        assert len(ret) == 2, 'timestamp={} tips={}'.format(
+            timestamp,
+            [x.hex() for x in self.tx_storage.get_tx_tips(timestamp-1)]
+        )
         return [x.data for x in ret]
 
     def generate_mining_block(self, timestamp=None):
