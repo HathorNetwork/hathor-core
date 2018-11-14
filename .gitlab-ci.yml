@@ -1,8 +1,20 @@
 # Documentation: https://docs.gitlab.com/ce/ci/yaml/README.html
 
 stages:
+    - generators
     - linters
     - unit-tests
+
+protos:
+    stage: generators
+    image: python:3.6
+    only:
+        - dev
+        - web
+    before_script:
+        - pip install grpcio-tools
+    script:
+        - make protos
 
 pep8:
     stage: linters

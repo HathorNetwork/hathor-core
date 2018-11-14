@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package hathor;
+
+import "hathor/protos/transaction.proto";
+
+service TransactionStorage {
+  rpc Exists(ExistsRequest) returns (ExistsResult) {}
+  rpc Get(GetRequest) returns (GetResult) {}
+  rpc Save(SaveRequest) returns (SaveResult) {}
+  rpc List(ListRequest) returns (stream Transaction) {}
+  rpc Count(CountRequest) returns (CountResult) {}
+}
+
+// request types
+
+message ExistsRequest {
+  bytes hash = 1;
+}
+
+message GetRequest {
+  bytes hash = 1;
+  bool include_metadata = 2;
+}
+
+message SaveRequest {
+  Transaction transaction = 1;
+  bool only_metadata = 2;
+}
+
+message ListRequest {
+  bool include_metadata = 2;
+}
+
+message CountRequest {
+}
+
+// result types
+
+message ExistsResult {
+  bool exists = 1;
+}
+
+message GetResult {
+  Transaction transaction = 1;
+}
+
+message SaveResult {
+  bool saved = 1;
+}
+
+message CountResult {
+  uint64 count = 1;
+}

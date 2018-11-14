@@ -5,7 +5,7 @@ import time
 
 from twisted.internet.task import Clock
 
-from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage, \
+from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage, TransactionSubprocessStorage,\
                                        TransactionCompactStorage, TransactionCacheStorage, TransactionBinaryStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction import Block, Transaction, TxOutput, TxInput
@@ -205,3 +205,18 @@ class CacheMemoryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest
         store = TransactionMemoryStorage()
         reactor = Clock()
         super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
+
+
+class SubprocessStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
+    def setUp(self):
+        # reactor = Clock()
+        storage = TransactionSubprocessStorage(TransactionMemoryStorage)
+        storage.start()
+        super().setUp(storage)
+
+    def tearDown(self):
+        self.tx_storage.stop()
+        super().tearDown()
+
+if __name__ == '__main__':
+    unittest.main()

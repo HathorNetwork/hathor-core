@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package hathor;
+
+// XXX: take this (from official docs) in consideration for future optimizations:
+// > Note that field numbers in the range 1 through 15 take one byte to encode, including the field number and the
+// > field's type (you can find out more about this in Protocol Buffer Encoding). Field numbers in the range 16 through
+// > 2047 take two bytes. So you should reserve the numbers 1 through 15 for very frequently occurring message
+// > elements. Remember to leave some room for frequently occurring elements that might be added in the future.
+
+// TODO: separate message for Block
+message Transaction {
+  uint32 version = 1; // 2 byte in practice
+  float weight = 2;
+  uint32 timestamp = 3;
+  uint64 height = 4;
+  repeated bytes parents = 5; // each parent is a hash (32 bytes)
+  repeated Input inputs = 6;
+  repeated Output outputs = 7;
+  uint32 nonce = 8;
+  // hash may be precomputed, should only be trusted if // it is sent by the storage
+  // optional bytes hash = 9; // in proto3 all fields are optional by default
+  bytes hash = 9; // always of size 32 or empty
+  Metadata metadata = 10;
+}
+
+message Input {
+  bytes tx_id = 1; // hash of
+  uint32 index = 2; // 1 byte in practice
+  bytes data = 3;
+}
+
+message Output {
+  uint32 value = 1;
+  bytes script = 2;
+}
+
+message Metadata {
+  message Hashes {
+    repeated bytes hashes = 1; // each hash always has 32 bytes
+  }
+  map<uint32, Hashes> spent_outputs = 1;
+  Hashes conflicts_with = 2;
+  Hashes voided_by = 3;
+  repeated uint32 received_by = 4; // TODO: how is a node_id represented
+  Hashes children = 5;
+  float accumulated_weight = 6;
+}

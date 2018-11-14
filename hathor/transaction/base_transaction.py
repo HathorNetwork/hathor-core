@@ -150,6 +150,41 @@ class BaseTransaction:
         tx.storage = storage
         return tx
 
+    @classmethod
+    def create_from_proto(cls, transaction_proto, storage=None):
+        """ Create a Transaction from a protobuf Transaction object.
+
+        :param transaction_proto: Protobuf transaction object
+        :type transaction_proto: :py:class:`hathor.protos.Transaction`
+
+        :return: A transaction or a block, depending on the class `cls`
+        :rtype: Union[Transaction, Block]
+        """
+        tx = cls(
+            version=transaction_proto.version,
+            weight=transaction_proto.weight,
+            timestamp=transaction_proto.timestamp,
+            height=transaction_proto.height,
+            parents=list(transaction_proto.parents),
+            inputs=list(map(Input.create_from_proto, transaction_proto.inputs)),
+            outputs=list(map(Output.create_from_proto, transaction_proto.outputs)),
+            nonce=transaction_proto.nonce,
+            hash=transaction_proto.hash or None,
+            storage=storage,
+        )
+
+        if transaction_proto.HasField('metadata'):
+            from hathor.transaction.transaction_metadata import TransactionMetadata
+            # make sure hash is not empty
+            tx.hash = tx.hash or tx.calculate_hash()
+            tx._metadata = TransactionMetadata.create_from_proto(tx.hash, transaction_proto.metadata)
+
+        # TODO: what about `is_block`?
+
+        return tx
+
+
+
     def __eq__(self, other):
         """Two transactions are equal when their hash matches
 
@@ -823,6 +858,31 @@ class BaseTransaction:
 
         return data
 
+    def to_proto(self, include_metadata=False):
+        """ Creates a Protobuf object from self
+
+        :param include_metadata: Whether to include metadata, regardless if there is
+        :type include_metadata: bool
+
+        :return: Protobuf object
+        :rtype: :py:class:`hathor.protos.Transaction`
+        """
+        from hathor import protos
+        tx_proto = protos.Transaction(
+            version=self.version,
+            weight=self.weight,
+            timestamp=self.timestamp,
+            height=self.height,
+            parents=self.parents,
+            inputs=map(Input.to_proto, self.inputs),
+            outputs=map(Output.to_proto, self.outputs),
+            nonce=self.nonce,
+            hash=self.hash,
+        )
+        if include_metadata:
+            tx_proto.metadata.CopyFrom(self.get_metadata().to_proto())
+        return tx_proto
+
     def validate_tx_error(self):
         """ Verify if tx is valid and return success and possible error message
 
@@ -854,6 +914,35 @@ class Input:
         self.index = index                  # int
         self.data = data                    # bytes
 
+    @classmethod
+    def create_from_proto(cls, input_proto):
+        """ Creates an Input from a protobuf Input object
+
+        :param input_proto: Bytes of a serialized output
+        :type input_proto: :py:class:`hathor.protos.Input`
+
+        :return: An input
+        :rtype: Input
+        """
+        return cls(
+            tx_id=input_proto.tx_id,
+            index=input_proto.index,
+            data=input_proto.data,
+        )
+
+    def to_proto(self):
+        """ Creates a Protobuf object from self
+
+        :return: Protobuf object
+        :rtype: :py:class:`hathor.protos.Input`
+        """
+        from hathor import protos
+        return protos.Input(
+            tx_id=self.tx_id,
+            index=self.index,
+            data=self.data,
+        )
+
 
 class Output:
     def __init__(self, value, script):
@@ -877,6 +966,33 @@ class Output:
         if p2pkh:
             ret = p2pkh.to_human_readable()
         return ret
+
+    @classmethod
+    def create_from_proto(cls, output_proto):
+        """ Creates an Output from a protobuf Input object
+
+        :param output_proto: Bytes of a serialized output
+        :type output_proto: :py:class:`hathor.protos.Output`
+
+        :return: An output
+        :rtype: Output
+        """
+        return cls(
+            value=output_proto.value,
+            script=output_proto.script,
+        )
+
+    def to_proto(self):
+        """ Creates a Protobuf object from self
+
+        :return: Protobuf object
+        :rtype: :py:class:`hathor.protos.Output`
+        """
+        from hathor import protos
+        return protos.Output(
+            value=self.value,
+            script=self.script,
+        )
 
 
 def int_to_bytes(number, size, signed=False):
