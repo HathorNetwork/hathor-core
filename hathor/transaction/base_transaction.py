@@ -23,6 +23,10 @@ _INPUT_SIZE_BYTES = 32  # 256 bits
 # H = unsigned short (2 bytes), f = float(4), I = unsigned int (4), Q = unsigned long long int (64)
 _TRANSACTION_FORMAT_STRING = '!HdIQHHH'  # Update code below if this changes.
 
+# Version (H), inputs len (H), and outputs len (H).
+# H = unsigned short (2 bytes)
+_SIGHASH_ALL_FORMAT_STRING = '!HHH'
+
 # tx should have 2 parents, both other transactions
 _TX_PARENTS_TXS = 2
 _TX_PARENTS_BLOCKS = 0
@@ -498,6 +502,39 @@ class BaseTransaction:
 
     def calculate_weight(self):
         raise NotImplementedError
+
+    def get_sighash_all(self, clear_input_data=True):
+        """Return a  serialization of the inputs and outputs, without including any other field
+
+        :return: Serialization of the inputs and outputs
+        :rtype: bytes
+        """
+        struct_bytes = struct.pack(
+            _SIGHASH_ALL_FORMAT_STRING,
+            self.version,
+            len(self.inputs),
+            len(self.outputs),
+        )
+
+        for input_tx in self.inputs:
+            struct_bytes += input_tx.tx_id
+            struct_bytes += bytes([input_tx.index])  # 1 byte
+
+            # data length
+            if not clear_input_data:
+                struct_bytes += int_to_bytes(len(input_tx.data), 2)
+                struct_bytes += input_tx.data
+            else:
+                struct_bytes += int_to_bytes(0, 2)
+
+        for output_tx in self.outputs:
+            struct_bytes += int_to_bytes(output_tx.value, 4)
+
+            # script length
+            struct_bytes += int_to_bytes(len(output_tx.script), 2)
+            struct_bytes += output_tx.script
+
+        return struct_bytes
 
     def get_struct_without_nonce(self):
         """Return a partial serialization of the transaction, without including the nonce field

@@ -1,5 +1,6 @@
 import os
 import json
+import hashlib
 
 from twisted.logger import Logger
 
@@ -7,7 +8,6 @@ from hathor.wallet.keypair import KeyPair
 from hathor.wallet.exceptions import OutOfUnusedAddresses
 from hathor.wallet import BaseWallet
 from hathor.pubsub import HathorEvents
-from hathor.transaction.scripts import DATA_TO_SIGN
 from hathor.crypto.util import get_public_key_bytes_compressed
 
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -201,8 +201,11 @@ class Wallet(BaseWallet):
     def is_locked(self):
         return self.password is None
 
-    def get_input_aux_data(self, private_key):
+    def get_input_aux_data(self, data_to_sign, private_key):
         """ Sign the data to be used in input and get public key compressed in bytes
+
+            :param data_to_sign: Data to be signed
+            :type data_to_sign: bytes
 
             :param private_key: private key to sign data
             :type private_key: pycoin.key.Key.Key
@@ -211,5 +214,6 @@ class Wallet(BaseWallet):
             :rtype: tuple[bytes, bytes]
         """
         public_key_bytes = get_public_key_bytes_compressed(private_key.public_key())
-        signature = private_key.sign(DATA_TO_SIGN, ec.ECDSA(hashes.SHA256()))
+        hashed_data = hashlib.sha256(data_to_sign).digest()
+        signature = private_key.sign(hashed_data, ec.ECDSA(hashes.SHA256()))
         return public_key_bytes, signature

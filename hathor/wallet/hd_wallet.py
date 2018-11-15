@@ -4,7 +4,6 @@ from hathor.wallet import BaseWallet
 from hathor.crypto.util import get_address_b58_from_public_key_bytes_compressed
 from hathor.pubsub import HathorEvents
 from hathor.wallet.exceptions import InvalidWords
-from hathor.transaction.scripts import DATA_TO_SIGN
 import hashlib
 
 # TODO pycoin BIP32 uses their own ecdsa library to generate key that does not use OpenSSL
@@ -276,8 +275,11 @@ class HDWallet(BaseWallet):
         if not self.words or not self.mnemonic.check(self.words):
             raise InvalidWords
 
-    def get_input_aux_data(self, private_key):
+    def get_input_aux_data(self, data_to_sign, private_key):
         """ Sign the data to be used in input and get public key compressed in bytes
+
+            :param data_to_sign: Data to be signed
+            :type data_to_sign: bytes
 
             :param private_key: private key to sign data
             :type private_key: pycoin.key.Key.Key
@@ -285,6 +287,6 @@ class HDWallet(BaseWallet):
             :return: public key compressed in bytes and signature
             :rtype: tuple[bytes, bytes]
         """
-        prehashed_msg = hashlib.sha256(DATA_TO_SIGN).digest()
+        prehashed_msg = hashlib.sha256(data_to_sign).digest()
         signature = private_key.sign(prehashed_msg)
         return private_key.sec(), signature

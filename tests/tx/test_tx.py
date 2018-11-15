@@ -63,10 +63,7 @@ class BasicTransaction(unittest.TestCase):
     def test_input_output_match(self):
         genesis_block = self.genesis_blocks[0]
 
-        public_bytes, signature = self.wallet.get_input_aux_data(self.genesis_private_key)
-
-        data = P2PKH.create_input_data(public_bytes, signature)
-        _input = TxInput(genesis_block.hash, 0, data)
+        _input = TxInput(genesis_block.hash, 0, b'')
 
         # spend less than what was generated
         value = genesis_block.outputs[0].value - 1
@@ -79,6 +76,10 @@ class BasicTransaction(unittest.TestCase):
             storage=self.tx_storage
         )
 
+        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        _input.data = P2PKH.create_input_data(public_bytes, signature)
+
         with self.assertRaises(InputOutputMismatch):
             tx.verify_sum()
 
@@ -86,10 +87,7 @@ class BasicTransaction(unittest.TestCase):
         genesis_block = self.genesis_blocks[0]
 
         # create input data with incorrect private key
-        public_bytes, signature = self.wallet.get_input_aux_data(self.private_key_random)
-
-        data_wrong = P2PKH.create_input_data(public_bytes, signature)
-        _input = TxInput(genesis_block.hash, 0, data_wrong)
+        _input = TxInput(genesis_block.hash, 0, b'')
         value = genesis_block.outputs[0].value
 
         address = get_address_from_public_key(self.genesis_public_key)
@@ -101,6 +99,11 @@ class BasicTransaction(unittest.TestCase):
             outputs=[output],
             storage=self.tx_storage
         )
+
+        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.private_key_random)
+        data_wrong = P2PKH.create_input_data(public_bytes, signature)
+        _input.data = data_wrong
 
         with self.assertRaises(InvalidInputData):
             tx.verify_inputs()
@@ -133,13 +136,11 @@ class BasicTransaction(unittest.TestCase):
         with self.assertRaises(TooManyOutputs):
             tx.verify_number_of_outputs()
 
-    def test_struct(self):
+    def _gen_tx_spending_genesis_block(self):
         parents = [tx.hash for tx in self.genesis_txs]
         genesis_block = self.genesis_blocks[0]
 
-        public_bytes, signature = self.wallet.get_input_aux_data(self.genesis_private_key)
-        data = P2PKH.create_input_data(public_bytes, signature)
-        _input = TxInput(genesis_block.hash, 0, data)
+        _input = TxInput(genesis_block.hash, 0, b'')
 
         value = genesis_block.outputs[0].value
         address = get_address_from_public_key(self.genesis_public_key)
@@ -153,35 +154,23 @@ class BasicTransaction(unittest.TestCase):
             parents=parents,
             storage=self.tx_storage
         )
-        tx.update_hash()
 
+        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
+
+        tx.update_hash()
+        return tx
+
+    def test_struct(self):
+        tx = self._gen_tx_spending_genesis_block()
         data = tx.get_struct()
         tx_read = Transaction.create_from_struct(data)
 
         self.assertEqual(tx, tx_read)
 
     def test_children_update(self):
-        parents = [tx.hash for tx in self.genesis_txs]
-        genesis_block = self.genesis_blocks[0]
-
-        public_bytes, signature = self.wallet.get_input_aux_data(self.genesis_private_key)
-        data = P2PKH.create_input_data(public_bytes, signature)
-        _input = TxInput(genesis_block.hash, 0, data)
-
-        value = genesis_block.outputs[0].value
-        address = get_address_from_public_key(self.genesis_public_key)
-        script = P2PKH.create_output_script(address)
-        output = TxOutput(value, script)
-
-        tx = Transaction(
-            nonce=100,
-            inputs=[_input],
-            outputs=[output],
-            parents=parents,
-            storage=self.tx_storage
-        )
-        tx.update_hash()
-
+        tx = self._gen_tx_spending_genesis_block()
         tx.update_parents()
 
         # genesis transactions should have only this tx in their children set
@@ -195,10 +184,8 @@ class BasicTransaction(unittest.TestCase):
         parents = [tx.hash for tx in self.genesis]
         genesis_block = self.genesis_blocks[0]
 
-        public_bytes, signature = self.wallet.get_input_aux_data(self.genesis_private_key)
-        data = P2PKH.create_input_data(public_bytes, signature)
         tx_inputs = [
-            TxInput(genesis_block.hash, 0, data)
+            TxInput(genesis_block.hash, 0, b'')
         ]
 
         address = get_address_from_public_key(self.genesis_public_key)
@@ -217,6 +204,11 @@ class BasicTransaction(unittest.TestCase):
         )
 
         block.inputs = tx_inputs
+
+        data_to_sign = block.get_sighash_all()
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        block.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
+
         block.resolve()
 
         with self.assertRaises(BlockWithInputs):
@@ -225,9 +217,7 @@ class BasicTransaction(unittest.TestCase):
     def test_tx_number_parents(self):
         genesis_block = self.genesis_blocks[0]
 
-        public_bytes, signature = self.wallet.get_input_aux_data(self.genesis_private_key)
-        data = P2PKH.create_input_data(public_bytes, signature)
-        _input = TxInput(genesis_block.hash, 0, data)
+        _input = TxInput(genesis_block.hash, 0, b'')
 
         value = genesis_block.outputs[0].value
         address = get_address_from_public_key(self.genesis_public_key)
@@ -242,6 +232,10 @@ class BasicTransaction(unittest.TestCase):
             parents=parents,
             storage=self.tx_storage
         )
+
+        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
 
         # in first test, only with 1 parent
         tx.resolve()
@@ -316,15 +310,12 @@ class BasicTransaction(unittest.TestCase):
         parents = [tx.hash for tx in self.genesis_txs]
         genesis_block = self.genesis_blocks[0]
 
-        public_bytes, signature = self.wallet.get_input_aux_data(self.genesis_private_key)
-        data = P2PKH.create_input_data(public_bytes, signature)
-
         value = genesis_block.outputs[0].value
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         output = TxOutput(value, script)
 
-        _input = TxInput(genesis_block.hash, len(genesis_block.outputs) + 1, data)
+        _input = TxInput(genesis_block.hash, len(genesis_block.outputs) + 1, b'')
         tx = Transaction(
             weight=1,
             inputs=[_input],
@@ -332,6 +323,11 @@ class BasicTransaction(unittest.TestCase):
             parents=parents,
             storage=self.tx_storage
         )
+
+        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        data = P2PKH.create_input_data(public_bytes, signature)
+        tx.inputs[0].data = data
 
         # test with an inexistent index
         tx.resolve()
@@ -359,16 +355,13 @@ class BasicTransaction(unittest.TestCase):
         parents = [tx.hash for tx in self.genesis_txs]
         genesis_block = self.genesis_blocks[0]
 
-        public_bytes, signature = self.wallet.get_input_aux_data(self.genesis_private_key)
-        data = P2PKH.create_input_data(public_bytes, signature)
-
         value = genesis_block.outputs[0].value
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         # We can't only duplicate the value because genesis is using the max value possible
         outputs = [TxOutput(value, script), TxOutput(value, script)]
 
-        _input = TxInput(genesis_block.hash, 0, data)
+        _input = TxInput(genesis_block.hash, 0, b'')
         tx = Transaction(
             weight=1,
             inputs=[_input, _input],
@@ -376,6 +369,10 @@ class BasicTransaction(unittest.TestCase):
             parents=parents,
             storage=self.tx_storage
         )
+
+        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        _input.data = P2PKH.create_input_data(public_bytes, signature)
 
         tx.resolve()
         with self.assertRaises(ConflictingInputs):
@@ -386,15 +383,12 @@ class BasicTransaction(unittest.TestCase):
         parents = [tx.hash for tx in self.genesis_txs]
         genesis_block = self.genesis_blocks[0]
 
-        public_bytes, signature = self.wallet.get_input_aux_data(self.genesis_private_key)
-        data = P2PKH.create_input_data(public_bytes, signature)
-
         value = genesis_block.outputs[0].value
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         output = TxOutput(value, script)
 
-        _input = TxInput(genesis_block.hash, 0, data)
+        _input = TxInput(genesis_block.hash, 0, b'')
         tx = Transaction(
             weight=1,
             inputs=[_input],
@@ -402,6 +396,10 @@ class BasicTransaction(unittest.TestCase):
             parents=parents,
             storage=self.tx_storage
         )
+
+        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        _input.data = P2PKH.create_input_data(public_bytes, signature)
 
         tx.resolve()
         tx.verify()
@@ -411,15 +409,12 @@ class BasicTransaction(unittest.TestCase):
         parents = [self.genesis_txs[0].hash, self.genesis_txs[0].hash]
         genesis_block = self.genesis_blocks[0]
 
-        public_bytes, signature = self.wallet.get_input_aux_data(self.genesis_private_key)
-        data = P2PKH.create_input_data(public_bytes, signature)
-
         value = genesis_block.outputs[0].value
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         output = TxOutput(value, script)
 
-        _input = TxInput(genesis_block.hash, 0, data)
+        _input = TxInput(genesis_block.hash, 0, b'')
         tx = Transaction(
             weight=1,
             inputs=[_input],
@@ -427,6 +422,10 @@ class BasicTransaction(unittest.TestCase):
             parents=parents,
             storage=self.tx_storage
         )
+
+        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        _input.data = P2PKH.create_input_data(public_bytes, signature)
 
         tx.resolve()
         with self.assertRaises(DuplicatedParents):

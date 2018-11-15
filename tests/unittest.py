@@ -1,5 +1,6 @@
 from twisted.trial import unittest
 from twisted.internet import reactor
+from twisted.internet.task import Clock
 
 from hathor.p2p.peer_id import PeerId
 from hathor.manager import HathorManager
@@ -7,11 +8,14 @@ from hathor.wallet import Wallet
 
 import tempfile
 import shutil
+import time
 
 
 class TestCase(unittest.TestCase):
     def setUp(self):
         self.tmpdirs = []
+        self.clock = Clock()
+        self.clock.advance(time.time())
 
     def tearDown(self):
         self.clean_tmpdirs()

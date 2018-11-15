@@ -16,21 +16,7 @@ def resolve_block_bytes(block_bytes):
     return block.get_struct()
 
 
-def add_new_tx(manager, address, value):
-    """ Create, resolve and propagate a new tx
-
-        :param manager: Manager object to handle the creation
-        :type manager: :py:class:`hathor.manager.HathorManager`
-
-        :param address: Address of the output
-        :type address: str
-
-        :param value: Value of the output
-        :type value: int
-
-        :return: Transaction created
-        :rtype: :py:class:`hathor.transaction.transaction.Transaction`
-    """
+def gen_new_tx(manager, address, value, verify=True):
     from hathor.transaction import Transaction
     from hathor.wallet.base_wallet import WalletOutputInfo
 
@@ -46,7 +32,27 @@ def add_new_tx(manager, address, value):
     tx.weight = 1
     tx.parents = manager.get_new_tx_parents(tx.timestamp)
     tx.resolve()
-    tx.verify()
+    if verify:
+        tx.verify()
+    return tx
+
+
+def add_new_tx(manager, address, value):
+    """ Create, resolve and propagate a new tx
+
+        :param manager: Manager object to handle the creation
+        :type manager: :py:class:`hathor.manager.HathorManager`
+
+        :param address: Address of the output
+        :type address: str
+
+        :param value: Value of the output
+        :type value: int
+
+        :return: Transaction created
+        :rtype: :py:class:`hathor.transaction.transaction.Transaction`
+    """
+    tx = gen_new_tx(manager, address, value)
     manager.propagate_tx(tx)
     return tx
 
