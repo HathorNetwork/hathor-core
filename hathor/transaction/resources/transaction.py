@@ -60,6 +60,8 @@ class TransactionResource(resource.Resource):
                     serialized['conflict_with'] = [h.hex() for h in meta.conflict_with]
                 if meta.voided_by:
                     serialized['voided_by'] = [h.hex() for h in meta.voided_by]
+                if meta.twins:
+                    serialized['twins'] = [h.hex() for h in meta.twins]
 
                 data = {
                     'success': True,

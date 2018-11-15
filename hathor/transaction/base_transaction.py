@@ -378,6 +378,63 @@ class BaseTransaction:
             self.storage._del_from_voided(tx)
             self.storage._add_to_cache(tx)
 
+    def set_conflict_twins(self):
+        """ Get all transactions that conflict with self
+            and check if they are also a twin of self
+        """
+        meta = self.get_metadata()
+        if not meta.conflict_with:
+            return
+
+        conflict_txs = [self.storage.get_transaction_by_hash_bytes(h) for h in meta.conflict_with]
+        self.check_twins(conflict_txs)
+
+    def check_twins(self, transactions):
+        """ Check if the tx has any twins in transactions list
+            A twin tx is a tx that has the same inputs and outputs
+            We add all the hashes of the twin txs in the metadata
+
+            :param transactions: list of transactions to be checked if they are twins with self
+            :type transactions: List[Transaction]
+        """
+        # Getting self metadata to save the new twins
+        meta = self.get_metadata()
+
+        # Sorting inputs and outputs to easir validation
+        sorted_inputs = sorted(self.inputs, key=lambda x: (x.tx_id, x.index, x.data))
+        sorted_outputs = sorted(self.outputs, key=lambda x: (x.script, x.value))
+
+        for tx in transactions:
+            # If quantity of inputs or outputs is different, it's not a twin
+            # If the hash is the same it's not a twin
+            if len(tx.inputs) != len(self.inputs) or len(tx.outputs) != len(self.outputs) or tx.hash == self.hash:
+                continue
+
+            # Verify if all the inputs are the same
+            equal = True
+            for index, tx_input in enumerate(sorted(tx.inputs, key=lambda x: (x.tx_id, x.index, x.data))):
+                if (tx_input.tx_id != sorted_inputs[index].tx_id or
+                        tx_input.data != sorted_inputs[index].data or tx_input.index != sorted_inputs[index].index):
+                    equal = False
+                    break
+
+            # Verify if all the outputs are the same
+            if equal:
+                for index, tx_output in enumerate(sorted(tx.outputs, key=lambda x: (x.script, x.value))):
+                    if (tx_output.value != sorted_outputs[index].value or
+                            tx_output.script != sorted_outputs[index].script):
+                        equal = False
+                        break
+
+            # If everything is equal we add in both metadatas
+            if equal:
+                meta.twins.add(tx.hash)
+                tx_meta = tx.get_metadata()
+                tx_meta.twins.add(self.hash)
+                self.storage.save_metadata(tx)
+
+        self.storage.save_metadata(self)
+
     def compute_genesis_dag_connectivity(self, storage, storage_sync, use_memoized_negative_results=True):
         """Computes the connectivity state from this tx bach to the genesis transactions.
 

@@ -37,6 +37,10 @@ class TransactionMetadata:
         # Store only the transactions' hash.
         self.children = set()  # Set[bytes(hash)]
 
+        # Hash of the transactions that are twin to this transaction.
+        # Twin transactions have the same inputs and outputs
+        self.twins = set()
+
         # Accumulated weight
         self.accumulated_weight = accumulated_weight  # float
 

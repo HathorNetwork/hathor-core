@@ -19,11 +19,13 @@ class CliManager:
         from . import wallet
         from . import generate_valid_words
         from . import grafana_dashboard
+        from . import twin_tx
 
         self.add_cmd('mining', 'run_miner', mining, 'Run a mining process (running node required)')
         self.add_cmd('hathor', 'run_node', run_node, 'Run a node')
         self.add_cmd('hathor', 'gen_peer_id', peer_id, 'Generate a new random peer-id')
         self.add_cmd('tests', 'gen_rand_tx', tx_generator, 'Generate random transactions (running node required)')
+        self.add_cmd('tests', 'gen_twin_tx', twin_tx, 'Generate a twin transaction from a transaction hash')
         self.add_cmd('wallet', 'gen_kp_wallet', wallet, 'Generate a new KeyPair wallet')
         self.add_cmd('wallet', 'gen_hd_words', generate_valid_words, 'Generate random words for HD wallet')
         self.add_cmd('grafana', 'grafana_dashboard', grafana_dashboard,
