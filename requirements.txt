@@ -18,5 +18,5 @@ requests
 colorama
 
 flake8
-nose
-coverage
+pytest
+pytest-cov

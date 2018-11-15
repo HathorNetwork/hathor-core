@@ -1,12 +1,12 @@
 from hathor.transaction.resources import GraphvizResource
 from twisted.internet.defer import inlineCallbacks
-from tests.resources.base_resource import TestSite, _BaseResourceTest
+from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
 class GraphvizTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
-        self.web = TestSite(GraphvizResource(self.manager))
+        self.web = StubSite(GraphvizResource(self.manager))
 
     @inlineCallbacks
     def test_get(self):

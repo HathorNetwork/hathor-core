@@ -1,12 +1,12 @@
 from hathor.p2p.resources import MiningResource
 from twisted.internet.defer import inlineCallbacks
-from tests.resources.base_resource import TestSite, _BaseResourceTest
+from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
 class MiningTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
-        self.web = TestSite(MiningResource(self.manager))
+        self.web = StubSite(MiningResource(self.manager))
 
     @inlineCallbacks
     def test_get(self):

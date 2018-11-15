@@ -4,7 +4,7 @@ all: tests pep8
 
 .PHONY: tests
 tests:
-	nosetests --with-coverage --cover-package=hathor --cover-html --cover-min-percentage=80 --cover-erase
+	pytest --cov=hathor --cov-fail-under=70 ./tests
 
 .PHONY: pep8
 pep8:

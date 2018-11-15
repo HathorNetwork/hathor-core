@@ -1,14 +1,14 @@
 from hathor.wallet.resources import LockWalletResource, StateWalletResource, UnlockWalletResource
 from twisted.internet.defer import inlineCallbacks
-from tests.resources.base_resource import TestSite, _BaseResourceTest
+from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
 class LockTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
-        self.web = TestSite(LockWalletResource(self.manager))
-        self.web_unlock = TestSite(UnlockWalletResource(self.manager))
-        self.web_state = TestSite(StateWalletResource(self.manager))
+        self.web = StubSite(LockWalletResource(self.manager))
+        self.web_unlock = StubSite(UnlockWalletResource(self.manager))
+        self.web_state = StubSite(StateWalletResource(self.manager))
 
     @inlineCallbacks
     def test_locking(self):

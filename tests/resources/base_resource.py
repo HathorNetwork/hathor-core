@@ -55,7 +55,7 @@ class TestDummyRequest(DummyRequest):
         return json.loads(self.written[0].decode('utf-8'))
 
 
-class TestSite(server.Site):
+class StubSite(server.Site):
     def get(self, url, args=None, headers=None):
         return self._request('GET', url, args, headers)
 
