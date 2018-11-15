@@ -1,12 +1,12 @@
 from hathor.wallet.resources import AddressResource
 from twisted.internet.defer import inlineCallbacks
-from tests.resources.base_resource import TestSite, _BaseResourceTest
+from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
 class AddressTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
-        self.web = TestSite(AddressResource(self.manager))
+        self.web = StubSite(AddressResource(self.manager))
 
     @inlineCallbacks
     def test_get(self):

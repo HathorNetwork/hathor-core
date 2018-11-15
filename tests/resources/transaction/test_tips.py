@@ -1,6 +1,6 @@
 from hathor.transaction.resources import TipsResource
 from twisted.internet.defer import inlineCallbacks
-from tests.resources.base_resource import TestSite, _BaseResourceTest
+from tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor.transaction.genesis import genesis_transactions
 
 from tests.utils import add_new_blocks, add_new_transactions
@@ -9,7 +9,7 @@ from tests.utils import add_new_blocks, add_new_transactions
 class TipsTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
-        self.web = TestSite(TipsResource(self.manager))
+        self.web = StubSite(TipsResource(self.manager))
 
     @inlineCallbacks
     def test_get_tips(self):

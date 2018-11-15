@@ -1,12 +1,12 @@
 from hathor.transaction.resources import DashboardTransactionResource
 from twisted.internet.defer import inlineCallbacks
-from tests.resources.base_resource import TestSite, _BaseResourceTest
+from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
 class DashboardTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
-        self.web = TestSite(DashboardTransactionResource(self.manager))
+        self.web = StubSite(DashboardTransactionResource(self.manager))
 
     @inlineCallbacks
     def test_get(self):

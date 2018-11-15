@@ -1,13 +1,13 @@
 from hathor.transaction.resources import DecodeTxResource
 from twisted.internet.defer import inlineCallbacks
-from tests.resources.base_resource import TestSite, _BaseResourceTest
+from tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor.transaction.genesis import genesis_transactions
 
 
 class DecodeTxTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
-        self.web = TestSite(DecodeTxResource(self.manager))
+        self.web = StubSite(DecodeTxResource(self.manager))
 
     @inlineCallbacks
     def test_get(self):

@@ -2,7 +2,7 @@ from hathor.transaction.resources import PushTxResource
 from hathor.p2p.resources import MiningResource
 from hathor.wallet.resources import SendTokensResource, BalanceResource, HistoryResource
 from twisted.internet.defer import inlineCallbacks
-from tests.resources.base_resource import TestSite, _BaseResourceTest
+from tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor.transaction.genesis import genesis_transactions
 from tests.utils import resolve_block_bytes
 import base64
@@ -11,11 +11,11 @@ import base64
 class DecodeTxTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
-        self.web = TestSite(PushTxResource(self.manager))
-        self.web_tokens = TestSite(SendTokensResource(self.manager))
-        self.web_mining = TestSite(MiningResource(self.manager))
-        self.web_balance = TestSite(BalanceResource(self.manager))
-        self.web_history = TestSite(HistoryResource(self.manager))
+        self.web = StubSite(PushTxResource(self.manager))
+        self.web_tokens = StubSite(SendTokensResource(self.manager))
+        self.web_mining = StubSite(MiningResource(self.manager))
+        self.web_balance = StubSite(BalanceResource(self.manager))
+        self.web_history = StubSite(HistoryResource(self.manager))
 
     @inlineCallbacks
     def test_get(self):
