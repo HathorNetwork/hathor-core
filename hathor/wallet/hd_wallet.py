@@ -287,6 +287,6 @@ class HDWallet(BaseWallet):
             :return: public key compressed in bytes and signature
             :rtype: tuple[bytes, bytes]
         """
-        prehashed_msg = hashlib.sha256(data_to_sign).digest()
+        prehashed_msg = hashlib.sha256(hashlib.sha256(data_to_sign).digest()).digest()
         signature = private_key.sign(prehashed_msg)
         return private_key.sec(), signature
