@@ -99,8 +99,6 @@ class Transaction(BaseTransaction):
             except TransactionDoesNotExist:
                 raise InexistentInput('Input tx does not exist: {}'.format(input_tx.tx_id.hex()))
 
-            self.verify_script(input_tx, spent_tx)
-
             if self.timestamp <= spent_tx.timestamp:
                 raise TimestampError('tx={} timestamp={}, parent={} timestamp={}'.format(
                     self.hash.hex(),
@@ -108,6 +106,8 @@ class Transaction(BaseTransaction):
                     spent_tx.hash.hex(),
                     spent_tx.timestamp,
                 ))
+
+            self.verify_script(input_tx, spent_tx)
 
             # check if any other input in this tx is spending the same output
             key = (input_tx.tx_id, input_tx.index)

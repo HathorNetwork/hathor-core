@@ -33,12 +33,13 @@ class TestCase(unittest.TestCase):
         wallet.lock()
         return wallet
 
-    def create_peer(self, network, peer_id=None, unlock_wallet=True):
+    def create_peer(self, network, peer_id=None, wallet=None, unlock_wallet=True):
         if peer_id is None:
             peer_id = PeerId()
-        wallet = self._create_test_wallet()
-        if unlock_wallet:
-            wallet.unlock(b'MYPASS')
+        if not wallet:
+            wallet = self._create_test_wallet()
+            if unlock_wallet:
+                wallet.unlock(b'MYPASS')
         manager = HathorManager(self.clock, peer_id=peer_id, network=network, wallet=wallet)
         manager.avg_time_between_blocks = 0.0001
         manager.start()
