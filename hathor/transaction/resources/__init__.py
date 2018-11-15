@@ -4,6 +4,7 @@ from hathor.transaction.resources.graphviz import GraphvizResource
 from hathor.transaction.resources.transaction import TransactionResource
 from hathor.transaction.resources.dashboard import DashboardTransactionResource
 from hathor.transaction.resources.tips_histogram import TipsHistogramResource
+from hathor.transaction.resources.tips import TipsResource
 
 __all__ = [
     'DecodeTxResource',
@@ -11,5 +12,6 @@ __all__ = [
     'GraphvizResource',
     'TransactionResource',
     'DashboardTransactionResource',
-    'TipsHistogramResource'
+    'TipsHistogramResource',
+    'TipsResource'
 ]

@@ -349,6 +349,7 @@ class HathorManager(object):
 
         tx.mark_inputs_as_used()
         tx.update_voided_info()
+        tx.set_conflict_twins()
 
         # Propagate to our peers.
         self.connections.send_tx_to_peers(tx)
