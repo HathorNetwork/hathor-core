@@ -91,7 +91,7 @@ class BaseWallet:
     def get_private_key(self, address58):
         raise NotImplementedError
 
-    def get_input_aux_data(self, private_key):
+    def get_input_aux_data(self, data_to_sign, private_key):
         raise NotImplementedError
 
     def prepare_transaction(self, cls, inputs, outputs):
@@ -108,16 +108,24 @@ class BaseWallet:
         :param outputs: the tx outputs
         :type inputs: List[WalletOutputInfo]
         """
-        tx_inputs = []
-        for txin in inputs:
-            public_key_bytes, signature = self.get_input_aux_data(txin.private_key)
-            tx_inputs.append(TxInput(txin.tx_id, txin.index, P2PKH.create_input_data(public_key_bytes, signature)))
-
         tx_outputs = []
         for txout in outputs:
             tx_outputs.append(TxOutput(txout.value, P2PKH.create_output_script(txout.address)))
 
-        return cls(inputs=tx_inputs, outputs=tx_outputs)
+        tx_inputs = []
+        private_keys = []
+        for txin in inputs:
+            private_keys.append(txin.private_key)
+            tx_inputs.append(TxInput(txin.tx_id, txin.index, b''))
+
+        tx = cls(inputs=tx_inputs, outputs=tx_outputs)
+        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+
+        for txin, privkey in zip(tx.inputs, private_keys):
+            public_key_bytes, signature = self.get_input_aux_data(data_to_sign, privkey)
+            txin.data = P2PKH.create_input_data(public_key_bytes, signature)
+
+        return tx
 
     def prepare_transaction_incomplete_inputs(self, cls, inputs, outputs):
         """Uses prepare_transaction() to prepare transaction.

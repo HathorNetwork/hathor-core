@@ -1,6 +1,7 @@
 from enum import IntEnum
 from collections import namedtuple
 import struct
+import hashlib
 
 from twisted.logger import Logger
 
@@ -13,8 +14,6 @@ from hathor.crypto.util import get_hash160, get_public_key_from_bytes_compressed
 from hathor.transaction.exceptions import ScriptError, OutOfData, MissingStackItems, \
                                           EqualVerifyFailed, FinalStackInvalid, TimeLocked
 
-# TODO what are we using for the signature?
-DATA_TO_SIGN = b'DATA_TO_SIGN'
 
 ScriptExtras = namedtuple('ScriptExtras', 'tx txin spent_tx')
 
@@ -350,8 +349,10 @@ def op_checksig(stack, log, extras):
     pubkey = stack.pop()
     signature = stack.pop()
     public_key = get_public_key_from_bytes_compressed(pubkey)
+    data_to_sign = extras.tx.get_sighash_all()
+    hashed_data = hashlib.sha256(data_to_sign).digest()
     try:
-        public_key.verify(signature, DATA_TO_SIGN, ec.ECDSA(hashes.SHA256()))
+        public_key.verify(signature, hashed_data, ec.ECDSA(hashes.SHA256()))
         # valid, push true to stack
         stack.append(1)
     except InvalidSignature:

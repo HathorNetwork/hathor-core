@@ -1,11 +1,10 @@
-import unittest
 import os
 import json
 import base64
 import struct
 
 from hathor.transaction.scripts import (
-    HathorScript, op_pushdata, DATA_TO_SIGN, ScriptExtras,
+    HathorScript, op_pushdata, ScriptExtras,
     op_pushdata1, op_dup, op_equalverify, op_checksig, op_hash160,
     op_greaterthan_timestamp
 )
@@ -15,6 +14,8 @@ from hathor.crypto.util import get_private_key_from_bytes, get_public_key_from_b
 
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
+
+from tests import unittest
 
 
 class BasicTransaction(unittest.TestCase):
@@ -77,15 +78,29 @@ class BasicTransaction(unittest.TestCase):
         with self.assertRaises(MissingStackItems):
             op_checksig([1], log=[], extras=None)
 
-        signature = genesis_private_key.sign(DATA_TO_SIGN, ec.ECDSA(hashes.SHA256()))
+        from hathor.transaction.genesis import genesis_transactions
+        block = [x for x in genesis_transactions(None) if x.is_block][0]
+
+        from hathor.transaction import Transaction, TxInput, TxOutput
+        txin = TxInput(tx_id=block.hash, index=0, data=b'')
+        txout = TxOutput(value=block.outputs[0].value, script=b'')
+        tx = Transaction(inputs=[txin], outputs=[txout])
+
+        import hashlib
+        data_to_sign = tx.get_sighash_all()
+        hashed_data = hashlib.sha256(data_to_sign).digest()
+        signature = genesis_private_key.sign(hashed_data, ec.ECDSA(hashes.SHA256()))
         pubkey_bytes = get_public_key_bytes_compressed(genesis_public_key)
-        stack = [signature, pubkey_bytes]
-        op_checksig(stack, log=[], extras=None)
-        self.assertEqual(1, stack.pop())
+
+        extras = ScriptExtras(tx=tx, txin=None, spent_tx=None)
 
         stack = [b'aaaaaaaaa', pubkey_bytes]
-        op_checksig(stack, log=[], extras=None)
+        op_checksig(stack, log=[], extras=extras)
         self.assertEqual(0, stack.pop())
+
+        stack = [signature, pubkey_bytes]
+        op_checksig(stack, log=[], extras=extras)
+        self.assertEqual(1, stack.pop())
 
     def test_hash160(self):
         with self.assertRaises(MissingStackItems):
