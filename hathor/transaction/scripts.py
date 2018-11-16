@@ -2,6 +2,7 @@ from enum import IntEnum
 from collections import namedtuple
 import struct
 import hashlib
+import re
 
 from twisted.logger import Logger
 
@@ -16,6 +17,69 @@ from hathor.transaction.exceptions import ScriptError, OutOfData, MissingStackIt
 
 
 ScriptExtras = namedtuple('ScriptExtras', 'tx txin spent_tx')
+
+
+def re_compile(pattern):
+    """ Transform a given script pattern into a regular expression.
+
+    The script pattern is like a regular expression, but you may include two
+    special symbols: (i) OP_DUP, OP_HASH160, and all other opcodes, and
+    (ii) DATA_<length>.
+
+    Example:
+    >>> re_compile(
+    ...     '^(?:DATA_4 OP_GREATERTHAN_TIMESTAMP)? '
+    ...     'OP_DUP OP_HASH160 (DATA_20) OP_EQUALVERIFY OP_CHECKSIG$'
+    ... )
+
+    :return: A compiled regular expression matcher
+    :rtype: :py:class:`re.Pattern`
+    """
+    def _to_byte_pattern(m):
+        x = m.group().decode('ascii').strip()
+        if x.startswith('OP_'):
+            return bytes([Opcode[x]])
+        elif x.startswith('DATA_'):
+            length = int(m.group()[5:])
+            return _re_pushdata(length)
+        else:
+            raise ValueError('Invalid opcode: {}'.format(x))
+
+    p = pattern.encode('ascii')
+    p = re.sub(rb'\s*([A-Z0-9_]+)\s*', _to_byte_pattern, p)
+    return re.compile(p, re.DOTALL)
+
+
+def _re_pushdata(length):
+    """ Create a regular expression that matches a data block with a given length.
+
+    :return: A non-compiled regular expression
+    :rtype: bytes
+    """
+    p1 = [
+        bytes([Opcode.OP_PUSHDATA1]),
+        b'.{',
+        str(length + 1).encode('ascii'),
+        b'}'
+    ]
+
+    if length >= 75:
+        ret = p1
+    else:
+        p2 = [
+            b'[\0-\75].{',
+            str(length).encode('ascii'),
+            b'}'
+        ]
+        ret = [
+            b'(?:(?:',
+            b''.join(p1),
+            b')|(?:',
+            b''.join(p2),
+            b'))',
+        ]
+
+    return b''.join(ret)
 
 
 class Opcode(IntEnum):
@@ -54,6 +118,11 @@ class HathorScript:
 
 
 class P2PKH:
+    re_match = re_compile(
+        '^(?:DATA_4 OP_GREATERTHAN_TIMESTAMP)? '
+        'OP_DUP OP_HASH160 (DATA_20) OP_EQUALVERIFY OP_CHECKSIG$'
+    )
+
     def __init__(self, address):
         """This class represents the pay to public hash key script. It enables the person
         who has the corresponding private key of the address to spend the tokens.
@@ -135,17 +204,14 @@ class P2PKH:
 
         :rtype: :py:class:`hathor.transaction.scripts.P2PKH` or None
         """
-        if (
-            script[0] == Opcode.OP_DUP
-            and script[1] == Opcode.OP_HASH160
-            and script[-2] == Opcode.OP_EQUALVERIFY
-            and script[-1] == Opcode.OP_CHECKSIG
-        ):
-            pos = 2
-            if script[2] > 75:
-                pos = 3
-            size = script[pos]
-            address = script[pos+1:size+pos+1]
+        match = cls.re_match.search(script)
+        if match:
+            groups = match.groups()
+            pushdata = groups[0]
+            if pushdata[0] > 75:
+                address = pushdata[2:]
+            else:
+                address = pushdata[1:]
             address_b58 = get_address_b58_from_bytes(address)
             return cls(address_b58)
         return None
