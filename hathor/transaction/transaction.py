@@ -121,9 +121,8 @@ class Transaction(BaseTransaction):
         :type input_tx: Input
         :type spent_tx: Transaction
         """
-        script_output = spent_tx.outputs[input_tx.index].script
         try:
-            script_eval(script_output, input_tx.data, tx=self, txin=input_tx, spent_tx=spent_tx)
+            script_eval(self, input_tx, spent_tx)
         except ScriptError as e:
             raise InvalidInputData from e
 
