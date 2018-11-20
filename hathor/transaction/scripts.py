@@ -13,7 +13,8 @@ from cryptography.hazmat.primitives import hashes
 from hathor.crypto.util import get_hash160, get_public_key_from_bytes_compressed, \
                                get_address_b58_from_bytes, get_address_b58_from_public_key_bytes_compressed
 from hathor.transaction.exceptions import ScriptError, OutOfData, MissingStackItems, \
-                                          EqualVerifyFailed, FinalStackInvalid, TimeLocked
+                                          EqualVerifyFailed, FinalStackInvalid, TimeLocked, \
+                                          OracleChecksigFailed, DataIndexError, VerifyFailed
 
 
 ScriptExtras = namedtuple('ScriptExtras', 'tx txin spent_tx')
@@ -248,18 +249,24 @@ class P2PKH:
         return cls(address)
 
 
-def script_eval(output_script, input_data, tx, txin, spent_tx):
+def script_eval(tx, txin, spent_tx):
     """Evaluates the output script and input data according to
     a very limited subset of Bitcoin's scripting language.
 
-    :param output_script: the script in the tx output
-    :type output_script: bytes
+    :param tx: the transaction being validated, the 'owner' of the input data
+    :type tx: :py:class:`hathor.transaction.Transaction`
 
-    :param input_data: the tx input data
-    :type input_data: bytes
+    :param txin: transaction input being evaluated
+    :type txin: :py:class:`hathor.transaction.TxInput`
+
+    :param spent_tx: the transaction referenced by the input
+    :type spent_tx: :py:class:`hathor.transaction.BaseTransaction`
 
     :raises ScriptError: if script verification fails
     """
+    input_data = txin.data
+    output_script = spent_tx.outputs[txin.index].script
+
     stack = []
     # merge input_data and output_script
     full_data = input_data + output_script
@@ -305,7 +312,7 @@ def op_pushdata(position, full_data, stack):
     :param stack: the stack used when evaluating the script
     :type stack: List[]
 
-    :raises OutOfData: if can't read data to be pushed
+    :raises OutOfData: if data length to read is larger than what's available
 
     :return: new position to be read from full_data
     :rtype: int
@@ -332,7 +339,7 @@ def op_pushdata1(position, full_data, stack):
     :param stack: the stack used when evaluating the script
     :type stack: List[]
 
-    :raises OutOfData: if can't read data to be pushed
+    :raises OutOfData: if data length to read is larger than what's available
 
     :return: new position to be read from full_data
     :rtype: int
@@ -441,6 +448,270 @@ def op_hash160(stack, log, extras):
     elem1 = stack.pop()
     new_elem = get_hash160(elem1)
     stack.append(new_elem)
+
+
+def op_checkdatasig(stack, log, extras):
+    """Verifies public key, signature and data match. Expects public key to be on top of stack, followed
+    by signature and data. If they match, put data on stack; otherwise, fail.
+
+    :param stack: the stack used when evaluating the script
+    :type stack: List[]
+
+    :raises MissingStackItems: if there aren't 3 element on stack
+    :raises OracleChecksigFailed: invalid signature, given data and public key
+    """
+    if len(stack) < 3:
+        raise MissingStackItems('OP_CHECKDATASIG: need 3 elements on stack, currently {}'.format(len(stack)))
+    pubkey = stack.pop()
+    signature = stack.pop()
+    data = stack.pop()
+    public_key = get_public_key_from_bytes_compressed(pubkey)
+    try:
+        public_key.verify(signature, data, ec.ECDSA(hashes.SHA256()))
+        # valid, push true to stack
+        stack.append(data)
+    except InvalidSignature as e:
+        raise OracleChecksigFailed from e
+
+
+def get_data_value(k, data):
+    """Extracts the kth value from data.
+
+    data should be in the format value0:value1:value2:...:valueN. This last representation
+    is merely for understanding the logic. In practice, data will be a sequence of bytes,
+    with each value preceded by the length of such value.
+
+    # TODO allow values larger than 255 bytes (some logic similar to OP_PUSHDATA1?)
+
+    :param k: index of item to retrieve
+    :type k: int
+
+    :param data: data to get value from
+    :type data: bytes
+
+    :raises OutOfData: if data length to read is larger than what's available
+    :raises DataIndexError: index requested from data is not available
+    """
+    data_len = len(data)
+    position = 0
+    iteration = 0
+    while position < data_len:
+        length = data[position]
+        if length == 0:
+            # TODO throw error
+            pass
+        position += 1
+        if (position + length) > len(data):
+            raise OutOfData('trying to read {} bytes starting at {}, available {}'
+                            .format(length, position, len(data)))
+        value = data[position:position+length]
+        if iteration == k:
+            return value
+        iteration += 1
+        position += length
+    raise DataIndexError
+
+
+def binary_to_int(binary):
+    """Receives a binary and transforms it to an integer
+
+    :param binary: value to convert
+    :type binary: bytes
+    """
+    if len(binary) == 1:
+        _format = '!B'
+    elif len(binary) == 2:
+        _format = '!H'
+    elif len(binary) == 4:
+        _format = '!I'
+    elif len(binary) == 8:
+        _format == '!L'
+    else:
+        raise struct.error
+
+    (value,) = struct.unpack(_format, binary)
+    return value
+
+
+def op_data_strequal(stack, log, extras):
+    """Equivalent to an OP_GET_DATA_STR followed by an OP_EQUALVERIFY.
+
+    Consumes three parameters from stack: <data> <k> <value>. Gets the kth value
+    from <data> as a string and verifies it's equal to <value>. If so, puts <data>
+    back on the stack.
+
+    :param stack: the stack used when evaluating the script
+    :type stack: List[]
+
+    :raises MissingStackItems: if there aren't 3 element on stack
+    :raises VerifyFailed: verification failed
+    """
+    if len(stack) < 3:
+        raise MissingStackItems('OP_DATA_STREQUAL: need 3 elements on stack, currently {}'.format(len(stack)))
+    value = stack.pop()
+    data_k = stack.pop()
+    data_k_int = data_k[0]      # data_k is a 1-byte unsigned int
+    data = stack.pop()
+
+    data_value = get_data_value(data_k_int, data)
+    if data_value != value:
+        raise VerifyFailed
+
+    stack.append(data)
+
+
+def op_data_greaterthan(stack, log, extras):
+    """Equivalent to an OP_GET_DATA_INT followed by an OP_GREATERTHAN.
+
+    Consumes three parameters from stack: <data> <k> <n>. Gets the kth value
+    from <data> as an integer and verifies it's greater than <n>.
+
+    :param stack: the stack used when evaluating the script
+    :type stack: List[]
+
+    :raises MissingStackItems: if there aren't 3 element on stack
+    :raises VerifyFailed: verification failed
+    """
+    if len(stack) < 3:
+        raise MissingStackItems('OP_DATA_GREATERTHAN: need 3 elements on stack, currently {}'.format(len(stack)))
+    value = stack.pop()
+    data_k = stack.pop()
+    data_k_int = data_k[0]      # data_k is a 1-byte unsigned int
+    data = stack.pop()
+
+    data_value = get_data_value(data_k_int, data)
+    try:
+        data_int = binary_to_int(data_value)
+        value_int = binary_to_int(value)
+    except (ValueError, struct.error) as e:
+        raise VerifyFailed from e
+
+    if data_int <= value_int:
+        raise VerifyFailed
+
+    stack.append(data)
+
+
+def op_data_match_interval(stack, log, extras):
+    """Equivalent to an OP_GET_DATA_INT followed by an OP_MATCH_INTERVAL.
+
+    :param stack: the stack used when evaluating the script
+    :type stack: List[]
+
+    :raises MissingStackItems: if there aren't 3 element on stack
+    :raises VerifyFailed: verification failed
+    """
+    if len(stack) < 1:
+        raise MissingStackItems('OP_DATA_MATCH_INTERVAL: stack is empty')
+
+    n_items = stack.pop()[0]
+    # number of items in stack that will be used
+    will_use = 2 * n_items + 3      # n data_points, n + 1 pubkeys, k and data
+    if len(stack) < will_use:
+        raise MissingStackItems('OP_DATA_MATCH_INTERVAL: need {} elements on stack, currently {}'
+                                .format(will_use, len(stack)))
+
+    items = []
+    try:
+        for _ in range(n_items):
+            pubkey = stack.pop()
+            buf = stack.pop()
+            value = binary_to_int(buf)
+            items.append((value, pubkey))
+        # one pubkey is left on stack
+        last_pubkey = stack.pop()
+        # next two items are data index and data
+        data_k = stack.pop()
+        data_k_int = data_k[0]      # data_k is a 1-byte unsigned int
+        data = stack.pop()
+        data_value = get_data_value(data_k_int, data)
+        data_int = binary_to_int(data_value)
+    except (ValueError, struct.error) as e:
+        raise VerifyFailed from e
+
+    for (value_int, pubkey) in items:
+        if data_int > value_int:
+            stack.append(pubkey)
+            return
+    # if none of the values match, last pubkey on stack is winner
+    stack.append(last_pubkey)
+
+
+def op_data_match_value(stack, log, extras):
+    """Equivalent to an OP_GET_DATA_STR followed by an OP_MATCH_VALUE.
+
+    :param stack: the stack used when evaluating the script
+    :type stack: List[]
+
+    :raises MissingStackItems: if there aren't 3 element on stack
+    :raises VerifyFailed: verification failed
+    """
+    if len(stack) < 1:
+        raise MissingStackItems('OP_DATA_MATCH_VALUE: empty stack')
+    n_items = stack.pop()[0]
+
+    # number of items in stack that will be used
+    will_use = 2 * n_items + 3      # n data_points, n + 1 keys, k and data
+    if len(stack) < will_use:
+        raise MissingStackItems('OP_DATA_MATCH_VALUE: need {} elements on stack, currently {}'
+                                .format(will_use, len(stack)))
+
+    items = {}
+    try:
+        for _ in range(n_items):
+            pubkey = stack.pop()
+            buf = stack.pop()
+            value = binary_to_int(buf)
+            items[value] = pubkey
+    except (ValueError, struct.error) as e:
+        raise VerifyFailed from e
+
+    # one pubkey is left on stack
+    last_pubkey = stack.pop()
+    # next two items are data index and data
+    data_k = stack.pop()
+    data_k_int = data_k[0]      # data_k is a 1-byte unsigned int
+    data = stack.pop()
+    data_value = get_data_value(data_k_int, data)
+    data_int = binary_to_int(data_value)
+    winner_pubkey = items.get(data_int, last_pubkey)
+    stack.append(winner_pubkey)
+
+
+def op_find_p2pkh(stack, log, extras):
+    """Checks whether the current transaction has an output with a P2PKH script with
+    the given public key hash and the same amount as the input.
+
+    :param stack: the stack used when evaluating the script
+    :type stack: List[]
+
+    :param tx: Transaction to be added
+    :type tx: :py:class:`hathor.transaction.BaseTransaction`
+
+    :param contract_value: amount available on the nano contract (on the original output)
+    :type contract_type: int
+
+    :raises MissingStackItems: if stack is empty
+    :raises VerifyFailed: verification failed
+    """
+    if not len(stack):
+        raise MissingStackItems('OP_FIND_P2PKH: empty stack')
+
+    spent_tx = extras.spent_tx
+    txin = extras.txin
+    tx = extras.tx
+    contract_value = spent_tx.outputs[txin.index].value
+
+    address = stack.pop()
+    address_b58 = get_address_b58_from_bytes(address)
+    for output in tx.outputs:
+        p2pkh_out = P2PKH.verify_script(output.script)
+        if p2pkh_out:
+            if p2pkh_out.address == address_b58 and output.value == contract_value:
+                stack.append(1)
+                return
+    # didn't find any match
+    raise VerifyFailed
 
 
 MAP_OPCODE_TO_FN = {

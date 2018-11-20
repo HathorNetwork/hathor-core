@@ -92,5 +92,20 @@ class FinalStackInvalid(ScriptError):
     """Value left on stack is not true"""
 
 
+class OracleChecksigFailed(ScriptError):
+    """Signature, public key and data don't match. Used mostly with nano contracts"""
+
+
+class DataIndexError(ScriptError):
+    """The value for data at the given index does not exist.
+
+    For example, if the data is of form 'value1:value2:value3' and we try to access value at index 5.
+    """
+
+
+class VerifyFailed(ScriptError):
+    """For all cases when there's a comparison that fails"""
+
+
 class TimeLocked(ScriptError):
     """Transaction is invalid because it is time locked"""
