@@ -202,7 +202,7 @@ class BaseTransaction:
         :rtype: Iter[BaseTransaction]
         """
         for parent_hash in self.parents:
-            yield self.storage.get_transaction_by_hash_bytes(parent_hash)
+            yield self.storage.get_transaction(parent_hash)
 
     @property
     def is_genesis(self):
@@ -211,7 +211,7 @@ class BaseTransaction:
         :rtype: bool
         """
         if self.storage:
-            genesis = self.storage.get_genesis_by_hash_bytes(self.hash)
+            genesis = self.storage.get_genesis(self.hash)
             if genesis:
                 return True
             else:
@@ -233,7 +233,7 @@ class BaseTransaction:
             voided_by.update(parent_meta.voided_by)
 
         for txin in self.inputs:
-            spent_tx = self.storage.get_transaction_by_hash_bytes(txin.tx_id)
+            spent_tx = self.storage.get_transaction(txin.tx_id)
             spent_meta = spent_tx.get_metadata()
             voided_by.update(spent_meta.voided_by)
 
@@ -248,7 +248,7 @@ class BaseTransaction:
         for h in voided_by:
             if h == self.hash:
                 continue
-            tx = self.storage.get_transaction_by_hash_bytes(h)
+            tx = self.storage.get_transaction(h)
             tx.check_conflicts()
 
     def mark_inputs_as_used(self):
@@ -260,7 +260,7 @@ class BaseTransaction:
     def mark_input_as_used(self, txin):
         """ Mark a given input as used
         """
-        spent_tx = self.storage.get_transaction_by_hash_bytes(txin.tx_id)
+        spent_tx = self.storage.get_transaction(txin.tx_id)
         spent_meta = spent_tx.get_metadata()
         spent_by = spent_meta.spent_outputs[txin.index]  # Set[bytes(hash)]
         spent_by.add(self.hash)
@@ -268,7 +268,7 @@ class BaseTransaction:
 
         if len(spent_by) > 1:
             for h in spent_by:
-                tx = self.storage.get_transaction_by_hash_bytes(h)
+                tx = self.storage.get_transaction(h)
                 tx_meta = tx.get_metadata()
                 tx_meta.conflict_with.update(spent_by)
                 tx_meta.conflict_with.discard(tx.hash)
@@ -296,7 +296,7 @@ class BaseTransaction:
 
         for h in meta.conflict_with:
             # now we need to update accumulated weight and get new metadata info
-            tx = self.storage.get_transaction_by_hash_bytes(h)
+            tx = self.storage.get_transaction(h)
             meta = tx.update_accumulated_weight()
             tx_list.append(tx)
 
@@ -327,8 +327,8 @@ class BaseTransaction:
 
         meta.voided_by.add(self.hash)
         self.storage.save_transaction(self, only_metadata=True)
-        self.storage._del_from_cache(self)
-        self.storage._add_to_voided(self)
+        self.storage._del_from_cache(self)  # XXX: accessing private method
+        self.storage._add_to_voided(self)  # XXX: accessing private method
 
         used = set()
         # TODO FIXME Run in topological sort.
@@ -390,7 +390,7 @@ class BaseTransaction:
         if not meta.conflict_with:
             return
 
-        conflict_txs = [self.storage.get_transaction_by_hash_bytes(h) for h in meta.conflict_with]
+        conflict_txs = [self.storage.get_transaction(h) for h in meta.conflict_with]
         self.check_twins(conflict_txs)
 
     def check_twins(self, transactions):
@@ -466,16 +466,16 @@ class BaseTransaction:
         connected = True  # Assume connected.
         for parent_hash_bytes in self.parents:
             # Find the parent.
-            if storage.transaction_exists_by_hash_bytes(parent_hash_bytes):
+            if storage.transaction_exists(parent_hash_bytes):
                 # If the parent is in the main storage, it's valid.
                 continue
-            if not storage_sync.transaction_exists_by_hash_bytes(parent_hash_bytes):
+            if not storage_sync.transaction_exists(parent_hash_bytes):
                 # We can't even find the parent in temp storage. So our state is "disconnected" for now.
                 connected = False
                 break
 
             # The parent is in storage_sync. Get the data.
-            parent = storage_sync.get_transaction_by_hash_bytes(parent_hash_bytes)
+            parent = storage_sync.get_transaction(parent_hash_bytes)
 
             # Now check the parent connectivity, using memoized results.
             # TODO: assumes that our temp storage_sync is in-memory; otherwise memoization data will be lost.
@@ -607,7 +607,7 @@ class BaseTransaction:
         for parent_hash in self.parents:
             # TODO should check repeated hashes in parents?
             try:
-                parent = self.storage.get_transaction_by_hash_bytes(parent_hash)
+                parent = self.storage.get_transaction(parent_hash)
                 if self.timestamp <= parent.timestamp:
                     raise TimestampError('tx={} timestamp={}, parent={} timestamp={}'.format(
                         self.hash.hex(),

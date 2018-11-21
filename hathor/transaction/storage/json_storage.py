@@ -24,7 +24,7 @@ class TransactionJSONStorage(TransactionStorage, TransactionStorageAsyncFromSync
 
     def _save_transaction(self, tx):
         data = tx.to_json()
-        filepath = self.generate_filepath(data['hash'])
+        filepath = self.generate_filepath(tx.hash)
         self.save_to_json(filepath, data)
         if tx.is_block:
             self._save_blockhash_by_height(tx)
@@ -35,11 +35,11 @@ class TransactionJSONStorage(TransactionStorage, TransactionStorageAsyncFromSync
             return
         metadata = tx.get_metadata()
         data = self.serialize_metadata(metadata)
-        filepath = self.generate_metadata_filepath(data['hash'])
+        filepath = self.generate_metadata_filepath(tx.hash)
         self.save_to_json(filepath, data)
 
-    def generate_filepath(self, hash_hex):
-        filename = 'tx_{}.json'.format(hash_hex)
+    def generate_filepath(self, hash_bytes):
+        filename = 'tx_{}.json'.format(hash_bytes.hex())
         filepath = os.path.join(self.path, filename)
         return filepath
 
@@ -49,23 +49,18 @@ class TransactionJSONStorage(TransactionStorage, TransactionStorageAsyncFromSync
     def load_metadata(self, data):
         return TransactionMetadata.create_from_json(data)
 
-    def generate_metadata_filepath(self, hash_hex):
-        filename = 'tx_{}_metadata.json'.format(hash_hex)
+    def generate_metadata_filepath(self, hash_bytes):
+        filename = 'tx_{}_metadata.json'.format(hash_bytes.hex())
         filepath = os.path.join(self.path, filename)
         return filepath
 
-    @deprecated('Use transaction_exists_by_hash_deferred instead')
-    def transaction_exists_by_hash(self, hash_hex):
-        hash_bytes = bytes.fromhex(hash_hex)
-        genesis = self.get_genesis_by_hash_bytes(hash_bytes)
+    @deprecated('Use transaction_exists_deferred instead')
+    def transaction_exists(self, hash_bytes):
+        genesis = self.get_genesis(hash_bytes)
         if genesis:
             return True
-        filepath = self.generate_filepath(hash_hex)
+        filepath = self.generate_filepath(hash_bytes)
         return os.path.isfile(filepath)
-
-    @deprecated('Use transaction_exists_by_hash_bytes_deferred instead')
-    def transaction_exists_by_hash_bytes(self, hash_bytes):
-        return skip_warning(super().transaction_exists_by_hash_bytes)(hash_bytes)
 
     def save_to_json(self, filepath, data):
         with open(filepath, 'w') as json_file:
@@ -155,29 +150,24 @@ class TransactionJSONStorage(TransactionStorage, TransactionStorageAsyncFromSync
         assert tx.hash == hash_bytes, 'Hashes differ: {} != {}'.format(tx.hash.hex(), hash_bytes.hex())
         return tx
 
-    @deprecated('Use get_transaction_by_hash_deferred instead')
-    def get_transaction_by_hash(self, hash_hex):
-        return skip_warning(super().get_transaction_by_hash)(hash_hex)
-
-    @deprecated('Use get_transaction_by_hash_bytes_deferred instead')
-    def get_transaction_by_hash_bytes(self, hash_bytes):
-        genesis = self.get_genesis_by_hash_bytes(hash_bytes)
+    @deprecated('Use get_transaction_deferred instead')
+    def get_transaction(self, hash_bytes):
+        genesis = self.get_genesis(hash_bytes)
         if genesis:
             return genesis
 
-        hash_hex = hash_bytes.hex()
-        filepath = self.generate_filepath(hash_hex)
-        data = self.load_from_json(filepath, TransactionDoesNotExist(hash_hex))
+        filepath = self.generate_filepath(hash_bytes)
+        data = self.load_from_json(filepath, TransactionDoesNotExist())
         tx = self.load(data)
         try:
-            meta = self._get_metadata_by_hash(hash_hex)
+            meta = self._get_metadata_by_hash(hash_bytes)
             tx._metadata = meta
         except TransactionMetadataDoesNotExist:
             pass
         return tx
 
-    def _get_metadata_by_hash(self, hash_hex):
-        filepath = self.generate_metadata_filepath(hash_hex)
+    def _get_metadata_by_hash(self, hash_bytes):
+        filepath = self.generate_metadata_filepath(hash_bytes)
         data = self.load_from_json(filepath, TransactionMetadataDoesNotExist)
         return self.load_metadata(data)
 

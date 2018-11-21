@@ -1,6 +1,6 @@
 # encoding: utf-8
 from twisted.internet import threads
-from twisted.internet.defer import inlineCallbacks
+from twisted.internet.defer import inlineCallbacks, succeed
 from twisted.logger import Logger
 
 from hathor.transaction.storage.transaction_storage import TransactionStorage
@@ -104,29 +104,21 @@ class TransactionCacheStorage(TransactionStorage):
         else:
             self.cache.move_to_end(tx.hash, last=False)
 
-    @deprecated('Use transaction_exists_by_hash_deferred instead')
-    def transaction_exists_by_hash(self, hash_hex):
-        return skip_warning(super().transaction_exists_by_hash)(hash_hex)
-
-    @deprecated('Use transaction_exists_by_hash_bytes_deferred instead')
-    def transaction_exists_by_hash_bytes(self, hash_bytes):
+    @deprecated('Use transaction_exists_deferred instead')
+    def transaction_exists(self, hash_bytes):
         if hash_bytes in self.cache:
             return True
-        return skip_warning(self.store.transaction_exists_by_hash_bytes)(hash_bytes)
+        return skip_warning(self.store.transaction_exists)(hash_bytes)
 
-    @deprecated('Use get_transaction_by_hash_deferred instead')
-    def get_transaction_by_hash(self, hash_hex):
-        return skip_warning(super().get_transaction_by_hash)(hash_hex)
-
-    @deprecated('Use get_transaction_by_hash_bytes_deferred instead')
-    def get_transaction_by_hash_bytes(self, hash_bytes):
+    @deprecated('Use get_transaction_deferred instead')
+    def get_transaction(self, hash_bytes):
         if hash_bytes in self.cache:
             tx = self.cache[hash_bytes]
             self.cache.move_to_end(hash_bytes, last=False)
             self.stats['hit'] += 1
             return tx
         else:
-            tx = skip_warning(self.store.get_transaction_by_hash_bytes)(hash_bytes)
+            tx = skip_warning(self.store.get_transaction)(hash_bytes)
             self._update_cache(tx)
             self.stats['miss'] += 1
             return tx
@@ -152,28 +144,20 @@ class TransactionCacheStorage(TransactionStorage):
         # call super which adds to index if needed
         yield super().save_transaction_deferred(tx)
 
-    def transaction_exists_by_hash_deferred(self, hash_hex):
-        return super().transaction_exists_by_hash_deferred(hash_hex)
-
-    @inlineCallbacks
-    def transaction_exists_by_hash_bytes_deferred(self, hash_bytes):
+    def transaction_exists_deferred(self, hash_bytes):
         if hash_bytes in self.cache:
-            return True
-        res = yield self.store.transaction_exists_by_hash_bytes_deferred(hash_bytes)
-        return res
-
-    def get_transaction_by_hash_deferred(self, hash_hex):
-        super().get_transaction_by_hash_deferred(hash_hex)
+            return succeed(True)
+        return self.store.transaction_exists_deferred(hash_bytes)
 
     @inlineCallbacks
-    def get_transaction_by_hash_bytes_deferred(self, hash_bytes):
+    def get_transaction_deferred(self, hash_bytes):
         if hash_bytes in self.cache:
             tx = self.cache[hash_bytes]
             self.cache.move_to_end(hash_bytes, last=False)
             self.stats['hit'] += 1
             return tx
         else:
-            tx = yield self.store.get_transaction_by_hash_bytes_deferred(hash_bytes)
+            tx = yield self.store.get_transaction_deferred(hash_bytes)
             # TODO: yield self._update_cache_deferred(tx)
             self._update_cache(tx)
             self.stats['miss'] += 1

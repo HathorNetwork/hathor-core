@@ -96,7 +96,7 @@ class NodeSyncTimestamp(object):
         if self.synced_timestamp is None:
             return
         # for parent_hash in tx.parents:
-        #     parent = self.protocol.node.tx_storage.get_transaction_by_hash_bytes(parent_hash)
+        #     parent = self.protocol.node.tx_storage.get_transaction(parent_hash)
         #     if parent.timestamp > self.synced_timestamp:
         #         # print('send_tx_to_peer_if_possible(): discarded')
         #         return
@@ -234,7 +234,7 @@ class NodeSyncTimestamp(object):
             payload = yield self.get_peer_next(next_timestamp, offset=next_offset)
             count = 0
             for h in payload.hashes:
-                if not self.manager.tx_storage.transaction_exists_by_hash_bytes(h):
+                if not self.manager.tx_storage.transaction_exists(h):
                     pending.append(self.get_data(h))
                     count += 1
             if count == 0:
@@ -497,11 +497,11 @@ class NodeSyncTimestamp(object):
         hash_hex, _, parents_json = payload2.partition(' ')
         parents = json.loads(parents_json)
 
-        if self.protocol.tx_storage.transaction_exists_by_hash(hash_hex):
+        if self.protocol.tx_storage.transaction_exists(bytes.fromhex(hash_hex)):
             return
 
         for parent_hash in parents:
-            if not self.protocol.tx_storage.transaction_exists_by_hash(parent_hash):
+            if not self.protocol.tx_storage.transaction_exists(bytes.fromhex(parent_hash)):
                 # Are we out-of-sync with this peer?
                 return
 
@@ -518,7 +518,7 @@ class NodeSyncTimestamp(object):
         hash_hex = payload
         # self.log.debug('handle_get_data {}'.format(hash_hex))
         try:
-            tx = self.protocol.node.tx_storage.get_transaction_by_hash(hash_hex)
+            tx = self.protocol.node.tx_storage.get_transaction(bytes.fromhex(hash_hex))
             self.send_data(tx)
         except TransactionDoesNotExist:
             # TODO Send NOT-FOUND?
@@ -546,7 +546,7 @@ class NodeSyncTimestamp(object):
         else:
             raise ValueError('Unknown payload load')
 
-        if self.protocol.node.tx_storage.get_genesis_by_hash_bytes(tx.hash):
+        if self.protocol.node.tx_storage.get_genesis(tx.hash):
             # We just got the data of a genesis tx/block. What should we do?
             # Will it reduce peer reputation score?
             return
@@ -689,12 +689,12 @@ class NodeSyncLeftToRightManager(object):  # pragma: no cover
         """
         def are_parents_known(tip):
             for parent_hash in tip.parents:
-                if not self.manager.tx_storage.transaction_exists_by_hash_bytes(parent_hash):
+                if not self.manager.tx_storage.transaction_exists(parent_hash):
                     return False
             return True
 
         def is_known(tip):
-            if not self.manager.tx_storage.transaction_exists_by_hash_bytes(tip.hash):
+            if not self.manager.tx_storage.transaction_exists(tip.hash):
                 return False
             return True
 
@@ -754,7 +754,7 @@ class NodeSyncLeftToRightManager(object):  # pragma: no cover
 
         print('on_tips_received(): All blocks are known. Checking tip transactions...')
         for tip in tip_transactions:
-            if not self.manager.tx_storage.transaction_exists_by_hash(tip.hash.hex()):
+            if not self.manager.tx_storage.transaction_exists(tip.hash):
                 print('on_tips_received(): Syncing transactions...')
                 conn.state.send_get_transactions(tip.hash.hex())
                 self.manager.state = self.manager.NodeState.SYNCING
@@ -780,7 +780,7 @@ class NodeSyncLeftToRightManager(object):  # pragma: no cover
 
         # Let's check whether we know these received hashes.
         for i, h in enumerate(block_hashes):
-            if not self.manager.tx_storage.transaction_exists_by_hash(h):
+            if not self.manager.tx_storage.transaction_exists(bytes.fromhex(h)):
                 first_unknown = i
                 break
         else:
@@ -790,7 +790,7 @@ class NodeSyncLeftToRightManager(object):  # pragma: no cover
 
         # Validate block hashes sequence.
         for h in block_hashes[first_unknown:]:
-            if self.manager.tx_storage.transaction_exists_by_hash(h):
+            if self.manager.tx_storage.transaction_exists(bytes.fromhex(h)):
                 # Something is wrong. We're supposed to unknown all hashes after the first unknown.
                 raise InvalidBlockHashesSequence()
 
@@ -819,7 +819,7 @@ class NodeSyncLeftToRightManager(object):  # pragma: no cover
 
         # Let's check whether we know these received hashes.
         for i, h in enumerate(txs_hashes):
-            if not self.manager.tx_storage.transaction_exists_by_hash(h):
+            if not self.manager.tx_storage.transaction_exists(bytes.fromhex(h)):
                 first_unknown = i
                 break
         else:
@@ -830,7 +830,7 @@ class NodeSyncLeftToRightManager(object):  # pragma: no cover
 
         # Validate block hashes sequence.
         for h in txs_hashes[first_unknown:]:
-            if self.manager.tx_storage.transaction_exists_by_hash(h):
+            if self.manager.tx_storage.transaction_exists(bytes.fromhex(h)):
                 # Something is wrong. We're supposed to unknown all hashes after the first unknown.
                 raise InvalidBlockHashesSequence(h)
 
@@ -877,7 +877,7 @@ class NodeSyncLeftToRightManager(object):  # pragma: no cover
     def handle_get_blocks(self, payload):
         print('handle_get_blocks:', payload)
         hash_hex = payload
-        blocks = self.protocol.node.tx_storage.get_blocks_before(hash_hex, num_blocks=20)
+        blocks = self.protocol.node.tx_storage.get_blocks_before(bytes.fromhex(hash_hex), num_blocks=20)
         block_hashes_hex = [x.hash.hex() for x in blocks]
         output_payload = json.dumps(block_hashes_hex)
         self.send_message(ProtocolMessages.BLOCKS, output_payload)
@@ -893,7 +893,7 @@ class NodeSyncLeftToRightManager(object):  # pragma: no cover
     def handle_get_transactions(self, payload):
         print('handle_get_transactions:', payload)
         hash_hex = payload
-        transactions = self.protocol.node.tx_storage.get_transactions_before(hash_hex, num_blocks=20)
+        transactions = self.protocol.node.tx_storage.get_transactions_before(bytes.fromhex(hash_hex), num_blocks=20)
         txs_hashes_hex = [x.hash.hex() for x in transactions]
         output_payload = json.dumps(txs_hashes_hex)
         print('@@', output_payload)
@@ -943,14 +943,14 @@ class NodeSyncManager(object):  # pragma: no cover
         """
 
         # Save the transaction if we don't have it.
-        if not self.manager.tx_storage.transaction_exists_by_hash_bytes(tx.hash):
+        if not self.manager.tx_storage.transaction_exists(tx.hash):
             # However, if the transaction doesn't connect to the genesis DAG, just save in temporary storage.
             if tx.compute_genesis_dag_connectivity(self.manager.tx_storage, self.tx_storage_sync):
                 self.manager.tx_storage.save_transaction(tx)
-            elif not self.tx_storage_sync.transaction_exists_by_hash_bytes(tx.hash):
+            elif not self.tx_storage_sync.transaction_exists(tx.hash):
                 self.tx_storage_sync.save_transaction(tx)
 
-        # meta = self.tx_storage.get_metadata_by_hash_bytes(tx.hash)
+        # meta = tx.get_metadata()
         # meta.peers.add(conn.peer_id.id)
         # self.tx_storage.save_transaction(tx, only_metadata=True)
 
@@ -965,9 +965,9 @@ class NodeSyncManager(object):  # pragma: no cover
         """
         hashes_to_remove = set()
         for hash_hex in self.blocks_to_download:
+            h = bytes.fromhex(hash_hex)
             # Check if we already have this hash, either in temp or permanent storage. If so, remove from list.
-            if (self.manager.tx_storage.transaction_exists_by_hash(hash_hex) or
-                    self.tx_storage_sync.transaction_exists_by_hash(hash_hex)):
+            if self.manager.tx_storage.transaction_exists(h) or self.tx_storage_sync.transaction_exists(h):
                 hashes_to_remove.add(hash_hex)
                 continue
 
@@ -997,11 +997,11 @@ class NodeSyncManager(object):  # pragma: no cover
                 continue
             for parent_hash_bytes in tx.parents:
                 # Find the parent.
-                if not self.manager.tx_storage.transaction_exists_by_hash_bytes(parent_hash_bytes):
+                if not self.manager.tx_storage.transaction_exists(parent_hash_bytes):
                     # If the parent isn't in the main storage, it's not confirmed.
                     continue
                 # The parent is in storage. Get the data.
-                parent = self.manager.tx_storage.get_transaction_by_hash_bytes(parent_hash_bytes)
+                parent = self.manager.tx_storage.get_transaction(parent_hash_bytes)
                 if not parent.is_block:
                     continue
                 # We have a confirmed parent block. So this is the first unconfirmed block!
@@ -1020,7 +1020,7 @@ class NodeSyncManager(object):  # pragma: no cover
             if parent_hash_bytes == confirmed_parent_bytes:
                 continue
             # Did we already store it in sync storage?
-            if self.tx_storage_sync.transaction_exists_by_hash_bytes(parent_hash_bytes):
+            if self.tx_storage_sync.transaction_exists(parent_hash_bytes):
                 # Nothing to do -- we already have this queued up.
                 continue
             # We have a new transaction/block! Request its data.

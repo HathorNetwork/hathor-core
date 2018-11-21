@@ -131,6 +131,6 @@ class Transaction(BaseTransaction):
         try:
             spent_tx = input_tx._tx
         except AttributeError:
-            spent_tx = self.storage.get_transaction_by_hash_bytes(input_tx.tx_id)
+            spent_tx = self.storage.get_transaction(input_tx.tx_id)
             input_tx._tx = spent_tx
         return spent_tx

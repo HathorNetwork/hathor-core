@@ -51,7 +51,8 @@ class TransactionResource(resource.Resource):
             pattern = r'[a-fA-F\d]{64}'
             # Check if parameter is a valid hex hash
             if re.match(pattern, requested_hash):
-                tx = self.manager.tx_storage.get_transaction_by_hash(requested_hash)
+                hash_bytes = bytes.fromhex(requested_hash)
+                tx = self.manager.tx_storage.get_transaction(hash_bytes)
                 serialized = tx.to_json(decode_script=True)
                 serialized['raw'] = tx.get_struct().hex()
                 meta = tx.update_accumulated_weight()

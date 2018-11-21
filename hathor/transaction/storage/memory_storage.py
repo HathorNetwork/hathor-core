@@ -24,24 +24,16 @@ class TransactionMemoryStorage(TransactionStorage, TransactionStorageAsyncFromSy
         if meta:
             self.metadata[tx.hash] = meta
 
-    @deprecated('Use transaction_exists_by_hash_deferred instead')
-    def transaction_exists_by_hash(self, hash_hex):
-        return skip_warning(super().transaction_exists_by_hash)(hash_hex)
-
-    @deprecated('Use transaction_exists_by_hash_bytes_deferred instead')
-    def transaction_exists_by_hash_bytes(self, hash_bytes):
-        genesis = self.get_genesis_by_hash_bytes(hash_bytes)
+    @deprecated('Use transaction_exists_deferred instead')
+    def transaction_exists(self, hash_bytes):
+        genesis = self.get_genesis(hash_bytes)
         if genesis:
             return True
         return hash_bytes in self.transactions
 
-    @deprecated('Use get_transaction_by_hash_deferred instead')
-    def get_transaction_by_hash(self, hash_hex):
-        return skip_warning(super().get_transaction_by_hash)(hash_hex)
-
-    @deprecated('Use get_transaction_by_hash_bytes_deferred instead')
-    def get_transaction_by_hash_bytes(self, hash_bytes):
-        genesis = self.get_genesis_by_hash_bytes(hash_bytes)
+    @deprecated('Use get_transaction_deferred instead')
+    def get_transaction(self, hash_bytes):
+        genesis = self.get_genesis(hash_bytes)
         if genesis:
             return genesis
 

@@ -80,7 +80,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(meta2.voided_by, {tx2.hash})
 
         for txin in tx1.inputs:
-            spent_tx = self.manager1.tx_storage.get_transaction_by_hash_bytes(txin.tx_id)
+            spent_tx = self.manager1.tx_storage.get_transaction(txin.tx_id)
             spent_meta = spent_tx.get_metadata()
             self.assertEqual({tx1.hash, tx2.hash}, spent_meta.spent_outputs[txin.index])
 
@@ -103,7 +103,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(meta3.voided_by, set())
 
         for txin in tx1.inputs:
-            spent_tx = self.manager1.tx_storage.get_transaction_by_hash_bytes(txin.tx_id)
+            spent_tx = self.manager1.tx_storage.get_transaction(txin.tx_id)
             spent_meta = spent_tx.get_metadata()
             self.assertEqual({tx1.hash, tx2.hash, tx3.hash}, spent_meta.spent_outputs[txin.index])
 

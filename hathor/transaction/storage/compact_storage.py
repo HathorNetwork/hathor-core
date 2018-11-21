@@ -1,5 +1,5 @@
 from hathor.transaction.storage.transaction_storage import TransactionStorage, TransactionStorageAsyncFromSync
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionMetadataDoesNotExist
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.util import deprecated, skip_warning
 
@@ -33,26 +33,21 @@ class TransactionCompactStorage(TransactionStorage, TransactionStorageAsyncFromS
         meta = getattr(tx, '_metadata', None)
         if meta:
             data['meta'] = tx._metadata.to_json()
-        filepath = self.generate_filepath(data['tx']['hash'])
+        filepath = self.generate_filepath(tx.hash)
         self.save_to_json(filepath, data)
 
-    def generate_filepath(self, hash_hex):
-        filename = 'tx_{}.json'.format(hash_hex)
+    def generate_filepath(self, hash_bytes):
+        filename = 'tx_{}.json'.format(hash_bytes.hex())
         filepath = os.path.join(self.path, filename)
         return filepath
 
-    @deprecated('Use transaction_exists_by_hash_deferred instead')
-    def transaction_exists_by_hash(self, hash_hex):
-        hash_bytes = bytes.fromhex(hash_hex)
-        genesis = self.get_genesis_by_hash_bytes(hash_bytes)
+    @deprecated('Use transaction_exists_deferred instead')
+    def transaction_exists(self, hash_bytes):
+        genesis = self.get_genesis(hash_bytes)
         if genesis:
             return True
-        filepath = self.generate_filepath(hash_hex)
+        filepath = self.generate_filepath(hash_bytes)
         return os.path.isfile(filepath)
-
-    @deprecated('Use transaction_exists_by_hash_bytes_deferred instead')
-    def transaction_exists_by_hash_bytes(self, hash_bytes):
-        return skip_warning(super().transaction_exists_by_hash_bytes)(hash_bytes)
 
     def save_to_json(self, filepath, data):
         with open(filepath, 'w') as json_file:
@@ -115,32 +110,19 @@ class TransactionCompactStorage(TransactionStorage, TransactionStorageAsyncFromS
         assert tx.hash == hash_bytes, 'Hashes differ: {} != {}'.format(tx.hash.hex(), hash_bytes.hex())
         return tx
 
-    @deprecated('Use get_transaction_by_hash_deferred instead')
-    def get_transaction_by_hash(self, hash_hex):
-        return skip_warning(super().get_transaction_by_hash)(hash_hex)
-
-    @deprecated('Use get_transaction_by_hash_bytes_deferred instead')
-    def get_transaction_by_hash_bytes(self, hash_bytes):
-        genesis = self.get_genesis_by_hash_bytes(hash_bytes)
+    @deprecated('Use get_transaction_deferred instead')
+    def get_transaction(self, hash_bytes):
+        genesis = self.get_genesis(hash_bytes)
         if genesis:
             return genesis
 
-        hash_hex = hash_bytes.hex()
-        filepath = self.generate_filepath(hash_hex)
-        data = self.load_from_json(filepath, TransactionDoesNotExist(hash_hex))
+        filepath = self.generate_filepath(hash_bytes)
+        data = self.load_from_json(filepath, TransactionDoesNotExist())
         tx = self.load(data['tx'])
         if 'meta' in data.keys():
             meta = TransactionMetadata.create_from_json(data['meta'])
             tx._metadata = meta
         return tx
-
-    def _get_metadata_by_hash(self, hash_hex):
-        tx = self.get_transaction_by_hash(hash_hex)
-        meta = getattr(tx, '_metadata', None)
-        if meta:
-            return meta
-        else:
-            raise TransactionMetadataDoesNotExist
 
     @deprecated('Use get_all_transactions_deferred instead')
     def get_all_transactions(self):
