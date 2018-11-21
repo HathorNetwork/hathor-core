@@ -72,11 +72,14 @@ class TransactionCacheStorage(TransactionStorage):
 
     @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx, *, only_metadata=False):
-        skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
         # genesis txs and metadata are kept in memory
         if tx.is_genesis and only_metadata:
             return
+
         self._save_transaction(tx)
+
+        # call super which adds to index if needed
+        skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
 
     def _save_transaction(self, tx):
         """Saves the transaction without modifying TimestampIndex entries (in superclass)."""
@@ -140,11 +143,14 @@ class TransactionCacheStorage(TransactionStorage):
 
     @inlineCallbacks
     def save_transaction_deferred(self, tx, *, only_metadata=False):
-        yield super().save_transaction_deferred(tx)
         if tx.is_genesis and only_metadata:
             return
+
         # TODO: yield self._save_transaction_deferred
         self._save_transaction(tx)
+
+        # call super which adds to index if needed
+        yield super().save_transaction_deferred(tx)
 
     def transaction_exists_by_hash_deferred(self, hash_hex):
         return super().transaction_exists_by_hash_deferred(hash_hex)
