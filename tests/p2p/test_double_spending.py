@@ -228,7 +228,13 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
             WalletOutputInfo(address=address, value=int(value))
         ]
         self.clock.advance(1)
-        tx5 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
+        tx5 = self.manager1.wallet.prepare_transaction_incomplete_inputs(
+            Transaction,
+            inputs,
+            outputs,
+            force=True,
+            tx_storage=self.manager1.tx_storage
+        )
         tx5.weight = 5
         tx5.parents = tx1.parents
         tx5.timestamp = int(self.clock.seconds())

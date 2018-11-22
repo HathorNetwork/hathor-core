@@ -2,18 +2,23 @@
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
 from hathor.indexes import TipsIndex, IndexesManager
 
+from hathor.pubsub import HathorEvents
+
 from collections import deque
 from itertools import chain
 
 
 class TransactionStorage:
-    def __init__(self, with_index=True):
+    def __init__(self, with_index=True, pubsub=None):
         self.with_index = with_index
         if with_index:
             self._reset_cache()
         self._genesis_cache = None
         if self.__class__ == TransactionStorage:
             raise Exception('You cannot directly create an instance of this class.')
+
+        # Pubsub is used to publish tx voided and winner but it's optional
+        self.pubsub = pubsub
 
     def _reset_cache(self):
         """Reset all caches. This function should not be called unless you know
@@ -295,11 +300,15 @@ class TransactionStorage:
         if not self.with_index:
             raise NotImplementedError
         self.voided_tips_index.add_tx(tx)
+        if self.pubsub:
+            self.pubsub.publish(HathorEvents.STORAGE_TX_VOIDED, tx=tx)
 
     def _del_from_voided(self, tx):
         if not self.with_index:
             raise NotImplementedError
         self.voided_tips_index.del_tx(tx)
+        if self.pubsub:
+            self.pubsub.publish(HathorEvents.STORAGE_TX_WINNER, tx=tx)
 
     def _add_to_cache(self, tx):
         if not self.with_index:
