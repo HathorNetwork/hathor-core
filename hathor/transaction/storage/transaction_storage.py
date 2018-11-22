@@ -65,7 +65,9 @@ class TransactionStorage:
         """
         if not self.with_index:
             raise NotImplementedError
-        return self.block_index.get_newest(count)
+        block_hashes, has_more = self.block_index.get_newest(count)
+        blocks = [self.get_transaction_by_hash_bytes(block_hash) for block_hash in block_hashes]
+        return blocks, has_more
 
     def get_newest_txs(self, count):
         """ Get transactions from the newest to the oldest
@@ -78,7 +80,9 @@ class TransactionStorage:
         """
         if not self.with_index:
             raise NotImplementedError
-        return self.tx_index.get_newest(count)
+        tx_hashes, has_more = self.tx_index.get_newest(count)
+        txs = [self.get_transaction_by_hash_bytes(tx_hash) for tx_hash in tx_hashes]
+        return txs, has_more
 
     def get_older_blocks_after(self, timestamp, hash_bytes, count):
         """ Get blocks from the timestamp/hash_bytes reference to the oldest
@@ -97,7 +101,9 @@ class TransactionStorage:
         """
         if not self.with_index:
             raise NotImplementedError
-        return self.block_index.get_older(timestamp, hash_bytes, count)
+        block_hashes, has_more = self.block_index.get_older(timestamp, hash_bytes, count)
+        blocks = [self.get_transaction_by_hash_bytes(block_hash) for block_hash in block_hashes]
+        return blocks, has_more
 
     def get_newer_blocks_after(self, timestamp, hash_bytes, count):
         """ Get blocks from the timestamp/hash_bytes reference to the newest
@@ -116,7 +122,9 @@ class TransactionStorage:
         """
         if not self.with_index:
             raise NotImplementedError
-        return self.block_index.get_newer(timestamp, hash_bytes, count)
+        block_hashes, has_more = self.block_index.get_newer(timestamp, hash_bytes, count)
+        blocks = [self.get_transaction_by_hash_bytes(block_hash) for block_hash in block_hashes]
+        return blocks, has_more
 
     def get_older_txs_after(self, timestamp, hash_bytes, count):
         """ Get transactions from the timestamp/hash_bytes reference to the oldest
@@ -135,7 +143,9 @@ class TransactionStorage:
         """
         if not self.with_index:
             raise NotImplementedError
-        return self.tx_index.get_older(timestamp, hash_bytes, count)
+        tx_hashes, has_more = self.tx_index.get_older(timestamp, hash_bytes, count)
+        txs = [self.get_transaction_by_hash_bytes(tx_hash) for tx_hash in tx_hashes]
+        return txs, has_more
 
     def get_newer_txs_after(self, timestamp, hash_bytes, count):
         """ Get transactions from the timestamp/hash_bytes reference to the newest
@@ -154,7 +164,9 @@ class TransactionStorage:
         """
         if not self.with_index:
             raise NotImplementedError
-        return self.tx_index.get_newer(timestamp, hash_bytes, count)
+        tx_hashes, has_more = self.tx_index.get_newer(timestamp, hash_bytes, count)
+        txs = [self.get_transaction_by_hash_bytes(tx_hash) for tx_hash in tx_hashes]
+        return txs, has_more
 
     def _manually_initialize(self):
         """Caches must be initialized. This function should not be called, because
