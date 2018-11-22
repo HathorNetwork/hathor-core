@@ -1,6 +1,10 @@
 from intervaltree import IntervalTree, Interval
 from sortedcontainers import SortedKeyList
 from math import inf
+from collections import namedtuple
+
+
+TransactionIndexElement = namedtuple('TransactionIndexElement', ['timestamp', 'hash'])
 
 
 class IndexesManager:
@@ -37,8 +41,8 @@ class IndexesManager:
             :param count: Number of transactions or blocks to be returned
             :type count: int
 
-            :return: List of transactions or blocks and a boolean indicating if has more txs
-            :rtype: Tuple[List[Transaction], bool]
+            :return: List of tx hashes and a boolean indicating if has more txs
+            :rtype: Tuple[List[bytes], bool]
         """
         return self.txs_index.get_newest(count)
 
@@ -54,8 +58,8 @@ class IndexesManager:
             :param count: Number of transactions or blocks to be returned
             :type count: int
 
-            :return: List of transactions or blocks and a boolean indicating if has more txs
-            :rtype: Tuple[List[Transaction], bool]
+            :return: List of tx hashes and a boolean indicating if has more txs
+            :rtype: Tuple[List[bytes], bool]
         """
         return self.txs_index.get_older(timestamp, hash_bytes, count)
 
@@ -71,8 +75,8 @@ class IndexesManager:
             :param count: Number of transactions or blocks to be returned
             :type count: int
 
-            :return: List of transactions or blocks and a boolean indicating if has more txs
-            :rtype: Tuple[List[Transaction], bool]
+            :return: List of tx hashes and a boolean indicating if has more txs
+            :rtype: Tuple[List[bytes], bool]
         """
         return self.txs_index.get_newer(timestamp, hash_bytes, count)
 
@@ -134,7 +138,7 @@ class TransactionsIndex:
         :param tx: Transaction to be added
         :type tx: :py:class:`hathor.transaction.BaseTransaction`
         """
-        self.transactions.add(tx)
+        self.transactions.add(TransactionIndexElement(tx.timestamp, tx.hash))
 
     def del_tx(self, tx):
         """ Delete a transaction from the index
@@ -152,8 +156,8 @@ class TransactionsIndex:
             :param count: Number of transactions or blocks to be returned
             :type count: int
 
-            :return: List of transactions or blocks and a boolean indicating if has more txs
-            :rtype: Tuple[List[Transaction], bool]
+            :return: List of tx hashes and a boolean indicating if has more txs
+            :rtype: Tuple[List[bytes], bool]
         """
         newest = self.transactions[-count:]
         newest.reverse()
@@ -161,7 +165,7 @@ class TransactionsIndex:
             has_more = False
         else:
             has_more = True
-        return newest, has_more
+        return [tx_index.hash for tx_index in newest], has_more
 
     def get_older(self, timestamp, hash_bytes, count):
         """ Get transactions or blocks from the timestamp/hash_bytes reference to the oldest
@@ -175,8 +179,8 @@ class TransactionsIndex:
             :param count: Number of transactions or blocks to be returned
             :type count: int
 
-            :return: List of transactions or blocks and a boolean indicating if has more txs
-            :rtype: Tuple[List[Transaction], bool]
+            :return: List of tx hashes and a boolean indicating if has more txs
+            :rtype: Tuple[List[bytes], bool]
         """
         # Get idx of element
         idx = self.transactions.bisect_key_left((timestamp, hash_bytes))
@@ -184,7 +188,7 @@ class TransactionsIndex:
         txs = self.transactions[first_idx:idx]
         # Reverse because we want the newest first
         txs.reverse()
-        return txs, first_idx > 0
+        return [tx_index.hash for tx_index in txs], first_idx > 0
 
     def get_newer(self, timestamp, hash_bytes, count):
         """ Get transactions or blocks from the timestamp/hash_bytes reference to the newest
@@ -198,8 +202,8 @@ class TransactionsIndex:
             :param count: Number of transactions or blocks to be returned
             :type count: int
 
-            :return: List of transactions or blocks and a boolean indicating if has more txs
-            :rtype: Tuple[List[Transaction], bool]
+            :return: List of tx hashes and a boolean indicating if has more txs
+            :rtype: Tuple[List[bytes], bool]
         """
         # Get idx of element
         idx = self.transactions.bisect_key_left((timestamp, hash_bytes))
@@ -207,4 +211,4 @@ class TransactionsIndex:
         txs = self.transactions[idx+1:last_idx]
         # Reverse because we want the newest first
         txs.reverse()
-        return txs, last_idx < len(self.transactions)
+        return [tx_index.hash for tx_index in txs], last_idx < len(self.transactions)
