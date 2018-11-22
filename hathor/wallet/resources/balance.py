@@ -11,9 +11,8 @@ class BalanceResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
-        # Important to have the manager so we can know the tx_storage
-        self.manager = manager
+    def __init__(self, wallet):
+        self.wallet = wallet
 
     def render_GET(self, request):
         """ GET request for /wallet/balance/
@@ -24,5 +23,5 @@ class BalanceResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        data = {'balance': self.manager.wallet.balance}
+        data = {'balance': self.wallet.balance}
         return json.dumps(data, indent=4).encode('utf-8')

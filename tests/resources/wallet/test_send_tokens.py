@@ -11,8 +11,8 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         super().setUp()
         self.web = StubSite(SendTokensResource(self.manager))
         self.web_mining = StubSite(MiningResource(self.manager))
-        self.web_balance = StubSite(BalanceResource(self.manager))
-        self.web_history = StubSite(HistoryResource(self.manager))
+        self.web_balance = StubSite(BalanceResource(self.manager.wallet))
+        self.web_history = StubSite(HistoryResource(self.manager.wallet))
 
     @inlineCallbacks
     def test_post(self):

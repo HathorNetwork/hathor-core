@@ -28,10 +28,9 @@ class BasicTransaction(unittest.TestCase):
             dict_data = json.loads(json_file.read())
         b64_private_key = dict_data['private_key']
         b64_public_key = dict_data['public_key']
-        private_key_bytes = base64.b64decode(b64_private_key)
-        public_key_bytes = base64.b64decode(b64_public_key)
-        self.genesis_private_key = get_private_key_from_bytes(private_key_bytes)
-        self.genesis_public_key = get_public_key_from_bytes(public_key_bytes)
+        self.genesis_private_key_bytes = base64.b64decode(b64_private_key)
+        self.genesis_public_key_bytes = base64.b64decode(b64_public_key)
+        self.genesis_public_key = get_public_key_from_bytes(self.genesis_public_key_bytes)
 
         # random keys to be used
         random_priv = 'MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQgMnAHVIyj7Hym2yI' \
@@ -39,7 +38,7 @@ class BasicTransaction(unittest.TestCase):
                       'AHbd30CVpUg8RRnAIhaFcuMY3G+YFr/mReAPRuiLKCnolWz3kCltTtNj36rJyd'
         random_pub = 'MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAE1++khrIRnqGnFHGQ4VxMxEbQB23d' \
                      '9AlaVIPEUZwCIWhXLjGNxvmBa/5kXgD0boiygp6JVs95ApbU7TY9+qycnQ=='
-        self.private_key_random = get_private_key_from_bytes(base64.b64decode(random_priv))
+        self.private_key_random_bytes = base64.b64decode(random_priv)
         self.public_key_random = get_public_key_from_bytes(base64.b64decode(random_pub))
 
     # def test_wrong_weight(self):
@@ -77,7 +76,7 @@ class BasicTransaction(unittest.TestCase):
         )
 
         data_to_sign = tx.get_sighash_all(clear_input_data=True)
-        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key_bytes)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
         with self.assertRaises(InputOutputMismatch):
@@ -101,7 +100,7 @@ class BasicTransaction(unittest.TestCase):
         )
 
         data_to_sign = tx.get_sighash_all(clear_input_data=True)
-        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.private_key_random)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.private_key_random_bytes)
         data_wrong = P2PKH.create_input_data(public_bytes, signature)
         _input.data = data_wrong
 
@@ -156,7 +155,7 @@ class BasicTransaction(unittest.TestCase):
         )
 
         data_to_sign = tx.get_sighash_all(clear_input_data=True)
-        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key_bytes)
         tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
 
         tx.update_hash()
@@ -206,7 +205,7 @@ class BasicTransaction(unittest.TestCase):
         block.inputs = tx_inputs
 
         data_to_sign = block.get_sighash_all()
-        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key_bytes)
         block.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
 
         block.resolve()
@@ -234,7 +233,7 @@ class BasicTransaction(unittest.TestCase):
         )
 
         data_to_sign = tx.get_sighash_all(clear_input_data=True)
-        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key_bytes)
         tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
 
         # in first test, only with 1 parent
@@ -325,7 +324,7 @@ class BasicTransaction(unittest.TestCase):
         )
 
         data_to_sign = tx.get_sighash_all(clear_input_data=True)
-        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key_bytes)
         data = P2PKH.create_input_data(public_bytes, signature)
         tx.inputs[0].data = data
 
@@ -371,7 +370,7 @@ class BasicTransaction(unittest.TestCase):
         )
 
         data_to_sign = tx.get_sighash_all(clear_input_data=True)
-        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key_bytes)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
         tx.resolve()
@@ -398,7 +397,7 @@ class BasicTransaction(unittest.TestCase):
         )
 
         data_to_sign = tx.get_sighash_all(clear_input_data=True)
-        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key_bytes)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
         tx.resolve()
@@ -424,7 +423,7 @@ class BasicTransaction(unittest.TestCase):
         )
 
         data_to_sign = tx.get_sighash_all(clear_input_data=True)
-        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key_bytes)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
         tx.resolve()

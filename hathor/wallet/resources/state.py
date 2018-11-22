@@ -12,9 +12,8 @@ class StateWalletResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
-        # Important to have the manager so we can know the wallet
-        self.manager = manager
+    def __init__(self, wallet):
+        self.wallet = wallet
 
     def render_GET(self, request):
         """ GET request for /wallet/state/
@@ -27,8 +26,8 @@ class StateWalletResource(resource.Resource):
         set_cors(request, 'GET')
 
         data = {
-            'is_locked': self.manager.wallet.is_locked(),
-            'type': self.manager.wallet.type.value
+            'is_locked': self.wallet.is_locked(),
+            'type': self.wallet.type.value
         }
 
         return json.dumps(data, indent=4).encode('utf-8')

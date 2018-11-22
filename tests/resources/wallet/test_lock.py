@@ -6,9 +6,9 @@ from tests.resources.base_resource import StubSite, _BaseResourceTest
 class LockTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
-        self.web = StubSite(LockWalletResource(self.manager))
-        self.web_unlock = StubSite(UnlockWalletResource(self.manager))
-        self.web_state = StubSite(StateWalletResource(self.manager))
+        self.web = StubSite(LockWalletResource(self.manager.wallet))
+        self.web_unlock = StubSite(UnlockWalletResource(self.manager.wallet, self.manager.tx_storage))
+        self.web_state = StubSite(StateWalletResource(self.manager.wallet))
 
     @inlineCallbacks
     def test_locking(self):

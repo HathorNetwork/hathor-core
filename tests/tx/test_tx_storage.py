@@ -207,16 +207,17 @@ class CacheMemoryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest
         super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
 
 
-class SubprocessStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
-    def setUp(self):
-        # reactor = Clock()
-        storage = TransactionSubprocessStorage(TransactionMemoryStorage)
-        storage.start()
-        super().setUp(storage)
+# class SubprocessStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
+#     def setUp(self):
+#         # reactor = Clock()
+#         storage = TransactionSubprocessStorage(TransactionMemoryStorage)
+#         storage.start()
+#         super().setUp(storage)
+# 
+#     def tearDown(self):
+#         self.tx_storage.stop()
+#         super().tearDown()
 
-    def tearDown(self):
-        self.tx_storage.stop()
-        super().tearDown()
 
 if __name__ == '__main__':
     unittest.main()

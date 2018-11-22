@@ -18,8 +18,11 @@ class SendTokensResource(resource.Resource):
     isLeaf = True
 
     def __init__(self, manager):
-        # Important to have the manager so we can know the tx_storage
+        # XXX: the manager is needed to start new tx propagation
         self.manager = manager
+        self.tx_storage = manager.tx_storage
+        self.wallet = manager.wallet
+        self.reactor = manager.reactor
         self.lock = Lock()
 
     def _render_POST_thread(self, request):
@@ -41,7 +44,7 @@ class SendTokensResource(resource.Resource):
             outputs = []
             for output in data['outputs']:
                 try:
-                    address = self.manager.wallet.decode_address(output['address'])  # bytes
+                    address = self.wallet.decode_address(output['address'])  # bytes
                 except InvalidAddress:
                     return self.return_POST(False, 'The address {} is invalid'.format(output['address']))
 
@@ -50,7 +53,7 @@ class SendTokensResource(resource.Resource):
 
             if len(data['inputs']) == 0:
                 try:
-                    tx = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+                    tx = self.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
                 except InsuficientFunds:
                     return self.return_POST(False, 'Insufficient funds')
             else:
@@ -61,15 +64,15 @@ class SendTokensResource(resource.Resource):
                     input_tx['tx_id'] = bytes.fromhex(input_tx['tx_id'])
                     inputs.append(WalletInputInfo(**input_tx))
                 try:
-                    tx = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
+                    tx = self.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
                 except (PrivateKeyNotFound, InputDuplicated):
                     return self.return_POST(False, 'Invalid input to create transaction')
 
-            tx.storage = self.manager.tx_storage
+            tx.storage = self.tx_storage
             # TODO Send tx to be mined
 
             max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
-            tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
+            tx.timestamp = max(max_ts_spent_tx + 1, int(self.reactor.seconds()))
             tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
 
             # Calculating weight

@@ -11,9 +11,8 @@ class AddressResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
-        # Important to have the manager so we can know the tx_storage
-        self.manager = manager
+    def __init__(self, wallet):
+        self.wallet = wallet
 
     def render_GET(self, request):
         """ GET request for /wallet/address/
@@ -34,9 +33,9 @@ class AddressResource(resource.Resource):
             # When user clicks 'Generate new address' we have to mark the old one
             # as used and return a new one but not mark the new as used
             # Because if the user refreshs the page we need to show the same
-            self.manager.wallet.get_unused_address(mark_as_used=True)
+            self.wallet.get_unused_address(mark_as_used=True)
 
-        address = self.manager.wallet.get_unused_address(mark_as_used=False)
+        address = self.wallet.get_unused_address(mark_as_used=False)
 
         data = {
             'address': address,

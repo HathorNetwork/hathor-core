@@ -12,8 +12,8 @@ class HistoryResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
-        self.manager = manager
+    def __init__(self, wallet):
+        self.wallet = wallet
 
     def render_GET(self, request):
         """ GET request for /wallet/history/
@@ -31,7 +31,7 @@ class HistoryResource(resource.Resource):
         page = int(request.args[b'page'][0])
         count = int(request.args[b'count'][0])
 
-        history_tuple, total = self.manager.wallet.get_history(count, page)
+        history_tuple, total = self.wallet.get_history(count, page)
 
         history = []
         for obj in history_tuple:

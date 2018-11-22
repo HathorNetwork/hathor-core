@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package hathor;
+
+// import "hathor/protos/transaction.proto";
+
+service Wallet {
+  rpc IsLocked(IsLockedRequest) returns (IsLockedResponse) {}
+  rpc GetUnusedAddress(GetUnusedAddressRequest) returns (GetUnusedAddressResponse) {}
+  rpc TokensReceived(TokensReceivedRequest) returns (TokensReceivedResponse) {}
+  rpc GetPrivateKey(GetPrivateKeyRequest) returns (GetPrivateKeyResponse) {}
+  rpc GetInputAuxData(GetInputAuxDataRequest) returns (GetInputAuxDataResponse) {}
+}
+
+message IsLockedRequest {
+}
+
+message IsLockedResponse {
+  bool is_locked = 1;
+}
+
+message GetUnusedAddressRequest {
+  bool mark_as_used = 1;
+}
+
+message GetUnusedAddressResponse {
+  string address58 = 1;
+}
+
+message TokensReceivedRequest {
+  string address58 = 1;
+}
+
+message TokensReceivedResponse {
+}
+
+message GetPrivateKeyRequest {
+  string address58 = 1;
+}
+
+message GetPrivateKeyResponse {
+  bytes private_key = 1;
+}
+
+message GetInputAuxDataRequest {
+  bytes data_to_sign = 1;
+  bytes private_key = 2;
+}
+
+message GetInputAuxDataResponse {
+  bytes public_key = 1;
+  bytes signature = 2;
+}

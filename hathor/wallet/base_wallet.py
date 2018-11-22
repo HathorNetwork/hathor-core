@@ -1,6 +1,7 @@
 import os
 import json
 import base58
+from abc import ABC, abstractmethod
 from collections import namedtuple, defaultdict
 from twisted.logger import Logger
 
@@ -15,7 +16,7 @@ WalletInputInfo = namedtuple('WalletInputInfo', ['tx_id', 'index', 'private_key'
 WalletOutputInfo = namedtuple('WalletOutputInfo', ['address', 'value'])
 
 
-class BaseWallet:
+class BaseWallet(ABC):
     log = Logger()
 
     class WalletType(Enum):
@@ -88,22 +89,86 @@ class BaseWallet:
         else:
             raise NotImplementedError
 
-    def is_locked(self):
+    @abstractmethod
+    def lock(self):
+        # TODO: unify docstring
+        """ Lock the wallet and all parameters to default values.
+        """
+        """ Lock wallet and clear all caches.
+        """
         raise NotImplementedError
 
+    @abstractmethod
+    def unlock(self, tx_storage, password):
+        # TODO: unify docstring
+        """ Unlock the wallet
+
+        Set all parameters to initialize the wallet and load the txs
+
+        :param tx_storage: storage from where I should load the txs
+        :type tx_storage: :py:class:`hathor.transaction.storage.transaction_storage.TransactionStorage`
+
+        :param words: words to generate the seed. It's a string with the words separated by a single space.
+        If None we generate new words when starting the wallet
+        :type words: string
+
+        :param language: language of the words
+        :type language: string
+
+        :param passphrase: one more security level to generate the seed
+        :type passphrase: bytes
+
+        :return: hd wallet words. Generated in this method or passed as parameter
+        :rtype: string
+        """
+        """ Validates if the password is valid
+
+        Then saves the password as bytes.
+
+        :type password: bytes
+
+        :raises IncorrectPassword: when the password is incorrect
+
+        :raises ValueError: when the password parameter is not bytes
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def is_locked(self):
+        """ Return if wallet is currently locked
+
+        The wallet is locked if self.words is None
+
+        :return: if wallet is locked
+        :rtype: bool
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def get_unused_address(self, mark_as_used=True):
+        """ Return an address that is not used yet
+
+        :param mark_as_used: if True we consider that this address is already used
+        :type mark_as_used: bool
+
+        :return: unused address in base58
+        :rtype: string
+
+        :raises OutOfUnusedAddresses: When there is no unused address left
+            to be returned and wallet is locked
+        """
         raise NotImplementedError
 
     def decode_address(self, address58):
         """ Decode address in base58 to bytes
 
-            :param address58: Wallet address in base58
-            :type address58: string
+        :param address58: Wallet address in base58
+        :type address58: string
 
-            :raises InvalidAddress: if address58 is not a valid base58 string or not a valid address
+        :raises InvalidAddress: if address58 is not a valid base58 string or not a valid address
 
-            :return: Address in bytes
-            :rtype: bytes
+        :return: Address in bytes
+        :rtype: bytes
         """
         try:
             decoded_address = base58.b58decode(address58)
@@ -121,13 +186,42 @@ class BaseWallet:
         address_str = self.get_unused_address(mark_as_used)
         return self.decode_address(address_str)
 
+    @abstractmethod
     def tokens_received(self, address58):
+        """ Method called when the wallet receive new tokens
+
+        We set the address as used and remove it from the unused_keys
+
+        :param address58: address that received the token in base58
+        :type address58: string
+        """
         raise NotImplementedError
 
+    @abstractmethod
     def get_private_key(self, address58):
+        """ Get private key from the address58
+
+        :param address58: address in base58
+        :type address58: string
+
+        :return: Private key object.
+        :rtype: bytes
+        """
         raise NotImplementedError
 
+    @abstractmethod
     def get_input_aux_data(self, data_to_sign, private_key):
+        """ Sign the data to be used in input and get public key compressed in bytes
+
+        :param data_to_sign: Data to be signed
+        :type data_to_sign: bytes
+
+        :param private_key: private key to sign data
+        :type private_key: bytes
+
+        :return: public key compressed in bytes and signature
+        :rtype: tuple[bytes, bytes]
+        """
         raise NotImplementedError
 
     def prepare_transaction(self, cls, inputs, outputs):

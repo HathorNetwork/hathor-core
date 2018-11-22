@@ -11,9 +11,8 @@ class LockWalletResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
-        # Important to have the manager so we can know the wallet
-        self.manager = manager
+    def __init__(self, wallet):
+        self.wallet = wallet
 
     def render_POST(self, request):
         """ Lock the wallet
@@ -24,7 +23,7 @@ class LockWalletResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
 
-        self.manager.wallet.lock()
+        self.wallet.lock()
 
         ret = {'success': True}
         return json.dumps(ret, indent=4).encode('utf-8')

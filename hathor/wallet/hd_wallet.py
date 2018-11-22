@@ -114,15 +114,7 @@ class HDWallet(BaseWallet):
             self._key_generated(key, key.child_index())
 
     def get_private_key(self, address58):
-        """ We get the private key bytes and generate the cryptography object
-
-            :param address58: address in base58
-            :type address58: string
-
-            :return: Private key object.
-            :rtype: :py:class:`cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey`
-        """
-        return self.keys[address58]
+        return self.keys[address58].serialize()
 
     def generate_new_key(self, index):
         """ Generate a new key in the tree at defined index
@@ -161,13 +153,6 @@ class HDWallet(BaseWallet):
         return self.chain_key.subkey(index)
 
     def tokens_received(self, address58):
-        """ Method called when the wallet receive new tokens
-
-            If the gap limit is not yet achieved we generate more keys
-
-            :param address58: address that received the token in base58
-            :type address58: string
-        """
         received_key = self.keys[address58]
 
         # If the gap now is less than the limit, we generate the new keys until the limit
@@ -181,14 +166,6 @@ class HDWallet(BaseWallet):
         self.last_shared_index = max(self.last_shared_index, received_key.child_index() + 1)
 
     def get_unused_address(self, mark_as_used=True):
-        """ Return an address that is not used yet
-
-            :param mark_as_used: if True we consider that this address is already used
-            :type mark_as_used: bool
-
-            :return: unused address in base58
-            :rtype: string
-        """
         if self.last_shared_index != self.last_generated_index:
             # Only in case we are not yet in the gap limit
             if mark_as_used:
@@ -201,18 +178,9 @@ class HDWallet(BaseWallet):
         return self.get_address(key)
 
     def is_locked(self):
-        """ Return if wallet is currently locked
-            The wallet is locked if self.words is None
-
-            :return: if wallet is locked
-            :rtype: bool
-        """
         return self.words is None
 
     def lock(self):
-        """ Lock the wallet
-            Set all parameters to default values
-        """
         self.words = None
         self.keys = {}
         self.passphrase = b''
@@ -276,17 +244,8 @@ class HDWallet(BaseWallet):
             raise InvalidWords
 
     def get_input_aux_data(self, data_to_sign, private_key):
-        """ Sign the data to be used in input and get public key compressed in bytes
-
-            :param data_to_sign: Data to be signed
-            :type data_to_sign: bytes
-
-            :param private_key: private key to sign data
-            :type private_key: pycoin.key.Key.Key
-
-            :return: public key compressed in bytes and signature
-            :rtype: tuple[bytes, bytes]
-        """
+        # XXX[jansegre]: I don't really understand why the need to prefix with 4 bytes, but their content seem irrelevant
+        key = self.chain_key.deserialize(b'\0\0\0\0' + private_key)
         prehashed_msg = hashlib.sha256(hashlib.sha256(data_to_sign).digest()).digest()
-        signature = private_key.sign(prehashed_msg)
-        return private_key.sec(), signature
+        signature = key.sign(prehashed_msg)
+        return key.sec(), signature

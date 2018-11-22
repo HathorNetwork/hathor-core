@@ -12,9 +12,9 @@ class UnlockWalletResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
-        # Important to have the manager so we can know the wallet
-        self.manager = manager
+    def __init__(self, wallet, tx_storage):
+        self.wallet = wallet
+        self.tx_storage = tx_storage
 
     def render_POST(self, request):
         """ Tries to unlock the wallet
@@ -46,7 +46,7 @@ class UnlockWalletResource(resource.Resource):
         ret = {'success': True}
 
         try:
-            ret_words = self.manager.wallet.unlock(self.manager.tx_storage, words, passphrase)
+            ret_words = self.wallet.unlock(self.tx_storage, words, passphrase)
             if not words:
                 # ret_words are the newly generated words
                 ret['words'] = ret_words
@@ -61,7 +61,7 @@ class UnlockWalletResource(resource.Resource):
         success = True
 
         try:
-            self.manager.wallet.unlock(password)
+            self.wallet.unlock(password)
         except IncorrectPassword:
             success = False
 

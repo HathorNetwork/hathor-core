@@ -9,6 +9,7 @@ from hathor.wallet import Wallet, HDWallet
 from hathor.p2p.peer_discovery import DNSPeerDiscovery, BootstrapPeerDiscovery
 import hathor
 
+from functools import partial
 import argparse
 import getpass
 import sys
@@ -37,6 +38,7 @@ def main():
     parser.add_argument('--dns', action='append', help='Seed DNS')
     parser.add_argument('--peer', help='json file with peer info')
     parser.add_argument('--bootstrap', action='append', help='Address to connect to (eg: tcp:127.0.0.1:8000')
+    parser.add_argument('--singleproc-wallet', help='Don\'t split wallet into subprocess')
     parser.add_argument('--data', help='Data directory')
     parser.add_argument(
         '--wallet',
@@ -80,7 +82,7 @@ def main():
 
     imported_objects = {}
 
-    def create_wallet():
+    def get_wallet_cls():
         if args.wallet == 'hd':
             kwargs = {
                 'words': args.words,
@@ -131,7 +133,10 @@ def main():
         print('Using TransactionMemoryStorage')
     imported_objects['tx_storage'] = tx_storage
 
-    wallet = create_wallet()
+    wallet_cls = get_wallet_cls()
+    if not args.singleproc_wallet:
+        wallet_cls = partial(SubprocessWallet, wallet_cls)
+    wallet = wallet_cls()
     imported_objects['wallet'] = wallet
 
     network = 'testnet'

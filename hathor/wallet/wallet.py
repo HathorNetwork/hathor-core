@@ -8,7 +8,7 @@ from hathor.wallet.keypair import KeyPair
 from hathor.wallet.exceptions import OutOfUnusedAddresses
 from hathor.wallet import BaseWallet
 from hathor.pubsub import HathorEvents
-from hathor.crypto.util import get_public_key_bytes_compressed
+from hathor.crypto.util import get_public_key_bytes_compressed, get_private_key_from_bytes
 
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
@@ -136,17 +136,11 @@ class Wallet(BaseWallet):
             raise ValueError('Password must be in bytes')
 
     def lock(self):
-        """ Lock wallet and clear all caches.
-        """
         self.password = None
         for keypair in self.keys.values():
             keypair.clear_cache()
 
     def get_unused_address(self, mark_as_used=True):
-        """
-        :raises OutOfUnusedAddresses: When there is no unused address left
-            to be returned and wallet is locked
-        """
         updated = False
         if len(self.unused_keys) == 0:
             if not self.password:
@@ -177,24 +171,9 @@ class Wallet(BaseWallet):
         self.publish_update(HathorEvents.WALLET_KEYS_GENERATED, keys_count=count)
 
     def get_private_key(self, address58):
-        """ Get private key from the address58
-
-            :param address58: address in base58
-            :type address58: string
-
-            :return: Private key object.
-            :rtype: :py:class:`cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey`
-        """
-        return self.keys[address58].get_private_key(self.password)
+        return self.keys[address58].private_key_bytes
 
     def tokens_received(self, address58):
-        """ Method called when the wallet receive new tokens
-
-            We set the address as used and remove it from the unused_keys
-
-            :param address58: address that received the token in base58
-            :type address58: string
-        """
         self.keys[address58].used = True
         self.unused_keys.discard(address58)
 
@@ -202,18 +181,8 @@ class Wallet(BaseWallet):
         return self.password is None
 
     def get_input_aux_data(self, data_to_sign, private_key):
-        """ Sign the data to be used in input and get public key compressed in bytes
-
-            :param data_to_sign: Data to be signed
-            :type data_to_sign: bytes
-
-            :param private_key: private key to sign data
-            :type private_key: pycoin.key.Key.Key
-
-            :return: public key compressed in bytes and signature
-            :rtype: tuple[bytes, bytes]
-        """
-        public_key_bytes = get_public_key_bytes_compressed(private_key.public_key())
+        key = get_private_key_from_bytes(private_key, self.password)
+        public_key_bytes = get_public_key_bytes_compressed(key.public_key())
         hashed_data = hashlib.sha256(data_to_sign).digest()
-        signature = private_key.sign(hashed_data, ec.ECDSA(hashes.SHA256()))
+        signature = key.sign(hashed_data, ec.ECDSA(hashes.SHA256()))
         return public_key_bytes, signature

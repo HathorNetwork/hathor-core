@@ -182,13 +182,13 @@ def main():
             (b'transaction', TransactionResource(manager), root),
             (b'dashboard_tx', DashboardTransactionResource(manager), root),
             (b'profiler', ProfilerResource(manager), root),
-            (b'balance', BalanceResource(manager), wallet_resource),
-            (b'history', HistoryResource(manager), wallet_resource),
-            (b'address', AddressResource(manager), wallet_resource),
+            (b'balance', BalanceResource(manager.wallet), wallet_resource),
+            (b'history', HistoryResource(manager.wallet), wallet_resource),
+            (b'address', AddressResource(manager.wallet), wallet_resource),
             (b'send_tokens', SendTokensResource(manager), wallet_resource),
-            (b'unlock', UnlockWalletResource(manager), wallet_resource),
-            (b'lock', LockWalletResource(manager), wallet_resource),
-            (b'state', StateWalletResource(manager), wallet_resource),
+            (b'unlock', UnlockWalletResource(manager.wallet, manager.tx_storage), wallet_resource),
+            (b'lock', LockWalletResource(manager.wallet), wallet_resource),
+            (b'state', StateWalletResource(manager.wallet), wallet_resource),
         )
         for url_path, resource, parent in resources:
             parent.putChild(url_path, resource)

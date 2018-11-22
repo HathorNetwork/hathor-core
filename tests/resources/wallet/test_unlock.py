@@ -1,16 +1,22 @@
-from hathor.wallet.resources import UnlockWalletResource, StateWalletResource, LockWalletResource
+import unittest
+
 from twisted.internet.defer import inlineCallbacks
+
 from tests.resources.base_resource import StubSite, _BaseResourceTest
+from hathor.wallet.resources import UnlockWalletResource, StateWalletResource, LockWalletResource
 from hathor.wallet import HDWallet
 
 
-class UnlockTest(_BaseResourceTest._ResourceTest):
-    def setUp(self):
-        super().setUp()
-        self.web = StubSite(UnlockWalletResource(self.manager))
-        self.web_lock = StubSite(LockWalletResource(self.manager))
-        self.web_state = StubSite(StateWalletResource(self.manager))
+class _Base:
+    class Test(_BaseResourceTest._ResourceTest):
+        def setUp(self):
+            super().setUp()
+            self.web = StubSite(UnlockWalletResource(self.manager.wallet, self.manager.tx_storage))
+            self.web_lock = StubSite(LockWalletResource(self.manager.wallet))
+            self.web_state = StubSite(StateWalletResource(self.manager.wallet))
 
+
+class UnlockKeyPairTest(_Base.Test):
     @inlineCallbacks
     def test_unlocking(self):
         # Wallet is locked
@@ -37,11 +43,15 @@ class UnlockTest(_BaseResourceTest._ResourceTest):
         data_unlocked = response_unlocked.json_value()
         self.assertFalse(data_unlocked['is_locked'])
 
+
+class UnlockHDTest(_Base.Test):
+    def _create_test_wallet(self):
+        return HDWallet()
+
     @inlineCallbacks
     def test_unlocking_hd_wallet(self):
-        self.manager.wallet = HDWallet()
-        self.manager.wallet._manually_initialize()
         self.manager.wallet.unlock(tx_storage=self.manager.tx_storage)
+        print(self.manager.wallet.is_locked())
 
         # Wallet is not locked
         response = yield self.web_state.get("wallet/state")
@@ -78,3 +88,7 @@ class UnlockTest(_BaseResourceTest._ResourceTest):
         response_words = yield self.web.post("wallet/unlock", {'words': data_success['words'], 'passphrase': ''})
         data_words = response_words.json_value()
         self.assertTrue(data_words['success'])
+
+
+if __name__ == '__main__':
+    unittest.main()
