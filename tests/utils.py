@@ -37,7 +37,7 @@ def gen_new_tx(manager, address, value, verify=True):
     return tx
 
 
-def add_new_tx(manager, address, value):
+def add_new_tx(manager, address, value, advance_clock=None):
     """ Create, resolve and propagate a new tx
 
         :param manager: Manager object to handle the creation
@@ -54,10 +54,12 @@ def add_new_tx(manager, address, value):
     """
     tx = gen_new_tx(manager, address, value)
     manager.propagate_tx(tx)
+    if advance_clock:
+        manager.reactor.advance(advance_clock)
     return tx
 
 
-def add_new_transactions(manager, num_txs):
+def add_new_transactions(manager, num_txs, advance_clock=None):
     """ Create, resolve and propagate some transactions
 
         :param manager: Manager object to handle the creation
@@ -73,7 +75,7 @@ def add_new_transactions(manager, num_txs):
     for _ in range(num_txs):
         address = '3JEcJKVsHddj1Td2KDjowZ1JqGF1'
         value = random.choice([5, 10, 15, 20])
-        tx = add_new_tx(manager, address, value)
+        tx = add_new_tx(manager, address, value, advance_clock)
         txs.append(tx)
     return txs
 

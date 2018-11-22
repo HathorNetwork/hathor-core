@@ -14,7 +14,7 @@ TOKENS = BLOCK_TOKENS
 class WalletHD(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        self.wallet = HDWallet()
+        self.wallet = HDWallet(gap_limit=2)
         self.wallet._manually_initialize()
         self.manager = self.create_peer('testnet', wallet=self.wallet, unlock_wallet=False)
         self.tx_storage = self.manager.tx_storage
@@ -53,6 +53,10 @@ class WalletHD(unittest.TestCase):
         self.assertEqual(len(self.wallet.spent_txs), 2)
         self.assertEqual(self.wallet.balance, TOKENS)
 
+        # Test getting more unused addresses than the gap limit
+        for _ in range(3):
+            self.wallet.get_unused_address()
+
     def test_insuficient_funds(self):
         # create transaction spending some value
         new_address = self.wallet.get_unused_address()
@@ -79,3 +83,7 @@ class WalletHD(unittest.TestCase):
 
         self.assertFalse(self.wallet.is_locked())
         self.assertEqual(address, self.wallet.get_unused_address())
+
+    def test_exceptions(self):
+        with self.assertRaises(ValueError):
+            HDWallet(word_count=3)

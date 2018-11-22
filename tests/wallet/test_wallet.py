@@ -96,6 +96,10 @@ class BasicWallet(unittest.TestCase):
         self.assertEqual(len(w.spent_txs), len(w.spent_txs))
         self.assertEqual(len(w.unspent_txs), len(w2.unspent_txs))
 
+        # test keypair exception
+        with self.assertRaises(WalletLocked):
+            key_pair.get_private_key(None)
+
     def test_block_increase_balance(self):
         # generate a new block and check if we increase balance
         w = Wallet(directory=self.directory)

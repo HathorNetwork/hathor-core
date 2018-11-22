@@ -28,6 +28,10 @@ class LockTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data_unlocked['is_locked'])
 
         # Test locking the wallet with resource
+
+        # Options
+        yield self.web.options("wallet/lock")
+
         response_test = yield self.web.post('wallet/lock')
         data_test = response_test.json_value()
         self.assertTrue(data_test['success'])

@@ -19,6 +19,10 @@ class UnlockTest(_BaseResourceTest._ResourceTest):
         self.assertTrue(data['is_locked'])
 
         # Try to unlock with wrong password
+
+        # Options
+        yield self.web.options("wallet/unlock")
+
         response_error = yield self.web.post("wallet/unlock", {'password': 'wrong_password'})
         data_error = response_error.json_value()
         self.assertFalse(data_error['success'])
@@ -68,3 +72,9 @@ class UnlockTest(_BaseResourceTest._ResourceTest):
         response_unlocked = yield self.web_state.get("wallet/state")
         data_unlocked = response_unlocked.json_value()
         self.assertFalse(data_unlocked['is_locked'])
+
+        # Lock the wallet and unlock with same words
+        self.manager.wallet.lock()
+        response_words = yield self.web.post("wallet/unlock", {'words': data_success['words'], 'passphrase': ''})
+        data_words = response_words.json_value()
+        self.assertTrue(data_words['success'])
