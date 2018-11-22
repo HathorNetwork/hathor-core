@@ -195,6 +195,7 @@ def main():
 
         # Websocket resource
         ws_factory = HathorAdminWebsocketFactory(metrics=manager.metrics)
+        ws_factory.start()
         resource = WebSocketResource(ws_factory)
         root.putChild(b"ws", resource)
 

@@ -63,11 +63,19 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
 
         self.metrics = metrics or Metrics()
 
+        self.is_running = False
+
+    def start(self):
+        self.is_running = True
+
         # Start limiter
         self._setup_rate_limit()
 
         # Start metric sender
         self._schedule_and_send_metric()
+
+    def stop(self):
+        self.is_running = False
 
     def _setup_rate_limit(self):
         """ Set the limit of the RateLimiter and start the buffer deques with BUFFER_SIZE
@@ -91,11 +99,13 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             'time': reactor.seconds(),
         }
         self.broadcast_message(data)
-        # Schedule next message
-        reactor.callLater(
-            1,
-            self._schedule_and_send_metric
-        )
+
+        if self.is_running:
+            # Schedule next message
+            reactor.callLater(
+                1,
+                self._schedule_and_send_metric
+            )
 
     def subscribe(self, pubsub):
         """ Subscribe to defined events for the pubsub received

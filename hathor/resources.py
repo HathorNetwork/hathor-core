@@ -1,5 +1,5 @@
-from twisted.web import resource, server
-from hathor.api_util import set_cors
+from twisted.web import resource
+from hathor.api_util import set_cors, render_options
 
 import json
 import os
@@ -44,8 +44,4 @@ class ProfilerResource(resource.Resource):
         return json.dumps(ret, indent=4).encode('utf-8')
 
     def render_OPTIONS(self, request):
-        set_cors(request, 'POST, OPTIONS')
-        request.setHeader(b'content-type', b'application/json; charset=utf-8')
-        request.write('')
-        request.finish()
-        return server.NOT_DONE_YET
+        return render_options(request)

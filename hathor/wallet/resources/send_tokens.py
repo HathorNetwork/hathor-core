@@ -1,7 +1,7 @@
-from twisted.web import resource, server
+from twisted.web import resource
 from twisted.internet import threads
 
-from hathor.api_util import set_cors
+from hathor.api_util import set_cors, render_options
 from hathor.wallet.base_wallet import WalletOutputInfo, WalletInputInfo
 from hathor.wallet.exceptions import InsuficientFunds, PrivateKeyNotFound, InputDuplicated, InvalidAddress
 from hathor.transaction import Transaction
@@ -123,8 +123,4 @@ class SendTokensResource(resource.Resource):
         return json.dumps(ret, indent=4).encode('utf-8')
 
     def render_OPTIONS(self, request):
-        set_cors(request, 'GET, POST, OPTIONS')
-        request.setHeader(b'content-type', b'application/json; charset=utf-8')
-        request.write('')
-        request.finish()
-        return server.NOT_DONE_YET
+        return render_options(request)

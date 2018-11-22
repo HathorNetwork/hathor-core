@@ -10,6 +10,6 @@ class GraphvizTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_get(self):
-        response = yield self.web.get("graphviz", {b'format': b'pdf'})
+        response = yield self.web.get("graphviz", {b'format': b'pdf', b'weight': b'false', b'acc_weight': b'true'})
         data = response.written[0]
         self.assertIsNotNone(data)

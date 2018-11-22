@@ -27,6 +27,10 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.manager.wallet.unlock(b"MYPASS")
 
         # Sending token to random address without input
+
+        # Options
+        yield self.web.options("wallet/send_tokens")
+
         data_json = {
             "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 505}],
             "inputs": []
@@ -62,6 +66,18 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data2['success'])
         self.reactor.advance(10)
 
+        # Sending duplicate input
+        data_json_duplicate = {
+            "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 19000}],
+            "inputs": [
+                {"tx_id": input_hash, "index": 0},
+                {"tx_id": input_hash, "index": 0}
+            ]
+        }
+        response_duplicate = yield self.web.post("wallet/send_tokens", {'data': data_json_duplicate})
+        data_duplicate = response_duplicate.json_value()
+        self.assertFalse(data_duplicate['success'])
+
         # Sending token to random address with input right amount
         data_json2 = {
             "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 1495}],
@@ -96,3 +112,12 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         )
         data_error2 = response_error2.json_value()
         self.assertFalse(data_error2['success'])
+
+        # Error insuficient funds
+        data_json5 = {
+            "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 5000000}],
+            "inputs": []
+        }
+        response_error3 = yield self.web.post("wallet/send_tokens", {'data': data_json5})
+        data_error3 = response_error3.json_value()
+        self.assertFalse(data_error3['success'])
