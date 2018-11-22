@@ -4,7 +4,7 @@ from functools import wraps, partial
 
 def deprecated(msg):
     """Use to indicate that a function or method has been deprecated."""
-    # warnings.simplefilter('default', DeprecationWarning)
+    warnings.simplefilter('default', DeprecationWarning)
 
     def decorator(func):
         @wraps(func)
