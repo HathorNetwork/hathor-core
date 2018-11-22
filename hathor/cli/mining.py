@@ -10,12 +10,19 @@ import requests
 import time
 import base64
 import argparse
+import sys
+import signal
 from json.decoder import JSONDecodeError
 
 _SLEEP_ON_ERROR_SECONDS = 5
 
 
+def signal_handler(sig, frame):
+    sys.exit(0)
+
+
 def worker(q_in, q_out):
+    signal.signal(signal.SIGINT, signal_handler)
     block, start, end, sleep_seconds = q_in.get()
     block.start_mining(start, end, sleep_seconds=sleep_seconds)
     q_out.put(block.nonce)
@@ -29,6 +36,8 @@ def main():
 
     print('Hathor CPU Miner v1.0.0')
     print('URL: {}'.format(args.url))
+
+    signal.signal(signal.SIGINT, signal_handler)
 
     sleep_seconds = 0
     if args.sleep:
