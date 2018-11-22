@@ -212,7 +212,7 @@ class BaseWallet:
                 # In case we use 'force', tx_storage is not optional
                 assert tx_storage is not None
                 # If we force we will search this private key also in the keys
-                output_tx = tx_storage.get_transaction_by_hash_bytes(_input.tx_id)
+                output_tx = tx_storage.get_transaction(_input.tx_id)
                 output = output_tx.outputs[_input.index]
                 p2pkh = P2PKH.verify_script(output.script)
 
@@ -347,7 +347,7 @@ class BaseWallet:
                         # So we append this spent with the others
                         key = (_input.tx_id, _input.index)
                         if key in self.spent_txs:
-                            output_tx = tx.storage.get_transaction_by_hash_bytes(_input.tx_id)
+                            output_tx = tx.storage.get_transaction(_input.tx_id)
                             output = output_tx.outputs[_input.index]
                             spent = SpentTx(tx.hash, _input.tx_id, _input.index, output.value, tx.timestamp)
                             self.spent_txs[key].append(spent)
@@ -467,7 +467,7 @@ class BaseWallet:
 
                             if len(self.spent_txs[key]) == 0:
                                 # If this was the last input that spent this output, we recreate the output
-                                output_tx = tx.storage.get_transaction_by_hash_bytes(spent.from_tx_id)
+                                output_tx = tx.storage.get_transaction(spent.from_tx_id)
                                 output = output_tx.outputs[spent.from_index]
 
                                 p2pkh_out = P2PKH.verify_script(output.script)
@@ -493,7 +493,7 @@ class BaseWallet:
                     if list_index == -1:
                         # If it's not there, we add it
                         if output is None:
-                            output_tx = tx.storage.get_transaction_by_hash_bytes(_input.tx_id)
+                            output_tx = tx.storage.get_transaction(_input.tx_id)
                             output = output_tx.outputs[_input.index]
 
                         voided = SpentTx(tx.hash, _input.tx_id, _input.index, output.value, tx.timestamp, voided=True)
@@ -624,7 +624,7 @@ class BaseWallet:
                     if not found:
                         # If spent not found, we recreate it
                         # Get tx from output to get the value
-                        output_tx = tx.storage.get_transaction_by_hash_bytes(_input.tx_id)
+                        output_tx = tx.storage.get_transaction(_input.tx_id)
                         output = output_tx.outputs[_input.index]
 
                         spent = SpentTx(tx.hash, _input.tx_id, _input.index, output.value, tx.timestamp)

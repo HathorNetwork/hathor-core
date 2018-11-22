@@ -104,6 +104,9 @@ class TipsIndex(object):
         :param tx: Transaction to be added
         :type tx: :py:class:`hathor.transaction.BaseTransaction`
         """
+        if tx.hash in self.tx_last_interval:
+            return
+
         for parent_hash in tx.parents:
             pi = self.tx_last_interval.get(parent_hash, None)
             if not pi:
@@ -138,6 +141,10 @@ class TransactionsIndex:
         :param tx: Transaction to be added
         :type tx: :py:class:`hathor.transaction.BaseTransaction`
         """
+        # It is safe to use the in operator because it is O(log(n)).
+        # http://www.grantjenks.com/docs/sortedcontainers/sortedlist.html#sortedcontainers.SortedList.__contains__
+        if tx in self.transactions:
+            return
         self.transactions.add(TransactionIndexElement(tx.timestamp, tx.hash))
 
     def del_tx(self, tx):

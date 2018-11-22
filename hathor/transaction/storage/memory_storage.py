@@ -1,32 +1,39 @@
-from hathor.transaction.storage.transaction_storage import TransactionStorage
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionMetadataDoesNotExist
+from hathor.transaction.storage.transaction_storage import TransactionStorage, TransactionStorageAsyncFromSync
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.util import deprecated, skip_warning
 
 
-class TransactionMemoryStorage(TransactionStorage):
+class TransactionMemoryStorage(TransactionStorage, TransactionStorageAsyncFromSync):
     def __init__(self, with_index=True):
         self.transactions = {}
         self.metadata = {}
         super().__init__(with_index=with_index)
 
-    def save_transaction(self, tx):
-        super().save_transaction(tx)
-        self._save_transaction(tx)
+    @deprecated('Use save_transaction_deferred instead')
+    def save_transaction(self, tx, *, only_metadata=False):
+        skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
+        if not only_metadata:
+            self.transactions[tx.hash] = tx
+        self._save_metadata(tx)
 
-    def _save_transaction(self, tx):
-        self.transactions[tx.hash] = tx
+    def _save_metadata(self, tx):
+        # genesis txs and metadata are kept in memory
+        if tx.is_genesis:
+            return
+        meta = getattr(tx, '_metadata', None)
+        if meta:
+            self.metadata[tx.hash] = meta
 
-    def transaction_exists_by_hash(self, hash_hex):
-        hash_bytes = bytes.fromhex(hash_hex)
-        return self.transaction_exists_by_hash_bytes(hash_bytes)
-
-    def transaction_exists_by_hash_bytes(self, hash_bytes):
-        genesis = self.get_genesis_by_hash_bytes(hash_bytes)
+    @deprecated('Use transaction_exists_deferred instead')
+    def transaction_exists(self, hash_bytes):
+        genesis = self.get_genesis(hash_bytes)
         if genesis:
             return True
         return hash_bytes in self.transactions
 
-    def get_transaction_by_hash_bytes(self, hash_bytes):
-        genesis = self.get_genesis_by_hash_bytes(hash_bytes)
+    @deprecated('Use get_transaction_deferred instead')
+    def get_transaction(self, hash_bytes):
+        genesis = self.get_genesis(hash_bytes)
         if genesis:
             return genesis
 
@@ -38,26 +45,8 @@ class TransactionMemoryStorage(TransactionStorage):
         else:
             raise TransactionDoesNotExist(hash_bytes.hex())
 
-    def get_transaction_by_hash(self, hash_hex):
-        hash_bytes = bytes.fromhex(hash_hex)
-        return self.get_transaction_by_hash_bytes(hash_bytes)
-
-    def save_metadata(self, tx):
-        # genesis txs and metadata are kept in memory
-        if tx.is_genesis:
-            return
-        meta = getattr(tx, '_metadata', None)
-        if meta:
-            self.metadata[tx.hash] = meta
-
-    def _get_metadata_by_hash(self, hash_hex):
-        try:
-            return self.metadata[bytes.fromhex(hash_hex)]
-        except KeyError:
-            raise TransactionMetadataDoesNotExist
-
+    @deprecated('Use get_all_transactions_deferred instead')
     def get_all_transactions(self):
-        """Return all transactions that are not blocks"""
         for tx in self.get_all_genesis():
             if tx.hash in self.metadata:
                 tx._metadata = self.metadata[tx.hash]
@@ -67,6 +56,7 @@ class TransactionMemoryStorage(TransactionStorage):
                 tx._metadata = self.metadata[tx.hash]
             yield tx
 
+    @deprecated('Use get_count_tx_blocks_deferred instead')
     def get_count_tx_blocks(self):
         genesis_len = len(self.get_all_genesis())
         return len(self.transactions) + genesis_len

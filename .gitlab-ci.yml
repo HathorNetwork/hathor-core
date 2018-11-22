@@ -27,5 +27,5 @@ unit-tests:
         - apt install -y graphviz
         - pip install -r requirements.txt
     script:
-        - pytest --cov=hathor --cov-fail-under=70 ./tests
+        - pytest --cov=hathor --cov-fail-under=70 -p no:warnings ./tests
     coverage: '/^TOTAL.*\s+(\d+\%)$/'

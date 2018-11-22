@@ -60,7 +60,7 @@ class Block(BaseTransaction):
         """
         if self.is_genesis:
             return 1
-        parents_tx = [self.storage.get_transaction_by_hash_bytes(h) for h in self.parents]
+        parents_tx = [self.storage.get_transaction(h) for h in self.parents]
         height = max(x.height for x in parents_tx) + 1
         return height
 

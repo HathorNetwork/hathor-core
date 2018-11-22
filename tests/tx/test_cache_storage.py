@@ -30,7 +30,7 @@ class BasicTransaction(unittest.TestCase):
         for tx in txs:
             self.cache_storage.save_transaction(tx)
 
-        txs2 = [self.cache_storage.get_transaction_by_hash_bytes(tx.hash) for tx in txs]
+        txs2 = [self.cache_storage.get_transaction(tx.hash) for tx in txs]
 
         self.assertEqual(txs, txs2)
 
@@ -64,7 +64,7 @@ class BasicTransaction(unittest.TestCase):
         self.assertNotIn(txs[0].hash, self.cache_storage.cache)
 
         # read tx
-        self.cache_storage.get_transaction_by_hash_bytes(txs[0].hash)
+        self.cache_storage.get_transaction(txs[0].hash)
 
         # now it should be in cache
         self.assertIn(txs[0].hash, self.cache_storage.cache)

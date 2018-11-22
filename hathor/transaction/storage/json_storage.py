@@ -1,6 +1,7 @@
-from hathor.transaction.storage.transaction_storage import TransactionStorage
+from hathor.transaction.storage.transaction_storage import TransactionStorage, TransactionStorageAsyncFromSync
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionMetadataDoesNotExist
 from hathor.transaction.transaction_metadata import TransactionMetadata
+from hathor.util import deprecated, skip_warning
 
 import json
 import os
@@ -8,44 +9,58 @@ import re
 import base64
 
 
-class TransactionJSONStorage(TransactionStorage):
+class TransactionJSONStorage(TransactionStorage, TransactionStorageAsyncFromSync):
     def __init__(self, path='./',  with_index=True):
-        self.mkdir_if_needed(path)
+        os.makedirs(path, exist_ok=True)
         self.path = path
         super().__init__(with_index=with_index)
 
-    def mkdir_if_needed(self, path):
-        if not os.path.isdir(path):
-            os.makedirs(path)
+    @deprecated('Use save_transaction_deferred instead')
+    def save_transaction(self, tx, *, only_metadata=False):
+        skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
+        if not only_metadata:
+            self._save_transaction(tx)
+        self._save_metadata(tx)
 
-    def generate_filepath(self, hash_hex):
-        filename = 'tx_{}.json'.format(hash_hex)
+    def _save_transaction(self, tx):
+        data = tx.to_json()
+        filepath = self.generate_filepath(tx.hash)
+        self.save_to_json(filepath, data)
+        if tx.is_block:
+            self._save_blockhash_by_height(tx)
+
+    def _save_metadata(self, tx):
+        # genesis txs and metadata are kept in memory
+        if tx.is_genesis:
+            return
+        metadata = tx.get_metadata()
+        data = self.serialize_metadata(metadata)
+        filepath = self.generate_metadata_filepath(tx.hash)
+        self.save_to_json(filepath, data)
+
+    def generate_filepath(self, hash_bytes):
+        filename = 'tx_{}.json'.format(hash_bytes.hex())
         filepath = os.path.join(self.path, filename)
         return filepath
 
-    def generate_metadata_filepath(self, hash_hex):
-        filename = 'tx_{}_metadata.json'.format(hash_hex)
+    def serialize_metadata(self, metadata):
+        return metadata.to_json()
+
+    def load_metadata(self, data):
+        return TransactionMetadata.create_from_json(data)
+
+    def generate_metadata_filepath(self, hash_bytes):
+        filename = 'tx_{}_metadata.json'.format(hash_bytes.hex())
         filepath = os.path.join(self.path, filename)
         return filepath
 
-    def transaction_exists_by_hash(self, hash_hex):
-        """Return `True` if `hash_hex` exists.
-
-        :param hash_hex: Hash in hexa that will be checked.
-        :type hash_hex: str(hex)
-
-        :rtype: bool
-        """
-        hash_bytes = bytes.fromhex(hash_hex)
-        genesis = self.get_genesis_by_hash_bytes(hash_bytes)
+    @deprecated('Use transaction_exists_deferred instead')
+    def transaction_exists(self, hash_bytes):
+        genesis = self.get_genesis(hash_bytes)
         if genesis:
             return True
-        filepath = self.generate_filepath(hash_hex)
+        filepath = self.generate_filepath(hash_bytes)
         return os.path.isfile(filepath)
-
-    def transaction_exists_by_hash_bytes(self, hash_bytes):
-        hash_hex = hash_bytes.hex()
-        return self.transaction_exists_by_hash(hash_hex)
 
     def save_to_json(self, filepath, data):
         with open(filepath, 'w') as json_file:
@@ -58,17 +73,6 @@ class TransactionJSONStorage(TransactionStorage):
                 return dict_data
         else:
             raise error
-
-    def save_transaction(self, tx):
-        super().save_transaction(tx)
-        self._save_transaction(tx)
-
-    def _save_transaction(self, tx):
-        data = tx.to_json()
-        filepath = self.generate_filepath(data['hash'])
-        self.save_to_json(filepath, data)
-        if tx.is_block:
-            self._save_blockhash_by_height(tx)
 
     def generate_blocks_at_height_filepath(self, height):
         filename = 'blks_h_{}.json'.format(height)
@@ -96,31 +100,6 @@ class TransactionJSONStorage(TransactionStorage):
         except FileNotFoundError:
             data = []
         return data, filepath
-
-    def get_transaction_by_hash_bytes(self, hash_bytes):
-        genesis = self.get_genesis_by_hash_bytes(hash_bytes)
-        if genesis:
-            return genesis
-
-        hash_hex = hash_bytes.hex()
-        filepath = self.generate_filepath(hash_hex)
-        data = self.load_from_json(filepath, TransactionDoesNotExist(hash_hex))
-        tx = self.load(data)
-        try:
-            meta = self._get_metadata_by_hash(hash_hex)
-            tx._metadata = meta
-        except TransactionMetadataDoesNotExist:
-            pass
-        return tx
-
-    def get_transaction_by_hash(self, hash_hex):
-        hash_bytes = bytes.fromhex(hash_hex)
-        return self.get_transaction_by_hash_bytes(hash_bytes)
-
-    def _get_metadata_by_hash(self, hash_hex):
-        filepath = self.generate_metadata_filepath(hash_hex)
-        data = self.load_from_json(filepath, TransactionMetadataDoesNotExist)
-        return self.load_metadata(data)
 
     def load(self, data):
         from hathor.transaction.transaction import Transaction
@@ -171,22 +150,28 @@ class TransactionJSONStorage(TransactionStorage):
         assert tx.hash == hash_bytes, 'Hashes differ: {} != {}'.format(tx.hash.hex(), hash_bytes.hex())
         return tx
 
-    def save_metadata(self, tx):
-        # genesis txs and metadata are kept in memory
-        if tx.is_genesis:
-            return
+    @deprecated('Use get_transaction_deferred instead')
+    def get_transaction(self, hash_bytes):
+        genesis = self.get_genesis(hash_bytes)
+        if genesis:
+            return genesis
 
-        metadata = tx._metadata
-        data = self.serialize_metadata(metadata)
-        filepath = self.generate_metadata_filepath(data['hash'])
-        self.save_to_json(filepath, data)
+        filepath = self.generate_filepath(hash_bytes)
+        data = self.load_from_json(filepath, TransactionDoesNotExist())
+        tx = self.load(data)
+        try:
+            meta = self._get_metadata_by_hash(hash_bytes)
+            tx._metadata = meta
+        except TransactionMetadataDoesNotExist:
+            pass
+        return tx
 
-    def serialize_metadata(self, metadata):
-        return metadata.to_json()
+    def _get_metadata_by_hash(self, hash_bytes):
+        filepath = self.generate_metadata_filepath(hash_bytes)
+        data = self.load_from_json(filepath, TransactionMetadataDoesNotExist)
+        return self.load_metadata(data)
 
-    def load_metadata(self, data):
-        return TransactionMetadata.create_from_json(data)
-
+    @deprecated('Use get_all_transactions_deferred instead')
     def get_all_transactions(self):
         for tx in self.get_all_genesis():
             yield tx
@@ -204,6 +189,7 @@ class TransactionJSONStorage(TransactionStorage):
                     transaction = self.load(dict_data)
                     yield transaction
 
+    @deprecated('Use get_count_tx_blocks_deferred instead')
     def get_count_tx_blocks(self):
         genesis_len = len(self.get_all_genesis())
         path = self.path

@@ -248,7 +248,7 @@ class HathorManager(object):
 
         parents = [random.choice(tip_blocks)] + tip_txs
 
-        parents_tx = [self.tx_storage.get_transaction_by_hash_bytes(x) for x in parents]
+        parents_tx = [self.tx_storage.get_transaction(x) for x in parents]
         new_height = max(x.height for x in parents_tx) + 1
 
         timestamp1 = int(self.reactor.seconds())
@@ -268,7 +268,7 @@ class HathorManager(object):
                 self.log.debug('validate_new_tx(): Genesis? {}'.format(tx.hash.hex()))
                 return False
 
-            if self.tx_storage.transaction_exists_by_hash_bytes(tx.hash):
+            if self.tx_storage.transaction_exists(tx.hash):
                 self.log.debug('validate_new_tx(): Already have transaction {}'.format(tx.hash.hex()))
                 return False
 

@@ -66,14 +66,14 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
     def test_get_blocks_before(self):
         genesis_block = self.genesis_blocks[0]
-        result = self.manager1.tx_storage.get_blocks_before(genesis_block.hash.hex())
+        result = self.manager1.tx_storage.get_blocks_before(genesis_block.hash)
         self.assertEqual(0, len(result))
 
         blocks = self._add_new_blocks(20)
         num_blocks = 5
 
         for i, block in enumerate(blocks):
-            result = self.manager1.tx_storage.get_blocks_before(block.hash.hex(), num_blocks=num_blocks)
+            result = self.manager1.tx_storage.get_blocks_before(block.hash, num_blocks=num_blocks)
 
             expected_result = [genesis_block] + blocks[:i]
             expected_result = expected_result[-num_blocks:]

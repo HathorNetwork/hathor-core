@@ -8,7 +8,7 @@ from twisted.internet.task import Clock
 from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage, \
                                        TransactionCompactStorage, TransactionCacheStorage, TransactionBinaryStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.transaction import Block, Transaction, TransactionMetadata, TxOutput, TxInput
+from hathor.transaction import Block, Transaction, TxOutput, TxInput
 from hathor.wallet import Wallet
 
 
@@ -77,10 +77,9 @@ class _BaseTransactionStorageTest:
                 tx.verify()
 
             for tx in self.genesis:
-                self.tx_storage.get_transaction_by_hash(tx.hash.hex())
-                self.tx_storage.get_transaction_by_hash_bytes(tx.hash)
-                self.assertTrue(self.tx_storage.transaction_exists_by_hash_bytes(tx.hash))
-                self.assertTrue(self.tx_storage.transaction_exists_by_hash(tx.hash.hex()))
+                tx2 = self.tx_storage.get_transaction(tx.hash)
+                self.assertEqual(tx, tx2)
+                self.assertTrue(self.tx_storage.transaction_exists(tx.hash))
 
         def test_storage_basic(self):
             self.assertEqual(1, self.tx_storage.get_block_count())
@@ -97,17 +96,12 @@ class _BaseTransactionStorageTest:
         def validate_save(self, obj):
             self.tx_storage.save_transaction(obj)
 
-            loaded_obj1 = self.tx_storage.get_transaction_by_hash_bytes(obj.hash)
+            loaded_obj1 = self.tx_storage.get_transaction(obj.hash)
 
-            self.assertTrue(self.tx_storage.transaction_exists_by_hash_bytes(obj.hash))
+            self.assertTrue(self.tx_storage.transaction_exists(obj.hash))
 
             self.assertEqual(obj, loaded_obj1)
             self.assertEqual(obj.is_block, loaded_obj1.is_block)
-
-            loaded_obj2 = self.tx_storage.get_transaction_by_hash(obj.hash.hex())
-
-            self.assertEqual(obj, loaded_obj2)
-            self.assertEqual(obj.is_block, loaded_obj2.is_block)
 
         def test_save_block(self):
             self.validate_save(self.block)
@@ -116,22 +110,20 @@ class _BaseTransactionStorageTest:
             self.validate_save(self.tx)
 
         def test_get_wrong_tx(self):
-            hex_error = '00001c5c0b69d13b05534c94a69b2c8272294e6b0c536660a3ac264820677024'
+            hex_error = bytes.fromhex('00001c5c0b69d13b05534c94a69b2c8272294e6b0c536660a3ac264820677024')
             with self.assertRaises(TransactionDoesNotExist):
-                self.tx_storage.get_transaction_by_hash(hex_error)
+                self.tx_storage.get_transaction(hex_error)
 
         def test_save_metadata(self):
             tx = self.block
-            metadata = TransactionMetadata(
-                hash=tx.hash
-            )
+            metadata = tx.get_metadata()
             metadata.spent_outputs[1].add(self.genesis_blocks[0].hash)
             random_tx = bytes.fromhex('0000222e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0f2222')
             metadata.children.add(random_tx)
-            tx._metadata = metadata
-            self.tx_storage.save_metadata(tx)
-            metadata_read = self.tx_storage._get_metadata_by_hash(tx.hash_hex)
-            self.assertEqual(metadata, metadata_read)
+            self.tx_storage.save_transaction(tx)
+            tx2 = self.tx_storage.get_transaction(tx.hash)
+            metadata2 = tx2.get_metadata()
+            self.assertEqual(metadata, metadata2)
 
         def test_storage_new_blocks(self):
             tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
