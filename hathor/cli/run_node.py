@@ -15,6 +15,7 @@ from hathor.wallet.resources import BalanceResource, HistoryResource, AddressRes
                                     SendTokensResource, UnlockWalletResource, \
                                     LockWalletResource, StateWalletResource
 from hathor.resources import ProfilerResource
+from hathor.version_resource import VersionResource
 from hathor.wallet import Wallet, HDWallet
 from hathor.transaction.resources import DecodeTxResource, PushTxResource, GraphvizResource, \
                                         TransactionResource, DashboardTransactionResource, \
@@ -171,6 +172,7 @@ def main():
 
         resources = (
             (b'status', StatusResource(manager), root),
+            (b'version', VersionResource(), root),
             (b'mining', MiningResource(manager), root),
             (b'decode_tx', DecodeTxResource(manager), root),
             (b'push_tx', PushTxResource(manager), root),
