@@ -107,6 +107,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             HathorEvents.WALLET_BALANCE_UPDATED,
             HathorEvents.WALLET_KEYS_GENERATED,
             HathorEvents.WALLET_GAP_LIMIT,
+            HathorEvents.WALLET_HISTORY_UPDATED,
         ]
 
         for event in events:
@@ -129,6 +130,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             HathorEvents.WALLET_BALANCE_UPDATED,
             HathorEvents.WALLET_KEYS_GENERATED,
             HathorEvents.WALLET_GAP_LIMIT,
+            HathorEvents.WALLET_HISTORY_UPDATED,
         ]
         data = args.__dict__
         if event in ready_events:

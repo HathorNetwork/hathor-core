@@ -87,8 +87,9 @@ class HathorManager(object):
         self.network = network or 'testnet'
 
         # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
-        self.tx_storage = tx_storage or TransactionMemoryStorage()
         self.pubsub = pubsub or PubSubManager()
+        self.tx_storage = tx_storage or TransactionMemoryStorage()
+        self.tx_storage.pubsub = self.pubsub
 
         self.avg_time_between_blocks = 64  # in seconds
         self.min_block_weight = 14
@@ -140,6 +141,8 @@ class HathorManager(object):
         # Metric starts to capture data
         self.metrics.start()
 
+        self.wallet.start()
+
     def stop(self):
         self.log.info('Stopping HathorManager...')
         self.connections.stop()
@@ -147,6 +150,8 @@ class HathorManager(object):
 
         # Metric stops to capture data
         self.metrics.stop()
+
+        self.wallet.stop()
 
     def start_profiler(self):
         """
