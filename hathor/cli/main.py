@@ -20,6 +20,7 @@ class CliManager:
         from . import generate_valid_words
         from . import grafana_dashboard
         from . import twin_tx
+        from . import shell
 
         self.add_cmd('mining', 'run_miner', mining, 'Run a mining process (running node required)')
         self.add_cmd('hathor', 'run_node', run_node, 'Run a node')
@@ -30,6 +31,7 @@ class CliManager:
         self.add_cmd('wallet', 'gen_hd_words', generate_valid_words, 'Generate random words for HD wallet')
         self.add_cmd('grafana', 'grafana_dashboard', grafana_dashboard,
                      'Generate a Grafana Dashboard with all nodes and metrics')
+        self.add_cmd('dev', 'shell', shell, 'Run a Python shell')
 
     def add_cmd(self, group, cmd, module, short_description=None):
         self.command_list[cmd] = module
