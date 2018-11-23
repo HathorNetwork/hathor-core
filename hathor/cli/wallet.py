@@ -20,6 +20,6 @@ def main():
     print('Generating {} keys at {}'.format(count, directory))
 
     wallet = Wallet(directory=directory)
-    wallet.unlock(passwd.encode('utf-8'))
+    wallet.unlock(passwd)
     wallet.generate_keys(count=count)
     wallet._write_keys_to_file()
