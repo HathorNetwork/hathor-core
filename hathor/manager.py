@@ -122,6 +122,12 @@ class HathorManager(object):
         self.wallet = wallet
         self.wallet.pubsub = self.pubsub
 
+        # When manager is in test mode we exclude some verifications
+        self.test_mode = False
+
+        # Multiplier coefficient to adjust the minimum weight of a normal tx to 18
+        self.min_tx_weight_coefficient = 1.6
+
     def start(self):
         """ A factory must be started only once. And it is usually automatically started.
         """
@@ -287,6 +293,7 @@ class HathorManager(object):
             return False
 
         if tx.is_block:
+            # Validate minimum block difficulty
             block_weight = self.calculate_block_difficulty(tx)
             if tx.weight < block_weight:
                 self.log.debug('Invalid new block {}: weight ({}) is smaller than the minimum weight ({})'.format(
@@ -300,6 +307,14 @@ class HathorManager(object):
                     tx=tx,
                     allowed=self.tokens_issued_per_block,
                 )
+        else:
+            # Validate minimum tx difficulty
+            min_tx_weight = self.minimum_tx_weight(tx)
+            if tx.weight < min_tx_weight:
+                self.log.debug('Invalid new tx {}: weight ({}) is smaller than the minimum weight ({})'.format(
+                    tx.hash.hex(), tx.weight, min_tx_weight)
+                )
+                return False
 
         return True
 
@@ -397,6 +412,33 @@ class HathorManager(object):
             weight = self.min_block_weight
 
         return weight
+
+    def minimum_tx_weight(self, tx):
+        """ Returns the minimum weight for the param tx
+            The minimum is calculated by the following function:
+
+            w = log(size, 2) + log(amount, 2) + 0.5
+
+            :param tx: tx to calculate the minimum weight
+            :type tx: :py:class:`hathor.transaction.transaction.Transaction`
+
+            :return: minimum weight for the tx
+            :rtype: float
+        """
+        # In test mode we don't validate the minimum weight for tx
+        # We do this to allow generating many txs for testing
+        if self.test_mode:
+            return 1
+
+        if tx.is_genesis:
+            return 14
+
+        tx_size = len(tx.get_struct())
+
+        # We need to remove the decimal places because it is in the amount
+        # If you want to transfer 20 hathors, the amount will be 2000, that's why we reduce the log of decimal places
+        return (self.min_tx_weight_coefficient*log(tx_size, 2) + log(tx.sum_outputs, 2) -
+                log(10**DECIMAL_PLACES, 2) + 0.5)
 
     def listen(self, description, ssl=False):
         endpoint = self.connections.listen(description, ssl)

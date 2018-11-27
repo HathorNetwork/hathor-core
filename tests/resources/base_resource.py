@@ -22,6 +22,7 @@ class _BaseResourceTest:
             self.reactor.advance(time.time())
             network = 'testnet'
             self.manager = HathorManager(self.reactor, peer_id=peer_id, network=network, wallet=wallet)
+            self.manager.test_mode = True
             self.manager.start()
 
 

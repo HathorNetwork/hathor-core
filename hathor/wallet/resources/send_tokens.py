@@ -67,11 +67,16 @@ class SendTokensResource(resource.Resource):
 
             tx.storage = self.manager.tx_storage
             # TODO Send tx to be mined
-            tx.weight = data.get('weight', 10)
 
             max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
             tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
             tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
+
+            # Calculating weight
+            weight = data.get('weight')
+            if weight is None:
+                weight = self.manager.minimum_tx_weight(tx)
+            tx.weight = weight
 
         # There is no need to synchonize this slow part.
         tx.resolve()
@@ -80,7 +85,7 @@ class SendTokensResource(resource.Resource):
         with self.lock:
             success, message = tx.validate_tx_error()
             if success:
-                self.manager.propagate_tx(tx)
+                success = self.manager.propagate_tx(tx)
 
         return self.return_POST(success, message, tx=tx)
 

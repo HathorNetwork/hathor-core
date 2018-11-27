@@ -2,7 +2,7 @@ from hathor.p2p.resources import MiningResource
 from hathor.wallet.resources import SendTokensResource, BalanceResource, HistoryResource
 from twisted.internet.defer import inlineCallbacks
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import resolve_block_bytes
+from tests.utils import resolve_block_bytes, add_new_blocks
 import base64
 
 
@@ -121,3 +121,24 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         response_error3 = yield self.web.post("wallet/send_tokens", {'data': data_json5})
         data_error3 = response_error3.json_value()
         self.assertFalse(data_error3['success'])
+
+    @inlineCallbacks
+    def test_tx_weight(self):
+        add_new_blocks(self.manager, 3)
+        self.reactor.advance(3)
+
+        # Unlocking wallet
+        self.manager.wallet.unlock(b"MYPASS")
+        self.manager.test_mode = False
+
+        data_json = {
+            "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 505}],
+            "inputs": [],
+            "weight": 1
+        }
+        response = yield self.web.post(
+            "wallet/send_tokens",
+            {'data': data_json}
+        )
+        data = response.json_value()
+        self.assertFalse(data['success'])

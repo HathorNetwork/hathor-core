@@ -42,6 +42,7 @@ class TestCase(unittest.TestCase):
                 wallet.unlock(b'MYPASS')
         manager = HathorManager(self.clock, peer_id=peer_id, network=network, wallet=wallet)
         manager.avg_time_between_blocks = 0.0001
+        manager.test_mode = True
         manager.start()
         return manager
 
