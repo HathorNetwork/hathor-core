@@ -5,6 +5,7 @@ from twisted.internet.task import Clock
 
 from hathor.p2p.peer_id import PeerId
 from hathor.manager import HathorManager
+from hathor.wallet import WalletManager
 
 from tests import unittest
 import json
@@ -15,15 +16,7 @@ class _BaseResourceTest:
     class _ResourceTest(unittest.TestCase):
         def setUp(self):
             super().setUp()
-
-            peer_id = PeerId()
-            wallet = self._create_test_wallet()
-            self.reactor = Clock()
-            self.reactor.advance(time.time())
-            network = 'testnet'
-            self.manager = HathorManager(self.reactor, peer_id=peer_id, network=network, wallet=wallet)
-            self.manager.test_mode = True
-            self.manager.start()
+            self.manager, self.wallet_manager = self.create_peer_for_wallet('testnet', unlock_wallet=False)
 
 
 class RequestBody(object):

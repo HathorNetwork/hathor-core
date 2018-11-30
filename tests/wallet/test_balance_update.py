@@ -17,9 +17,10 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.clock = Clock()
         self.clock.advance(time.time())
         self.network = 'testnet'
-        self.manager = self.create_peer(self.network, unlock_wallet=True)
+        self.hathor_manager, self.manager = self.create_peer_for_wallet(self.network, unlock_wallet=True)
+        self.tx_storage = self.manager.tx_storage
 
-        add_new_blocks(self.manager, 3, advance_clock=15)
+        add_new_blocks(self.hathor_manager, 3, advance_clock=15)
 
         address = '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'
         value = 100
@@ -30,10 +31,10 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         self.tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
         self.tx1.weight = 10
-        self.tx1.parents = self.manager.get_new_tx_parents()
+        self.tx1.parents = self.hathor_manager.get_new_tx_parents()
         self.tx1.timestamp = int(self.clock.seconds())
         self.tx1.resolve()
-        self.manager.propagate_tx(self.tx1)
+        self.hathor_manager.propagate_tx(self.tx1)
 
     def test_balance_update1(self):
         # Tx2 is twin with tx1 but less acc weight, so it will get voided
@@ -43,13 +44,13 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # Change of parents only, so it's a twin.
         # With less weight, so the balance will continue because tx1 will be the winner
-        tx2 = Transaction.create_from_struct(self.tx1.get_struct())
+        tx2 = Transaction.create_from_struct(self.tx1.get_struct(), storage=self.tx_storage)
         tx2.parents = [self.tx1.parents[1], self.tx1.parents[0]]
         tx2.weight = 9
         tx2.resolve()
 
         # Propagate a conflicting twin transaction
-        self.manager.propagate_tx(tx2)
+        self.assertTrue(self.manager.propagate_tx(tx2))
 
         meta1 = self.tx1.get_metadata(force_reload=True)
         self.assertEqual(meta1.twins, {tx2.hash})
@@ -89,7 +90,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx2.resolve()
 
         # Propagate a conflicting twin transaction
-        self.manager.propagate_tx(tx2)
+        self.assertTrue(self.manager.propagate_tx(tx2))
 
         meta1 = self.tx1.get_metadata(force_reload=True)
         self.assertEqual(meta1.twins, {tx2.hash})
@@ -115,7 +116,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx2.resolve()
 
         # Propagate a conflicting twin transaction
-        self.manager.propagate_tx(tx2)
+        self.assertTrue(self.manager.propagate_tx(tx2))
 
         meta1 = self.tx1.get_metadata(force_reload=True)
         self.assertEqual(meta1.twins, {tx2.hash})
@@ -149,7 +150,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx2.parents = [self.tx1.hash, self.tx1.parents[0]]
         tx2.timestamp = int(self.clock.seconds())
         tx2.resolve()
-        self.manager.propagate_tx(tx2)
+        self.assertTrue(self.manager.propagate_tx(tx2))
 
         # Test create same tx with allow double spending
         with self.assertRaises(PrivateKeyNotFound):
@@ -169,7 +170,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx3.resolve()
 
         # Propagate a conflicting twin transaction
-        self.manager.propagate_tx(tx3)
+        self.assertTrue(self.manager.propagate_tx(tx3))
 
         meta2 = tx2.get_metadata(force_reload=True)
         self.assertEqual(meta2.twins, {tx3.hash})
@@ -211,8 +212,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx3.resolve()
 
         # Propagate a conflicting twin transaction
-        self.manager.propagate_tx(tx2)
-        self.manager.propagate_tx(tx3)
+        self.assertTrue(self.manager.propagate_tx(tx2))
+        self.assertTrue(self.manager.propagate_tx(tx3))
 
         meta2 = tx2.get_metadata()
         self.assertEqual(meta2.twins, set())
@@ -253,8 +254,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx3.resolve()
 
         # Propagate a conflicting twin transaction
-        self.manager.propagate_tx(tx2)
-        self.manager.propagate_tx(tx3)
+        self.assertTrue(self.manager.propagate_tx(tx2))
+        self.assertTrue(self.manager.propagate_tx(tx3))
 
         # Balance is the same
         self.assertEqual(self.manager.wallet.balance, WalletBalance(0, 5800))
@@ -289,8 +290,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx3.resolve()
 
         # Propagate a conflicting twin transaction
-        self.manager.propagate_tx(tx2)
-        self.manager.propagate_tx(tx3)
+        self.assertTrue(self.manager.propagate_tx(tx2))
+        self.assertTrue(self.manager.propagate_tx(tx3))
 
         meta2 = tx2.get_metadata(force_reload=True)
         self.assertEqual(meta2.twins, set())
@@ -318,7 +319,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx2.parents = self.manager.get_new_tx_parents()
         tx2.timestamp = int(self.clock.seconds())
         tx2.resolve()
-        self.manager.propagate_tx(tx2)
+        self.assertTrue(self.manager.propagate_tx(tx2))
 
         self.clock.advance(1)
 
@@ -330,7 +331,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx3.parents = self.manager.get_new_tx_parents()
         tx3.timestamp = int(self.clock.seconds())
         tx3.resolve()
-        self.manager.propagate_tx(tx3)
+        self.assertTrue(self.manager.propagate_tx(tx3))
 
         self.clock.advance(1)
         new_address = self.manager.wallet.get_unused_address_bytes()
@@ -345,7 +346,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx4.parents = [tx3.hash, tx3.parents[0]]
         tx4.timestamp = int(self.clock.seconds())
         tx4.resolve()
-        self.manager.propagate_tx(tx4)
+        self.assertTrue(self.manager.propagate_tx(tx4))
         self.clock.advance(1)
 
         # Change of parents only, so it's a twin.
@@ -355,7 +356,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx5.resolve()
 
         # Propagate a conflicting twin transaction
-        self.manager.propagate_tx(tx5)
+        self.assertTrue(self.manager.propagate_tx(tx5))
 
         meta4 = tx4.get_metadata(force_reload=True)
         self.assertEqual(meta4.twins, {tx5.hash})

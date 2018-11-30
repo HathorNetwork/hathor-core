@@ -1,14 +1,24 @@
+from hathor.protos.manager_pb2 import GetNewTxParentsRequest
+from hathor.protos.manager_pb2 import GetNewTxParentsResponse
+from hathor.protos.manager_pb2 import MinimumTxWeightRequest
+from hathor.protos.manager_pb2 import MinimumTxWeightResponse
+from hathor.protos.manager_pb2 import PropagateTxRequest
+from hathor.protos.manager_pb2 import PropagateTxResponse
+from hathor.protos.manager_pb2_grpc import HathorManagerStub
+from hathor.protos.manager_pb2_grpc import HathorManagerServicer
+from hathor.protos.manager_pb2_grpc import add_HathorManagerServicer_to_server
 from hathor.protos.transaction_pb2 import BaseTransaction
 from hathor.protos.transaction_pb2 import Transaction
 from hathor.protos.transaction_pb2 import Block
 from hathor.protos.transaction_pb2 import Input
 from hathor.protos.transaction_pb2 import Output
 from hathor.protos.transaction_pb2 import Metadata
-from hathor.protos.transaction_storage_pb2 import ExistsRequest,  ExistsResponse
-from hathor.protos.transaction_storage_pb2 import GetRequest,  GetResponse
-from hathor.protos.transaction_storage_pb2 import SaveRequest,  SaveResponse
-from hathor.protos.transaction_storage_pb2 import CountRequest,  CountResponse
-from hathor.protos.transaction_storage_pb2 import LatestTimestampRequest,  LatestTimestampResponse
+from hathor.protos.transaction_storage_pb2 import ExistsRequest, ExistsResponse
+from hathor.protos.transaction_storage_pb2 import GetRequest, GetResponse
+from hathor.protos.transaction_storage_pb2 import GetMetadataRequest, GetMetadataResponse
+from hathor.protos.transaction_storage_pb2 import SaveRequest, SaveResponse
+from hathor.protos.transaction_storage_pb2 import CountRequest, CountResponse
+from hathor.protos.transaction_storage_pb2 import LatestTimestampRequest, LatestTimestampResponse
 from hathor.protos.transaction_storage_pb2 import MarkAsRequest, MarkAsResponse
 from hathor.protos.transaction_storage_pb2 import (
         ANY_TYPE, TRANSACTION_TYPE, BLOCK_TYPE, NO_FILTER, ANY_ORDER, ASC_ORDER, TOPOLOGICAL_ORDER,
@@ -22,6 +32,15 @@ from hathor.protos.transaction_storage_pb2_grpc import add_TransactionStorageSer
 
 
 __all__ = [
+    'GetNewTxParentsRequest',
+    'GetNewTxParentsResponse',
+    'MinimumTxWeightRequest',
+    'MinimumTxWeightResponse',
+    'PropagateTxRequest',
+    'PropagateTxResponse',
+    'HathorManagerStub',
+    'HathorManagerServicer',
+    'add_HathorManagerServicer_to_server',
     'BaseTransaction',
     'Transaction',
     'Block',

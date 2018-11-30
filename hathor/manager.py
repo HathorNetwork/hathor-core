@@ -452,3 +452,6 @@ class HathorManager(object):
             proto, _, _ = description.partition(':')
             address = '{}:{}:{}'.format(proto, self.hostname, endpoint._port)
             self.my_peer.entrypoints.append(address)
+
+    def timestamp_now(self):
+        return int(self.reactor.seconds())

@@ -9,7 +9,7 @@ import base64
 class HistoryTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
-        self.web = StubSite(HistoryResource(self.manager))
+        self.web = StubSite(HistoryResource(self.wallet_manager))
         self.web_mining = StubSite(MiningResource(self.manager))
 
     @inlineCallbacks

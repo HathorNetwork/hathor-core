@@ -7,6 +7,7 @@ import "hathor/protos/transaction.proto";
 service TransactionStorage {
   rpc Exists(ExistsRequest) returns (ExistsResponse) {}
   rpc Get(GetRequest) returns (GetResponse) {}
+  rpc GetMetadata(GetMetadataRequest) returns (GetMetadataResponse) {}
   rpc Save(SaveRequest) returns (SaveResponse) {}
   rpc Count(CountRequest) returns (CountResponse) {}
   rpc LatestTimestamp(LatestTimestampRequest) returns (LatestTimestampResponse) {}
@@ -26,11 +27,18 @@ message ExistsResponse {
 
 message GetRequest {
   bytes hash = 1;
-  bool exclude_metadata = 2;
 }
 
 message GetResponse {
   BaseTransaction transaction = 1;
+}
+
+message GetMetadataRequest {
+  bytes hash = 1;
+}
+
+message GetMetadataResponse {
+  Metadata transaction_metadata = 1;
 }
 
 message SaveRequest {
@@ -91,15 +99,14 @@ enum OrderBy {
 }
 
 message ListRequest {
-  bool exclude_metadata = 1;
-  TxType tx_type = 2;
-  TimeFilterType time_filter = 3;
-  uint32 timestamp = 4;
-  OrderBy order_by = 5;
-  bool filter_before = 6;
+  TxType tx_type = 1;
+  TimeFilterType time_filter = 2;
+  uint32 timestamp = 3;
+  OrderBy order_by = 4;
+  bool filter_before = 5;
   oneof tx_oneof {
-    bytes hash = 7;
-    BaseTransaction tx = 9;
+    bytes hash = 6;
+    BaseTransaction tx = 7;
   }
   uint64 max_count = 8;
 }

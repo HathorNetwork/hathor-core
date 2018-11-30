@@ -16,7 +16,7 @@ class WalletHD(unittest.TestCase):
         super().setUp()
         self.wallet = HDWallet(gap_limit=2)
         self.wallet._manually_initialize()
-        self.manager = self.create_peer('testnet', wallet=self.wallet, unlock_wallet=False)
+        self._manager, self.manager = self.create_peer_for_wallet('testnet', wallet=self.wallet, unlock_wallet=False)
         self.tx_storage = self.manager.tx_storage
         self.wallet.unlock(tx_storage=self.tx_storage)
 
@@ -24,7 +24,7 @@ class WalletHD(unittest.TestCase):
         # generate a new block and check if we increase balance
         new_address = self.wallet.get_unused_address()
         out = WalletOutputInfo(self.wallet.decode_address(new_address), TOKENS, timelock=None)
-        block = add_new_block(self.manager)
+        block = add_new_block(self._manager)
         block.verify()
         self.assertEqual(len(self.wallet.unspent_txs[new_address]), 1)
         self.assertEqual(self.wallet.balance, WalletBalance(0, BLOCK_TOKENS))

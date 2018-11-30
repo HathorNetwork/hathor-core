@@ -1,11 +1,13 @@
+import grpc
 from twisted.trial import unittest
 from twisted.internet import reactor
 from twisted.internet.task import Clock
 
 from hathor.p2p.peer_id import PeerId
 from hathor.manager import HathorManager
-from hathor.wallet import Wallet
+from hathor.wallet import Wallet, WalletManager
 
+from concurrent import futures
 import tempfile
 import shutil
 import time
@@ -16,8 +18,11 @@ class TestCase(unittest.TestCase):
         self.tmpdirs = []
         self.clock = Clock()
         self.clock.advance(time.time())
+        self.grpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+        # self.grpc_server.start()
 
     def tearDown(self):
+        self.grpc_server.stop(0)
         self.clean_tmpdirs()
 
     def _create_test_wallet(self):
@@ -45,6 +50,24 @@ class TestCase(unittest.TestCase):
         manager.test_mode = True
         manager.start()
         return manager
+
+    def create_peer_for_wallet(self, network, peer_id=None, wallet=None, unlock_wallet=True):
+        from hathor.remote_manager import create_manager_server, RemoteManager
+        from hathor.transaction.storage import create_transaction_storage_server, TransactionRemoteStorage
+
+        manager = self.create_peer(network, peer_id=peer_id, wallet=wallet, unlock_wallet=unlock_wallet)
+        manager_servicer, manager_port = create_manager_server(self.grpc_server, manager)
+        tx_storage_servicer, tx_storage_port = create_transaction_storage_server(self.grpc_server, manager.tx_storage)
+        self.grpc_server.start()
+
+        remote_manager = RemoteManager()
+        remote_manager.connect_to(manager_port)
+
+        remote_tx_storage = TransactionRemoteStorage()
+        remote_tx_storage.connect_to(tx_storage_port)
+
+        wallet_manager = WalletManager(manager.wallet, remote_tx_storage, remote_manager, reactor=manager.reactor)
+        return manager, wallet_manager
 
     def clean_tmpdirs(self):
         for tmpdir in self.tmpdirs:

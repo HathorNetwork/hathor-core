@@ -9,7 +9,7 @@ import base64
 class BalanceTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
-        self.web = StubSite(BalanceResource(self.manager))
+        self.web = StubSite(BalanceResource(self.wallet_manager))
         self.web_mining = StubSite(MiningResource(self.manager))
 
     @inlineCallbacks

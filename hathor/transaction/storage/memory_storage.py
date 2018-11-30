@@ -57,6 +57,11 @@ class TransactionMemoryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         else:
             raise TransactionDoesNotExist(hash_bytes.hex())
 
+    @deprecated('Use get_metadata_deferred instead')
+    def get_metadata(self, hash_bytes):
+        if hash_bytes in self.metadata:
+            return self._clone(self.metadata[hash_bytes])
+
     @deprecated('Use get_all_transactions_deferred instead')
     def get_all_transactions(self):
         for tx in self.get_all_genesis():

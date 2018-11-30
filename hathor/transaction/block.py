@@ -24,7 +24,7 @@ class Block(BaseTransaction):
             is_block=True
         )
 
-    def to_proto(self, include_metadata=True):
+    def to_proto(self):
         from hathor import protos
         from hathor.transaction import TxOutput
         tx_proto = protos.Block(
@@ -37,8 +37,8 @@ class Block(BaseTransaction):
             nonce=self.nonce,
             hash=self.hash,
         )
-        if include_metadata:
-            tx_proto.metadata.CopyFrom(self.get_metadata().to_proto())
+        if hasattr(self, '_metadata'):
+            tx_proto.metadata.CopyFrom(self._metadata.to_proto())
         return protos.BaseTransaction(block=tx_proto)
 
     @classmethod

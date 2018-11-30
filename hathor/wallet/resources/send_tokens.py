@@ -70,7 +70,7 @@ class SendTokensResource(resource.Resource):
             # TODO Send tx to be mined
 
             max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
-            tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
+            tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.timestamp_now()))
             tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
 
             # Calculating weight
