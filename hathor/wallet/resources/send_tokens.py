@@ -46,7 +46,8 @@ class SendTokensResource(resource.Resource):
                     return self.return_POST(False, 'The address {} is invalid'.format(output['address']))
 
                 value = int(output['value'])
-                outputs.append(WalletOutputInfo(address=address, value=value))
+                timelock = output.get('timelock')
+                outputs.append(WalletOutputInfo(address=address, value=value, timelock=timelock))
 
             if len(data['inputs']) == 0:
                 try:

@@ -8,7 +8,7 @@ from hathor.transaction import Transaction
 from hathor.transaction.genesis import genesis_transactions
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet import Wallet
-from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
+from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo, WalletBalance
 from hathor.wallet.keypair import KeyPair
 from hathor.wallet.exceptions import WalletLocked, OutOfUnusedAddresses, InsuficientFunds
 from hathor.crypto.util import get_private_key_from_bytes, get_address_b58_from_public_key, get_private_key_bytes
@@ -65,28 +65,28 @@ class BasicWallet(unittest.TestCase):
         # wallet will receive genesis block and store in unspent_tx
         w.on_new_tx(genesis_block)
         self.assertEqual(len(list(w.unspent_txs.values())[0]), len(genesis_block.outputs))
-        self.assertEqual(w.balance, genesis_value)
+        self.assertEqual(w.balance, WalletBalance(0, genesis_value))
 
         # create transaction spending this value, but sending to same wallet
         new_address = w.get_unused_address()
-        out = WalletOutputInfo(w.decode_address(new_address), 100)
+        out = WalletOutputInfo(w.decode_address(new_address), 100, timelock=None)
         tx1 = w.prepare_transaction_compute_inputs(Transaction, outputs=[out])
         tx1.update_hash()
         w.on_new_tx(tx1)
         self.assertEqual(len(w.spent_txs), 1)
-        self.assertEqual(w.balance, genesis_value)
+        self.assertEqual(w.balance, WalletBalance(0, genesis_value))
 
         # pass inputs and outputs to prepare_transaction, but not the input keys
         # spend output last transaction
         input_info = WalletInputInfo(tx1.hash, 1, None)
         new_address = w.get_unused_address()
         key2 = w.keys[new_address]
-        out = WalletOutputInfo(w.decode_address(key2.address), 100)
+        out = WalletOutputInfo(w.decode_address(key2.address), 100, timelock=None)
         tx2 = w.prepare_transaction_incomplete_inputs(Transaction, inputs=[input_info], outputs=[out])
         tx2.update_hash()
         w.on_new_tx(tx2)
         self.assertEqual(len(w.spent_txs), 2)
-        self.assertEqual(w.balance, genesis_value)
+        self.assertEqual(w.balance, WalletBalance(0, genesis_value))
 
         # test wallet history storage
         w.save_history_to_file()
@@ -106,12 +106,12 @@ class BasicWallet(unittest.TestCase):
         w.unlock(PASSWORD)
         new_address = w.get_unused_address()
         key = w.keys[new_address]
-        out = WalletOutputInfo(w.decode_address(key.address), BLOCK_REWARD)
+        out = WalletOutputInfo(w.decode_address(key.address), BLOCK_REWARD, timelock=None)
         tx = w.prepare_transaction(Transaction, inputs=[], outputs=[out])
         tx.update_hash()
         w.on_new_tx(tx)
         self.assertEqual(len(w.unspent_txs[new_address]), 1)
-        self.assertEqual(w.balance, BLOCK_REWARD)
+        self.assertEqual(w.balance, WalletBalance(0, BLOCK_REWARD))
 
     def test_replay_from_file(self):
         # create wallet with genesis block key
@@ -128,7 +128,7 @@ class BasicWallet(unittest.TestCase):
         memory_storage = TransactionMemoryStorage()
         w.replay_from_storage(memory_storage)
         self.assertEqual(len(list(w.unspent_txs.values())[0]), len(genesis_block.outputs))
-        self.assertEqual(w.balance, genesis_value)
+        self.assertEqual(w.balance, WalletBalance(0, genesis_value))
 
     def test_locked(self):
         # generate a new block and check if we increase balance
@@ -155,7 +155,7 @@ class BasicWallet(unittest.TestCase):
 
         # create transaction spending some value
         new_address = w.get_unused_address()
-        out = WalletOutputInfo(w.decode_address(new_address), 100)
+        out = WalletOutputInfo(w.decode_address(new_address), 100, timelock=None)
         with self.assertRaises(InsuficientFunds):
             w.prepare_transaction_compute_inputs(Transaction, outputs=[out])
 

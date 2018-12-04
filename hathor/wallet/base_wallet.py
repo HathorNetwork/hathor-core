@@ -4,15 +4,21 @@ import base58
 from collections import namedtuple, defaultdict
 from twisted.logger import Logger
 
-from hathor.wallet.exceptions import WalletOutOfSync, InsuficientFunds, PrivateKeyNotFound, \
+from hathor.wallet.exceptions import InsuficientFunds, PrivateKeyNotFound, \
                                      InputDuplicated, InvalidAddress
 from hathor.transaction import TxInput, TxOutput
+from hathor.transaction.base_transaction import int_to_bytes
 from hathor.transaction.scripts import P2PKH
 from hathor.pubsub import HathorEvents
 from enum import Enum
+from math import inf
 
 WalletInputInfo = namedtuple('WalletInputInfo', ['tx_id', 'index', 'private_key'])
-WalletOutputInfo = namedtuple('WalletOutputInfo', ['address', 'value'])
+WalletOutputInfo = namedtuple('WalletOutputInfo', ['address', 'value', 'timelock'])
+WalletBalance = namedtuple('WalletBalance', ['locked', 'available'])
+# Setting balance default value
+WalletBalance.__new__.__defaults__ = (0, 0)
+WalletBalanceUpdate = namedtuple('WalletBalanceUpdate', ['call_id', 'timelock'])
 
 
 class BaseWallet:
@@ -25,7 +31,7 @@ class BaseWallet:
         # Normal key pair wallet
         KEY_PAIR = 'keypair'
 
-    def __init__(self, directory='./', history_file='history.json', pubsub=None):
+    def __init__(self, directory='./', history_file='history.json', pubsub=None, reactor=None):
         """ A wallet will hold the unspent and spent transactions
 
         All files will be stored in the same directory, and it should
@@ -39,6 +45,9 @@ class BaseWallet:
 
         :param pubsub: If not given, a new one is created.
         :type pubsub: :py:class:`hathor.pubsub.PubSubManager`
+
+        :param reactor: Twisted reactor that handles the time now
+        :type reactor: :py:class:`twisted.internet.Reactor`
         """
         self.history_path = os.path.join(directory, history_file)
 
@@ -56,7 +65,11 @@ class BaseWallet:
         # Save each unspent tx that was voided and is not increasing the tokens of this wallet anymore
         self.voided_unspent = defaultdict(list)
 
-        self.balance = 0
+        # Wallet now has locked balance (with timelock) and available balance
+        self.balance = WalletBalance()
+
+        # WalletBalanceUpdate object to store the callLater to update the balance
+        self.balance_update = None
 
         self.pubsub = pubsub
 
@@ -64,6 +77,10 @@ class BaseWallet:
             HathorEvents.STORAGE_TX_VOIDED,
             HathorEvents.STORAGE_TX_WINNER,
         ]
+
+        if reactor is None:
+            from twisted.internet import reactor
+        self.reactor = reactor
 
     def start(self):
         """ Start the pubsub subscription if wallet has a pubsub
@@ -146,7 +163,8 @@ class BaseWallet:
         """
         tx_outputs = []
         for txout in outputs:
-            tx_outputs.append(TxOutput(txout.value, P2PKH.create_output_script(txout.address)))
+            timelock = int_to_bytes(txout.timelock, 4) if txout.timelock else None
+            tx_outputs.append(TxOutput(txout.value, P2PKH.create_output_script(txout.address, timelock)))
 
         tx_inputs = []
         private_keys = []
@@ -266,7 +284,8 @@ class BaseWallet:
             difference = sum_inputs - sum_outputs
             address_b58 = self.get_unused_address()
             address = self.decode_address(address_b58)
-            new_output = WalletOutputInfo(address, difference)
+            # Changes txs don't have timelock
+            new_output = WalletOutputInfo(address, difference, None)
             return new_output
         return None
 
@@ -283,12 +302,14 @@ class BaseWallet:
 
         for address_b58, utxo_list in self.unspent_txs.items():
             for utxo in utxo_list:
-                inputs_tx.append(WalletInputInfo(utxo.tx_id, utxo.index,
-                                 self.get_private_key(address_b58)))
-                total_inputs_amount += utxo.value
+                if not utxo.is_locked(self.reactor):
+                    # I can only use the outputs that are not locked
+                    inputs_tx.append(WalletInputInfo(utxo.tx_id, utxo.index,
+                                     self.get_private_key(address_b58)))
+                    total_inputs_amount += utxo.value
 
-                if total_inputs_amount >= amount:
-                    break
+                    if total_inputs_amount >= amount:
+                        break
 
             if total_inputs_amount >= amount:
                 break
@@ -303,10 +324,6 @@ class BaseWallet:
 
         If an output matches, will add it to the unspent_txs dict.
         If an input matches, removes from unspent_txs dict and adds to spent_txs dict.
-
-        :raises WalletOutOfSync: when there's an input spending an address in our wallet
-            but we don't have the corresponding UTXO. This indicates the wallet may be
-            missing some transactions.
         """
         updated = False
 
@@ -316,13 +333,12 @@ class BaseWallet:
             if p2pkh_out:
                 if p2pkh_out.address in self.keys:
                     # this wallet received tokens
-                    utxo = UnspentTx(tx.hash, index, output.value, tx.timestamp)
+                    utxo = UnspentTx(tx.hash, index, output.value, tx.timestamp, timelock=p2pkh_out.timelock)
                     utxo_list = self.unspent_txs.pop(p2pkh_out.address, [])
                     utxo_list.append(utxo)
                     self.unspent_txs[p2pkh_out.address] = utxo_list
                     # mark key as used
                     self.tokens_received(p2pkh_out.address)
-                    self.balance += output.value
                     updated = True
                     # publish new output and new balance
                     self.publish_update(
@@ -330,7 +346,6 @@ class BaseWallet:
                         total=self.get_total_tx(),
                         output=utxo
                     )
-                    self.publish_update(HathorEvents.WALLET_BALANCE_UPDATED, balance=self.balance)
             else:
                 # it's the only one we know, so log warning
                 self.log.warn('unknown script')
@@ -342,7 +357,13 @@ class BaseWallet:
                 if p2pkh_in.address in self.keys:
                     # this wallet spent tokens
                     # remove from unspent_txs
-                    if p2pkh_in.address not in self.unspent_txs:
+                    utxo_list = self.unspent_txs.pop(p2pkh_in.address, [])
+                    list_index = -1
+                    for i, utxo in enumerate(utxo_list):
+                        if utxo.tx_id == _input.tx_id and utxo.index == _input.index:
+                            list_index = i
+                            break
+                    if list_index == -1:
                         # If we dont have it in the unspent_txs, it must be in the spent_txs
                         # So we append this spent with the others
                         key = (_input.tx_id, _input.index)
@@ -351,35 +372,24 @@ class BaseWallet:
                             output = output_tx.outputs[_input.index]
                             spent = SpentTx(tx.hash, _input.tx_id, _input.index, output.value, tx.timestamp)
                             self.spent_txs[key].append(spent)
+                    else:
+                        old_utxo = utxo_list.pop(list_index)
+                        # add to spent_txs
+                        spent = SpentTx(tx.hash, _input.tx_id, _input.index, old_utxo.value, tx.timestamp)
+                        self.spent_txs[(_input.tx_id, _input.index)].append(spent)
+                        updated = True
+                        # publish spent output and new balance
+                        self.publish_update(HathorEvents.WALLET_INPUT_SPENT, output_spent=spent)
 
-                        continue
-                    utxo_list = self.unspent_txs.pop(p2pkh_in.address)
-                    list_index = -1
-                    for i, utxo in enumerate(utxo_list):
-                        if utxo.tx_id == _input.tx_id and utxo.index == _input.index:
-                            list_index = i
-                            break
-                    if list_index == -1:
-                        # the wallet does not have the output referenced by this input
-                        raise WalletOutOfSync('{} {}'.format(_input.tx_id.hex(), _input.index))
-                    old_utxo = utxo_list.pop(list_index)
                     if len(utxo_list) > 0:
                         self.unspent_txs[p2pkh_in.address] = utxo_list
-                    # add to spent_txs
-                    spent = SpentTx(tx.hash, _input.tx_id, _input.index, old_utxo.value, tx.timestamp)
-                    self.spent_txs[(_input.tx_id, _input.index)].append(spent)
-                    self.balance -= old_utxo.value
-                    updated = True
-                    # publish spent output and new balance
-                    self.publish_update(HathorEvents.WALLET_INPUT_SPENT, output_spent=spent)
-                    self.publish_update(HathorEvents.WALLET_BALANCE_UPDATED, balance=self.balance)
             else:
                 self.log.warn('unknown input data')
 
         if updated:
             # TODO update history file?
             # XXX should wallet always update it or it will be called externally?
-            pass
+            self.update_balance()
 
     def on_tx_voided(self, tx):
         """ This method is called when a tx is voided in a conflict
@@ -417,10 +427,7 @@ class BaseWallet:
                     if list_index > -1:
                         # Output found: remove from list and update balance
                         utxo_list.pop(list_index)
-                        self.balance -= output.value
                         should_update = True
-                        # publish new balance
-                        self.publish_update(HathorEvents.WALLET_BALANCE_UPDATED, balance=self.balance)
                     else:
                         # If it is in spent tx, remove from dict
                         if (tx.hash, index) in self.spent_txs:
@@ -476,7 +483,6 @@ class BaseWallet:
                                     utxo_list = self.unspent_txs.pop(p2pkh_out.address, [])
                                     utxo_list.append(utxo)
                                     self.unspent_txs[p2pkh_out.address] = utxo_list
-                                    self.balance += output.value
 
                             should_update = True
 
@@ -501,8 +507,8 @@ class BaseWallet:
                         should_update = True
 
         if should_update:
-            # publish new balance
-            self.publish_update(HathorEvents.WALLET_BALANCE_UPDATED, balance=self.balance)
+            # update balance
+            self.update_balance()
             # publish update history
             self.publish_update(HathorEvents.WALLET_HISTORY_UPDATED)
 
@@ -547,8 +553,6 @@ class BaseWallet:
                             utxo = UnspentTx(tx.hash, index, output.value, tx.timestamp)
                             utxo_list = self.unspent_txs.pop(p2pkh_out.address, [])
                             utxo_list.append(utxo)
-                            # Update balance
-                            self.balance += output.value
                             should_update = True
 
                     self.unspent_txs[p2pkh_out.address] = utxo_list
@@ -602,7 +606,6 @@ class BaseWallet:
                             # add to spent_txs
                             spent = SpentTx(tx.hash, _input.tx_id, _input.index, old_utxo.value, tx.timestamp)
                             self.spent_txs[(_input.tx_id, _input.index)].append(spent)
-                            self.balance -= old_utxo.value
                             should_update = True
                             continue
 
@@ -632,14 +635,14 @@ class BaseWallet:
                         should_update = True
 
         if should_update:
-            # publish new balance
-            self.publish_update(HathorEvents.WALLET_BALANCE_UPDATED, balance=self.balance)
+            # update balance
+            self.update_balance()
             # publish update history
             self.publish_update(HathorEvents.WALLET_HISTORY_UPDATED)
 
     def save_history_to_file(self):
         data = {}
-        data['balance'] = self.balance
+        data['balance'] = self.balance._asdict()
         data['unspent_txs'] = unspent_txs = {}
 
         data['spent_txs'] = {}
@@ -658,7 +661,7 @@ class BaseWallet:
         with open(self.history_path, 'r') as json_file:
             json_data = json.loads(json_file.read())
 
-        self.balance = json_data['balance']
+        self.balance = WalletBalance(json_data['balance']['locked'], json_data['balance']['available'])
 
         for k, v in json_data['spent_txs'].items():
             key = tuple(json.loads(k))
@@ -675,7 +678,7 @@ class BaseWallet:
 
         self.unspent_txs = {}
         self.spent_txs = defaultdict(list)
-        self.balance = 0
+        self.balance = WalletBalance()
 
         # TODO we won't be able to hold all transactions in memory in the future
         all_txs = tx_storage.get_all_transactions()
@@ -731,14 +734,61 @@ class BaseWallet:
         if self.pubsub:
             self.pubsub.publish(event, **kwargs)
 
+    def update_balance(self):
+        """ Calculate the balance of the wallet considering locked and not locked outputs
+        """
+        balance = {'locked': 0, 'available': 0}
+        for utxo_list in self.unspent_txs.values():
+            for utxo in utxo_list:
+                if utxo.is_locked(self.reactor):
+                    balance['locked'] += utxo.value
+                else:
+                    balance['available'] += utxo.value
+
+        self.balance = WalletBalance(balance['locked'], balance['available'])
+        self.should_schedule_update()
+
+        # publish new balance
+        self.publish_update(HathorEvents.WALLET_BALANCE_UPDATED, balance=self.balance)
+
+    def should_schedule_update(self):
+        """ Checks if we need to schedule a balance update for later
+            Verifies if we have any unspent tx with timelock and schedule for after it is unlocked
+        """
+        smallest_timestamp = inf
+        for utxo_list in self.unspent_txs.values():
+            for utxo in utxo_list:
+                if utxo.is_locked(self.reactor):
+                    assert utxo.timelock is not None
+                    smallest_timestamp = min(smallest_timestamp, utxo.timelock)
+
+        if smallest_timestamp < inf:
+            # We have an unspent tx that is locked
+            if self.balance_update:
+                if self.balance_update.timelock == smallest_timestamp:
+                    # It's already scheduled for the smallest timelock
+                    return
+                elif self.balance_update.timelock > smallest_timestamp:
+                    # Cancel the scheduled call to create one for the smallest timestamp
+                    self.balance_update.call_id.cancel()
+
+            # Create the new balance update
+            diff = smallest_timestamp - int(self.reactor.seconds()) + 1
+            call_id = self.reactor.callLater(diff, self.update_balance)
+            self.balance_update = WalletBalanceUpdate(call_id, smallest_timestamp)
+        else:
+            # If dont have any other timelock, set balance update to None
+            self.balance_update = None
+
 
 class UnspentTx:
-    def __init__(self, tx_id, index, value, timestamp, voided=False):
+    def __init__(self, tx_id, index, value, timestamp, voided=False, timelock=None):
         self.tx_id = tx_id
         self.index = index
         self.value = value
         self.timestamp = timestamp
         self.voided = voided
+        self.timelock = timelock
 
     def to_dict(self):
         data = {}
@@ -757,6 +807,20 @@ class UnspentTx:
             data['value'],
             data['timestamp']
         )
+
+    def is_locked(self, reactor):
+        """ Returns if the unspent tx is locked or available to be spent
+
+            :param reactor: reactor to get the current time
+            :type reactor: :py:class:`twisted.internet.Reactor`
+
+            :return: if the unspent tx is locked
+            :rtype: bool
+        """
+        if self.timelock is None or self.timelock < int(reactor.seconds()):
+            return False
+        else:
+            return True
 
 
 class SpentTx:

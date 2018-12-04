@@ -24,5 +24,5 @@ class BalanceResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        data = {'balance': self.manager.wallet.balance}
+        data = {'balance': self.manager.wallet.balance._asdict()}
         return json.dumps(data, indent=4).encode('utf-8')

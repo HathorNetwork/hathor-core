@@ -1,6 +1,6 @@
 from hathor.transaction import Transaction, TxOutput
 from hathor.transaction.block import Block
-from hathor.constants import GENESIS_TOKENS, MAX_VALUE
+from hathor.constants import GENESIS_TOKENS, MAX_VALUE, MIN_WEIGHT
 import math
 
 
@@ -9,7 +9,7 @@ def genesis_transactions(tx_storage):
         hash=bytes.fromhex('0001569c85fffa5782c3979e7d68dce1d8d84772505a53ddd76d636585f3977d'),
         nonce=19300,
         timestamp=1539271482,
-        weight=14,
+        weight=MIN_WEIGHT,
         height=1,
         storage=tx_storage,
     )
@@ -18,7 +18,7 @@ def genesis_transactions(tx_storage):
         hash=bytes.fromhex('0000810b22f0cdc3ac6d978a4c80ea46f831b74765fefea2595cc6d4b00e207a'),
         nonce=22587,
         timestamp=1539271483,
-        weight=14,
+        weight=MIN_WEIGHT,
         height=1,
         storage=tx_storage,
     )
@@ -38,7 +38,7 @@ def genesis_transactions(tx_storage):
         hash=bytes.fromhex('0001242057660788e83008a985fa0ef60adb2652bfd70955016992a3d1ad38d7'),
         nonce=5448,
         timestamp=1539271481,
-        weight=14,
+        weight=MIN_WEIGHT,
         height=1,
         outputs=GENESIS_OUTPUTS,
         storage=tx_storage,
