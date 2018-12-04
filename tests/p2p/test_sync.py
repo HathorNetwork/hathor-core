@@ -29,7 +29,9 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         from hathor.wallet.base_wallet import WalletOutputInfo
 
         outputs = []
-        outputs.append(WalletOutputInfo(address=self.manager1.wallet.decode_address(address), value=int(value)))
+        outputs.append(
+            WalletOutputInfo(address=self.manager1.wallet.decode_address(address), value=int(value), timelock=None)
+        )
 
         tx = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
         tx.timestamp = int(self.clock.seconds())

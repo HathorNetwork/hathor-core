@@ -46,7 +46,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         # Asserting new balance
         response_balance = yield self.web_balance.get("wallet/balance")
         data_balance = response_balance.json_value()
-        self.assertEqual(data_balance['balance'], 1495)
+        self.assertEqual(data_balance['balance'], {'available': 1495, 'locked': 0})
 
         # Getting history, so we can get the input
         response_history = yield self.web_history.get("wallet/history", {b'page': 1, b'count': 10})
@@ -121,6 +121,20 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         response_error3 = yield self.web.post("wallet/send_tokens", {'data': data_json5})
         data_error3 = response_error3.json_value()
         self.assertFalse(data_error3['success'])
+
+        add_new_blocks(self.manager, 1)
+
+        # Sending token with timelock
+        data_timelock = {
+            "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 505, "timelock": 1542995660}],
+            "inputs": []
+        }
+        response_timelock = yield self.web.post(
+            "wallet/send_tokens",
+            {'data': data_timelock}
+        )
+        data_response_timelock = response_timelock.json_value()
+        self.assertTrue(data_response_timelock['success'])
 
     @inlineCallbacks
     def test_tx_weight(self):

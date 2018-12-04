@@ -9,7 +9,7 @@ from hathor.transaction.exceptions import TxValidationError
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.metrics import Metrics
-from hathor.constants import TOKENS_PER_BLOCK, DECIMAL_PLACES
+from hathor.constants import TOKENS_PER_BLOCK, DECIMAL_PLACES, MIN_WEIGHT
 
 from twisted.logger import Logger
 
@@ -92,7 +92,7 @@ class HathorManager(object):
         self.tx_storage.pubsub = self.pubsub
 
         self.avg_time_between_blocks = 64  # in seconds
-        self.min_block_weight = 14
+        self.min_block_weight = MIN_WEIGHT
         self.tokens_issued_per_block = TOKENS_PER_BLOCK * (10**DECIMAL_PLACES)
 
         self.max_future_timestamp_allowed = 3600  # in seconds
@@ -121,6 +121,7 @@ class HathorManager(object):
 
         self.wallet = wallet
         self.wallet.pubsub = self.pubsub
+        self.wallet.reactor = self.reactor
 
         # When manager is in test mode we exclude some verifications
         self.test_mode = False
@@ -431,14 +432,18 @@ class HathorManager(object):
             return 1
 
         if tx.is_genesis:
-            return 14
+            return MIN_WEIGHT
 
         tx_size = len(tx.get_struct())
 
         # We need to remove the decimal places because it is in the amount
         # If you want to transfer 20 hathors, the amount will be 2000, that's why we reduce the log of decimal places
-        return (self.min_tx_weight_coefficient*log(tx_size, 2) + log(tx.sum_outputs, 2) -
-                log(10**DECIMAL_PLACES, 2) + 0.5)
+        weight = (self.min_tx_weight_coefficient*log(tx_size, 2) + log(tx.sum_outputs, 2) -
+                  log(10**DECIMAL_PLACES, 2) + 0.5)
+
+        # Make sure the calculated weight is bigger than the minimum
+        assert weight > MIN_WEIGHT
+        return weight
 
     def listen(self, description, ssl=False):
         endpoint = self.connections.listen(description, ssl)

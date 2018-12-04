@@ -3,6 +3,7 @@ from collections import namedtuple
 import struct
 import hashlib
 import re
+import datetime
 
 from twisted.logger import Logger
 
@@ -120,11 +121,11 @@ class HathorScript:
 
 class P2PKH:
     re_match = re_compile(
-        '^(?:DATA_4 OP_GREATERTHAN_TIMESTAMP)? '
+        '^(?:(DATA_4) OP_GREATERTHAN_TIMESTAMP)? '
         'OP_DUP OP_HASH160 (DATA_20) OP_EQUALVERIFY OP_CHECKSIG$'
     )
 
-    def __init__(self, address):
+    def __init__(self, address, timelock=None):
         """This class represents the pay to public hash key script. It enables the person
         who has the corresponding private key of the address to spend the tokens.
 
@@ -138,20 +139,28 @@ class P2PKH:
 
         :param address: address to send tokens
         :type address: string(base58)
+
+        :param timelock: timestamp until when it's locked
+        :type timelock: int
         """
         self.address = address
+        self.timelock = timelock
 
     def to_human_readable(self):
         ret = {}
         ret['type'] = 'P2PKH'
         ret['address'] = self.address
+        ret['timelock'] = self.timelock
         return ret
 
     @classmethod
-    def create_output_script(cls, address):
+    def create_output_script(cls, address, timelock=None):
         """
         :param address: address to send tokens
         :type address: bytes
+
+        :param timelock: timestamp until when the output is locked
+        :type timelock: bytes
 
         :rtype: bytes
         """
@@ -165,6 +174,9 @@ class P2PKH:
         #     Opcode.OP_CHECKSIG
         # )
         s = HathorScript()
+        if timelock:
+            s.pushData(timelock)
+            s.addOpcode(Opcode.OP_GREATERTHAN_TIMESTAMP)
         s.addOpcode(Opcode.OP_DUP)
         s.addOpcode(Opcode.OP_HASH160)
         s.pushData(address)
@@ -208,13 +220,18 @@ class P2PKH:
         match = cls.re_match.search(script)
         if match:
             groups = match.groups()
-            pushdata = groups[0]
-            if pushdata[0] > 75:
-                address = pushdata[2:]
+            timelock = None
+            pushdata_timelock = groups[0]
+            if pushdata_timelock:
+                timelock_bytes = pushdata_timelock[1:]
+                timelock = struct.unpack('!I', timelock_bytes)[0]
+            pushdata_address = groups[1]
+            if pushdata_address[0] > 75:
+                address = pushdata_address[2:]
             else:
-                address = pushdata[1:]
+                address = pushdata_address[1:]
             address_b58 = get_address_b58_from_bytes(address)
-            return cls(address_b58)
+            return cls(address_b58, timelock)
         return None
 
     @classmethod
@@ -385,7 +402,11 @@ def op_greaterthan_timestamp(stack, log, extras):
     buf = stack.pop()
     (timelock,) = struct.unpack('!I', buf)
     if extras.tx.timestamp <= timelock:
-        raise TimeLocked('tx.timestamp ({}) < {}'.format(extras.tx.timestamp, timelock))
+        raise TimeLocked(
+            'The output is locked until {}'.format(
+                datetime.datetime.fromtimestamp(timelock).strftime("%m/%d/%Y %I:%M:%S %p")
+            )
+        )
 
 
 def op_equalverify(stack, log, extras):

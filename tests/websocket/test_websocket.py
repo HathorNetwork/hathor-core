@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import json
 from hathor.pubsub import HathorEvents
 from hathor.transaction.genesis import genesis_transactions
-from hathor.wallet.base_wallet import UnspentTx, SpentTx
+from hathor.wallet.base_wallet import UnspentTx, SpentTx, WalletBalance
 
 
 class TestWebsocket(unittest.TestCase):
@@ -67,9 +67,10 @@ class TestWebsocket(unittest.TestCase):
     def test_balance(self):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
-        self.manager.pubsub.publish(HathorEvents.WALLET_BALANCE_UPDATED, balance=10)
+        self.manager.pubsub.publish(HathorEvents.WALLET_BALANCE_UPDATED, balance=WalletBalance(10, 20))
         value = self._decode_value(self.transport.value())
-        self.assertEqual(value['balance'], 10)
+        self.assertEqual(value['balance']['locked'], 10)
+        self.assertEqual(value['balance']['available'], 20)
         self.assertEqual(value['type'], 'wallet:balance_updated')
 
     def test_output_received(self):

@@ -124,7 +124,7 @@ class Transaction(BaseTransaction):
         try:
             script_eval(self, input_tx, spent_tx)
         except ScriptError as e:
-            raise InvalidInputData from e
+            raise InvalidInputData(e) from e
 
     def get_spent_tx(self, input_tx):
         # TODO Maybe we could use a TransactionCacheStorage in the future to reduce storage hit

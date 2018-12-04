@@ -137,7 +137,6 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         """
         # Ready events don't need extra serialization
         ready_events = [
-            HathorEvents.WALLET_BALANCE_UPDATED,
             HathorEvents.WALLET_KEYS_GENERATED,
             HathorEvents.WALLET_GAP_LIMIT,
             HathorEvents.WALLET_HISTORY_UPDATED,
@@ -155,6 +154,9 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             tx = data['tx']
             data = tx.to_json()
             data['is_block'] = tx.is_block
+            return data
+        elif event == HathorEvents.WALLET_BALANCE_UPDATED:
+            data['balance'] = data['balance']._asdict()
             return data
         else:
             raise ValueError('Should never have entered here! We dont know this event')

@@ -27,13 +27,13 @@ class TwinTransactionTestCase(unittest.TestCase):
         value3 = 102
 
         outputs = [
-            WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=int(value1)),
-            WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=int(value2))
+            WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=int(value1), timelock=None),
+            WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=int(value2), timelock=None)
         ]
 
         outputs2 = [
-            WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=int(value1)),
-            WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=int(value3))
+            WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=int(value1), timelock=None),
+            WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=int(value3), timelock=None)
         ]
 
         tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)

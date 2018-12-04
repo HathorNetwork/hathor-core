@@ -21,7 +21,7 @@ def gen_new_tx(manager, address, value, verify=True):
     from hathor.wallet.base_wallet import WalletOutputInfo
 
     outputs = []
-    outputs.append(WalletOutputInfo(address=manager.wallet.decode_address(address), value=int(value)))
+    outputs.append(WalletOutputInfo(address=manager.wallet.decode_address(address), value=int(value), timelock=None))
 
     tx = manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
     tx.storage = manager.tx_storage

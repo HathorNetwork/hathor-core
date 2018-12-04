@@ -1,6 +1,6 @@
 from hathor.transaction import Transaction
 from hathor.wallet import HDWallet
-from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
+from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo, WalletBalance
 from hathor.wallet.exceptions import InsuficientFunds
 from hathor.constants import TOKENS_PER_BLOCK, DECIMAL_PLACES
 
@@ -23,35 +23,35 @@ class WalletHD(unittest.TestCase):
     def test_transaction_and_balance(self):
         # generate a new block and check if we increase balance
         new_address = self.wallet.get_unused_address()
-        out = WalletOutputInfo(self.wallet.decode_address(new_address), TOKENS)
+        out = WalletOutputInfo(self.wallet.decode_address(new_address), TOKENS, timelock=None)
         block = add_new_block(self.manager)
         block.verify()
         self.assertEqual(len(self.wallet.unspent_txs[new_address]), 1)
-        self.assertEqual(self.wallet.balance, BLOCK_TOKENS)
+        self.assertEqual(self.wallet.balance, WalletBalance(0, BLOCK_TOKENS))
 
         # create transaction spending this value, but sending to same wallet
         new_address2 = self.wallet.get_unused_address()
-        out = WalletOutputInfo(self.wallet.decode_address(new_address2), TOKENS)
+        out = WalletOutputInfo(self.wallet.decode_address(new_address2), TOKENS, timelock=None)
         tx1 = self.wallet.prepare_transaction_compute_inputs(Transaction, outputs=[out])
         tx1.update_hash()
         tx1.verify_script(tx1.inputs[0], block)
         self.wallet.on_new_tx(tx1)
         self.assertEqual(len(self.wallet.spent_txs), 1)
         self.assertEqual(len(self.wallet.unspent_txs), 1)
-        self.assertEqual(self.wallet.balance, TOKENS)
+        self.assertEqual(self.wallet.balance, WalletBalance(0, TOKENS))
 
         # pass inputs and outputs to prepare_transaction, but not the input keys
         # spend output last transaction
         input_info = WalletInputInfo(tx1.hash, 0, None)
         new_address3 = self.wallet.get_unused_address()
-        out = WalletOutputInfo(self.wallet.decode_address(new_address3), TOKENS)
+        out = WalletOutputInfo(self.wallet.decode_address(new_address3), TOKENS, timelock=None)
         tx2 = self.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs=[input_info], outputs=[out])
         tx2.storage = self.tx_storage
         tx2.update_hash()
         tx2.verify_script(tx2.inputs[0], tx1)
         self.wallet.on_new_tx(tx2)
         self.assertEqual(len(self.wallet.spent_txs), 2)
-        self.assertEqual(self.wallet.balance, TOKENS)
+        self.assertEqual(self.wallet.balance, WalletBalance(0, TOKENS))
 
         # Test getting more unused addresses than the gap limit
         for _ in range(3):
@@ -60,7 +60,7 @@ class WalletHD(unittest.TestCase):
     def test_insuficient_funds(self):
         # create transaction spending some value
         new_address = self.wallet.get_unused_address()
-        out = WalletOutputInfo(self.wallet.decode_address(new_address), TOKENS)
+        out = WalletOutputInfo(self.wallet.decode_address(new_address), TOKENS, timelock=None)
         with self.assertRaises(InsuficientFunds):
             self.wallet.prepare_transaction_compute_inputs(Transaction, outputs=[out])
 

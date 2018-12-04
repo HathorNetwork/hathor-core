@@ -44,6 +44,7 @@ class Wallet(BaseWallet):
             directory=directory,
             history_file=history_file,
             pubsub=pubsub,
+            reactor=reactor
         )
 
         self.filepath = os.path.join(directory, filename)
@@ -56,11 +57,6 @@ class Wallet(BaseWallet):
 
         # Used in admin frontend to know which wallet is being used
         self.type = self.WalletType.KEY_PAIR
-
-        # :py:class:`twisted.internet.Reactor`
-        if reactor is None:
-            from twisted.internet import reactor
-        self.reactor = reactor
 
         # int(seconds)
         # 0=flush every change
@@ -99,7 +95,7 @@ class Wallet(BaseWallet):
             if self.flush_schedule is None:
                 remaining = self.flush_to_disk_interval - dt
                 self.log.info('Wallet: Flush delayed {} seconds...'.format(remaining))
-                assert remaining > 0
+                assert remaining >= 0
                 self.flush_schedule = self.reactor.callLater(remaining, self._write_keys_to_file)
 
     def _write_keys_to_file(self):
