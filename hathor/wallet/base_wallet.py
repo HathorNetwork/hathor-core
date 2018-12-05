@@ -10,6 +10,7 @@ from hathor.transaction import TxInput, TxOutput
 from hathor.transaction.base_transaction import int_to_bytes
 from hathor.transaction.scripts import P2PKH
 from hathor.pubsub import HathorEvents
+from hathor.crypto.util import get_checksum
 from enum import Enum
 from math import inf
 
@@ -117,7 +118,8 @@ class BaseWallet:
             :param address58: Wallet address in base58
             :type address58: string
 
-            :raises InvalidAddress: if address58 is not a valid base58 string or not a valid address
+            :raises InvalidAddress: if address58 is not a valid base58 string or
+                                    not a valid address or has invalid checksum
 
             :return: Address in bytes
             :rtype: bytes
@@ -127,10 +129,13 @@ class BaseWallet:
         except ValueError:
             # Invalid base58 string
             raise InvalidAddress
-        # Validate address size (right now our address is 20 bytes)
-        # XXX In the future we will probably change how the address is generated
-        # so the byte size will also change
-        if len(decoded_address) != 20:
+        # Validate address size [25 bytes]
+        if len(decoded_address) != 25:
+            raise InvalidAddress
+        # Validate the checksum
+        address_checksum = decoded_address[-4:]
+        valid_checksum = get_checksum(decoded_address[:-4])
+        if address_checksum != valid_checksum:
             raise InvalidAddress
         return decoded_address
 

@@ -30,7 +30,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
 
         # Sending token to random address without input
         data_json = {
-            'outputs': [{'address': '2jGdawyCaFf1Zsw6bjHxPUiyMZix', 'value': 5}],
+            'outputs': [{'address': '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH', 'value': 5}],
             'inputs': []
         }
         yield self.web_tokens.post(

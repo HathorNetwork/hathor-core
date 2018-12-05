@@ -73,7 +73,7 @@ def add_new_transactions(manager, num_txs, advance_clock=None):
     """
     txs = []
     for _ in range(num_txs):
-        address = '3JEcJKVsHddj1Td2KDjowZ1JqGF1'
+        address = '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'
         value = random.choice([5, 10, 15, 20])
         tx = add_new_tx(manager, address, value, advance_clock)
         txs.append(tx)

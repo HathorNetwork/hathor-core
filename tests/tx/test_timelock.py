@@ -23,7 +23,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
         add_new_blocks(self.manager, 5, advance_clock=15)
 
         address = self.manager.wallet.get_unused_address()
-        outside_address = '3JEcJKVsHddj1Td2KDjowZ1JqGF1'
+        outside_address = '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'
 
         outputs = [
             WalletOutputInfo(

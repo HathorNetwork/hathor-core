@@ -285,9 +285,9 @@ class BasicTransaction(unittest.TestCase):
         with self.assertRaises(MissingStackItems):
             op_find_p2pkh([], log=[], extras=None)
 
-        addr1 = '3hBAjR5t2dNY7bDvdRxwA9N9DYb6'
-        addr2 = 'y8ZRAF9AjD54BgTMCYUxLVjQj9u'
-        addr3 = '2pd3t5QZSt1HESjviVj6zDNQ3456'
+        addr1 = '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'
+        addr2 = '1K35zJQeYrVzQAW7X3s7vbPKmngj5JXTBc'
+        addr3 = '1MnHN3D41yaMN5WLLKPARRdF77USvPLDfy'
 
         import base58
         out1 = P2PKH.create_output_script(base58.b58decode(addr1))

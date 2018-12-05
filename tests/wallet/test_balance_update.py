@@ -21,7 +21,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         add_new_blocks(self.manager, 3, advance_clock=15)
 
-        address = '3JEcJKVsHddj1Td2KDjowZ1JqGF1'
+        address = '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'
         value = 100
 
         outputs = [
@@ -239,7 +239,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx2.parents = [self.tx1.parents[1], self.tx1.parents[0]]
         tx2.resolve()
 
-        address = '3JEcJKVsHddj1Td2KDjowZ1JqGF1'
+        address = '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'
         value = 100
 
         outputs = [

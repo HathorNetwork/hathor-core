@@ -32,7 +32,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         yield self.web.options("wallet/send_tokens")
 
         data_json = {
-            "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 505}],
+            "outputs": [{"address": "15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH", "value": 505}],
             "inputs": []
         }
         response = yield self.web.post(
@@ -55,7 +55,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         # Sending token to random address with input wrong amount
         data_json = {
-            "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 500}],
+            "outputs": [{"address": "15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH", "value": 500}],
             "inputs": [{"tx_id": input_hash, "index": 0}]
         }
         response2 = yield self.web.post(
@@ -68,7 +68,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         # Sending duplicate input
         data_json_duplicate = {
-            "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 19000}],
+            "outputs": [{"address": "15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH", "value": 19000}],
             "inputs": [
                 {"tx_id": input_hash, "index": 0},
                 {"tx_id": input_hash, "index": 0}
@@ -80,7 +80,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         # Sending token to random address with input right amount
         data_json2 = {
-            "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 1495}],
+            "outputs": [{"address": "15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH", "value": 1495}],
             "inputs": [{"tx_id": input_hash, "index": 0}]
         }
         response3 = yield self.web.post(
@@ -115,7 +115,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         # Error insuficient funds
         data_json5 = {
-            "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 5000000}],
+            "outputs": [{"address": "15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH", "value": 5000000}],
             "inputs": []
         }
         response_error3 = yield self.web.post("wallet/send_tokens", {'data': data_json5})
@@ -126,7 +126,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         # Sending token with timelock
         data_timelock = {
-            "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 505, "timelock": 1542995660}],
+            "outputs": [{"address": "15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH", "value": 505, "timelock": 1542995660}],
             "inputs": []
         }
         response_timelock = yield self.web.post(
@@ -146,7 +146,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.manager.test_mode = False
 
         data_json = {
-            "outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZix", "value": 505}],
+            "outputs": [{"address": "15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH", "value": 505}],
             "inputs": [],
             "weight": 1
         }
