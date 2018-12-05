@@ -10,7 +10,7 @@ from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet import Wallet
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo, WalletBalance
 from hathor.wallet.keypair import KeyPair
-from hathor.wallet.exceptions import WalletLocked, OutOfUnusedAddresses, InsuficientFunds
+from hathor.wallet.exceptions import WalletLocked, OutOfUnusedAddresses, InsuficientFunds, InvalidAddress
 from hathor.crypto.util import get_private_key_from_bytes, get_address_b58_from_public_key, get_private_key_bytes
 from cryptography.hazmat.primitives import serialization
 
@@ -158,6 +158,24 @@ class BasicWallet(unittest.TestCase):
         out = WalletOutputInfo(w.decode_address(new_address), 100, timelock=None)
         with self.assertRaises(InsuficientFunds):
             w.prepare_transaction_compute_inputs(Transaction, outputs=[out])
+
+    def test_invalid_address(self):
+        w = Wallet(directory=self.directory)
+        w.unlock(PASSWORD)
+
+        # creating valid address
+        valid_address = '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'
+        WalletOutputInfo(w.decode_address(valid_address), 100, None)
+
+        # creating invalid address
+        invalid_address = '5d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'
+        with self.assertRaises(InvalidAddress):
+            WalletOutputInfo(w.decode_address(invalid_address), 100, None)
+
+        # invalid address (checksum invalid)
+        invalid_address2 = '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1Bfnq'
+        with self.assertRaises(InvalidAddress):
+            WalletOutputInfo(w.decode_address(invalid_address2), 100, None)
 
 
 if __name__ == '__main__':

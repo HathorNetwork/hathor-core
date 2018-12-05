@@ -11,8 +11,8 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
 
-from hathor.crypto.util import get_hash160, get_public_key_from_bytes_compressed, \
-                               get_address_b58_from_bytes, get_address_b58_from_public_key_bytes_compressed
+from hathor.crypto.util import get_hash160, get_public_key_from_bytes_compressed, get_address_b58_from_bytes, \
+                                get_address_b58_from_public_key_bytes_compressed, get_address_b58_from_public_key_hash
 from hathor.transaction.exceptions import ScriptError, OutOfData, MissingStackItems, \
                                           EqualVerifyFailed, FinalStackInvalid, TimeLocked, \
                                           OracleChecksigFailed, DataIndexError, VerifyFailed
@@ -164,22 +164,15 @@ class P2PKH:
 
         :rtype: bytes
         """
-        # return struct.pack(
-        #     '!BBB{}sBB'.format(len(address)),
-        #     Opcode.OP_DUP,
-        #     Opcode.OP_HASH160,
-        #     len(address),
-        #     address,
-        #     Opcode.OP_EQUALVERIFY,
-        #     Opcode.OP_CHECKSIG
-        # )
+        assert len(address) == 25
+        public_key_hash = address[1:-4]
         s = HathorScript()
         if timelock:
             s.pushData(timelock)
             s.addOpcode(Opcode.OP_GREATERTHAN_TIMESTAMP)
         s.addOpcode(Opcode.OP_DUP)
         s.addOpcode(Opcode.OP_HASH160)
-        s.pushData(address)
+        s.pushData(public_key_hash)
         s.addOpcode(Opcode.OP_EQUALVERIFY)
         s.addOpcode(Opcode.OP_CHECKSIG)
         return s.data
@@ -192,13 +185,6 @@ class P2PKH:
 
         :rtype: bytes
         """
-        # return struct.pack(
-        #     '!B{}sB{}s'.format(len(signature), len(public_key_bytes)),
-        #     len(signature),
-        #     signature,
-        #     len(public_key_bytes),
-        #     public_key_bytes
-        # )
         s = HathorScript()
         s.pushData(signature)
         s.pushData(public_key_bytes)
@@ -227,10 +213,10 @@ class P2PKH:
                 timelock = struct.unpack('!I', timelock_bytes)[0]
             pushdata_address = groups[1]
             if pushdata_address[0] > 75:
-                address = pushdata_address[2:]
+                public_key_hash = pushdata_address[2:]
             else:
-                address = pushdata_address[1:]
-            address_b58 = get_address_b58_from_bytes(address)
+                public_key_hash = pushdata_address[1:]
+            address_b58 = get_address_b58_from_public_key_hash(public_key_hash)
             return cls(address_b58, timelock)
         return None
 

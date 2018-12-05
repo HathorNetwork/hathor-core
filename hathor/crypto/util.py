@@ -4,6 +4,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
+from hathor.constants import P2PKH_VERSION_BYTE
 
 
 def get_private_key_bytes(private_key,
@@ -49,25 +50,30 @@ def get_hash160(public_key_bytes):
     return h.digest()
 
 
-def get_address_from_public_key_bytes(public_key_bytes):
-    """For now, we only do sha256 followed by ripmd160.
-
-    :param public_key_bytes: public key in bytes
-    :type public_key_bytes: bytes
-
-
-    :return: address associated to public key
-    :rtype: bytes
-    """
-    return get_hash160(public_key_bytes)
-
-
 def get_address_from_public_key(public_key):
-    """Wrapper function to pass a cryptography ec.EllipticCurvePrivateKey object
-    to the function above
+    """ Get bytes from public key object and call method that expect bytes
+
+        :param public_key: Public key object
+        :param public_key: ec.EllipticCurvePublicKey
+
+        :return: address in bytes
+        :rtype: bytes
     """
     public_key_bytes = get_public_key_bytes_compressed(public_key)
     return get_address_from_public_key_bytes(public_key_bytes)
+
+
+def get_address_from_public_key_bytes(public_key_bytes):
+    """ Calculate public key hash and get address from it
+
+        :param public_key_bytes: public key in bytes
+        :param public_key_bytes: bytes
+
+        :return: address in bytes
+        :rtype: bytes
+    """
+    public_key_hash = get_hash160(public_key_bytes)
+    return get_address_from_public_key_hash(public_key_hash)
 
 
 def get_address_b58_from_public_key(public_key):
@@ -77,14 +83,78 @@ def get_address_b58_from_public_key(public_key):
     :return: the b58-encoded address
     :rtype: string
     """
-    return base58.b58encode(get_address_from_public_key(public_key)).decode('utf-8')
+    public_key_bytes = get_public_key_bytes_compressed(public_key)
+    return get_address_b58_from_public_key_bytes(public_key_bytes)
 
 
-def get_address_b58_from_public_key_bytes(public_key):
-    return base58.b58encode(get_address_from_public_key_bytes(public_key)).decode('utf-8')
+def get_address_b58_from_public_key_hash(public_key_hash):
+    """Gets the b58 address from the hash of a public key.
+
+        :param public_key_hash: hash of public key (sha256 and ripemd160)
+        :param public_key_hash: bytes
+
+        :return: address in base 58
+        :rtype: string
+    """
+    address = get_address_from_public_key_hash(public_key_hash)
+    return base58.b58encode(address).decode('utf-8')
+
+
+def get_address_from_public_key_hash(public_key_hash, version_byte=P2PKH_VERSION_BYTE):
+    """Gets the address in bytes from the public key hash
+
+        :param public_key_hash: hash of public key (sha256 and ripemd160)
+        :param public_key_hash: bytes
+
+        :param version_byte: first byte of address to define the version of this address
+        :param version_byte: bytes
+
+        :return: address in bytes
+        :rtype: bytes
+    """
+    address = b''
+    # Version byte
+    address += version_byte
+    # Pubkey hash
+    address += public_key_hash
+    checksum = get_checksum(address)
+    address += checksum
+    return address
+
+
+def get_checksum(address_bytes):
+    """ Calculate double sha256 of address and gets first 4 bytes
+
+        :param address_bytes: address before checksum
+        :param address_bytes: bytes
+
+        :return: checksum of the address
+        :rtype: bytes
+    """
+    return hashlib.sha256(hashlib.sha256(address_bytes).digest()).digest()[:4]
+
+
+def get_address_b58_from_public_key_bytes(public_key_bytes):
+    """Gets the b58 address from a public key bytes.
+
+        :param public_key_bytes: public key in bytes
+        :param public_key_bytes: bytes
+
+        :return: address in base 58
+        :rtype: string
+    """
+    public_key_hash = get_hash160(public_key_bytes)
+    return get_address_b58_from_public_key_hash(public_key_hash)
 
 
 def get_address_b58_from_bytes(address):
+    """Gets the b58 address from the address in bytes
+
+        :param address: bytes
+
+        :return: address in base 58
+        :rtype: string
+    """
     return base58.b58encode(address).decode('utf-8')
 
 
