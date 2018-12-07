@@ -876,6 +876,18 @@ class BaseTransaction(ABC):
             message = str(e)
         return success, message
 
+    def clone(self):
+        """Return exact copy without sharing memory, including metadata if loaded.
+
+        :return: Transaction or Block copy
+        :rtype: :py:class:`hathor.transaction.BaseTransaction`
+        """
+        new_tx = self.create_from_struct(self.get_struct())
+        if hasattr(self, '_metadata'):
+            new_tx._metadata = self._metadata.clone()
+        new_tx.storage = self.storage
+        return new_tx
+
 
 class Input:
     def __init__(self, tx_id, index, data):

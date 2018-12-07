@@ -14,7 +14,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
     """
     log = Logger()
 
-    def __init__(self, store, reactor, interval=5, capacity=10000):
+    def __init__(self, store, reactor, interval=5, capacity=10000, *, _avoid_shared_memory=True):
         """
         :param store: a subclass of TransactionStorage
         :type store: :py:class:`hathor.transaction.storage.TransactionStorage`
@@ -34,11 +34,18 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self.interval = interval
         self.capacity = capacity
         self.flush_deferred = None
+        self._avoid_shared_memory = _avoid_shared_memory
         self.cache = collections.OrderedDict()
         # dirty_txs has the txs that have been modified but are not persisted yet
         self.dirty_txs = set()          # Set[bytes(hash)]
         self.stats = dict(hit=0, miss=0)
         super().__init__()
+
+    def _clone(self, x):
+        if self._avoid_shared_memory:
+            return x.clone()
+        else:
+            return x
 
     def start(self):
         self.reactor.callLater(self.interval, self._start_flush_thread)
@@ -66,7 +73,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
             # and we need to save the tx to disk immediately. So it might happen that the tx which was
             # in the dirty set when the flush thread began is not in cache anymore, hence this `if` check
             if tx_hash in self.cache:
-                tx = self.cache[tx_hash]
+                tx = self._clone(self.cache[tx_hash])
                 skip_warning(self.store.save_transaction)(tx)
                 self.dirty_txs.discard(tx_hash)
 
@@ -100,7 +107,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
                     # write to disk so we don't lose the last update
                     skip_warning(self.store.save_transaction)(removed_tx)
                     self.dirty_txs.remove(removed_tx.hash)
-            self.cache[tx.hash] = tx
+            self.cache[tx.hash] = self._clone(tx)
         else:
             self.cache.move_to_end(tx.hash, last=False)
 
@@ -113,7 +120,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
     @deprecated('Use get_transaction_deferred instead')
     def get_transaction(self, hash_bytes):
         if hash_bytes in self.cache:
-            tx = self.cache[hash_bytes]
+            tx = self._clone(self.cache[hash_bytes])
             self.cache.move_to_end(hash_bytes, last=False)
             self.stats['hit'] += 1
             return tx
@@ -152,7 +159,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
     @inlineCallbacks
     def get_transaction_deferred(self, hash_bytes):
         if hash_bytes in self.cache:
-            tx = self.cache[hash_bytes]
+            tx = self._clone(self.cache[hash_bytes])
             self.cache.move_to_end(hash_bytes, last=False)
             self.stats['hit'] += 1
             return tx
