@@ -24,6 +24,45 @@ class Block(BaseTransaction):
             is_block=True
         )
 
+    def to_proto(self, include_metadata=True):
+        from hathor import protos
+        from hathor.transaction import TxOutput
+        tx_proto = protos.Block(
+            version=self.version,
+            weight=self.weight,
+            timestamp=self.timestamp,
+            height=self.height,
+            parents=self.parents,
+            outputs=map(TxOutput.to_proto, self.outputs),
+            nonce=self.nonce,
+            hash=self.hash,
+        )
+        if include_metadata:
+            tx_proto.metadata.CopyFrom(self.get_metadata().to_proto())
+        return protos.BaseTransaction(block=tx_proto)
+
+    @classmethod
+    def create_from_proto(cls, tx_proto, storage=None):
+        from hathor.transaction import TxOutput
+        block_proto = tx_proto.block
+        tx = cls(
+            version=block_proto.version,
+            weight=block_proto.weight,
+            timestamp=block_proto.timestamp,
+            height=block_proto.height,
+            nonce=block_proto.nonce,
+            hash=block_proto.hash or None,
+            parents=list(block_proto.parents),
+            outputs=list(map(TxOutput.create_from_proto, block_proto.outputs)),
+            storage=storage,
+        )
+        if block_proto.HasField('metadata'):
+            from hathor.transaction import TransactionMetadata
+            # make sure hash is not empty
+            tx.hash = tx.hash or tx.calculate_hash()
+            tx._metadata = TransactionMetadata.create_from_proto(tx.hash, block_proto.metadata)
+        return tx
+
     def calculate_weight(self, network_hashrate):
         """ Calculate the minimum weight so it is a valid block.
         weight = 7 + log2(hash_rate)

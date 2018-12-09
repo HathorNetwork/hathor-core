@@ -3,13 +3,13 @@ from twisted.internet import threads
 from twisted.internet.defer import inlineCallbacks, succeed
 from twisted.logger import Logger
 
-from hathor.transaction.storage.transaction_storage import TransactionStorage
+from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.util import deprecated, skip_warning
 
 import collections
 
 
-class TransactionCacheStorage(TransactionStorage):
+class TransactionCacheStorage(BaseTransactionStorage):
     """Caching storage to be used 'on top' of other storages.
     """
     log = Logger()
@@ -17,7 +17,7 @@ class TransactionCacheStorage(TransactionStorage):
     def __init__(self, store, reactor, interval=5, capacity=10000):
         """
         :param store: a subclass of TransactionStorage
-        :type store: :py:class:`hathor.transaction.storage.transaction_storage.TransactionStorage`
+        :type store: :py:class:`hathor.transaction.storage.TransactionStorage`
 
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :type reactor: :py:class:`twisted.internet.Reactor`

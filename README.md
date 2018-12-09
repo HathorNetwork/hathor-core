@@ -39,8 +39,8 @@ Then, run a client which connects to the server. You may run as many clients as 
 
 To run multiple nodes in one server:
 
-	hathor-cli run_node --hostname localhost --listen tcp:8000 --status 8080 --peer peer0.json --data ./peer0/data/
-	hathor-cli run_node --hostname localhost --listen tcp:8001 --status 8081 --peer peer1.json --data ./peer1/data/ --bootstrap tcp:127.0.0.1:8000
+    hathor-cli run_node --hostname localhost --listen tcp:8000 --status 8080 --peer peer0.json --data ./peer0/data/
+    hathor-cli run_node --hostname localhost --listen tcp:8001 --status 8081 --peer peer1.json --data ./peer1/data/ --bootstrap tcp:127.0.0.1:8000
 
 
 Run a simple miner
@@ -75,7 +75,7 @@ Run flake8:
 
 Run tests with coverage:
 
-	nosetests --with-coverage --cover-package=hathor --cover-html
+    nosetests --with-coverage --cover-package=hathor --cover-html
 
 Generate Sphinx docs:
 
@@ -105,12 +105,15 @@ Then, install `hathor-python`:
     source ./venv/bin/activate
     pip install -r requirements.txt
 
+Generate grpc/protobuf modules (in virtualenv):
+
+    make protos
+
 Then, generate your `peer_id.json`:
 
     hathor-cli gen_peer_id >peer_id.json
 
 Finally, you can run your node.
-
 
 
 Daemonizing with Supervisor
@@ -142,9 +145,10 @@ Recommended aliases to control `hathord`:
 
 Notes for running on Windows 10
 ------
+
 A few additional steps are required to run the code on Windows:
 
-* If pip install has trouble installing `twisted`, install it from a wheel file appropriate for your environment. 
+* If pip install has trouble installing `twisted`, install it from a wheel file appropriate for your environment.
 
     For example: download from a [repo of wheel files](https://www.lfd.uci.edu/~gohlke/pythonlibs/#twisted) and then:
 
@@ -160,4 +164,4 @@ After this succeeds, you should be able to install the other requirements normal
 
 
     mkdir c:\tmp
-    
+

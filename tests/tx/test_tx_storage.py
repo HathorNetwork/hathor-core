@@ -5,8 +5,9 @@ import time
 
 from twisted.internet.task import Clock
 
-from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage, \
-                                       TransactionCompactStorage, TransactionCacheStorage, TransactionBinaryStorage
+from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage, TransactionRemoteStorage,\
+                                       TransactionCompactStorage, TransactionCacheStorage, TransactionBinaryStorage,\
+                                       TransactionSubprocessStorage, create_transaction_storage_server
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction import Block, Transaction, TxOutput, TxInput
 from hathor.wallet import Wallet
@@ -84,6 +85,7 @@ class _BaseTransactionStorageTest:
         def test_storage_basic(self):
             self.assertEqual(1, self.tx_storage.get_block_count())
             self.assertEqual(2, self.tx_storage.get_tx_count())
+            self.assertEqual(3, self.tx_storage.get_count_tx_blocks())
 
             block_parents_hash = [x.data for x in self.tx_storage.get_block_tips()]
             self.assertEqual(1, len(block_parents_hash))
@@ -164,6 +166,34 @@ class _BaseTransactionStorageTest:
             self.reactor.advance(5)
             return block
 
+    class _RemoteStorageTest(_TransactionStorageTest):
+        def setUp(self, tx_storage, reactor=None):
+            from concurrent import futures
+            import grpc
+
+            self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+            tx_storage._manually_initialize()
+            _servicer, port = create_transaction_storage_server(self._server, tx_storage)
+            self._server.start()
+
+            tx_storage = TransactionRemoteStorage()
+            tx_storage.connect_to(port)
+            super().setUp(tx_storage, reactor=reactor)
+
+        def tearDown(self):
+            self._server.stop(0)
+            super().tearDown()
+
+    class _SubprocessStorageTest(_TransactionStorageTest):
+        def setUp(self, tx_storage_constructor, reactor=None):
+            tx_storage = TransactionSubprocessStorage(tx_storage_constructor)
+            tx_storage.start()
+            super().setUp(tx_storage, reactor=reactor)
+
+        def tearDown(self):
+            self.tx_storage.stop()
+            super().tearDown()
+
 
 class TransactionBinaryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
     def setUp(self):
@@ -205,3 +235,33 @@ class CacheMemoryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest
         store = TransactionMemoryStorage()
         reactor = Clock()
         super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
+
+
+class RemoteMemoryStorageTest(_BaseTransactionStorageTest._RemoteStorageTest):
+    def setUp(self):
+        super().setUp(TransactionMemoryStorage())
+
+
+class RemoteCacheMemoryStorageTest(_BaseTransactionStorageTest._RemoteStorageTest):
+    def setUp(self):
+        store = TransactionMemoryStorage()
+        reactor = Clock()
+        super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
+
+
+class SubprocessMemoryStorageTest(_BaseTransactionStorageTest._SubprocessStorageTest):
+    def setUp(self):
+        super().setUp(TransactionMemoryStorage)
+
+
+class SubprocessCacheMemoryStorageTest(_BaseTransactionStorageTest._SubprocessStorageTest):
+    def setUp(self):
+        def storage_constructor():
+            store = TransactionMemoryStorage()
+            reactor = Clock()
+            return TransactionCacheStorage(store, reactor, capacity=5)
+        super().setUp(storage_constructor)
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -1,9 +1,9 @@
-from hathor.transaction.storage.transaction_storage import TransactionStorage, TransactionStorageAsyncFromSync
+from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.util import deprecated, skip_warning
 
 
-class TransactionMemoryStorage(TransactionStorage, TransactionStorageAsyncFromSync):
+class TransactionMemoryStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
     def __init__(self, with_index=True):
         self.transactions = {}
         self.metadata = {}

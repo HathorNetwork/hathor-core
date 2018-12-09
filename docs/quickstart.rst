@@ -106,14 +106,37 @@ Then, install `hathor-python`:
     source ./venv/bin/activate
     pip install -r requirements.txt
 
+Generate grpc/protobuf modules (in virtualenv):
+
+.. code-block:: shell
+
+    make protos
+
 Then, generate your `peer_id.json`:
 
 .. code-block:: shell
 
-    hathor-cli gen_peer_id >peer_id.json
+    hathor-cli gen_peer_id > peer_id.json
 
 Finally, you can run your node.
 
+
+Updating and cleanup
+--------------------
+
+For development, make sure to have the required dependencies and latest generated files after updating the repo.
+
+Installing new dependencies (in virtualenv):
+
+.. code-block:: shell
+
+    pip install -r requirements.txt
+
+Regenerate grpc/protobuf modules (in virtualenv):
+
+.. code-block:: shell
+
+    make protos
 
 
 Daemonizing with Supervisor

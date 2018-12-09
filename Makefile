@@ -10,5 +10,17 @@ tests:
 pep8:
 	flake8 hathor/ tests/ tools/ *.py
 
+proto_dir = ./hathor/protos
+proto_srcs = $(wildcard $(proto_dir)/*.proto)
+proto_outputs = $(patsubst %.proto,%_pb2.py,$(proto_srcs)) $(patsubst %.proto,%_pb2_grpc.py,$(proto_srcs))
 
+# all proto_srcs are added as deps so we a change on any of them triggers all to be rebuilt
+%_pb2.py %_pb2_grpc.py: %.proto $(proto_srcs)
+	python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. $<
 
+.PHONY: protos
+protos: $(proto_outputs)
+
+.PHONY:
+clean:
+	rm -f $(proto_outputs)
