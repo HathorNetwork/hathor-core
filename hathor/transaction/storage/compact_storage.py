@@ -1,4 +1,4 @@
-from hathor.transaction.storage.transaction_storage import TransactionStorage, TransactionStorageAsyncFromSync
+from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.util import deprecated, skip_warning
@@ -9,7 +9,7 @@ import re
 import base64
 
 
-class TransactionCompactStorage(TransactionStorage, TransactionStorageAsyncFromSync):
+class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
     """This storage saves tx and metadata in the same file.
 
     It also uses JSON format. Saved file is of format {'tx': {...}, 'meta': {...}}

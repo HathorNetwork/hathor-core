@@ -1,4 +1,4 @@
-from hathor.transaction.storage.transaction_storage import TransactionStorage, TransactionStorageAsyncFromSync
+from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionMetadataDoesNotExist
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.util import deprecated, skip_warning
@@ -9,7 +9,7 @@ import re
 import base64
 
 
-class TransactionJSONStorage(TransactionStorage, TransactionStorageAsyncFromSync):
+class TransactionJSONStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
     def __init__(self, path='./',  with_index=True):
         os.makedirs(path, exist_ok=True)
         self.path = path

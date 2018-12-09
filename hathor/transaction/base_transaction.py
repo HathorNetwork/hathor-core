@@ -1,9 +1,8 @@
-# encoding: utf-8
-
 from hathor.transaction.exceptions import TxValidationError, ParentDoesNotExist, TimestampError, \
                                           IncorrectParents, DuplicatedParents, PowError
 from hathor.transaction.scripts import P2PKH
 
+from abc import ABC, abstractmethod, abstractclassmethod
 from enum import Enum
 from math import log
 from itertools import chain
@@ -18,9 +17,9 @@ MAX_NUM_INPUTS = MAX_NUM_OUTPUTS = 256
 
 _INPUT_SIZE_BYTES = 32  # 256 bits
 
-# Version (H), weight (f), timestamp (I), height (Q), inputs len (H), outputs len (H) and
+# Version (H), weight (d), timestamp (I), height (Q), inputs len (H), outputs len (H) and
 # parents len (H).
-# H = unsigned short (2 bytes), f = float(4), I = unsigned int (4), Q = unsigned long long int (64)
+# H = unsigned short (2 bytes), d = double(8), f = float(4), I = unsigned int (4), Q = unsigned long long int (64)
 _TRANSACTION_FORMAT_STRING = '!HdIQHHH'  # Update code below if this changes.
 
 # Version (H), inputs len (H), and outputs len (H).
@@ -56,7 +55,7 @@ def aux_calc_weight(w1, w2, multiplier):
     return a + log(1 + 2**(b-a)*multiplier, 2)
 
 
-class BaseTransaction:
+class BaseTransaction(ABC):
     """Hathor base transaction"""
 
     class GenesisDagConnectivity(Enum):
@@ -149,6 +148,18 @@ class BaseTransaction:
         tx.hash = tx.calculate_hash()
         tx.storage = storage
         return tx
+
+    @abstractclassmethod
+    def create_from_proto(cls, tx_proto, storage=None):
+        """ Create a Transaction from a protobuf Transaction object.
+
+        :param transaction_proto: Protobuf transaction object
+        :type transaction_proto: :py:class:`hathor.protos.Transaction`
+
+        :return: A transaction or a block, depending on the class `cls`
+        :rtype :py:class:`hathor.transaction.BaseTransaction`
+        """
+        raise NotImplementedError
 
     def __eq__(self, other):
         """Two transactions are equal when their hash matches
@@ -823,6 +834,18 @@ class BaseTransaction:
 
         return data
 
+    @abstractmethod
+    def to_proto(self, include_metadata=True):
+        """ Creates a Protobuf object from self
+
+        :param include_metadata: Whether to include metadata, regardless if there is
+        :type include_metadata: bool
+
+        :return: Protobuf object
+        :rtype: :py:class:`hathor.protos.BaseTransaction`
+        """
+        raise NotImplementedError
+
     def validate_tx_error(self):
         """ Verify if tx is valid and return success and possible error message
 
@@ -854,6 +877,35 @@ class Input:
         self.index = index                  # int
         self.data = data                    # bytes
 
+    @classmethod
+    def create_from_proto(cls, input_proto):
+        """ Creates an Input from a protobuf Input object
+
+        :param input_proto: Bytes of a serialized output
+        :type input_proto: :py:class:`hathor.protos.Input`
+
+        :return: An input
+        :rtype: Input
+        """
+        return cls(
+            tx_id=input_proto.tx_id,
+            index=input_proto.index,
+            data=input_proto.data,
+        )
+
+    def to_proto(self):
+        """ Creates a Protobuf object from self
+
+        :return: Protobuf object
+        :rtype: :py:class:`hathor.protos.Input`
+        """
+        from hathor import protos
+        return protos.Input(
+            tx_id=self.tx_id,
+            index=self.index,
+            data=self.data,
+        )
+
 
 class Output:
     def __init__(self, value, script):
@@ -878,6 +930,44 @@ class Output:
             ret = p2pkh.to_human_readable()
         return ret
 
+    @classmethod
+    def create_from_proto(cls, output_proto):
+        """ Creates an Output from a protobuf Input object
+
+        :param output_proto: Bytes of a serialized output
+        :type output_proto: :py:class:`hathor.protos.Output`
+
+        :return: An output
+        :rtype: Output
+        """
+        return cls(
+            value=output_proto.value,
+            script=output_proto.script,
+        )
+
+    def to_proto(self):
+        """ Creates a Protobuf object from self
+
+        :return: Protobuf object
+        :rtype: :py:class:`hathor.protos.Output`
+        """
+        from hathor import protos
+        return protos.Output(
+            value=self.value,
+            script=self.script,
+        )
+
 
 def int_to_bytes(number, size, signed=False):
     return number.to_bytes(size, byteorder='big', signed=signed)
+
+
+def tx_or_block_from_proto(tx_proto, storage=None):
+    from hathor.transaction.transaction import Transaction
+    from hathor.transaction.block import Block
+    if tx_proto.HasField('transaction'):
+        return Transaction.create_from_proto(tx_proto, storage=storage)
+    elif tx_proto.HasField('block'):
+        return Block.create_from_proto(tx_proto, storage=storage)
+    else:
+        raise ValueError('invalid base_transaction_oneof')

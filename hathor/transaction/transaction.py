@@ -28,6 +28,47 @@ class Transaction(BaseTransaction):
             is_block=False
         )
 
+    def to_proto(self, include_metadata=True):
+        from hathor import protos
+        from hathor.transaction import TxInput, TxOutput
+        tx_proto = protos.Transaction(
+            version=self.version,
+            weight=self.weight,
+            timestamp=self.timestamp,
+            height=self.height,
+            parents=self.parents,
+            inputs=map(TxInput.to_proto, self.inputs),
+            outputs=map(TxOutput.to_proto, self.outputs),
+            nonce=self.nonce,
+            hash=self.hash,
+        )
+        if include_metadata:
+            tx_proto.metadata.CopyFrom(self.get_metadata().to_proto())
+        return protos.BaseTransaction(transaction=tx_proto)
+
+    @classmethod
+    def create_from_proto(cls, tx_proto, storage=None):
+        from hathor.transaction import TxInput, TxOutput
+        transaction_proto = tx_proto.transaction
+        tx = cls(
+            version=transaction_proto.version,
+            weight=transaction_proto.weight,
+            timestamp=transaction_proto.timestamp,
+            height=transaction_proto.height,
+            nonce=transaction_proto.nonce,
+            hash=transaction_proto.hash or None,
+            parents=list(transaction_proto.parents),
+            inputs=list(map(TxInput.create_from_proto, transaction_proto.inputs)),
+            outputs=list(map(TxOutput.create_from_proto, transaction_proto.outputs)),
+            storage=storage,
+        )
+        if transaction_proto.HasField('metadata'):
+            from hathor.transaction import TransactionMetadata
+            # make sure hash is not empty
+            tx.hash = tx.hash or tx.calculate_hash()
+            tx._metadata = TransactionMetadata.create_from_proto(tx.hash, transaction_proto.metadata)
+        return tx
+
     def calculate_weight(self):
         """
             Calculate transaction weight
