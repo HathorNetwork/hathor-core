@@ -73,7 +73,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # Propagate a conflicting transaction.
         self.manager1.propagate_tx(tx2)
 
-        meta1 = tx1.get_metadata()
+        meta1 = tx1.get_metadata(force_reload=True)
         self.assertEqual(meta1.conflict_with, {tx2.hash})
         self.assertEqual(meta1.voided_by, {tx1.hash})
 
@@ -92,11 +92,11 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # Propagate another conflicting transaction, but with higher weight.
         self.manager1.propagate_tx(tx3)
 
-        meta1 = tx1.get_metadata()
+        meta1 = tx1.get_metadata(force_reload=True)
         self.assertEqual(meta1.conflict_with, {tx2.hash, tx3.hash})
         self.assertEqual(meta1.voided_by, {tx1.hash})
 
-        meta2 = tx2.get_metadata()
+        meta2 = tx2.get_metadata(force_reload=True)
         self.assertEqual(meta2.conflict_with, {tx1.hash, tx3.hash})
         self.assertEqual(meta2.voided_by, {tx2.hash})
 
@@ -212,8 +212,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         print('tx4', tx4.hash.hex())
         self.clock.advance(15)
 
-        meta1 = tx1.get_metadata()
-        meta4 = tx4.get_metadata()
+        meta1 = tx1.get_metadata(force_reload=True)
+        meta4 = tx4.get_metadata(force_reload=True)
         self.assertEqual(meta1.conflict_with, set([tx4.hash]))
         self.assertEqual(meta1.voided_by, set())
         self.assertEqual(meta4.conflict_with, set([tx1.hash]))
@@ -288,17 +288,17 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         print('tx7', tx7.hash.hex())
         self.clock.advance(15)
 
-        meta1 = tx1.get_metadata()
-        meta2 = tx2.get_metadata()
-        meta3 = tx3.get_metadata()
+        meta1 = tx1.get_metadata(force_reload=True)
+        meta2 = tx2.get_metadata(force_reload=True)
+        meta3 = tx3.get_metadata(force_reload=True)
         self.assertEqual(meta1.voided_by, set([tx1.hash]))
         self.assertEqual(meta2.voided_by, set([tx1.hash]))
         self.assertEqual(meta3.voided_by, set([tx1.hash, tx3.hash]))
 
-        meta4 = tx4.get_metadata()
-        meta5 = tx5.get_metadata()
-        meta6 = tx6.get_metadata()
-        meta7 = tx7.get_metadata()
+        meta4 = tx4.get_metadata(force_reload=True)
+        meta5 = tx5.get_metadata(force_reload=True)
+        meta6 = tx6.get_metadata(force_reload=True)
+        meta7 = tx7.get_metadata(force_reload=True)
         self.assertEqual(meta4.voided_by, set())
         self.assertEqual(meta5.voided_by, set())
         self.assertEqual(meta6.voided_by, set())

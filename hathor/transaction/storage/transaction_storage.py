@@ -3,9 +3,9 @@ from abc import ABC, abstractmethod, abstractproperty
 from collections import deque
 from itertools import chain
 
-from twisted.internet.defer import succeed
+from twisted.internet.defer import succeed, inlineCallbacks
 
-from hathor.transaction.storage.exceptions import TransactionIsNotABlock
+from hathor.transaction.storage.exceptions import TransactionIsNotABlock, TransactionDoesNotExist
 from hathor.indexes import TipsIndex, IndexesManager
 from hathor.util import deprecated, skip_warning
 from hathor.pubsub import HathorEvents
@@ -55,6 +55,25 @@ class TransactionStorageSync(ABC):
         :rtype :py:class:`hathor.transaction.BaseTransaction`
         """
         raise NotImplementedError
+
+    @deprecated('Use get_metadata_deferred instead')
+    def get_metadata(self, hash_bytes):
+        """Returns the transaction metadata with hash `hash_bytes`.
+
+        :param hash_bytes: Hash in bytes that will be checked.
+        :type hash_bytes: bytes
+
+        :rtype :py:class:`hathor.transaction.TransactionMetadata`
+        """
+        try:
+            tx = self.get_transaction(hash_bytes)
+            storage = tx.storage
+            tx.storage = None
+            metadata = tx.get_metadata()
+            tx.storage = storage
+            return metadata
+        except TransactionDoesNotExist:
+            pass
 
     @abstractmethod
     @deprecated('Use get_all_transactions_deferred instead')
@@ -117,6 +136,25 @@ class TransactionStorageAsync(ABC):
         :rtype :py:class:`twisted.internet.defer.Deferred[hathor.transaction.BaseTransaction]`
         """
         raise NotImplementedError
+
+    @inlineCallbacks
+    def get_metadata_deferred(self, hash_bytes):
+        """Returns the transaction metadata with hash `hash_bytes`.
+
+        :param hash_bytes: Hash in bytes that will be checked.
+        :type hash_bytes: bytes
+
+        :rtype :py:class:`twisted.internet.defer.Deferred[hathor.transaction.TransactionMetadata]`
+        """
+        try:
+            tx = yield self.get_transaction_deferred(hash_bytes)
+            storage = tx.storage
+            tx.storage = None
+            metadata = tx.get_metadata()
+            tx.storage = storage
+            return metadata
+        except TransactionDoesNotExist:
+            pass
 
     @abstractmethod
     def get_all_transactions_deferred(self):

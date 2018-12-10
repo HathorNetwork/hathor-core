@@ -751,7 +751,7 @@ class BaseTransaction(ABC):
                 time.sleep(sleep_seconds)
         return None
 
-    def get_metadata(self):
+    def get_metadata(self, *, force_reload=False):
         """Return this tx's metadata.
 
         It first looks in our cache (tx._metadata) and then tries the tx storage. If it doesn't
@@ -759,7 +759,13 @@ class BaseTransaction(ABC):
 
         :rtype: :py:class:`hathor.transaction.TransactionMetadata`
         """
-        metadata = getattr(self, '_metadata', None)
+        if force_reload:
+            metadata = None
+        else:
+            metadata = getattr(self, '_metadata', None)
+        if not metadata and self.storage:
+            metadata = self.storage.get_metadata(self.hash)
+            self._metadata = metadata
         if not metadata:
             from hathor.transaction.transaction_metadata import TransactionMetadata
             metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight)
