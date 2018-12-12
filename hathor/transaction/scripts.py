@@ -3,6 +3,7 @@ from collections import namedtuple
 import struct
 import hashlib
 import re
+import base64
 import datetime
 
 from twisted.logger import Logger
@@ -44,6 +45,15 @@ def re_compile(pattern):
         elif x.startswith('DATA_'):
             length = int(m.group()[5:])
             return _re_pushdata(length)
+        elif x.startswith('INT_'):
+            number = int(m.group()[4:])
+            return b'.{1}' + bytes([number])
+        elif x.startswith('NUMBER'):
+            return b'.{5}'
+        elif x.startswith('CHAR'):
+            return b'.{1}'
+        elif x.startswith('BLOCK'):
+            return b'.*'
         else:
             raise ValueError('Invalid opcode: {}'.format(x))
 
@@ -91,6 +101,11 @@ class Opcode(IntEnum):
     OP_HASH160 = 0xA9
     OP_PUSHDATA1 = 0x4C
     OP_GREATERTHAN_TIMESTAMP = 0x6F
+    OP_CHECKDATASIG = 0xBA
+    OP_DATA_STREQUAL = 0xC0
+    OP_DATA_GREATERTHAN = 0xC1
+    OP_FIND_P2PKH = 0xD0
+    OP_DATA_MATCH_VALUE = 0xD1
 
 
 class HathorScript:
@@ -113,6 +128,16 @@ class HathorScript:
         self.data += bytes([opcode])
 
     def pushData(self, data):
+        if isinstance(data, int):
+            if data > 4294967295:
+                n = struct.pack('!Q', data)
+            elif data > 65535:
+                n = struct.pack('!I', data)
+            elif data > 255:
+                n = struct.pack('!H', data)
+            else:
+                n = struct.pack('!B', data)
+            data = n
         if len(data) <= 75:
             self.data += (bytes([len(data)]) + data)
         else:
@@ -191,12 +216,9 @@ class P2PKH:
         return s.data
 
     @classmethod
-    def verify_script(cls, script):
+    def parse_script(cls, script):
         """Checks if the given script is of type p2pkh. If it is, returns the P2PKH object.
         Otherwise, returns None.
-
-        TODO come up with better method name [yan]
-        TODO this is a very naive approach
 
         :param script: script to check
         :type script: bytes
@@ -212,10 +234,7 @@ class P2PKH:
                 timelock_bytes = pushdata_timelock[1:]
                 timelock = struct.unpack('!I', timelock_bytes)[0]
             pushdata_address = groups[1]
-            if pushdata_address[0] > 75:
-                public_key_hash = pushdata_address[2:]
-            else:
-                public_key_hash = pushdata_address[1:]
+            public_key_hash = get_pushdata(pushdata_address)
             address_b58 = get_address_b58_from_public_key_hash(public_key_hash)
             return cls(address_b58, timelock)
         return None
@@ -234,6 +253,7 @@ class P2PKH:
 
         :rtype: :py:class:`hathor.transaction.scripts.P2PKH` or None
         """
+        # TODO check if we have minimum amount of bytes in input_data
         opcode = input_data[0]
         if opcode <= 75:
             siglen = opcode
@@ -248,8 +268,196 @@ class P2PKH:
         else:
             pos += 1
         public_key = input_data[pos+1:]
-        address = get_address_b58_from_public_key_bytes_compressed(public_key)
-        return cls(address)
+        try:
+            address = get_address_b58_from_public_key_bytes_compressed(public_key)
+            return cls(address)
+        except ValueError:
+            return None
+
+
+class NanoContractMatchValues:
+    re_match = re_compile(
+        '^OP_DUP OP_HASH160 (DATA_20) OP_EQUALVERIFY OP_CHECKDATASIG INT_0 (BLOCK) OP_DATA_STREQUAL '
+        'INT_1 (NUMBER) OP_DATA_GREATERTHAN INT_2 (BLOCK) OP_DATA_MATCH_VALUE OP_FIND_P2PKH$'
+    )
+
+    def __init__(self, oracle_pubkey_hash, min_timestamp, oracle_data_id,
+                 value_dict, fallback_pubkey_hash=b'\x00'):
+        """This class represents a nano contract that tries to match on a single value. The pubKeyHash
+        associated with the data given by the oracle will be able to spend the contract tokens.
+
+        :param oracle_pubkey_hash: oracle's public key after being hashed by SHA256 and RIPMD160
+        :type oracle_pubkey_hash: bytes
+
+        :param min_timestamp: contract can only be spent after this timestamp. If we don't need it, simply
+        pass same timestamp as transaction
+        :type min_timestamp: int
+
+        :param oracle_data_id: unique id for the data reported by the oracle. For eg, a oracle that reports
+        stock prices can use stock ticker symbols as this id
+        :type oracle_data_id: bytes
+
+        :param value_dict: a dictionary with the pubKeyHash and corresponding value ({pubKeyHash, value}).
+        The pubkeyHash with value matching the data sent by oracle will be able to spend the contract funds
+        :type value_dict: Dict[bytes, int]
+
+        :param fallback_pubkey_hash: if none of the values match, this pubkey hash identifies the winner address
+        :type fallback_pubkey_hash: bytes
+        """
+        self.oracle_pubkey_hash = oracle_pubkey_hash
+        self.min_timestamp = min_timestamp
+        self.oracle_data_id = oracle_data_id
+        self.value_dict = value_dict            # Dict[bytes, int]
+        self.fallback_pubkey_hash = fallback_pubkey_hash
+
+    def to_human_readable(self):
+        ret = {}
+        ret['type'] = 'NanoContractMatchValues'
+        ret['oracle_pubkey_hash'] = base64.b64encode(self.oracle_pubkey_hash).decode('utf-8')
+        ret['min_timestamp'] = self.min_timestamp
+        ret['oracle_data_id'] = self.oracle_data_id.decode('utf-8')
+        ret['value_dict'] = {
+            get_address_b58_from_bytes(k): v for k, v in self.value_dict.items()
+        }
+        try:
+            if len(self.fallback_pubkey_hash) == 1:
+                ret['fallback_pubkey_hash'] = None
+            else:
+                ret['fallback_pubkey_hash'] = get_address_b58_from_bytes(self.fallback_pubkey_hash)
+        except TypeError:
+            ret['fallback_pubkey_hash'] = None
+        return ret
+
+    def create_output_script(self):
+        """
+        params are described on __init__
+
+        :rtype: bytes
+        """
+        s = HathorScript()
+        s.addOpcode(Opcode.OP_DUP)
+        s.addOpcode(Opcode.OP_HASH160)
+        s.pushData(self.oracle_pubkey_hash)
+        s.addOpcode(Opcode.OP_EQUALVERIFY)
+        s.addOpcode(Opcode.OP_CHECKDATASIG)
+        # compare first value from data with oracle_data_id
+        s.pushData(bytes([0]))
+        s.pushData(self.oracle_data_id)
+        s.addOpcode(Opcode.OP_DATA_STREQUAL)
+        # compare second value from data with min_timestamp
+        s.pushData(bytes([1]))
+        s.pushData(struct.pack('!I', self.min_timestamp))
+        s.addOpcode(Opcode.OP_DATA_GREATERTHAN)
+        # finally, compare third value with values on dict
+        s.pushData(bytes([2]))
+        s.pushData(self.fallback_pubkey_hash)
+        for pubkey_hash, value in self.value_dict.items():
+            s.pushData(value)
+            s.pushData(pubkey_hash)
+        s.pushData(bytes([len(self.value_dict)]))
+        s.addOpcode(Opcode.OP_DATA_MATCH_VALUE)
+        # pubkey left on stack should be on outputs
+        s.addOpcode(Opcode.OP_FIND_P2PKH)
+        return s.data
+
+    @classmethod
+    def create_input_data(cls, data, oracle_sig, oracle_pubkey):
+        """
+        :param data: data from the oracle
+        :type data: bytes
+
+        :param oracle_sig: the data signed by the oracle, with its private key
+        :type oracle_sig: bytes
+
+        :param oracle_pubkey: the oracle's public key
+        :type oracle_pubkey: bytes
+
+        :rtype: bytes
+        """
+        s = HathorScript()
+        s.pushData(data)
+        s.pushData(oracle_sig)
+        s.pushData(oracle_pubkey)
+        return s.data
+
+    @classmethod
+    def parse_script(cls, script):
+        """Checks if the given script is of type NanoContractMatchValues. If it is, returns the corresponding object.
+        Otherwise, returns None.
+
+        :param script: script to check
+        :type script: bytes
+
+        :rtype: :py:class:`hathor.transaction.scripts.NanoContractMatchValues` or None
+        """
+        # regex for this is a bit tricky, as some data has variable length. We first match the base regex for this
+        # script and later manually parse variable length fields
+        match = cls.re_match.search(script)
+        if match:
+            groups = match.groups()
+            # oracle pubkey hash
+            oracle_pubkey_hash = get_pushdata(groups[0])
+            # oracle data id
+            oracle_data_id = get_pushdata(groups[1])
+            # timestamp
+            timestamp = groups[2]
+            min_timestamp = binary_to_int(timestamp[1:])
+
+            # variable length data. We'll parse it manually. It should have the following format:
+            # fallback_pubkey_hash, [valueN, pubkey_hash_N], N
+            extra_data = groups[3]
+
+            fallback_pubkey_len = extra_data[0]
+            if len(extra_data) < fallback_pubkey_len + 2:
+                # extra data has at least the fallback_pubkey length (1 byte) and number of
+                # values (N, after values and pubkeys). That's why we use fallback_pubkey_len + 2
+                return None
+            fallback_pubkey = extra_data[1] if fallback_pubkey_len == 1 else extra_data[1:fallback_pubkey_len]
+            n_values = extra_data[-1]
+
+            values_pubkeys = extra_data[(fallback_pubkey_len + 1):-2]
+            value_dict = {}
+            pos = 0
+            for i in range(n_values):
+                if len(values_pubkeys[pos:]) < 1:
+                    return None
+                value_len = values_pubkeys[pos]
+                pos += 1
+                if len(values_pubkeys[pos:]) < value_len:
+                    return None
+                value = values_pubkeys[pos] if value_len == 1 else binary_to_int(values_pubkeys[pos:(pos + value_len)])
+                pos += value_len
+                if len(values_pubkeys[pos:]) < 1:
+                    return None
+                pubkey_len = values_pubkeys[pos]
+                pos += 1
+                if len(values_pubkeys[pos:]) < pubkey_len:
+                    return None
+                pubkey = values_pubkeys[pos:(pos + pubkey_len)]
+                pos += pubkey_len
+                value_dict[pubkey] = value
+
+            if len(values_pubkeys[pos:]) > 0:
+                # shouldn't have data left
+                return None
+
+            # TODO should check n_values == len(values_pubkeys)?
+
+            return NanoContractMatchValues(oracle_pubkey_hash, min_timestamp, oracle_data_id,
+                                           value_dict, fallback_pubkey)
+        return None
+
+    @classmethod
+    def verify_input(cls, input_data):
+        """Checks if the given input is of type NanoContractMatchValues. If it is, returns the corresponding object.
+        Otherwise, returns None.
+
+        :param script: input data to check
+        :type script: bytes
+
+        :rtype: :py:class:`hathor.transaction.scripts.NanoContractMatchValues` or None
+        """
+        raise NotImplementedError
 
 
 def script_eval(tx, txin, spent_tx):
@@ -301,6 +509,72 @@ def script_eval(tx, txin, spent_tx):
         if stack.pop() != 1:
             # stack left with non zero value
             raise FinalStackInvalid('\n'.join(log))
+
+
+def get_pushdata(data):
+    if data[0] > 75:
+        return data[2:]
+    else:
+        return data[1:]
+
+
+def get_data_value(k, data):
+    """Extracts the kth value from data.
+
+    data should be in the format value0:value1:value2:...:valueN. This last representation
+    is merely for understanding the logic. In practice, data will be a sequence of bytes,
+    with each value preceded by the length of such value.
+
+    # TODO allow values larger than 255 bytes (some logic similar to OP_PUSHDATA1?)
+
+    :param k: index of item to retrieve
+    :type k: int
+
+    :param data: data to get value from
+    :type data: bytes
+
+    :raises OutOfData: if data length to read is larger than what's available
+    :raises DataIndexError: index requested from data is not available
+    """
+    data_len = len(data)
+    position = 0
+    iteration = 0
+    while position < data_len:
+        length = data[position]
+        if length == 0:
+            # TODO throw error
+            pass
+        position += 1
+        if (position + length) > len(data):
+            raise OutOfData('trying to read {} bytes starting at {}, available {}'
+                            .format(length, position, len(data)))
+        value = data[position:position+length]
+        if iteration == k:
+            return value
+        iteration += 1
+        position += length
+    raise DataIndexError
+
+
+def binary_to_int(binary):
+    """Receives a binary and transforms it to an integer
+
+    :param binary: value to convert
+    :type binary: bytes
+    """
+    if len(binary) == 1:
+        _format = '!B'
+    elif len(binary) == 2:
+        _format = '!H'
+    elif len(binary) == 4:
+        _format = '!I'
+    elif len(binary) == 8:
+        _format == '!L'
+    else:
+        raise struct.error
+
+    (value,) = struct.unpack(_format, binary)
+    return value
 
 
 def op_pushdata(position, full_data, stack):
@@ -481,65 +755,6 @@ def op_checkdatasig(stack, log, extras):
         raise OracleChecksigFailed from e
 
 
-def get_data_value(k, data):
-    """Extracts the kth value from data.
-
-    data should be in the format value0:value1:value2:...:valueN. This last representation
-    is merely for understanding the logic. In practice, data will be a sequence of bytes,
-    with each value preceded by the length of such value.
-
-    # TODO allow values larger than 255 bytes (some logic similar to OP_PUSHDATA1?)
-
-    :param k: index of item to retrieve
-    :type k: int
-
-    :param data: data to get value from
-    :type data: bytes
-
-    :raises OutOfData: if data length to read is larger than what's available
-    :raises DataIndexError: index requested from data is not available
-    """
-    data_len = len(data)
-    position = 0
-    iteration = 0
-    while position < data_len:
-        length = data[position]
-        if length == 0:
-            # TODO throw error
-            pass
-        position += 1
-        if (position + length) > len(data):
-            raise OutOfData('trying to read {} bytes starting at {}, available {}'
-                            .format(length, position, len(data)))
-        value = data[position:position+length]
-        if iteration == k:
-            return value
-        iteration += 1
-        position += length
-    raise DataIndexError
-
-
-def binary_to_int(binary):
-    """Receives a binary and transforms it to an integer
-
-    :param binary: value to convert
-    :type binary: bytes
-    """
-    if len(binary) == 1:
-        _format = '!B'
-    elif len(binary) == 2:
-        _format = '!H'
-    elif len(binary) == 4:
-        _format = '!I'
-    elif len(binary) == 8:
-        _format == '!L'
-    else:
-        raise struct.error
-
-    (value,) = struct.unpack(_format, binary)
-    return value
-
-
 def op_data_strequal(stack, log, extras):
     """Equivalent to an OP_GET_DATA_STR followed by an OP_EQUALVERIFY.
 
@@ -562,7 +777,7 @@ def op_data_strequal(stack, log, extras):
 
     data_value = get_data_value(data_k_int, data)
     if data_value != value:
-        raise VerifyFailed
+        raise VerifyFailed('OP_DATA_STREQUAL: {} x {}'.format(data_value.decode('utf-8'), value.decode('utf-8')))
 
     stack.append(data)
 
@@ -594,7 +809,7 @@ def op_data_greaterthan(stack, log, extras):
         raise VerifyFailed from e
 
     if data_int <= value_int:
-        raise VerifyFailed
+        raise VerifyFailed('op_data_greaterthan: {} x {}'.format(data_int, value_int))
 
     stack.append(data)
 
@@ -712,7 +927,7 @@ def op_find_p2pkh(stack, log, extras):
     address = stack.pop()
     address_b58 = get_address_b58_from_bytes(address)
     for output in tx.outputs:
-        p2pkh_out = P2PKH.verify_script(output.script)
+        p2pkh_out = P2PKH.parse_script(output.script)
         if p2pkh_out:
             if p2pkh_out.address == address_b58 and output.value == contract_value:
                 stack.append(1)
@@ -727,4 +942,9 @@ MAP_OPCODE_TO_FN = {
     Opcode.OP_CHECKSIG: op_checksig,
     Opcode.OP_HASH160: op_hash160,
     Opcode.OP_GREATERTHAN_TIMESTAMP: op_greaterthan_timestamp,
+    Opcode.OP_DATA_STREQUAL: op_data_strequal,
+    Opcode.OP_DATA_GREATERTHAN: op_data_greaterthan,
+    Opcode.OP_DATA_MATCH_VALUE: op_data_match_value,
+    Opcode.OP_CHECKDATASIG: op_checkdatasig,
+    Opcode.OP_FIND_P2PKH: op_find_p2pkh,
 }

@@ -126,7 +126,8 @@ class Transaction(BaseTransaction):
             spent_tx = self.get_spent_tx(input_tx)
             sum_inputs += spent_tx.outputs[input_tx.index].value
         if sum_outputs != sum_inputs:
-            raise InputOutputMismatch('Sum of inputs is different than the sum of outputs')
+            raise InputOutputMismatch('Sum of inputs ({}) is different than the sum of outputs ({})'
+                                      .format(sum_inputs, sum_outputs))
 
     def verify_inputs(self):
         """Verify inputs signatures and ownership and all inputs actually exist"""

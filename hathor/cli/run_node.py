@@ -13,7 +13,9 @@ from hathor.manager import HathorManager
 from hathor.transaction.storage import TransactionCompactStorage, TransactionMemoryStorage, TransactionCacheStorage
 from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, \
                                     SendTokensResource, UnlockWalletResource, \
-                                    LockWalletResource, StateWalletResource
+                                    LockWalletResource, StateWalletResource, SignTxResource
+from hathor.wallet.resources.nano_contracts import NanoContractMatchValueResource, NanoContractDecodeResource, \
+                                                   NanoContractExecuteResource
 from hathor.resources import ProfilerResource
 from hathor.version_resource import VersionResource
 from hathor.wallet import Wallet, HDWallet
@@ -169,6 +171,8 @@ def main():
         root = Resource()
         wallet_resource = Resource()
         root.putChild(b'wallet', wallet_resource)
+        contracts_resource = Resource()
+        wallet_resource.putChild(b'nano-contract', contracts_resource)
 
         resources = (
             (b'status', StatusResource(manager), root),
@@ -182,13 +186,19 @@ def main():
             (b'transaction', TransactionResource(manager), root),
             (b'dashboard_tx', DashboardTransactionResource(manager), root),
             (b'profiler', ProfilerResource(manager), root),
+            # /wallet
             (b'balance', BalanceResource(manager), wallet_resource),
             (b'history', HistoryResource(manager), wallet_resource),
             (b'address', AddressResource(manager), wallet_resource),
             (b'send_tokens', SendTokensResource(manager), wallet_resource),
+            (b'sign_tx', SignTxResource(manager), wallet_resource),
             (b'unlock', UnlockWalletResource(manager), wallet_resource),
             (b'lock', LockWalletResource(manager), wallet_resource),
             (b'state', StateWalletResource(manager), wallet_resource),
+            # /wallet/nano-contract
+            (b'match-value', NanoContractMatchValueResource(manager), contracts_resource),
+            (b'decode', NanoContractDecodeResource(manager), contracts_resource),
+            (b'execute', NanoContractExecuteResource(manager), contracts_resource),
         )
         for url_path, resource, parent in resources:
             parent.putChild(url_path, resource)
