@@ -237,18 +237,6 @@ class CacheMemoryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest
         super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
 
 
-class RemoteMemoryStorageTest(_BaseTransactionStorageTest._RemoteStorageTest):
-    def setUp(self):
-        super().setUp(TransactionMemoryStorage())
-
-
-class RemoteCacheMemoryStorageTest(_BaseTransactionStorageTest._RemoteStorageTest):
-    def setUp(self):
-        store = TransactionMemoryStorage()
-        reactor = Clock()
-        super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
-
-
 class SubprocessMemoryStorageTest(_BaseTransactionStorageTest._SubprocessStorageTest):
     def setUp(self):
         super().setUp(TransactionMemoryStorage)
@@ -261,6 +249,18 @@ class SubprocessCacheMemoryStorageTest(_BaseTransactionStorageTest._SubprocessSt
             reactor = Clock()
             return TransactionCacheStorage(store, reactor, capacity=5)
         super().setUp(storage_constructor)
+
+
+class RemoteMemoryStorageTest(_BaseTransactionStorageTest._RemoteStorageTest):
+    def setUp(self):
+        super().setUp(TransactionMemoryStorage())
+
+
+class RemoteCacheMemoryStorageTest(_BaseTransactionStorageTest._RemoteStorageTest):
+    def setUp(self):
+        store = TransactionMemoryStorage()
+        reactor = Clock()
+        super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
 
 
 if __name__ == '__main__':
