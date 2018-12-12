@@ -431,6 +431,35 @@ class BasicTransaction(unittest.TestCase):
         with self.assertRaises(DuplicatedParents):
             tx.verify()
 
+    def test_update_timestamp(self):
+        parents = [tx for tx in self.genesis_txs]
+        genesis_block = self.genesis_blocks[0]
+
+        value = genesis_block.outputs[0].value
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+        output = TxOutput(value, script)
+
+        # update based on input
+        _input = TxInput(genesis_block.hash, 0, b'')
+        tx = Transaction(
+            weight=1,
+            inputs=[_input],
+            outputs=[output],
+            parents=[p.hash for p in parents],
+            storage=self.tx_storage
+        )
+
+        input_timestamp = genesis_block.timestamp
+
+        max_ts = max(input_timestamp, parents[0].timestamp, parents[1].timestamp)
+        tx.update_timestamp(0)
+        self.assertEquals(tx.timestamp, max_ts + 1)
+
+        ts = max_ts + 20
+        tx.update_timestamp(ts)
+        self.assertEquals(tx.timestamp, ts)
+
 
 if __name__ == '__main__':
     unittest.main()

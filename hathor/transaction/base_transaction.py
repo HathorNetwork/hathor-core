@@ -1,6 +1,6 @@
 from hathor.transaction.exceptions import TxValidationError, ParentDoesNotExist, TimestampError, \
                                           IncorrectParents, DuplicatedParents, PowError
-from hathor.transaction.scripts import P2PKH
+from hathor.transaction.scripts import P2PKH, NanoContractMatchValues
 
 from abc import ABC, abstractmethod, abstractclassmethod
 from enum import Enum
@@ -795,6 +795,19 @@ class BaseTransaction(ABC):
             metadata.children.add(self.hash)
             self.storage.save_transaction(parent, only_metadata=True)
 
+    def update_timestamp(self, now):
+        """Update this tx's timestamp
+
+        :param now: the current timestamp, in seconds
+        :type now: int
+
+        :rtype: None
+        """
+        assert self.storage is not None
+        max_ts_spent_tx = max(self.get_spent_tx(txin).timestamp for txin in self.inputs)
+        max_ts_parent = max(parent.timestamp for parent in self.get_parents())
+        self.timestamp = max(max_ts_spent_tx + 1, max_ts_parent + 1, now)
+
     def to_json(self, decode_script=False):
         data = {}
         data['hash'] = self.hash.hex()
@@ -877,6 +890,17 @@ class Input:
         self.index = index                  # int
         self.data = data                    # bytes
 
+    def to_human_readable(self):
+        """Returns dict of Input information, ready to be serialized
+
+        :rtype: Dict
+        """
+        return {
+            'tx_id': self.tx_id.hex(),                              # string
+            'index': self.index,                                    # int
+            'data': base64.b64encode(self.data).decode('utf-8')     # string
+        }
+
     @classmethod
     def create_from_proto(cls, input_proto):
         """ Creates an Input from a protobuf Input object
@@ -920,15 +944,18 @@ class Output:
         self.script = script                # bytes
 
     def to_human_readable(self):
-        """Checks what kind of script this is and returns it in human readable form
-
-        We only have P2PKH for now.
-        """
-        p2pkh = P2PKH.verify_script(self.script)
-        ret = {}
+        """Checks what kind of script this is and returns it in human readable form"""
+        p2pkh = P2PKH.parse_script(self.script)
         if p2pkh:
             ret = p2pkh.to_human_readable()
-        return ret
+            ret['value'] = self.value
+            return ret
+
+        nano_contract = NanoContractMatchValues.parse_script(self.script)
+        if nano_contract:
+            return nano_contract.to_human_readable()
+
+        return {}
 
     @classmethod
     def create_from_proto(cls, output_proto):

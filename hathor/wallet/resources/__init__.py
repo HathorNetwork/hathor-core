@@ -5,6 +5,7 @@ from hathor.wallet.resources.send_tokens import SendTokensResource
 from hathor.wallet.resources.unlock import UnlockWalletResource
 from hathor.wallet.resources.lock import LockWalletResource
 from hathor.wallet.resources.state import StateWalletResource
+from hathor.wallet.resources.sign_tx import SignTxResource
 
 __all__ = [
     'BalanceResource',
@@ -14,4 +15,5 @@ __all__ = [
     'UnlockWalletResource',
     'LockWalletResource',
     'StateWalletResource',
+    'SignTxResource',
 ]

@@ -13,5 +13,5 @@ __all__ = [
     'TransactionResource',
     'DashboardTransactionResource',
     'TipsHistogramResource',
-    'TipsResource'
+    'TipsResource',
 ]

@@ -21,6 +21,9 @@ class CliManager:
         from . import grafana_dashboard
         from . import twin_tx
         from . import shell
+        from . import oracle_create_key
+        from . import oracle_get_pubkey
+        from . import oracle_encode_data
 
         self.add_cmd('mining', 'run_miner', mining, 'Run a mining process (running node required)')
         self.add_cmd('hathor', 'run_node', run_node, 'Run a node')
@@ -31,6 +34,11 @@ class CliManager:
         self.add_cmd('wallet', 'gen_hd_words', generate_valid_words, 'Generate random words for HD wallet')
         self.add_cmd('grafana', 'grafana_dashboard', grafana_dashboard,
                      'Generate a Grafana Dashboard with all nodes and metrics')
+        self.add_cmd('oracle', 'oracle-create-key', oracle_create_key, 'Create an oracle private/public key')
+        self.add_cmd('oracle', 'oracle-get-pubkey', oracle_get_pubkey,
+                     'Read an oracle private key and output public key hash')
+        self.add_cmd('oracle', 'oracle-encode-data', oracle_encode_data,
+                     'Encode data and sign it with a private key')
         self.add_cmd('dev', 'shell', shell, 'Run a Python shell')
 
     def add_cmd(self, group, cmd, module, short_description=None):

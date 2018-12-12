@@ -53,6 +53,8 @@ class BaseWallet:
         self.history_path = os.path.join(directory, history_file)
 
         # Dict[string(base58), List[UnspentTx]]
+        # TODO use a Set(Tuple[tx_id, index]) instead. Discussion:
+        # https://gitlab.com/HathorNetwork/hathor-python/merge_requests/131#note_122997309
         self.unspent_txs = {}
 
         # Dict[Tuple(tx_id, index), List[SpentTx]]
@@ -115,14 +117,14 @@ class BaseWallet:
     def decode_address(self, address58):
         """ Decode address in base58 to bytes
 
-            :param address58: Wallet address in base58
-            :type address58: string
+        :param address58: Wallet address in base58
+        :type address58: string
 
-            :raises InvalidAddress: if address58 is not a valid base58 string or
-                                    not a valid address or has invalid checksum
+        :raises InvalidAddress: if address58 is not a valid base58 string or
+                                not a valid address or has invalid checksum
 
-            :return: Address in bytes
-            :rtype: bytes
+        :return: Address in bytes
+        :rtype: bytes
         """
         try:
             decoded_address = base58.b58decode(address58)
@@ -237,7 +239,7 @@ class BaseWallet:
                 # If we force we will search this private key also in the keys
                 output_tx = tx_storage.get_transaction(_input.tx_id)
                 output = output_tx.outputs[_input.index]
-                p2pkh = P2PKH.verify_script(output.script)
+                p2pkh = P2PKH.parse_script(output.script)
 
                 if p2pkh:
                     address = p2pkh.address
@@ -261,30 +263,71 @@ class BaseWallet:
         :type cls: :py:class:`hathor.transaction.Block` or :py:class:`hathor.transaction.Transaction`
 
         :param outputs: the tx outputs
-        :type inputs: List[WalletOutputInfo]
+        :type outputs: List[WalletOutputInfo]
         """
         amount = sum(output.value for output in outputs)
         inputs, total_inputs_amount = self.get_inputs_from_amount(amount)
-        change_tx = self.handle_change_tx(total_inputs_amount, outputs)
+
+        sum_outputs = sum([output.value for output in outputs])
+        change_tx = self.handle_change_tx(total_inputs_amount, sum_outputs)
         if change_tx:
             # change is usually the first output
             outputs.insert(0, change_tx)
         return self.prepare_transaction(cls, inputs, outputs)
 
-    def handle_change_tx(self, sum_inputs, outputs):
+    def separate_inputs(self, inputs):
+        """Separates the inputs from a tx into 2 groups: the ones that belong to this wallet and the ones that don't
+
+        :param inputs: transaction to decode
+        :type inputs: List[py:class:`hathor.transaction.TxInput`]
+
+        :return my_inputs: list of all inputs belonging to this wallet
+        :rtype my_inputs: List[py:class:`hathor.transaction.TxInput`]
+
+        :return other_inputs: list of all inputs NOT belonging to this wallet
+        :rtype other_inputs: List[py:class:`hathor.transaction.TxInput`]
+        """
+        my_inputs = []
+        other_inputs = []
+        for _input, address58 in self.match_inputs(inputs):
+            if address58:
+                my_inputs.append(_input)
+            else:
+                other_inputs.append(_input)
+
+        return my_inputs, other_inputs
+
+    def sign_transaction(self, tx):
+        """Signs a transaction. Iterates over all inputs and signs the ones belonging to this wallet.
+
+        :param tx: transaction to sign
+        :type tx: py:class:`hathor.transaction.Transaction`
+
+        :return: there's no return. This function modifies the tx given to it
+        :rtype: None
+        """
+        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+
+        for _input, address58 in self.match_inputs(tx.inputs):
+            if address58:
+                public_key_bytes, signature = self.get_input_aux_data(
+                    data_to_sign,
+                    self.get_private_key(address58)
+                )
+                _input.data = P2PKH.create_input_data(public_key_bytes, signature)
+
+    def handle_change_tx(self, sum_inputs, sum_outputs):
         """Creates an output transaction with the change value
 
         :param sum_inputs: Sum of the input amounts
         :type sum_inputs: int
 
-        :param outputs: A list of WalletOutputInfo
-        :type outputs: List[WalletOutputInfo]
+        :param sum_outputs: Total value we're spending
+        :type outputs: int
 
         :return: Return an output with the change
         :rtype: :py:class:`hathor.wallet.base_wallet.WalletOutputInfo`
         """
-        sum_outputs = sum([output.value for output in outputs])
-
         if sum_inputs > sum_outputs:
             difference = sum_inputs - sum_outputs
             address_b58 = self.get_unused_address()
@@ -334,7 +377,7 @@ class BaseWallet:
 
         # check outputs
         for index, output in enumerate(tx.outputs):
-            p2pkh_out = P2PKH.verify_script(output.script)
+            p2pkh_out = P2PKH.parse_script(output.script)
             if p2pkh_out:
                 if p2pkh_out.address in self.keys:
                     # this wallet received tokens
@@ -418,7 +461,7 @@ class BaseWallet:
         should_update = False
         # check outputs
         for index, output in enumerate(tx.outputs):
-            p2pkh_out = P2PKH.verify_script(output.script)
+            p2pkh_out = P2PKH.parse_script(output.script)
             if p2pkh_out:
                 if p2pkh_out.address in self.keys:
                     # Remove this output from unspent_tx, if still there
@@ -482,7 +525,7 @@ class BaseWallet:
                                 output_tx = tx.storage.get_transaction(spent.from_tx_id)
                                 output = output_tx.outputs[spent.from_index]
 
-                                p2pkh_out = P2PKH.verify_script(output.script)
+                                p2pkh_out = P2PKH.parse_script(output.script)
                                 if p2pkh_out and p2pkh_out.address in self.keys:
                                     utxo = UnspentTx(_input.tx_id, _input.index, output.value, output_tx.timestamp)
                                     utxo_list = self.unspent_txs.pop(p2pkh_out.address, [])
@@ -539,7 +582,7 @@ class BaseWallet:
         should_update = False
         # check outputs
         for index, output in enumerate(tx.outputs):
-            p2pkh_out = P2PKH.verify_script(output.script)
+            p2pkh_out = P2PKH.parse_script(output.script)
             if p2pkh_out:
                 if p2pkh_out.address in self.keys:
                     # Find output index
@@ -784,6 +827,26 @@ class BaseWallet:
         else:
             # If dont have any other timelock, set balance update to None
             self.balance_update = None
+
+    def match_inputs(self, inputs):
+        """Returns an iterable with the inputs that belong and don't belong to this wallet
+
+        :return: An iterable with the inputs and corresponding address, if it belongs to this wallet
+        :rtype: Iterable[(TxInput, bool)]
+        """
+        for _input in inputs:
+            # is it in our wallet?
+            _found = False
+            for address, utxo_list in self.unspent_txs.items():
+                for utxo in utxo_list:
+                    if utxo.tx_id == _input.tx_id and utxo.index == _input.index:
+                        yield _input, address
+                        _found = True
+                        break
+                if _found:
+                    break
+            if not _found:
+                yield _input, None
 
 
 class UnspentTx:

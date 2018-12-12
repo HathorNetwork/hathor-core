@@ -48,8 +48,8 @@ class PushTxResource(resource.Resource):
 
                     force = b'force' in request.args and request.args[b'force'][0].decode('utf-8') == 'true'
                     if success or force:
-                        self.manager.propagate_tx(tx)
-                        data = {'success': True}
+                        success = self.manager.propagate_tx(tx)
+                        data = {'success': success}
                     else:
                         data = {
                             'success': success,
