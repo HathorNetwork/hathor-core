@@ -6,10 +6,11 @@ from hathor.transaction import Transaction
 from json.decoder import JSONDecodeError
 
 
-def main():
+def create_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('url', help='URL to access tx storage')
-    parser.add_argument('hash', help='Hash of tx to create a twin')
+    parser.add_argument('--url', help='URL to access tx storage in case the hash was passed')
+    parser.add_argument('--hash', help='Hash of tx to create a twin')
+    parser.add_argument('--raw_tx', help='Raw tx to create a twin')
     parser.add_argument('--human', action='store_true', help='Print in human readable (json)')
     parser.add_argument(
         '--parents',
@@ -17,20 +18,29 @@ def main():
         help='Change the parents, so they can have different accumulated weight'
     )
     parser.add_argument('--weight', type=int, help='Weight of twin transaction')
-    args = parser.parse_args()
+    return parser
 
+
+def execute(args):
     # Get tx you want to create a twin
-    get_tx_url = urllib.parse.urljoin(args.url, '/transaction/')
-    response = requests.get(get_tx_url, {b'id': bytes(args.hash, 'utf-8')})
+    if args.url and args.hash:
+        get_tx_url = urllib.parse.urljoin(args.url, '/transaction/')
+        response = requests.get(get_tx_url, {b'id': bytes(args.hash, 'utf-8')})
 
-    try:
-        data = response.json()
-    except JSONDecodeError as e:
-        print('Error decoding transaction data')
-        print(e)
+        try:
+            data = response.json()
+        except JSONDecodeError as e:
+            print('Error decoding transaction data')
+            print(e)
+            return
+
+        tx_bytes = bytes.fromhex(data['tx']['raw'])
+    elif args.raw_tx:
+        tx_bytes = bytes.fromhex(args.raw_tx)
+    else:
+        print('The command expects raw_tx or hash and url as parameters')
         return
 
-    tx_bytes = bytes.fromhex(data['tx']['raw'])
     try:
         # Create new tx from the twin
         twin = Transaction.create_from_struct(tx_bytes)
@@ -70,9 +80,15 @@ def main():
             print(twin.to_json())
         else:
             print(twin.get_struct().hex())
-    except struct.error:
+    except (struct.error, ValueError):
         print('Error getting transaction from bytes')
         return
+
+
+def main():
+    parser = create_parser()
+    args = parser.parse_args()
+    execute(args)
 
 
 if __name__ == '__main__':
