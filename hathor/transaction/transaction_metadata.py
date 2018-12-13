@@ -136,3 +136,12 @@ class TransactionMetadata:
             children=protos.Metadata.Hashes(hashes=self.children),
             accumulated_weight=self.accumulated_weight,
         )
+
+    def clone(self):
+        """Return exact copy without sharing memory.
+
+        :return: TransactionMetadata
+        :rtype: :py:class:`hathor.transaction.TransactionMetadata`
+        """
+        # XXX: using json serialization for simplicity, should it use pickle? manual fields? other alternative?
+        return self.create_from_json(self.to_json())
