@@ -67,11 +67,7 @@ class TransactionStorageSync(ABC):
         """
         try:
             tx = self.get_transaction(hash_bytes)
-            storage = tx.storage
-            tx.storage = None
-            metadata = tx.get_metadata()
-            tx.storage = storage
-            return metadata
+            return tx.get_metadata(use_storage=False)
         except TransactionDoesNotExist:
             pass
 
@@ -148,11 +144,7 @@ class TransactionStorageAsync(ABC):
         """
         try:
             tx = yield self.get_transaction_deferred(hash_bytes)
-            storage = tx.storage
-            tx.storage = None
-            metadata = tx.get_metadata()
-            tx.storage = storage
-            return metadata
+            return tx.get_metadata(use_storage=False)
         except TransactionDoesNotExist:
             pass
 

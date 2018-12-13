@@ -751,7 +751,7 @@ class BaseTransaction(ABC):
                 time.sleep(sleep_seconds)
         return None
 
-    def get_metadata(self, *, force_reload=False):
+    def get_metadata(self, *, force_reload=False, use_storage=True):
         """Return this tx's metadata.
 
         It first looks in our cache (tx._metadata) and then tries the tx storage. If it doesn't
@@ -763,7 +763,7 @@ class BaseTransaction(ABC):
             metadata = None
         else:
             metadata = getattr(self, '_metadata', None)
-        if not metadata and self.storage:
+        if not metadata and use_storage and self.storage:
             metadata = self.storage.get_metadata(self.hash)
             self._metadata = metadata
         if not metadata:
