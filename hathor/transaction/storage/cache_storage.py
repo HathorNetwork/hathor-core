@@ -14,7 +14,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
     """
     log = Logger()
 
-    def __init__(self, store, reactor, interval=5, capacity=10000, *, _avoid_shared_memory=True):
+    def __init__(self, store, reactor, interval=5, capacity=10000, *, _clone_if_needed=True):
         """
         :param store: a subclass of TransactionStorage
         :type store: :py:class:`hathor.transaction.storage.TransactionStorage`
@@ -27,6 +27,10 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
         :param capacity: cache capacity
         :type capacity: int
+
+        :param _clone_if_needed: *private parameter*, defaults to True, controls whether to clone
+                                 transaction/blocks/metadata when returning those objects.
+        :type _clone_if_needed: bool
         """
         store.remove_cache()
         self.store = store
@@ -34,7 +38,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self.interval = interval
         self.capacity = capacity
         self.flush_deferred = None
-        self._avoid_shared_memory = _avoid_shared_memory
+        self._clone_if_needed = _clone_if_needed
         self.cache = collections.OrderedDict()
         # dirty_txs has the txs that have been modified but are not persisted yet
         self.dirty_txs = set()          # Set[bytes(hash)]
@@ -42,7 +46,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
         super().__init__()
 
     def _clone(self, x):
-        if self._avoid_shared_memory:
+        if self._clone_if_needed:
             return x.clone()
         else:
             return x

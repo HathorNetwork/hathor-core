@@ -4,14 +4,19 @@ from hathor.util import deprecated, skip_warning
 
 
 class TransactionMemoryStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
-    def __init__(self, with_index=True, *, _avoid_shared_memory=True):
+    def __init__(self, with_index=True, *, _clone_if_needed=True):
+        """
+        :param _clone_if_needed: *private parameter*, defaults to True, controls whether to clone
+                                 transaction/blocks/metadata when returning those objects.
+        :type _clone_if_needed: bool
+        """
         self.transactions = {}
         self.metadata = {}
-        self._avoid_shared_memory = _avoid_shared_memory
+        self._clone_if_needed = _clone_if_needed
         super().__init__(with_index=with_index)
 
     def _clone(self, x):
-        if self._avoid_shared_memory:
+        if self._clone_if_needed:
             return x.clone()
         else:
             return x
