@@ -51,10 +51,10 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # Propagate a conflicting twin transaction
         self.manager.propagate_tx(tx2)
 
-        meta1 = self.tx1.get_metadata()
+        meta1 = self.tx1.get_metadata(force_reload=True)
         self.assertEqual(meta1.twins, {tx2.hash})
 
-        meta2 = tx2.get_metadata()
+        meta2 = tx2.get_metadata(force_reload=True)
         self.assertEqual(meta2.voided_by, {tx2.hash})
 
         # Balance is the same
@@ -91,7 +91,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # Propagate a conflicting twin transaction
         self.manager.propagate_tx(tx2)
 
-        meta1 = self.tx1.get_metadata()
+        meta1 = self.tx1.get_metadata(force_reload=True)
         self.assertEqual(meta1.twins, {tx2.hash})
         self.assertEqual(meta1.voided_by, {self.tx1.hash})
 
@@ -117,7 +117,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # Propagate a conflicting twin transaction
         self.manager.propagate_tx(tx2)
 
-        meta1 = self.tx1.get_metadata()
+        meta1 = self.tx1.get_metadata(force_reload=True)
         self.assertEqual(meta1.twins, {tx2.hash})
         self.assertEqual(meta1.voided_by, {self.tx1.hash})
 
@@ -171,7 +171,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # Propagate a conflicting twin transaction
         self.manager.propagate_tx(tx3)
 
-        meta2 = tx2.get_metadata()
+        meta2 = tx2.get_metadata(force_reload=True)
         self.assertEqual(meta2.twins, {tx3.hash})
         self.assertEqual(meta2.voided_by, {tx2.hash})
 
@@ -292,11 +292,11 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.manager.propagate_tx(tx2)
         self.manager.propagate_tx(tx3)
 
-        meta2 = tx2.get_metadata()
+        meta2 = tx2.get_metadata(force_reload=True)
         self.assertEqual(meta2.twins, set())
         self.assertEqual(meta2.voided_by, {self.tx1.hash})
 
-        meta3 = tx3.get_metadata()
+        meta3 = tx3.get_metadata(force_reload=True)
         self.assertEqual(meta3.voided_by, set())
         self.assertEqual(meta3.twins, {self.tx1.hash})
 
@@ -357,10 +357,10 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # Propagate a conflicting twin transaction
         self.manager.propagate_tx(tx5)
 
-        meta4 = tx4.get_metadata()
+        meta4 = tx4.get_metadata(force_reload=True)
         self.assertEqual(meta4.twins, {tx5.hash})
 
-        meta5 = tx5.get_metadata()
+        meta5 = tx5.get_metadata(force_reload=True)
         self.assertEqual(meta5.voided_by, {tx5.hash})
 
         # Balance is the same
