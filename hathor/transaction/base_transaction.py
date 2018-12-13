@@ -757,6 +757,12 @@ class BaseTransaction(ABC):
         It first looks in our cache (tx._metadata) and then tries the tx storage. If it doesn't
         exist, returns a new TransactionMetadata object.
 
+        :param force_reload: don't load the cached metadata
+        :type force_reload: bool
+
+        :param use_storage: use self.storage.get_metadata if no metadata in cache
+        :type use_storage: bool
+
         :rtype: :py:class:`hathor.transaction.TransactionMetadata`
         """
         if force_reload:
