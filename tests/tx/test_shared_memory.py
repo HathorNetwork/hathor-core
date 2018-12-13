@@ -65,7 +65,7 @@ class MemoryIsharedTest(unittest.TestCase):
         self.clock = Clock()
         self.clock.advance(time.time())
         self.network = 'testnet'
-        self.tx_storage = TransactionMemoryStorage(_avoid_shared_memory=False)
+        self.tx_storage = TransactionMemoryStorage(_clone_if_needed=False)
         self.manager = self.create_peer(self.network, unlock_wallet=True, tx_storage=self.tx_storage)
 
         add_new_blocks(self.manager, 3, advance_clock=15)
