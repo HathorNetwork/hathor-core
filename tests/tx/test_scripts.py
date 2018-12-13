@@ -5,15 +5,18 @@ import struct
 
 from hathor.crypto.util import get_private_key_from_bytes, get_public_key_from_bytes, \
                                get_public_key_bytes_compressed, get_hash160, get_address_from_public_key
-from hathor.transaction.exceptions import OutOfData, MissingStackItems, EqualVerifyFailed, DataIndexError,\
-                                          VerifyFailed, OracleChecksigFailed, TimeLocked
+from hathor.transaction.exceptions import OutOfData, MissingStackItems, EqualVerifyFailed, DataIndexError, \
+                                          VerifyFailed, OracleChecksigFailed, TimeLocked, InvalidStackData, \
+                                          ScriptError
 from hathor.transaction.scripts import (
-    HathorScript, op_pushdata, ScriptExtras, P2PKH,
+    HathorScript, op_pushdata, ScriptExtras, P2PKH, Opcode,
     op_pushdata1, op_dup, op_equalverify, op_checksig, op_hash160,
     op_checkdatasig, get_data_value, op_data_strequal, op_find_p2pkh,
     op_data_greaterthan, op_data_match_interval, op_data_match_value,
-    op_greaterthan_timestamp
+    op_greaterthan_timestamp, op_checkmultisig, op_equal, op_integer
 )
+
+from hathor.wallet import HDWallet
 
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
@@ -384,6 +387,190 @@ class BasicTransaction(unittest.TestCase):
         tx.timestamp = timestamp + 1
         op_greaterthan_timestamp(stack, log=[], extras=extras)
         self.assertEqual(len(stack), 0)
+
+    def test_checkmultisig(self):
+        with self.assertRaises(MissingStackItems):
+            op_checkmultisig([], log=[], extras=None)
+
+        from hathor.transaction.genesis import genesis_transactions
+        block = [x for x in genesis_transactions(None) if x.is_block][0]
+
+        from hathor.transaction import Transaction, TxInput, TxOutput
+        txin = TxInput(tx_id=block.hash, index=0, data=b'')
+        txout = TxOutput(value=block.outputs[0].value, script=b'')
+        tx = Transaction(inputs=[txin], outputs=[txout])
+
+        data_to_sign = tx.get_sighash_all()
+        extras = ScriptExtras(tx=tx, txin=None, spent_tx=None)
+
+        wallet = HDWallet()
+        wallet._manually_initialize()
+        wallet.words = wallet.mnemonic.generate()
+        wallet._manually_initialize()
+
+        keys_count = 3
+        keys = []
+
+        for i in range(keys_count):
+            privkey = list(wallet.keys.values())[i]
+            keys.append(
+                {
+                    'privkey': privkey,
+                    'pubkey': privkey.sec(),
+                    'signature': wallet.get_input_aux_data(data_to_sign, privkey)[1]
+                }
+            )
+
+        wrong_privkey = list(wallet.keys.values())[3]
+        wrong_key = {
+            'privkey': wrong_privkey,
+            'pubkey': wrong_privkey.sec(),
+            'signature': wallet.get_input_aux_data(data_to_sign, wrong_privkey)[1]
+        }
+
+        # All signatures match
+        stack = [
+            keys[0]['signature'],
+            keys[2]['signature'],
+            2,
+            keys[0]['pubkey'],
+            keys[1]['pubkey'],
+            keys[2]['pubkey'],
+            3
+        ]
+        op_checkmultisig(stack, log=[], extras=extras)
+        self.assertEqual(1, stack.pop())
+
+        # New set of valid signatures
+        stack = [
+            keys[0]['signature'],
+            keys[1]['signature'],
+            2,
+            keys[0]['pubkey'],
+            keys[1]['pubkey'],
+            keys[2]['pubkey'],
+            3
+        ]
+        op_checkmultisig(stack, log=[], extras=extras)
+        self.assertEqual(1, stack.pop())
+
+        # Changing the signatures but they match
+        stack = [
+            keys[1]['signature'],
+            keys[2]['signature'],
+            2,
+            keys[0]['pubkey'],
+            keys[1]['pubkey'],
+            keys[2]['pubkey'],
+            3
+        ]
+        op_checkmultisig(stack, log=[], extras=extras)
+        self.assertEqual(1, stack.pop())
+
+        # Signatures are valid but in wrong order
+        stack = [
+            keys[1]['signature'],
+            keys[0]['signature'],
+            2,
+            keys[0]['pubkey'],
+            keys[1]['pubkey'],
+            keys[2]['pubkey'],
+            3
+        ]
+        op_checkmultisig(stack, log=[], extras=extras)
+        self.assertEqual(0, stack.pop())
+
+        # Adding wrong signature, so we get error
+        stack = [
+            keys[0]['signature'],
+            wrong_key['signature'],
+            2,
+            keys[0]['pubkey'],
+            keys[1]['pubkey'],
+            keys[2]['pubkey'],
+            3
+        ]
+        op_checkmultisig(stack, log=[], extras=extras)
+        self.assertEqual(0, stack.pop())
+
+        # Adding same signature twice, so we get error
+        stack = [
+            keys[0]['signature'],
+            keys[0]['signature'],
+            2,
+            keys[0]['pubkey'],
+            keys[1]['pubkey'],
+            keys[2]['pubkey'],
+            3
+        ]
+        op_checkmultisig(stack, log=[], extras=extras)
+        self.assertEqual(0, stack.pop())
+
+        # Adding less signatures than required, so we get error
+        stack = [
+            keys[0]['signature'],
+            2,
+            keys[0]['pubkey'],
+            keys[1]['pubkey'],
+            keys[2]['pubkey'],
+            3
+        ]
+        with self.assertRaises(MissingStackItems):
+            op_checkmultisig(stack, log=[], extras=extras)
+
+        # Quantity of signatures is more than it should
+        stack = [
+            keys[0]['signature'],
+            keys[1]['signature'],
+            3,
+            keys[0]['pubkey'],
+            keys[1]['pubkey'],
+            keys[2]['pubkey'],
+            3
+        ]
+        with self.assertRaises(MissingStackItems):
+            op_checkmultisig(stack, log=[], extras=extras)
+
+        # Quantity of pubkeys is more than it should
+        stack = [
+            keys[0]['signature'],
+            keys[1]['signature'],
+            2,
+            keys[0]['pubkey'],
+            keys[1]['pubkey'],
+            keys[2]['pubkey'],
+            4
+        ]
+        with self.assertRaises(InvalidStackData):
+            op_checkmultisig(stack, log=[], extras=extras)
+
+    def test_equal(self):
+        elem = b'a'
+        with self.assertRaises(MissingStackItems):
+            op_equal([elem], log=[], extras=None)
+
+        # no exception should be raised
+        stack = [elem, elem]
+        op_equal(stack, log=[], extras=None)
+        self.assertEqual(stack.pop(), 1)
+
+        stack = [elem, b'aaaa']
+        op_equal(stack, log=[], extras=None)
+        self.assertEqual(stack.pop(), 0)
+
+    def test_integer_opcode(self):
+        # We have opcodes from OP_1 to OP_16
+        for i in range(1, 17):
+            stack = []
+            op_integer(getattr(Opcode, 'OP_{}'.format(i)), stack, [], None)
+            self.assertEqual(stack, [i])
+
+        stack = []
+        with self.assertRaises(ScriptError):
+            op_integer(0, stack, [], None)
+
+        with self.assertRaises(ScriptError):
+            op_integer(0x61, stack, [], None)
 
 
 if __name__ == '__main__':

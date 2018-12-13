@@ -12,5 +12,8 @@ MAX_VALUE = 2**32 - 1
 # Version byte of the address in P2PKH
 P2PKH_VERSION_BYTE = b'\x00'
 
+# Version byte of the address in MultiSig
+MULTISIG_VERSION_BYTE = b'\x05'
+
 # Weight of genesis and minimum weight of a tx/block
 MIN_WEIGHT = 14

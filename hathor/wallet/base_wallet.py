@@ -8,7 +8,7 @@ from hathor.wallet.exceptions import InsuficientFunds, PrivateKeyNotFound, \
                                      InputDuplicated, InvalidAddress
 from hathor.transaction import TxInput, TxOutput
 from hathor.transaction.base_transaction import int_to_bytes
-from hathor.transaction.scripts import P2PKH
+from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.pubsub import HathorEvents
 from hathor.crypto.util import get_checksum
 from enum import Enum
@@ -171,7 +171,7 @@ class BaseWallet:
         tx_outputs = []
         for txout in outputs:
             timelock = int_to_bytes(txout.timelock, 4) if txout.timelock else None
-            tx_outputs.append(TxOutput(txout.value, P2PKH.create_output_script(txout.address, timelock)))
+            tx_outputs.append(TxOutput(txout.value, create_output_script(txout.address, timelock)))
 
         tx_inputs = []
         private_keys = []
@@ -239,10 +239,10 @@ class BaseWallet:
                 # If we force we will search this private key also in the keys
                 output_tx = tx_storage.get_transaction(_input.tx_id)
                 output = output_tx.outputs[_input.index]
-                p2pkh = P2PKH.parse_script(output.script)
+                script_type = parse_address_script(output.script)
 
-                if p2pkh:
-                    address = p2pkh.address
+                if script_type:
+                    address = script_type.address
                     if address in self.keys:
                         new_inputs.insert(
                             0,
@@ -377,16 +377,16 @@ class BaseWallet:
 
         # check outputs
         for index, output in enumerate(tx.outputs):
-            p2pkh_out = P2PKH.parse_script(output.script)
-            if p2pkh_out:
-                if p2pkh_out.address in self.keys:
+            script_type_out = parse_address_script(output.script)
+            if script_type_out:
+                if script_type_out.address in self.keys:
                     # this wallet received tokens
-                    utxo = UnspentTx(tx.hash, index, output.value, tx.timestamp, timelock=p2pkh_out.timelock)
-                    utxo_list = self.unspent_txs.pop(p2pkh_out.address, [])
+                    utxo = UnspentTx(tx.hash, index, output.value, tx.timestamp, timelock=script_type_out.timelock)
+                    utxo_list = self.unspent_txs.pop(script_type_out.address, [])
                     utxo_list.append(utxo)
-                    self.unspent_txs[p2pkh_out.address] = utxo_list
+                    self.unspent_txs[script_type_out.address] = utxo_list
                     # mark key as used
-                    self.tokens_received(p2pkh_out.address)
+                    self.tokens_received(script_type_out.address)
                     updated = True
                     # publish new output and new balance
                     self.publish_update(
@@ -400,12 +400,15 @@ class BaseWallet:
 
         # check inputs
         for _input in tx.inputs:
-            p2pkh_in = P2PKH.verify_input(_input.data)
-            if p2pkh_in:
-                if p2pkh_in.address in self.keys:
+            output_tx = tx.storage.get_transaction(_input.tx_id)
+            output = output_tx.outputs[_input.index]
+
+            script_type_out = parse_address_script(output.script)
+            if script_type_out:
+                if script_type_out.address in self.keys:
                     # this wallet spent tokens
                     # remove from unspent_txs
-                    utxo_list = self.unspent_txs.pop(p2pkh_in.address, [])
+                    utxo_list = self.unspent_txs.pop(script_type_out.address, [])
                     list_index = -1
                     for i, utxo in enumerate(utxo_list):
                         if utxo.tx_id == _input.tx_id and utxo.index == _input.index:
@@ -430,7 +433,7 @@ class BaseWallet:
                         self.publish_update(HathorEvents.WALLET_INPUT_SPENT, output_spent=spent)
 
                     if len(utxo_list) > 0:
-                        self.unspent_txs[p2pkh_in.address] = utxo_list
+                        self.unspent_txs[script_type_out.address] = utxo_list
             else:
                 self.log.warn('unknown input data')
 
@@ -461,12 +464,12 @@ class BaseWallet:
         should_update = False
         # check outputs
         for index, output in enumerate(tx.outputs):
-            p2pkh_out = P2PKH.parse_script(output.script)
-            if p2pkh_out:
-                if p2pkh_out.address in self.keys:
+            script_type_out = parse_address_script(output.script)
+            if script_type_out:
+                if script_type_out.address in self.keys:
                     # Remove this output from unspent_tx, if still there
                     # Find output index
-                    utxo_list = self.unspent_txs.pop(p2pkh_out.address, [])
+                    utxo_list = self.unspent_txs.pop(script_type_out.address, [])
                     list_index = -1
                     for i, utxo in enumerate(utxo_list):
                         if utxo.tx_id == tx.hash and utxo.index == index:
@@ -483,11 +486,11 @@ class BaseWallet:
                             del self.spent_txs[(tx.hash, index)]
 
                     if len(utxo_list) > 0:
-                        self.unspent_txs[p2pkh_out.address] = utxo_list
+                        self.unspent_txs[script_type_out.address] = utxo_list
 
                     # Save in voided_unspent, if it's not there yet
                     # First try to find it in voided_unspent
-                    voided_utxo_list = self.voided_unspent.get(p2pkh_out.address, [])
+                    voided_utxo_list = self.voided_unspent.get(script_type_out.address, [])
                     list_index = -1
                     for i, utxo in enumerate(voided_utxo_list):
                         if utxo.tx_id == tx.hash and utxo.index == index:
@@ -496,14 +499,17 @@ class BaseWallet:
                     if list_index == -1:
                         # If it's not there, we add it
                         voided = UnspentTx(tx.hash, index, output.value, tx.timestamp, voided=True)
-                        self.voided_unspent[p2pkh_out.address].append(voided)
+                        self.voided_unspent[script_type_out.address].append(voided)
                         should_update = True
 
         # check inputs
         for _input in tx.inputs:
-            p2pkh_in = P2PKH.verify_input(_input.data)
-            if p2pkh_in:
-                if p2pkh_in.address in self.keys:
+            output_tx = tx.storage.get_transaction(_input.tx_id)
+            output = output_tx.outputs[_input.index]
+
+            script_type_out = parse_address_script(output.script)
+            if script_type_out:
+                if script_type_out.address in self.keys:
                     output = None
                     # Try to find in spent tx
                     key = (_input.tx_id, _input.index)
@@ -525,12 +531,12 @@ class BaseWallet:
                                 output_tx = tx.storage.get_transaction(spent.from_tx_id)
                                 output = output_tx.outputs[spent.from_index]
 
-                                p2pkh_out = P2PKH.parse_script(output.script)
-                                if p2pkh_out and p2pkh_out.address in self.keys:
+                                script_type_out = parse_address_script(output.script)
+                                if script_type_out and script_type_out.address in self.keys:
                                     utxo = UnspentTx(_input.tx_id, _input.index, output.value, output_tx.timestamp)
-                                    utxo_list = self.unspent_txs.pop(p2pkh_out.address, [])
+                                    utxo_list = self.unspent_txs.pop(script_type_out.address, [])
                                     utxo_list.append(utxo)
-                                    self.unspent_txs[p2pkh_out.address] = utxo_list
+                                    self.unspent_txs[script_type_out.address] = utxo_list
 
                             should_update = True
 
@@ -582,11 +588,11 @@ class BaseWallet:
         should_update = False
         # check outputs
         for index, output in enumerate(tx.outputs):
-            p2pkh_out = P2PKH.parse_script(output.script)
-            if p2pkh_out:
-                if p2pkh_out.address in self.keys:
+            script_type_out = parse_address_script(output.script)
+            if script_type_out:
+                if script_type_out.address in self.keys:
                     # Find output index
-                    utxo_list = self.unspent_txs.pop(p2pkh_out.address, [])
+                    utxo_list = self.unspent_txs.pop(script_type_out.address, [])
                     list_utxo_index = -1
                     for i, utxo in enumerate(utxo_list):
                         if utxo.tx_id == tx.hash and utxo.index == index:
@@ -599,15 +605,15 @@ class BaseWallet:
                         if key not in self.spent_txs or len(self.spent_txs[key]) == 0:
                             # If it's not in unspet or spent it was deleted, so we create again in the unspent
                             utxo = UnspentTx(tx.hash, index, output.value, tx.timestamp)
-                            utxo_list = self.unspent_txs.pop(p2pkh_out.address, [])
+                            utxo_list = self.unspent_txs.pop(script_type_out.address, [])
                             utxo_list.append(utxo)
                             should_update = True
 
-                    self.unspent_txs[p2pkh_out.address] = utxo_list
+                    self.unspent_txs[script_type_out.address] = utxo_list
 
                     # Remove from voided_unspent, if it's there
                     # First try to find it in voided_unspent
-                    voided_utxo_list = self.voided_unspent.get(p2pkh_out.address, [])
+                    voided_utxo_list = self.voided_unspent.get(script_type_out.address, [])
                     list_index = -1
                     for i, utxo in enumerate(voided_utxo_list):
                         if utxo.tx_id == tx.hash and utxo.index == index:
@@ -615,14 +621,17 @@ class BaseWallet:
                             break
                     if list_index > -1:
                         # If it's there, we remove it
-                        self.voided_unspent[p2pkh_out.address].pop(list_index)
+                        self.voided_unspent[script_type_out.address].pop(list_index)
                         should_update = True
 
         # check inputs
         for _input in tx.inputs:
-            p2pkh_in = P2PKH.verify_input(_input.data)
-            if p2pkh_in:
-                if p2pkh_in.address in self.keys:
+            output_tx = tx.storage.get_transaction(_input.tx_id)
+            output = output_tx.outputs[_input.index]
+
+            script_type_out = parse_address_script(output.script)
+            if script_type_out:
+                if script_type_out.address in self.keys:
                     key = (_input.tx_id, _input.index)
                     # Remove from voided_spent, if it's there
                     # First try to find it in voided_spent
@@ -640,8 +649,8 @@ class BaseWallet:
                         should_update = True
 
                     # Remove from unspent_txs, if it's there
-                    if p2pkh_in.address in self.unspent_txs:
-                        utxo_list = self.unspent_txs.pop(p2pkh_in.address)
+                    if script_type_out.address in self.unspent_txs:
+                        utxo_list = self.unspent_txs.pop(script_type_out.address)
                         list_index = -1
                         for i, utxo in enumerate(utxo_list):
                             if utxo.tx_id == _input.tx_id and utxo.index == _input.index:
@@ -650,7 +659,7 @@ class BaseWallet:
                         if list_index > -1:
                             old_utxo = utxo_list.pop(list_index)
                             if len(utxo_list) > 0:
-                                self.unspent_txs[p2pkh_in.address] = utxo_list
+                                self.unspent_txs[script_type_out.address] = utxo_list
                             # add to spent_txs
                             spent = SpentTx(tx.hash, _input.tx_id, _input.index, old_utxo.value, tx.timestamp)
                             self.spent_txs[(_input.tx_id, _input.index)].append(spent)
