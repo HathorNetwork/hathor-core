@@ -8,15 +8,19 @@ import datetime
 
 from twisted.logger import Logger
 
+from hathor.constants import P2PKH_VERSION_BYTE, MULTISIG_VERSION_BYTE
+
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
 
 from hathor.crypto.util import get_hash160, get_public_key_from_bytes_compressed, get_address_b58_from_bytes, \
-                                get_address_b58_from_public_key_bytes_compressed, get_address_b58_from_public_key_hash
+                                get_address_b58_from_public_key_hash, get_address_b58_from_redeem_script_hash
+
 from hathor.transaction.exceptions import ScriptError, OutOfData, MissingStackItems, \
                                           EqualVerifyFailed, FinalStackInvalid, TimeLocked, \
-                                          OracleChecksigFailed, DataIndexError, VerifyFailed
+                                          OracleChecksigFailed, DataIndexError, VerifyFailed, \
+                                          InvalidStackData
 
 
 ScriptExtras = namedtuple('ScriptExtras', 'tx txin spent_tx')
@@ -95,12 +99,30 @@ def _re_pushdata(length):
 
 
 class Opcode(IntEnum):
+    OP_1 = 0x51
+    OP_2 = 0x52
+    OP_3 = 0x53
+    OP_4 = 0x54
+    OP_5 = 0x55
+    OP_6 = 0x56
+    OP_7 = 0x57
+    OP_8 = 0x58
+    OP_9 = 0x59
+    OP_10 = 0x5a
+    OP_11 = 0x5b
+    OP_12 = 0x5c
+    OP_13 = 0x5d
+    OP_14 = 0x5e
+    OP_15 = 0x5f
+    OP_16 = 0x60
     OP_DUP = 0x76
+    OP_EQUAL = 0x87
     OP_EQUALVERIFY = 0x88
     OP_CHECKSIG = 0xAC
     OP_HASH160 = 0xA9
     OP_PUSHDATA1 = 0x4C
     OP_GREATERTHAN_TIMESTAMP = 0x6F
+    OP_CHECKMULTISIG = 0xae
     OP_CHECKDATASIG = 0xBA
     OP_DATA_STREQUAL = 0xC0
     OP_DATA_GREATERTHAN = 0xC1
@@ -239,40 +261,140 @@ class P2PKH:
             return cls(address_b58, timelock)
         return None
 
+
+class MultiSig:
+    re_match = re_compile(
+        '^(?:(DATA_4) OP_GREATERTHAN_TIMESTAMP)? '
+        'OP_HASH160 (DATA_20) OP_EQUAL$'
+    )
+
+    def __init__(self, address, timelock=None):
+        """This class represents the multi signature script (MultiSig). It enables the group of persons
+        who has the corresponding private keys of the address to spend the tokens.
+
+        This script validates the signatures and public keys on the corresponding input
+        data.
+
+        Output script and the corresponding input data are usually represented like:
+        output script: OP_HASH160 <redeemScriptHash> OP_EQUAL
+        input data: <sig1> ... <sigM> <redeemScript>
+
+        :param address: address to send tokens
+        :type address: string(base58)
+
+        :param timelock: timestamp until when it's locked
+        :type timelock: int
+        """
+        self.address = address
+        self.timelock = timelock
+
+    def to_human_readable(self):
+        """ Decode MultiSig class to dict with its type and data
+
+            :return: Dict with MultiSig info
+            :rtype: Dict[str:]
+        """
+        ret = {}
+        ret['type'] = 'MultiSig'
+        ret['address'] = self.address
+        ret['timelock'] = self.timelock
+        return ret
+
     @classmethod
-    def verify_input(cls, input_data):
-        """Checks if the given input is of type p2pkh. If it is, returns the P2PKH object.
+    def create_output_script(cls, address, timelock=None):
+        """
+        :param address: address to send tokens
+        :type address: bytes
+
+        :param timelock: timestamp until when the output is locked
+        :type timelock: bytes
+
+        :rtype: bytes
+        """
+        assert len(address) == 25
+        redeem_script_hash = address[1:-4]
+        s = HathorScript()
+        if timelock:
+            s.pushData(timelock)
+            s.addOpcode(Opcode.OP_GREATERTHAN_TIMESTAMP)
+        s.addOpcode(Opcode.OP_HASH160)
+        s.pushData(redeem_script_hash)
+        s.addOpcode(Opcode.OP_EQUAL)
+        return s.data
+
+    @classmethod
+    def create_input_data(cls, redeem_script, signatures):
+        """
+        :param redeem_script: script to redeem the tokens: <M> <pubkey1> ... <pubkeyN> <N> <OP_CHECKMULTISIG>
+        :type redeem_script: bytes
+
+        :param signatures: array of signatures to validate the input and redeem the tokens
+        :type signagures: List[bytes]
+
+        :rtype: bytes
+        """
+        s = HathorScript()
+        for signature in signatures:
+            s.pushData(signature)
+        s.pushData(redeem_script)
+        return s.data
+
+    @classmethod
+    def parse_script(cls, script):
+        """Checks if the given script is of type multisig. If it is, returns the MultiSig object.
         Otherwise, returns None.
 
-        TODO come up with better method name [yan]
-        TODO this is a very naive approach
-        TODO this considers only PUSHDATA1
-
-        :param script: input data to check
+        :param script: script to check
         :type script: bytes
 
-        :rtype: :py:class:`hathor.transaction.scripts.P2PKH` or None
+        :rtype: :py:class:`hathor.transaction.scripts.MultiSig` or None
         """
-        # TODO check if we have minimum amount of bytes in input_data
-        opcode = input_data[0]
-        if opcode <= 75:
-            siglen = opcode
-            pos = 1
-        else:
-            siglen = input_data[1]
-            pos = 2
-        pos = siglen + pos
-        opcode = input_data[pos]
-        if opcode <= 75:
-            pass
-        else:
-            pos += 1
-        public_key = input_data[pos+1:]
-        try:
-            address = get_address_b58_from_public_key_bytes_compressed(public_key)
-            return cls(address)
-        except ValueError:
-            return None
+        match = cls.re_match.search(script)
+        if match:
+            groups = match.groups()
+            timelock = None
+            pushdata_timelock = groups[0]
+            if pushdata_timelock:
+                timelock_bytes = pushdata_timelock[1:]
+                timelock = struct.unpack('!I', timelock_bytes)[0]
+            pushdata_address = groups[1]
+            if pushdata_address[0] > 75:
+                redeem_script_hash = pushdata_address[2:]
+            else:
+                redeem_script_hash = pushdata_address[1:]
+            address_b58 = get_address_b58_from_redeem_script_hash(redeem_script_hash)
+            return cls(address_b58, timelock)
+        return None
+
+    @classmethod
+    def get_multisig_data(cls, input_data):
+        """ Input data has many signatures and a block with the redeem script
+            In the second part of the script eval we need to evaluate the redeem script
+            so we need to get the redeem script without the block, to evaluate the elements on it
+
+            This method removes the (possible) OP_PUSHDATA1 byte and the redeem script length,
+            so it can be evaluated as any normal script
+
+            :param input_data: data from the input being evaluated
+            :type input_data: bytes
+
+            :return: data ready to be evaluated. The signatures and the redeem script
+            :rtype: bytes
+        """
+        pos = 0
+        last_pos = 0
+        stack = []
+        data_len = len(input_data)
+        while pos < data_len:
+            last_pos = pos
+            opcode = input_data[pos]
+            if (opcode >= 1 and opcode <= 75):
+                pos = op_pushdata(pos, input_data, stack)
+            elif opcode == Opcode.OP_PUSHDATA1:
+                pos = op_pushdata1(pos, input_data, stack)
+
+        redeem_script = stack[-1]
+        return input_data[:last_pos] + redeem_script
 
 
 class NanoContractMatchValues:
@@ -460,6 +582,92 @@ class NanoContractMatchValues:
         raise NotImplementedError
 
 
+def create_output_script(address, timelock=None):
+    """ Verifies if address is P2PKH or Multisig and create correct output script
+
+        :param address: address to send tokens
+        :type address: bytes
+
+        :param timelock: timestamp until when the output is locked
+        :type timelock: bytes
+
+        :raises ScriptError: if address is not from one of the possible options
+
+        :rtype: bytes
+    """
+    if address[0] == binary_to_int(P2PKH_VERSION_BYTE):
+        return P2PKH.create_output_script(address, timelock)
+    elif address[0] == binary_to_int(MULTISIG_VERSION_BYTE):
+        return MultiSig.create_output_script(address, timelock)
+    else:
+        raise ScriptError('The address is not valid')
+
+
+def parse_address_script(script):
+    """ Verifies if address is P2PKH or Multisig and calls correct parse_script method
+
+        :param script: script to decode
+        :type script: bytes
+
+        :return: P2PKH or MultiSig class or None
+        :rtype: class or None
+    """
+    script_classes = [P2PKH, MultiSig]
+    # Each class verifies its script
+    for script_class in script_classes:
+        if script_class.re_match.search(script):
+            return script_class.parse_script(script)
+    return None
+
+
+def execute_eval(data, log, extras):
+    """ Execute eval from data executing opcode methods
+
+        :param data: data to be evaluate that contains data and opcodes
+        :type data: bytes
+
+        :param log: List of log messages
+        :type log: List[str]
+
+        :param extras: namedtuple with extra fields
+        :type extras: :py:class:`hathor.transaction.scripts.ScriptExtras`
+
+        :raises ScriptError: case opcode is not found
+        :raises FinalStackInvalid: case the evaluation fails
+    """
+    stack = []
+    data_len = len(data)
+    pos = 0
+    while pos < data_len:
+        opcode = data[pos]
+        if (opcode >= 1 and opcode <= 75):
+            pos = op_pushdata(pos, data, stack)
+            continue
+        elif opcode == Opcode.OP_PUSHDATA1:
+            pos = op_pushdata1(pos, data, stack)
+            continue
+
+        # Checking if the opcode is an integer push (OP_1 - OP_16)
+        if opcode >= Opcode.OP_1 and opcode <= Opcode.OP_16:
+            op_integer(opcode, stack, log, extras)
+            pos += 1
+            continue
+
+        # this is an opcode manipulating the stack
+        fn = MAP_OPCODE_TO_FN.get(opcode, None)
+        if fn is None:
+            # throw error
+            raise ScriptError('unknown opcode')
+
+        fn(stack, log, extras)
+        pos += 1
+
+    if len(stack) > 0:
+        if stack.pop() != 1:
+            # stack left with non zero value
+            raise FinalStackInvalid('\n'.join(log))
+
+
 def script_eval(tx, txin, spent_tx):
     """Evaluates the output script and input data according to
     a very limited subset of Bitcoin's scripting language.
@@ -478,37 +686,18 @@ def script_eval(tx, txin, spent_tx):
     input_data = txin.data
     output_script = spent_tx.outputs[txin.index].script
 
-    stack = []
     # merge input_data and output_script
     full_data = input_data + output_script
-    data_len = len(full_data)
-    pos = 0
     log = []
     extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
-    while pos < data_len:
-        opcode = full_data[pos]
-        if (opcode >= 1 and opcode <= 75):
-            pos = op_pushdata(pos, full_data, stack)
-            continue
-        elif opcode == Opcode.OP_PUSHDATA1:
-            pos = op_pushdata1(pos, full_data, stack)
-            continue
+    execute_eval(full_data, log, extras)
 
-        # self.log.debug('!! pos={} opcode={} {}'.format(pos, opcode, Opcode(opcode)))
-
-        # this is an opcode manipulating the stack
-        fn = MAP_OPCODE_TO_FN.get(opcode, None)
-        if fn is None:
-            # throw error
-            raise ScriptError('unknown opcode')
-
-        fn(stack, log, extras)
-        pos += 1
-
-    if len(stack) > 0:
-        if stack.pop() != 1:
-            # stack left with non zero value
-            raise FinalStackInvalid('\n'.join(log))
+    # If it's multisig we still have to validate the script in input data
+    if MultiSig.re_match.search(output_script):
+        # First execute_eval will check if this redeem_script is valid, so I can assume it is here
+        # So now we can execute another execute_eval only for the input_data (signatures and redeem script)
+        multisig_data = MultiSig.get_multisig_data(extras.txin.data)
+        execute_eval(multisig_data, log, extras)
 
 
 def get_pushdata(data):
@@ -678,12 +867,29 @@ def op_equalverify(stack, log, extras):
     :raises MissingStackItems: if there aren't 2 element on stack
     :raises EqualVerifyFailed: items don't match
     """
+    op_equal(stack, log, extras)
+    is_equal = stack.pop()
+    if not is_equal:
+        raise EqualVerifyFailed('Failed to verify if elements are equal')
+
+
+def op_equal(stack, log, extras):
+    """Verifies top 2 elements from stack are equal
+
+    In case they are the same, we push 1 to the stack and push 0 if they are different
+
+    :param stack: the stack used when evaluating the script
+    :type stack: List[]
+    """
     if len(stack) < 2:
         raise MissingStackItems('OP_EQUALVERIFY: need 2 elements on stack, currently {}')
     elem1 = stack.pop()
     elem2 = stack.pop()
-    if elem1 != elem2:
-        raise EqualVerifyFailed('elements: {} {}'.format(elem1.hex(), elem2.hex()))
+    if elem1 == elem2:
+        stack.append(1)
+    else:
+        stack.append(0)
+        log.append('OP_EQUAL: failed. elements: {} {}'.format(elem1.hex(), elem2.hex()))
 
 
 def op_checksig(stack, log, extras):
@@ -936,12 +1142,103 @@ def op_find_p2pkh(stack, log, extras):
     raise VerifyFailed
 
 
+def op_checkmultisig(stack, log, extras):
+    """Checks if it has the minimum signatures required and if all of them are valid
+
+    :param stack: the stack used when evaluating the script
+    :type stack: List[]
+
+    :raises MissingStackItems: if stack is empty or it has less signatures than the minimum required
+    :raises VerifyFailed: verification failed
+    """
+    if not len(stack):
+        raise MissingStackItems('OP_CHECKMULTISIG: empty stack')
+
+    # Pop the quantity of pubkeys
+    pubkey_count = stack.pop()
+
+    if not isinstance(pubkey_count, int):
+        raise InvalidStackData('OP_CHECKMULTISIG: pubkey count should be an integer')
+
+    if len(stack) < pubkey_count:
+        raise MissingStackItems('OP_CHECKMULTISIG: not enough public keys on the stack')
+
+    # Get all pubkeys
+    pubkeys = []
+    for _ in range(pubkey_count):
+        pubkey_bytes = stack.pop()
+        pubkeys.append(pubkey_bytes)
+
+    if not len(stack):
+        raise MissingStackItems('OP_CHECKMULTISIG: less elements than should on the stack')
+
+    # Pop the quantity of signatures required
+    # We don't need to check that this quantity is the minimum required because we already checked the redeem_script
+    signatures_count = stack.pop()
+
+    if not isinstance(signatures_count, int):
+        raise InvalidStackData('OP_CHECKMULTISIG: signatures count should be an integer')
+
+    # Error if we don't have the minimum quantity of signatures
+    if len(stack) < signatures_count:
+        raise MissingStackItems('OP_CHECKMULTISIG: not enough signatures on the stack')
+
+    # Get all signatures
+    signatures = []
+    for _ in range(signatures_count):
+        signature_bytes = stack.pop()
+        signatures.append(signature_bytes)
+
+    # For each signature we check if it's valid with one of the public keys
+    # Signatures must be in order (same as the public keys in the multi sig wallet)
+    for signature in signatures:
+        valid = False
+        for index, pubkey in enumerate(pubkeys):
+            new_stack = [signature, pubkey]
+            op_checksig(new_stack, log, extras)
+            result = new_stack.pop()
+            if result == 1:
+                pubkeys = pubkeys[index+1:]
+                valid = True
+                break
+
+        if not valid:
+            # If one signature is not valid we push 0 and return
+            stack.append(0)
+            return
+
+    # If all signatures are valids we push 1
+    stack.append(1)
+
+
+def op_integer(opcode, stack, log, extras):
+    """ Appends an integer to the stack
+        We get the opcode comparing to all integers opcodes
+
+        Example to append integer 4:
+        opcode will be equal to OP_4 (0x54)
+        Then we append the integer OP_4 - OP_1 + 1 = 4
+
+        :param opcode: the opcode to append to the stack
+        :type opcode: bytes
+
+        :param stack: the stack used when evaluating the script
+        :type stack: List[]
+    """
+    to_append = opcode - Opcode.OP_1 + 1
+    if to_append < 1 or to_append > 16:
+        raise ScriptError('unknown opcode {}'.format(opcode))
+    stack.append(to_append)
+
+
 MAP_OPCODE_TO_FN = {
     Opcode.OP_DUP: op_dup,
+    Opcode.OP_EQUAL: op_equal,
     Opcode.OP_EQUALVERIFY: op_equalverify,
     Opcode.OP_CHECKSIG: op_checksig,
     Opcode.OP_HASH160: op_hash160,
     Opcode.OP_GREATERTHAN_TIMESTAMP: op_greaterthan_timestamp,
+    Opcode.OP_CHECKMULTISIG: op_checkmultisig,
     Opcode.OP_DATA_STREQUAL: op_data_strequal,
     Opcode.OP_DATA_GREATERTHAN: op_data_greaterthan,
     Opcode.OP_DATA_MATCH_VALUE: op_data_match_value,

@@ -1,6 +1,8 @@
 from hathor.transaction.exceptions import TxValidationError, ParentDoesNotExist, TimestampError, \
                                           IncorrectParents, DuplicatedParents, PowError
-from hathor.transaction.scripts import P2PKH, NanoContractMatchValues
+
+from hathor.transaction.scripts import parse_address_script
+from hathor.transaction.scripts import NanoContractMatchValues
 
 from abc import ABC, abstractmethod, abstractclassmethod
 from enum import Enum
@@ -944,10 +946,11 @@ class Output:
         self.script = script                # bytes
 
     def to_human_readable(self):
-        """Checks what kind of script this is and returns it in human readable form"""
-        p2pkh = P2PKH.parse_script(self.script)
-        if p2pkh:
-            ret = p2pkh.to_human_readable()
+        """Checks what kind of script this is and returns it in human readable form
+        """
+        script_type = parse_address_script(self.script)
+        if script_type:
+            ret = script_type.to_human_readable()
             ret['value'] = self.value
             return ret
 

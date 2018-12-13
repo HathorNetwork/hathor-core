@@ -4,7 +4,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
-from hathor.constants import P2PKH_VERSION_BYTE
+from hathor.constants import P2PKH_VERSION_BYTE, MULTISIG_VERSION_BYTE
 
 
 def get_private_key_bytes(private_key,
@@ -239,3 +239,54 @@ def get_address_b58_from_public_key_bytes_compressed(public_key_bytes_compressed
     """
     public_key = get_public_key_from_bytes_compressed(public_key_bytes_compressed)
     return get_address_b58_from_public_key(public_key)
+
+
+def get_address_b58_from_redeem_script_hash(redeem_script_hash, version_byte=MULTISIG_VERSION_BYTE):
+    """Gets the b58 address from the hash of the redeem script in multisig.
+
+        :param redeem_script_hash: hash of the redeem script (sha256 and ripemd160)
+        :param redeem_script_hash: bytes
+
+        :return: address in base 58
+        :rtype: string
+    """
+    address = get_address_from_redeem_script_hash(redeem_script_hash, version_byte)
+    return base58.b58encode(address).decode('utf-8')
+
+
+def get_address_from_redeem_script_hash(redeem_script_hash, version_byte=MULTISIG_VERSION_BYTE):
+    """Gets the address in bytes from the redeem script hash
+
+        :param redeem_script_hash: hash of redeem script (sha256 and ripemd160)
+        :param redeem_script_hash: bytes
+
+        :param version_byte: first byte of address to define the version of this address
+        :param version_byte: bytes
+
+        :return: address in bytes
+        :rtype: bytes
+    """
+    address = b''
+    # Version byte
+    address += version_byte
+    # redeem script hash
+    address += redeem_script_hash
+    checksum = get_checksum(address)
+    address += checksum
+    return address
+
+
+def get_address_b58_from_redeem_script(redeem_script, version_byte=MULTISIG_VERSION_BYTE):
+    """Gets the address in base58 from the redeem script
+
+        :param redeem_script: redeem script (<M> <pubkey1> ... <pubkeyN> <N> <OP_CHECKMULTISIG>)
+        :param redeem_script: bytes
+
+        :param version_byte: first byte of address to define the version of this address
+        :param version_byte: bytes
+
+        :return: address in base 58
+        :rtype: str(base58)
+    """
+    redeem_script_hash = get_hash160(redeem_script)
+    return get_address_b58_from_redeem_script_hash(redeem_script_hash, version_byte)

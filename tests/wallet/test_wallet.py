@@ -35,6 +35,7 @@ class BasicWallet(unittest.TestCase):
             self.genesis_private_key,
             encryption_algorithm=serialization.BestAvailableEncryption(PASSWORD)
         )
+        self.storage = TransactionMemoryStorage()
 
     def tearDown(self):
         shutil.rmtree(self.directory)
@@ -71,7 +72,9 @@ class BasicWallet(unittest.TestCase):
         new_address = w.get_unused_address()
         out = WalletOutputInfo(w.decode_address(new_address), 100, timelock=None)
         tx1 = w.prepare_transaction_compute_inputs(Transaction, outputs=[out])
+        tx1.storage = self.storage
         tx1.update_hash()
+        self.storage.save_transaction(tx1)
         w.on_new_tx(tx1)
         self.assertEqual(len(w.spent_txs), 1)
         self.assertEqual(w.balance, WalletBalance(0, genesis_value))
@@ -83,7 +86,9 @@ class BasicWallet(unittest.TestCase):
         key2 = w.keys[new_address]
         out = WalletOutputInfo(w.decode_address(key2.address), 100, timelock=None)
         tx2 = w.prepare_transaction_incomplete_inputs(Transaction, inputs=[input_info], outputs=[out])
+        tx2.storage = self.storage
         tx2.update_hash()
+        self.storage.save_transaction(tx2)
         w.on_new_tx(tx2)
         self.assertEqual(len(w.spent_txs), 2)
         self.assertEqual(w.balance, WalletBalance(0, genesis_value))

@@ -35,7 +35,9 @@ class WalletHD(unittest.TestCase):
         tx1 = self.wallet.prepare_transaction_compute_inputs(Transaction, outputs=[out])
         tx1.update_hash()
         tx1.verify_script(tx1.inputs[0], block)
+        tx1.storage = self.tx_storage
         self.wallet.on_new_tx(tx1)
+        self.tx_storage.save_transaction(tx1)
         self.assertEqual(len(self.wallet.spent_txs), 1)
         self.assertEqual(len(self.wallet.unspent_txs), 1)
         self.assertEqual(self.wallet.balance, WalletBalance(0, TOKENS))
@@ -48,7 +50,9 @@ class WalletHD(unittest.TestCase):
         tx2 = self.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs=[input_info], outputs=[out])
         tx2.storage = self.tx_storage
         tx2.update_hash()
+        tx2.storage = self.tx_storage
         tx2.verify_script(tx2.inputs[0], tx1)
+        self.tx_storage.save_transaction(tx2)
         self.wallet.on_new_tx(tx2)
         self.assertEqual(len(self.wallet.spent_txs), 2)
         self.assertEqual(self.wallet.balance, WalletBalance(0, TOKENS))

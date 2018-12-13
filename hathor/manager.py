@@ -3,7 +3,7 @@
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.manager import ConnectionsManager
 from hathor.transaction import Block, TxOutput, sum_weights
-from hathor.transaction.scripts import P2PKH
+from hathor.transaction.scripts import create_output_script
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.transaction.exceptions import TxValidationError
 from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
@@ -240,7 +240,7 @@ class HathorManager(object):
         """
         address = self.wallet.get_unused_address_bytes(mark_as_used=False)
         amount = self.tokens_issued_per_block
-        output_script = P2PKH.create_output_script(address)
+        output_script = create_output_script(address)
         tx_outputs = [
             TxOutput(amount, output_script)
         ]

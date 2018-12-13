@@ -21,6 +21,9 @@ class CliManager:
         from . import grafana_dashboard
         from . import twin_tx
         from . import shell
+        from . import multisig_address
+        from . import multisig_spend
+        from . import multisig_signature
         from . import oracle_create_key
         from . import oracle_get_pubkey
         from . import oracle_encode_data
@@ -28,6 +31,9 @@ class CliManager:
         self.add_cmd('mining', 'run_miner', mining, 'Run a mining process (running node required)')
         self.add_cmd('hathor', 'run_node', run_node, 'Run a node')
         self.add_cmd('hathor', 'gen_peer_id', peer_id, 'Generate a new random peer-id')
+        self.add_cmd('multisig', 'gen_multisig_address', multisig_address, 'Generate a new multisig address')
+        self.add_cmd('multisig', 'spend_multisig_output', multisig_spend, 'Generate tx that spends a multisig output')
+        self.add_cmd('multisig', 'tx_signature', multisig_signature, 'Generate a signature of a multisig tx')
         self.add_cmd('tests', 'gen_rand_tx', tx_generator, 'Generate random transactions (running node required)')
         self.add_cmd('tests', 'gen_twin_tx', twin_tx, 'Generate a twin transaction from a transaction hash')
         self.add_cmd('wallet', 'gen_kp_wallet', wallet, 'Generate a new KeyPair wallet')

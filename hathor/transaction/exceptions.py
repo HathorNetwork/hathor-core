@@ -103,6 +103,13 @@ class DataIndexError(ScriptError):
     """
 
 
+class InvalidStackData(ScriptError):
+    """The value for data on the stack is not what we expect
+
+    For example, we expect an integer but it's not
+    """
+
+
 class VerifyFailed(ScriptError):
     """For all cases when there's a comparison that fails"""
 
