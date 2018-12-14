@@ -180,6 +180,7 @@ def run_server(hostname='localhost', listen=8005, status=8085, tries=50):
 
     return process
 
+
 def request_server(path, method, host='http://localhost', port=8085, data=None):
     partial_url = '{}:{}'.format(host, port)
     url = urllib.parse.urljoin(partial_url, path)
