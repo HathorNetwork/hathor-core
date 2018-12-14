@@ -89,7 +89,3 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
     execute(args)
-
-
-if __name__ == '__main__':
-    main()
