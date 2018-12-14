@@ -1,5 +1,9 @@
 from twisted.test import proto_helpers
 import random
+import subprocess
+import requests
+import time
+import urllib.parse
 
 
 def resolve_block_bytes(block_bytes):
@@ -156,3 +160,36 @@ class FakeConnection:
 
     def is_empty(self):
         return not self.tr1.value() and not self.tr2.value()
+
+
+def run_server(hostname='localhost', listen=8005, status=8085, tries=50):
+    command = 'bash hathor-cli run_node --hostname {} --listen tcp:{} --status {}'.format(hostname, listen, status)
+    process = subprocess.Popen(command.split())
+
+    partial_url = 'http://{}:{}'.format(hostname, status)
+    url = urllib.parse.urljoin(partial_url, '/wallet/balance/')
+    while True:
+        try:
+            requests.get(url)
+            break
+        except requests.exceptions.ConnectionError:
+            tries -= 1
+            if tries == 0:
+                raise TimeoutError('Error when running node for testing')
+            time.sleep(0.1)
+
+    return process
+
+def request_server(path, method, host='http://localhost', port=8085, data=None):
+    partial_url = '{}:{}'.format(host, port)
+    url = urllib.parse.urljoin(partial_url, path)
+    if method == 'GET':
+        response = requests.get(url, params=data)
+    elif method == 'POST':
+        response = requests.post(url, json=data)
+    elif method == 'PUT':
+        response = requests.put(url, json=data)
+    else:
+        raise ValueError('Unsuported method')
+
+    return response.json()
