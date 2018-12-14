@@ -11,16 +11,19 @@ from json.decoder import JSONDecodeError
 _SLEEP_ON_ERROR_SECONDS = 5
 
 
-def main():
+def create_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('url', help='URL to get mining bytes')
     parser.add_argument('--address', action='append')
     parser.add_argument('--value', action='append')
     parser.add_argument('--rate', type=float, help='tx/s')
     parser.add_argument('--weight', type=float, help='Weight')
+    parser.add_argument('--count', type=int, help='Quantity of txs to be generated')
     parser.add_argument('--profiler', action='store_true', default=False, help='Enable profiling')
-    args = parser.parse_args()
+    return parser
 
+
+def execute(args):
     import urllib.parse
     send_tokens_url = urllib.parse.urljoin(args.url, '/wallet/send_tokens/')
 
@@ -58,6 +61,7 @@ def main():
         print(response.text)
 
     t0 = time.time()
+    total = 0
     count = 0
     while True:
         address = random.choice(addresses)
@@ -77,6 +81,9 @@ def main():
         try:
             data = response.json()
             assert data['success']
+            total += 1
+            if args.count and total == args.count:
+                break
             latest_timestamp = data['tx']['timestamp']
         except (AssertionError, JSONDecodeError) as e:
             print('Error reading response from server: %s' % response)
@@ -101,3 +108,9 @@ def main():
                 print('')
                 count = 0
                 t0 = t1
+
+
+def main():
+    parser = create_parser()
+    args = parser.parse_args()
+    execute(args)
