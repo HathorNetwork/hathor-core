@@ -441,8 +441,9 @@ class HathorManager(object):
         weight = (self.min_tx_weight_coefficient*log(tx_size, 2) + log(tx.sum_outputs, 2) -
                   log(10**DECIMAL_PLACES, 2) + 0.5)
 
-        # Make sure the calculated weight is bigger than the minimum
-        assert weight > MIN_WEIGHT
+        # Make sure the calculated weight is at least the minimum
+        weight = max(weight, MIN_WEIGHT)
+
         return weight
 
     def listen(self, description, ssl=False):
