@@ -7,9 +7,7 @@ from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.wallet.base_wallet import WalletOutputInfo, WalletBalance
 from hathor.wallet.util import generate_signature
 
-from hathor.crypto.util import get_private_key_from_bytes, get_public_key_bytes_compressed
-
-from hathor.transaction.scripts import create_output_script, MultiSig, parse_address_script, script_eval, P2PKH
+from hathor.transaction.scripts import create_output_script
 from hathor.wallet.util import generate_multisig_redeem_script, generate_multisig_address
 
 from hathor.cli.multisig_spend import create_parser, execute
