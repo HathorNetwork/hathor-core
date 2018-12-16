@@ -7,7 +7,9 @@ from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.wallet.base_wallet import WalletOutputInfo, WalletBalance
 from hathor.wallet.util import generate_signature
 
-from hathor.transaction.scripts import create_output_script, MultiSig, parse_address_script, script_eval
+from hathor.crypto.util import get_private_key_from_bytes, get_public_key_bytes_compressed
+
+from hathor.transaction.scripts import create_output_script, MultiSig, parse_address_script, script_eval, P2PKH
 from hathor.wallet.util import generate_multisig_redeem_script, generate_multisig_address
 
 import time
@@ -105,6 +107,18 @@ class MultisigTestCase(unittest.TestCase):
         self.clock.advance(6)
         tx.timestamp = int(self.clock.seconds())
         tx.resolve()
+
+        # First we try to propagate with a P2PKH input
+        private_key_obj = get_private_key_from_bytes(bytes.fromhex(self.private_keys[0]), password=b'1234')
+        pubkey_obj = private_key_obj.public_key()
+        public_key_compressed = get_public_key_bytes_compressed(pubkey_obj)
+        p2pkh_input_data = P2PKH.create_input_data(public_key_compressed, signatures[0])
+        tx2 = Transaction.create_from_struct(tx.get_struct())
+        tx2.inputs[0].data = p2pkh_input_data
+        tx2.resolve()
+        self.assertFalse(self.manager.propagate_tx(tx2))
+
+        # Now we propagate the correct
         self.assertTrue(self.manager.propagate_tx(tx))
 
         self.assertEqual(self.manager.wallet.balance, WalletBalance(0, 2800))
