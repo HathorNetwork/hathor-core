@@ -21,7 +21,7 @@ PASSWORD = b'passwd'
 
 class BasicWallet(unittest.TestCase):
     def setUp(self):
-        self.directory = tempfile.mkdtemp(dir='/tmp/')
+        self.directory = tempfile.mkdtemp()
         # read genesis keys
         filepath = os.path.join(os.getcwd(), 'hathor/wallet/genesis_keys.json')
         dict_data = None

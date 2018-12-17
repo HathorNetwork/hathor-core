@@ -31,7 +31,7 @@ class TestCase(unittest.TestCase):
         """ Generate a Wallet with a number of keypairs for testing
             :rtype: Wallet
         """
-        tmpdir = tempfile.mkdtemp(dir='/tmp/')
+        tmpdir = tempfile.mkdtemp()
         self.tmpdirs.append(tmpdir)
 
         wallet = Wallet(directory=tmpdir)

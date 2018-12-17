@@ -29,7 +29,7 @@ class _BaseTransactionStorageTest:
             self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
 
             from hathor.manager import HathorManager
-            self.tmpdir = tempfile.mkdtemp(dir='/tmp/')
+            self.tmpdir = tempfile.mkdtemp()
             wallet = Wallet(directory=self.tmpdir)
             wallet.unlock(b'teste')
             self.manager = HathorManager(self.reactor, tx_storage=self.tx_storage, wallet=wallet)
@@ -197,7 +197,7 @@ class _BaseTransactionStorageTest:
 
 class TransactionBinaryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
     def setUp(self):
-        self.directory = tempfile.mkdtemp(dir='/tmp/')
+        self.directory = tempfile.mkdtemp()
         super().setUp(TransactionBinaryStorage(self.directory))
 
     def tearDown(self):
@@ -207,7 +207,7 @@ class TransactionBinaryStorageTest(_BaseTransactionStorageTest._TransactionStora
 
 class TransactionJSONStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
     def setUp(self):
-        self.directory = tempfile.mkdtemp(dir='/tmp/')
+        self.directory = tempfile.mkdtemp()
         super().setUp(TransactionJSONStorage(self.directory))
 
     def tearDown(self):
@@ -217,7 +217,7 @@ class TransactionJSONStorageTest(_BaseTransactionStorageTest._TransactionStorage
 
 class TransactionCompactStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
     def setUp(self):
-        self.directory = tempfile.mkdtemp(dir='/tmp/')
+        self.directory = tempfile.mkdtemp()
         super().setUp(TransactionCompactStorage(self.directory))
 
     def tearDown(self):
