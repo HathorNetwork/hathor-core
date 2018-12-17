@@ -1,7 +1,6 @@
 import hashlib
 import base58
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from hathor.constants import P2PKH_VERSION_BYTE, MULTISIG_VERSION_BYTE
@@ -26,15 +25,6 @@ def get_private_key_from_bytes(private_key_bytes, password=None, backend=default
 def get_public_key_from_bytes(public_key_bytes, backend=default_backend()):
     """Returns the cryptography ec.EllipticCurvePublicKey from bytes"""
     return serialization.load_der_public_key(public_key_bytes, backend)
-
-
-def sign_data(private_key, data_to_sign, sig_algorithm=ec.ECDSA(hashes.SHA256())):
-    """Signs the provided data with the public key
-
-    private_key: cryptography ec.EllipticCurvePrivateKey
-    data_to_sign: bytes
-    """
-    return private_key.sign(data_to_sign, sig_algorithm)
 
 
 def get_hash160(public_key_bytes):
@@ -228,19 +218,6 @@ def get_public_key_from_bytes_compressed(public_key_bytes, backend=default_backe
     return ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), public_key_bytes, backend)
 
 
-def get_address_b58_from_public_key_bytes_compressed(public_key_bytes_compressed):
-    """ Gets the b58 address from the compressed bytes of a public key
-
-        :param public_key_bytes_compressed: Compressed format of public key in bytes
-        :type public_key_bytes_compressed: bytes
-
-        :return: the b58-encoded address
-        :rtype: string
-    """
-    public_key = get_public_key_from_bytes_compressed(public_key_bytes_compressed)
-    return get_address_b58_from_public_key(public_key)
-
-
 def get_address_b58_from_redeem_script_hash(redeem_script_hash, version_byte=MULTISIG_VERSION_BYTE):
     """Gets the b58 address from the hash of the redeem script in multisig.
 
@@ -274,19 +251,3 @@ def get_address_from_redeem_script_hash(redeem_script_hash, version_byte=MULTISI
     checksum = get_checksum(address)
     address += checksum
     return address
-
-
-def get_address_b58_from_redeem_script(redeem_script, version_byte=MULTISIG_VERSION_BYTE):
-    """Gets the address in base58 from the redeem script
-
-        :param redeem_script: redeem script (<M> <pubkey1> ... <pubkeyN> <N> <OP_CHECKMULTISIG>)
-        :param redeem_script: bytes
-
-        :param version_byte: first byte of address to define the version of this address
-        :param version_byte: bytes
-
-        :return: address in base 58
-        :rtype: str(base58)
-    """
-    redeem_script_hash = get_hash160(redeem_script)
-    return get_address_b58_from_redeem_script_hash(redeem_script_hash, version_byte)
