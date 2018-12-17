@@ -61,16 +61,21 @@ class PrometheusMetricsExporter:
         self.running = True
         self._schedule_and_write_data()
 
+    def set_new_metrics(self):
+        """ Update metric_gauges dict with new data from metrics
+        """
+        for metric_name in METRIC_INFO.keys():
+            self.metric_gauges[metric_name].set(getattr(self.metrics, metric_name))
+
+        write_to_textfile(self.filepath, self.registry)
+
     def _schedule_and_write_data(self):
         """ Update all metric data with new values
             Write new data to file
             Schedule next call
         """
         if self.running:
-            for metric_name in METRIC_INFO.keys():
-                self.metric_gauges[metric_name].set(getattr(self.metrics, metric_name))
-
-            write_to_textfile(self.filepath, self.registry)
+            self.set_new_metrics()
 
             # Schedule next call
             reactor.callLater(
