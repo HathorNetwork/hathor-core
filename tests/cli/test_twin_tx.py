@@ -70,7 +70,8 @@ class TwinTxTest(unittest.TestCase):
         self.assertEqual(meta.twins, set([twin_tx.hash]))
 
     def test_twin_different(self):
-        server = run_server()
+        # Running with ssl just to test listening tcp with TLS factory
+        server = run_server(listen_ssl=True)
 
         host = 'http://localhost:8085'
         prepare_transactions(host)
