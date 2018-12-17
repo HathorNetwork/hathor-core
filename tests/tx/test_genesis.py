@@ -26,3 +26,7 @@ class GenesisTest(unittest.TestCase):
         genesis_block = genesis_blocks[0]
 
         self.assertEqual(GENESIS_TOKENS, sum([output.value for output in genesis_block.outputs]))
+
+
+if __name__ == '__main__':
+    unittest.main()

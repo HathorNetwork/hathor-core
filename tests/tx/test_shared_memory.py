@@ -106,3 +106,7 @@ class MemoryIsharedTest(unittest.TestCase):
             # and naturally the metadata too
             self.assertTrue(meta1 == meta2)
             self.assertTrue(meta1 is meta2)
+
+
+if __name__ == '__main__':
+    unittest.main()

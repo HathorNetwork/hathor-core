@@ -23,3 +23,7 @@ class MiningTest(_BaseResourceTest._ResourceTest):
 
         response_post = yield self.web.post('mining', {'block_bytes': block_bytes})
         self.assertEqual(response_post.written[0], b'')
+
+
+if __name__ == '__main__':
+    unittest.main()

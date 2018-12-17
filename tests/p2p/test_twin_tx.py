@@ -83,3 +83,7 @@ class TwinTransactionTestCase(unittest.TestCase):
 
         meta3 = tx3.get_metadata()
         self.assertEqual(meta3.twins, set())
+
+
+if __name__ == '__main__':
+    unittest.main()

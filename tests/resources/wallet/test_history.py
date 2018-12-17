@@ -25,3 +25,7 @@ class HistoryTest(_BaseResourceTest._ResourceTest):
         data = response.json_value()
         self.assertEqual(len(data['history']), 1)
         self.assertEqual(data['total_pages'], 1)
+
+
+if __name__ == '__main__':
+    unittest.main()

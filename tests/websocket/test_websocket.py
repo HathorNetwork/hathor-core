@@ -124,3 +124,7 @@ class TestWebsocket(unittest.TestCase):
         self.assertEqual(len(self.factory.connections), 1)
         self.protocol.onClose(True, 1, 'Closed')
         self.assertEqual(len(self.factory.connections), 0)
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -24,3 +24,7 @@ class AddressTest(_BaseResourceTest._ResourceTest):
 
         self.assertEqual(new_address1, same_address)
         self.assertNotEqual(new_address1, new_address2)
+
+
+if __name__ == '__main__':
+    unittest.main()

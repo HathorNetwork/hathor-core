@@ -36,3 +36,7 @@ class TipsTest(_BaseResourceTest._ResourceTest):
         response3 = yield self.web.get("tips", {b'timestamp': tx.timestamp - 1})
         data3 = response3.json_value()
         self.assertEqual(len(data3), 2)
+
+
+if __name__ == '__main__':
+    unittest.main()

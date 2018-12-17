@@ -118,3 +118,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
             self.assertEqual(expected.hash.hex(), result['hash'])
 
         self.assertFalse(data4['has_more'])
+
+
+if __name__ == '__main__':
+    unittest.main()

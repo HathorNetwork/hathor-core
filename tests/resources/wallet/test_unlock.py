@@ -78,3 +78,7 @@ class UnlockTest(_BaseResourceTest._ResourceTest):
         response_words = yield self.web.post("wallet/unlock", {'words': data_success['words'], 'passphrase': ''})
         data_words = response_words.json_value()
         self.assertTrue(data_words['success'])
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -13,3 +13,7 @@ class GraphvizTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.get("graphviz", {b'format': b'pdf', b'weight': b'false', b'acc_weight': b'true'})
         data = response.written[0]
         self.assertIsNotNone(data)
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -65,3 +65,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         data_error2 = response_error2.json_value()
 
         self.assertFalse(data_error2['success'])
+
+
+if __name__ == '__main__':
+    unittest.main()

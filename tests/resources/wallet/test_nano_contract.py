@@ -113,3 +113,7 @@ class NanoContractsTest(_BaseResourceTest._ResourceTest):
         )
         data = response.json_value()
         self.assertTrue(data['success'])
+
+
+if __name__ == '__main__':
+    unittest.main()

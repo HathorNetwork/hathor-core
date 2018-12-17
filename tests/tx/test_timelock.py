@@ -156,3 +156,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
         self.manager.propagate_tx(tx2)
 
         self.assertEqual(self.manager.wallet.balance, WalletBalance(0, 2000))
+
+
+if __name__ == '__main__':
+    unittest.main()

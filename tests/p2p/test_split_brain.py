@@ -75,3 +75,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # dot1 = manager1.tx_storage.graphviz(format='pdf')
         # dot1.render('dot-merged')
+
+
+if __name__ == '__main__':
+    unittest.main()

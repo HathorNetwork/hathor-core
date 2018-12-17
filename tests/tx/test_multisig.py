@@ -115,3 +115,7 @@ class MultisigTestCase(unittest.TestCase):
         self.assertEqual(cls_script.address, self.multisig_address_b58)
 
         script_eval(tx, tx_input, tx1)
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -45,3 +45,7 @@ class StatusTest(_BaseResourceTest._ResourceTest):
 
         self.assertEqual(len(connections['connected_peers']), 1)
         self.assertEqual(connections['connected_peers'][0]['id'], manager2.my_peer.id)
+
+
+if __name__ == '__main__':
+    unittest.main()

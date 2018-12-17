@@ -16,3 +16,7 @@ class DashboardTest(_BaseResourceTest._ResourceTest):
 
         self.assertLessEqual(len(data['transactions']), tx_count)
         self.assertLessEqual(len(data['blocks']), block_count)
+
+
+if __name__ == '__main__':
+    unittest.main()

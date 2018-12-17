@@ -40,3 +40,7 @@ class LockTest(_BaseResourceTest._ResourceTest):
         response_locked = yield self.web_state.get('wallet/state')
         data_locked = response_locked.json_value()
         self.assertTrue(data_locked['is_locked'])
+
+
+if __name__ == '__main__':
+    unittest.main()

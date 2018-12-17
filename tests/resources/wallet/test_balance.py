@@ -28,3 +28,7 @@ class BalanceTest(_BaseResourceTest._ResourceTest):
         response2 = yield self.web.get("wallet/balance")
         data2 = response2.json_value()
         self.assertEqual(data2['balance'], {'available': 2000, 'locked': 0})
+
+
+if __name__ == '__main__':
+    unittest.main()

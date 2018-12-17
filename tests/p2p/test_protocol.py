@@ -163,3 +163,7 @@ class HathorProtocolTestCase(unittest.TestCase):
 
         self._check_result_only_cmd(self.conn1.tr1.value(), b'PEERS')
         self.conn1.run_one_step()
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -14,3 +14,7 @@ class VersionTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.get("version")
         data = response.json_value()
         self.assertEqual(data['version'], hathor.__version__)
+
+
+if __name__ == '__main__':
+    unittest.main()

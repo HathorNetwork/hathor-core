@@ -91,3 +91,7 @@ class WalletHD(unittest.TestCase):
     def test_exceptions(self):
         with self.assertRaises(ValueError):
             HDWallet(word_count=3)
+
+
+if __name__ == '__main__':
+    unittest.main()

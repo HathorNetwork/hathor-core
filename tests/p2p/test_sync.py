@@ -215,3 +215,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         self.assertTipsEqual(self.manager1, manager2)
         self.assertTipsEqual(self.manager1, manager3)
+
+
+if __name__ == '__main__':
+    unittest.main()

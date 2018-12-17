@@ -156,3 +156,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         )
         data = response.json_value()
         self.assertFalse(data['success'])
+
+
+if __name__ == '__main__':
+    unittest.main()

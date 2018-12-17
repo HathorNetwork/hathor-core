@@ -34,3 +34,7 @@ class TipsTest(_BaseResourceTest._ResourceTest):
         response3 = yield self.web.get("tips-histogram", {b'begin': txs[0].timestamp, b'end': txs[-1].timestamp})
         data3 = response3.json_value()
         self.assertEqual(len(data3), 19)
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -6,9 +6,16 @@ from hathor.p2p.peer_id import PeerId
 from hathor.manager import HathorManager
 from hathor.wallet import Wallet
 
+from unittest import main
 import tempfile
 import shutil
 import time
+
+
+__all__ = [
+    'TestCase',
+    'main',
+]
 
 
 class TestCase(unittest.TestCase):

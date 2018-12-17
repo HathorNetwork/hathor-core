@@ -365,3 +365,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # Balance is the same
         self.assertEqual(self.manager.wallet.balance, WalletBalance(0, 5900))
+
+
+if __name__ == '__main__':
+    unittest.main()

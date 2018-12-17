@@ -44,3 +44,7 @@ class RateLimiterTestCase(unittest.TestCase):
         # Unset limit
         self.rate_limiter.unset_limit(key)
         self.assertIsNone(self.rate_limiter.get_limit(key))
+
+
+if __name__ == '__main__':
+    unittest.main()

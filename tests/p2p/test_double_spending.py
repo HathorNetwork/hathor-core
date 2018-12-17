@@ -316,3 +316,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # dot2 = self.manager1.tx_storage.graphviz_funds(format='pdf', acc_weight=True)
         # dot2.render('dot2')
+
+
+if __name__ == '__main__':
+    unittest.main()
