@@ -116,6 +116,7 @@ class Opcode(IntEnum):
     OP_15 = 0x5f
     OP_16 = 0x60
     OP_DUP = 0x76
+    OP_OVER = 0x78
     OP_EQUAL = 0x87
     OP_EQUALVERIFY = 0x88
     OP_CHECKSIG = 0xAC
@@ -836,6 +837,19 @@ def op_dup(stack, log, extras):
     stack.append(stack[-1])
 
 
+def op_over(stack, log, extras):
+    """Duplicates second-to-top item of stack, to the top
+
+    :param stack: the stack used when evaluating the script
+    :type stack: List[]
+
+    :raises MissingStackItems: if there aren't 2 element on stack
+    """
+    if len(stack) < 2:
+        raise MissingStackItems('OP_OVER: need 2 elements on stack, currently {}'.format(len(stack)))
+    stack.append(stack[-2])
+
+
 def op_greaterthan_timestamp(stack, log, extras):
     """Check whether transaction's timestamp is greater than the top of stack
 
@@ -882,7 +896,7 @@ def op_equal(stack, log, extras):
     :type stack: List[]
     """
     if len(stack) < 2:
-        raise MissingStackItems('OP_EQUALVERIFY: need 2 elements on stack, currently {}')
+        raise MissingStackItems('OP_EQUALVERIFY: need 2 elements on stack, currently {}'.format(len(stack)))
     elem1 = stack.pop()
     elem2 = stack.pop()
     if elem1 == elem2:
@@ -1233,6 +1247,7 @@ def op_integer(opcode, stack, log, extras):
 
 MAP_OPCODE_TO_FN = {
     Opcode.OP_DUP: op_dup,
+    Opcode.OP_OVER: op_over,
     Opcode.OP_EQUAL: op_equal,
     Opcode.OP_EQUALVERIFY: op_equalverify,
     Opcode.OP_CHECKSIG: op_checksig,

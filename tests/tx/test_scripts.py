@@ -10,7 +10,7 @@ from hathor.transaction.exceptions import OutOfData, MissingStackItems, EqualVer
                                           ScriptError
 from hathor.transaction.scripts import (
     HathorScript, op_pushdata, ScriptExtras, P2PKH, Opcode,
-    op_pushdata1, op_dup, op_equalverify, op_checksig, op_hash160,
+    op_pushdata1, op_dup, op_over, op_equalverify, op_checksig, op_hash160,
     op_checkdatasig, get_data_value, op_data_strequal, op_find_p2pkh,
     op_data_greaterthan, op_data_match_interval, op_data_match_value,
     op_greaterthan_timestamp, op_checkmultisig, op_equal, op_integer
@@ -60,6 +60,18 @@ class BasicTransaction(unittest.TestCase):
         stack = [1]
         op_dup(stack, log=[], extras=None)
         self.assertEqual(stack[-1], stack[-2])
+
+    def test_over(self):
+        with self.assertRaises(MissingStackItems):
+            op_over([1], log=[], extras=None)
+
+        stack = [1, 2]
+        op_over(stack, log=[], extras=None)
+        self.assertEqual(stack[-1], stack[-3])
+
+        stack = [1, 2]
+        op_over(stack, log=[], extras=None)
+        self.assertNotEqual(stack[-1], stack[-2])
 
     def test_equalverify(self):
         elem = b'a'
