@@ -2,6 +2,7 @@ from hathor.resources import ProfilerResource
 from twisted.internet.defer import inlineCallbacks
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from pathlib import Path
+import os
 
 
 class ProfilerTest(_BaseResourceTest._ResourceTest):
@@ -14,7 +15,12 @@ class ProfilerTest(_BaseResourceTest._ResourceTest):
         # Options
         yield self.web.options("profiler")
 
-        dump_file = Path('profiles/profile001.prof')
+        path = 'profiles/profile001.prof'
+
+        dump_file = Path(path)
+        if dump_file.is_file():
+            dump_file.rename('{}.bkp'.format(path))
+
         self.assertFalse(dump_file.is_file())
 
         # Start profiler
@@ -34,3 +40,10 @@ class ProfilerTest(_BaseResourceTest._ResourceTest):
         response_error = yield self.web.post("profiler")
         data_error = response_error.json_value()
         self.assertFalse(data_error['success'])
+
+        # Removing created file
+        os.remove(path)
+
+        bkp_file = Path('{}.bkp'.format(path))
+        if bkp_file.is_file():
+            bkp_file.rename(path)
