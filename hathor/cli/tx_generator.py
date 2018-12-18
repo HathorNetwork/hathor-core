@@ -50,14 +50,14 @@ def execute(args):
 
     def signal_handler(sig, frame):
         if args.profiler:
-            response = requests.post(profiler_url + '?stop')
+            response = requests.post(profiler_url, json={'stop': True})
             print(response.text)
         sys.exit(0)
     signal.signal(signal.SIGINT, signal_handler)
 
     if args.profiler:
         profiler_url = urllib.parse.urljoin(args.url, '/profiler/')
-        response = requests.post(profiler_url + '?start')
+        response = requests.post(profiler_url, json={'start': True})
         print(response.text)
 
     t0 = time.time()

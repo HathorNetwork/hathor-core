@@ -28,12 +28,14 @@ class ProfilerResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
 
+        data_read = request.content.read()
+        post_data = json.loads(data_read.decode('utf-8')) if data_read else {}
         ret = {'success': True}
 
-        if b'start' in request.uri:
+        if 'start' in post_data:
             self.manager.start_profiler()
 
-        elif b'stop' in request.uri:
+        elif 'stop' in post_data:
             dump_filename = self.gen_dump_filename()
             self.manager.stop_profiler(save_to=dump_filename)
             ret['saved_to'] = dump_filename
