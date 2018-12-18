@@ -10,6 +10,10 @@ tests:
 pep8:
 	flake8 hathor/ tests/ tools/ *.py
 
+.PHONY: coverage report
+cov_report:
+	pytest --cov-report=term --cov-report=html --cov=hathor --cov-fail-under=75 -p no:warnings ./tests
+
 proto_dir = ./hathor/protos
 proto_srcs = $(wildcard $(proto_dir)/*.proto)
 proto_outputs = $(patsubst %.proto,%_pb2.py,$(proto_srcs)) $(patsubst %.proto,%_pb2_grpc.py,$(proto_srcs))
