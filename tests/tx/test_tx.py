@@ -1,4 +1,4 @@
-import unittest
+from tests import unittest
 import os
 import json
 import base64
@@ -12,9 +12,14 @@ from hathor.transaction.exceptions import InputOutputMismatch, TooManyInputs, To
 from hathor.transaction.scripts import P2PKH
 from hathor.crypto.util import get_private_key_from_bytes, get_public_key_from_bytes, get_address_from_public_key
 
+from twisted.internet.task import Clock
+
+import time
+
 
 class BasicTransaction(unittest.TestCase):
     def setUp(self):
+        super().setUp()
         self.wallet = Wallet()
         self.tx_storage = TransactionMemoryStorage()
         self.genesis = self.tx_storage.get_all_genesis()
@@ -459,6 +464,30 @@ class BasicTransaction(unittest.TestCase):
         ts = max_ts + 20
         tx.update_timestamp(ts)
         self.assertEquals(tx.timestamp, ts)
+
+    def test_propagation_error(self):
+        clock = Clock()
+        clock.advance(time.time())
+        network = 'testnet'
+        manager = self.create_peer(network, unlock_wallet=True)
+
+        # 1. propagate genesis
+        genesis_block = self.genesis_blocks[0]
+        genesis_block.storage = manager.tx_storage
+        self.assertFalse(manager.propagate_tx(genesis_block))
+
+        # 2. propagate block with weight 1
+        block = manager.generate_mining_block()
+        block.weight = 1
+        block.resolve()
+        self.assertFalse(manager.propagate_tx(block))
+
+        # 3. propagate block with wrong amount of tokens
+        block = manager.generate_mining_block()
+        output = TxOutput(1, block.outputs[0].script)
+        block.outputs = [output]
+        block.resolve()
+        self.assertFalse(manager.propagate_tx(block))
 
 
 if __name__ == '__main__':
