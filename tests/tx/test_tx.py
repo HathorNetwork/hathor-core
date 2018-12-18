@@ -490,6 +490,12 @@ class BasicTransaction(unittest.TestCase):
         block.resolve()
         self.assertFalse(manager.propagate_tx(block))
 
+        # 4. propagate block from the future
+        block = manager.generate_mining_block()
+        block.timestamp = int(clock.seconds()) + manager.max_future_timestamp_allowed + 100
+        block.resolve()
+        self.assertFalse(manager.propagate_tx(block))
+
 
 if __name__ == '__main__':
     unittest.main()
