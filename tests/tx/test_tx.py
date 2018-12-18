@@ -470,6 +470,7 @@ class BasicTransaction(unittest.TestCase):
         clock.advance(time.time())
         network = 'testnet'
         manager = self.create_peer(network, unlock_wallet=True)
+        manager.test_mode = False
 
         # 1. propagate genesis
         genesis_block = self.genesis_blocks[0]
