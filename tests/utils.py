@@ -161,10 +161,14 @@ class FakeConnection:
         return not self.tr1.value() and not self.tr2.value()
 
 
-def run_server(hostname='localhost', listen=8005, listen_ssl=False, status=8085, tries=50):
+def run_server(hostname='localhost', listen=8005, listen_ssl=False, status=8085, bootstrap=None, tries=50):
     command = 'bash hathor-cli run_node --hostname {} --listen tcp:{} --status {}'.format(hostname, listen, status)
     if listen_ssl:
         command = '{} --ssl'.format(command)
+
+    if bootstrap:
+        command = '{} --bootstrap {}'.format(command, bootstrap)
+
     process = subprocess.Popen(command.split())
 
     partial_url = 'http://{}:{}'.format(hostname, status)
