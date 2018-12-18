@@ -389,15 +389,19 @@ class HathorManager(object):
 
         The new difficulty cannot be smaller than `self.min_block_weight`.
         """
+        # In test mode we don't validate the block difficulty
+        if self.test_mode:
+            return 1
+
         if block.is_genesis:
-            return 10
+            return MIN_WEIGHT
 
         it = self.tx_storage.iter_bfs_ascendent_blocks(block, max_depth=10)
         blocks = list(it)
         blocks.sort(key=lambda tx: tx.timestamp)
 
         if blocks[-1].is_genesis:
-            return 10
+            return MIN_WEIGHT
 
         dt = blocks[-1].timestamp - blocks[0].timestamp
 
