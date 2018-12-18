@@ -308,6 +308,7 @@ class HathorManager(object):
                     tx=tx,
                     allowed=self.tokens_issued_per_block,
                 )
+                return False
         else:
             # Validate minimum tx difficulty
             min_tx_weight = self.minimum_tx_weight(tx)
