@@ -65,29 +65,45 @@ class PeerIdTest(unittest.TestCase):
         peer_storage = PeerStorage()
 
         p1 = PeerId()
+        p2 = PeerId()
+        p2.id = p1.id
+        p2.public_key = p1.public_key
+        p1.public_key = ''
+
         peer_storage.add_or_merge(p1)
         self.assertEqual(len(peer_storage), 1)
 
-        p2 = PeerId()
-        p2.entrypoints.append('1')
+        peer_storage.add_or_merge(p2)
+
+        peer = peer_storage[p1.id]
+        self.assertEqual(peer.id, p1.id)
+        self.assertEqual(peer.private_key, p1.private_key)
+        self.assertEqual(peer.public_key, p1.public_key)
+        self.assertEqual(peer.entrypoints, [])
 
         p3 = PeerId()
+        p3.entrypoints.append('1')
         p3.public_key = ''
-        p3.private_key = ''
-        p3.id = p2.id
-        p3.entrypoints.append('2')
-        p2.public_key = ''
+
+        p4 = PeerId()
+        p4.public_key = ''
+        p4.private_key = ''
+        p4.id = p3.id
+        p4.entrypoints.append('2')
+        peer_storage.add_or_merge(p4)
+
+        self.assertEqual(len(peer_storage), 2)
+
         peer_storage.add_or_merge(p3)
-
         self.assertEqual(len(peer_storage), 2)
 
-        peer_storage.add_or_merge(p2)
-        self.assertEqual(len(peer_storage), 2)
-
-        peer = peer_storage[p2.id]
-        self.assertEqual(peer.id, p2.id)
-        self.assertEqual(peer.private_key, p2.private_key)
+        peer = peer_storage[p3.id]
+        self.assertEqual(peer.id, p3.id)
+        self.assertEqual(peer.private_key, p3.private_key)
         self.assertEqual(peer.entrypoints, ['2', '1'])
+
+        with self.assertRaises(ValueError):
+            peer_storage.add(p1)
 
     def test_save_peer_file(self):
         p = PeerId()
