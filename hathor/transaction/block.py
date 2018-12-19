@@ -77,7 +77,12 @@ class Block(BaseTransaction):
         # Get all parents.
         parent_blocks = [parent for parent in self.get_parents()]
 
-        if self.height != max(x.height for x in parent_blocks) + 1:
+        if self.is_genesis:
+            expected_height = 1
+        else:
+            expected_height = max(x.height for x in parent_blocks) + 1
+
+        if self.height != expected_height:
             raise BlockHeightError(error_height_message)
 
     def verify_no_inputs(self):
