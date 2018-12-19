@@ -4,7 +4,6 @@ from hathor.transaction.exceptions import InputOutputMismatch, TooManyInputs, To
                                           ConflictingInputs, ScriptError
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.scripts import script_eval
-from math import log
 
 
 class Transaction(BaseTransaction):

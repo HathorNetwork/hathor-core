@@ -48,7 +48,7 @@ class BasicWallet(unittest.TestCase):
         w.unlock(b'testpass')
         w.generate_keys()
         # Using one address to save used/unused addresses in the file
-        _ = w.get_unused_address()
+        w.get_unused_address()
         w._write_keys_to_file()
         # wallet 2 will read from saved file
         w2 = Wallet(directory=self.directory)

@@ -3,8 +3,6 @@ from hathor.transaction.exceptions import BlockHeightError, BlockWithInputs
 
 from twisted.logger import Logger
 
-from math import log
-
 
 class Block(BaseTransaction):
     log = Logger()
