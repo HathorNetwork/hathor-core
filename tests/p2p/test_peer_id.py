@@ -1,6 +1,8 @@
 import unittest
 from hathor.p2p.peer_id import PeerId, InvalidPeerIdException
 
+from hathor.p2p.peer_storage import PeerStorage
+
 
 class PeerIdTest(unittest.TestCase):
     def test_invalid_id(self):
@@ -53,6 +55,35 @@ class PeerIdTest(unittest.TestCase):
         signature = p1.sign(data)
         signature = signature[::-1]
         self.assertFalse(p1.verify_signature(signature, data))
+
+    def test_add_peer_id(self):
+        # Testing peer storage with merge of peers
+        peer_storage = PeerStorage()
+
+        p1 = PeerId()
+        peer_storage.add_or_merge(p1)
+        self.assertEqual(len(peer_storage), 1)
+
+        p2 = PeerId()
+        p2.entrypoints.append('1')
+
+        p3 = PeerId()
+        p3.public_key = ''
+        p3.private_key = ''
+        p3.id = p2.id
+        p3.entrypoints.append('2')
+        peer_storage.add_or_merge(p3)
+
+        self.assertEqual(len(peer_storage), 2)
+
+        peer_storage.add_or_merge(p2)
+        self.assertEqual(len(peer_storage), 2)
+
+        peer = peer_storage[p2.id]
+        self.assertEqual(peer.id, p2.id)
+        self.assertEqual(peer.private_key, p2.private_key)
+        self.assertEqual(peer.public_key, p2.public_key)
+        self.assertEqual(peer.entrypoints, ['2', '1'])
 
 
 if __name__ == '__main__':
