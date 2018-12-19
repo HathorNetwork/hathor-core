@@ -235,29 +235,29 @@ class BasicTransaction(unittest.TestCase):
         data = (bytes([len(value0)]) + value0)
 
         stack = [
-            data, bytes([0]), 'key1', struct.pack('!I', 1000), 'key2', struct.pack('!I', 1005), 'key3', bytes([2])
+            data, bytes([0]), struct.pack('!I', 1000), struct.pack('!I', 1005), 'key1', 'key2', 'key3', bytes([2])
         ]
         op_data_match_interval(stack, log=[], extras=None)
         self.assertEqual(stack.pop(), 'key1')
         self.assertEqual(len(stack), 0)
 
-        stack = [data, bytes([0]), 'key1', struct.pack('!I', 100), 'key2', struct.pack('!I', 1005), 'key3', bytes([2])]
+        stack = [data, bytes([0]), struct.pack('!I', 100), struct.pack('!I', 1005), 'key1', 'key2', 'key3', bytes([2])]
         op_data_match_interval(stack, log=[], extras=None)
         self.assertEqual(stack.pop(), 'key2')
         self.assertEqual(len(stack), 0)
 
-        stack = [data, bytes([0]), 'key1', struct.pack('!I', 100), 'key2', struct.pack('!I', 900), 'key3', bytes([2])]
+        stack = [data, bytes([0]), struct.pack('!I', 100), struct.pack('!I', 900), 'key1', 'key2', 'key3', bytes([2])]
         op_data_match_interval(stack, log=[], extras=None)
         self.assertEqual(stack.pop(), 'key3')
         self.assertEqual(len(stack), 0)
 
         # missing 1 item on stack
-        stack = [data, bytes([0]), struct.pack('!I', 100), 'key2', struct.pack('!I', 900), 'key3', bytes([2])]
+        stack = [data, bytes([0]), struct.pack('!I', 100), struct.pack('!I', 900), 'key2', 'key3', bytes([2])]
         with self.assertRaises(MissingStackItems):
             op_data_match_interval(stack, log=[], extras=None)
 
         # value should be an integer
-        stack = [data, bytes([0]), 'key1', struct.pack('!I', 100), 'key2', b'not_an_int', 'key3', bytes([2])]
+        stack = [data, bytes([0]), struct.pack('!I', 100), b'not_an_int', 'key1', 'key2', 'key3', bytes([2])]
         with self.assertRaises(VerifyFailed):
             op_data_match_interval(stack, log=[], extras=None)
 

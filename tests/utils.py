@@ -1,6 +1,10 @@
 from twisted.test import proto_helpers
 import random
 
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import ec
+from hathor.crypto.util import get_public_key_bytes_compressed
+
 
 def resolve_block_bytes(block_bytes):
     """ From block bytes we create a block and resolve pow
@@ -114,6 +118,17 @@ def add_new_blocks(manager, num_blocks, advance_clock=None):
     for _ in range(num_blocks):
         blocks.append(add_new_block(manager, advance_clock))
     return blocks
+
+
+def create_private_key():
+    """Creates a new private key.
+
+    :return: private key object and associated compressed public key
+    :rtype: Tuple(ec.EllipticCurvePrivateKey, bytes)
+    """
+    new_key = ec.generate_private_key(ec.SECP256K1(), default_backend())
+    pubkey = get_public_key_bytes_compressed(new_key.public_key())
+    return new_key, pubkey
 
 
 class FakeConnection:

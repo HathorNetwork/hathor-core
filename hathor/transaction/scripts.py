@@ -123,12 +123,13 @@ class Opcode(IntEnum):
     OP_HASH160 = 0xA9
     OP_PUSHDATA1 = 0x4C
     OP_GREATERTHAN_TIMESTAMP = 0x6F
-    OP_CHECKMULTISIG = 0xae
+    OP_CHECKMULTISIG = 0xAE
     OP_CHECKDATASIG = 0xBA
     OP_DATA_STREQUAL = 0xC0
     OP_DATA_GREATERTHAN = 0xC1
     OP_FIND_P2PKH = 0xD0
     OP_DATA_MATCH_VALUE = 0xD1
+    OP_DATA_MATCH_INTERVAL = 0xD2
 
 
 class HathorScript:
@@ -541,7 +542,7 @@ class NanoContractMatchValues:
             values_pubkeys = extra_data[(fallback_pubkey_len + 1):-2]
             value_dict = {}
             pos = 0
-            for i in range(n_values):
+            for _ in range(n_values):
                 if len(values_pubkeys[pos:]) < 1:
                     return None
                 value_len = values_pubkeys[pos]
@@ -564,23 +565,184 @@ class NanoContractMatchValues:
                 # shouldn't have data left
                 return None
 
-            # TODO should check n_values == len(values_pubkeys)?
-
             return NanoContractMatchValues(oracle_pubkey_hash, min_timestamp, oracle_data_id,
                                            value_dict, fallback_pubkey)
         return None
 
+
+class NanoContractMatchInterval:
+    re_match = re_compile(
+        '^OP_DUP OP_HASH160 (DATA_20) OP_EQUALVERIFY OP_CHECKDATASIG INT_0 (BLOCK) OP_DATA_STREQUAL '
+        'INT_1 (NUMBER) OP_DATA_GREATERTHAN INT_2 (BLOCK) OP_DATA_MATCH_INTERVAL OP_OVER OP_HASH160 '
+        'OP_EQUALVERIFY OP_CHECKSIG$'
+    )
+
+    def __init__(self, oracle_pubkey_hash, min_timestamp, oracle_data_id, pubkey_list, value_list):
+        """This class represents a nano contract that tries to match on an interval. The pubKeyHash
+        associated with the data given by the oracle will be able to spend the contract tokens.
+
+        :param oracle_pubkey_hash: oracle's public key after being hashed by SHA256 and RIPMD160
+        :type oracle_pubkey_hash: bytes
+
+        :param min_timestamp: contract can only be spent after this timestamp. If we don't need it, simply
+        pass same timestamp as transaction
+        :type min_timestamp: int
+
+        :param oracle_data_id: unique id for the data reported by the oracle. For eg, a oracle that reports
+        stock prices can use stock ticker symbols as this id
+        :type oracle_data_id: bytes
+
+        :param pubkey_list: a list with the pubkeys taking part in this bet. The pubkeyHash with interval
+        matching the data sent by oracle will be able to spend the contract funds
+        :type pubkey_list: List[bytes]
+
+        :param value_list: the values of the intervals. For eg, if the values are [1, 5], the intervals
+        are (-inf, 1], (1, 5], (5, inf) and we should have received 3 values in pubkey_list
+        :type value_list: List[int]
+        """
+        self.oracle_pubkey_hash = oracle_pubkey_hash
+        self.min_timestamp = min_timestamp
+        self.oracle_data_id = oracle_data_id
+        self.pubkey_list = pubkey_list              # List[bytes]
+        self.value_list = value_list                # List[int]
+
+    def to_human_readable(self):
+        ret = {}
+        ret['type'] = 'NanoContractMatchInterval'
+        ret['oracle_pubkey_hash'] = base64.b64encode(self.oracle_pubkey_hash).decode('utf-8')
+        ret['min_timestamp'] = self.min_timestamp
+        ret['oracle_data_id'] = self.oracle_data_id.decode('utf-8')
+        ret['pubkey_list'] = list(map(get_address_b58_from_bytes, self.pubkey_list))
+        ret['value_list'] = self.value_list
+        return ret
+
+    def create_output_script(self):
+        """
+        params are described on __init__
+
+        :rtype: bytes
+        """
+        s = HathorScript()
+        s.addOpcode(Opcode.OP_DUP)
+        s.addOpcode(Opcode.OP_HASH160)
+        s.pushData(self.oracle_pubkey_hash)
+        s.addOpcode(Opcode.OP_EQUALVERIFY)
+        s.addOpcode(Opcode.OP_CHECKDATASIG)
+        # compare first value from data with oracle_data_id
+        s.pushData(0)
+        s.pushData(self.oracle_data_id)
+        s.addOpcode(Opcode.OP_DATA_STREQUAL)
+        # compare second value from data with min_timestamp
+        s.pushData(1)
+        s.pushData(self.min_timestamp)
+        s.addOpcode(Opcode.OP_DATA_GREATERTHAN)
+        # finally, compare third value with values on dict
+        s.pushData(2)
+        for value in self.value_list:
+            s.pushData(value)
+        for pubkey_hash in self.pubkey_list:
+            s.pushData(pubkey_hash)
+        s.pushData(bytes([len(self.value_list)]))
+        s.addOpcode(Opcode.OP_DATA_MATCH_INTERVAL)
+        # pubkey left on stack can spend nano contract
+        s.addOpcode(Opcode.OP_OVER)
+        s.addOpcode(Opcode.OP_HASH160)
+        s.addOpcode(Opcode.OP_EQUALVERIFY)
+        s.addOpcode(Opcode.OP_CHECKSIG)
+        return s.data
+
     @classmethod
-    def verify_input(cls, input_data):
-        """Checks if the given input is of type NanoContractMatchValues. If it is, returns the corresponding object.
+    def create_input_data(cls, tx_sig, pubkey, oracle_data, oracle_sig, oracle_pubkey):
+        """
+        :param tx_sig: transaction signature, usually a SIGHASH_ALL
+        :type tx_sig: bytes
+
+        :param pubkey: the winner pubkey of this contract
+        :type pubkey: bytes
+
+        :param oracle_data: data from the oracle
+        :type oracle_data: bytes
+
+        :param oracle_sig: the data signed by the oracle, with its private key
+        :type oracle_sig: bytes
+
+        :param oracle_pubkey: the oracle's public key
+        :type oracle_pubkey: bytes
+
+        :rtype: bytes
+        """
+        s = HathorScript()
+        s.pushData(tx_sig)
+        s.pushData(pubkey)
+        s.pushData(oracle_data)
+        s.pushData(oracle_sig)
+        s.pushData(oracle_pubkey)
+        return s.data
+
+    @classmethod
+    def parse_script(cls, script):
+        """Checks if the given script is of type NanoContractMatchInterval. If it is, returns the corresponding object.
         Otherwise, returns None.
 
-        :param script: input data to check
+        :param script: script to check
         :type script: bytes
 
-        :rtype: :py:class:`hathor.transaction.scripts.NanoContractMatchValues` or None
+        :rtype: :py:class:`hathor.transaction.scripts.NanoContractMatchInterval` or None
         """
-        raise NotImplementedError
+        # regex for this is a bit tricky, as some data has variable length. We first match the base regex for this
+        # script and later manually parse variable length fields
+        match = cls.re_match.search(script)
+        if match:
+            groups = match.groups()
+            # oracle pubkey hash
+            oracle_pubkey_hash = get_pushdata(groups[0])
+            # oracle data id
+            oracle_data_id = get_pushdata(groups[1])
+            # timestamp
+            timestamp = groups[2]
+            min_timestamp = binary_to_int(timestamp[1:])
+
+            # variable length data. We'll parse it manually. It should have the following format:
+            # [value1, ..., valueN], [pubkeyHash1, ..., pubkeyHashN, pubkeyHashN+1], N
+            extra_data = groups[3]
+
+            n_values = extra_data[-1]
+
+            values_pubkeys = extra_data[:-2]
+            value_list = []
+            pubkey_list = []
+            pos = 0
+            if len(values_pubkeys) == 0:
+                return None
+            for _ in range(n_values):
+                if len(values_pubkeys[pos:]) < 2:
+                    return None
+                value_len = values_pubkeys[pos]
+                pos += 1
+                if len(values_pubkeys[pos:]) < value_len:
+                    return None
+                value = values_pubkeys[pos] if value_len == 1 else binary_to_int(values_pubkeys[pos:(pos + value_len)])
+                value_list.append(value)
+                pos += value_len
+
+            for _ in range(n_values + 1):
+                if len(values_pubkeys[pos:]) < 2:
+                    return None
+                pubkey_len = values_pubkeys[pos]
+                pos += 1
+                if len(values_pubkeys[pos:]) < pubkey_len:
+                    return None
+                pubkey = values_pubkeys[pos:(pos + pubkey_len)]
+                pos += pubkey_len
+                pubkey_list.append(pubkey)
+
+            if len(values_pubkeys[pos:]) > 0:
+                # shouldn't have data left
+                return None
+
+            return NanoContractMatchInterval(oracle_pubkey_hash, min_timestamp, oracle_data_id,
+                                             pubkey_list, value_list)
+        return None
 
 
 def create_output_script(address, timelock=None):
@@ -1053,15 +1215,16 @@ def op_data_match_interval(stack, log, extras):
         raise MissingStackItems('OP_DATA_MATCH_INTERVAL: need {} elements on stack, currently {}'
                                 .format(will_use, len(stack)))
 
-    items = []
+    values = []
+    pubkeys = []
     try:
-        for _ in range(n_items):
+        for _ in range(n_items + 1):
             pubkey = stack.pop()
+            pubkeys.append(pubkey)
+        for _ in range(n_items):
             buf = stack.pop()
             value = binary_to_int(buf)
-            items.append((value, pubkey))
-        # one pubkey is left on stack
-        last_pubkey = stack.pop()
+            values.append(value)
         # next two items are data index and data
         data_k = stack.pop()
         data_k_int = data_k[0]      # data_k is a 1-byte unsigned int
@@ -1071,12 +1234,12 @@ def op_data_match_interval(stack, log, extras):
     except (ValueError, struct.error) as e:
         raise VerifyFailed from e
 
-    for (value_int, pubkey) in items:
-        if data_int > value_int:
-            stack.append(pubkey)
+    for i in range(len(values)):
+        if data_int > values[i]:
+            stack.append(pubkeys[i])
             return
     # if none of the values match, last pubkey on stack is winner
-    stack.append(last_pubkey)
+    stack.append(pubkeys[-1])
 
 
 def op_data_match_value(stack, log, extras):
@@ -1257,6 +1420,7 @@ MAP_OPCODE_TO_FN = {
     Opcode.OP_DATA_STREQUAL: op_data_strequal,
     Opcode.OP_DATA_GREATERTHAN: op_data_greaterthan,
     Opcode.OP_DATA_MATCH_VALUE: op_data_match_value,
+    Opcode.OP_DATA_MATCH_INTERVAL: op_data_match_interval,
     Opcode.OP_CHECKDATASIG: op_checkdatasig,
     Opcode.OP_FIND_P2PKH: op_find_p2pkh,
 }

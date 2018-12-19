@@ -204,7 +204,7 @@ class Wallet(BaseWallet):
             :type data_to_sign: bytes
 
             :param private_key: private key to sign data
-            :type private_key: pycoin.key.Key.Key
+            :type private_key: ec.EllipticCurvePrivateKey
 
             :return: public key compressed in bytes and signature
             :rtype: tuple[bytes, bytes]
