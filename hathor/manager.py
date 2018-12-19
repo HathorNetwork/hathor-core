@@ -1,26 +1,31 @@
-# encoding: utf-8
-
-from hathor.p2p.peer_id import PeerId
-from hathor.p2p.manager import ConnectionsManager
-from hathor.transaction import Block, TxOutput, sum_weights
-from hathor.transaction.scripts import create_output_script
-from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
-from hathor.transaction.exceptions import TxValidationError
-from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
-from hathor.pubsub import HathorEvents, PubSubManager
-from hathor.metrics import Metrics
-from hathor.constants import TOKENS_PER_BLOCK, DECIMAL_PLACES, MIN_WEIGHT
-
-from twisted.logger import Logger
-
+from abc import ABC, abstractmethod
 from collections import defaultdict
 from enum import Enum
-from math import log
+from typing import List, Optional
 import time
 import random
 import datetime
 
+from twisted.logger import Logger
+
+from hathor import protos
+from hathor.p2p.peer_id import PeerId
+from hathor.p2p.manager import ConnectionsManager
+from hathor.transaction import Block, TxOutput
+from hathor.transaction.base_transaction import BaseTransaction
+from hathor.transaction.scripts import create_output_script
+from hathor.transaction.storage import ITransactionStorage, TransactionRemoteStorageFactory
+from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
+from hathor.transaction.storage.remote_storage import TransactionStorageServicer
+from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
+from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.metrics import Metrics
+from hathor.constants import TOKENS_PER_BLOCK, DECIMAL_PLACES
+from hathor.validator import ValidatorSubprocessMock, Validator
+from hathor.wallet.base_wallet import IWallet
 from hathor.p2p.protocol import HathorLineReceiver
+
+
 MyServerProtocol = HathorLineReceiver
 MyClientProtocol = HathorLineReceiver
 
@@ -29,7 +34,40 @@ MyClientProtocol = HathorLineReceiver
 # MyClientProtocol = HathorWebSocketClientProtocol
 
 
-class HathorManager(object):
+class IManager(ABC):
+    wallet: IWallet
+    tx_storage: ITransactionStorage
+
+    @abstractmethod
+    def get_new_tx_parents(self, timestamp: Optional[int] = None) -> List[bytes]:
+        """Select which transactions will be confirmed by a new transaction.
+
+        Returns the hashes of the parents for a new transaction.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def minimum_tx_weight(self, tx: BaseTransaction) -> float:
+        """Returns the minimum weight for the param tx.
+
+        The minimum is calculated by the following function:
+
+        w = log(size, 2) + log(amount, 2) + 0.5
+
+        Returns minimum weight for the tx.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def propagate_tx(self, tx: BaseTransaction) -> bool:
+        """Push a new transaction to the network. It is used by both the wallet and the mining modules.
+
+        Returns whether the transaction was accepted.
+        """
+        raise NotImplementedError
+
+
+class HathorManager(IManager):
     """ HathorManager manages the node with the help of other specialized classes.
 
     Its primary objective is to handle DAG-related matters, ensuring that the DAG is always valid and connected.
@@ -43,8 +81,22 @@ class HathorManager(object):
         # This node is ready to establish new connections, sync, and exchange transactions.
         READY = 'READY'
 
-    def __init__(self, reactor, peer_id=None, network=None, hostname=None,
-                 pubsub=None, wallet=None, tx_storage=None, peer_storage=None, default_port=40403):
+    def __init__(
+            self,
+            reactor,
+            peer_id=None,
+            network=None,
+            hostname=None,
+            pubsub=None,
+            wallet=None,
+            tx_storage=None,
+            peer_storage=None,
+            default_port=40403,
+            *,
+            grpc_server_port=None,
+            test_mode=False,
+            clock=None,
+            ):
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :type reactor: :py:class:`twisted.internet.Reactor`
@@ -62,7 +114,7 @@ class HathorManager(object):
         :type pubsub: :py:class:`hathor.pubsub.PubSubManager`
 
         :param tx_storage: If not given, a :py:class:`TransactionMemoryStorage` one is created.
-        :type tx_storage: :py:class:`hathor.transaction.storage.transaction_storage.TransactionStorage`
+        :type tx_storage: :py:class:`hathor.transaction.storage.ITransactionStorage`
 
         :param peer_storage: If not given, a new one is created.
         :type peer_storage: :py:class:`hathor.p2p.peer_storage.PeerStorage`
@@ -70,7 +122,10 @@ class HathorManager(object):
         :param default_port: Network default port. It is used when only ip addresses are discovered.
         :type default_port: int
         """
+        from hathor.remote_manager import HathorManagerServicer, RemoteManagerFactory
+
         self.reactor = reactor
+        self.clock = clock or self.reactor
         if hasattr(self.reactor, 'addSystemEventTrigger'):
             self.reactor.addSystemEventTrigger('after', 'shutdown', self.stop)
 
@@ -91,18 +146,17 @@ class HathorManager(object):
         self.tx_storage = tx_storage or TransactionMemoryStorage()
         self.tx_storage.pubsub = self.pubsub
 
+        self._test_mode = test_mode
+
         self.avg_time_between_blocks = 64  # in seconds
-        self.min_block_weight = MIN_WEIGHT
         self.tokens_issued_per_block = TOKENS_PER_BLOCK * (10**DECIMAL_PLACES)
 
-        self.max_future_timestamp_allowed = 3600  # in seconds
-
-        self.metrics = Metrics(
-            pubsub=self.pubsub,
-            avg_time_between_blocks=self.avg_time_between_blocks,
-            tx_storage=tx_storage,
-            reactor=self.reactor,
-        )
+        # self.metrics = Metrics(
+        #     pubsub=self.pubsub,
+        #     avg_time_between_blocks=self.avg_time_between_blocks,
+        #     tx_storage=tx_storage,
+        #     reactor=self.reactor,
+        # )
 
         self.peer_discoveries = []
 
@@ -123,18 +177,40 @@ class HathorManager(object):
         self.wallet.pubsub = self.pubsub
         self.wallet.reactor = self.reactor
 
-        # When manager is in test mode we exclude some verifications
-        self.test_mode = False
+        self._grpc_server_port = grpc_server_port
+        if grpc_server_port is not None:
+            self.tx_storage_factory = TransactionRemoteStorageFactory(grpc_server_port)
+            self._tx_storage_servicer = TransactionStorageServicer(self.tx_storage)
+            self.manager_factory = RemoteManagerFactory(grpc_server_port, self.tx_storage_factory)
+            self._manager_servicer = HathorManagerServicer(self)
+            self.validator_subprocess = ValidatorSubprocessMock(
+                    self.tx_storage_factory, test_mode=self._test_mode,
+                    clock=clock)  # XXX: use `clock` NOT `self.clock` to propagate the None-ness
+            self.validator = None
+        else:
+            self.validator = Validator(self.tx_storage, clock=self.clock, test_mode=self._test_mode)
+            # TODO
+            raise
+            pass
 
-        # Multiplier coefficient to adjust the minimum weight of a normal tx to 18
-        self.min_tx_weight_coefficient = 1.6
+        self.state = None
+
+    def add_grpc_servicers_to_server(self, grpc_server):
+        assert self._grpc_server_port is not None, 'No grpc_server_port given, cannot add servicers'
+        assert self.state is None, 'Call manager.add_grpc_servicers_to_server before manager.start'
+        protos.add_TransactionStorageServicer_to_server(self._tx_storage_servicer, grpc_server)
+        protos.add_HathorManagerServicer_to_server(self._manager_servicer, grpc_server)
 
     def start(self):
         """ A factory must be started only once. And it is usually automatically started.
         """
         self.log.info('Starting HathorManager...')
+
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
+        if self.validator_subprocess is not None:
+            self.validator_subprocess.start()
+            self.validator = self.validator_subprocess.remote_validator_factory()
         self.connections.start()
 
         # Initialize manager's components.
@@ -146,7 +222,7 @@ class HathorManager(object):
         self.start_time = time.time()
 
         # Metric starts to capture data
-        self.metrics.start()
+        # self.metrics.start()
 
         self.wallet.start()
 
@@ -156,9 +232,11 @@ class HathorManager(object):
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
 
         # Metric stops to capture data
-        self.metrics.stop()
+        # self.metrics.stop()
 
         self.wallet.stop()
+        if self.validator_subprocess:
+            self.validator_subprocess.stop()
 
     def start_profiler(self):
         """
@@ -208,6 +286,14 @@ class HathorManager(object):
         self.state = self.NodeState.READY
         self.log.info('Node successfully initialized ({} seconds).'.format(t2 - t0))
 
+    def advance_clock(self, amount):
+        # TODO: docstring
+        self.clock.advance(amount)
+        if self.validator_subprocess and self.validator.clock:
+            self.validator.clock.advance(amount)
+        # if self.wallet_subprocess and self.wallet.clock:
+        #     self.wallet.clock.advance(amount)
+
     def add_peer_discovery(self, peer_discovery):
         self.peer_discoveries.append(peer_discovery)
 
@@ -217,7 +303,7 @@ class HathorManager(object):
         :return: The hashes of the parents for a new transaction.
         :rtype: List[bytes(hash)]
         """
-        timestamp = timestamp or self.reactor.seconds()
+        timestamp = timestamp or self.clock.seconds()
         ret = list(self.tx_storage.get_tx_tips(timestamp-1))
         random.shuffle(ret)
         ret = ret[:2]
@@ -231,6 +317,8 @@ class HathorManager(object):
         )
         return [x.data for x in ret]
 
+    # XXX: this function is only used by the MiningResource class, it makes sense to make mining talk to the wallet
+    #      directly instead of indirectly (through the manager), ... thinking of a "multi wallet manager"
     def generate_mining_block(self, timestamp=None):
         """ Generates a block ready to be mined. The block includes new issued tokens,
         parents, and the weight.
@@ -246,7 +334,7 @@ class HathorManager(object):
         ]
 
         if not timestamp:
-            timestamp = max(self.tx_storage.latest_timestamp, self.reactor.seconds())
+            timestamp = max(self.tx_storage.latest_timestamp, self.clock.seconds())
         tip_blocks = [x.data for x in self.tx_storage.get_block_tips(timestamp)]
         tip_txs = self.get_new_tx_parents(timestamp)
 
@@ -258,66 +346,13 @@ class HathorManager(object):
         parents_tx = [self.tx_storage.get_transaction(x) for x in parents]
         new_height = max(x.height for x in parents_tx) + 1
 
-        timestamp1 = int(self.reactor.seconds())
+        timestamp1 = int(self.clock.seconds())
         timestamp2 = max(x.timestamp for x in parents_tx) + 1
 
         blk = Block(outputs=tx_outputs, parents=parents, storage=self.tx_storage, height=new_height)
         blk.timestamp = max(timestamp1, timestamp2)
         blk.weight = self.calculate_block_difficulty(blk)
         return blk
-
-    def validate_new_tx(self, tx):
-        """ Process incoming transaction during initialization.
-        These transactions came only from storage.
-        """
-        if self.state != self.NodeState.INITIALIZING:
-            if tx.is_genesis:
-                self.log.debug('validate_new_tx(): Genesis? {}'.format(tx.hash.hex()))
-                return False
-
-            if self.tx_storage.transaction_exists(tx.hash):
-                self.log.debug('validate_new_tx(): Already have transaction {}'.format(tx.hash.hex()))
-                return False
-
-        else:
-            if tx.is_genesis:
-                return True
-
-        if tx.timestamp - self.reactor.seconds() > self.max_future_timestamp_allowed:
-            self.log.debug('validate_new_tx(): Ignoring transaction in the future {}'.format(tx.hash.hex()))
-            return False
-
-        try:
-            tx.verify()
-        except TxValidationError as e:
-            self.log.debug('validate_new_tx(): Error verifying transaction {} tx={}'.format(repr(e), tx.hash.hex()))
-            return False
-
-        if tx.is_block:
-            # Validate minimum block difficulty
-            block_weight = self.calculate_block_difficulty(tx)
-            if tx.weight < block_weight:
-                self.log.debug('Invalid new block {}: weight ({}) is smaller than the minimum weight ({})'.format(
-                    tx.hash.hex(), tx.weight, block_weight)
-                )
-                return False
-            if tx.sum_outputs != self.tokens_issued_per_block:
-                self.log.info(
-                    'Invalid number of issued tokens tag=invalid_issued_tokens'
-                    ' tx.hash={tx.hash_hex} issued={tx.sum_outputs} allowed={allowed}',
-                    tx=tx,
-                    allowed=self.tokens_issued_per_block,
-                )
-        else:
-            # Validate minimum tx difficulty
-            min_tx_weight = self.minimum_tx_weight(tx)
-            if tx.weight < min_tx_weight:
-                self.log.debug('Invalid new tx {}: weight ({}) is smaller than the minimum weight ({})'.format(
-                    tx.hash.hex(), tx.weight, min_tx_weight)
-                )
-                return False
-
-        return True
 
     def propagate_tx(self, tx):
         """Push a new transaction to the network. It is used by both the wallet and the mining modules.
@@ -345,7 +380,7 @@ class HathorManager(object):
         if self.wallet:
             self.wallet.on_new_tx(tx)
 
-        if self.state != self.NodeState.INITIALIZING:
+        if self.state is self.NodeState.READY:
             self.tx_storage.save_transaction(tx)
             tx.update_parents()
         else:
@@ -379,71 +414,30 @@ class HathorManager(object):
         self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
         return True
 
-    def calculate_block_difficulty(self, block):
-        """ Calculate block difficulty according to the ascendents of `block`.
-
-        The new difficulty is calculated so that the average time between blocks will be
-        `self.avg_time_between_blocks`. If the measured time between blocks is smaller than the target,
-        the weight increases. If it is higher than the target, the weight decreases.
-
-        The new difficulty cannot be smaller than `self.min_block_weight`.
+    def validate_new_tx(self, tx):
+        """ Process incoming transaction during initialization.
+        These transactions came only from storage.
         """
-        if block.is_genesis:
-            return 10
+        if self.state is self.NodeState.READY:
+            if tx.is_genesis:
+                self.log.debug('validate_new_tx(): Genesis? {}'.format(tx.hash.hex()))
+                return False
 
-        it = self.tx_storage.iter_bfs_ascendent_blocks(block, max_depth=10)
-        blocks = list(it)
-        blocks.sort(key=lambda tx: tx.timestamp)
+            if self.tx_storage.transaction_exists(tx.hash):
+                self.log.debug('validate_new_tx(): Already have transaction {}'.format(tx.hash.hex()))
+                return False
 
-        if blocks[-1].is_genesis:
-            return 10
+        else:
+            if tx.is_genesis:
+                return True
 
-        dt = blocks[-1].timestamp - blocks[0].timestamp
-
-        if dt <= 0:
-            dt = 1  # Strange situation, so, let's just increase difficulty.
-
-        logH = 0
-        for blk in blocks:
-            logH = sum_weights(logH, blk.weight)
-
-        weight = logH - log(dt, 2) + log(self.avg_time_between_blocks, 2)
-
-        if weight < self.min_block_weight:
-            weight = self.min_block_weight
-
-        return weight
+        return self.validator.validate_new_tx(tx)
 
     def minimum_tx_weight(self, tx):
-        """ Returns the minimum weight for the param tx
-            The minimum is calculated by the following function:
+        return self.validator.minimum_tx_weight(tx)
 
-            w = log(size, 2) + log(amount, 2) + 0.5
-
-            :param tx: tx to calculate the minimum weight
-            :type tx: :py:class:`hathor.transaction.transaction.Transaction`
-
-            :return: minimum weight for the tx
-            :rtype: float
-        """
-        # In test mode we don't validate the minimum weight for tx
-        # We do this to allow generating many txs for testing
-        if self.test_mode:
-            return 1
-
-        if tx.is_genesis:
-            return MIN_WEIGHT
-
-        tx_size = len(tx.get_struct())
-
-        # We need to remove the decimal places because it is in the amount
-        # If you want to transfer 20 hathors, the amount will be 2000, that's why we reduce the log of decimal places
-        weight = (self.min_tx_weight_coefficient*log(tx_size, 2) + log(tx.sum_outputs, 2) -
-                  log(10**DECIMAL_PLACES, 2) + 0.5)
-
-        # Make sure the calculated weight is bigger than the minimum
-        assert weight > MIN_WEIGHT
-        return weight
+    def calculate_block_difficulty(self, block):
+        return self.validator.calculate_block_difficulty(block)
 
     def listen(self, description, ssl=False):
         endpoint = self.connections.listen(description, ssl)

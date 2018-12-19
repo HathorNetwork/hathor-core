@@ -15,7 +15,7 @@ class Metrics:
         :type pubsub: :py:class:`hathor.pubsub.PubSubManager`
 
         :param tx_storage: If not given, a new one is created.
-        :type tx_storage: :py:class:`hathor.storage.TransactionStorage`
+        :type tx_storage: :py:class:`hathor.storage.ITransactionStorage`
 
         :param avg_time_between_blocks: Seconds between blocks (comes from manager)
         :type avg_time_between_blocks: int

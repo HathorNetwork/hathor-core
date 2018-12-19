@@ -1,10 +1,8 @@
-from concurrent import futures
-from multiprocessing import Process, Queue
-
-import grpc
-
 from hathor.exception import HathorError
-from hathor.transaction.storage.remote_storage import TransactionRemoteStorage, create_transaction_storage_server
+from hathor.mp_util import Process, Queue
+from hathor.remote_clock import RemoteClockFactory, RemoteClockServicer
+from hathor.transaction.storage.remote_storage import (TransactionRemoteStorage, TransactionRemoteStorageFactory,
+                                                       TransactionStorageServicer)
 
 
 class SubprocessNotAliveError(HathorError):
@@ -17,18 +15,19 @@ class TransactionSubprocessStorage(TransactionRemoteStorage, Process):
     Wraps a given store constructor and spawns it on a subprocess.
     """
 
-    def __init__(self, store_constructor, with_index=None):
+    def __init__(self, tx_storage_factory, with_index=None, _with_remote_clock=False):
         """
-        :param store_constructor: a callable that returns an instance of TransactionStorage
-        :type store_constructor: :py:class:`typing.Callable[..., hathor.transaction.storage.TransactionStorage]`
+        :param tx_storage_factory: a callable that returns an instance of ITransactionStorage
+        :type tx_storage_factory: :py:class:`typing.Callable[..., hathor.transaction.storage.ITransactionStorage]`
         """
         Process.__init__(self)
         TransactionRemoteStorage.__init__(self, with_index=with_index)
-        self._store_constructor = store_constructor
+        self._tx_storage_factory = tx_storage_factory
         # this queue is used by the subprocess to inform which port was selected
         self._port_q = Queue(1)
         # this queue is used to inform the subprocess it can end
         self._exit_q = Queue(1)
+        self._with_remote_clock = _with_remote_clock
 
     def _check_connection(self):
         """raise error if subprocess is not alive"""
@@ -36,29 +35,42 @@ class TransactionSubprocessStorage(TransactionRemoteStorage, Process):
         if not self.is_alive():
             raise SubprocessNotAliveError('subprocess is dead')
 
-    def stop(self):
-        self._exit_q.put(None)
-        if self._channel:
-            self._channel.close()
-
     def start(self):
         super().start()
         port = self._port_q.get()
         self.connect_to(port)
+        self.factory = TransactionRemoteStorageFactory(port)
+        if self._with_remote_clock:
+            self.remote_clock_factory = RemoteClockFactory(self._port)
 
-    def terminate(self):
-        self.close()
-        super().terminate()
+    def stop(self):
+        self._exit_q.put(None)
+        self.disconnect()
+        self.join()
+        # self.terminate()
 
     def run(self):
         """internal method for Process interface, do not run directly"""
-        # TODO: some tuning with benchmarks
-        server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-        tx_storage = self._store_constructor()
-        tx_storage._manually_initialize()
-        _servicer, port = create_transaction_storage_server(server, tx_storage)
+        from concurrent import futures
+
+        import grpc
+        from twisted.internet import reactor
+
+        from hathor import protos
+
+        grpc_server = grpc.server(futures.ThreadPoolExecutor())
+        port = grpc_server.add_insecure_port('127.0.0.1:0')
+        grpc_server.start()
         self._port_q.put(port)
-        server.start()
+
+        tx_storage = self._tx_storage_factory()
+        tx_storage._manually_initialize()
+        tx_storage_servier = TransactionStorageServicer(tx_storage)
+        protos.add_TransactionStorageServicer_to_server(tx_storage_servier, grpc_server)
+
+        if self._with_remote_clock:
+            clock_servicer = RemoteClockServicer(reactor)
+            protos.add_ClockServicer_to_server(clock_servicer, grpc_server)
+
         self._exit_q.get()
-        # the above all blocks until _exit_q.put(None) or _exit_q closes
-        server.stop(0)
+        grpc_server.stop(0)

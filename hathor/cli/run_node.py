@@ -1,32 +1,30 @@
-# encoding: utf-8
-
+import grpc
 from twisted.internet import reactor
 from twisted.web import server
 from twisted.logger import FileLogObserver, formatEventAsClassicLogText
 from twisted.logger import globalLogPublisher, FilteringLogObserver, LogLevelFilterPredicate, LogLevel
 from twisted.web.resource import Resource
+from twisted.web.proxy import ReverseProxyResource
 from autobahn.twisted.resource import WebSocketResource
 
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.resources import StatusResource, MiningResource
 from hathor.manager import HathorManager
 from hathor.transaction.storage import TransactionCompactStorage, TransactionMemoryStorage, TransactionCacheStorage
-from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, \
-                                    SendTokensResource, UnlockWalletResource, \
-                                    LockWalletResource, StateWalletResource, SignTxResource
-from hathor.wallet.resources.nano_contracts import NanoContractMatchValueResource, NanoContractDecodeResource, \
-                                                   NanoContractExecuteResource
 from hathor.resources import ProfilerResource
 from hathor.version_resource import VersionResource
-from hathor.wallet import Wallet, HDWallet
+from hathor.wallet import Wallet, HDWallet, WalletResources, WalletSubprocess
 from hathor.transaction.resources import DecodeTxResource, PushTxResource, GraphvizResource, \
                                         TransactionResource, DashboardTransactionResource, \
                                         TipsHistogramResource, TipsResource
 from hathor.websocket import HathorAdminWebsocketFactory
 from hathor.p2p.peer_discovery import DNSPeerDiscovery, BootstrapPeerDiscovery
 from hathor.prometheus import PrometheusMetricsExporter
+from hathor.remote_manager import RemoteManagerFactory
+from hathor.transaction.storage.remote_storage import TransactionRemoteStorageFactory
 import hathor
 
+from concurrent import futures
 import argparse
 import getpass
 import sys
@@ -47,6 +45,7 @@ def main():
     parser.add_argument('--listen', action='append', help='Address to listen for new connections (eg: tcp:8000)')
     parser.add_argument('--bootstrap', action='append', help='Address to connect to (eg: tcp:127.0.0.1:8000')
     parser.add_argument('--status', type=int, help='Port to run status server')
+    parser.add_argument('--split-wallet-port', type=int, help='Port to run the wallet on, implies subprocess')
     parser.add_argument('--data', help='Data directory')
     parser.add_argument(
         '--wallet',
@@ -80,7 +79,7 @@ def main():
     print('Hathor v{}'.format(hathor.__version__))
     print('My peer id is', peer_id.id)
 
-    def create_wallet():
+    def wallet_factory(clock=None):
         if args.wallet == 'hd':
             kwargs = {
                 'words': args.words,
@@ -93,12 +92,12 @@ def main():
             if args.data:
                 kwargs['directory'] = args.data
 
-            return HDWallet(**kwargs)
+            return HDWallet(clock=clock, **kwargs)
         elif args.wallet == 'keypair':
             if args.data:
-                wallet = Wallet(directory=args.data)
+                wallet = Wallet(directory=args.data, clock=clock)
             else:
-                wallet = Wallet()
+                wallet = Wallet(clock=clock)
 
             wallet.flush_to_disk_interval = 5  # seconds
 
@@ -130,11 +129,26 @@ def main():
         tx_storage = TransactionMemoryStorage()
         print('Using TransactionMemoryStorage')
 
-    wallet = create_wallet()
+    grpc_server = grpc.server(futures.ThreadPoolExecutor())
+    grpc_server_port = grpc_server.add_insecure_port('127.0.0.1:0')
+    grpc_server.start()
+
+    remote_tx_storage_factory = TransactionRemoteStorageFactory(grpc_server_port)
+    remote_manager_factory = RemoteManagerFactory(grpc_server, remote_tx_storage_factory)
+
+    if args.split_wallet_port:
+        wallet_subprocess = WalletSubprocess(wallet_factory, remote_manager_factory, args.split_wallet_port)
+        wallet_subprocess.start()
+        # reactor.addSystemEventTrigger('before', 'shutdown', wallet_subprocess.stop)
+        wallet = wallet_subprocess.remote_wallet_factory()
+    else:
+        wallet = wallet_factory()
 
     network = 'testnet'
-    manager = HathorManager(reactor, peer_id=peer_id, network=network,
-                            hostname=args.hostname, tx_storage=tx_storage, wallet=wallet)
+    manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=args.hostname, tx_storage=tx_storage,
+                            wallet=wallet, grpc_server_port=grpc_server_port)
+    manager.add_grpc_servicers_to_server(grpc_server)
+    # reactor.addSystemEventTrigger('before', 'shutdown', manager.stop)
 
     dns_hosts = []
     if args.testnet:
@@ -148,8 +162,6 @@ def main():
 
     if args.bootstrap:
         manager.add_peer_discovery(BootstrapPeerDiscovery(args.bootstrap))
-
-    manager.start()
 
     if args.listen:
         for description in args.listen:
@@ -169,7 +181,10 @@ def main():
     if args.status:
         # TODO get this from a file. How should we do with the factory?
         root = Resource()
-        wallet_resource = Resource()
+        if args.split_wallet_port:
+            wallet_resource = ReverseProxyResource('127.0.0.1', args.split_wallet_port, b'/wallet')
+        else:
+            wallet_resource = WalletResources(manager)
         root.putChild(b'wallet', wallet_resource)
         contracts_resource = Resource()
         wallet_resource.putChild(b'nano-contract', contracts_resource)
@@ -186,19 +201,6 @@ def main():
             (b'transaction', TransactionResource(manager), root),
             (b'dashboard_tx', DashboardTransactionResource(manager), root),
             (b'profiler', ProfilerResource(manager), root),
-            # /wallet
-            (b'balance', BalanceResource(manager), wallet_resource),
-            (b'history', HistoryResource(manager), wallet_resource),
-            (b'address', AddressResource(manager), wallet_resource),
-            (b'send_tokens', SendTokensResource(manager), wallet_resource),
-            (b'sign_tx', SignTxResource(manager), wallet_resource),
-            (b'unlock', UnlockWalletResource(manager), wallet_resource),
-            (b'lock', LockWalletResource(manager), wallet_resource),
-            (b'state', StateWalletResource(manager), wallet_resource),
-            # /wallet/nano-contract
-            (b'match-value', NanoContractMatchValueResource(manager), contracts_resource),
-            (b'decode', NanoContractDecodeResource(manager), contracts_resource),
-            (b'execute', NanoContractExecuteResource(manager), contracts_resource),
         )
         for url_path, resource, parent in resources:
             parent.putChild(url_path, resource)
@@ -214,4 +216,5 @@ def main():
         status_server = server.Site(root)
         reactor.listenTCP(args.status, status_server)
 
+    manager.start()
     reactor.run()

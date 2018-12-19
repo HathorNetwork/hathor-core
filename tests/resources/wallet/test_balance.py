@@ -1,9 +1,11 @@
+import base64
+import unittest
+
 from hathor.wallet.resources import BalanceResource
 from hathor.p2p.resources import MiningResource
 from twisted.internet.defer import inlineCallbacks
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import resolve_block_bytes
-import base64
 
 
 class BalanceTest(_BaseResourceTest._ResourceTest):

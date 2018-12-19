@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package hathor;
+
+import "hathor/protos/transaction.proto";
+
+service Wallet {
+  rpc GetUnusedAddress(GetUnusedAddressRequest) returns (GetUnusedAddressResponse) {}
+  rpc OnNewTx(OnNewTxRequest) returns (OnNewTxResponse) {}
+}
+
+message GetUnusedAddressRequest {
+  bool mark_as_used = 1;
+}
+
+message GetUnusedAddressResponse {
+  string address = 1;
+}
+
+message OnNewTxRequest {
+  BaseTransaction tx = 1;
+}
+
+message OnNewTxResponse {
+}

@@ -1,9 +1,11 @@
+import base64
+import unittest
+
 from hathor.p2p.resources import MiningResource
 from hathor.wallet.resources import SendTokensResource, BalanceResource, HistoryResource
 from twisted.internet.defer import inlineCallbacks
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import resolve_block_bytes, add_new_blocks
-import base64
 
 
 class SendTokensTest(_BaseResourceTest._ResourceTest):
@@ -21,7 +23,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         data_mining = response_mining.json_value()
         block_bytes = resolve_block_bytes(block_bytes=data_mining['block_bytes'])
         yield self.web_mining.post("mining", {'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
-        self.reactor.advance(10)
+        self.manager.advance_clock(10)
 
         # Unlocking wallet
         self.manager.wallet.unlock(b"MYPASS")
@@ -41,7 +43,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         )
         data = response.json_value()
         self.assertTrue(data['success'])
-        self.reactor.advance(10)
+        self.manager.advance_clock(10)
 
         # Asserting new balance
         response_balance = yield self.web_balance.get("wallet/balance")
@@ -64,7 +66,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         )
         data2 = response2.json_value()
         self.assertFalse(data2['success'])
-        self.reactor.advance(10)
+        self.manager.advance_clock(10)
 
         # Sending duplicate input
         data_json_duplicate = {
@@ -139,7 +141,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
     @inlineCallbacks
     def test_tx_weight(self):
         add_new_blocks(self.manager, 3)
-        self.reactor.advance(3)
+        self.manager.advance_clock(3)
 
         # Unlocking wallet
         self.manager.wallet.unlock(b"MYPASS")

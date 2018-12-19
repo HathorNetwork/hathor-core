@@ -1,3 +1,5 @@
+import unittest
+
 from hathor.wallet.resources import SignTxResource
 from hathor.transaction.resources import PushTxResource, DecodeTxResource
 from hathor.wallet.resources.nano_contracts import NanoContractDecodeResource, NanoContractExecuteResource, \
@@ -21,7 +23,7 @@ class NanoContractsTest(_BaseResourceTest._ResourceTest):
         signtx_resource = StubSite(SignTxResource(self.manager))
         decodetx_resource = StubSite(DecodeTxResource(self.manager))
         add_new_blocks(self.manager, 3)
-        self.reactor.advance(3)
+        self.manager.advance_clock(3)
         # Options
         yield match_value_resource.options("wallet/nano_contracts/match_values")
 
@@ -88,7 +90,7 @@ class NanoContractsTest(_BaseResourceTest._ResourceTest):
         data = response.json_value()
         self.assertTrue(data['success'])
 
-        self.reactor.advance(3)
+        self.manager.advance_clock(3)
 
         # get tx hash
         response = yield decodetx_resource.get("decode_tx", {b'hex_tx': bytes(nano_contract_hex, 'utf-8')})

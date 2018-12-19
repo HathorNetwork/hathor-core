@@ -1,96 +1,35 @@
-import grpc
 from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.logger import Logger
 
 from hathor import protos
-from hathor.exception import HathorError
-from hathor.transaction.storage.transaction_storage import TransactionStorage
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.transaction.storage.transaction_storage import ITransactionStorage
 from hathor.util import deprecated, skip_warning
+from hathor.grpc_util import (
+        StubConnect, convert_grpc_exceptions, convert_grpc_exceptions_generator, convert_hathor_exceptions,
+        convert_hathor_exceptions_generator)
 
 
-class RemoteCommunicationError(HathorError):
-    pass
+class TransactionRemoteStorageFactory:
+    def __init__(self, tx_storage_port):
+        self._tx_storage_port = tx_storage_port
+
+    def __call__(self):
+        remote_tx_storage = TransactionRemoteStorage()
+        remote_tx_storage.connect_to(self._tx_storage_port)
+        return remote_tx_storage
 
 
-def convert_grpc_exceptions(func):
-    """Decorator to catch and conver grpc excpetions for hathor expections.
-    """
-    from functools import wraps
-
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except grpc.RpcError as e:
-            if e.code() is grpc.StatusCode.NOT_FOUND:
-                raise TransactionDoesNotExist
-            else:
-                raise RemoteCommunicationError from e
-
-    return wrapper
-
-
-def convert_grpc_exceptions_generator(func):
-    """Decorator to catch and conver grpc excpetions for hathor expections. (for generators)
-    """
-    from functools import wraps
-
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            yield from func(*args, **kwargs)
-        except grpc.RpcError as e:
-            if e.code() is grpc.StatusCode.NOT_FOUND:
-                raise TransactionDoesNotExist
-            else:
-                raise RemoteCommunicationError from e
-
-    return wrapper
-
-
-def convert_hathor_exceptions(func):
-    """Decorator to annotate better details and codes on the grpc context for known exceptions.
-    """
-    from functools import wraps
-
-    @wraps(func)
-    def wrapper(self, request, context):
-        try:
-            return func(self, request, context)
-        except TransactionDoesNotExist:
-            context.set_code(grpc.StatusCode.NOT_FOUND)
-            context.set_details('Transaction does not exist.')
-            raise
-
-    return wrapper
-
-
-def convert_hathor_exceptions_generator(func):
-    """Decorator to annotate better details and codes on the grpc context for known exceptions. (for generators)
-    """
-    from functools import wraps
-
-    @wraps(func)
-    def wrapper(self, request, context):
-        try:
-            yield from func(self, request, context)
-        except TransactionDoesNotExist:
-            context.set_code(grpc.StatusCode.NOT_FOUND)
-            context.set_details('Transaction does not exist.')
-            raise
-
-    return wrapper
-
-
-class TransactionRemoteStorage(TransactionStorage):
+class TransactionRemoteStorage(ITransactionStorage, StubConnect):
     """Connects to a Storage API Server at given port and exposes standard storage interface.
     """
     log = Logger()
 
+    @classmethod
+    def get_stub_class(cls):
+        return protos.TransactionStorageStub
+
     def __init__(self, with_index=None):
         super().__init__()
-        self._channel = None
         self._genesis_cache = None
 
     def _create_genesis_cache(self):
@@ -98,18 +37,6 @@ class TransactionRemoteStorage(TransactionStorage):
         self._genesis_cache = {}
         for genesis in genesis_transactions(self):
             self._genesis_cache[genesis.hash] = genesis
-
-    def connect_to(self, port):
-        if self._channel:
-            self._channel.close()
-        self._channel = grpc.insecure_channel('127.0.0.1:{}'.format(port))
-        self._stub = protos.TransactionStorageStub(self._channel)
-
-    def _check_connection(self):
-        """raise error if not connected"""
-        from .subprocess_storage import SubprocessNotAliveError
-        if not self._channel:
-            raise SubprocessNotAliveError('subprocess not started')
 
     # TransactionStorageSync interface implementation:
 
@@ -143,6 +70,16 @@ class TransactionRemoteStorage(TransactionStorage):
         request = protos.GetRequest(hash=hash_bytes)
         result = self._stub.Get(request)
         return tx_or_block_from_proto(result.transaction, storage=self)
+
+    @deprecated('Use get_transaction_deferred instead')
+    @convert_grpc_exceptions
+    def get_metadata(self, hash_bytes):
+        from hathor.transaction import TransactionMetadata
+        self._check_connection()
+        request = protos.GetMetadataRequest(hash=hash_bytes)
+        result = self._stub.GetMetadata(request)
+        if result.HasField('transaction_metadata'):
+            return TransactionMetadata.create_from_proto(hash_bytes, result.transaction_metadata)
 
     @deprecated('Use get_all_transactions_deferred instead')
     @convert_grpc_exceptions_generator
@@ -195,7 +132,7 @@ class TransactionRemoteStorage(TransactionStorage):
         self._check_connection()
         raise NotImplementedError
 
-    # TransactionStorage interface implementation:
+    # ITransactionStorage interface implementation:
 
     @property
     @convert_grpc_exceptions
@@ -493,7 +430,8 @@ class TransactionRemoteStorage(TransactionStorage):
     def iter_bfs_ascendent_blocks(self, root, max_depth):
         from hathor.transaction import tx_or_block_from_proto
         self._check_connection()
-        request = protos.ListRequest(order_by=protos.ASC_ORDER, tx_type=protos.BLOCK_TYPE, tx=root.to_proto())
+        request = protos.ListRequest(order_by=protos.ASC_ORDER, tx_type=protos.BLOCK_TYPE, tx=root.to_proto(),
+                                     max_count=max_depth)
         result = self._stub.List(request)
         for list_item in result:
             if not list_item.HasField('transaction'):
@@ -536,16 +474,17 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
     @convert_hathor_exceptions
     def Get(self, request, context):
         hash_bytes = request.hash
-        exclude_metadata = request.exclude_metadata
-
         tx = skip_warning(self.storage.get_transaction)(hash_bytes)
-
-        if exclude_metadata:
-            del tx._metadata
-        else:
-            tx.get_metadata()
-
         return protos.GetResponse(transaction=tx.to_proto())
+
+    @convert_hathor_exceptions
+    def GetMetadata(self, request, context):
+        hash_bytes = request.hash
+        meta = skip_warning(self.storage.get_metadata)(hash_bytes)
+        if meta is not None:
+            return protos.GetMetadataResponse(transaction_metadata=meta.to_proto())
+        else:
+            return protos.GetMetadataResponse()
 
     @convert_hathor_exceptions
     def Save(self, request, context):
@@ -605,7 +544,6 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
     def List(self, request, context):
         from hathor.transaction import tx_or_block_from_proto
 
-        exclude_metadata = request.exclude_metadata
         has_more = None
 
         hash_bytes = request.hash
@@ -657,10 +595,6 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
             raise ValueError('invalid request')
 
         for tx in tx_iter:
-            if exclude_metadata:
-                del tx._metadata
-            else:
-                tx.get_metadata()
             yield protos.ListItemResponse(transaction=tx.to_proto())
         if has_more is not None:
             yield protos.ListItemResponse(has_more=has_more)
@@ -699,23 +633,3 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         for tx in tx_list:
             yield protos.ListItemResponse(transaction=tx.to_proto())
         yield protos.ListItemResponse(has_more=has_more)
-
-
-def create_transaction_storage_server(server, tx_storage, port=None):
-    """Create a GRPC servicer for the given storage, returns a (servicer, port) tuple.
-
-    :param server: a GRPC server
-    :type server: :py:class:`grpc.Server`
-
-    :param tx_storage: an instance of TransactionStorage
-    :type tx_storage: :py:class:`hathor.transaction.storage.TransactionStorage`
-
-    :param port: optional listen port, if None a random port will be chosen (and returned)
-    :type server: :py:class:`typing.Optional[int]`
-
-    :rtype :py:class:`typing.Tuple[hathor.protos.TransactionStorageServicer, int]`
-    """
-    servicer = TransactionStorageServicer(tx_storage)
-    protos.add_TransactionStorageServicer_to_server(servicer, server)
-    port = server.add_insecure_port('127.0.0.1:0')
-    return servicer, port

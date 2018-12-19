@@ -1,17 +1,17 @@
+import time
+import unittest
+
 from hathor.p2p.resources import StatusResource
 from twisted.internet.defer import inlineCallbacks
 from twisted.internet.task import Clock
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import FakeConnection
 import hathor
-import time
 
 
 class StatusTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
-        self.clock = Clock()
-        self.clock.advance(time.time())
         self.web = StubSite(StatusResource(self.manager))
 
     @inlineCallbacks

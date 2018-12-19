@@ -1,12 +1,15 @@
+import grpc
 from twisted.trial import unittest
 from twisted.internet import reactor
 from twisted.internet.task import Clock
 
 from hathor.p2p.peer_id import PeerId
 from hathor.manager import HathorManager
-from hathor.wallet import Wallet
+from hathor.wallet import Wallet, WalletSubprocessMock
 
+from concurrent import futures
 from unittest import main
+from functools import partial
 import tempfile
 import shutil
 import time
@@ -18,13 +21,34 @@ __all__ = [
 ]
 
 
+class StubWallet(Wallet):
+    def __init__(self, *args, passwd, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.unlock(passwd)
+        self.generate_keys(count=20)
+        self.lock()
+
+
 class TestCase(unittest.TestCase):
     def setUp(self):
+        from hathor.transaction.storage.remote_storage import TransactionRemoteStorageFactory
+        from hathor.remote_manager import RemoteManagerFactory
+
         self.tmpdirs = []
         self.clock = Clock()
         self.clock.advance(time.time())
+        self.grpc_server = grpc.server(futures.ThreadPoolExecutor())
+        self.grpc_server_port = self.grpc_server.add_insecure_port('127.0.0.1:0')
+        self.grpc_server.start()
+        self.use_remote_wallet = False
+        self.remote_tx_storage_factory = TransactionRemoteStorageFactory(self.grpc_server_port)
+        self.remote_manager_factory = RemoteManagerFactory(self.grpc_server, self.remote_tx_storage_factory)
+        self.managers = []
 
     def tearDown(self):
+        for m in self.managers:
+            m.stop()
+        self.grpc_server.stop(0)
         self.clean_tmpdirs()
 
     def _create_test_wallet(self):
@@ -34,10 +58,13 @@ class TestCase(unittest.TestCase):
         tmpdir = tempfile.mkdtemp()
         self.tmpdirs.append(tmpdir)
 
-        wallet = Wallet(directory=tmpdir)
-        wallet.unlock(b'MYPASS')
-        wallet.generate_keys(count=20)
-        wallet.lock()
+        if self.use_remote_wallet:
+            wallet_factory = partial(StubWallet, directory=tmpdir, passwd=b'MYPASS')
+            wallet_subprocess = WalletSubprocessMock(wallet_factory, self.remote_manager_factory)
+            wallet_subprocess.start()
+            wallet = wallet_subprocess.remote_wallet_factory()
+        else:
+            wallet = StubWallet(directory=tmpdir, passwd=b'MYPASS')
         return wallet
 
     def create_peer(self, network, peer_id=None, wallet=None, tx_storage=None, unlock_wallet=True):
@@ -47,10 +74,13 @@ class TestCase(unittest.TestCase):
             wallet = self._create_test_wallet()
             if unlock_wallet:
                 wallet.unlock(b'MYPASS')
-        manager = HathorManager(self.clock, peer_id=peer_id, network=network, wallet=wallet, tx_storage=tx_storage)
+        manager = HathorManager(reactor, peer_id=peer_id, network=network, wallet=wallet,
+                                tx_storage=tx_storage, test_mode=True, grpc_server_port=self.grpc_server_port,
+                                clock=self.clock)
         manager.avg_time_between_blocks = 0.0001
-        manager.test_mode = True
+        manager.add_grpc_servicers_to_server(self.grpc_server)
         manager.start()
+        self.managers.append(manager)
         return manager
 
     def clean_tmpdirs(self):

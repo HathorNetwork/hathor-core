@@ -64,7 +64,7 @@ class NanoContractExecuteResource(resource.Resource):
         tx.storage = self.manager.tx_storage
 
         tx.parents = self.manager.get_new_tx_parents()
-        tx.update_timestamp(int(self.manager.reactor.seconds()))
+        tx.update_timestamp(int(self.manager.clock.seconds()))
         tx.weight = self.manager.minimum_tx_weight(tx)
         tx.resolve()
         success = self.manager.propagate_tx(tx)

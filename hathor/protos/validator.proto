@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package hathor;
+
+import "hathor/protos/transaction.proto";
+import "hathor/protos/manager.proto";
+
+service Validator {
+  rpc ValidateNewTx(ValidateNewTxRequest) returns (ValidateNewTxResponse) {}
+  rpc MinimumTxWeight(MinimumTxWeightRequest) returns (MinimumTxWeightResponse) {}
+  rpc CalculateBlockDifficulty(CalculateBlockDifficultyRequest) returns (CalculateBlockDifficultyResponse) {}
+}
+
+message ValidateNewTxRequest {
+  BaseTransaction tx = 1;
+}
+
+message ValidateNewTxResponse {
+  bool is_valid = 1;
+}
+
+message CalculateBlockDifficultyRequest {
+  BaseTransaction block = 1;
+}
+
+message CalculateBlockDifficultyResponse {
+  float weight = 1;
+}

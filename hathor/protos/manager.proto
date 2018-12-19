@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package hathor;
+
+import "hathor/protos/transaction.proto";
+
+service HathorManager {
+  rpc GetNewTxParents(GetNewTxParentsRequest) returns (GetNewTxParentsResponse) {}
+  rpc MinimumTxWeight(MinimumTxWeightRequest) returns (MinimumTxWeightResponse) {}
+  rpc PropagateTx(PropagateTxRequest) returns (PropagateTxResponse) {}
+}
+
+message GetNewTxParentsRequest {
+  uint64 timestamp = 1;
+}
+
+message GetNewTxParentsResponse {
+  repeated bytes parent_hashes = 1;
+}
+
+message MinimumTxWeightRequest {
+  BaseTransaction tx = 1;
+}
+
+message MinimumTxWeightResponse {
+  float weight = 1;
+}
+
+message PropagateTxRequest {
+  BaseTransaction tx = 1;
+}
+
+message PropagateTxResponse {
+  bool propagated = 1;
+  BaseTransaction tx = 2;
+}

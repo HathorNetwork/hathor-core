@@ -1,4 +1,3 @@
-
 import sys
 import os
 from collections import defaultdict
@@ -92,6 +91,8 @@ class CliManager:
 
 
 def main():
+    from twisted.internet import asyncioreactor
+    asyncioreactor.install()
     sys.exit(CliManager().execute_from_command_line())
 
 

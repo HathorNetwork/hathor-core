@@ -1,3 +1,5 @@
+import unittest
+
 from hathor.wallet.resources import AddressResource
 from twisted.internet.defer import inlineCallbacks
 from tests.resources.base_resource import StubSite, _BaseResourceTest

@@ -1,0 +1,2 @@
+- spending too much time trying to run subprocesses on unittests
+- trying to hide grpc, consequently poorly managing `grpc.server`s

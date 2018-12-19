@@ -16,6 +16,7 @@ Welcome to Hathor Network's documentation!
    tx-maleability
    conflict-resolution
    sync
+   multiprocess
    ref/index
 
 

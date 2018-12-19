@@ -15,7 +15,7 @@ class HDWallet(BaseWallet):
     """ Hierarchical Deterministic Wallet based in BIP32 (https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki)
     """
     def __init__(self, words=None, language='english', passphrase=b'', gap_limit=20, word_count=24, directory='./',
-                 history_file='history.json', pubsub=None, reactor=None, initial_key_generation=None):
+                 history_file='history.json', pubsub=None, reactor=None, initial_key_generation=None, clock=None):
         """
         :param words: words to generate the seed. It's a string with the words separated by a single space.
         If None we generate new words when starting the wallet
@@ -45,7 +45,8 @@ class HDWallet(BaseWallet):
             directory=directory,
             history_file=history_file,
             pubsub=pubsub,
-            reactor=reactor
+            reactor=reactor,
+            clock=clock,
         )
 
         # Dict[string(base58), BIP32Key]
@@ -225,7 +226,7 @@ class HDWallet(BaseWallet):
             Set all parameters to initialize the wallet and load the txs
 
             :param tx_storage: storage from where I should load the txs
-            :type tx_storage: :py:class:`hathor.transaction.storage.transaction_storage.TransactionStorage`
+            :type tx_storage: :py:class:`hathor.transaction.storage.ITransactionStorage`
 
             :param words: words to generate the seed. It's a string with the words separated by a single space.
             If None we generate new words when starting the wallet
@@ -258,7 +259,7 @@ class HDWallet(BaseWallet):
         """ Load all saved txs to fill the wallet txs
 
             :param tx_storage: storage from where I should load the txs
-            :type tx_storage: :py:class:`hathor.transaction.storage.transaction_storage.TransactionStorage`
+            :type tx_storage: :py:class:`hathor.transaction.storage.ITransactionStorage`
         """
         for tx in tx_storage._topological_sort():
             self.on_new_tx(tx)

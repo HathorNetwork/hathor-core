@@ -32,10 +32,10 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         return txs
 
     def test_simple_double_spending(self):
-        add_new_blocks(self.manager1, 5, advance_clock=15)
-
         from hathor.transaction import Transaction
         from hathor.wallet.base_wallet import WalletOutputInfo
+
+        add_new_blocks(self.manager1, 5, advance_clock=15)
 
         address = '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'
         value = 1000
@@ -133,7 +133,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         outputs = [
             WalletOutputInfo(address=address, value=int(value), timelock=None)
         ]
-        self.clock.advance(1)
+        self.manager1.advance_clock(1)
         tx1 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
         tx1.weight = 5
         tx1.parents = self.manager1.get_new_tx_parents()
@@ -145,7 +145,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         outputs = [
             WalletOutputInfo(address=address, value=int(value), timelock=None)
         ]
-        self.clock.advance(1)
+        self.manager1.advance_clock(1)
         tx4 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
         tx4.weight = 5
         tx4.parents = self.manager1.get_new_tx_parents()
@@ -157,10 +157,10 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # ---
 
-        self.clock.advance(15)
+        self.manager1.advance_clock(15)
         self.assertTrue(self.manager1.propagate_tx(tx1))
         print('tx1', tx1.hash.hex())
-        self.clock.advance(15)
+        self.manager1.advance_clock(15)
 
         # ---
 
@@ -172,16 +172,16 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         outputs = [
             WalletOutputInfo(address=address, value=int(value), timelock=None)
         ]
-        self.clock.advance(1)
+        self.manager1.advance_clock(1)
         tx2 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
         tx2.weight = 5
         tx2.parents = tx1.parents
         tx2.timestamp = int(self.clock.seconds())
         tx2.resolve()
-        self.clock.advance(15)
+        self.manager1.advance_clock(15)
         self.manager1.propagate_tx(tx2)
         print('tx2', tx2.hash.hex())
-        self.clock.advance(15)
+        self.manager1.advance_clock(15)
 
         self.assertGreater(tx2.timestamp, tx1.timestamp)
 
@@ -192,7 +192,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         outputs = [
             WalletOutputInfo(address=address, value=int(value), timelock=None)
         ]
-        self.clock.advance(1)
+        self.manager1.advance_clock(1)
         tx3 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
         self.assertNotEqual(tx3.inputs[0].tx_id, tx1.hash)
         self.assertNotEqual(tx3.inputs[0].tx_id, tx2.hash)
@@ -200,17 +200,17 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx3.parents = [tx1.hash, tx1.parents[0]]
         tx3.timestamp = int(self.clock.seconds())
         tx3.resolve()
-        self.clock.advance(15)
+        self.manager1.advance_clock(15)
         self.assertTrue(self.manager1.propagate_tx(tx3))
         print('tx3', tx3.hash.hex())
-        self.clock.advance(15)
+        self.manager1.advance_clock(15)
 
         # ---
 
-        self.clock.advance(15)
+        self.manager1.advance_clock(15)
         self.manager1.propagate_tx(tx4)
         print('tx4', tx4.hash.hex())
-        self.clock.advance(15)
+        self.manager1.advance_clock(15)
 
         meta1 = tx1.get_metadata(force_reload=True)
         meta4 = tx4.get_metadata(force_reload=True)
@@ -229,7 +229,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         outputs = [
             WalletOutputInfo(address=address, value=int(value), timelock=None)
         ]
-        self.clock.advance(1)
+        self.manager1.advance_clock(1)
         tx5 = self.manager1.wallet.prepare_transaction_incomplete_inputs(
             Transaction,
             inputs,
@@ -241,10 +241,10 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx5.parents = tx1.parents
         tx5.timestamp = int(self.clock.seconds())
         tx5.resolve()
-        self.clock.advance(15)
+        self.manager1.advance_clock(15)
         self.manager1.propagate_tx(tx5)
         print('tx5', tx5.hash.hex())
-        self.clock.advance(15)
+        self.manager1.advance_clock(15)
 
         meta5 = tx5.get_metadata()
         self.assertEqual(meta5.conflict_with, set())
@@ -252,16 +252,16 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # ---
 
-        self.clock.advance(1)
+        self.manager1.advance_clock(1)
         tx6 = Transaction.create_from_struct(tx3.get_struct())
         tx6.weight = 1
         tx6.parents = [tx4.hash, tx5.hash]
         tx6.timestamp = int(self.clock.seconds())
         tx6.resolve()
-        self.clock.advance(15)
+        self.manager1.advance_clock(15)
         self.manager1.propagate_tx(tx6)
         print('tx6', tx6.hash.hex())
-        self.clock.advance(15)
+        self.manager1.advance_clock(15)
 
         meta6 = tx6.get_metadata()
         self.assertEqual(meta6.conflict_with, set([tx3.hash]))
@@ -277,16 +277,16 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         outputs = [
             WalletOutputInfo(address=address, value=int(value), timelock=None)
         ]
-        self.clock.advance(1)
+        self.manager1.advance_clock(1)
         tx7 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
         tx7.weight = 10
         tx7.parents = [tx4.hash, tx5.hash]
         tx7.timestamp = int(self.clock.seconds())
         tx7.resolve()
-        self.clock.advance(15)
+        self.manager1.advance_clock(15)
         self.manager1.propagate_tx(tx7)
         print('tx7', tx7.hash.hex())
-        self.clock.advance(15)
+        self.manager1.advance_clock(15)
 
         meta1 = tx1.get_metadata(force_reload=True)
         meta2 = tx2.get_metadata(force_reload=True)

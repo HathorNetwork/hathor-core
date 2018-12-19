@@ -770,12 +770,10 @@ class BaseTransaction(ABC):
         else:
             metadata = getattr(self, '_metadata', None)
         if not metadata and use_storage and self.storage:
-            metadata = self.storage.get_metadata(self.hash)
-            self._metadata = metadata
+            metadata = self._metadata = self.storage.get_metadata(self.hash)
         if not metadata:
             from hathor.transaction.transaction_metadata import TransactionMetadata
-            metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight)
-            self._metadata = metadata
+            metadata = self._metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight)
         return metadata
 
     def update_accumulated_weight(self, save_file=True):
@@ -862,11 +860,8 @@ class BaseTransaction(ABC):
         return data
 
     @abstractmethod
-    def to_proto(self, include_metadata=True):
+    def to_proto(self):
         """ Creates a Protobuf object from self
-
-        :param include_metadata: Whether to include metadata, regardless if there is
-        :type include_metadata: bool
 
         :return: Protobuf object
         :rtype: :py:class:`hathor.protos.BaseTransaction`

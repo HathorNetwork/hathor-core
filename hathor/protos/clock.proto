@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package hathor;
+
+service Clock {
+  rpc Advance(AdvanceRequest) returns (AdvanceResponse) {}
+}
+
+message AdvanceRequest {
+  double amount = 1;
+}
+
+message AdvanceResponse {
+}

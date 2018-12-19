@@ -1,16 +1,21 @@
+import unittest
+
 from hathor.wallet.resources import UnlockWalletResource, StateWalletResource, LockWalletResource
 from twisted.internet.defer import inlineCallbacks
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor.wallet import HDWallet
 
 
-class UnlockTest(_BaseResourceTest._ResourceTest):
-    def setUp(self):
-        super().setUp()
-        self.web = StubSite(UnlockWalletResource(self.manager))
-        self.web_lock = StubSite(LockWalletResource(self.manager))
-        self.web_state = StubSite(StateWalletResource(self.manager))
+class _Base:
+    class _UnlockTest(_BaseResourceTest._ResourceTest):
+        def setUp(self):
+            super().setUp()
+            self.web = StubSite(UnlockWalletResource(self.manager))
+            self.web_lock = StubSite(LockWalletResource(self.manager))
+            self.web_state = StubSite(StateWalletResource(self.manager))
 
+
+class UnlockTest(_Base._UnlockTest):
     @inlineCallbacks
     def test_unlocking(self):
         # Wallet is locked
@@ -37,21 +42,25 @@ class UnlockTest(_BaseResourceTest._ResourceTest):
         data_unlocked = response_unlocked.json_value()
         self.assertFalse(data_unlocked['is_locked'])
 
+
+class UnlockHDTest(_Base._UnlockTest):
+    def _create_test_wallet(self):
+        wallet = HDWallet()
+        wallet._manually_initialize()
+        # wallet.unlock(tx_storage=self.manager.tx_storage)
+        return wallet
+
     @inlineCallbacks
-    def test_unlocking_hd_wallet(self):
-        self.manager.wallet = HDWallet()
-        self.manager.wallet._manually_initialize()
-        self.manager.wallet.unlock(tx_storage=self.manager.tx_storage)
+    def test_unlocking(self):
+        # # Wallet is not locked
+        # response = yield self.web_state.get("wallet/state")
+        # data = response.json_value()
+        # self.assertFalse(data['is_locked'])
 
-        # Wallet is not locked
-        response = yield self.web_state.get("wallet/state")
-        data = response.json_value()
-        self.assertFalse(data['is_locked'])
-
-        # Lock the wallet
-        response_lock = yield self.web_lock.post("wallet/lock")
-        data_lock = response_lock.json_value()
-        self.assertTrue(data_lock['success'])
+        # # Lock the wallet
+        # response_lock = yield self.web_lock.post("wallet/lock")
+        # data_lock = response_lock.json_value()
+        # self.assertTrue(data_lock['success'])
 
         # Wallet is locked
         response_locked = yield self.web_state.get("wallet/state")

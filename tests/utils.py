@@ -55,7 +55,7 @@ def add_new_tx(manager, address, value, advance_clock=None):
     tx = gen_new_tx(manager, address, value)
     manager.propagate_tx(tx)
     if advance_clock:
-        manager.reactor.advance(advance_clock)
+        manager.advance_clock(advance_clock)
     return tx
 
 
@@ -94,7 +94,7 @@ def add_new_block(manager, advance_clock=None):
     block.verify()
     manager.propagate_tx(block)
     if advance_clock:
-        manager.reactor.advance(advance_clock)
+        manager.advance_clock(advance_clock)
     return block
 
 

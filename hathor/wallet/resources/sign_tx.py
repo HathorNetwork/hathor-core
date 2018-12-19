@@ -49,7 +49,7 @@ class SignTxResource(resource.Resource):
 
                 if prepare_to_send:
                     tx.parents = self.manager.get_new_tx_parents()
-                    tx.update_timestamp(int(self.manager.reactor.seconds()))
+                    tx.update_timestamp(int(self.manager.clock.seconds()))
                     tx.weight = self.manager.minimum_tx_weight(tx)
                     tx.resolve()
 

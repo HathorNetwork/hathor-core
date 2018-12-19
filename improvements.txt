@@ -1,0 +1,6 @@
+- class Address for improved representation (bytes/base58/checksum)
+- class Hash for improved readability and organization (also improved dealing of bytes/hex)
+- try to reduce code duplication (subprocess and subprocess mock share a lot of code)
+- organize contexts for improved management of shared internal APIs (this would make tests a lot easier), and also clarify object ownership (the context owns the API objects (direct or proxies): Manager, Wallet, Clock, Storage)
+- use "global" context for configuration/settings (like `test_mode`), we have to be aware that different processes will have separate instances of the configuration context
+- try to remove internal references as much as possible, for instance, on `<BaseTransaction instance>.storage`, it is very difficult to map what operations will hit the storage, and also this makes pickling impossible, methods can be refactored to require passing the storage as argument when needed

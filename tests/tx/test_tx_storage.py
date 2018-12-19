@@ -5,9 +5,9 @@ import time
 
 from twisted.internet.task import Clock
 
-from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage, TransactionRemoteStorage,\
-                                       TransactionCompactStorage, TransactionCacheStorage, TransactionBinaryStorage,\
-                                       TransactionSubprocessStorage, create_transaction_storage_server
+from hathor.transaction.storage import (TransactionJSONStorage, TransactionMemoryStorage, TransactionCompactStorage,
+                                        TransactionCacheStorage, TransactionBinaryStorage,
+                                        TransactionSubprocessStorage)
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction import Block, Transaction, TxOutput, TxInput
 from hathor.wallet import Wallet
@@ -16,14 +16,24 @@ from hathor.wallet import Wallet
 class _BaseTransactionStorageTest:
 
     class _TransactionStorageTest(unittest.TestCase):
-        def setUp(self, tx_storage, reactor=None):
-            if not reactor:
-                self.reactor = Clock()
-            else:
-                self.reactor = reactor
-            self.reactor.advance(time.time())
-            self.tx_storage = tx_storage
-            tx_storage._manually_initialize()
+        def create_tx_storage(self):
+            raise NotImplementedError
+
+        def clean_tx_storage(self):
+            pass
+
+        def setUp(self):
+            from concurrent import futures
+            import grpc
+
+            self.grpc_server = grpc.server(futures.ThreadPoolExecutor())
+            self.grpc_server_port = self.grpc_server.add_insecure_port('127.0.0.1:0')
+            self.grpc_server.start()
+
+            self.clock = Clock()
+            self.clock.advance(time.time())
+            self.tx_storage = self.create_tx_storage()
+            # self.tx_storage._manually_initialize()
             self.genesis = self.tx_storage.get_all_genesis()
             self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
             self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
@@ -32,7 +42,10 @@ class _BaseTransactionStorageTest:
             self.tmpdir = tempfile.mkdtemp()
             wallet = Wallet(directory=self.tmpdir)
             wallet.unlock(b'teste')
-            self.manager = HathorManager(self.reactor, tx_storage=self.tx_storage, wallet=wallet)
+            self.manager = HathorManager(self.clock, tx_storage=self.tx_storage, wallet=wallet,
+                                         grpc_server_port=self.grpc_server_port, clock=self.clock)
+            self.manager.add_grpc_servicers_to_server(self.grpc_server)
+            self.manager.start()
 
             block_parents = [tx.hash for tx in self.genesis]
             output = TxOutput(200, bytes.fromhex('1e393a5ce2ff1c98d4ff6892f2175100f2dad049'))
@@ -42,7 +55,7 @@ class _BaseTransactionStorageTest:
                 outputs=[output],
                 parents=block_parents,
                 nonce=100781,
-                storage=tx_storage
+                storage=self.tx_storage
             )
             self.block.resolve()
 
@@ -64,12 +77,15 @@ class _BaseTransactionStorageTest:
                 inputs=[tx_input],
                 outputs=[output],
                 parents=tx_parents,
-                storage=tx_storage
+                storage=self.tx_storage
             )
             self.tx.resolve()
 
         def tearDown(self):
             shutil.rmtree(self.tmpdir)
+            self.manager.stop()
+            self.grpc_server.stop(0)
+            self.clean_tx_storage()
 
         def test_genesis(self):
             self.assertEqual(1, len(self.genesis_blocks))
@@ -163,32 +179,19 @@ class _BaseTransactionStorageTest:
             self.assertTrue(block.resolve())
             block.verify()
             self.manager.tx_storage.save_transaction(block)
-            self.reactor.advance(5)
+            self.manager.advance_clock(5)
             return block
 
     class _RemoteStorageTest(_TransactionStorageTest):
-        def setUp(self, tx_storage, reactor=None):
-            from concurrent import futures
-            import grpc
-
-            self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-            tx_storage._manually_initialize()
-            _servicer, port = create_transaction_storage_server(self._server, tx_storage)
-            self._server.start()
-
-            tx_storage = TransactionRemoteStorage()
-            tx_storage.connect_to(port)
-            super().setUp(tx_storage, reactor=reactor)
-
-        def tearDown(self):
-            self._server.stop(0)
-            super().tearDown()
+        def setUp(self):
+            super().setUp()
+            self.tx_storage = self.manager.tx_storage_factory()
 
     class _SubprocessStorageTest(_TransactionStorageTest):
-        def setUp(self, tx_storage_constructor, reactor=None):
+        def setUp(self, tx_storage_constructor):
             tx_storage = TransactionSubprocessStorage(tx_storage_constructor)
             tx_storage.start()
-            super().setUp(tx_storage, reactor=reactor)
+            super().setUp(tx_storage)
 
         def tearDown(self):
             self.tx_storage.stop()
@@ -196,71 +199,65 @@ class _BaseTransactionStorageTest:
 
 
 class TransactionBinaryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
-    def setUp(self):
+    def create_tx_storage(self):
         self.directory = tempfile.mkdtemp()
-        super().setUp(TransactionBinaryStorage(self.directory))
+        return TransactionBinaryStorage(self.directory)
 
-    def tearDown(self):
+    def clean_tx_storage(self):
         shutil.rmtree(self.directory)
-        super().tearDown()
 
 
 class TransactionJSONStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
-    def setUp(self):
+    def create_tx_storage(self):
         self.directory = tempfile.mkdtemp()
-        super().setUp(TransactionJSONStorage(self.directory))
+        return TransactionJSONStorage(self.directory)
 
-    def tearDown(self):
+    def clean_tx_storage(self):
         shutil.rmtree(self.directory)
-        super().tearDown()
 
 
 class TransactionCompactStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
-    def setUp(self):
+    def create_tx_storage(self):
         self.directory = tempfile.mkdtemp()
-        super().setUp(TransactionCompactStorage(self.directory))
+        return TransactionCompactStorage(self.directory)
 
-    def tearDown(self):
+    def clean_tx_storage(self):
         shutil.rmtree(self.directory)
-        super().tearDown()
 
 
 class TransactionMemoryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
-    def setUp(self):
-        super().setUp(TransactionMemoryStorage())
+    def create_tx_storage(self):
+        return TransactionMemoryStorage()
 
 
 class CacheMemoryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
-    def setUp(self):
+    def create_tx_storage(self):
         store = TransactionMemoryStorage()
-        reactor = Clock()
-        super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
+        return TransactionCacheStorage(store, self.clock, capacity=5)
 
 
-class SubprocessMemoryStorageTest(_BaseTransactionStorageTest._SubprocessStorageTest):
-    def setUp(self):
-        super().setUp(TransactionMemoryStorage)
-
-
-class SubprocessCacheMemoryStorageTest(_BaseTransactionStorageTest._SubprocessStorageTest):
-    def setUp(self):
-        def storage_constructor():
-            store = TransactionMemoryStorage()
-            reactor = Clock()
-            return TransactionCacheStorage(store, reactor, capacity=5)
-        super().setUp(storage_constructor)
+# class SubprocessMemoryStorageTest(_BaseTransactionStorageTest._SubprocessStorageTest):
+#     def setUp(self):
+#         super().setUp(TransactionMemoryStorage)
+#
+#
+# class SubprocessCacheMemoryStorageTest(_BaseTransactionStorageTest._SubprocessStorageTest):
+#     def setUp(self):
+#         def storage_constructor():
+#             store = TransactionMemoryStorage()
+#             return TransactionCacheStorage(store, self.clock, capacity=5)
+#         super().setUp(storage_constructor)
 
 
 class RemoteMemoryStorageTest(_BaseTransactionStorageTest._RemoteStorageTest):
-    def setUp(self):
-        super().setUp(TransactionMemoryStorage())
+    def create_tx_storage(self):
+        return TransactionMemoryStorage()
 
 
 class RemoteCacheMemoryStorageTest(_BaseTransactionStorageTest._RemoteStorageTest):
-    def setUp(self):
+    def create_tx_storage(self):
         store = TransactionMemoryStorage()
-        reactor = Clock()
-        super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
+        return TransactionCacheStorage(store, self.clock, capacity=5)
 
 
 if __name__ == '__main__':

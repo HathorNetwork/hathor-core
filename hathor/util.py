@@ -12,7 +12,8 @@ def deprecated(msg):
             warnings.warn('{} is deprecated. {}'.format(func.__name__, msg), category=DeprecationWarning, stacklevel=2)
             return func(*args, **kwargs)
         wrapper.__deprecated = func
-        return wrapper
+        return func
+        # return wrapper
 
     return decorator
 

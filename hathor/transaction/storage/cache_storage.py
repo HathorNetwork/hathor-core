@@ -16,8 +16,8 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
     def __init__(self, store, reactor, interval=5, capacity=10000, *, _clone_if_needed=True):
         """
-        :param store: a subclass of TransactionStorage
-        :type store: :py:class:`hathor.transaction.storage.TransactionStorage`
+        :param store: a subclass of ITransactionStorage
+        :type store: :py:class:`hathor.transaction.storage.ITransactionStorage`
 
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :type reactor: :py:class:`twisted.internet.Reactor`

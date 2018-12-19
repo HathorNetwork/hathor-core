@@ -187,7 +187,7 @@ class TransactionStorageAsyncFromSync(TransactionStorageAsync):
         return succeed(skip_warning(self.get_count_tx_blocks)(self))
 
 
-class TransactionStorage(TransactionStorageSync, TransactionStorageAsync):
+class ITransactionStorage(TransactionStorageSync, TransactionStorageAsync):
     @abstractproperty
     def latest_timestamp(self):
         raise NotImplementedError
@@ -569,7 +569,7 @@ class TransactionStorage(TransactionStorageSync, TransactionStorageAsync):
         return dot
 
 
-class BaseTransactionStorage(TransactionStorage):
+class BaseTransactionStorage(ITransactionStorage):
     def __init__(self, with_index=True, pubsub=None):
         self.with_index = with_index
         if with_index:

@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 import os
 import json
 import base58
@@ -7,7 +8,7 @@ from twisted.logger import Logger
 from hathor.wallet.exceptions import InsuficientFunds, PrivateKeyNotFound, \
                                      InputDuplicated, InvalidAddress
 from hathor.transaction import TxInput, TxOutput
-from hathor.transaction.base_transaction import int_to_bytes
+from hathor.transaction.base_transaction import int_to_bytes, BaseTransaction
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.pubsub import HathorEvents
 from hathor.crypto.util import get_checksum
@@ -22,7 +23,17 @@ WalletBalance.__new__.__defaults__ = (0, 0)
 WalletBalanceUpdate = namedtuple('WalletBalanceUpdate', ['call_id', 'timelock'])
 
 
-class BaseWallet:
+class IWallet(ABC):
+    @abstractmethod
+    def get_unused_address(self, mark_as_used: bool = True) -> bytes:
+        raise NotImplementedError
+
+    @abstractmethod
+    def on_new_tx(self, tx: BaseTransaction):
+        pass
+
+
+class BaseWallet(IWallet):
     log = Logger()
 
     class WalletType(Enum):
@@ -32,7 +43,7 @@ class BaseWallet:
         # Normal key pair wallet
         KEY_PAIR = 'keypair'
 
-    def __init__(self, directory='./', history_file='history.json', pubsub=None, reactor=None):
+    def __init__(self, directory='./', history_file='history.json', pubsub=None, reactor=None, clock=None):
         """ A wallet will hold the unspent and spent transactions
 
         All files will be stored in the same directory, and it should
@@ -84,6 +95,7 @@ class BaseWallet:
         if reactor is None:
             from twisted.internet import reactor
         self.reactor = reactor
+        self.clock = clock or self.reactor
 
     def start(self):
         """ Start the pubsub subscription if wallet has a pubsub
@@ -212,7 +224,7 @@ class BaseWallet:
         :type force: bool
 
         :param tx_storage: storage to search for output tx, in case we want to allow double spending
-        :type tx_storage: TransactionStorage
+        :type tx_storage: ITransactionStorage
 
         :raises PrivateKeyNotFound: when trying to spend output and we don't have the corresponding
             key in our wallet
@@ -350,7 +362,7 @@ class BaseWallet:
 
         for address_b58, utxo_list in self.unspent_txs.items():
             for utxo in utxo_list:
-                if not utxo.is_locked(self.reactor):
+                if not utxo.is_locked(self.clock):
                     # I can only use the outputs that are not locked
                     inputs_tx.append(WalletInputInfo(utxo.tx_id, utxo.index,
                                      self.get_private_key(address_b58)))
@@ -797,7 +809,7 @@ class BaseWallet:
         balance = {'locked': 0, 'available': 0}
         for utxo_list in self.unspent_txs.values():
             for utxo in utxo_list:
-                if utxo.is_locked(self.reactor):
+                if utxo.is_locked(self.clock):
                     balance['locked'] += utxo.value
                 else:
                     balance['available'] += utxo.value
@@ -815,7 +827,7 @@ class BaseWallet:
         smallest_timestamp = inf
         for utxo_list in self.unspent_txs.values():
             for utxo in utxo_list:
-                if utxo.is_locked(self.reactor):
+                if utxo.is_locked(self.clock):
                     assert utxo.timelock is not None
                     smallest_timestamp = min(smallest_timestamp, utxo.timelock)
 
@@ -830,7 +842,7 @@ class BaseWallet:
                     self.balance_update.call_id.cancel()
 
             # Create the new balance update
-            diff = smallest_timestamp - int(self.reactor.seconds()) + 1
+            diff = smallest_timestamp - int(self.clock.seconds()) + 1
             call_id = self.reactor.callLater(diff, self.update_balance)
             self.balance_update = WalletBalanceUpdate(call_id, smallest_timestamp)
         else:
@@ -885,7 +897,7 @@ class UnspentTx:
             data['timestamp']
         )
 
-    def is_locked(self, reactor):
+    def is_locked(self, clock):
         """ Returns if the unspent tx is locked or available to be spent
 
             :param reactor: reactor to get the current time
@@ -894,7 +906,7 @@ class UnspentTx:
             :return: if the unspent tx is locked
             :rtype: bool
         """
-        if self.timelock is None or self.timelock < int(reactor.seconds()):
+        if self.timelock is None or self.timelock < int(clock.seconds()):
             return False
         else:
             return True

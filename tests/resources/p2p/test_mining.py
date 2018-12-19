@@ -1,3 +1,5 @@
+import unittest
+
 from hathor.p2p.resources import MiningResource
 from twisted.internet.defer import inlineCallbacks
 from tests.resources.base_resource import StubSite, _BaseResourceTest

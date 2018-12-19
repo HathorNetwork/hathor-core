@@ -55,7 +55,7 @@ class NanoContractMatchValueResource(resource.Resource):
             value_dict[base58.b58decode(item['address'])] = item['value']
 
         fallback_address = base58.b58decode(data['fallback_address']) if data['fallback_address'] else b'\x00'
-        min_timestamp = data['min_timestamp'] if data.get('min_timestamp') else int(self.manager.reactor.seconds())
+        min_timestamp = data['min_timestamp'] if data.get('min_timestamp') else int(self.manager.clock.seconds())
 
         nano_contract = NanoContractMatchValues(
             base64.b64decode(data['oracle_pubkey_hash']),

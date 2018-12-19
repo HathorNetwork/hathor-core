@@ -1,9 +1,11 @@
+import time
+import unittest
+
 from hathor.transaction.resources import TipsHistogramResource
 from twisted.internet.defer import inlineCallbacks
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 from tests.utils import add_new_blocks, add_new_transactions
-import time
 
 
 class TipsTest(_BaseResourceTest._ResourceTest):
@@ -11,7 +13,6 @@ class TipsTest(_BaseResourceTest._ResourceTest):
         super().setUp()
         self.web = StubSite(TipsHistogramResource(self.manager))
         self.manager.wallet.unlock(b'MYPASS')
-        self.manager.reactor.advance(time.time())
 
     @inlineCallbacks
     def test_get_tips_histogram(self):

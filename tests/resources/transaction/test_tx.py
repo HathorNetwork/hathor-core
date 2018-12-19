@@ -1,3 +1,5 @@
+import unittest
+
 from hathor.transaction.resources import TransactionResource
 from twisted.internet.defer import inlineCallbacks
 from tests.resources.base_resource import StubSite, _BaseResourceTest

@@ -18,7 +18,7 @@ class Wallet(BaseWallet):
     log = Logger()
 
     def __init__(self, keys=None, directory='./', filename='keys.json', history_file='history.json',
-                 pubsub=None, reactor=None):
+                 pubsub=None, reactor=None, clock=None):
         """ A wallet will hold key pair objects and the unspent and
         spent transactions associated with the keys.
 
@@ -44,7 +44,8 @@ class Wallet(BaseWallet):
             directory=directory,
             history_file=history_file,
             pubsub=pubsub,
-            reactor=reactor
+            reactor=reactor,
+            clock=clock,
         )
 
         self.filepath = os.path.join(directory, filename)
@@ -88,7 +89,7 @@ class Wallet(BaseWallet):
         self.keys.update(new_keys)
 
     def _write_keys_to_file_or_delay(self):
-        dt = self.reactor.seconds() - self.last_flush_time
+        dt = self.clock.seconds() - self.last_flush_time
         if dt > self.flush_to_disk_interval:
             self._write_keys_to_file()
         else:
@@ -100,7 +101,7 @@ class Wallet(BaseWallet):
 
     def _write_keys_to_file(self):
         self.flush_schedule = None
-        self.last_flush_time = self.reactor.seconds()
+        self.last_flush_time = self.clock.seconds()
         data = [keypair.to_json() for keypair in self.keys.values()]
         with open(self.filepath, 'w') as json_file:
             json_file.write(json.dumps(data, indent=4))
