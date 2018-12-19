@@ -10,9 +10,11 @@ from hathor.wallet.util import generate_signature
 from hathor.crypto.util import get_private_key_from_bytes, get_public_key_bytes_compressed
 
 from hathor.transaction.scripts import create_output_script, MultiSig, parse_address_script, script_eval, P2PKH
+from hathor.transaction.exceptions import ScriptError
 from hathor.wallet.util import generate_multisig_redeem_script, generate_multisig_address
 
 import time
+import base58
 
 
 class MultisigTestCase(unittest.TestCase):
@@ -128,4 +130,11 @@ class MultisigTestCase(unittest.TestCase):
         self.assertTrue(isinstance(cls_script, MultiSig))
         self.assertEqual(cls_script.address, self.multisig_address_b58)
 
+        expected_dict = {'type': 'MultiSig', 'address': self.multisig_address_b58, 'timelock': None}
+        self.assertEqual(cls_script.to_human_readable(), expected_dict)
+
         script_eval(tx, tx_input, tx1)
+
+        # Script error
+        with self.assertRaises(ScriptError):
+            create_output_script(base58.b58decode('55d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'))

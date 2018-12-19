@@ -544,6 +544,38 @@ class BasicTransaction(unittest.TestCase):
         with self.assertRaises(InvalidStackData):
             op_checkmultisig(stack, log=[], extras=extras)
 
+        # Exception pubkey_count should be integer
+        stack = [
+            keys[0]['signature'],
+            keys[1]['signature'],
+            2,
+            keys[0]['pubkey'],
+            keys[1]['pubkey'],
+            keys[2]['pubkey'],
+            '3'
+        ]
+        with self.assertRaises(InvalidStackData):
+            op_checkmultisig(stack, log=[], extras=extras)
+
+        # Exception not enough pub keys
+        stack = [
+            keys[0]['pubkey'],
+            keys[1]['pubkey'],
+            3
+        ]
+        with self.assertRaises(MissingStackItems):
+            op_checkmultisig(stack, log=[], extras=extras)
+
+        # Exception stack empty after pubkeys
+        stack = [
+            keys[0]['pubkey'],
+            keys[1]['pubkey'],
+            keys[2]['pubkey'],
+            3
+        ]
+        with self.assertRaises(MissingStackItems):
+            op_checkmultisig(stack, log=[], extras=extras)
+
     def test_equal(self):
         elem = b'a'
         with self.assertRaises(MissingStackItems):
