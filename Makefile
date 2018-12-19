@@ -4,7 +4,7 @@ all: tests pep8
 
 .PHONY: tests
 tests:
-	pytest --cov=hathor --cov-fail-under=75 -p no:warnings ./tests
+	pytest --cov=hathor --cov-fail-under=85 -p no:warnings ./tests
 
 .PHONY: pep8
 pep8:
@@ -12,7 +12,7 @@ pep8:
 
 .PHONY: coverage report
 cov_report:
-	pytest --cov-report=term --cov-report=html --cov=hathor --cov-fail-under=75 -p no:warnings ./tests
+	pytest --cov-report=term --cov-report=html --cov=hathor --cov-fail-under=85 -p no:warnings ./tests
 
 proto_dir = ./hathor/protos
 proto_srcs = $(wildcard $(proto_dir)/*.proto)
