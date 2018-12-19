@@ -63,12 +63,6 @@ class Block(BaseTransaction):
             tx._metadata = TransactionMetadata.create_from_proto(tx.hash, block_proto.metadata)
         return tx
 
-    def calculate_weight(self, network_hashrate):
-        """ Calculate the minimum weight so it is a valid block.
-        weight = 7 + log2(hash_rate)
-        """
-        return 7 + log(network_hashrate, 2)
-
     def verify_height(self):
         """Verify that the height is correct (should be parent + 1)."""
         error_height_message = 'Invalid height of block'

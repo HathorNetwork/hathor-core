@@ -513,9 +513,6 @@ class BaseTransaction(ABC):
             self.GenesisDagConnectivity.CONNECTED if connected else self.GenesisDagConnectivity.DISCONNECTED)
         return connected
 
-    def calculate_weight(self):
-        raise NotImplementedError
-
     def get_sighash_all(self, clear_input_data=True):
         """Return a  serialization of the inputs and outputs, without including any other field
 
@@ -655,8 +652,6 @@ class BaseTransaction(ABC):
 
         :raises PowError: when the hash is equal or greater than the target
         """
-        # if abs(self.calculate_weight() - self.weight) > 1e-6:
-        #     raise WeightError
         if int(self.hash.hex(), 16) >= self.get_target():
             raise PowError('Transaction has invalid data')
 

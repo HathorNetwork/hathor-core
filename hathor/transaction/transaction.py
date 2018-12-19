@@ -69,16 +69,6 @@ class Transaction(BaseTransaction):
             tx._metadata = TransactionMetadata.create_from_proto(tx.hash, transaction_proto.metadata)
         return tx
 
-    def calculate_weight(self):
-        """
-            Calculate transaction weight
-            weight = log2(size) + log2(amount) + 0.5
-        """
-        size = len(self.get_struct())
-        # +1 solves corner case when sum is 0 (genesis)
-        amount = self.sum_outputs + 1
-        return log(size, 2) + log(amount, 2) + 0.5
-
     def verify(self):
         """
             We have to do 8 verifications:
