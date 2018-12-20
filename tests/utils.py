@@ -162,6 +162,29 @@ class FakeConnection:
 
 
 def run_server(hostname='localhost', listen=8005, listen_ssl=False, status=8085, bootstrap=None, tries=50):
+    """ Starts a full node in a subprocess running the cli command
+
+        :param hostname: Hostname used to be accessed by other peers
+        :type hostname: str
+
+        :param listen: Port to listen for new connections (eg: 8000)
+        :type listen: int
+
+        :param listen_ssl: Listen to ssl connection
+        :type listen_ssl: bool
+
+        :param status: Port to run status server
+        :type status: int
+
+        :param bootstrap: Address to connect to (eg: tcp:127.0.0.1:8000)
+        :type bootstrap: str
+
+        :param tries: How many loop tries we will have waiting for the node to run
+        :type tries: int
+
+        :return: Subprocess created
+        :rtype: :py:class:`subprocess.Popen`
+    """
     command = 'bash hathor-cli run_node --hostname {} --listen tcp:{} --status {}'.format(hostname, listen, status)
     if listen_ssl:
         command = '{} --ssl'.format(command)
@@ -187,6 +210,26 @@ def run_server(hostname='localhost', listen=8005, listen_ssl=False, status=8085,
 
 
 def request_server(path, method, host='http://localhost', port=8085, data=None):
+    """ Execute a request for status server
+
+        :param path: Url path of the request
+        :type path: str
+
+        :param method: Request method (eg: GET, POST, ...)
+        :type method: str
+
+        :param host: Host to execute request (eg: http://localhost)
+        :type host: str
+
+        :param port: Port to connect in the host
+        :type port: int
+
+        :param data: Request data
+        :type data: Dict
+
+        :return: Response in json format
+        :rtype: Dict (json)
+    """
     partial_url = '{}:{}'.format(host, port)
     url = urllib.parse.urljoin(partial_url, path)
     if method == 'GET':
