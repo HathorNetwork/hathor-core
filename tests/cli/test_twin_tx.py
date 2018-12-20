@@ -9,7 +9,7 @@ from hathor.cli.mining import create_parser as create_parser_mining, execute as 
 import urllib.parse
 
 import time
-import ast
+import json
 
 from io import StringIO
 from contextlib import redirect_stdout
@@ -119,7 +119,8 @@ class TwinTxTest(unittest.TestCase):
         # Last element is always empty string
         output.pop()
 
-        tx_data = ast.literal_eval(output[0])
+        human = output[0].replace("'", '"')
+        tx_data = json.loads(human)
 
         self.assertTrue(isinstance(tx_data, dict))
         self.assertTrue('hash' in tx_data)
