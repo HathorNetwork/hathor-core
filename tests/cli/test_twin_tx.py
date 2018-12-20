@@ -66,7 +66,7 @@ class TwinTxTest(unittest.TestCase):
         self.manager.propagate_tx(twin_tx)
 
         # Validate they are twins
-        meta = self.tx.get_metadata()
+        meta = self.tx.get_metadata(force_reload=True)
         self.assertEqual(meta.twins, set([twin_tx.hash]))
 
     def test_twin_different(self):
@@ -78,7 +78,6 @@ class TwinTxTest(unittest.TestCase):
 
         response = request_server('transaction', 'GET', data={b'count': 4, b'type': 'tx'})
         tx = response['transactions'][-1]
-        print(tx)
 
         # Twin different weight and parents
         params = ['--url', host, '--hash', tx['hash'], '--parents', '--weight', '14']
