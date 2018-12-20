@@ -6,13 +6,14 @@ import argparse
 import getpass
 
 
-def main():
+def create_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--count', type=int, default=20, help='Number of keys/addresses (default=20)')
     parser.add_argument('--directory', help='Wallet directory')
-    args = parser.parse_args()
+    return parser
 
-    passwd = getpass.getpass(prompt='Wallet password:')
+
+def execute(args, passwd):
     passwd = passwd.encode('utf-8')
 
     count = args.count
@@ -23,3 +24,10 @@ def main():
     wallet.unlock(passwd)
     wallet.generate_keys(count=count)
     wallet._write_keys_to_file()
+
+
+def main():
+    parser = create_parser()
+    args = parser.parse_args()
+    passwd = getpass.getpass(prompt='Wallet password:')
+    execute(args, passwd)

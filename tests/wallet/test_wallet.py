@@ -42,12 +42,17 @@ class BasicWallet(unittest.TestCase):
 
     def test_wallet_keys_storage(self):
         w = Wallet(directory=self.directory)
+        # Testing password error not in bytes
+        with self.assertRaises(ValueError):
+            w.unlock('testpass')
         w.unlock(b'testpass')
         w.generate_keys()
+        # Using one address to save used/unused addresses in the file
+        w.get_unused_address()
         w._write_keys_to_file()
         # wallet 2 will read from saved file
         w2 = Wallet(directory=self.directory)
-        w2.read_keys_from_file()
+        w2._manually_initialize()
         for address, key in w.keys.items():
             key2 = w2.keys.pop(address)
             self.assertEqual(key, key2)

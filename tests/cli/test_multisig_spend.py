@@ -1,23 +1,24 @@
 from twisted.internet.task import Clock
 
 from tests import unittest
-from tests.utils import add_new_blocks
+from tests.utils import add_new_blocks, get_tokens_from_mining
 
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.wallet.base_wallet import WalletOutputInfo, WalletBalance
 from hathor.wallet.util import generate_signature
 
-from hathor.crypto.util import get_private_key_from_bytes, get_public_key_bytes_compressed
-
-from hathor.transaction.scripts import create_output_script, MultiSig, parse_address_script, script_eval, P2PKH
-from hathor.transaction.exceptions import ScriptError
+from hathor.transaction.scripts import create_output_script
 from hathor.wallet.util import generate_multisig_redeem_script, generate_multisig_address
 
+from hathor.cli.multisig_spend import create_parser, execute
+
+from io import StringIO
+from contextlib import redirect_stdout
+
 import time
-import base58
 
 
-class MultisigTestCase(unittest.TestCase):
+class MultiSigSpendTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
@@ -60,11 +61,12 @@ class MultisigTestCase(unittest.TestCase):
     def test_spend_multisig(self):
         # Adding funds to the wallet
         add_new_blocks(self.manager, 2, advance_clock=15)
-        self.assertEqual(self.manager.wallet.balance, WalletBalance(0, 4000))
+        available_tokens = get_tokens_from_mining(2)
+        self.assertEqual(self.manager.wallet.balance, WalletBalance(0, available_tokens))
 
         # First we send tokens to a multisig address
         outputs = [
-            WalletOutputInfo(address=self.multisig_address, value=2000, timelock=int(self.clock.seconds()) + 15)
+            WalletOutputInfo(address=self.multisig_address, value=2000, timelock=None)
         ]
 
         tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
@@ -75,7 +77,7 @@ class MultisigTestCase(unittest.TestCase):
         self.manager.propagate_tx(tx1)
         self.clock.advance(10)
 
-        self.assertEqual(self.manager.wallet.balance, WalletBalance(0, 2000))
+        self.assertEqual(self.manager.wallet.balance, WalletBalance(0, available_tokens - 2000))
 
         # Then we create a new tx that spends this tokens from multisig wallet
         tx = Transaction.create_from_struct(tx1.get_struct())
@@ -99,42 +101,22 @@ class MultisigTestCase(unittest.TestCase):
             signature = generate_signature(tx, bytes.fromhex(private_key_hex), password=b'1234')
             signatures.append(signature)
 
-        input_data = MultiSig.create_input_data(self.redeem_script, signatures)
-        tx.inputs[0].data = input_data
+        parser = create_parser()
+        # Generate spend tx
+        args = parser.parse_args([
+            tx.get_struct().hex(),
+            '{},{}'.format(signatures[0].hex(), signatures[1].hex()),
+            self.redeem_script.hex()
+        ])
+        f = StringIO()
+        with redirect_stdout(f):
+            execute(args)
+        # Transforming prints str in array
+        output = f.getvalue().split('\n')
+        # Last element is always empty string
+        output.pop()
 
-        tx.resolve()
-        # Transaction is still locked
-        self.assertFalse(self.manager.propagate_tx(tx))
+        tx_raw = output[0].split(':')[1].strip()
 
-        self.clock.advance(6)
-        tx.timestamp = int(self.clock.seconds())
-        tx.resolve()
-
-        # First we try to propagate with a P2PKH input
-        private_key_obj = get_private_key_from_bytes(bytes.fromhex(self.private_keys[0]), password=b'1234')
-        pubkey_obj = private_key_obj.public_key()
-        public_key_compressed = get_public_key_bytes_compressed(pubkey_obj)
-        p2pkh_input_data = P2PKH.create_input_data(public_key_compressed, signatures[0])
-        tx2 = Transaction.create_from_struct(tx.get_struct())
-        tx2.inputs[0].data = p2pkh_input_data
-        tx2.resolve()
-        self.assertFalse(self.manager.propagate_tx(tx2))
-
-        # Now we propagate the correct
+        tx = Transaction.create_from_struct(bytes.fromhex(tx_raw))
         self.assertTrue(self.manager.propagate_tx(tx))
-
-        self.assertEqual(self.manager.wallet.balance, WalletBalance(0, 2800))
-
-        # Testing the MultiSig class methods
-        cls_script = parse_address_script(multisig_script)
-        self.assertTrue(isinstance(cls_script, MultiSig))
-        self.assertEqual(cls_script.address, self.multisig_address_b58)
-
-        expected_dict = {'type': 'MultiSig', 'address': self.multisig_address_b58, 'timelock': None}
-        self.assertEqual(cls_script.to_human_readable(), expected_dict)
-
-        script_eval(tx, tx_input, tx1)
-
-        # Script error
-        with self.assertRaises(ScriptError):
-            create_output_script(base58.b58decode('55d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'))

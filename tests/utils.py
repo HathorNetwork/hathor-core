@@ -1,5 +1,10 @@
 from twisted.test import proto_helpers
 import random
+import subprocess
+import requests
+import time
+import urllib.parse
+from hathor.constants import TOKENS_PER_BLOCK, DECIMAL_PLACES
 
 
 def resolve_block_bytes(block_bytes):
@@ -11,7 +16,6 @@ def resolve_block_bytes(block_bytes):
     import base64
     block_bytes = base64.b64decode(block_bytes)
     block = Block.create_from_struct(block_bytes)
-    block.weight = 10
     block.resolve()
     return block.get_struct()
 
@@ -156,3 +160,99 @@ class FakeConnection:
 
     def is_empty(self):
         return not self.tr1.value() and not self.tr2.value()
+
+
+def run_server(hostname='localhost', listen=8005, listen_ssl=False, status=8085, bootstrap=None, tries=50):
+    """ Starts a full node in a subprocess running the cli command
+
+        :param hostname: Hostname used to be accessed by other peers
+        :type hostname: str
+
+        :param listen: Port to listen for new connections (eg: 8000)
+        :type listen: int
+
+        :param listen_ssl: Listen to ssl connection
+        :type listen_ssl: bool
+
+        :param status: Port to run status server
+        :type status: int
+
+        :param bootstrap: Address to connect to (eg: tcp:127.0.0.1:8000)
+        :type bootstrap: str
+
+        :param tries: How many loop tries we will have waiting for the node to run
+        :type tries: int
+
+        :return: Subprocess created
+        :rtype: :py:class:`subprocess.Popen`
+    """
+    command = 'bash hathor-cli run_node --hostname {} --listen tcp:{} --status {}'.format(hostname, listen, status)
+    if listen_ssl:
+        command = '{} --ssl'.format(command)
+
+    if bootstrap:
+        command = '{} --bootstrap {}'.format(command, bootstrap)
+
+    process = subprocess.Popen(command.split())
+
+    partial_url = 'http://{}:{}'.format(hostname, status)
+    url = urllib.parse.urljoin(partial_url, '/wallet/balance/')
+    while True:
+        try:
+            requests.get(url)
+            break
+        except requests.exceptions.ConnectionError:
+            tries -= 1
+            if tries == 0:
+                raise TimeoutError('Error when running node for testing')
+            time.sleep(0.1)
+
+    return process
+
+
+def request_server(path, method, host='http://localhost', port=8085, data=None):
+    """ Execute a request for status server
+
+        :param path: Url path of the request
+        :type path: str
+
+        :param method: Request method (eg: GET, POST, ...)
+        :type method: str
+
+        :param host: Host to execute request (eg: http://localhost)
+        :type host: str
+
+        :param port: Port to connect in the host
+        :type port: int
+
+        :param data: Request data
+        :type data: Dict
+
+        :return: Response in json format
+        :rtype: Dict (json)
+    """
+    partial_url = '{}:{}'.format(host, port)
+    url = urllib.parse.urljoin(partial_url, path)
+    if method == 'GET':
+        response = requests.get(url, params=data)
+    elif method == 'POST':
+        response = requests.post(url, json=data)
+    elif method == 'PUT':
+        response = requests.put(url, json=data)
+    else:
+        raise ValueError('Unsuported method')
+
+    return response.json()
+
+
+def get_tokens_from_mining(blocks_mined):
+    """ Return the tokens available expected after mining
+
+        :param blocks_mined: number of blocks that were mined
+        :type blocks_mined: int
+
+        :return: Available tokens after blocks were mined
+        :rtype: int
+    """
+    tokens_issued_per_block = TOKENS_PER_BLOCK * (10**DECIMAL_PLACES)
+    return tokens_issued_per_block * blocks_mined

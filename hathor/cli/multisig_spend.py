@@ -3,7 +3,7 @@ from hathor.transaction import Transaction
 from hathor.transaction.scripts import MultiSig
 
 
-def main():
+def create_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('partial_tx', type=str, help='Tx to spend multisig fund')
     parser.add_argument(
@@ -12,9 +12,10 @@ def main():
         help='Signatures in hex of the private keys in the same order as the public keys (separated by a comma)'
     )
     parser.add_argument('redeem_script', type=str, help='Redeem script in hex')
+    return parser
 
-    args = parser.parse_args()
 
+def execute(args):
     tx = Transaction.create_from_struct(bytes.fromhex(args.partial_tx))
 
     signatures = [bytes.fromhex(signature) for signature in args.signatures.split(',')]
@@ -23,3 +24,9 @@ def main():
 
     tx.resolve()
     print('Transaction after POW: ', tx.get_struct().hex())
+
+
+def main():
+    parser = create_parser()
+    args = parser.parse_args()
+    execute(args)

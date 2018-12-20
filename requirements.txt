@@ -16,6 +16,7 @@ prometheus-client==0.4.2
 
 requests
 colorama
+ipython
 
 flake8
 pytest

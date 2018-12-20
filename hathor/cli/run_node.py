@@ -45,6 +45,7 @@ def main():
     parser.add_argument('--dns', action='append', help='Seed DNS')
     parser.add_argument('--peer', help='json file with peer info')
     parser.add_argument('--listen', action='append', help='Address to listen for new connections (eg: tcp:8000)')
+    parser.add_argument('--ssl', action='store_true', help='Listen to ssl connection')
     parser.add_argument('--bootstrap', action='append', help='Address to connect to (eg: tcp:127.0.0.1:8000')
     parser.add_argument('--status', type=int, help='Port to run status server')
     parser.add_argument('--data', help='Data directory')
@@ -153,7 +154,10 @@ def main():
 
     if args.listen:
         for description in args.listen:
-            manager.listen(description)
+            ssl = False
+            if args.ssl:
+                ssl = True
+            manager.listen(description, ssl=ssl)
 
     if args.prometheus:
         kwargs = {'metrics': manager.metrics}

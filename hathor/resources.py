@@ -6,7 +6,7 @@ import os
 
 
 class ProfilerResource(resource.Resource):
-    """ Implements a web server API with POST to lock the wallet
+    """ Implements a web server API with POST to start a profiler
 
     You must run with option `--status <PORT>`.
     """
@@ -25,18 +25,32 @@ class ProfilerResource(resource.Resource):
             raise Exception('Unable to generate dump filename')
 
     def render_POST(self, request):
+        """ POST request for /profiler/
+            We expect 'start' or 'stop' as request args and, in the case of stop, also an optional parameter 'filepath'
+            'start': bool to represent it should start the profiler
+            'stop': bool to represent it should stop the profiler
+            'filepath': str of the file path where to save the profiler file
+
+            :rtype: string (json)
+        """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
 
+        data_read = request.content.read()
+        post_data = json.loads(data_read.decode('utf-8')) if data_read else {}
         ret = {'success': True}
 
-        if b'start' in request.uri:
+        if 'start' in post_data:
             self.manager.start_profiler()
 
-        elif b'stop' in request.uri:
-            dump_filename = self.gen_dump_filename()
-            self.manager.stop_profiler(save_to=dump_filename)
-            ret['saved_to'] = dump_filename
+        elif 'stop' in post_data:
+            if 'filepath' in post_data:
+                filepath = post_data['filepath']
+            else:
+                filepath = self.gen_dump_filename()
+
+            self.manager.stop_profiler(save_to=filepath)
+            ret['saved_to'] = filepath
 
         else:
             ret['success'] = False

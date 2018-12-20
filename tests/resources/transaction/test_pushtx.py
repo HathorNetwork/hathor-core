@@ -65,3 +65,10 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         data_error2 = response_error2.json_value()
 
         self.assertFalse(data_error2['success'])
+
+        # Invalid will ask to force
+        valid_tx.outputs[0].value += 1
+        response_invalid = yield self.web.get('push_tx', {b'hex_tx': bytes(valid_tx.get_struct().hex(), 'utf-8')})
+        data_invalid = response_invalid.json_value()
+        self.assertFalse(data_invalid['success'])
+        self.assertTrue(data_invalid['can_force'])

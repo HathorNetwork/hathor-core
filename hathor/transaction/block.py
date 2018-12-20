@@ -3,8 +3,6 @@ from hathor.transaction.exceptions import BlockHeightError, BlockWithInputs
 
 from twisted.logger import Logger
 
-from math import log
-
 
 class Block(BaseTransaction):
     log = Logger()
@@ -63,12 +61,6 @@ class Block(BaseTransaction):
             tx._metadata = TransactionMetadata.create_from_proto(tx.hash, block_proto.metadata)
         return tx
 
-    def calculate_weight(self, network_hashrate):
-        """ Calculate the minimum weight so it is a valid block.
-        weight = 7 + log2(hash_rate)
-        """
-        return 7 + log(network_hashrate, 2)
-
     def verify_height(self):
         """Verify that the height is correct (should be parent + 1)."""
         error_height_message = 'Invalid height of block'
@@ -83,7 +75,12 @@ class Block(BaseTransaction):
         # Get all parents.
         parent_blocks = [parent for parent in self.get_parents()]
 
-        if self.height != max(x.height for x in parent_blocks) + 1:
+        if self.is_genesis:
+            expected_height = 1
+        else:
+            expected_height = max(x.height for x in parent_blocks) + 1
+
+        if self.height != expected_height:
             raise BlockHeightError(error_height_message)
 
     def verify_no_inputs(self):

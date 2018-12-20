@@ -4,13 +4,15 @@ def generate_words(language='english', count=24):
     return mnemonic.generate(strength=int(count*10.67))
 
 
-def main():
+def create_parser():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--language', help='Words language')
     parser.add_argument('--count', type=int, help='Word count')
-    args = parser.parse_args()
+    return parser
 
+
+def execute(args):
     kwargs = {}
 
     if args.language:
@@ -21,5 +23,7 @@ def main():
     print(generate_words(**kwargs))
 
 
-if __name__ == '__main__':
-    main()
+def main():
+    parser = create_parser()
+    args = parser.parse_args()
+    execute(args)
