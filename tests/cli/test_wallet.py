@@ -9,7 +9,6 @@ class WalletTest(unittest.TestCase):
         parser = create_parser()
 
         tmpdir = tempfile.mkdtemp()
-        print(tmpdir)
 
         count = 5
         args = parser.parse_args(['--count', '{}'.format(count), '--directory', tmpdir])
