@@ -746,15 +746,27 @@ class BaseTransaction(ABC):
                 time.sleep(sleep_seconds)
         return None
 
-    def get_metadata(self):
+    def get_metadata(self, *, force_reload=False, use_storage=True):
         """Return this tx's metadata.
 
         It first looks in our cache (tx._metadata) and then tries the tx storage. If it doesn't
         exist, returns a new TransactionMetadata object.
 
+        :param force_reload: don't load the cached metadata
+        :type force_reload: bool
+
+        :param use_storage: use self.storage.get_metadata if no metadata in cache
+        :type use_storage: bool
+
         :rtype: :py:class:`hathor.transaction.TransactionMetadata`
         """
-        metadata = getattr(self, '_metadata', None)
+        if force_reload:
+            metadata = None
+        else:
+            metadata = getattr(self, '_metadata', None)
+        if not metadata and use_storage and self.storage:
+            metadata = self.storage.get_metadata(self.hash)
+            self._metadata = metadata
         if not metadata:
             from hathor.transaction.transaction_metadata import TransactionMetadata
             metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight)
@@ -870,6 +882,18 @@ class BaseTransaction(ABC):
             success = False
             message = str(e)
         return success, message
+
+    def clone(self):
+        """Return exact copy without sharing memory, including metadata if loaded.
+
+        :return: Transaction or Block copy
+        :rtype: :py:class:`hathor.transaction.BaseTransaction`
+        """
+        new_tx = self.create_from_struct(self.get_struct())
+        if hasattr(self, '_metadata'):
+            new_tx._metadata = self._metadata.clone()
+        new_tx.storage = self.storage
+        return new_tx
 
 
 class Input:
