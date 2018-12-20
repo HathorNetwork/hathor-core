@@ -74,6 +74,12 @@ class NanoContractsTest(_BaseResourceTest._ResourceTest):
         self.assertTrue(data['success'])
         self.assertIsNotNone(data['hex_tx'])
 
+        # Error missing parameter
+        response_error = yield signtx_resource.get("wallet/sign_tx", {})
+        data_error = response_error.json_value()
+        self.assertFalse(data_error['success'])
+        self.assertEqual(data_error['message'], 'Missing parameter: hex_tx')
+
         # sign tx
         response = yield signtx_resource.get(
             "wallet/sign_tx",

@@ -2,6 +2,7 @@ from hathor.transaction.resources import TransactionResource
 from twisted.internet.defer import inlineCallbacks
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor.transaction.genesis import genesis_transactions
+from hathor.transaction import Transaction
 
 from tests.utils import add_new_blocks, add_new_transactions
 
@@ -10,6 +11,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
         self.web = StubSite(TransactionResource(self.manager))
+        self.manager.wallet.unlock(b'MYPASS')
 
     @inlineCallbacks
     def test_get_one(self):
@@ -38,10 +40,23 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         data_error2 = response_error2.json_value()
         self.assertFalse(data_error2['success'])
 
+        # Adding blocks to have funds
+        add_new_blocks(self.manager, 2)
+        tx = add_new_transactions(self.manager, 1)[0]
+
+        tx2 = Transaction.create_from_struct(tx.get_struct())
+        tx2.parents = [tx.parents[1], tx.parents[0]]
+        tx2.resolve()
+
+        self.manager.propagate_tx(tx2)
+
+        # Now we get a tx with conflict, voided_by and twin
+        response_conflict = yield self.web.get("transaction", {b'id': bytes(tx2.hash.hex(), 'utf-8')})
+        data_conflict = response_conflict.json_value()
+        self.assertTrue(data_conflict['success'])
+
     @inlineCallbacks
     def test_get_many(self):
-        self.manager.wallet.unlock(b'MYPASS')
-
         # Add some blocks and txs and get them in timestamp order
         blocks = sorted(add_new_blocks(self.manager, 4), key=lambda x: (x.timestamp, x.hash))
         txs = sorted(add_new_transactions(self.manager, 25), key=lambda x: (x.timestamp, x.hash))
@@ -78,7 +93,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
         self.assertTrue(data2['has_more'])
 
-        # Get blocks with hash reference
+        # Get older blocks with hash reference
         expected3 = blocks[:2]
         expected3.reverse()
 
@@ -100,7 +115,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
         self.assertFalse(data3['has_more'])
 
-        # Get txs with hash reference
+        # Get newer txs with hash reference
         response4 = yield self.web.get(
             "transaction",
             {
@@ -118,3 +133,47 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
             self.assertEqual(expected.hash.hex(), result['hash'])
 
         self.assertFalse(data4['has_more'])
+
+        # Get newer blocks with hash reference
+        expected5 = blocks[-2:]
+        expected5.reverse()
+
+        response5 = yield self.web.get(
+            "transaction",
+            {
+                b'count': b'3',
+                b'type': b'block',
+                b'timestamp': bytes(str(expected1[-1].timestamp), 'utf-8'),
+                b'hash': bytes(expected1[-1].hash.hex(), 'utf-8'),
+                b'page': b'previous'
+            }
+        )
+        data5 = response5.json_value()
+
+        for expected, result in zip(expected5, data5['transactions']):
+            self.assertEqual(expected.timestamp, result['timestamp'])
+            self.assertEqual(expected.hash.hex(), result['hash'])
+
+        self.assertFalse(data5['has_more'])
+
+        # Get txs with hash reference
+        expected6 = txs[:8]
+        expected6.reverse()
+
+        response6 = yield self.web.get(
+            "transaction",
+            {
+                b'count': b'8',
+                b'type': b'tx',
+                b'timestamp': bytes(str(txs[8].timestamp), 'utf-8'),
+                b'hash': bytes(txs[8].hash.hex(), 'utf-8'),
+                b'page': b'next'
+            }
+        )
+        data6 = response6.json_value()
+
+        for expected, result in zip(expected6, data6['transactions']):
+            self.assertEqual(expected.timestamp, result['timestamp'])
+            self.assertEqual(expected.hash.hex(), result['hash'])
+
+        self.assertTrue(data6['has_more'])

@@ -6,15 +6,17 @@ from hathor.wallet.util import generate_multisig_address, generate_multisig_rede
 from cryptography.hazmat.primitives import serialization
 
 
-def main():
+def create_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('signatures_required', type=int, help='Mimimum quantity of signatures required')
     parser.add_argument('--pubkey_count', type=int, help='Quantity of public keys in the multisig')
     parser.add_argument('--public_keys', type=str, help='Public keys in hex separated by comma')
     parser.add_argument('--dir', type=str, help='Directory of key pair wallet keys')
 
-    args = parser.parse_args()
+    return parser
 
+
+def execute(args, wallet_passwd):
     if (args.pubkey_count and args.pubkey_count > 16) or args.signatures_required > 16:
         print('Error: maximum number of public keys or signatures required is 16')
         return
@@ -28,7 +30,6 @@ def main():
     else:
         wallet = Wallet()
 
-    wallet_passwd = getpass.getpass(prompt='Wallet password:')
     wallet.unlock(wallet_passwd.encode())
 
     if args.public_keys:
@@ -66,3 +67,10 @@ def main():
     print('------------------\n')
     print('MultiSig address:', address)
     print('------------------\n\n')
+
+
+def main():
+    parser = create_parser()
+    args = parser.parse_args()
+    wallet_passwd = getpass.getpass(prompt='Wallet password:')
+    execute(args, wallet_passwd)

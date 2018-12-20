@@ -29,7 +29,7 @@ def get_ipython(extra_args, imported_objects):
     return run_ipython
 
 
-def main():
+def create_parser():
     # TODO: reuse as much as possible from hathor.cli.run_node
     parser = argparse.ArgumentParser()
     parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
@@ -49,17 +49,10 @@ def main():
     parser.add_argument('--cache', action='store_true', help='Use cache for tx storage')
     parser.add_argument('--cache-size', type=int, help='Number of txs to keep on cache')
     parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
+    return parser
 
-    # TODO: add help for the `--` extra argument separator
-    extra_args = []
-    argv = sys.argv[1:]
-    if '--' in argv:
-        idx = argv.index('--')
-        extra_args = argv[idx + 1:]
-        argv = argv[:idx]
 
-    args = parser.parse_args(argv)
-
+def prepare(args, extra_args=[]):
     loglevel_filter = LogLevelFilterPredicate(LogLevel.info)
     loglevel_filter.setLogLevelForNamespace('hathor.websocket.protocol.HathorAdminWebsocketProtocol', LogLevel.warn)
     loglevel_filter.setLogLevelForNamespace('twisted.python.log', LogLevel.warn)
@@ -160,4 +153,19 @@ def main():
     print()
 
     shell = get_ipython(extra_args, imported_objects)
+    return shell
+
+
+def main():
+    parser = create_parser()
+    # TODO: add help for the `--` extra argument separator
+    extra_args = []
+    argv = sys.argv[1:]
+    if '--' in argv:
+        idx = argv.index('--')
+        extra_args = argv[idx + 1:]
+        argv = argv[:idx]
+
+    args = parser.parse_args(argv)
+    shell = prepare(args, extra_args)
     shell()

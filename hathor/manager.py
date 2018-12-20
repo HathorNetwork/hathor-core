@@ -308,6 +308,7 @@ class HathorManager(object):
                     tx=tx,
                     allowed=self.tokens_issued_per_block,
                 )
+                return False
         else:
             # Validate minimum tx difficulty
             min_tx_weight = self.minimum_tx_weight(tx)
@@ -388,15 +389,19 @@ class HathorManager(object):
 
         The new difficulty cannot be smaller than `self.min_block_weight`.
         """
+        # In test mode we don't validate the block difficulty
+        if self.test_mode:
+            return 1
+
         if block.is_genesis:
-            return 10
+            return MIN_WEIGHT
 
         it = self.tx_storage.iter_bfs_ascendent_blocks(block, max_depth=10)
         blocks = list(it)
         blocks.sort(key=lambda tx: tx.timestamp)
 
         if blocks[-1].is_genesis:
-            return 10
+            return MIN_WEIGHT
 
         dt = blocks[-1].timestamp - blocks[0].timestamp
 
@@ -441,8 +446,9 @@ class HathorManager(object):
         weight = (self.min_tx_weight_coefficient*log(tx_size, 2) + log(tx.sum_outputs, 2) -
                   log(10**DECIMAL_PLACES, 2) + 0.5)
 
-        # Make sure the calculated weight is bigger than the minimum
-        assert weight > MIN_WEIGHT
+        # Make sure the calculated weight is at least the minimum
+        weight = max(weight, MIN_WEIGHT)
+
         return weight
 
     def listen(self, description, ssl=False):

@@ -28,12 +28,15 @@ def worker(q_in, q_out):
     q_out.put(block.nonce)
 
 
-def main():
+def create_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('url', help='URL to get mining bytes')
     parser.add_argument('--sleep', type=float, help='Sleep every 2 seconds (in seconds)')
-    args = parser.parse_args()
+    parser.add_argument('--count', type=int, help='Quantity of blocks to be mined')
+    return parser
 
+
+def execute(args):
     print('Hathor CPU Miner v1.0.0')
     print('URL: {}'.format(args.url))
 
@@ -43,6 +46,7 @@ def main():
     if args.sleep:
         sleep_seconds = args.sleep
 
+    total = 0
     while True:
         print('Requesting mining information...')
         response = requests.get(args.url)
@@ -83,3 +87,13 @@ def main():
             print('')
 
             requests.post(args.url, json={'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
+
+        total += 1
+        if args.count and total == args.count:
+            break
+
+
+def main():
+    parser = create_parser()
+    args = parser.parse_args()
+    execute(args)

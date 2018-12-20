@@ -1,4 +1,4 @@
-import unittest
+from tests import unittest
 import os
 import json
 import base64
@@ -8,13 +8,20 @@ from hathor.transaction import Transaction, Block, TxInput, TxOutput, MAX_NUM_IN
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.transaction.exceptions import InputOutputMismatch, TooManyInputs, TooManyOutputs, ConflictingInputs, \
                                           InvalidInputData, BlockWithInputs, IncorrectParents, InexistentInput, \
-                                          DuplicatedParents, ParentDoesNotExist
+                                          DuplicatedParents, ParentDoesNotExist, PowError, TimestampError, \
+                                          BlockHeightError
 from hathor.transaction.scripts import P2PKH
 from hathor.crypto.util import get_private_key_from_bytes, get_public_key_from_bytes, get_address_from_public_key
+from tests.utils import add_new_blocks, add_new_transactions
+
+from twisted.internet.task import Clock
+
+import time
 
 
 class BasicTransaction(unittest.TestCase):
     def setUp(self):
+        super().setUp()
         self.wallet = Wallet()
         self.tx_storage = TransactionMemoryStorage()
         self.genesis = self.tx_storage.get_all_genesis()
@@ -459,6 +466,118 @@ class BasicTransaction(unittest.TestCase):
         ts = max_ts + 20
         tx.update_timestamp(ts)
         self.assertEquals(tx.timestamp, ts)
+
+    def test_propagation_error(self):
+        clock = Clock()
+        clock.advance(time.time())
+        network = 'testnet'
+        manager = self.create_peer(network, unlock_wallet=True)
+        manager.test_mode = False
+
+        # 1. propagate genesis
+        genesis_block = self.genesis_blocks[0]
+        genesis_block.storage = manager.tx_storage
+        self.assertFalse(manager.propagate_tx(genesis_block))
+
+        # 2. propagate block with weight 1
+        block = manager.generate_mining_block()
+        block.weight = 1
+        block.resolve()
+        self.assertFalse(manager.propagate_tx(block))
+
+        # 3. propagate block with wrong amount of tokens
+        block = manager.generate_mining_block()
+        output = TxOutput(1, block.outputs[0].script)
+        block.outputs = [output]
+        block.resolve()
+        self.assertFalse(manager.propagate_tx(block))
+
+        # 4. propagate block from the future
+        block = manager.generate_mining_block()
+        block.timestamp = int(clock.seconds()) + manager.max_future_timestamp_allowed + 100
+        block.resolve()
+        self.assertFalse(manager.propagate_tx(block))
+
+    def test_tx_methods(self):
+        clock = Clock()
+        clock.advance(time.time())
+        network = 'testnet'
+        manager = self.create_peer(network, unlock_wallet=True)
+
+        blocks = add_new_blocks(manager, 2, advance_clock=1)
+        txs = add_new_transactions(manager, 2, advance_clock=1)
+
+        # Validate __str__, __bytes__, __eq__
+        tx = txs[0]
+        tx2 = txs[1]
+        str_tx = str(tx)
+        self.assertTrue(isinstance(str_tx, str))
+        self.assertEqual(bytes(tx), tx.get_struct())
+
+        tx_equal = Transaction.create_from_struct(tx.get_struct())
+        self.assertTrue(tx == tx_equal)
+        self.assertFalse(tx == tx2)
+
+        tx2_hash = tx2.hash
+        tx2.hash = None
+        self.assertFalse(tx == tx2)
+        tx2.hash = tx2_hash
+
+        # Validate is_genesis without storage
+        tx_equal.storage = None
+        self.assertFalse(tx_equal.is_genesis)
+
+        # Pow error
+        tx2.verify_pow()
+        tx2.weight = 100
+        with self.assertRaises(PowError):
+            tx2.verify_pow()
+
+        # Get sighashall is different with and without data
+        self.assertNotEqual(tx.get_sighash_all(), tx.get_sighash_all(clear_input_data=False))
+
+        # Verify parent timestamps
+        tx2.verify_parents()
+        tx2_timestamp = tx2.timestamp
+        tx2.timestamp = 2
+        with self.assertRaises(TimestampError):
+            tx2.verify_parents()
+        tx2.timestamp = tx2_timestamp
+
+        # Verify inputs timestamps
+        tx2.verify_inputs()
+        tx2.timestamp = 2
+        with self.assertRaises(TimestampError):
+            tx2.verify_inputs()
+        tx2.timestamp = tx2_timestamp
+
+        # Validating block height
+        genesis_block = self.genesis_blocks[0]
+        self.assertEqual(genesis_block.calculate_height(), 1)
+
+        genesis_block.verify_height()
+        genesis_block_height = genesis_block.height
+        genesis_block.height = 2
+        with self.assertRaises(BlockHeightError):
+            genesis_block.verify_height()
+        genesis_block.height = genesis_block_height
+
+        block = blocks[0]
+        block.verify_height()
+        block_storage = block.storage
+        block.storage = None
+        # This part of the code does nothing but it's good to do this verification here
+        # because in the future it might raise an exception so the person will have to change the test also
+        block.verify_height()
+
+        block.storage = block_storage
+        block.height += 1
+        with self.assertRaises(BlockHeightError):
+            block.verify_height()
+
+        block.height -= 2
+        with self.assertRaises(BlockHeightError):
+            block.verify_height()
 
 
 if __name__ == '__main__':

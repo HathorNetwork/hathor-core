@@ -58,8 +58,13 @@ class WalletHD(unittest.TestCase):
         self.assertEqual(self.wallet.balance, WalletBalance(0, TOKENS))
 
         # Test getting more unused addresses than the gap limit
-        for _ in range(3):
-            self.wallet.get_unused_address()
+        for i in range(3):
+            kwargs = {'mark_as_used': True}
+            if i == 2:
+                # Last one we dont mark as used
+                kwargs['mark_as_used'] = False
+
+            self.wallet.get_unused_address(**kwargs)
 
     def test_insuficient_funds(self):
         # create transaction spending some value
