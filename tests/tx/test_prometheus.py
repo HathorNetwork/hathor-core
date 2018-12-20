@@ -7,7 +7,6 @@ import tempfile
 import time
 import os
 import shutil
-from pathlib import Path
 
 
 class PrometheusTest(unittest.TestCase):
@@ -21,14 +20,12 @@ class PrometheusTest(unittest.TestCase):
 
     def test_wallet(self):
         tmpdir = tempfile.mkdtemp()
-        full_path = os.path.join(tmpdir, 'hathor.prom')
+        tmpfile = tempfile.NamedTemporaryFile(dir=tmpdir, suffix='.prom', delete=False)
+        filename = os.path.basename(tmpfile.name)
+        full_path = os.path.join(tmpdir, filename)
 
-        prom_file = Path(full_path)
-        prometheus = PrometheusMetricsExporter(metrics=self.manager.metrics, path=tmpdir)
-        self.assertFalse(prom_file.is_file())
-
+        prometheus = PrometheusMetricsExporter(metrics=self.manager.metrics, path=tmpdir, filename=filename)
         prometheus.set_new_metrics()
-        self.assertTrue(prom_file.is_file())
 
         with open(full_path, 'r') as f:
             text = f.read().split('\n')
