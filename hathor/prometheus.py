@@ -17,13 +17,16 @@ class PrometheusMetricsExporter:
     """ Class that sends hathor metrics to a node exporter that will be read by Prometheus
     """
 
-    def __init__(self, metrics, path):
+    def __init__(self, metrics, path, filename='hathor.prom'):
         """
         :param metrics: Metric object that stores all the hathor metrics
         :type metrics: :py:class:`hathor.metrics.Metrics`
 
         :param path: Path to save the prometheus file
         :type path: str
+
+        :param filename: Name of the prometheus file (must end in .prom)
+        :type filename: str
         """
         self.metrics = metrics
 
@@ -31,7 +34,7 @@ class PrometheusMetricsExporter:
         os.makedirs(path, exist_ok=True)
 
         # Full filepath with filename
-        self.filepath = os.path.join(path, 'hathor.prom')
+        self.filepath = os.path.join(path, filename)
 
         # Stores all Gauge objects for each metric (key is the metric name)
         # Dict[str, prometheus_client.Gauge]
