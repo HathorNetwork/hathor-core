@@ -36,9 +36,13 @@ class ProfilerResource(resource.Resource):
             self.manager.start_profiler()
 
         elif 'stop' in post_data:
-            dump_filename = self.gen_dump_filename()
-            self.manager.stop_profiler(save_to=dump_filename)
-            ret['saved_to'] = dump_filename
+            if 'filepath' in post_data:
+                filepath = post_data['filepath']
+            else:
+                filepath = self.gen_dump_filename()
+
+            self.manager.stop_profiler(save_to=filepath)
+            ret['saved_to'] = filepath
 
         else:
             ret['success'] = False
