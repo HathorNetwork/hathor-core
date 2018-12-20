@@ -4,6 +4,7 @@ from hathor.p2p.peer_id import PeerId, InvalidPeerIdException
 from hathor.p2p.peer_storage import PeerStorage
 
 import tempfile
+import shutil
 import os
 import json
 
@@ -116,6 +117,9 @@ class PeerIdTest(unittest.TestCase):
             peer_from_file = json.loads(f.read())
 
         self.assertEqual(p.to_json(include_private_key=True), peer_from_file)
+
+        # Removing tmpdir
+        shutil.rmtree(tmpdir)
 
 
 if __name__ == '__main__':

@@ -6,6 +6,7 @@ from tests.utils import add_new_blocks, add_new_transactions
 import tempfile
 import time
 import os
+import shutil
 from pathlib import Path
 
 
@@ -47,3 +48,6 @@ class PrometheusTest(unittest.TestCase):
             text = f.read().split('\n')
             self.assertEqual(text[5], 'blocks 4.0')
             self.assertEqual(text[2], 'transactions 7.0')
+
+        # Removing tmpdir
+        shutil.rmtree(tmpdir)

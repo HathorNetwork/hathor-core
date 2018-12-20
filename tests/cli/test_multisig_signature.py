@@ -13,6 +13,7 @@ from contextlib import redirect_stdout
 import tempfile
 import hashlib
 import time
+import shutil
 
 
 class SignatureTest(unittest.TestCase):
@@ -24,9 +25,12 @@ class SignatureTest(unittest.TestCase):
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, unlock_wallet=True)
 
-        tmpdir = tempfile.mkdtemp()
-        self.wallet = Wallet(directory=tmpdir)
+        self.tmpdir = tempfile.mkdtemp()
+        self.wallet = Wallet(directory=self.tmpdir)
         self.wallet.unlock(b'123')
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
 
     def test_generate_signature(self):
         add_new_blocks(self.manager, 1, advance_clock=1)

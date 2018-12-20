@@ -5,7 +5,6 @@ import requests
 import time
 import urllib.parse
 from hathor.constants import TOKENS_PER_BLOCK, DECIMAL_PLACES
-from hathor.wallet.base_wallet import WalletBalance
 
 
 def resolve_block_bytes(block_bytes):

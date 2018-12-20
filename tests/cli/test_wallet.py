@@ -2,6 +2,7 @@ from tests import unittest
 from hathor.cli.wallet import create_parser, execute
 import tempfile
 import json
+import shutil
 
 
 class WalletTest(unittest.TestCase):
@@ -18,3 +19,6 @@ class WalletTest(unittest.TestCase):
             data = json.loads(f.read())
 
         self.assertEqual(len(data), 5)
+
+        # Removing tmpdir
+        shutil.rmtree(tmpdir)
