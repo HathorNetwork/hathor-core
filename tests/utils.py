@@ -4,6 +4,8 @@ import subprocess
 import requests
 import time
 import urllib.parse
+from hathor.constants import TOKENS_PER_BLOCK, DECIMAL_PLACES
+from hathor.wallet.base_wallet import WalletBalance
 
 
 def resolve_block_bytes(block_bytes):
@@ -242,3 +244,16 @@ def request_server(path, method, host='http://localhost', port=8085, data=None):
         raise ValueError('Unsuported method')
 
     return response.json()
+
+
+def get_tokens_from_mining(blocks_mined):
+    """ Return the tokens available expected after mining
+
+        :param blocks_mined: number of blocks that were mined
+        :type blocks_mined: int
+
+        :return: Available tokens after blocks were mined
+        :rtype: int
+    """
+    tokens_issued_per_block = TOKENS_PER_BLOCK * (10**DECIMAL_PLACES)
+    return tokens_issued_per_block * blocks_mined

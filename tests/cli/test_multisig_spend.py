@@ -1,7 +1,7 @@
 from twisted.internet.task import Clock
 
 from tests import unittest
-from tests.utils import add_new_blocks
+from tests.utils import add_new_blocks, get_tokens_from_mining
 
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.wallet.base_wallet import WalletOutputInfo, WalletBalance
@@ -61,7 +61,8 @@ class MultiSigSpendTest(unittest.TestCase):
     def test_spend_multisig(self):
         # Adding funds to the wallet
         add_new_blocks(self.manager, 2, advance_clock=15)
-        self.assertEqual(self.manager.wallet.balance, WalletBalance(0, 4000))
+        available_tokens = get_tokens_from_mining(2)
+        self.assertEqual(self.manager.wallet.balance, WalletBalance(0, available_tokens))
 
         # First we send tokens to a multisig address
         outputs = [
@@ -76,7 +77,7 @@ class MultiSigSpendTest(unittest.TestCase):
         self.manager.propagate_tx(tx1)
         self.clock.advance(10)
 
-        self.assertEqual(self.manager.wallet.balance, WalletBalance(0, 2000))
+        self.assertEqual(self.manager.wallet.balance, WalletBalance(0, available_tokens - 2000))
 
         # Then we create a new tx that spends this tokens from multisig wallet
         tx = Transaction.create_from_struct(tx1.get_struct())
