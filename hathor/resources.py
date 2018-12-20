@@ -26,7 +26,7 @@ class ProfilerResource(resource.Resource):
 
     def render_POST(self, request):
         """ POST request for /profiler/
-            We expect 'start' or 'stop' as request args and in the case of stop, an optional parameter can be 'filepath'
+            We expect 'start' or 'stop' as request args and, in the case of stop, also an optional parameter 'filepath'
             'start': bool to represent it should start the profiler
             'stop': bool to represent it should stop the profiler
             'filepath': str of the file path where to save the profiler file
