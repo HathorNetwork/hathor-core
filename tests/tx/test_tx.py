@@ -571,7 +571,11 @@ class BasicTransaction(unittest.TestCase):
         block.verify_height()
 
         block.storage = block_storage
-        block.height = 200
+        block.height += 1
+        with self.assertRaises(BlockHeightError):
+            block.verify_height()
+
+        block.height -= 2
         with self.assertRaises(BlockHeightError):
             block.verify_height()
 
