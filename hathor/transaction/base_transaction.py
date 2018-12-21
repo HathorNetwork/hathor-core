@@ -1,8 +1,7 @@
 from hathor.transaction.exceptions import TxValidationError, ParentDoesNotExist, TimestampError, \
                                           IncorrectParents, DuplicatedParents, PowError
-
 from hathor.transaction.scripts import parse_address_script
-from hathor.transaction.scripts import NanoContractMatchValues
+from hathor.transaction.scripts import NanoContractMatchValues, NanoContractMatchInterval
 
 from abc import ABC, abstractmethod, abstractclassmethod
 from enum import Enum
@@ -978,7 +977,8 @@ class Output:
             ret['value'] = self.value
             return ret
 
-        nano_contract = NanoContractMatchValues.parse_script(self.script)
+        nano_contract = (NanoContractMatchValues.parse_script(self.script) or
+                         NanoContractMatchInterval.parse_script(self.script))
         if nano_contract:
             return nano_contract.to_human_readable()
 

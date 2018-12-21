@@ -1,7 +1,7 @@
 from twisted.web import resource
 from hathor.api_util import set_cors, get_missing_params_msg
 from hathor.transaction import Transaction
-from hathor.transaction.scripts import NanoContractMatchValues
+from hathor.transaction.scripts import NanoContractMatchValues, NanoContractMatchInterval
 
 import json
 import struct
@@ -45,7 +45,8 @@ class NanoContractDecodeResource(resource.Resource):
             outputs = []
             nano_contract = None
             for _output in tx.outputs:
-                _nano_contract = NanoContractMatchValues.parse_script(_output.script)
+                _nano_contract = (NanoContractMatchValues.parse_script(_output.script) or
+                                  NanoContractMatchInterval.parse_script(_output.script))
                 if _nano_contract:
                     nano_contract = _nano_contract.to_human_readable()
                     nano_contract['value'] = _output.value

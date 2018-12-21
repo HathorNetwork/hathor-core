@@ -44,7 +44,7 @@ class NanoContractMatchValueResource(resource.Resource):
         try:
             data = json.loads(request.content.read().decode('utf-8'))
         except json.JSONDecodeError:
-            return get_missing_params_msg()
+            return 'Unable to decode JSON'.encode('utf-8')
 
         for param in PARAMS_POST:
             if param not in data:
@@ -82,7 +82,7 @@ class NanoContractMatchValueResource(resource.Resource):
     def render_PUT(self, request):
         """ Updates a nano contract tx and returns it in hexadecimal format.
 
-        Post data should be a json with the following items:
+        Put data should be a json with the following items:
         hex_tx: tx being updated, in hex value
         new_values: List[{'address', 'value'}], with bet address and value
         input_value: amount this wallet should stake in the nano contract

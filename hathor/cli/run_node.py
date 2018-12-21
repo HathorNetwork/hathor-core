@@ -14,8 +14,10 @@ from hathor.transaction.storage import TransactionCompactStorage, TransactionMem
 from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, \
                                     SendTokensResource, UnlockWalletResource, \
                                     LockWalletResource, StateWalletResource, SignTxResource
-from hathor.wallet.resources.nano_contracts import NanoContractMatchValueResource, NanoContractDecodeResource, \
-                                                   NanoContractExecuteResource
+from hathor.wallet.resources.nano_contracts import NanoContractMatchValueResource, NanoContractMatchIntervalResource, \
+                                                   NanoContractDecodeResource, NanoContractExecuteResource, \
+                                                   NanoContractParticipantResource
+
 from hathor.resources import ProfilerResource
 from hathor.version_resource import VersionResource
 from hathor.wallet import Wallet, HDWallet
@@ -197,8 +199,10 @@ def main():
             (b'state', StateWalletResource(manager), wallet_resource),
             # /wallet/nano-contract
             (b'match-value', NanoContractMatchValueResource(manager), contracts_resource),
+            (b'match-interval', NanoContractMatchIntervalResource(manager), contracts_resource),
             (b'decode', NanoContractDecodeResource(manager), contracts_resource),
             (b'execute', NanoContractExecuteResource(manager), contracts_resource),
+            (b'participant', NanoContractParticipantResource(manager), contracts_resource),
         )
         for url_path, resource, parent in resources:
             parent.putChild(url_path, resource)
