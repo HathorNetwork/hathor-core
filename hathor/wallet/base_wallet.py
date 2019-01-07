@@ -1,5 +1,3 @@
-import os
-import json
 import base58
 from collections import namedtuple, defaultdict
 from twisted.logger import Logger
@@ -32,7 +30,7 @@ class BaseWallet:
         # Normal key pair wallet
         KEY_PAIR = 'keypair'
 
-    def __init__(self, directory='./', history_file='history.json', pubsub=None, reactor=None):
+    def __init__(self, directory='./', pubsub=None, reactor=None):
         """ A wallet will hold the unspent and spent transactions
 
         All files will be stored in the same directory, and it should
@@ -41,32 +39,25 @@ class BaseWallet:
         :param directory: where to store wallet associated files
         :type directory: string
 
-        :param history_file: name of history file
-        :type history_file: string
-
         :param pubsub: If not given, a new one is created.
         :type pubsub: :py:class:`hathor.pubsub.PubSubManager`
 
         :param reactor: Twisted reactor that handles the time now
         :type reactor: :py:class:`twisted.internet.Reactor`
         """
-        self.history_path = os.path.join(directory, history_file)
-
-        # Dict[string(base58), List[UnspentTx]]
-        # TODO use a Set(Tuple[tx_id, index]) instead. Discussion:
-        # https://gitlab.com/HathorNetwork/hathor-python/merge_requests/131#note_122997309
+        # Dict[Tuple[tx_id, index], UnspentTx]
         self.unspent_txs = {}
 
         # Dict[Tuple(tx_id, index), List[SpentTx]]
         # We have for each output, which txs spent it
         self.spent_txs = defaultdict(list)
 
-        # Dict[Tuple(tx_id, index), List[SpentTx]]
         # Save each spent tx that was voided and is not spending tokens from this wallet anymore
+        # Dict[Tuple(tx_id, index), List[SpentTx]]
         self.voided_spent = defaultdict(list)
-        # Dict[string(base58), List[UnspentTx]]
         # Save each unspent tx that was voided and is not increasing the tokens of this wallet anymore
-        self.voided_unspent = defaultdict(list)
+        # Dict[Tuple[tx_id, index], UnspentTx]
+        self.voided_unspent = {}
 
         # Wallet now has locked balance (with timelock) and available balance
         self.balance = WalletBalance()
@@ -222,18 +213,11 @@ class BaseWallet:
             raise InputDuplicated
         new_inputs = []
         for _input in inputs:
-            found = False
-            for address_b58, utxo_list in self.unspent_txs.items():
-                for utxo in utxo_list:
-                    if _input.tx_id == utxo.tx_id and _input.index == utxo.index:
-                        new_inputs.insert(
-                            0,
-                            WalletInputInfo(_input.tx_id, _input.index,
-                                            self.get_private_key(address_b58))
-                        )
-                        found = True
-
-            if not found and force:
+            new_input = None
+            utxo = self.unspent_txs.get((_input.tx_id, _input.index))
+            if utxo:
+                new_input = WalletInputInfo(_input.tx_id, _input.index, self.get_private_key(utxo.address))
+            elif force:
                 # In case we use 'force', tx_storage is not optional
                 assert tx_storage is not None
                 # If we force we will search this private key also in the keys
@@ -244,14 +228,11 @@ class BaseWallet:
                 if script_type:
                     address = script_type.address
                     if address in self.keys:
-                        new_inputs.insert(
-                            0,
-                            WalletInputInfo(_input.tx_id, _input.index,
-                                            self.get_private_key(address))
-                        )
-                        found = True
+                        new_input = WalletInputInfo(_input.tx_id, _input.index, self.get_private_key(address))
 
-            if not found:
+            if new_input:
+                new_inputs.insert(0, new_input)
+            else:
                 raise PrivateKeyNotFound
 
         return self.prepare_transaction(cls, new_inputs, outputs)
@@ -348,16 +329,14 @@ class BaseWallet:
         inputs_tx = []
         total_inputs_amount = 0
 
-        for address_b58, utxo_list in self.unspent_txs.items():
-            for utxo in utxo_list:
-                if not utxo.is_locked(self.reactor):
-                    # I can only use the outputs that are not locked
-                    inputs_tx.append(WalletInputInfo(utxo.tx_id, utxo.index,
-                                     self.get_private_key(address_b58)))
-                    total_inputs_amount += utxo.value
+        for utxo in self.unspent_txs.values():
+            if not utxo.is_locked(self.reactor):
+                # I can only use the outputs that are not locked
+                inputs_tx.append(WalletInputInfo(utxo.tx_id, utxo.index, self.get_private_key(utxo.address)))
+                total_inputs_amount += utxo.value
 
-                    if total_inputs_amount >= amount:
-                        break
+                if total_inputs_amount >= amount:
+                    break
 
             if total_inputs_amount >= amount:
                 break
@@ -381,10 +360,9 @@ class BaseWallet:
             if script_type_out:
                 if script_type_out.address in self.keys:
                     # this wallet received tokens
-                    utxo = UnspentTx(tx.hash, index, output.value, tx.timestamp, timelock=script_type_out.timelock)
-                    utxo_list = self.unspent_txs.pop(script_type_out.address, [])
-                    utxo_list.append(utxo)
-                    self.unspent_txs[script_type_out.address] = utxo_list
+                    utxo = UnspentTx(tx.hash, index, output.value, tx.timestamp,
+                                     script_type_out.address, timelock=script_type_out.timelock)
+                    self.unspent_txs[(tx.hash, index)] = utxo
                     # mark key as used
                     self.tokens_received(script_type_out.address)
                     updated = True
@@ -408,32 +386,23 @@ class BaseWallet:
                 if script_type_out.address in self.keys:
                     # this wallet spent tokens
                     # remove from unspent_txs
-                    utxo_list = self.unspent_txs.pop(script_type_out.address, [])
-                    list_index = -1
-                    for i, utxo in enumerate(utxo_list):
-                        if utxo.tx_id == _input.tx_id and utxo.index == _input.index:
-                            list_index = i
-                            break
-                    if list_index == -1:
+                    key = (_input.tx_id, _input.index)
+                    old_utxo = self.unspent_txs.pop(key, None)
+                    if old_utxo:
+                        # add to spent_txs
+                        spent = SpentTx(tx.hash, _input.tx_id, _input.index, old_utxo.value, tx.timestamp)
+                        self.spent_txs[key].append(spent)
+                        updated = True
+                        # publish spent output and new balance
+                        self.publish_update(HathorEvents.WALLET_INPUT_SPENT, output_spent=spent)
+                    else:
                         # If we dont have it in the unspent_txs, it must be in the spent_txs
                         # So we append this spent with the others
-                        key = (_input.tx_id, _input.index)
                         if key in self.spent_txs:
                             output_tx = tx.storage.get_transaction(_input.tx_id)
                             output = output_tx.outputs[_input.index]
                             spent = SpentTx(tx.hash, _input.tx_id, _input.index, output.value, tx.timestamp)
                             self.spent_txs[key].append(spent)
-                    else:
-                        old_utxo = utxo_list.pop(list_index)
-                        # add to spent_txs
-                        spent = SpentTx(tx.hash, _input.tx_id, _input.index, old_utxo.value, tx.timestamp)
-                        self.spent_txs[(_input.tx_id, _input.index)].append(spent)
-                        updated = True
-                        # publish spent output and new balance
-                        self.publish_update(HathorEvents.WALLET_INPUT_SPENT, output_spent=spent)
-
-                    if len(utxo_list) > 0:
-                        self.unspent_txs[script_type_out.address] = utxo_list
             else:
                 self.log.warn('unknown input data')
 
@@ -468,38 +437,25 @@ class BaseWallet:
             if script_type_out:
                 if script_type_out.address in self.keys:
                     # Remove this output from unspent_tx, if still there
-                    # Find output index
-                    utxo_list = self.unspent_txs.pop(script_type_out.address, [])
-                    list_index = -1
-                    for i, utxo in enumerate(utxo_list):
-                        if utxo.tx_id == tx.hash and utxo.index == index:
-                            list_index = i
-                            break
-                    if list_index > -1:
-                        # Output found: remove from list and update balance
-                        utxo_list.pop(list_index)
+                    key = (tx.hash, index)
+                    utxo = self.unspent_txs.pop(key, None)
+                    if utxo:
+                        # Output found: update balance
                         should_update = True
                     else:
                         # If it is in spent tx, remove from dict
-                        if (tx.hash, index) in self.spent_txs:
+                        if key in self.spent_txs:
                             should_update = True
-                            del self.spent_txs[(tx.hash, index)]
-
-                    if len(utxo_list) > 0:
-                        self.unspent_txs[script_type_out.address] = utxo_list
+                            del self.spent_txs[key]
 
                     # Save in voided_unspent, if it's not there yet
                     # First try to find it in voided_unspent
-                    voided_utxo_list = self.voided_unspent.get(script_type_out.address, [])
-                    list_index = -1
-                    for i, utxo in enumerate(voided_utxo_list):
-                        if utxo.tx_id == tx.hash and utxo.index == index:
-                            list_index = i
-                            break
-                    if list_index == -1:
+                    voided_utxo = self.voided_unspent.pop(key, None)
+                    if not voided_utxo:
                         # If it's not there, we add it
-                        voided = UnspentTx(tx.hash, index, output.value, tx.timestamp, voided=True)
-                        self.voided_unspent[script_type_out.address].append(voided)
+                        voided = UnspentTx(tx.hash, index, output.value, tx.timestamp,
+                                           script_type_out.address, voided=True)
+                        self.voided_unspent[key] = voided
                         should_update = True
 
         # check inputs
@@ -533,10 +489,9 @@ class BaseWallet:
 
                                 script_type_out = parse_address_script(output.script)
                                 if script_type_out and script_type_out.address in self.keys:
-                                    utxo = UnspentTx(_input.tx_id, _input.index, output.value, output_tx.timestamp)
-                                    utxo_list = self.unspent_txs.pop(script_type_out.address, [])
-                                    utxo_list.append(utxo)
-                                    self.unspent_txs[script_type_out.address] = utxo_list
+                                    utxo = UnspentTx(_input.tx_id, _input.index, output.value,
+                                                     script_type_out.address, output_tx.timestamp)
+                                    self.unspent_txs[(_input.tx_id, _input.index)] = utxo
 
                             should_update = True
 
@@ -574,7 +529,7 @@ class BaseWallet:
             For outputs we have the following situations:
 
             . In case it's in the spent or unspent we do nothing
-            . In case is not found, it was deleted because of a previous conflict, so we recreate un the unspent
+            . In case is not found, it was deleted because of a previous conflict, so we recreate in the unspent
 
             For inputs we have the following situations:
 
@@ -591,37 +546,21 @@ class BaseWallet:
             script_type_out = parse_address_script(output.script)
             if script_type_out:
                 if script_type_out.address in self.keys:
-                    # Find output index
-                    utxo_list = self.unspent_txs.pop(script_type_out.address, [])
-                    list_utxo_index = -1
-                    for i, utxo in enumerate(utxo_list):
-                        if utxo.tx_id == tx.hash and utxo.index == index:
-                            list_utxo_index = i
-                            break
-                    if list_utxo_index == -1:
+                    # Find output
+                    key = (tx.hash, index)
+                    utxo = self.unspent_txs.get(key)
+                    if not utxo:
                         # Not found in unspent
                         # Try to find in spent tx
-                        key = (tx.hash, index)
                         if key not in self.spent_txs or len(self.spent_txs[key]) == 0:
                             # If it's not in unspet or spent it was deleted, so we create again in the unspent
-                            utxo = UnspentTx(tx.hash, index, output.value, tx.timestamp)
-                            utxo_list = self.unspent_txs.pop(script_type_out.address, [])
-                            utxo_list.append(utxo)
-                            should_update = True
-
-                    self.unspent_txs[script_type_out.address] = utxo_list
+                            utxo = UnspentTx(tx.hash, index, output.value, tx.timestamp, script_type_out.address)
+                            self.unspent_txs[key] = utxo
 
                     # Remove from voided_unspent, if it's there
-                    # First try to find it in voided_unspent
-                    voided_utxo_list = self.voided_unspent.get(script_type_out.address, [])
-                    list_index = -1
-                    for i, utxo in enumerate(voided_utxo_list):
-                        if utxo.tx_id == tx.hash and utxo.index == index:
-                            list_index = i
-                            break
-                    if list_index > -1:
-                        # If it's there, we remove it
-                        self.voided_unspent[script_type_out.address].pop(list_index)
+                    voided_utxo = self.voided_unspent.pop(key, None)
+                    if voided_utxo:
+                        # If it's there, we should update
                         should_update = True
 
         # check inputs
@@ -649,22 +588,13 @@ class BaseWallet:
                         should_update = True
 
                     # Remove from unspent_txs, if it's there
-                    if script_type_out.address in self.unspent_txs:
-                        utxo_list = self.unspent_txs.pop(script_type_out.address)
-                        list_index = -1
-                        for i, utxo in enumerate(utxo_list):
-                            if utxo.tx_id == _input.tx_id and utxo.index == _input.index:
-                                list_index = i
-                                break
-                        if list_index > -1:
-                            old_utxo = utxo_list.pop(list_index)
-                            if len(utxo_list) > 0:
-                                self.unspent_txs[script_type_out.address] = utxo_list
-                            # add to spent_txs
-                            spent = SpentTx(tx.hash, _input.tx_id, _input.index, old_utxo.value, tx.timestamp)
-                            self.spent_txs[(_input.tx_id, _input.index)].append(spent)
-                            should_update = True
-                            continue
+                    old_utxo = self.unspent_txs.pop(key, None)
+                    if old_utxo:
+                        # add to spent_txs
+                        spent = SpentTx(tx.hash, _input.tx_id, _input.index, old_utxo.value, tx.timestamp)
+                        self.spent_txs[(_input.tx_id, _input.index)].append(spent)
+                        should_update = True
+                        continue
 
                     # If we dont have it in the unspent_txs, we check in the spent txs
                     # Try to find in spent tx
@@ -697,74 +627,18 @@ class BaseWallet:
             # publish update history
             self.publish_update(HathorEvents.WALLET_HISTORY_UPDATED)
 
-    def save_history_to_file(self):
-        data = {}
-        data['balance'] = self.balance._asdict()
-        data['unspent_txs'] = unspent_txs = {}
-
-        data['spent_txs'] = {}
-        for k, v in self.spent_txs.items():
-            k = (k[0].hex(), k[1])
-            data['spent_txs'][json.dumps(list(k))] = [spent_tx.to_dict() for spent_tx in v]
-
-        for address_b58, utxo_list in self.unspent_txs.items():
-            unspent_txs[address_b58] = [utxo.to_dict() for utxo in utxo_list]
-
-        with open(self.history_path, 'w') as json_file:
-            json_file.write(json.dumps(data, indent=4))
-
-    def read_history_from_file(self):
-        json_data = {}
-        with open(self.history_path, 'r') as json_file:
-            json_data = json.loads(json_file.read())
-
-        self.balance = WalletBalance(json_data['balance']['locked'], json_data['balance']['available'])
-
-        for k, v in json_data['spent_txs'].items():
-            key = tuple(json.loads(k))
-            k = (bytes.fromhex(key[0]), k[1])
-            self.spent_txs[key] = [SpentTx.from_dict(data) for data in v]
-
-        self.unspent_txs = {}
-        for address_b58, utxo_list in json_data['unspent_txs'].items():
-            self.unspent_txs[address_b58] = [UnspentTx.from_dict(utxo) for utxo in utxo_list]
-
-    def replay_from_storage(self, tx_storage):
-        """Builds this wallet's state based on all transactions in the storage
-        """
-
-        self.unspent_txs = {}
-        self.spent_txs = defaultdict(list)
-        self.balance = WalletBalance()
-
-        # TODO we won't be able to hold all transactions in memory in the future
-        all_txs = tx_storage.get_all_transactions()
-
-        # XXX can we trust tx timestamp to order the transactions? This ordering is
-        # important to the wallet. If it replays the transactions in wrong order,
-        # an exception may happen
-        ordered_txs = sorted(all_txs, key=lambda t: t.timestamp, reverse=False)
-
-        for tx in ordered_txs:
-            self.on_new_tx(tx)
-
-        # TODO update history file?
-
     def get_history(self, count=10, page=1):
         """Return the last transactions in this wallet ordered by timestamp and the total
 
         :rtype: tuple[list[SpentTx, UnspentTx], int]
         """
         history = []
-        unspent = self.unspent_txs.values()
-        for obj in unspent:
-            history += obj
+        history += self.unspent_txs.values()
 
         for obj in self.spent_txs.values():
             history += obj
 
-        for obj in self.voided_unspent.values():
-            history += obj
+        history += self.voided_unspent.values()
 
         for obj in self.voided_spent.values():
             history += obj
@@ -782,8 +656,7 @@ class BaseWallet:
 
         :rtype: int
         """
-        total_unspent = sum([len(arr) for arr in self.unspent_txs.values()])
-        return total_unspent + len(self.spent_txs)
+        return len(self.unspent_txs) + len(self.spent_txs)
 
     def publish_update(self, event, **kwargs):
         """ Executes pubsub publish if pubsub is defined in the Wallet
@@ -795,12 +668,11 @@ class BaseWallet:
         """ Calculate the balance of the wallet considering locked and not locked outputs
         """
         balance = {'locked': 0, 'available': 0}
-        for utxo_list in self.unspent_txs.values():
-            for utxo in utxo_list:
-                if utxo.is_locked(self.reactor):
-                    balance['locked'] += utxo.value
-                else:
-                    balance['available'] += utxo.value
+        for utxo in self.unspent_txs.values():
+            if utxo.is_locked(self.reactor):
+                balance['locked'] += utxo.value
+            else:
+                balance['available'] += utxo.value
 
         self.balance = WalletBalance(balance['locked'], balance['available'])
         self.should_schedule_update()
@@ -813,11 +685,10 @@ class BaseWallet:
             Verifies if we have any unspent tx with timelock and schedule for after it is unlocked
         """
         smallest_timestamp = inf
-        for utxo_list in self.unspent_txs.values():
-            for utxo in utxo_list:
-                if utxo.is_locked(self.reactor):
-                    assert utxo.timelock is not None
-                    smallest_timestamp = min(smallest_timestamp, utxo.timelock)
+        for utxo in self.unspent_txs.values():
+            if utxo.is_locked(self.reactor):
+                assert utxo.timelock is not None
+                smallest_timestamp = min(smallest_timestamp, utxo.timelock)
 
         if smallest_timestamp < inf:
             # We have an unspent tx that is locked
@@ -841,29 +712,25 @@ class BaseWallet:
         """Returns an iterable with the inputs that belong and don't belong to this wallet
 
         :return: An iterable with the inputs and corresponding address, if it belongs to this wallet
-        :rtype: Iterable[(TxInput, bool)]
+        :rtype: Iterable[(TxInput, str(base58))]
         """
         for _input in inputs:
             # is it in our wallet?
-            _found = False
-            for address, utxo_list in self.unspent_txs.items():
-                for utxo in utxo_list:
-                    if utxo.tx_id == _input.tx_id and utxo.index == _input.index:
-                        yield _input, address
-                        _found = True
-                        break
-                if _found:
-                    break
-            if not _found:
+            utxo = self.unspent_txs.get((_input.tx_id, _input.index))
+            if utxo:
+                yield _input, utxo.address
+            else:
+                # we couldn't find the UTXO, so it's not ours
                 yield _input, None
 
 
 class UnspentTx:
-    def __init__(self, tx_id, index, value, timestamp, voided=False, timelock=None):
+    def __init__(self, tx_id, index, value, timestamp, address, voided=False, timelock=None):
         self.tx_id = tx_id
         self.index = index
         self.value = value
         self.timestamp = timestamp
+        self.address = address
         self.voided = voided
         self.timelock = timelock
 
@@ -873,6 +740,7 @@ class UnspentTx:
         data['tx_id'] = self.tx_id.hex()
         data['index'] = self.index
         data['value'] = self.value
+        data['address'] = self.address
         data['voided'] = self.voided
         return data
 
@@ -882,7 +750,8 @@ class UnspentTx:
             bytes.fromhex(data['tx_id']),
             data['index'],
             data['value'],
-            data['timestamp']
+            data['timestamp'],
+            data['address']
         )
 
     def is_locked(self, reactor):
