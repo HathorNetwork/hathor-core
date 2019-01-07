@@ -26,7 +26,8 @@ class WalletHD(unittest.TestCase):
         out = WalletOutputInfo(self.wallet.decode_address(new_address), TOKENS, timelock=None)
         block = add_new_block(self.manager)
         block.verify()
-        self.assertEqual(len(self.wallet.unspent_txs[new_address]), 1)
+        utxo = self.wallet.unspent_txs.get((block.hash, 0))
+        self.assertIsNotNone(utxo)
         self.assertEqual(self.wallet.balance, WalletBalance(0, BLOCK_TOKENS))
 
         # create transaction spending this value, but sending to same wallet
@@ -39,7 +40,8 @@ class WalletHD(unittest.TestCase):
         self.wallet.on_new_tx(tx1)
         self.tx_storage.save_transaction(tx1)
         self.assertEqual(len(self.wallet.spent_txs), 1)
-        self.assertEqual(len(self.wallet.unspent_txs), 1)
+        utxo = self.wallet.unspent_txs.get((tx1.hash, 0))
+        self.assertIsNotNone(utxo)
         self.assertEqual(self.wallet.balance, WalletBalance(0, TOKENS))
 
         # pass inputs and outputs to prepare_transaction, but not the input keys

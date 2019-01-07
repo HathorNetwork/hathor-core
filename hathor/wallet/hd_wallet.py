@@ -14,8 +14,8 @@ WORD_COUNT_CHOICES = [12, 15, 18, 21, 24]
 class HDWallet(BaseWallet):
     """ Hierarchical Deterministic Wallet based in BIP32 (https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki)
     """
-    def __init__(self, words=None, language='english', passphrase=b'', gap_limit=20, word_count=24, directory='./',
-                 history_file='history.json', pubsub=None, reactor=None, initial_key_generation=None):
+    def __init__(self, words=None, language='english', passphrase=b'', gap_limit=20, word_count=24,
+                 directory='./', pubsub=None, reactor=None, initial_key_generation=None):
         """
         :param words: words to generate the seed. It's a string with the words separated by a single space.
         If None we generate new words when starting the wallet
@@ -43,7 +43,6 @@ class HDWallet(BaseWallet):
         """
         super().__init__(
             directory=directory,
-            history_file=history_file,
             pubsub=pubsub,
             reactor=reactor
         )

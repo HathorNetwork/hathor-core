@@ -17,8 +17,7 @@ from cryptography.hazmat.primitives import hashes
 class Wallet(BaseWallet):
     log = Logger()
 
-    def __init__(self, keys=None, directory='./', filename='keys.json', history_file='history.json',
-                 pubsub=None, reactor=None):
+    def __init__(self, keys=None, directory='./', filename='keys.json', pubsub=None, reactor=None):
         """ A wallet will hold key pair objects and the unspent and
         spent transactions associated with the keys.
 
@@ -34,15 +33,11 @@ class Wallet(BaseWallet):
         :param filename: name of keys file
         :type filename: string
 
-        :param history_file: name of history file
-        :type history_file: string
-
         :param pubsub: If not given, a new one is created.
         :type pubsub: :py:class:`hathor.pubsub.PubSubManager`
         """
         super().__init__(
             directory=directory,
-            history_file=history_file,
             pubsub=pubsub,
             reactor=reactor
         )

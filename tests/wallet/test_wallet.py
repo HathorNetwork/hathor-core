@@ -1,10 +1,13 @@
-import unittest
 import os
 import json
 import base64
 import tempfile
 import shutil
-from hathor.transaction import Transaction
+
+from tests import unittest
+from tests.utils import add_new_block
+
+from hathor.transaction import Transaction, TxInput
 from hathor.transaction.genesis import genesis_transactions
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet import Wallet
@@ -12,6 +15,7 @@ from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo, WalletB
 from hathor.wallet.keypair import KeyPair
 from hathor.wallet.exceptions import WalletLocked, OutOfUnusedAddresses, InsuficientFunds, InvalidAddress
 from hathor.crypto.util import get_private_key_from_bytes, get_address_b58_from_public_key, get_private_key_bytes
+
 from cryptography.hazmat.primitives import serialization
 
 BLOCK_REWARD = 300
@@ -21,6 +25,7 @@ PASSWORD = b'passwd'
 
 class BasicWallet(unittest.TestCase):
     def setUp(self):
+        super().setUp()
         self.directory = tempfile.mkdtemp(dir='/tmp/')
         # read genesis keys
         filepath = os.path.join(os.getcwd(), 'hathor/wallet/genesis_keys.json')
@@ -36,6 +41,7 @@ class BasicWallet(unittest.TestCase):
             encryption_algorithm=serialization.BestAvailableEncryption(PASSWORD)
         )
         self.storage = TransactionMemoryStorage()
+        self.manager = self.create_peer('testnet', unlock_wallet=True)
 
     def tearDown(self):
         shutil.rmtree(self.directory)
@@ -70,7 +76,9 @@ class BasicWallet(unittest.TestCase):
 
         # wallet will receive genesis block and store in unspent_tx
         w.on_new_tx(genesis_block)
-        self.assertEqual(len(list(w.unspent_txs.values())[0]), len(genesis_block.outputs))
+        for index in range(len(genesis_block.outputs)):
+            utxo = w.unspent_txs.get((genesis_block.hash, index))
+            self.assertIsNotNone(utxo)
         self.assertEqual(w.balance, WalletBalance(0, genesis_value))
 
         # create transaction spending this value, but sending to same wallet
@@ -98,14 +106,6 @@ class BasicWallet(unittest.TestCase):
         self.assertEqual(len(w.spent_txs), 2)
         self.assertEqual(w.balance, WalletBalance(0, genesis_value))
 
-        # test wallet history storage
-        w.save_history_to_file()
-        w2 = Wallet(directory=self.directory)
-        w2.read_history_from_file()
-        self.assertEqual(w.balance, w2.balance)
-        self.assertEqual(len(w.spent_txs), len(w.spent_txs))
-        self.assertEqual(len(w.unspent_txs), len(w2.unspent_txs))
-
         # test keypair exception
         with self.assertRaises(WalletLocked):
             key_pair.get_private_key(None)
@@ -120,25 +120,9 @@ class BasicWallet(unittest.TestCase):
         tx = w.prepare_transaction(Transaction, inputs=[], outputs=[out])
         tx.update_hash()
         w.on_new_tx(tx)
-        self.assertEqual(len(w.unspent_txs[new_address]), 1)
+        utxo = w.unspent_txs.get((tx.hash, 0))
+        self.assertIsNotNone(utxo)
         self.assertEqual(w.balance, WalletBalance(0, BLOCK_REWARD))
-
-    def test_replay_from_file(self):
-        # create wallet with genesis block key
-        key_pair = KeyPair(private_key_bytes=self.genesis_private_key_bytes, address=self.genesis_address, used=True)
-        keys = {}
-        keys[key_pair.address] = key_pair
-        w = Wallet(keys=keys, directory=self.directory)
-        w.unlock(PASSWORD)
-        genesis_blocks = [tx for tx in genesis_transactions(None) if tx.is_block]
-        genesis_block = genesis_blocks[0]
-        genesis_value = sum([output.value for output in genesis_block.outputs])
-
-        # memory storage will only have genesis transactions
-        memory_storage = TransactionMemoryStorage()
-        w.replay_from_storage(memory_storage)
-        self.assertEqual(len(list(w.unspent_txs.values())[0]), len(genesis_block.outputs))
-        self.assertEqual(w.balance, WalletBalance(0, genesis_value))
 
     def test_locked(self):
         # generate a new block and check if we increase balance
@@ -187,6 +171,14 @@ class BasicWallet(unittest.TestCase):
         with self.assertRaises(InvalidAddress):
             WalletOutputInfo(w.decode_address(invalid_address2), 100, None)
 
-
-if __name__ == '__main__':
-    unittest.main()
+    def test_separate_inputs(self):
+        block = add_new_block(self.manager, advance_clock=5)
+        my_input = TxInput(block.hash, 0, b'')
+        genesis_blocks = [tx for tx in genesis_transactions(None) if tx.is_block]
+        genesis_block = genesis_blocks[0]
+        other_input = TxInput(genesis_block.hash, 0, b'')
+        my_inputs, other_inputs = self.manager.wallet.separate_inputs([my_input, other_input])
+        self.assertEqual(len(my_inputs), 1)
+        self.assertEqual(my_inputs[0], my_input)
+        self.assertEqual(len(other_inputs), 1)
+        self.assertEqual(other_inputs[0], other_input)

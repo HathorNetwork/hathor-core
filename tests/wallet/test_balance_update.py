@@ -63,11 +63,12 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # Voided wallet history
         index_voided = 0
         output_voided = tx2.outputs[index_voided]
-        voided_unspent = UnspentTx(tx2.hash, index_voided, output_voided.value, tx2.timestamp, voided=True)
         address = output_voided.to_human_readable()['address']
+        voided_unspent = UnspentTx(tx2.hash, index_voided, output_voided.value, tx2.timestamp, address, voided=True)
         self.assertEqual(len(self.manager.wallet.voided_unspent), 1)
-        self.assertEqual(len(self.manager.wallet.voided_unspent[address]), 1)
-        self.assertEqual(self.manager.wallet.voided_unspent[address][0].to_dict(), voided_unspent.to_dict())
+        voided_utxo = self.manager.wallet.voided_unspent.get((voided_unspent.tx_id, index_voided))
+        self.assertIsNotNone(voided_utxo)
+        self.assertEqual(voided_utxo.to_dict(), voided_unspent.to_dict())
 
         input_voided = tx2.inputs[0]
         key = (input_voided.tx_id, input_voided.index)

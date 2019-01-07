@@ -77,7 +77,7 @@ class TestWebsocket(unittest.TestCase):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
         gen_tx = genesis_transactions(None)[0]
-        output = UnspentTx(gen_tx.hash, 0, 10, gen_tx.timestamp)
+        output = UnspentTx(gen_tx.hash, 0, 10, gen_tx.timestamp, '')
         self.manager.pubsub.publish(HathorEvents.WALLET_OUTPUT_RECEIVED, total=10, output=output)
         value = self._decode_value(self.transport.value())
         self.assertEqual(value['total'], 10)
