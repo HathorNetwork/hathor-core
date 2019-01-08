@@ -64,6 +64,7 @@ class _BaseTransactionStorageTest:
                 inputs=[tx_input],
                 outputs=[output],
                 parents=tx_parents,
+                tokens=[bytes.fromhex('0023be91834c973d6a6ddd1a0ae411807b7c8ef2a015afb5177ee64b666ce602')],
                 storage=tx_storage
             )
             self.tx.resolve()
@@ -153,6 +154,18 @@ class _BaseTransactionStorageTest:
 #            block4 = self._add_new_block()
 #            tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
 #            self.assertEqual(tip_blocks, [block4.hash])
+
+        def test_token_list(self):
+            tx = self.tx
+            self.validate_save(tx)
+            # 2 token uids
+            tx.tokens.append(bytes.fromhex('00001c5c0b69d13b05534c94a69b2c8272294e6b0c536660a3ac264820677024'))
+            tx.resolve()
+            self.validate_save(tx)
+            # no tokens
+            tx.tokens = []
+            tx.resolve()
+            self.validate_save(tx)
 
         def _add_new_block(self, parents=None):
             block = self.manager.generate_mining_block()

@@ -60,6 +60,10 @@ class DuplicatedParents(TxValidationError):
     """Transaction has duplicated parents"""
 
 
+class InvalidToken(TxValidationError):
+    """Token is not valid"""
+
+
 class BlockError(TxValidationError):
     """Base class for Block-specific errors"""
 
@@ -70,6 +74,10 @@ class BlockHeightError(BlockError):
 
 class BlockWithInputs(BlockError):
     """Block has inputs"""
+
+
+class BlockWithTokensError(BlockError):
+    """Block has tokens other than hathor"""
 
 
 class ScriptError(HathorError):

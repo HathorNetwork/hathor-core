@@ -90,6 +90,8 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
             script = base64.b64decode(output['script'])
             outputs.append(Output(value, script))
 
+        tokens = [bytes.fromhex(uid) for uid in data['tokens']]
+
         kwargs = {
             'nonce': nonce,
             'timestamp': timestamp,
@@ -105,6 +107,7 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
             tx = Block(**kwargs)
         else:
             kwargs['inputs'] = inputs
+            kwargs['tokens'] = tokens
             tx = Transaction(**kwargs)
         tx.update_hash()
         assert tx.hash == hash_bytes, 'Hashes differ: {} != {}'.format(tx.hash.hex(), hash_bytes.hex())
