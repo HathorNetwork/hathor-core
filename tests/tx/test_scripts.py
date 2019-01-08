@@ -181,11 +181,15 @@ class BasicTransaction(unittest.TestCase):
                 + bytes([len(value1)]) + value1
                 + bytes([len(value2)]) + value2)
 
-        stack = [data, bytes([0]), value0]
+        stack = [data, 0, value0]
         op_data_strequal(stack, log=[], extras=None)
         self.assertEqual(stack.pop(), data)
 
-        stack = [data, bytes([1]), value0]
+        stack = [data, 1, value0]
+        with self.assertRaises(VerifyFailed):
+            op_data_strequal(stack, log=[], extras=None)
+
+        stack = [data, b'\x00', value0]
         with self.assertRaises(VerifyFailed):
             op_data_strequal(stack, log=[], extras=None)
 
@@ -199,19 +203,23 @@ class BasicTransaction(unittest.TestCase):
         data = (bytes([len(value0)]) + value0
                 + bytes([len(value1)]) + value1)
 
-        stack = [data, bytes([0]), struct.pack('!I', 999)]
+        stack = [data, 0, struct.pack('!I', 999)]
         op_data_greaterthan(stack, log=[], extras=None)
         self.assertEqual(stack.pop(), data)
 
-        stack = [data, bytes([1]), struct.pack('!I', 0)]
+        stack = [data, 1, struct.pack('!I', 0)]
         op_data_greaterthan(stack, log=[], extras=None)
         self.assertEqual(stack.pop(), data)
 
         with self.assertRaises(VerifyFailed):
-            stack = [data, bytes([1]), struct.pack('!I', 1)]
+            stack = [data, 1, struct.pack('!I', 1)]
             op_data_greaterthan(stack, log=[], extras=None)
 
-        stack = [data, bytes([1]), b'not_an_int']
+        stack = [data, 1, b'not_an_int']
+        with self.assertRaises(VerifyFailed):
+            op_data_greaterthan(stack, log=[], extras=None)
+
+        stack = [data, b'\x00', struct.pack('!I', 0)]
         with self.assertRaises(VerifyFailed):
             op_data_greaterthan(stack, log=[], extras=None)
 
@@ -223,29 +231,29 @@ class BasicTransaction(unittest.TestCase):
         data = (bytes([len(value0)]) + value0)
 
         stack = [
-            data, bytes([0]), 'key1', struct.pack('!I', 1000), 'key2', struct.pack('!I', 1005), 'key3', bytes([2])
+            data, 0, 'key1', struct.pack('!I', 1000), 'key2', struct.pack('!I', 1005), 'key3', bytes([2])
         ]
         op_data_match_interval(stack, log=[], extras=None)
         self.assertEqual(stack.pop(), 'key1')
         self.assertEqual(len(stack), 0)
 
-        stack = [data, bytes([0]), 'key1', struct.pack('!I', 100), 'key2', struct.pack('!I', 1005), 'key3', bytes([2])]
+        stack = [data, 0, 'key1', struct.pack('!I', 100), 'key2', struct.pack('!I', 1005), 'key3', bytes([2])]
         op_data_match_interval(stack, log=[], extras=None)
         self.assertEqual(stack.pop(), 'key2')
         self.assertEqual(len(stack), 0)
 
-        stack = [data, bytes([0]), 'key1', struct.pack('!I', 100), 'key2', struct.pack('!I', 900), 'key3', bytes([2])]
+        stack = [data, 0, 'key1', struct.pack('!I', 100), 'key2', struct.pack('!I', 900), 'key3', bytes([2])]
         op_data_match_interval(stack, log=[], extras=None)
         self.assertEqual(stack.pop(), 'key3')
         self.assertEqual(len(stack), 0)
 
         # missing 1 item on stack
-        stack = [data, bytes([0]), struct.pack('!I', 100), 'key2', struct.pack('!I', 900), 'key3', bytes([2])]
+        stack = [data, 0, struct.pack('!I', 100), 'key2', struct.pack('!I', 900), 'key3', bytes([2])]
         with self.assertRaises(MissingStackItems):
             op_data_match_interval(stack, log=[], extras=None)
 
         # value should be an integer
-        stack = [data, bytes([0]), 'key1', struct.pack('!I', 100), 'key2', b'not_an_int', 'key3', bytes([2])]
+        stack = [data, 0, 'key1', struct.pack('!I', 100), 'key2', b'not_an_int', 'key3', bytes([2])]
         with self.assertRaises(VerifyFailed):
             op_data_match_interval(stack, log=[], extras=None)
 
@@ -257,30 +265,30 @@ class BasicTransaction(unittest.TestCase):
         data = (bytes([len(value0)]) + value0)
 
         stack = [
-            data, bytes([0]), 'key1', struct.pack('!I', 1000), 'key2', struct.pack('!I', 1005), 'key3', bytes([2])
+            data, 0, 'key1', struct.pack('!I', 1000), 'key2', struct.pack('!I', 1005), 'key3', bytes([2])
         ]
         op_data_match_value(stack, log=[], extras=None)
         self.assertEqual(stack.pop(), 'key2')
         self.assertEqual(len(stack), 0)
 
-        stack = [data, bytes([0]), 'key1', struct.pack('!I', 999), 'key2', struct.pack('!I', 1000), 'key3', bytes([2])]
+        stack = [data, 0, 'key1', struct.pack('!I', 999), 'key2', struct.pack('!I', 1000), 'key3', bytes([2])]
         op_data_match_value(stack, log=[], extras=None)
         self.assertEqual(stack.pop(), 'key3')
         self.assertEqual(len(stack), 0)
 
         # missing 1 item on stack
-        stack = [data, bytes([0]), 'key1', struct.pack('!I', 1000), 'key2', struct.pack('!I', 1000), bytes([2])]
+        stack = [data, 0, 'key1', struct.pack('!I', 1000), 'key2', struct.pack('!I', 1000), bytes([2])]
         with self.assertRaises(MissingStackItems):
             op_data_match_value(stack, log=[], extras=None)
 
         # no value matches
-        stack = [data, bytes([0]), 'key1', struct.pack('!I', 999), 'key2', struct.pack('!I', 1111), 'key3', bytes([2])]
+        stack = [data, 0, 'key1', struct.pack('!I', 999), 'key2', struct.pack('!I', 1111), 'key3', bytes([2])]
         op_data_match_value(stack, log=[], extras=None)
         self.assertEqual(stack.pop(), 'key1')
         self.assertEqual(len(stack), 0)
 
         # value should be an integer
-        stack = [data, bytes([0]), 'key1', struct.pack('!I', 100), 'key2', b'not_an_int', 'key3', bytes([2])]
+        stack = [data, 0, 'key1', struct.pack('!I', 100), 'key2', b'not_an_int', 'key3', bytes([2])]
         with self.assertRaises(VerifyFailed):
             op_data_match_value(stack, log=[], extras=None)
 
@@ -591,8 +599,8 @@ class BasicTransaction(unittest.TestCase):
         self.assertEqual(stack.pop(), 0)
 
     def test_integer_opcode(self):
-        # We have opcodes from OP_1 to OP_16
-        for i in range(1, 17):
+        # We have opcodes from OP_0 to OP_16
+        for i in range(0, 17):
             stack = []
             op_integer(getattr(Opcode, 'OP_{}'.format(i)), stack, [], None)
             self.assertEqual(stack, [i])

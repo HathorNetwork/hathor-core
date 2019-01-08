@@ -29,9 +29,13 @@ ScriptExtras = namedtuple('ScriptExtras', 'tx txin spent_tx')
 def re_compile(pattern):
     """ Transform a given script pattern into a regular expression.
 
-    The script pattern is like a regular expression, but you may include two
-    special symbols: (i) OP_DUP, OP_HASH160, and all other opcodes, and
-    (ii) DATA_<length>.
+    The script pattern is like a regular expression, but you may include five
+    special symbols:
+      (i) OP_DUP, OP_HASH160, and all other opcodes;
+     (ii) DATA_<length>: data with the specified length;
+    (iii) INT_<number>: the integer number (eg INT_3 means the number 3);
+     (iv) NUMBER: a 4-byte integer;
+      (v) BLOCK: a variable length block, to be parsed later
 
     Example:
     >>> re_compile(
@@ -54,8 +58,6 @@ def re_compile(pattern):
             return b'.{1}' + bytes([number])
         elif x.startswith('NUMBER'):
             return b'.{5}'
-        elif x.startswith('CHAR'):
-            return b'.{1}'
         elif x.startswith('BLOCK'):
             return b'.*'
         else:
@@ -99,6 +101,7 @@ def _re_pushdata(length):
 
 
 class Opcode(IntEnum):
+    OP_0 = 0x50
     OP_1 = 0x51
     OP_2 = 0x52
     OP_3 = 0x53
@@ -399,8 +402,8 @@ class MultiSig:
 
 class NanoContractMatchValues:
     re_match = re_compile(
-        '^OP_DUP OP_HASH160 (DATA_20) OP_EQUALVERIFY OP_CHECKDATASIG INT_0 (BLOCK) OP_DATA_STREQUAL '
-        'INT_1 (NUMBER) OP_DATA_GREATERTHAN INT_2 (BLOCK) OP_DATA_MATCH_VALUE OP_FIND_P2PKH$'
+        '^OP_DUP OP_HASH160 (DATA_20) OP_EQUALVERIFY OP_CHECKDATASIG OP_0 (BLOCK) OP_DATA_STREQUAL '
+        'OP_1 (NUMBER) OP_DATA_GREATERTHAN OP_2 (BLOCK) OP_DATA_MATCH_VALUE OP_FIND_P2PKH$'
     )
 
     def __init__(self, oracle_pubkey_hash, min_timestamp, oracle_data_id,
@@ -452,8 +455,7 @@ class NanoContractMatchValues:
 
     def create_output_script(self):
         """
-        params are described on __init__
-
+        :return: the output script in binary
         :rtype: bytes
         """
         s = HathorScript()
@@ -463,20 +465,22 @@ class NanoContractMatchValues:
         s.addOpcode(Opcode.OP_EQUALVERIFY)
         s.addOpcode(Opcode.OP_CHECKDATASIG)
         # compare first value from data with oracle_data_id
-        s.pushData(bytes([0]))
+        s.addOpcode(Opcode.OP_0)
         s.pushData(self.oracle_data_id)
         s.addOpcode(Opcode.OP_DATA_STREQUAL)
         # compare second value from data with min_timestamp
-        s.pushData(bytes([1]))
+        s.addOpcode(Opcode.OP_1)
         s.pushData(struct.pack('!I', self.min_timestamp))
         s.addOpcode(Opcode.OP_DATA_GREATERTHAN)
         # finally, compare third value with values on dict
-        s.pushData(bytes([2]))
+        s.addOpcode(Opcode.OP_2)
         s.pushData(self.fallback_pubkey_hash)
         for pubkey_hash, value in self.value_dict.items():
             s.pushData(value)
             s.pushData(pubkey_hash)
-        s.pushData(bytes([len(self.value_dict)]))
+        # we use int as bytes because it may be greater than 16
+        # TODO should we limit it to 16?
+        s.pushData(len(self.value_dict))
         s.addOpcode(Opcode.OP_DATA_MATCH_VALUE)
         # pubkey left on stack should be on outputs
         s.addOpcode(Opcode.OP_FIND_P2PKH)
@@ -563,23 +567,9 @@ class NanoContractMatchValues:
                 # shouldn't have data left
                 return None
 
-            # TODO should check n_values == len(values_pubkeys)?
-
             return NanoContractMatchValues(oracle_pubkey_hash, min_timestamp, oracle_data_id,
                                            value_dict, fallback_pubkey)
         return None
-
-    @classmethod
-    def verify_input(cls, input_data):
-        """Checks if the given input is of type NanoContractMatchValues. If it is, returns the corresponding object.
-        Otherwise, returns None.
-
-        :param script: input data to check
-        :type script: bytes
-
-        :rtype: :py:class:`hathor.transaction.scripts.NanoContractMatchValues` or None
-        """
-        raise NotImplementedError
 
 
 def create_output_script(address, timelock=None):
@@ -647,8 +637,8 @@ def execute_eval(data, log, extras):
             pos = op_pushdata1(pos, data, stack)
             continue
 
-        # Checking if the opcode is an integer push (OP_1 - OP_16)
-        if opcode >= Opcode.OP_1 and opcode <= Opcode.OP_16:
+        # Checking if the opcode is an integer push (OP_0 - OP_16)
+        if opcode >= Opcode.OP_0 and opcode <= Opcode.OP_16:
             op_integer(opcode, stack, log, extras)
             pos += 1
             continue
@@ -978,10 +968,12 @@ def op_data_strequal(stack, log, extras):
         raise MissingStackItems('OP_DATA_STREQUAL: need 3 elements on stack, currently {}'.format(len(stack)))
     value = stack.pop()
     data_k = stack.pop()
-    data_k_int = data_k[0]      # data_k is a 1-byte unsigned int
     data = stack.pop()
 
-    data_value = get_data_value(data_k_int, data)
+    if not isinstance(data_k, int):
+        raise VerifyFailed('OP_DATA_STREQUAL: value on stack should be an integer ({})'.format(data_k))
+
+    data_value = get_data_value(data_k, data)
     if data_value != value:
         raise VerifyFailed('OP_DATA_STREQUAL: {} x {}'.format(data_value.decode('utf-8'), value.decode('utf-8')))
 
@@ -1004,10 +996,12 @@ def op_data_greaterthan(stack, log, extras):
         raise MissingStackItems('OP_DATA_GREATERTHAN: need 3 elements on stack, currently {}'.format(len(stack)))
     value = stack.pop()
     data_k = stack.pop()
-    data_k_int = data_k[0]      # data_k is a 1-byte unsigned int
     data = stack.pop()
 
-    data_value = get_data_value(data_k_int, data)
+    if not isinstance(data_k, int):
+        raise VerifyFailed('OP_DATA_STREQUAL: value on stack should be an integer ({})'.format(data_k))
+
+    data_value = get_data_value(data_k, data)
     try:
         data_int = binary_to_int(data_value)
         value_int = binary_to_int(value)
@@ -1032,6 +1026,7 @@ def op_data_match_interval(stack, log, extras):
     if len(stack) < 1:
         raise MissingStackItems('OP_DATA_MATCH_INTERVAL: stack is empty')
 
+    # TODO test this is actually bytes and can transform in integer
     n_items = stack.pop()[0]
     # number of items in stack that will be used
     will_use = 2 * n_items + 3      # n data_points, n + 1 pubkeys, k and data
@@ -1050,9 +1045,8 @@ def op_data_match_interval(stack, log, extras):
         last_pubkey = stack.pop()
         # next two items are data index and data
         data_k = stack.pop()
-        data_k_int = data_k[0]      # data_k is a 1-byte unsigned int
         data = stack.pop()
-        data_value = get_data_value(data_k_int, data)
+        data_value = get_data_value(data_k, data)
         data_int = binary_to_int(data_value)
     except (ValueError, struct.error) as e:
         raise VerifyFailed from e
@@ -1076,6 +1070,8 @@ def op_data_match_value(stack, log, extras):
     """
     if len(stack) < 1:
         raise MissingStackItems('OP_DATA_MATCH_VALUE: empty stack')
+
+    # TODO test this is actually bytes and can transform in integer
     n_items = stack.pop()[0]
 
     # number of items in stack that will be used
@@ -1098,9 +1094,8 @@ def op_data_match_value(stack, log, extras):
     last_pubkey = stack.pop()
     # next two items are data index and data
     data_k = stack.pop()
-    data_k_int = data_k[0]      # data_k is a 1-byte unsigned int
     data = stack.pop()
-    data_value = get_data_value(data_k_int, data)
+    data_value = get_data_value(data_k, data)
     data_int = binary_to_int(data_value)
     winner_pubkey = items.get(data_int, last_pubkey)
     stack.append(winner_pubkey)
@@ -1217,7 +1212,7 @@ def op_integer(opcode, stack, log, extras):
 
         Example to append integer 4:
         opcode will be equal to OP_4 (0x54)
-        Then we append the integer OP_4 - OP_1 + 1 = 4
+        Then we append the integer OP_4 - OP_0 = 4
 
         :param opcode: the opcode to append to the stack
         :type opcode: bytes
@@ -1225,8 +1220,8 @@ def op_integer(opcode, stack, log, extras):
         :param stack: the stack used when evaluating the script
         :type stack: List[]
     """
-    to_append = opcode - Opcode.OP_1 + 1
-    if to_append < 1 or to_append > 16:
+    to_append = opcode - Opcode.OP_0
+    if to_append < 0 or to_append > 16:
         raise ScriptError('unknown opcode {}'.format(opcode))
     stack.append(to_append)
 

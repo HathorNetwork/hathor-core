@@ -26,6 +26,7 @@ class NanoContracts(unittest.TestCase):
                                      'some_id'.encode('utf-8'), {address: 100})
         script = nc.create_output_script()
         nc2 = NanoContractMatchValues.parse_script(script)
+        self.assertIsNotNone(nc2)
         self.assertEqual(json.dumps(nc.to_human_readable()), json.dumps(nc2.to_human_readable()))
 
         # if we add some more bytes, parsing should not match
