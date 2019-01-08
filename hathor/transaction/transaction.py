@@ -1,14 +1,21 @@
-from hathor.transaction.base_transaction import BaseTransaction, MAX_NUM_INPUTS, MAX_NUM_OUTPUTS
+from hathor.transaction.base_transaction import BaseTransaction
+from hathor.transaction import TxInput, MAX_NUM_INPUTS, MAX_NUM_OUTPUTS
 from hathor.transaction.exceptions import InputOutputMismatch, TooManyInputs, TooManyOutputs, \
                                           InvalidInputData, TimestampError, InexistentInput, \
-                                          ConflictingInputs, ScriptError
+                                          ConflictingInputs, ScriptError, InvalidToken
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.scripts import script_eval
+
+import hashlib
+from collections import namedtuple
+from typing import Dict, List, Tuple
+
+TokenInfo = namedtuple('TokenInfo', 'amount can_mint can_melt')
 
 
 class Transaction(BaseTransaction):
     def __init__(self, nonce=0, timestamp=None, version=1, weight=0, height=0,
-                 inputs=None, outputs=None, parents=None, hash=None, storage=None):
+                 inputs=None, outputs=None, parents=None, tokens=None, hash=None, storage=None):
         """
             Creating new init just to make sure inputs will always be empty array
             Inputs: all inputs that are being used (empty in case of a block)
@@ -22,6 +29,7 @@ class Transaction(BaseTransaction):
             inputs=inputs or [],
             outputs=outputs or [],
             parents=parents or [],
+            tokens=tokens or [],
             hash=hash,
             storage=storage,
             is_block=False
@@ -36,6 +44,7 @@ class Transaction(BaseTransaction):
             timestamp=self.timestamp,
             height=self.height,
             parents=self.parents,
+            tokens=self.tokens,
             inputs=map(TxInput.to_proto, self.inputs),
             outputs=map(TxOutput.to_proto, self.outputs),
             nonce=self.nonce,
@@ -57,6 +66,7 @@ class Transaction(BaseTransaction):
             nonce=transaction_proto.nonce,
             hash=transaction_proto.hash or None,
             parents=list(transaction_proto.parents),
+            tokens=list(transaction_proto.tokens),
             inputs=list(map(TxInput.create_from_proto, transaction_proto.inputs)),
             outputs=list(map(TxOutput.create_from_proto, transaction_proto.outputs)),
             storage=storage,
@@ -70,13 +80,13 @@ class Transaction(BaseTransaction):
 
     def verify(self):
         """
-            We have to do 8 verifications:
+            We have to do the following verifications:
                (i) spends only unspent outputs
               (ii) sum of inputs is equal to the sum of outputs
              (iii) number of inputs is at most 256
               (iv) number of outputs is at most 256
                (v) confirms at least two pending transactions
-              (vi) solves the pow with the correct weight
+              (vi) solves the pow with the correct weight (done in HathorManager)
              (vii) validates signature of inputs
             (viii) validates public key and output (of the inputs) addresses
               (ix) validate that both parents are valid
@@ -96,6 +106,7 @@ class Transaction(BaseTransaction):
         self.verify_pow()
         self.verify_number_of_inputs()
         self.verify_number_of_outputs()
+        self.verify_outputs()
 
     def verify_number_of_inputs(self):
         """Verify number of inputs does not exceeds the limit"""
@@ -107,18 +118,121 @@ class Transaction(BaseTransaction):
         if len(self.outputs) > MAX_NUM_OUTPUTS:
             raise TooManyOutputs('Maximum number of outputs exceeded')
 
-    def verify_sum(self):
-        """Verify that the sum of outputs is equal of the sum of inputs"""
-        sum_outputs = self.sum_outputs
-        sum_inputs = 0
+    def verify_outputs(self) -> None:
+        """Verify outputs reference an existing token uid in the tx list and there are no hathor
+        authority UTXOs
+
+        :raises InvalidToken: output references non existent token uid or when there's a hathor authority utxo
+        """
+        for output in self.outputs:
+            # check index is valid
+            if output.get_token_index() > len(self.tokens):
+                raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
+
+            # no hathor authority UTXO
+            if (output.get_token_index() == 0) and output.is_token_authority():
+                raise InvalidToken('Cannot have authority UTXO for hathor tokens: {}'
+                                   .format(output.to_human_readable()))
+
+    def create_token_uid(self, index: int) -> bytes:
+        """Returns the token uid for a token in a given output position.
+
+        The uid is the hash of an input_id + input_index. The input is the one whose index is the same
+        as the token creation output. For eg, if the token creation UTXO is the 3rd output, we'll use
+        the 3rd input for computing its uid.
+
+        :param index: position of the token output in the output list
+        :type index: int
+
+        :return: the new token uid
+        :rtype: bytes
+
+        :raises InvalidToken: no matching input for given index
+        """
+        if index >= len(self.inputs):
+            raise InvalidToken('no matching input for index {}'.format(index))
+        _input: TxInput = self.inputs[index]
+        m = hashlib.sha256()
+        m.update(_input.tx_id)
+        m.update(bytes([_input.index]))
+        return m.digest()
+
+    def verify_sum(self) -> None:
+        """Verify that the sum of outputs is equal of the sum of inputs, for each token.
+
+        If there are authority UTXOs involved, tokens can be minted or melted, so the above rule may
+        not be respected.
+
+        :raises InvalidToken: when there's an error in token operations
+        :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
+        """
+        # token dict sums up all tokens present in the tx and their properties (amount, mint, melt)
+        token_dict: Dict[bytes, TokenInfo] = {}
+        # created tokens contains tokens being created in this tx and the corresponding output index
+        created_tokens: List[Tuple[bytes, int]] = []     # List[(token_uid, index)]
+
+        default_info: TokenInfo = TokenInfo(0, False, False)
+
         for input_tx in self.inputs:
             spent_tx = self.get_spent_tx(input_tx)
-            sum_inputs += spent_tx.outputs[input_tx.index].value
-        if sum_outputs != sum_inputs:
-            raise InputOutputMismatch('Sum of inputs ({}) is different than the sum of outputs ({})'
-                                      .format(sum_inputs, sum_outputs))
+            spent_output = spent_tx.outputs[input_tx.index]
 
-    def verify_inputs(self):
+            token_uid: TokenInfo = spent_tx.get_token_uid(spent_output.get_token_index())
+            (amount, can_mint, can_melt) = token_dict.get(token_uid, default_info)
+            if spent_output.is_token_authority():
+                can_mint = can_mint or spent_output.can_mint_token()
+                can_melt = can_melt or spent_output.can_melt_token()
+            else:
+                amount += spent_output.value
+            token_dict[token_uid] = TokenInfo(amount, can_mint, can_melt)
+
+        # iterate over outputs and subtract spent values from token_map
+        for index, tx_output in enumerate(self.outputs):
+            token_uid: bytes = self.get_token_uid(tx_output.get_token_index())
+            token_info: TokenInfo = token_dict.get(token_uid)
+            if token_info is None:
+                # was not in the inputs, so it must be a new token
+                if tx_output.is_token_creation():
+                    created_tokens.append((token_uid, index))
+                else:
+                    raise InvalidToken('no token creation and no inputs for token {}'.format(token_uid.hex()))
+            else:
+                # for authority outputs, make sure the same capability (mint/melt) was present in the inputs
+                if tx_output.can_mint_token() and not token_info.can_mint:
+                    raise InvalidToken('output has mint authority, but no input has it: {}'
+                                       .format(tx_output.to_human_readable()))
+                if tx_output.can_melt_token() and not token_info.can_melt:
+                    raise InvalidToken('output has melt authority, but no input has it: {}'
+                                       .format(tx_output.to_human_readable()))
+
+                # for regular outputs, just subtract from the total amount
+                if not tx_output.is_token_authority():
+                    sum_tokens = token_info.amount - tx_output.value
+                    token_dict[token_uid] = TokenInfo(sum_tokens, token_info.can_mint, token_info.can_melt)
+
+        # if sum of inputs and outputs is not 0, make sure inputs have mint/melt authority
+        for token_uid, token_info in token_dict.items():
+            if token_info.amount == 0:
+                # that's the usual behavior, nothing to do
+                pass
+            elif token_info.amount > 0:
+                # tokens have been melted
+                if not token_info.can_melt:
+                    raise InputOutputMismatch('{} {} tokens melted, but there is no melt authority input'
+                                              .format(token_info.amount, token_uid.hex()))
+            else:
+                # tokens have been minted
+                if not token_info.can_mint:
+                    raise InputOutputMismatch('{} {} tokens minted, but there is no mint authority input'
+                                              .format((-1)*token_info.amount, token_uid.hex()))
+
+        # make sure created tokens have correct hash
+        for token_uid, index in created_tokens:
+            if token_uid != self.create_token_uid(index):
+                raise InvalidToken('token creation with invalid uid; expecting {}, got {}; output index {}'
+                                   .format(self.create_token_uid(index), token_uid, index))
+
+    def verify_inputs(self) -> None:
         """Verify inputs signatures and ownership and all inputs actually exist"""
         spent_outputs = set()  # Set[Tuple[bytes(hash), int]]
         for input_tx in self.inputs:

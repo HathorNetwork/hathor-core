@@ -1,5 +1,5 @@
 from hathor.transaction.base_transaction import BaseTransaction
-from hathor.transaction.exceptions import BlockHeightError, BlockWithInputs
+from hathor.transaction.exceptions import BlockHeightError, BlockWithInputs, BlockWithTokensError
 
 from twisted.logger import Logger
 
@@ -88,6 +88,16 @@ class Block(BaseTransaction):
         if inputs:
             raise BlockWithInputs('number of inputs {}'.format(len(inputs)))
 
+    def verify_outputs(self) -> None:
+        # can only contain hathor tokens
+        # check there are no tokens in the token uid list
+        if len(self.tokens) > 0:
+            raise BlockWithTokensError('token list: {}'.format([token_uid.hex() for token_uid in self.tokens]))
+
+        for output in self.outputs:
+            if output.get_token_index() > 0:
+                raise BlockWithTokensError('in output: {}'.format(output.to_human_readable()))
+
     def calculate_height(self):
         """ Calculate block height according to its parents
 
@@ -105,23 +115,24 @@ class Block(BaseTransaction):
         """
         self.verify_pow()
         self.verify_no_inputs()
+        self.verify_outputs()
 
     def verify(self):
         """
             (1) confirms at least two pending transactions and references last block
-            (2) solves the pow with the correct weight
-            (3) creates the correct amount of tokens in the output
+            (2) solves the pow with the correct weight (done in HathorManager)
+            (3) creates the correct amount of tokens in the output (done in HathorManager)
             (4) all parents must exist and have timestamp smaller than ours
             (5) height of block == height of previous block + 1
         """
         # TODO Should we validate a limit of outputs?
-        # TODO (1) and (3)
         if self.is_genesis:
             # TODO do genesis validation
             return
 
         self.verify_without_storage()
 
-        # (4) and (5)
+        # (1) and (4)
         self.verify_parents()
+        # (5)
         self.verify_height()

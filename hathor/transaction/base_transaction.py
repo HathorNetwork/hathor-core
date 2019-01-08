@@ -20,13 +20,14 @@ MAX_NUM_INPUTS = MAX_NUM_OUTPUTS = 256
 _INPUT_SIZE_BYTES = 32  # 256 bits
 
 # Version (H), weight (d), timestamp (I), height (Q), inputs len (H), outputs len (H) and
-# parents len (H).
-# H = unsigned short (2 bytes), d = double(8), f = float(4), I = unsigned int (4), Q = unsigned long long int (64)
-_TRANSACTION_FORMAT_STRING = '!HdIQHHH'  # Update code below if this changes.
+# parents len (H), token uids len (B).
+# H = unsigned short (2 bytes), d = double(8), f = float(4), I = unsigned int (4),
+# Q = unsigned long long int (64), B = unsigned char (1 byte)
+_TRANSACTION_FORMAT_STRING = '!HdIQHHHB'  # Update code below if this changes.
 
-# Version (H), inputs len (H), and outputs len (H).
+# Version (H), inputs len (H), and outputs len (H), token uids len (B).
 # H = unsigned short (2 bytes)
-_SIGHASH_ALL_FORMAT_STRING = '!HHH'
+_SIGHASH_ALL_FORMAT_STRING = '!HHHB'
 
 # tx should have 2 parents, both other transactions
 _TX_PARENTS_TXS = 2
@@ -65,8 +66,8 @@ class BaseTransaction(ABC):
         DISCONNECTED = 0
         CONNECTED = 1
 
-    def __init__(self, nonce=0, timestamp=None, version=1, weight=0, height=0,
-                 inputs=None, outputs=None, parents=None, hash=None, storage=None, is_block=True):
+    def __init__(self, nonce=0, timestamp=None, version=1, weight=0, height=0, inputs=None,
+                 outputs=None, parents=None, tokens=None, hash=None, storage=None, is_block=True):
         """
             Nonce: nonce used for the proof-of-work
             Timestamp: moment of creation
@@ -74,6 +75,7 @@ class BaseTransaction(ABC):
             Weight: different for transactions and blocks
             Outputs: all outputs that are being created
             Parents: transactions you are confirming (2 transactions and 1 block - in case of a block only)
+            Tokens: list of token uids in this transaction
         """
         self.nonce = nonce
         self.timestamp = timestamp or int(time.time())
@@ -83,6 +85,7 @@ class BaseTransaction(ABC):
         self.inputs = inputs or []
         self.outputs = outputs or []
         self.parents = parents or []
+        self.tokens = tokens or []
         self.storage = storage
         self.hash = hash      # Stored as bytes.
         self.is_block = is_block
@@ -95,12 +98,12 @@ class BaseTransaction(ABC):
         return ('%s(nonce=%d, timestamp=%s, version=%s, weight=%f, height=%d, inputs=%s, outputs=%s, parents=%s, '
                 'hash=%s, storage=%s)' %
                 (class_name, self.nonce, self.timestamp, self.version, self.weight, self.height,
-                 repr(self.inputs), repr(self.outputs), repr(self.parents), self.hash, repr(self.storage)))
+                 repr(self.inputs), repr(self.outputs), repr(self.parents), self.hash_hex, repr(self.storage)))
 
     def __str__(self):
         class_name = 'Block' if self.is_block else 'Transaction'
         return ('%s(nonce=%d, timestamp=%s, version=%s, weight=%f, height=%d, hash=%s)' % (class_name, self.nonce,
-                self.timestamp, self.version, self.weight, self.height, self.hash))
+                self.timestamp, self.version, self.weight, self.height, self.hash_hex))
 
     @classmethod
     def create_from_struct(cls, struct_bytes, storage=None):
@@ -122,12 +125,16 @@ class BaseTransaction(ABC):
         buf = struct_bytes
 
         tx = cls()
-        (tx.version, tx.weight, tx.timestamp, tx.height, inputs_len, outputs_len, parents_len), buf = (
+        (tx.version, tx.weight, tx.timestamp, tx.height, inputs_len, outputs_len, parents_len, tokens_len), buf = (
             unpack(_TRANSACTION_FORMAT_STRING, buf))
 
         for _ in range(parents_len):
             parent, buf = unpack_len(32, buf)  # 256bits
             tx.parents.append(parent)
+
+        for _ in range(tokens_len):
+            token_uid, buf = unpack_len(32, buf)  # 256bits
+            tx.tokens.append(token_uid)
 
         for _ in range(inputs_len):
             input_tx_id, buf = unpack_len(_INPUT_SIZE_BYTES, buf)  # 256bits
@@ -137,9 +144,9 @@ class BaseTransaction(ABC):
             tx.inputs.append(txin)
 
         for _ in range(outputs_len):
-            (value, script_len), buf = unpack('!IH', buf)
+            (value, token_data, script_len), buf = unpack('!IBH', buf)
             script, buf = unpack_len(script_len, buf)
-            txout = Output(value, script)
+            txout = Output(value, script, token_data)
             tx.outputs.append(txout)
 
         (tx.nonce,), buf = unpack('!I', buf)
@@ -524,7 +531,11 @@ class BaseTransaction(ABC):
             self.version,
             len(self.inputs),
             len(self.outputs),
+            len(self.tokens)
         )
+
+        for token_uid in self.tokens:
+            struct_bytes += token_uid
 
         for input_tx in self.inputs:
             struct_bytes += input_tx.tx_id
@@ -539,6 +550,9 @@ class BaseTransaction(ABC):
 
         for output_tx in self.outputs:
             struct_bytes += int_to_bytes(output_tx.value, 4)
+
+            # token index
+            struct_bytes += int_to_bytes(output_tx.token_data, 1)
 
             # script length
             struct_bytes += int_to_bytes(len(output_tx.script), 2)
@@ -560,11 +574,15 @@ class BaseTransaction(ABC):
             self.height,
             len(self.inputs),
             len(self.outputs),
-            len(self.parents)
+            len(self.parents),
+            len(self.tokens)
         )
 
         for parent in self.parents:
             struct_bytes += parent
+
+        for token_uid in self.tokens:
+            struct_bytes += token_uid
 
         for input_tx in self.inputs:
             struct_bytes += input_tx.tx_id
@@ -576,6 +594,9 @@ class BaseTransaction(ABC):
 
         for output_tx in self.outputs:
             struct_bytes += int_to_bytes(output_tx.value, 4)
+
+            # token index
+            struct_bytes += int_to_bytes(output_tx.token_data, 1)
 
             # script length
             struct_bytes += int_to_bytes(len(output_tx.script), 2)
@@ -854,6 +875,8 @@ class BaseTransaction(ABC):
                 data_output['decoded'] = output.to_human_readable()
             data['outputs'].append(data_output)
 
+        data['tokens'] = [uid.hex() for uid in self.tokens]
+
         return data
 
     @abstractmethod
@@ -894,6 +917,22 @@ class BaseTransaction(ABC):
             new_tx._metadata = self._metadata.clone()
         new_tx.storage = self.storage
         return new_tx
+
+    def get_token_uid(self, index: int) -> bytes:
+        """Returns the token uid with corresponding index from the tx token uid list.
+
+        Hathor always has index 0, but we don't include it in the token uid list, so other tokens are
+        always 1-off. This means that token with index 1 is the first in the list.
+
+        :param index: token index on the token uid list
+        :type index: int
+
+        :return: the token uid
+        :rtype: bytes
+        """
+        if index == 0:
+            return b'\x00'
+        return self.tokens[index - 1]
 
 
 class Input:
@@ -953,16 +992,51 @@ class Input:
 
 
 class Output:
-    def __init__(self, value, script):
+
+    # first bit in the index byte indicates whether it's an authority output
+    TOKEN_INDEX_MASK = 0b01111111
+    TOKEN_AUTHORITY_MASK = 0b10000000
+
+    # last bit indicates a token uid creation UTXO
+    TOKEN_CREATION_MASK = 0b00000001
+    # second to last bit is mint authority
+    TOKEN_MINT_MASK = 0b00000010
+    # and next one is melt authority
+    TOKEN_MELT_MASK = 0b00000100
+
+    def __init__(self, value: int, script: bytes, token_data: int = 0):
         """
             value: amount spent (4 bytes)
             script: script in bytes
+            token_data: index of the token uid in the uid list
         """
-        assert isinstance(value, int), 'Value is %s, type %s' % (str(value), type(value))
-        assert isinstance(script, bytes), 'Value is %s, type %s' % (str(script), type(script))
+        assert isinstance(value, int), 'value is %s, type %s' % (str(value), type(value))
+        assert isinstance(script, bytes), 'script is %s, type %s' % (str(script), type(script))
+        assert isinstance(token_data, int), 'token_data is %s, type %s' % (str(token_data), type(token_data))
 
         self.value = value                  # int
         self.script = script                # bytes
+        self.token_data = token_data        # int
+
+    def get_token_index(self) -> int:
+        """The token uid index in the list"""
+        return self.token_data & self.TOKEN_INDEX_MASK
+
+    def is_token_authority(self) -> bool:
+        """Whether this is a token authority output"""
+        return (self.token_data & self.TOKEN_AUTHORITY_MASK) > 0
+
+    def is_token_creation(self) -> bool:
+        """Whether this is a token creation output"""
+        return self.is_token_authority() and ((self.value & self.TOKEN_CREATION_MASK) > 0)
+
+    def can_mint_token(self) -> bool:
+        """Whether this utxo can mint tokens"""
+        return self.is_token_authority() and ((self.value & self.TOKEN_MINT_MASK) > 0)
+
+    def can_melt_token(self) -> bool:
+        """Whether this utxo can melt tokens"""
+        return self.is_token_authority() and ((self.value & self.TOKEN_MELT_MASK) > 0)
 
     def to_human_readable(self):
         """Checks what kind of script this is and returns it in human readable form
@@ -971,6 +1045,7 @@ class Output:
         if script_type:
             ret = script_type.to_human_readable()
             ret['value'] = self.value
+            ret['token_data'] = self.token_data
             return ret
 
         nano_contract = NanoContractMatchValues.parse_script(self.script)
@@ -992,6 +1067,7 @@ class Output:
         return cls(
             value=output_proto.value,
             script=output_proto.script,
+            token_data=output_proto.token_data,
         )
 
     def to_proto(self):
@@ -1004,6 +1080,7 @@ class Output:
         return protos.Output(
             value=self.value,
             script=self.script,
+            token_data=self.token_data,
         )
 
 

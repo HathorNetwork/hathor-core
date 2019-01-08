@@ -6,8 +6,8 @@ import math
 
 def genesis_transactions(tx_storage):
     TX_GENESIS1 = Transaction(
-        hash=bytes.fromhex('0001569c85fffa5782c3979e7d68dce1d8d84772505a53ddd76d636585f3977d'),
-        nonce=19300,
+        hash=bytes.fromhex('00002b3be4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22f'),
+        nonce=17076,
         timestamp=1539271482,
         weight=MIN_WEIGHT,
         height=1,
@@ -15,8 +15,8 @@ def genesis_transactions(tx_storage):
     )
 
     TX_GENESIS2 = Transaction(
-        hash=bytes.fromhex('0000810b22f0cdc3ac6d978a4c80ea46f831b74765fefea2595cc6d4b00e207a'),
-        nonce=22587,
+        hash=bytes.fromhex('0002bb171de3490828028ec5eef3325956acb6bcffa6a50466bb9a81d38363c2'),
+        nonce=91696,
         timestamp=1539271483,
         weight=MIN_WEIGHT,
         height=1,
@@ -35,8 +35,8 @@ def genesis_transactions(tx_storage):
         )
         total_tokens -= value
     BLOCK_GENESIS = Block(
-        hash=bytes.fromhex('0001242057660788e83008a985fa0ef60adb2652bfd70955016992a3d1ad38d7'),
-        nonce=5448,
+        hash=bytes.fromhex('0001e298570e37d46f9101bcf903bde67186f26a83d88b9cb196f38b49623457'),
+        nonce=14204,
         timestamp=1539271481,
         weight=MIN_WEIGHT,
         height=1,
