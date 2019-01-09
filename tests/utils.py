@@ -6,6 +6,12 @@ import time
 import urllib.parse
 from hathor.constants import TOKENS_PER_BLOCK, DECIMAL_PLACES
 
+from concurrent import futures
+import grpc
+
+from hathor.transaction.storage import TransactionMemoryStorage, TransactionRemoteStorage, \
+                                       create_transaction_storage_server
+
 
 def resolve_block_bytes(block_bytes):
     """ From block bytes we create a block and resolve pow
@@ -162,7 +168,7 @@ class FakeConnection:
         return not self.tr1.value() and not self.tr2.value()
 
 
-def run_server(hostname='localhost', listen=8005, listen_ssl=False, status=8085, bootstrap=None, tries=50):
+def run_server(hostname='localhost', listen=8005, listen_ssl=False, status=8085, bootstrap=None, tries=100):
     """ Starts a full node in a subprocess running the cli command
 
         :param hostname: Hostname used to be accessed by other peers
@@ -256,3 +262,26 @@ def get_tokens_from_mining(blocks_mined):
     """
     tokens_issued_per_block = TOKENS_PER_BLOCK * (10**DECIMAL_PLACES)
     return tokens_issued_per_block * blocks_mined
+
+
+def start_remote_storage(tx_storage=None):
+    """ Starts a remote storage
+
+        :param tx_storage: storage to run in the remote storage
+        :type tx_storage: :py:class:`hathor.transaction.storage.TransactionStorage`
+
+        :return: Remote tx storage and the remote server
+        :rtype: Tuple[:py:class:`hathor.transaction.storage.TransactionRemoteStorage`, grpc server]
+    """
+    if not tx_storage:
+        tx_storage = TransactionMemoryStorage()
+
+    _server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    tx_storage._manually_initialize()
+    _servicer, port = create_transaction_storage_server(_server, tx_storage)
+    _server.start()
+
+    tx_storage = TransactionRemoteStorage()
+    tx_storage.connect_to(port)
+
+    return tx_storage, _server

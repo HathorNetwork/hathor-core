@@ -60,9 +60,9 @@ class TransactionMemoryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
     @deprecated('Use get_all_transactions_deferred instead')
     def get_all_transactions(self):
         for tx in self.get_all_genesis():
+            # Genesis metadata is not saved in the storage because they are kept in memory
+            # so we don't need to take care of it here
             tx = self._clone(tx)
-            if tx.hash in self.metadata:
-                tx._metadata = self._clone(self.metadata[tx.hash])
             yield tx
         for tx in self.transactions.values():
             tx = self._clone(tx)

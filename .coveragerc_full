@@ -1,14 +1,4 @@
 [run]
-omit = 
-    # Cli files have a different test coverage target
-    hathor/cli/*
-
-    # Subprocess storage will be revisited later
-    hathor/transaction/storage/subprocess_storage.py
-
-    # Files in hathor/protos are generated automatically
-    hathor/protos/*
-
 branch = True
 
 [report]

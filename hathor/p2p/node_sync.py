@@ -486,7 +486,7 @@ class NodeSyncTimestamp(object):
         payload = '{} {} {}'.format(
             tx.timestamp,
             tx.hash.hex(),
-            json.dumps(x.hex() for x in tx.parents),
+            json.dumps([x.hex() for x in tx.parents]),
         )
         self.send_message(ProtocolMessages.NOTIFY_DATA, payload)
 
@@ -497,11 +497,11 @@ class NodeSyncTimestamp(object):
         hash_hex, _, parents_json = payload2.partition(' ')
         parents = json.loads(parents_json)
 
-        if self.protocol.tx_storage.transaction_exists(bytes.fromhex(hash_hex)):
+        if self.manager.tx_storage.transaction_exists(bytes.fromhex(hash_hex)):
             return
 
         for parent_hash in parents:
-            if not self.protocol.tx_storage.transaction_exists(bytes.fromhex(parent_hash)):
+            if not self.manager.tx_storage.transaction_exists(bytes.fromhex(parent_hash)):
                 # Are we out-of-sync with this peer?
                 return
 

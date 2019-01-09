@@ -24,10 +24,6 @@ from hathor.p2p.protocol import HathorLineReceiver
 MyServerProtocol = HathorLineReceiver
 MyClientProtocol = HathorLineReceiver
 
-# from hathor.p2p.protocol import HathorWebSocketServerProtocol, HathorWebSocketClientProtocol
-# MyServerProtocol = HathorWebSocketServerProtocol
-# MyClientProtocol = HathorWebSocketClientProtocol
-
 
 class HathorManager(object):
     """ HathorManager manages the node with the help of other specialized classes.

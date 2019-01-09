@@ -1,9 +1,19 @@
 from twisted.internet.task import Clock
+from twisted.internet.defer import inlineCallbacks
+import tempfile
+import shutil
 
 from hathor.transaction import Transaction, TransactionMetadata
 from hathor.transaction.storage import TransactionMemoryStorage, TransactionCacheStorage
+from hathor.wallet import Wallet
+from hathor.manager import HathorManager
+from hathor.transaction import Block, TxOutput
 
+from tests.utils import add_new_transactions, add_new_blocks
+
+import collections
 import unittest
+import time
 
 CACHE_SIZE = 5
 
@@ -12,8 +22,26 @@ class BasicTransaction(unittest.TestCase):
     def setUp(self):
         store = TransactionMemoryStorage()
         self.reactor = Clock()
+        self.reactor.advance(time.time())
         self.cache_storage = TransactionCacheStorage(store, self.reactor, capacity=5)
+        self.cache_storage._manually_initialize()
         self.cache_storage.start()
+
+        self.genesis = self.cache_storage.get_all_genesis()
+        self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
+        self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
+
+        # Save genesis metadata
+        self.cache_storage.save_transaction_deferred(self.genesis_txs[0], only_metadata=True)
+
+        self.tmpdir = tempfile.mkdtemp(dir='/tmp/')
+        wallet = Wallet(directory=self.tmpdir)
+        wallet.unlock(b'teste')
+        self.manager = HathorManager(self.reactor, tx_storage=self.cache_storage, wallet=wallet)
+
+    def tearDown(self):
+        super().tearDown()
+        shutil.rmtree(self.tmpdir)
 
     def _get_new_tx(self, nonce):
         tx = Transaction(
@@ -68,6 +96,111 @@ class BasicTransaction(unittest.TestCase):
 
         # now it should be in cache
         self.assertIn(txs[0].hash, self.cache_storage.cache)
+
+    def test_flush_thread(self):
+        txs = [self._get_new_tx(nonce) for nonce in range(CACHE_SIZE)]
+        for tx in txs:
+            self.cache_storage.save_transaction(tx)
+
+        for tx in txs:
+            self.assertIn(tx.hash, self.cache_storage.dirty_txs)
+
+        self.assertIsNone(self.cache_storage.flush_deferred)
+
+        # Starts flush thread
+        self.reactor.advance(10)
+        # Flush deferred is not None
+        self.assertIsNotNone(self.cache_storage.flush_deferred)
+        last_flush_deferred = self.cache_storage.flush_deferred
+        self.cache_storage._start_flush_thread()
+        self.assertEqual(last_flush_deferred, self.cache_storage.flush_deferred)
+
+        # We flush the cache and flush_deferred becomes None
+        self.cache_storage._cb_flush_thread(self.cache_storage.dirty_txs.copy())
+        self.assertIsNone(self.cache_storage.flush_deferred)
+        # After the interval it becomes not None again
+        self.reactor.advance(10)
+        self.assertIsNotNone(self.cache_storage.flush_deferred)
+
+        # If an err occurs, it will become None again and then not None after the interval
+        self.cache_storage._err_flush_thread('')
+        self.assertIsNone(self.cache_storage.flush_deferred)
+        self.reactor.advance(5)
+        self.assertIsNotNone(self.cache_storage.flush_deferred)
+
+        # Remove element from cache to test a part of the code
+        del self.cache_storage.cache[next(iter(self.cache_storage.dirty_txs))]
+        self.cache_storage._flush_to_storage(self.cache_storage.dirty_txs.copy())
+
+    @inlineCallbacks
+    def test_deferred_methods(self):
+        # Testing without cloning
+        self.cache_storage._clone_if_needed = False
+
+        block_parents = [tx.hash for tx in self.genesis]
+        output = TxOutput(200, bytes.fromhex('1e393a5ce2ff1c98d4ff6892f2175100f2dad049'))
+        obj = Block(
+            timestamp=1539271491,
+            weight=12,
+            outputs=[output],
+            parents=block_parents,
+            nonce=100781,
+            storage=self.cache_storage
+        )
+        obj.resolve()
+
+        self.cache_storage.save_transaction_deferred(obj)
+
+        loaded_obj1 = yield self.cache_storage.get_transaction_deferred(obj.hash)
+
+        metadata_obj1_def = yield self.cache_storage.get_metadata_deferred(obj.hash)
+        metadata_obj1 = obj.get_metadata()
+        self.assertEqual(metadata_obj1_def, metadata_obj1)
+        metadata_error = yield self.cache_storage.get_metadata_deferred(
+            bytes.fromhex('0001569c85fffa5782c3979e7d68dce1d8d84772505a53ddd76d636585f3977e')
+        )
+        self.assertIsNone(metadata_error)
+
+        self.cache_storage._flush_to_storage(self.cache_storage.dirty_txs.copy())
+        self.cache_storage.cache = collections.OrderedDict()
+        loaded_obj2 = yield self.cache_storage.get_transaction_deferred(obj.hash)
+
+        self.assertEqual(loaded_obj1, loaded_obj2)
+
+        self.assertTrue((yield self.cache_storage.transaction_exists_deferred(obj.hash)))
+        self.assertFalse(
+            (yield self.cache_storage.transaction_exists_deferred(
+                '0001569c85fffa5782c3979e7d68dce1d8d84772505a53ddd76d636585f3977e'
+            ))
+        )
+
+        self.assertFalse(
+            self.cache_storage.transaction_exists(
+                '0001569c85fffa5782c3979e7d68dce1d8d84772505a53ddd76d636585f3977e'
+            )
+        )
+
+        self.assertEqual(obj, loaded_obj1)
+        self.assertEqual(obj.is_block, loaded_obj1.is_block)
+
+        count = yield self.cache_storage.get_count_tx_blocks_deferred()
+        self.assertEqual(count, 4)
+
+        all_transactions = yield self.cache_storage.get_all_transactions_deferred()
+        total = 0
+        for tx in all_transactions:
+            total += 1
+        self.assertEqual(total, 4)
+
+    def test_topological_sort_dfs(self):
+        self.manager.test_mode = True
+        add_new_blocks(self.manager, 1, advance_clock=1)
+        tx = add_new_transactions(self.manager, 1, advance_clock=1)[0]
+
+        total = 0
+        for tx in self.cache_storage._topological_sort_dfs(root=tx, visited=dict()):
+            total += 1
+        self.assertEqual(total, 5)
 
 
 if __name__ == '__main__':

@@ -4,6 +4,7 @@ from tests.resources.base_resource import StubSite, _BaseResourceTest
 import tempfile
 import os
 import shutil
+import re
 
 
 class ProfilerTest(_BaseResourceTest._ResourceTest):
@@ -46,3 +47,11 @@ class ProfilerTest(_BaseResourceTest._ResourceTest):
 
         # Removing tmpdir
         shutil.rmtree(tmpdir)
+
+    def test_dump_file(self):
+        resource = ProfilerResource(self.manager)
+        filename = resource.gen_dump_filename()
+
+        filename_arr = filename.split('/')
+        self.assertEqual(filename_arr[0], 'profiles')
+        self.assertTrue(re.search(r'^profile\d{3}\.prof$', filename_arr[1]))

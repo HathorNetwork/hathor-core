@@ -3,7 +3,6 @@ import json
 import base64
 import tempfile
 import shutil
-
 from tests import unittest
 from tests.utils import add_new_block
 

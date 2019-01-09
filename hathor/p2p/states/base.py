@@ -33,7 +33,7 @@ class BaseState(object):
         self.protocol.send_message(ProtocolMessages.THROTTLE, payload)
 
     def on_enter(self):
-        pass
+        raise NotImplementedError
 
     def on_exit(self):
         pass

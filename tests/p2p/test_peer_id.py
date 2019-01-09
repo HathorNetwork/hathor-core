@@ -43,8 +43,12 @@ class PeerIdTest(unittest.TestCase):
     def test_create_from_json_without_private_key(self):
         p1 = PeerId()
         data1 = p1.to_json()
+        # Just to test a part of the code
+        del data1['entrypoints']
         p2 = PeerId.create_from_json(data1)
         data2 = p2.to_json()
+        self.assertEqual(data2['entrypoints'], [])
+        data1['entrypoints'] = []
         self.assertEqual(data1, data2)
         p2.validate()
 
@@ -84,6 +88,7 @@ class PeerIdTest(unittest.TestCase):
 
         p3 = PeerId()
         p3.entrypoints.append('1')
+        p3.entrypoints.append('3')
         p3.public_key = ''
 
         p4 = PeerId()
@@ -91,6 +96,7 @@ class PeerIdTest(unittest.TestCase):
         p4.private_key = ''
         p4.id = p3.id
         p4.entrypoints.append('2')
+        p4.entrypoints.append('3')
         peer_storage.add_or_merge(p4)
 
         self.assertEqual(len(peer_storage), 2)
@@ -101,7 +107,7 @@ class PeerIdTest(unittest.TestCase):
         peer = peer_storage[p3.id]
         self.assertEqual(peer.id, p3.id)
         self.assertEqual(peer.private_key, p3.private_key)
-        self.assertEqual(peer.entrypoints, ['2', '1'])
+        self.assertEqual(peer.entrypoints, ['2', '3', '1'])
 
         with self.assertRaises(ValueError):
             peer_storage.add(p1)

@@ -38,10 +38,14 @@ class NanoContractExecuteResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
 
+        content = request.content.read()
+        if not content:
+            return json.dumps({'success': False, 'message': 'No post data received'}).encode('utf-8')
+
         try:
-            data = json.loads(request.content.read().decode('utf-8'))
+            data = json.loads(content.decode('utf-8'))
         except json.JSONDecodeError:
-            return get_missing_params_msg()
+            return json.dumps({'success': False, 'message': 'Invalid format for post data'}).encode('utf-8')
 
         for param in PARAMS:
             if param not in data:

@@ -41,6 +41,7 @@ class NanoContractDecodeResource(resource.Resource):
                 tx = Transaction.create_from_struct(tx_bytes)
             except struct.error:
                 data = {'success': False}
+                return json.dumps(data).encode('utf-8')
 
             outputs = []
             nano_contract = None

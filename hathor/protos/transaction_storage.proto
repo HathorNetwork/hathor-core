@@ -88,6 +88,8 @@ enum OrderBy {
   ANY_ORDER = 0;
   ASC_ORDER = 1;
   TOPOLOGICAL_ORDER = 2;
+  LEFT_RIGHT_ORDER_CHILDREN = 3;
+  LEFT_RIGHT_ORDER_SPENT = 4;
 }
 
 message ListRequest {
@@ -107,7 +109,7 @@ message ListRequest {
 message ListTipsRequest {
   // optional timestamp, `oneof` used to differentiate unset (None) from 0
   oneof timestamp_oneof {
-    uint32 timestamp = 1;
+    double timestamp = 1;
   }
   TxType tx_type = 2;
 }

@@ -1,7 +1,7 @@
 from hathor.p2p.resources import MiningResource
 from hathor.wallet.resources import SendTokensResource, BalanceResource, HistoryResource
 from twisted.internet.defer import inlineCallbacks
-from tests.resources.base_resource import StubSite, _BaseResourceTest
+from tests.resources.base_resource import StubSite, _BaseResourceTest, TestDummyRequest
 from tests.utils import resolve_block_bytes, add_new_blocks
 import base64
 
@@ -156,3 +156,11 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         )
         data = response.json_value()
         self.assertFalse(data['success'])
+
+    def test_error_request(self):
+        resource = SendTokensResource(self.manager)
+        request = TestDummyRequest('POST', 'wallet/send_tokens', {})
+
+        self.assertIsNotNone(request._finishedDeferreds)
+        resource._err_tx_resolve('Error', request)
+        self.assertIsNone(request._finishedDeferreds)

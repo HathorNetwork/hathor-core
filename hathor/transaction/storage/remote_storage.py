@@ -8,6 +8,9 @@ from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.util import deprecated, skip_warning
 
+from intervaltree import Interval
+from math import inf
+
 
 class RemoteCommunicationError(HathorError):
     pass
@@ -92,6 +95,7 @@ class TransactionRemoteStorage(TransactionStorage):
         super().__init__()
         self._channel = None
         self._genesis_cache = None
+        self.with_index = with_index
 
     def _create_genesis_cache(self):
         from hathor.transaction.genesis import genesis_transactions
@@ -169,7 +173,7 @@ class TransactionRemoteStorage(TransactionStorage):
 
     @convert_grpc_exceptions
     def save_transaction_deferred(self, tx, *, only_metadata=False):
-        self._check_connection()
+        # self._check_connection()
         raise NotImplementedError
 
     @inlineCallbacks
@@ -182,17 +186,17 @@ class TransactionRemoteStorage(TransactionStorage):
 
     @convert_grpc_exceptions
     def get_transaction_deferred(self, hash_bytes):
-        self._check_connection()
+        # self._check_connection()
         raise NotImplementedError
 
     @convert_grpc_exceptions
     def get_all_transactions_deferred(self):
-        self._check_connection()
+        # self._check_connection()
         raise NotImplementedError
 
     @convert_grpc_exceptions
     def get_count_tx_blocks_deferred(self):
-        self._check_connection()
+        # self._check_connection()
         raise NotImplementedError
 
     # TransactionStorage interface implementation:
@@ -205,29 +209,31 @@ class TransactionRemoteStorage(TransactionStorage):
         result = self._stub.LatestTimestamp(request)
         return result.timestamp
 
-    @convert_grpc_exceptions_generator
+    @convert_grpc_exceptions
     def get_block_tips(self, timestamp=None):
-        from intervaltree import Interval
         self._check_connection()
-        if isinstance(timestamp, float):
+        if isinstance(timestamp, float) and timestamp != inf:
             self.log.warn('timestamp given in float will be truncated, use int instead')
             timestamp = int(timestamp)
         request = protos.ListTipsRequest(tx_type=protos.BLOCK_TYPE, timestamp=timestamp)
         result = self._stub.ListTips(request)
+        tips = set()
         for interval_proto in result:
-            yield Interval(interval_proto.begin, interval_proto.end, interval_proto.data)
+            tips.add(Interval(interval_proto.begin, interval_proto.end, interval_proto.data))
+        return tips
 
-    @convert_grpc_exceptions_generator
+    @convert_grpc_exceptions
     def get_tx_tips(self, timestamp=None):
-        from intervaltree import Interval
         self._check_connection()
-        if isinstance(timestamp, float):
+        if isinstance(timestamp, float) and timestamp != inf:
             self.log.warn('timestamp given in float will be truncated, use int instead')
             timestamp = int(timestamp)
         request = protos.ListTipsRequest(tx_type=protos.TRANSACTION_TYPE, timestamp=timestamp)
         result = self._stub.ListTips(request)
+        tips = set()
         for interval_proto in result:
-            yield Interval(interval_proto.begin, interval_proto.end, interval_proto.data)
+            tips.add(Interval(interval_proto.begin, interval_proto.end, interval_proto.data))
+        return tips
 
     @convert_grpc_exceptions
     def get_newest_blocks(self, count):
@@ -395,10 +401,15 @@ class TransactionRemoteStorage(TransactionStorage):
         pass
 
     @convert_grpc_exceptions_generator
-    def _topological_sort(self):
+    def _call_list_request_generators(self, kwargs):
+        """ Execute a call for the ListRequest and yield the blocks or txs
+
+            :param kwargs: Parameters to be sent to ListRequest
+            :type kwargs: Dict[str,]
+        """
         from hathor.transaction import tx_or_block_from_proto
         self._check_connection()
-        request = protos.ListRequest(order_by=protos.TOPOLOGICAL_ORDER)
+        request = protos.ListRequest(**kwargs)
         result = self._stub.List(request)
         for list_item in result:
             if not list_item.HasField('transaction'):
@@ -406,15 +417,23 @@ class TransactionRemoteStorage(TransactionStorage):
             tx_proto = list_item.transaction
             yield tx_or_block_from_proto(tx_proto, storage=self)
 
-    @convert_grpc_exceptions
+    @convert_grpc_exceptions_generator
+    def _topological_sort(self):
+        yield from self._call_list_request_generators({'order_by': protos.TOPOLOGICAL_ORDER})
+
+    @convert_grpc_exceptions_generator
     def iter_bfs_children(self, root):
-        self._check_connection()
-        raise NotImplementedError
+        yield from self._call_list_request_generators({
+            'order_by': protos.LEFT_RIGHT_ORDER_CHILDREN,
+            'tx': root.to_proto()
+        })
 
     @convert_grpc_exceptions
     def iter_bfs_spent_by(self, root):
-        self._check_connection()
-        raise NotImplementedError
+        yield from self._call_list_request_generators({
+            'order_by': protos.LEFT_RIGHT_ORDER_SPENT,
+            'tx': root.to_proto()
+        })
 
     @convert_grpc_exceptions
     def _add_to_voided(self, tx):
@@ -471,7 +490,7 @@ class TransactionRemoteStorage(TransactionStorage):
         return self._genesis_cache.values()
 
     @convert_grpc_exceptions
-    def get_transactions_before(self, hash_bytes, num_blocks=100):
+    def get_transactions_before(self, hash_bytes, num_blocks=100):  # pragma: no cover
         from hathor.transaction import tx_or_block_from_proto
         self._check_connection()
         request = protos.ListRequest(
@@ -491,15 +510,12 @@ class TransactionRemoteStorage(TransactionStorage):
 
     @convert_grpc_exceptions_generator
     def iter_bfs_ascendent_blocks(self, root, max_depth):
-        from hathor.transaction import tx_or_block_from_proto
-        self._check_connection()
-        request = protos.ListRequest(order_by=protos.ASC_ORDER, tx_type=protos.BLOCK_TYPE, tx=root.to_proto())
-        result = self._stub.List(request)
-        for list_item in result:
-            if not list_item.HasField('transaction'):
-                break
-            tx_proto = list_item.transaction
-            yield tx_or_block_from_proto(tx_proto, storage=self)
+        yield from self._call_list_request_generators({
+            'order_by': protos.ASC_ORDER,
+            'tx_type': protos.BLOCK_TYPE,
+            'tx': root.to_proto(),
+            'max_count': max_depth
+        })
 
     @convert_grpc_exceptions
     def get_blocks_before(self, hash_bytes, num_blocks=100):
@@ -587,14 +603,14 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
 
         if request.mark_type == protos.FOR_CACHING:
             if request.remove_mark:
-                self.storage._add_to_cache(tx)
-            else:
                 self.storage._del_from_cache(tx)
+            else:
+                self.storage._add_to_cache(tx)
         elif request.mark_type == protos.VOIDED:
             if request.remove_mark:
-                self.storage._add_to_voided(tx)
-            else:
                 self.storage._del_from_voided(tx)
+            else:
+                self.storage._add_to_voided(tx)
         else:
             raise ValueError('invalid mark_type')
 
@@ -651,6 +667,12 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
                 root = tx_or_block_from_proto(request.tx, storage=self.storage)
                 max_depth = request.max_count
                 tx_iter = self.storage.iter_bfs_ascendent_blocks(root, max_depth)
+            elif request.order_by is protos.LEFT_RIGHT_ORDER_CHILDREN:
+                root = tx_or_block_from_proto(request.tx, storage=self.storage)
+                tx_iter = self.storage.iter_bfs_children(root)
+            elif request.order_by is protos.LEFT_RIGHT_ORDER_SPENT:
+                root = tx_or_block_from_proto(request.tx, storage=self.storage)
+                tx_iter = self.storage.iter_bfs_spent_by(root)
             else:
                 raise ValueError('invalid order_by')
         else:
