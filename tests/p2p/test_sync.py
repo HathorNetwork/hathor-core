@@ -1,7 +1,9 @@
 from twisted.python import log
 from twisted.internet.task import Clock
 
-from tests.utils import FakeConnection
+from hathor.transaction.storage.exceptions import TransactionIsNotABlock
+from hathor.transaction.storage.remote_storage import TransactionRemoteStorage, RemoteCommunicationError
+from tests.utils import FakeConnection, start_remote_storage
 from tests import unittest
 
 import sys
@@ -70,6 +72,14 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         genesis_block = self.genesis_blocks[0]
         result = self.manager1.tx_storage.get_blocks_before(genesis_block.hash)
         self.assertEqual(0, len(result))
+
+        genesis_tx = [tx for tx in self.genesis if not tx.is_block][0]
+        if isinstance(self.manager1.tx_storage, TransactionRemoteStorage):
+            with self.assertRaises(RemoteCommunicationError):
+                self.manager1.tx_storage.get_blocks_before(genesis_tx.hash)
+        else:
+            with self.assertRaises(TransactionIsNotABlock):
+                self.manager1.tx_storage.get_blocks_before(genesis_tx.hash)
 
         blocks = self._add_new_blocks(20)
         num_blocks = 5
@@ -215,3 +225,14 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         self.assertTipsEqual(self.manager1, manager2)
         self.assertTipsEqual(self.manager1, manager3)
+
+
+class RemoteStorageSyncTest(HathorSyncMethodsTestCase):
+    def setUp(self):
+        super().setUp()
+        tx_storage, self._server = start_remote_storage()
+
+        self.manager1.tx_storage = tx_storage
+
+    def tearDown(self):
+        self._server.stop(0).wait()

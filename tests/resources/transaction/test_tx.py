@@ -4,7 +4,7 @@ from tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor.transaction.genesis import genesis_transactions
 from hathor.transaction import Transaction
 
-from tests.utils import add_new_blocks, add_new_transactions
+from tests.utils import add_new_blocks, add_new_transactions, start_remote_storage
 
 
 class TransactionTest(_BaseResourceTest._ResourceTest):
@@ -177,3 +177,14 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
             self.assertEqual(expected.hash.hex(), result['hash'])
 
         self.assertTrue(data6['has_more'])
+
+
+class RemoteStorageTransactioTest(TransactionTest):
+    def setUp(self):
+        super().setUp()
+        tx_storage, self._server = start_remote_storage()
+
+        self.manager.tx_storage = tx_storage
+
+    def tearDown(self):
+        self._server.stop(0).wait()

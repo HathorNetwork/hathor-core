@@ -299,7 +299,7 @@ class BaseTransaction(ABC):
     def check_conflicts(self):
         """ Check which transaction is the winner of a conflict, the remaining are voided.
         """
-        meta = self.get_metadata()
+        meta = self.get_metadata(force_reload=True)
         if not meta.conflict_with:
             return
 
@@ -459,7 +459,9 @@ class BaseTransaction(ABC):
 
         self.storage.save_transaction(self, only_metadata=True)
 
-    def compute_genesis_dag_connectivity(self, storage, storage_sync, use_memoized_negative_results=True):
+    def compute_genesis_dag_connectivity(
+        self, storage, storage_sync, use_memoized_negative_results=True
+    ):  # pragma: no cover
         """Computes the connectivity state from this tx bach to the genesis transactions.
 
         Returns True if this transaction has a complete path of confirmations back to the genesis transactions.

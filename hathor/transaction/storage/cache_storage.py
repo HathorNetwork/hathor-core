@@ -113,6 +113,8 @@ class TransactionCacheStorage(BaseTransactionStorage):
                     self.dirty_txs.remove(removed_tx.hash)
             self.cache[tx.hash] = self._clone(tx)
         else:
+            # Tx might have been updated
+            self.cache[tx.hash] = self._clone(tx)
             self.cache.move_to_end(tx.hash, last=False)
 
     @deprecated('Use transaction_exists_deferred instead')

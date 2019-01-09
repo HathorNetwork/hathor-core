@@ -44,7 +44,7 @@ class NanoContractMatchValueResource(resource.Resource):
         try:
             data = json.loads(request.content.read().decode('utf-8'))
         except json.JSONDecodeError:
-            return get_missing_params_msg()
+            return json.dumps({'success': False, 'message': 'Invalid format for post data'}).encode('utf-8')
 
         for param in PARAMS_POST:
             if param not in data:
@@ -95,7 +95,7 @@ class NanoContractMatchValueResource(resource.Resource):
         try:
             data = json.loads(request.content.read().decode('utf-8'))
         except json.JSONDecodeError:
-            return 'Unable to decode JSON'.encode('utf-8')
+            return json.dumps({'success': False, 'message': 'Invalid format for post data'}).encode('utf-8')
 
         for param in PARAMS_PUT:
             if param not in data:
@@ -119,8 +119,9 @@ class NanoContractMatchValueResource(resource.Resource):
                 nano_contract = _nano_contract
             else:
                 tx_outputs.append(_output)
+
         if not nano_contract:
-            raise ValueError('no nano contract found')
+            return json.dumps({'success': False, 'message': 'Nano contract not found'}).encode('utf-8')
 
         for address, value in new_value_dict.items():
             nano_contract.value_dict[address] = value

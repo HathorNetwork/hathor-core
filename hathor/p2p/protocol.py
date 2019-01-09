@@ -214,11 +214,11 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
         self.sendLine(line)
 
 
-class HathorWebSocketServerProtocol(WebSocketServerProtocol, HathorProtocol):
+class HathorWebSocketServerProtocol(WebSocketServerProtocol, HathorProtocol):  # pragma: no cover
     def onMessage(self, payload, isBinary):
         pass
 
 
-class HathorWebSocketClientProtocol(WebSocketClientProtocol, HathorProtocol):
+class HathorWebSocketClientProtocol(WebSocketClientProtocol, HathorProtocol):  # pragma: no cover
     def onMessage(self, payload, isBinary):
         pass

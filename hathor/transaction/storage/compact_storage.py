@@ -19,6 +19,9 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
         self.path = path
         super().__init__(with_index=with_index)
 
+        filename_pattern = r'tx_[\dabcdef]{64}\.json'
+        self.re_pattern = re.compile(filename_pattern)
+
     @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx, *, only_metadata=False):
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
@@ -133,12 +136,10 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
             yield tx
 
         path = self.path
-        pattern = r'tx_[\dabcdef]{64}\.json'
-        re_pattern = re.compile(pattern)
 
         with os.scandir(path) as it:
             for f in it:
-                if re_pattern.match(f.name):
+                if self.re_pattern.match(f.name):
                     # TODO Return a proxy that will load the transaction only when it is used.
                     data = self.load_from_json(f.path, TransactionDoesNotExist())
                     tx = self.load(data['tx'])
@@ -151,5 +152,5 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
     def get_count_tx_blocks(self):
         genesis_len = len(self.get_all_genesis())
         path = self.path
-        files = os.listdir(path)
+        files = [f for f in os.listdir(path) if self.re_pattern.match(f)]
         return len(files) + genesis_len

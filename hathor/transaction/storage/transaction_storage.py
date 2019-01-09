@@ -184,7 +184,7 @@ class TransactionStorageAsyncFromSync(TransactionStorageAsync):
         return succeed(skip_warning(self.get_all_transactions)())
 
     def get_count_tx_blocks_deferred(self):
-        return succeed(skip_warning(self.get_count_tx_blocks)(self))
+        return succeed(skip_warning(self.get_count_tx_blocks)())
 
 
 class TransactionStorage(TransactionStorageSync, TransactionStorageAsync):
@@ -708,7 +708,8 @@ class BaseTransactionStorage(TransactionStorage):
                     parent = self.get_transaction(parent_hash)
                     stack.append(parent)
 
-    def iter_bfs(self, root):
+    # XXX: NOT IN USE:
+    def iter_bfs(self, root):  # pragma: no cover
         """Run a BFS starting from the given transaction to genesis (right_to_left)
 
         :param root: Starting point of the BFS, either a block or a transaction.
@@ -819,11 +820,11 @@ class BaseTransactionStorage(TransactionStorage):
         for genesis in genesis_transactions(self):
             self._genesis_cache[genesis.hash] = genesis
 
-    def get_best_height(self):
+    def get_best_height(self):  # pragma: no cover
         latest_block = self.get_latest_block()
         return latest_block.height
 
-    def get_transactions_before(self, hash_bytes, num_blocks=100):
+    def get_transactions_before(self, hash_bytes, num_blocks=100):  # pragma: no cover
         ref_tx = self.get_transaction(hash_bytes)
         visited = dict()  # Dict[bytes, int]
         result = [x for x in self._topological_sort_dfs(ref_tx, visited) if not x.is_block]
@@ -868,7 +869,7 @@ class BaseTransactionStorage(TransactionStorage):
         return result
 
     # XXX: NOT IN USE:
-    def get_block_hashes_after(self, hash_bytes, num_blocks=100):
+    def get_block_hashes_after(self, hash_bytes, num_blocks=100):  # pragma: no cover
         """Retrieve the next num_blocks block hashes after the given hash. Return value is a list of hashes."""
         hashes = []
         tx = self.get_transaction(hash_bytes)
@@ -880,7 +881,7 @@ class BaseTransactionStorage(TransactionStorage):
         return hashes
 
     # XXX: NOT IN USE:
-    def get_latest(self, transactions, count=2, page=1):
+    def get_latest(self, transactions, count=2, page=1):  # pragma: no cover
         transactions = sorted(transactions, key=lambda t: t.timestamp, reverse=True)
 
         # Calculating indexes based on count and page
@@ -889,7 +890,7 @@ class BaseTransactionStorage(TransactionStorage):
         return transactions[start_index:end_index]
 
     # XXX: NOT IN USE:
-    def get_all_after_hash(self, transactions, ref_hash, count):
+    def get_all_after_hash(self, transactions, ref_hash, count):  # pragma: no cover
         """ Receives the list of elements (txs or blocks) to be paginated.
 
         We first order the elements by timestamp and then
@@ -923,7 +924,7 @@ class BaseTransactionStorage(TransactionStorage):
                     return txs[start_idx:end_idx], total > end_idx
 
     # XXX: NOT IN USE:
-    def get_all_before_hash(self, transactions, ref_hash, count):
+    def get_all_before_hash(self, transactions, ref_hash, count):  # pragma: no cover
         """ Receives the list of elements (txs or blocks) to be paginated.
 
         We first order the elements by timestamp and then

@@ -1,7 +1,7 @@
 from tests import unittest
 from tests.utils import add_new_blocks, add_new_transactions, run_server, request_server
 from twisted.internet.task import Clock
-from hathor.transaction import Transaction
+from hathor.transaction import Transaction, TransactionMetadata
 
 from hathor.cli.twin_tx import create_parser, execute
 from hathor.cli.tx_generator import create_parser as create_parser_tx, execute as execute_tx
@@ -63,11 +63,23 @@ class TwinTxTest(unittest.TestCase):
         self.assertEqual(twin_tx.parents[0], self.tx.parents[1])
         self.assertEqual(twin_tx.parents[1], self.tx.parents[0])
 
+        # Testing metadata creation from json
+        meta_before_conflict = self.tx.get_metadata()
+        meta_before_conflict_json = meta_before_conflict.to_json()
+        del meta_before_conflict_json['conflict_with']
+        del meta_before_conflict_json['voided_by']
+        del meta_before_conflict_json['twins']
+        new_meta = TransactionMetadata.create_from_json(meta_before_conflict_json)
+        self.assertEqual(meta_before_conflict, new_meta)
+
         self.manager.propagate_tx(twin_tx)
 
         # Validate they are twins
         meta = self.tx.get_metadata(force_reload=True)
         self.assertEqual(meta.twins, set([twin_tx.hash]))
+
+        meta2 = twin_tx.get_metadata()
+        self.assertFalse(meta == meta2)
 
     def test_twin_different(self):
         # Running with ssl just to test listening tcp with TLS factory

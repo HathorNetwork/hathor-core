@@ -1,10 +1,10 @@
-from hathor.pubsub import EventArguments
 from twisted.test import proto_helpers
 from hathor.websocket.factory import HathorAdminWebsocketFactory, HathorAdminWebsocketProtocol
 from tests import unittest
 from unittest.mock import Mock
 import json
-from hathor.pubsub import HathorEvents
+from hathor.metrics import Metrics
+from hathor.pubsub import HathorEvents, EventArguments
 from hathor.transaction.genesis import genesis_transactions
 from hathor.wallet.base_wallet import UnspentTx, SpentTx, WalletBalance
 
@@ -124,3 +124,26 @@ class TestWebsocket(unittest.TestCase):
         self.assertEqual(len(self.factory.connections), 1)
         self.protocol.onClose(True, 1, 'Closed')
         self.assertEqual(len(self.factory.connections), 0)
+
+    def test_invalid_metric_key(self):
+        kwargs = {'test': False}
+        arg = EventArguments(**kwargs)
+        with self.assertRaises(ValueError):
+            self.manager.metrics.handle_publish('invalid_key', arg)
+
+        metrics = Metrics(
+            pubsub=self.manager.pubsub,
+            avg_time_between_blocks=self.manager.avg_time_between_blocks,
+            tx_storage=self.manager.tx_storage,
+        )
+
+        self.assertNotEqual(metrics.reactor, self.manager.reactor)
+
+        hash_rate = metrics.get_current_hash_rate(
+            metrics.weight_block_deque,
+            metrics.total_block_weight,
+            metrics.set_current_block_hash_rate,
+            metrics.block_hash_store_interval
+        )
+
+        self.assertEqual(hash_rate, 0)
