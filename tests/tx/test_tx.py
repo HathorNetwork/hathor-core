@@ -6,6 +6,7 @@ import time
 
 from twisted.internet.task import Clock
 
+from hathor.constants import MAX_DISTANCE_BETWEEN_BLOCKS
 from hathor.crypto.util import get_address_from_public_key, get_private_key_from_bytes, get_public_key_from_bytes
 from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
@@ -523,6 +524,16 @@ class BasicTransaction(unittest.TestCase):
         block.height -= 2
         with self.assertRaises(BlockHeightError):
             block.verify_height()
+
+        block.height += 1  # Back to the correct value
+
+        # Validate maximum distance between blocks
+        block2 = blocks[1]
+        block2.timestamp = block.timestamp + MAX_DISTANCE_BETWEEN_BLOCKS
+        block2.verify_parents()
+        block2.timestamp += 1
+        with self.assertRaises(TimestampError):
+            block2.verify_parents()
 
 
 if __name__ == '__main__':
