@@ -1,43 +1,41 @@
-from hathor.transaction.base_transaction import BaseTransaction
-from hathor.transaction import TxInput, MAX_NUM_INPUTS, MAX_NUM_OUTPUTS
-from hathor.transaction.exceptions import InputOutputMismatch, TooManyInputs, TooManyOutputs, \
-                                          InvalidInputData, TimestampError, InexistentInput, \
-                                          ConflictingInputs, ScriptError, InvalidToken
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.transaction.scripts import script_eval
-
 import hashlib
 from collections import namedtuple
-from typing import Dict, List, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
+
+from hathor import protos
+from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, BaseTransaction, TxInput, TxOutput
+from hathor.transaction.exceptions import (
+    ConflictingInputs,
+    InexistentInput,
+    InputOutputMismatch,
+    InvalidInputData,
+    InvalidToken,
+    ScriptError,
+    TimestampError,
+    TooManyInputs,
+    TooManyOutputs,
+)
+
+if TYPE_CHECKING:
+    from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 TokenInfo = namedtuple('TokenInfo', 'amount can_mint can_melt')
 
 
 class Transaction(BaseTransaction):
-    def __init__(self, nonce=0, timestamp=None, version=1, weight=0, height=0,
-                 inputs=None, outputs=None, parents=None, tokens=None, hash=None, storage=None):
+    def __init__(self, nonce: int = 0, timestamp: Optional[int] = None, version: int = 1, weight: float = 0,
+                 height: int = 0, inputs: Optional[List[TxInput]] = None, outputs: Optional[List[TxOutput]] = None,
+                 parents: Optional[List[bytes]] = None, tokens: Optional[List[bytes]] = None,
+                 hash: Optional[bytes] = None, storage: Optional['TransactionStorage'] = None) -> None:
         """
             Creating new init just to make sure inputs will always be empty array
             Inputs: all inputs that are being used (empty in case of a block)
         """
-        super().__init__(
-            nonce=nonce,
-            timestamp=timestamp,
-            version=version,
-            weight=weight,
-            height=height,
-            inputs=inputs or [],
-            outputs=outputs or [],
-            parents=parents or [],
-            tokens=tokens or [],
-            hash=hash,
-            storage=storage,
-            is_block=False
-        )
+        super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight, height=height, inputs=inputs
+                         or [], outputs=outputs or [], parents=parents or [], tokens=tokens or [], hash=hash,
+                         storage=storage, is_block=False)
 
-    def to_proto(self, include_metadata=True):
-        from hathor import protos
-        from hathor.transaction import TxInput, TxOutput
+    def to_proto(self, include_metadata: bool = True) -> protos.BaseTransaction:
         tx_proto = protos.Transaction(
             version=self.version,
             weight=self.weight,
@@ -55,8 +53,8 @@ class Transaction(BaseTransaction):
         return protos.BaseTransaction(transaction=tx_proto)
 
     @classmethod
-    def create_from_proto(cls, tx_proto, storage=None):
-        from hathor.transaction import TxInput, TxOutput
+    def create_from_proto(cls, tx_proto: protos.BaseTransaction,
+                          storage: Optional['TransactionStorage'] = None) -> 'Transaction':
         transaction_proto = tx_proto.transaction
         tx = cls(
             version=transaction_proto.version,
@@ -78,7 +76,7 @@ class Transaction(BaseTransaction):
             tx._metadata = TransactionMetadata.create_from_proto(tx.hash, transaction_proto.metadata)
         return tx
 
-    def verify(self):
+    def verify(self) -> None:
         """
             We have to do the following verifications:
                (i) spends only unspent outputs
@@ -96,11 +94,11 @@ class Transaction(BaseTransaction):
             # TODO do genesis validation
             return
         self.verify_without_storage()
-        self.verify_inputs()        # need to run verify_inputs first to check if all inputs exist
+        self.verify_inputs()  # need to run verify_inputs first to check if all inputs exist
         self.verify_sum()
         self.verify_parents()
 
-    def verify_without_storage(self):
+    def verify_without_storage(self) -> None:
         """ Run all verifications that do not need a storage.
         """
         self.verify_pow()
@@ -108,12 +106,12 @@ class Transaction(BaseTransaction):
         self.verify_number_of_outputs()
         self.verify_outputs()
 
-    def verify_number_of_inputs(self):
+    def verify_number_of_inputs(self) -> None:
         """Verify number of inputs does not exceeds the limit"""
         if len(self.inputs) > MAX_NUM_INPUTS:
             raise TooManyInputs('Maximum number of inputs exceeded')
 
-    def verify_number_of_outputs(self):
+    def verify_number_of_outputs(self) -> None:
         """Verify number of outputs does not exceeds the limit"""
         if len(self.outputs) > MAX_NUM_OUTPUTS:
             raise TooManyOutputs('Maximum number of outputs exceeded')
@@ -131,8 +129,8 @@ class Transaction(BaseTransaction):
 
             # no hathor authority UTXO
             if (output.get_token_index() == 0) and output.is_token_authority():
-                raise InvalidToken('Cannot have authority UTXO for hathor tokens: {}'
-                                   .format(output.to_human_readable()))
+                raise InvalidToken('Cannot have authority UTXO for hathor tokens: {}'.format(
+                    output.to_human_readable()))
 
     def create_token_uid(self, index: int) -> bytes:
         """Returns the token uid for a token in a given output position.
@@ -169,7 +167,7 @@ class Transaction(BaseTransaction):
         # token dict sums up all tokens present in the tx and their properties (amount, mint, melt)
         token_dict: Dict[bytes, TokenInfo] = {}
         # created tokens contains tokens being created in this tx and the corresponding output index
-        created_tokens: List[Tuple[bytes, int]] = []     # List[(token_uid, index)]
+        created_tokens: List[Tuple[bytes, int]] = []  # List[(token_uid, index)]
 
         default_info: TokenInfo = TokenInfo(0, False, False)
 
@@ -177,7 +175,7 @@ class Transaction(BaseTransaction):
             spent_tx = self.get_spent_tx(input_tx)
             spent_output = spent_tx.outputs[input_tx.index]
 
-            token_uid: TokenInfo = spent_tx.get_token_uid(spent_output.get_token_index())
+            token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
             (amount, can_mint, can_melt) = token_dict.get(token_uid, default_info)
             if spent_output.is_token_authority():
                 can_mint = can_mint or spent_output.can_mint_token()
@@ -188,8 +186,8 @@ class Transaction(BaseTransaction):
 
         # iterate over outputs and subtract spent values from token_map
         for index, tx_output in enumerate(self.outputs):
-            token_uid: bytes = self.get_token_uid(tx_output.get_token_index())
-            token_info: TokenInfo = token_dict.get(token_uid)
+            token_uid = self.get_token_uid(tx_output.get_token_index())
+            token_info = token_dict.get(token_uid)
             if token_info is None:
                 # was not in the inputs, so it must be a new token
                 if tx_output.is_token_creation():
@@ -199,11 +197,11 @@ class Transaction(BaseTransaction):
             else:
                 # for authority outputs, make sure the same capability (mint/melt) was present in the inputs
                 if tx_output.can_mint_token() and not token_info.can_mint:
-                    raise InvalidToken('output has mint authority, but no input has it: {}'
-                                       .format(tx_output.to_human_readable()))
+                    raise InvalidToken('output has mint authority, but no input has it: {}'.format(
+                        tx_output.to_human_readable()))
                 if tx_output.can_melt_token() and not token_info.can_melt:
-                    raise InvalidToken('output has melt authority, but no input has it: {}'
-                                       .format(tx_output.to_human_readable()))
+                    raise InvalidToken('output has melt authority, but no input has it: {}'.format(
+                        tx_output.to_human_readable()))
 
                 # for regular outputs, just subtract from the total amount
                 if not tx_output.is_token_authority():
@@ -218,35 +216,38 @@ class Transaction(BaseTransaction):
             elif token_info.amount > 0:
                 # tokens have been melted
                 if not token_info.can_melt:
-                    raise InputOutputMismatch('{} {} tokens melted, but there is no melt authority input'
-                                              .format(token_info.amount, token_uid.hex()))
+                    raise InputOutputMismatch('{} {} tokens melted, but there is no melt authority input'.format(
+                        token_info.amount, token_uid.hex()))
             else:
                 # tokens have been minted
                 if not token_info.can_mint:
-                    raise InputOutputMismatch('{} {} tokens minted, but there is no mint authority input'
-                                              .format((-1)*token_info.amount, token_uid.hex()))
+                    raise InputOutputMismatch('{} {} tokens minted, but there is no mint authority input'.format(
+                        (-1) * token_info.amount, token_uid.hex()))
 
         # make sure created tokens have correct hash
         for token_uid, index in created_tokens:
             if token_uid != self.create_token_uid(index):
-                raise InvalidToken('token creation with invalid uid; expecting {}, got {}; output index {}'
-                                   .format(self.create_token_uid(index), token_uid, index))
+                raise InvalidToken('token creation with invalid uid; expecting {}, got {}; output index {}'.format(
+                    self.create_token_uid(index), token_uid, index))
 
     def verify_inputs(self) -> None:
         """Verify inputs signatures and ownership and all inputs actually exist"""
-        spent_outputs = set()  # Set[Tuple[bytes(hash), int]]
+        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+
+        spent_outputs: Set[Tuple[bytes, int]] = set()
         for input_tx in self.inputs:
             try:
                 spent_tx = self.get_spent_tx(input_tx)
+                assert spent_tx.hash is not None
                 if input_tx.index >= len(spent_tx.outputs):
-                    raise InexistentInput('Output spent by this input does not exist: {} index {}'
-                                          .format(input_tx.tx_id.hex(), input_tx.index))
+                    raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
+                        input_tx.tx_id.hex(), input_tx.index))
             except TransactionDoesNotExist:
                 raise InexistentInput('Input tx does not exist: {}'.format(input_tx.tx_id.hex()))
 
             if self.timestamp <= spent_tx.timestamp:
                 raise TimestampError('tx={} timestamp={}, parent={} timestamp={}'.format(
-                    self.hash.hex(),
+                    self.hash and self.hash.hex(),
                     self.timestamp,
                     spent_tx.hash.hex(),
                     spent_tx.timestamp,
@@ -257,25 +258,27 @@ class Transaction(BaseTransaction):
             # check if any other input in this tx is spending the same output
             key = (input_tx.tx_id, input_tx.index)
             if key in spent_outputs:
-                raise ConflictingInputs('tx {} inputs spend the same output: {} index {}'
-                                        .format(self.hash_hex, input_tx.tx_id.hex(), input_tx.index))
+                raise ConflictingInputs('tx {} inputs spend the same output: {} index {}'.format(
+                    self.hash_hex, input_tx.tx_id.hex(), input_tx.index))
             spent_outputs.add(key)
 
-    def verify_script(self, input_tx, spent_tx):
+    def verify_script(self, input_tx: TxInput, spent_tx: BaseTransaction) -> None:
         """
-        :type input_tx: Input
+        :type input_tx: TxInput
         :type spent_tx: Transaction
         """
+        from hathor.transaction.scripts import script_eval
         try:
             script_eval(self, input_tx, spent_tx)
         except ScriptError as e:
             raise InvalidInputData(e) from e
 
-    def get_spent_tx(self, input_tx):
+    def get_spent_tx(self, input_tx: TxInput) -> BaseTransaction:
         # TODO Maybe we could use a TransactionCacheStorage in the future to reduce storage hit
         try:
             spent_tx = input_tx._tx
         except AttributeError:
+            assert self.storage is not None
             spent_tx = self.storage.get_transaction(input_tx.tx_id)
             input_tx._tx = spent_tx
         return spent_tx

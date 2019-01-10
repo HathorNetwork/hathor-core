@@ -1,13 +1,12 @@
+import time
+
 from twisted.internet.task import Clock
 
+from hathor.transaction import Transaction
+from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance, WalletInputInfo, WalletOutputInfo
+from hathor.wallet.exceptions import PrivateKeyNotFound
 from tests import unittest
 from tests.utils import add_new_blocks
-
-from hathor.transaction import Transaction
-from hathor.wallet.base_wallet import WalletOutputInfo, WalletInputInfo, UnspentTx, SpentTx, WalletBalance
-from hathor.wallet.exceptions import PrivateKeyNotFound
-
-import time
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):
@@ -139,12 +138,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager.wallet.get_unused_address_bytes()
         value = 1900
-        inputs = [
-            WalletInputInfo(tx_id=self.tx1.hash, index=0, private_key=None)
-        ]
-        outputs = [
-            WalletOutputInfo(address=address, value=int(value), timelock=None)
-        ]
+        inputs = [WalletInputInfo(tx_id=self.tx1.hash, index=0, private_key=None)]
+        outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         tx2 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
         tx2.weight = 10
         tx2.parents = [self.tx1.hash, self.tx1.parents[0]]
@@ -156,13 +151,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         with self.assertRaises(PrivateKeyNotFound):
             self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs=inputs, outputs=outputs)
 
-        self.manager.wallet.prepare_transaction_incomplete_inputs(
-            Transaction,
-            inputs=inputs,
-            outputs=outputs,
-            force=True,
-            tx_storage=self.manager.tx_storage
-        )
+        self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs=inputs, outputs=outputs,
+                                                                  force=True, tx_storage=self.manager.tx_storage)
 
         # Change of parents only, so it's a twin.
         tx3 = Transaction.create_from_struct(tx2.get_struct())
@@ -194,12 +184,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager.wallet.get_unused_address_bytes()
         value = 1900
-        inputs = [
-            WalletInputInfo(tx_id=self.tx1.hash, index=0, private_key=None)
-        ]
-        outputs = [
-            WalletOutputInfo(address=address, value=int(value), timelock=None)
-        ]
+        inputs = [WalletInputInfo(tx_id=self.tx1.hash, index=0, private_key=None)]
+        outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         tx2 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
         tx2.weight = 10
         tx2.parents = [self.tx1.hash, self.tx1.parents[0]]
@@ -271,12 +257,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager.wallet.get_unused_address_bytes()
         value = 1900
-        inputs = [
-            WalletInputInfo(tx_id=self.tx1.hash, index=0, private_key=None)
-        ]
-        outputs = [
-            WalletOutputInfo(address=address, value=int(value), timelock=None)
-        ]
+        inputs = [WalletInputInfo(tx_id=self.tx1.hash, index=0, private_key=None)]
+        outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         tx2 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
         tx2.weight = 10
         tx2.parents = [self.tx1.hash, self.tx1.parents[0]]
@@ -335,12 +317,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         self.clock.advance(1)
         new_address = self.manager.wallet.get_unused_address_bytes()
-        inputs = [
-            WalletInputInfo(tx_id=tx3.hash, index=0, private_key=None)
-        ]
-        outputs = [
-            WalletOutputInfo(address=new_address, value=2000, timelock=None)
-        ]
+        inputs = [WalletInputInfo(tx_id=tx3.hash, index=0, private_key=None)]
+        outputs = [WalletOutputInfo(address=new_address, value=2000, timelock=None)]
         tx4 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
         tx4.weight = 10
         tx4.parents = [tx3.hash, tx3.parents[0]]

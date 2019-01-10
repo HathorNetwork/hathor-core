@@ -1,19 +1,17 @@
-from twisted.internet.task import Clock
-from twisted.internet.defer import inlineCallbacks
-import tempfile
-import shutil
-
-from hathor.transaction import Transaction, TransactionMetadata
-from hathor.transaction.storage import TransactionMemoryStorage, TransactionCacheStorage
-from hathor.wallet import Wallet
-from hathor.manager import HathorManager
-from hathor.transaction import Block, TxOutput
-
-from tests.utils import add_new_transactions, add_new_blocks
-
 import collections
-import unittest
+import shutil
+import tempfile
 import time
+import unittest
+
+from twisted.internet.defer import inlineCallbacks
+from twisted.internet.task import Clock
+
+from hathor.manager import HathorManager
+from hathor.transaction import Block, Transaction, TransactionMetadata, TxOutput
+from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
+from hathor.wallet import Wallet
+from tests.utils import add_new_blocks, add_new_transactions
 
 CACHE_SIZE = 5
 
@@ -44,17 +42,14 @@ class BasicTransaction(unittest.TestCase):
         shutil.rmtree(self.tmpdir)
 
     def _get_new_tx(self, nonce):
-        tx = Transaction(
-            nonce=nonce,
-            storage=self.cache_storage
-        )
+        tx = Transaction(nonce=nonce, storage=self.cache_storage)
         tx.update_hash()
         meta = TransactionMetadata(hash=tx.hash)
         tx._metadata = meta
         return tx
 
     def test_write_read(self):
-        txs = [self._get_new_tx(nonce) for nonce in range(2*CACHE_SIZE)]
+        txs = [self._get_new_tx(nonce) for nonce in range(2 * CACHE_SIZE)]
         for tx in txs:
             self.cache_storage.save_transaction(tx)
 
@@ -76,7 +71,7 @@ class BasicTransaction(unittest.TestCase):
 
     def test_capacity(self):
         # cache should not grow over its capacity
-        txs = [self._get_new_tx(nonce) for nonce in range(2*CACHE_SIZE)]
+        txs = [self._get_new_tx(nonce) for nonce in range(2 * CACHE_SIZE)]
         for tx in txs:
             self.cache_storage.save_transaction(tx)
 
@@ -84,7 +79,7 @@ class BasicTransaction(unittest.TestCase):
 
     def test_read_adds_to_cache(self):
         # make sure reading also adds to cache, not only writes
-        txs = [self._get_new_tx(nonce) for nonce in range(2*CACHE_SIZE)]
+        txs = [self._get_new_tx(nonce) for nonce in range(2 * CACHE_SIZE)]
         for tx in txs:
             self.cache_storage.save_transaction(tx)
 
@@ -139,14 +134,8 @@ class BasicTransaction(unittest.TestCase):
 
         block_parents = [tx.hash for tx in self.genesis]
         output = TxOutput(200, bytes.fromhex('1e393a5ce2ff1c98d4ff6892f2175100f2dad049'))
-        obj = Block(
-            timestamp=1539271491,
-            weight=12,
-            outputs=[output],
-            parents=block_parents,
-            nonce=100781,
-            storage=self.cache_storage
-        )
+        obj = Block(timestamp=1539271491, weight=12, outputs=[output], parents=block_parents, nonce=100781,
+                    storage=self.cache_storage)
         obj.resolve()
 
         self.cache_storage.save_transaction_deferred(obj)
@@ -157,8 +146,7 @@ class BasicTransaction(unittest.TestCase):
         metadata_obj1 = obj.get_metadata()
         self.assertEqual(metadata_obj1_def, metadata_obj1)
         metadata_error = yield self.cache_storage.get_metadata_deferred(
-            bytes.fromhex('0001569c85fffa5782c3979e7d68dce1d8d84772505a53ddd76d636585f3977e')
-        )
+            bytes.fromhex('0001569c85fffa5782c3979e7d68dce1d8d84772505a53ddd76d636585f3977e'))
         self.assertIsNone(metadata_error)
 
         self.cache_storage._flush_to_storage(self.cache_storage.dirty_txs.copy())
@@ -168,17 +156,11 @@ class BasicTransaction(unittest.TestCase):
         self.assertEqual(loaded_obj1, loaded_obj2)
 
         self.assertTrue((yield self.cache_storage.transaction_exists_deferred(obj.hash)))
-        self.assertFalse(
-            (yield self.cache_storage.transaction_exists_deferred(
-                '0001569c85fffa5782c3979e7d68dce1d8d84772505a53ddd76d636585f3977e'
-            ))
-        )
+        self.assertFalse((yield self.cache_storage.transaction_exists_deferred(
+            '0001569c85fffa5782c3979e7d68dce1d8d84772505a53ddd76d636585f3977e')))
 
         self.assertFalse(
-            self.cache_storage.transaction_exists(
-                '0001569c85fffa5782c3979e7d68dce1d8d84772505a53ddd76d636585f3977e'
-            )
-        )
+            self.cache_storage.transaction_exists('0001569c85fffa5782c3979e7d68dce1d8d84772505a53ddd76d636585f3977e'))
 
         self.assertEqual(obj, loaded_obj1)
         self.assertEqual(obj.is_block, loaded_obj1.is_block)

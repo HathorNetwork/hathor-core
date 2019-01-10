@@ -1,5 +1,5 @@
-from tests import unittest
 from hathor.cli.grafana_dashboard import create_parser, execute
+from tests import unittest
 
 
 class GrafanaTest(unittest.TestCase):

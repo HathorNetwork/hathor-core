@@ -1,28 +1,58 @@
-from hathor.pubsub import HathorEvents
-from hathor.p2p.protocol import HathorProtocol
-from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
-from hathor.transaction.base_transaction import sum_weights, sub_weights
-from math import log
-from collections import deque, namedtuple
+from collections import deque
+from typing import Callable, Deque, NamedTuple, Optional
 
-WeightValue = namedtuple('WeightValue', ['time', 'value'])
+from twisted.internet.interfaces import IReactorCore
+
+from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
+from hathor.transaction.base_transaction import sub_weights, sum_weights
+from hathor.transaction.block import Block
+from hathor.transaction.storage import TransactionStorage
+from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
+
+
+class WeightValue(NamedTuple):
+    time: int
+    value: float
 
 
 class Metrics:
-    def __init__(self, pubsub, avg_time_between_blocks, tx_storage=None, reactor=None):
+    transactions: int
+    blocks: int
+    hash_rate: float
+    total_block_weight: float
+    total_tx_weight: float
+    peers: int
+    tx_hash_rate: float
+    block_hash_rate: float
+    weight_tx_deque_len: int
+    weight_block_deque_len: int
+    weight_tx_deque: Deque[WeightValue]
+    weight_block_deque: Deque[WeightValue]
+    avg_time_between_blocks: int
+    pubsub: PubSubManager
+    tx_storage: TransactionStorage
+    reactor: IReactorCore
+    is_running: bool
+    exponential_alfa: float  # XXX: "alpha"?
+    tx_hash_store_interval: int
+    block_hash_store_interval: int
+
+    def __init__(
+            self,
+            pubsub: PubSubManager,
+            avg_time_between_blocks: int,
+            tx_storage: Optional[TransactionStorage] = None,
+            reactor: Optional[IReactorCore] = None,
+    ):
         """
         :param pubsub: If not given, a new one is created.
-        :type pubsub: :py:class:`hathor.pubsub.PubSubManager`
-
         :param tx_storage: If not given, a new one is created.
-        :type tx_storage: :py:class:`hathor.storage.TransactionStorage`
-
         :param avg_time_between_blocks: Seconds between blocks (comes from manager)
-        :type avg_time_between_blocks: int
-
+        :param tx_storage: Transaction storage
         :param reactor: Twisted reactor that handles the time and callLater
-        :type reactor: :py:class:`twisted.internet.Reactor`
         """
+        from collections import deque
+
         # Transactions count in the network
         self.transactions = 0
 
@@ -30,19 +60,19 @@ class Metrics:
         self.blocks = 0
 
         # Hash rate of the network
-        self.hash_rate = 0
+        self.hash_rate = 0.0
 
         # Total block weight
-        self.total_block_weight = 0
+        self.total_block_weight = 0.0
 
         # Total tx weight
-        self.total_tx_weight = 0
+        self.total_tx_weight = 0.0
 
         # Peers connected
         self.peers = 0
 
         # Hash rate of tx
-        self.tx_hash_rate = 0
+        self.tx_hash_rate = 0.0
 
         # Hash rate of block
         self.block_hash_rate = 0
@@ -54,11 +84,9 @@ class Metrics:
         self.weight_block_deque_len = 450
 
         # Stores caculated tx weights saved in tx storage
-        # deque[WeightValue]
         self.weight_tx_deque = deque(maxlen=self.weight_tx_deque_len)
 
         # Stores caculated block weights saved in tx storage
-        # deque[WeightValue]
         self.weight_block_deque = deque(maxlen=self.weight_block_deque_len)
 
         self.avg_time_between_blocks = avg_time_between_blocks
@@ -68,7 +96,8 @@ class Metrics:
         self.tx_storage = tx_storage or TransactionMemoryStorage()
 
         if reactor is None:
-            from twisted.internet import reactor
+            from twisted.internet import reactor as twisted_reactor
+            reactor = twisted_reactor
         self.reactor = reactor
 
         # If metric capture data is running
@@ -83,13 +112,13 @@ class Metrics:
 
         self._initial_setup()
 
-    def _initial_setup(self):
+    def _initial_setup(self) -> None:
         """ Start metrics initial values and subscribe to necessary events in the pubsub
         """
         self._start_initial_values()
         self.subscribe()
 
-    def _start_initial_values(self):
+    def _start_initial_values(self) -> None:
         """ When we start the metrics object we set the transaction and block count already in the network
         """
         self.transactions = self.tx_storage.get_tx_count()
@@ -99,7 +128,7 @@ class Metrics:
         if last_block:
             self.hash_rate = self.calculate_new_hashrate(last_block[0])
 
-    def start(self):
+    def start(self) -> None:
         self.is_running = True
         self.set_current_tx_hash_rate()
         self.set_current_block_hash_rate()
@@ -107,7 +136,7 @@ class Metrics:
     def stop(self):
         self.is_running = False
 
-    def subscribe(self):
+    def subscribe(self) -> None:
         """ Subscribe to defined events for the pubsub received
         """
         events = [
@@ -119,9 +148,11 @@ class Metrics:
         for event in events:
             self.pubsub.subscribe(event, self.handle_publish)
 
-    def handle_publish(self, key, args):
+    def handle_publish(self, key: HathorEvents, args: EventArguments) -> None:
         """ This method is called when pubsub publishes an event that we subscribed
         """
+        from hathor.p2p.protocol import HathorProtocol
+
         data = args.__dict__
         if key == HathorEvents.NETWORK_NEW_TX_ACCEPTED:
             if data['tx'].is_block:
@@ -140,34 +171,27 @@ class Metrics:
         else:
             raise ValueError('Invalid key')
 
-    def calculate_new_hashrate(self, block):
+    def calculate_new_hashrate(self, block: Block) -> float:
         """ Weight formula: w = log2(avg_time_between_blocks) + log2(hash_rate)
         """
+        from math import log
         return 2**(block.weight - log(self.avg_time_between_blocks, 2))
 
-    def set_current_tx_hash_rate(self):
+    def set_current_tx_hash_rate(self) -> None:
         """ Calculate new tx hash rate
         """
-        hash_rate = self.get_current_hash_rate(
-            self.weight_tx_deque,
-            self.total_tx_weight,
-            self.set_current_tx_hash_rate,
-            self.tx_hash_store_interval
-        )
+        hash_rate = self.get_current_hash_rate(self.weight_tx_deque, self.total_tx_weight,
+                                               self.set_current_tx_hash_rate, self.tx_hash_store_interval)
         self.tx_hash_rate = self.get_exponential_hash_rate(hash_rate, self.tx_hash_rate)
 
-    def set_current_block_hash_rate(self):
+    def set_current_block_hash_rate(self) -> None:
         """ Calculate new block hash rate
         """
-        hash_rate = self.get_current_hash_rate(
-            self.weight_block_deque,
-            self.total_block_weight,
-            self.set_current_block_hash_rate,
-            self.block_hash_store_interval
-        )
+        hash_rate = self.get_current_hash_rate(self.weight_block_deque, self.total_block_weight,
+                                               self.set_current_block_hash_rate, self.block_hash_store_interval)
         self.block_hash_rate = self.get_exponential_hash_rate(hash_rate, self.block_hash_rate)
 
-    def get_current_hash_rate(self, deque, total_weight, fn, interval):
+    def get_current_hash_rate(self, deque: deque, total_weight: float, fn: Callable, interval: int) -> float:
         """ Calculate new hash rate and schedule next call
 
             :param deque: deque to get first and last hash rate values
@@ -195,14 +219,11 @@ class Metrics:
             hash_rate = (2**sub_weights(last.value, first.value)) / (last.time - first.time)
 
         if self.is_running:
-            self.reactor.callLater(
-                interval,
-                fn
-            )
+            self.reactor.callLater(interval, fn)
 
         return hash_rate
 
-    def get_exponential_hash_rate(self, new_value, last_value):
+    def get_exponential_hash_rate(self, new_value: float, last_value: float) -> float:
         """ Using exponential moving average to calculate hash rate, so it decreases exponentially
             https://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average
 

@@ -1,20 +1,16 @@
+import time
+
+import base58
 from twisted.internet.task import Clock
 
+from hathor.crypto.util import get_private_key_from_bytes, get_public_key_bytes_compressed
+from hathor.transaction import Transaction, TxInput, TxOutput
+from hathor.transaction.exceptions import ScriptError
+from hathor.transaction.scripts import P2PKH, MultiSig, create_output_script, parse_address_script, script_eval
+from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
+from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from tests import unittest
 from tests.utils import add_new_blocks
-
-from hathor.transaction import Transaction, TxInput, TxOutput
-from hathor.wallet.base_wallet import WalletOutputInfo, WalletBalance
-from hathor.wallet.util import generate_signature
-
-from hathor.crypto.util import get_private_key_from_bytes, get_public_key_bytes_compressed
-
-from hathor.transaction.scripts import create_output_script, MultiSig, parse_address_script, script_eval, P2PKH
-from hathor.transaction.exceptions import ScriptError
-from hathor.wallet.util import generate_multisig_redeem_script, generate_multisig_address
-
-import time
-import base58
 
 
 class MultisigTestCase(unittest.TestCase):

@@ -1,7 +1,6 @@
-# encoding: utf-8
-
 from collections import defaultdict
 from enum import Enum
+from typing import Any, Callable, Dict, List
 
 
 class HathorEvents(Enum):
@@ -71,10 +70,11 @@ class HathorEvents(Enum):
     WALLET_HISTORY_UPDATED = 'wallet:history_updated'
 
 
-class EventArguments(object):
+class EventArguments:
     """Simple object for storing event arguments.
     """
-    def __init__(self, **kwargs):
+
+    def __init__(self, **kwargs: Any) -> None:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -82,15 +82,18 @@ class EventArguments(object):
         return key in self.__dict__
 
 
-class PubSubManager(object):
+class PubSubManager:
     """Manages a pub/sub pattern bus.
 
     It is used to let independent objects respond to events.
     """
-    def __init__(self):
+
+    _subscribers: Dict[HathorEvents, List[Callable]]
+
+    def __init__(self) -> None:
         self._subscribers = defaultdict(list)
 
-    def subscribe(self, key, fn):
+    def subscribe(self, key: HathorEvents, fn: Callable) -> None:
         """Subscribe to a specific event.
 
         :param key: Name of the key to which to subscribe.
@@ -108,7 +111,7 @@ class PubSubManager(object):
         if fn in self._subscribers[key]:
             self._subscribers[key].remove(fn)
 
-    def publish(self, key, **kwargs):
+    def publish(self, key: HathorEvents, **kwargs: Any) -> None:
         """Publish a new event.
 
         :param key: Key of the new event.

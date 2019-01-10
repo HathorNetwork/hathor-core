@@ -1,11 +1,10 @@
-from tests import unittest
-
-from hathor.transaction.genesis import genesis_transactions, get_genesis_output
-from hathor.constants import GENESIS_TOKENS
+import time
 
 from twisted.internet.task import Clock
 
-import time
+from hathor.constants import GENESIS_TOKENS
+from hathor.transaction.genesis import genesis_transactions, get_genesis_output
+from tests import unittest
 
 
 class GenesisTest(unittest.TestCase):

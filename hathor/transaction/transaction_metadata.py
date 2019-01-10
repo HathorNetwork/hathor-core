@@ -1,34 +1,37 @@
 from collections import defaultdict
+from typing import Any, Dict, Optional, Set
+
+from hathor import protos
 
 
 class TransactionMetadata:
+    hash: Optional[bytes]
+    spent_outputs: Dict[int, Set[bytes]]
+    conflict_with: Set[bytes]
+    voided_by: Set[bytes]
+    received_by: Set[int]
+    children: Set[bytes]
+    twins: Set[bytes]
+    accumulated_weight: float
 
-    def __init__(self, spent_outputs=None, hash=None, accumulated_weight=0):
-        """
-        :param hash: hash of tx
-        :type hash: bytes
+    def __init__(self, spent_outputs: Optional[Dict[int, Set[bytes]]] = None, hash: Optional[bytes] = None,
+                 accumulated_weight: float = 0) -> None:
 
-        :param spent_outputs: Spent outputs of this tx
-        :type spent_outputs: DefaultDict[int, Set[bytes (hash)]]
-
-        :type accumulated_weight: int
-        """
         # Hash of the transaction.
-        self.hash = hash  # bytes(hash)
+        self.hash = hash
 
         # Tx outputs that have been spent.
         # The key is the output index, while the value is a set of the transactions which spend the output.
-        # DefaultDict[int, Set[bytes(hash)]]
         self.spent_outputs = spent_outputs or defaultdict(set)
 
         # FIXME: conflict_with -> conflicts_with (as in "this transaction conflicts with these ones")
         # Hash of the transactions that conflicts with this transaction.
-        self.conflict_with = set()  # Set[bytes(hash)]
+        self.conflict_with = set()
 
         # Hash of the transactions that void this transaction.
         # When a transaction has a conflict and is voided because of this conflict, its own hash is added to
         # voided_by. The logic is that the transaction is voiding itself.
-        self.voided_by = set()  # Set[bytes(hash)]
+        self.voided_by = set()
 
         # List of peers which have sent this transaction.
         # Store only the peers' id.
@@ -36,26 +39,28 @@ class TransactionMetadata:
 
         # List of transactions which have this transaction as parent.
         # Store only the transactions' hash.
-        self.children = set()  # Set[bytes(hash)]
+        self.children = set()
 
         # Hash of the transactions that are twin to this transaction.
         # Twin transactions have the same inputs and outputs
         self.twins = set()
 
         # Accumulated weight
-        self.accumulated_weight = accumulated_weight  # float
+        self.accumulated_weight = accumulated_weight
 
     def __eq__(self, other):
         """Override the default Equals behavior"""
-        for field in ['hash', 'spent_outputs', 'conflict_with', 'voided_by',
-                      'received_by', 'children', 'accumulated_weight', 'twins']:
+        for field in [
+                'hash', 'spent_outputs', 'conflict_with', 'voided_by', 'received_by', 'children', 'accumulated_weight',
+                'twins'
+        ]:
             if getattr(self, field) != getattr(other, field):
                 return False
         return True
 
-    def to_json(self):
-        data = {}
-        data['hash'] = self.hash.hex()
+    def to_json(self) -> Dict[str, Any]:
+        data: Dict[str, Any] = {}
+        data['hash'] = self.hash and self.hash.hex()
         data['spent_outputs'] = []
         for idx, hashes in self.spent_outputs.items():
             data['spent_outputs'].append([idx, [h_bytes.hex() for h_bytes in hashes]])
@@ -68,7 +73,7 @@ class TransactionMetadata:
         return data
 
     @classmethod
-    def create_from_json(cls, data):
+    def create_from_json(cls, data: Dict[str, Any]) -> 'TransactionMetadata':
         meta = cls()
         meta.hash = bytes.fromhex(data['hash'])
         for idx, hashes in data['spent_outputs']:
@@ -97,7 +102,7 @@ class TransactionMetadata:
 
     # XXX(jansegre): I did not put the transaction hash in the protobuf object to keep it less redundant. Is this OK?
     @classmethod
-    def create_from_proto(cls, hash_bytes, metadata_proto):
+    def create_from_proto(cls, hash_bytes: bytes, metadata_proto: protos.Metadata) -> 'TransactionMetadata':
         """ Create a TransactionMetadata from a protobuf Metadata object.
 
         :param hash_bytes: hash of the transaction in bytes
@@ -120,7 +125,7 @@ class TransactionMetadata:
         metadata.accumulated_weight = metadata_proto.accumulated_weight
         return metadata
 
-    def to_proto(self):
+    def to_proto(self) -> protos.Metadata:
         """ Creates a Probuf object from self
 
         :return: Protobuf object
@@ -128,7 +133,8 @@ class TransactionMetadata:
         """
         from hathor import protos
         return protos.Metadata(
-            spent_outputs={k: protos.Metadata.Hashes(hashes=v) for k, v in self.spent_outputs.items()},
+            spent_outputs={k: protos.Metadata.Hashes(hashes=v)
+                           for k, v in self.spent_outputs.items()},
             conflicts_with=protos.Metadata.Hashes(hashes=self.conflict_with),
             voided_by=protos.Metadata.Hashes(hashes=self.voided_by),
             twins=protos.Metadata.Hashes(hashes=self.twins),
@@ -137,7 +143,7 @@ class TransactionMetadata:
             accumulated_weight=self.accumulated_weight,
         )
 
-    def clone(self):
+    def clone(self) -> 'TransactionMetadata':
         """Return exact copy without sharing memory.
 
         :return: TransactionMetadata

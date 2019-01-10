@@ -1,18 +1,15 @@
-# encoding: utf-8
-
-from multiprocessing import Process, Queue
-
-from hathor.transaction import Block
-from hathor.transaction.exceptions import HathorError
-
-import datetime
-import requests
-import time
-import base64
 import argparse
-import sys
+import base64
+import datetime
 import signal
+import sys
+import time
+from argparse import ArgumentParser, Namespace
 from json.decoder import JSONDecodeError
+from multiprocessing import Process, Queue
+from typing import Tuple
+
+import requests
 
 _SLEEP_ON_ERROR_SECONDS = 5
 
@@ -28,7 +25,7 @@ def worker(q_in, q_out):
     q_out.put(block.nonce)
 
 
-def create_parser():
+def create_parser() -> ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('url', help='URL to get mining bytes')
     parser.add_argument('--sleep', type=float, help='Sleep every 2 seconds (in seconds)')
@@ -36,7 +33,10 @@ def create_parser():
     return parser
 
 
-def execute(args):
+def execute(args: Namespace) -> None:
+    from hathor.transaction import Block
+    from hathor.transaction.exceptions import HathorError
+
     print('Hathor CPU Miner v1.0.0')
     print('URL: {}'.format(args.url))
 
@@ -60,8 +60,12 @@ def execute(args):
             continue
         block_bytes = base64.b64decode(data['block_bytes'])
         block = Block.create_from_struct(block_bytes)
+        assert block.hash is not None
+        assert isinstance(block, Block)
         print('Mining block with weight {}'.format(block.weight))
 
+        q_in: Queue[Tuple[Block, int, int, int]]
+        q_out: Queue[int]
         q_in, q_out = Queue(), Queue()
         p = Process(target=worker, args=(q_in, q_out))
         p.start()
@@ -78,12 +82,7 @@ def execute(args):
             block_bytes = block.get_struct()
 
             print('[{}] New block found: {} (nonce={}, weight={}, height={})'.format(
-                datetime.datetime.now(),
-                block.hash.hex(),
-                block.nonce,
-                block.weight,
-                block.height
-            ))
+                datetime.datetime.now(), block.hash.hex(), block.nonce, block.weight, block.height))
             print('')
 
             requests.post(args.url, json={'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})

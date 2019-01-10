@@ -1,13 +1,12 @@
+from hathor.constants import DECIMAL_PLACES, TOKENS_PER_BLOCK
 from hathor.transaction import Transaction
 from hathor.wallet import HDWallet
-from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo, WalletBalance
+from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InsuficientFunds
-from hathor.constants import TOKENS_PER_BLOCK, DECIMAL_PLACES
-
 from tests import unittest
 from tests.utils import add_new_block
 
-BLOCK_TOKENS = TOKENS_PER_BLOCK * (10 ** DECIMAL_PLACES)
+BLOCK_TOKENS = TOKENS_PER_BLOCK * (10**DECIMAL_PLACES)
 TOKENS = BLOCK_TOKENS
 
 

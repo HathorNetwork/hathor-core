@@ -10,6 +10,7 @@ service TransactionStorage {
   rpc Save(SaveRequest) returns (SaveResponse) {}
   rpc Count(CountRequest) returns (CountResponse) {}
   rpc LatestTimestamp(LatestTimestampRequest) returns (LatestTimestampResponse) {}
+  rpc FirstTimestamp(FirstTimestampRequest) returns (FirstTimestampResponse) {}
   rpc MarkAs(MarkAsRequest) returns (MarkAsResponse) {}
   rpc List(ListRequest) returns (stream ListItemResponse) {}
   rpc ListTips(ListTipsRequest) returns (stream Interval) {}
@@ -60,6 +61,13 @@ message LatestTimestampRequest {
 }
 
 message LatestTimestampResponse {
+  uint32 timestamp = 1;
+}
+
+message FirstTimestampRequest {
+}
+
+message FirstTimestampResponse {
   uint32 timestamp = 1;
 }
 

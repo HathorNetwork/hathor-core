@@ -1,21 +1,16 @@
+import time
+from contextlib import redirect_stdout
+from io import StringIO
+
 from twisted.internet.task import Clock
 
+from hathor.cli.multisig_spend import create_parser, execute
+from hathor.transaction import Transaction, TxInput, TxOutput
+from hathor.transaction.scripts import create_output_script
+from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
+from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from tests import unittest
 from tests.utils import add_new_blocks, get_tokens_from_mining
-
-from hathor.transaction import Transaction, TxInput, TxOutput
-from hathor.wallet.base_wallet import WalletOutputInfo, WalletBalance
-from hathor.wallet.util import generate_signature
-
-from hathor.transaction.scripts import create_output_script
-from hathor.wallet.util import generate_multisig_redeem_script, generate_multisig_address
-
-from hathor.cli.multisig_spend import create_parser, execute
-
-from io import StringIO
-from contextlib import redirect_stdout
-
-import time
 
 
 class MultiSigSpendTest(unittest.TestCase):
@@ -65,9 +60,7 @@ class MultiSigSpendTest(unittest.TestCase):
         self.assertEqual(self.manager.wallet.balance, WalletBalance(0, available_tokens))
 
         # First we send tokens to a multisig address
-        outputs = [
-            WalletOutputInfo(address=self.multisig_address, value=2000, timelock=None)
-        ]
+        outputs = [WalletOutputInfo(address=self.multisig_address, value=2000, timelock=None)]
 
         tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
         tx1.weight = 10
@@ -104,8 +97,7 @@ class MultiSigSpendTest(unittest.TestCase):
         parser = create_parser()
         # Generate spend tx
         args = parser.parse_args([
-            tx.get_struct().hex(),
-            '{},{}'.format(signatures[0].hex(), signatures[1].hex()),
+            tx.get_struct().hex(), '{},{}'.format(signatures[0].hex(), signatures[1].hex()),
             self.redeem_script.hex()
         ])
         f = StringIO()

@@ -1,12 +1,13 @@
-from twisted.internet.task import Clock
-from hathor.prometheus import PrometheusMetricsExporter
-
-from tests import unittest
-from tests.utils import add_new_blocks, add_new_transactions
-import tempfile
-import time
 import os
 import shutil
+import tempfile
+import time
+
+from twisted.internet.task import Clock
+
+from hathor.prometheus import PrometheusMetricsExporter
+from tests import unittest
+from tests.utils import add_new_blocks, add_new_transactions
 
 
 class PrometheusTest(unittest.TestCase):

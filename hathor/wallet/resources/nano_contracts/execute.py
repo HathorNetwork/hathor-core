@@ -1,12 +1,12 @@
+import base64
+import json
+
+import base58
 from twisted.web import resource
 
-from hathor.api_util import set_cors, render_options, get_missing_params_msg
+from hathor.api_util import get_missing_params_msg, render_options, set_cors
 from hathor.transaction import Transaction, TxInput, TxOutput
-from hathor.transaction.scripts import NanoContractMatchValues, P2PKH
-
-import json
-import base58
-import base64
+from hathor.transaction.scripts import P2PKH, NanoContractMatchValues
 
 PARAMS = ['spent_tx_id', 'spent_tx_index', 'oracle_data', 'oracle_signature', 'oracle_pubkey', 'address', 'value']
 

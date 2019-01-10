@@ -1,15 +1,15 @@
-from twisted.python import log
-from twisted.internet.task import Clock
-
-from hathor.p2p.peer_id import PeerId
-from hathor.p2p.protocol import HathorProtocol
-from tests.utils import FakeConnection, add_new_block
-from hathor.p2p.node_sync import NodeSyncTimestamp
-from tests import unittest
-
-import time
 import json
 import sys
+import time
+
+from twisted.internet.task import Clock
+from twisted.python import log
+
+from hathor.p2p.node_sync import NodeSyncTimestamp
+from hathor.p2p.peer_id import PeerId
+from hathor.p2p.protocol import HathorProtocol
+from tests import unittest
+from tests.utils import FakeConnection, add_new_block
 
 
 class HathorProtocolTestCase(unittest.TestCase):
@@ -78,8 +78,7 @@ class HathorProtocolTestCase(unittest.TestCase):
 
         self._check_cmd_and_value(
             self.conn1.tr1.value(),
-            (b'THROTTLE', 'RateLimitKeys.GLOBAL At most {} hits every {} seconds'.format(hits, window).encode('utf-8'))
-        )
+            (b'THROTTLE', 'global At most {} hits every {} seconds'.format(hits, window).encode('utf-8')))
 
         self.conn1.proto1.state.handle_throttle(b'')
 

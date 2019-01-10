@@ -1,9 +1,10 @@
-from hathor.transaction.resources import TipsHistogramResource
-from twisted.internet.defer import inlineCallbacks
-from tests.resources.base_resource import StubSite, _BaseResourceTest
-
-from tests.utils import add_new_blocks, add_new_transactions
 import time
+
+from twisted.internet.defer import inlineCallbacks
+
+from hathor.transaction.resources import TipsHistogramResource
+from tests.resources.base_resource import StubSite, _BaseResourceTest
+from tests.utils import add_new_blocks, add_new_transactions
 
 
 class TipsTest(_BaseResourceTest._ResourceTest):

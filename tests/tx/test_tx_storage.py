@@ -1,21 +1,25 @@
-import unittest
-import tempfile
 import shutil
+import tempfile
 import time
+import unittest
 
 from twisted.internet.task import Clock
 
-from hathor.transaction.storage import TransactionJSONStorage, TransactionMemoryStorage, TransactionCompactStorage, \
-                                       TransactionCacheStorage, TransactionBinaryStorage, TransactionSubprocessStorage
+from hathor.transaction import Block, Transaction, TxInput, TxOutput
+from hathor.transaction.storage import (
+    TransactionBinaryStorage,
+    TransactionCacheStorage,
+    TransactionCompactStorage,
+    TransactionJSONStorage,
+    TransactionMemoryStorage,
+    TransactionSubprocessStorage,
+)
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.transaction import Block, Transaction, TxOutput, TxInput
 from hathor.wallet import Wallet
-
-from tests.utils import start_remote_storage, add_new_transactions, add_new_blocks
+from tests.utils import add_new_blocks, add_new_transactions, start_remote_storage
 
 
 class _BaseTransactionStorageTest:
-
     class _TransactionStorageTest(unittest.TestCase):
         def setUp(self, tx_storage, reactor=None):
             if not reactor:
@@ -37,37 +41,23 @@ class _BaseTransactionStorageTest:
 
             block_parents = [tx.hash for tx in self.genesis]
             output = TxOutput(200, bytes.fromhex('1e393a5ce2ff1c98d4ff6892f2175100f2dad049'))
-            self.block = Block(
-                timestamp=1539271491,
-                weight=12,
-                outputs=[output],
-                parents=block_parents,
-                nonce=100781,
-                storage=tx_storage
-            )
+            self.block = Block(timestamp=1539271491, weight=12, outputs=[output], parents=block_parents, nonce=100781,
+                               storage=tx_storage)
             self.block.resolve()
 
             tx_parents = [tx.hash for tx in self.genesis_txs]
             tx_input = TxInput(
-                tx_id=bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902'),
-                index=0,
+                tx_id=bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902'), index=0,
                 data=bytes.fromhex('46304402203470cb9818c9eb842b0c433b7e2b8aded0a51f5903e971649e870763d0266a'
                                    'd2022049b48e09e718c4b66a0f3178ef92e4d60ee333d2d0e25af8868acf5acbb35aaa583'
                                    '056301006072a8648ce3d020106052b8104000a034200042ce7b94cba00b654d4308f8840'
                                    '7345cacb1f1032fb5ac80407b74d56ed82fb36467cb7048f79b90b1cf721de57e942c5748'
-                                   '620e78362cf2d908e9057ac235a63')
-            )
+                                   '620e78362cf2d908e9057ac235a63'))
 
             self.tx = Transaction(
-                timestamp=1539271493,
-                weight=10,
-                nonce=932049,
-                inputs=[tx_input],
-                outputs=[output],
-                parents=tx_parents,
+                timestamp=1539271493, weight=10, nonce=932049, inputs=[tx_input], outputs=[output], parents=tx_parents,
                 tokens=[bytes.fromhex('0023be91834c973d6a6ddd1a0ae411807b7c8ef2a015afb5177ee64b666ce602')],
-                storage=tx_storage
-            )
+                storage=tx_storage)
             self.tx.resolve()
 
         def tearDown(self):
@@ -188,11 +178,6 @@ class _BaseTransactionStorageTest:
             tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
             self.assertEqual(set(tip_blocks), {block2.hash, block3.hash})
 
-#            # Block4 has both blocks as parents
-#            block4 = self._add_new_block()
-#            tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
-#            self.assertEqual(tip_blocks, [block4.hash])
-
         def test_token_list(self):
             tx = self.tx
             self.validate_save(tx)
@@ -294,7 +279,6 @@ class CacheMemoryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest
 # class SubprocessMemoryStorageTest(_BaseTransactionStorageTest._SubprocessStorageTest):
 #    def setUp(self):
 #        super().setUp(TransactionMemoryStorage)
-
 
 # class SubprocessCacheMemoryStorageTest(_BaseTransactionStorageTest._SubprocessStorageTest):
 #    def setUp(self):

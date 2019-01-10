@@ -1,10 +1,11 @@
-from twisted.web import resource
-from hathor.api_util import set_cors
-from hathor.transaction import Transaction
-
 import json
 import re
 import struct
+
+from twisted.web import resource
+
+from hathor.api_util import set_cors
+from hathor.transaction import Transaction
 
 
 class PushTxResource(resource.Resource):
@@ -51,11 +52,7 @@ class PushTxResource(resource.Resource):
                         success = self.manager.propagate_tx(tx)
                         data = {'success': success}
                     else:
-                        data = {
-                            'success': success,
-                            'message': message,
-                            'can_force': True
-                        }
+                        data = {'success': success, 'message': message, 'can_force': True}
             except struct.error:
                 data = {
                     'success': False,

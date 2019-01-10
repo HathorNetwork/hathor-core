@@ -1,9 +1,9 @@
-from hathor.transaction.resources import TransactionResource
 from twisted.internet.defer import inlineCallbacks
-from tests.resources.base_resource import StubSite, _BaseResourceTest
-from hathor.transaction.genesis import genesis_transactions
-from hathor.transaction import Transaction
 
+from hathor.transaction import Transaction
+from hathor.transaction.genesis import genesis_transactions
+from hathor.transaction.resources import TransactionResource
+from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_new_blocks, add_new_transactions, start_remote_storage
 
 
@@ -26,17 +26,13 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
         # Test sending hash that does not exist
         response_error1 = yield self.web.get(
-            "transaction",
-            {b'id': b'000000831cff82fa730cbdf8640fae6c130aab1681336e2f8574e314a5533848'}
-        )
+            "transaction", {b'id': b'000000831cff82fa730cbdf8640fae6c130aab1681336e2f8574e314a5533848'})
         data_error1 = response_error1.json_value()
         self.assertFalse(data_error1['success'])
 
         # Test sending invalid hash
         response_error2 = yield self.web.get(
-            "transaction",
-            {b'id': b'000000831cff82fa730cbdf8640fae6c130aab1681336e2f8574e314a553384'}
-        )
+            "transaction", {b'id': b'000000831cff82fa730cbdf8640fae6c130aab1681336e2f8574e314a553384'})
         data_error2 = response_error2.json_value()
         self.assertFalse(data_error2['success'])
 
@@ -65,10 +61,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         expected1 = blocks[-2:]
         expected1.reverse()
 
-        response1 = yield self.web.get(
-            "transaction",
-            {b'count': b'2', b'type': b'block'}
-        )
+        response1 = yield self.web.get("transaction", {b'count': b'2', b'type': b'block'})
         data1 = response1.json_value()
 
         for expected, result in zip(expected1, data1['transactions']):
@@ -81,10 +74,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         expected2 = txs[-8:]
         expected2.reverse()
 
-        response2 = yield self.web.get(
-            "transaction",
-            {b'count': b'8', b'type': b'tx'}
-        )
+        response2 = yield self.web.get("transaction", {b'count': b'8', b'type': b'tx'})
         data2 = response2.json_value()
 
         for expected, result in zip(expected2, data2['transactions']):
@@ -98,15 +88,13 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         expected3.reverse()
 
         response3 = yield self.web.get(
-            "transaction",
-            {
+            "transaction", {
                 b'count': b'3',
                 b'type': b'block',
                 b'timestamp': bytes(str(expected1[-1].timestamp), 'utf-8'),
                 b'hash': bytes(expected1[-1].hash.hex(), 'utf-8'),
                 b'page': b'next'
-            }
-        )
+            })
         data3 = response3.json_value()
 
         for expected, result in zip(expected3, data3['transactions']):
@@ -117,15 +105,13 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
         # Get newer txs with hash reference
         response4 = yield self.web.get(
-            "transaction",
-            {
+            "transaction", {
                 b'count': b'16',
                 b'type': b'tx',
                 b'timestamp': bytes(str(txs[-9].timestamp), 'utf-8'),
                 b'hash': bytes(txs[-9].hash.hex(), 'utf-8'),
                 b'page': b'previous'
-            }
-        )
+            })
         data4 = response4.json_value()
 
         for expected, result in zip(expected2, data4['transactions']):
@@ -139,15 +125,13 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         expected5.reverse()
 
         response5 = yield self.web.get(
-            "transaction",
-            {
+            "transaction", {
                 b'count': b'3',
                 b'type': b'block',
                 b'timestamp': bytes(str(expected1[-1].timestamp), 'utf-8'),
                 b'hash': bytes(expected1[-1].hash.hex(), 'utf-8'),
                 b'page': b'previous'
-            }
-        )
+            })
         data5 = response5.json_value()
 
         for expected, result in zip(expected5, data5['transactions']):
@@ -161,15 +145,13 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         expected6.reverse()
 
         response6 = yield self.web.get(
-            "transaction",
-            {
+            "transaction", {
                 b'count': b'8',
                 b'type': b'tx',
                 b'timestamp': bytes(str(txs[8].timestamp), 'utf-8'),
                 b'hash': bytes(txs[8].hash.hex(), 'utf-8'),
                 b'page': b'next'
-            }
-        )
+            })
         data6 = response6.json_value()
 
         for expected, result in zip(expected6, data6['transactions']):

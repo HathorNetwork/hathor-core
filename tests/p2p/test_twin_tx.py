@@ -1,12 +1,11 @@
-from twisted.internet.task import Clock
+import time
 
-from tests import unittest
-from tests.utils import add_new_blocks
+from twisted.internet.task import Clock
 
 from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletOutputInfo
-
-import time
+from tests import unittest
+from tests.utils import add_new_blocks
 
 
 class TwinTransactionTestCase(unittest.TestCase):

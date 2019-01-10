@@ -1,9 +1,11 @@
+import base64
+
+from twisted.internet.defer import inlineCallbacks
+
 from hathor.p2p.resources import MiningResource
 from hathor.wallet.resources import HistoryResource
-from twisted.internet.defer import inlineCallbacks
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import resolve_block_bytes
-import base64
 
 
 class HistoryTest(_BaseResourceTest._ResourceTest):

@@ -1,12 +1,14 @@
+import json
+from unittest.mock import Mock
+
 from twisted.test import proto_helpers
+
+from hathor.metrics import Metrics
+from hathor.pubsub import EventArguments, HathorEvents
+from hathor.transaction.genesis import genesis_transactions
+from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance
 from hathor.websocket.factory import HathorAdminWebsocketFactory, HathorAdminWebsocketProtocol
 from tests import unittest
-from unittest.mock import Mock
-import json
-from hathor.metrics import Metrics
-from hathor.pubsub import HathorEvents, EventArguments
-from hathor.transaction.genesis import genesis_transactions
-from hathor.wallet.base_wallet import UnspentTx, SpentTx, WalletBalance
 
 
 class TestWebsocket(unittest.TestCase):
@@ -50,15 +52,8 @@ class TestWebsocket(unittest.TestCase):
         self.factory._schedule_and_send_metric()
         value = self._decode_value(self.transport.value())
         keys = [
-            'transactions',
-            'blocks',
-            'hash_rate',
-            'block_hash_rate',
-            'tx_hash_rate',
-            'network_hash_rate',
-            'peers',
-            'type',
-            'time'
+            'transactions', 'blocks', 'hash_rate', 'block_hash_rate', 'tx_hash_rate', 'network_hash_rate', 'peers',
+            'type', 'time'
         ]
         self.assertEqual(len(value), len(keys))
         for key in keys:
@@ -139,11 +134,8 @@ class TestWebsocket(unittest.TestCase):
 
         self.assertNotEqual(metrics.reactor, self.manager.reactor)
 
-        hash_rate = metrics.get_current_hash_rate(
-            metrics.weight_block_deque,
-            metrics.total_block_weight,
-            metrics.set_current_block_hash_rate,
-            metrics.block_hash_store_interval
-        )
+        hash_rate = metrics.get_current_hash_rate(metrics.weight_block_deque, metrics.total_block_weight,
+                                                  metrics.set_current_block_hash_rate,
+                                                  metrics.block_hash_store_interval)
 
         self.assertEqual(hash_rate, 0)

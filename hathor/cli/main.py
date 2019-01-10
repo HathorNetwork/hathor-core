@@ -1,16 +1,17 @@
-
-import sys
 import os
+import sys
 from collections import defaultdict
+from types import ModuleType
+from typing import Dict, List
 
 
 class CliManager:
-    def __init__(self):
-        self.basename = os.path.basename(sys.argv[0])
-        self.command_list = {}  # Dict[str, module]
-        self.cmd_description = {}  # Dict[str, str]
-        self.groups = defaultdict(list)  # Dict[str, List[str]]
-        self.longest_cmd = 0
+    def __init__(self) -> None:
+        self.basename: str = os.path.basename(sys.argv[0])
+        self.command_list: Dict[str, ModuleType] = {}
+        self.cmd_description: Dict[str, str] = {}
+        self.groups: Dict[str, List[str]] = defaultdict(list)
+        self.longest_cmd: int = 0
 
         from . import mining
         from . import peer_id
@@ -43,18 +44,17 @@ class CliManager:
         self.add_cmd('oracle', 'oracle-create-key', oracle_create_key, 'Create an oracle private/public key')
         self.add_cmd('oracle', 'oracle-get-pubkey', oracle_get_pubkey,
                      'Read an oracle private key and output public key hash')
-        self.add_cmd('oracle', 'oracle-encode-data', oracle_encode_data,
-                     'Encode data and sign it with a private key')
+        self.add_cmd('oracle', 'oracle-encode-data', oracle_encode_data, 'Encode data and sign it with a private key')
         self.add_cmd('dev', 'shell', shell, 'Run a Python shell')
 
-    def add_cmd(self, group, cmd, module, short_description=None):
+    def add_cmd(self, group: str, cmd: str, module: ModuleType, short_description: str = None) -> None:
         self.command_list[cmd] = module
         self.groups[group].append(cmd)
         if short_description:
             self.cmd_description[cmd] = short_description
         self.longest_cmd = max(self.longest_cmd, len(cmd))
 
-    def help(self):
+    def help(self) -> None:
         print()
         print('Available subcommands:')
         print()

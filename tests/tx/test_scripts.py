@@ -1,26 +1,53 @@
-import os
-import json
 import base64
+import json
+import os
 import struct
 
-from hathor.crypto.util import get_private_key_from_bytes, get_public_key_from_bytes, \
-                               get_public_key_bytes_compressed, get_hash160, get_address_from_public_key
-from hathor.transaction.exceptions import OutOfData, MissingStackItems, EqualVerifyFailed, DataIndexError, \
-                                          VerifyFailed, OracleChecksigFailed, TimeLocked, InvalidStackData, \
-                                          ScriptError
-from hathor.transaction.scripts import (
-    HathorScript, op_pushdata, ScriptExtras, P2PKH, Opcode,
-    op_pushdata1, op_dup, op_equalverify, op_checksig, op_hash160,
-    op_checkdatasig, get_data_value, op_data_strequal, op_find_p2pkh,
-    op_data_greaterthan, op_data_match_interval, op_data_match_value,
-    op_greaterthan_timestamp, op_checkmultisig, op_equal, op_integer
-)
-
-from hathor.wallet import HDWallet
-
-from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
 
+from hathor.crypto.util import (
+    get_address_from_public_key,
+    get_hash160,
+    get_private_key_from_bytes,
+    get_public_key_bytes_compressed,
+    get_public_key_from_bytes,
+)
+from hathor.transaction.exceptions import (
+    DataIndexError,
+    EqualVerifyFailed,
+    InvalidStackData,
+    MissingStackItems,
+    OracleChecksigFailed,
+    OutOfData,
+    ScriptError,
+    TimeLocked,
+    VerifyFailed,
+)
+from hathor.transaction.scripts import (
+    P2PKH,
+    HathorScript,
+    Opcode,
+    ScriptExtras,
+    get_data_value,
+    op_checkdatasig,
+    op_checkmultisig,
+    op_checksig,
+    op_data_greaterthan,
+    op_data_match_interval,
+    op_data_match_value,
+    op_data_strequal,
+    op_dup,
+    op_equal,
+    op_equalverify,
+    op_find_p2pkh,
+    op_greaterthan_timestamp,
+    op_hash160,
+    op_integer,
+    op_pushdata,
+    op_pushdata1,
+)
+from hathor.wallet import HDWallet
 from tests import unittest
 
 
@@ -155,9 +182,7 @@ class BasicTransaction(unittest.TestCase):
         value1 = b'vvvalue1'
         value2 = b'vvvvvalue2'
 
-        data = (bytes([len(value0)]) + value0
-                + bytes([len(value1)]) + value1
-                + bytes([len(value2)]) + value2)
+        data = (bytes([len(value0)]) + value0 + bytes([len(value1)]) + value1 + bytes([len(value2)]) + value2)
 
         self.assertEqual(get_data_value(0, data), value0)
         self.assertEqual(get_data_value(1, data), value1)
@@ -177,9 +202,7 @@ class BasicTransaction(unittest.TestCase):
         value1 = b'vvvalue1'
         value2 = b'vvvvvalue2'
 
-        data = (bytes([len(value0)]) + value0
-                + bytes([len(value1)]) + value1
-                + bytes([len(value2)]) + value2)
+        data = (bytes([len(value0)]) + value0 + bytes([len(value1)]) + value1 + bytes([len(value2)]) + value2)
 
         stack = [data, 0, value0]
         op_data_strequal(stack, log=[], extras=None)
@@ -200,8 +223,7 @@ class BasicTransaction(unittest.TestCase):
         value0 = struct.pack('!I', 1000)
         value1 = struct.pack('!I', 1)
 
-        data = (bytes([len(value0)]) + value0
-                + bytes([len(value1)]) + value1)
+        data = (bytes([len(value0)]) + value0 + bytes([len(value1)]) + value1)
 
         stack = [data, 0, struct.pack('!I', 999)]
         op_data_greaterthan(stack, log=[], extras=None)
@@ -230,9 +252,7 @@ class BasicTransaction(unittest.TestCase):
         value0 = struct.pack('!I', 1000)
         data = (bytes([len(value0)]) + value0)
 
-        stack = [
-            data, 0, 'key1', struct.pack('!I', 1000), 'key2', struct.pack('!I', 1005), 'key3', bytes([2])
-        ]
+        stack = [data, 0, 'key1', struct.pack('!I', 1000), 'key2', struct.pack('!I', 1005), 'key3', bytes([2])]
         op_data_match_interval(stack, log=[], extras=None)
         self.assertEqual(stack.pop(), 'key1')
         self.assertEqual(len(stack), 0)
@@ -264,9 +284,7 @@ class BasicTransaction(unittest.TestCase):
         value0 = struct.pack('!I', 1000)
         data = (bytes([len(value0)]) + value0)
 
-        stack = [
-            data, 0, 'key1', struct.pack('!I', 1000), 'key2', struct.pack('!I', 1005), 'key3', bytes([2])
-        ]
+        stack = [data, 0, 'key1', struct.pack('!I', 1000), 'key2', struct.pack('!I', 1005), 'key3', bytes([2])]
         op_data_match_value(stack, log=[], extras=None)
         self.assertEqual(stack.pop(), 'key2')
         self.assertEqual(len(stack), 0)
@@ -317,57 +335,33 @@ class BasicTransaction(unittest.TestCase):
         out_genesis = P2PKH.create_output_script(genesis_address)
 
         from hathor.transaction import Transaction, TxOutput, TxInput
-        spent_tx = Transaction(
-            outputs=[TxOutput(1, b'nano_contract_code')]
-        )
+        spent_tx = Transaction(outputs=[TxOutput(1, b'nano_contract_code')])
         txin = TxInput(b'dont_care', 0, b'data')
 
         # try with just 1 output
         stack = [genesis_address]
-        tx = Transaction(
-            outputs=[TxOutput(1, out_genesis)]
-        )
+        tx = Transaction(outputs=[TxOutput(1, out_genesis)])
         extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
         op_find_p2pkh(stack, log=[], extras=extras)
         self.assertEqual(stack.pop(), 1)
 
         # several outputs and correct output among them
         stack = [genesis_address]
-        tx = Transaction(
-            outputs=[
-                TxOutput(1, out1),
-                TxOutput(1, out2),
-                TxOutput(1, out_genesis),
-                TxOutput(1, out3)
-            ]
-        )
+        tx = Transaction(outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(1, out_genesis), TxOutput(1, out3)])
         extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
         op_find_p2pkh(stack, log=[], extras=extras)
         self.assertEqual(stack.pop(), 1)
 
         # several outputs without correct amount output
         stack = [genesis_address]
-        tx = Transaction(
-            outputs=[
-                TxOutput(1, out1),
-                TxOutput(1, out2),
-                TxOutput(2, out_genesis),
-                TxOutput(1, out3)
-            ]
-        )
+        tx = Transaction(outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(2, out_genesis), TxOutput(1, out3)])
         extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
         with self.assertRaises(VerifyFailed):
             op_find_p2pkh(stack, log=[], extras=extras)
 
         # several outputs without correct address output
         stack = [genesis_address]
-        tx = Transaction(
-            outputs=[
-                TxOutput(1, out1),
-                TxOutput(1, out2),
-                TxOutput(1, out3)
-            ]
-        )
+        tx = Transaction(outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(1, out3)])
         extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
         with self.assertRaises(VerifyFailed):
             op_find_p2pkh(stack, log=[], extras=extras)
@@ -421,13 +415,11 @@ class BasicTransaction(unittest.TestCase):
 
         for i in range(keys_count):
             privkey = list(wallet.keys.values())[i]
-            keys.append(
-                {
-                    'privkey': privkey,
-                    'pubkey': privkey.sec(),
-                    'signature': wallet.get_input_aux_data(data_to_sign, privkey)[1]
-                }
-            )
+            keys.append({
+                'privkey': privkey,
+                'pubkey': privkey.sec(),
+                'signature': wallet.get_input_aux_data(data_to_sign, privkey)[1]
+            })
 
         wrong_privkey = list(wallet.keys.values())[3]
         wrong_key = {
@@ -438,149 +430,79 @@ class BasicTransaction(unittest.TestCase):
 
         # All signatures match
         stack = [
-            keys[0]['signature'],
-            keys[2]['signature'],
-            2,
-            keys[0]['pubkey'],
-            keys[1]['pubkey'],
-            keys[2]['pubkey'],
-            3
+            keys[0]['signature'], keys[2]['signature'], 2, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 3
         ]
         op_checkmultisig(stack, log=[], extras=extras)
         self.assertEqual(1, stack.pop())
 
         # New set of valid signatures
         stack = [
-            keys[0]['signature'],
-            keys[1]['signature'],
-            2,
-            keys[0]['pubkey'],
-            keys[1]['pubkey'],
-            keys[2]['pubkey'],
-            3
+            keys[0]['signature'], keys[1]['signature'], 2, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 3
         ]
         op_checkmultisig(stack, log=[], extras=extras)
         self.assertEqual(1, stack.pop())
 
         # Changing the signatures but they match
         stack = [
-            keys[1]['signature'],
-            keys[2]['signature'],
-            2,
-            keys[0]['pubkey'],
-            keys[1]['pubkey'],
-            keys[2]['pubkey'],
-            3
+            keys[1]['signature'], keys[2]['signature'], 2, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 3
         ]
         op_checkmultisig(stack, log=[], extras=extras)
         self.assertEqual(1, stack.pop())
 
         # Signatures are valid but in wrong order
         stack = [
-            keys[1]['signature'],
-            keys[0]['signature'],
-            2,
-            keys[0]['pubkey'],
-            keys[1]['pubkey'],
-            keys[2]['pubkey'],
-            3
+            keys[1]['signature'], keys[0]['signature'], 2, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 3
         ]
         op_checkmultisig(stack, log=[], extras=extras)
         self.assertEqual(0, stack.pop())
 
         # Adding wrong signature, so we get error
         stack = [
-            keys[0]['signature'],
-            wrong_key['signature'],
-            2,
-            keys[0]['pubkey'],
-            keys[1]['pubkey'],
-            keys[2]['pubkey'],
-            3
+            keys[0]['signature'], wrong_key['signature'], 2, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 3
         ]
         op_checkmultisig(stack, log=[], extras=extras)
         self.assertEqual(0, stack.pop())
 
         # Adding same signature twice, so we get error
         stack = [
-            keys[0]['signature'],
-            keys[0]['signature'],
-            2,
-            keys[0]['pubkey'],
-            keys[1]['pubkey'],
-            keys[2]['pubkey'],
-            3
+            keys[0]['signature'], keys[0]['signature'], 2, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 3
         ]
         op_checkmultisig(stack, log=[], extras=extras)
         self.assertEqual(0, stack.pop())
 
         # Adding less signatures than required, so we get error
-        stack = [
-            keys[0]['signature'],
-            2,
-            keys[0]['pubkey'],
-            keys[1]['pubkey'],
-            keys[2]['pubkey'],
-            3
-        ]
+        stack = [keys[0]['signature'], 2, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 3]
         with self.assertRaises(MissingStackItems):
             op_checkmultisig(stack, log=[], extras=extras)
 
         # Quantity of signatures is more than it should
         stack = [
-            keys[0]['signature'],
-            keys[1]['signature'],
-            3,
-            keys[0]['pubkey'],
-            keys[1]['pubkey'],
-            keys[2]['pubkey'],
-            3
+            keys[0]['signature'], keys[1]['signature'], 3, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 3
         ]
         with self.assertRaises(MissingStackItems):
             op_checkmultisig(stack, log=[], extras=extras)
 
         # Quantity of pubkeys is more than it should
         stack = [
-            keys[0]['signature'],
-            keys[1]['signature'],
-            2,
-            keys[0]['pubkey'],
-            keys[1]['pubkey'],
-            keys[2]['pubkey'],
-            4
+            keys[0]['signature'], keys[1]['signature'], 2, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 4
         ]
         with self.assertRaises(InvalidStackData):
             op_checkmultisig(stack, log=[], extras=extras)
 
         # Exception pubkey_count should be integer
         stack = [
-            keys[0]['signature'],
-            keys[1]['signature'],
-            2,
-            keys[0]['pubkey'],
-            keys[1]['pubkey'],
-            keys[2]['pubkey'],
-            '3'
+            keys[0]['signature'], keys[1]['signature'], 2, keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], '3'
         ]
         with self.assertRaises(InvalidStackData):
             op_checkmultisig(stack, log=[], extras=extras)
 
         # Exception not enough pub keys
-        stack = [
-            keys[0]['pubkey'],
-            keys[1]['pubkey'],
-            3
-        ]
+        stack = [keys[0]['pubkey'], keys[1]['pubkey'], 3]
         with self.assertRaises(MissingStackItems):
             op_checkmultisig(stack, log=[], extras=extras)
 
         # Exception stack empty after pubkeys
-        stack = [
-            keys[0]['pubkey'],
-            keys[1]['pubkey'],
-            keys[2]['pubkey'],
-            3
-        ]
+        stack = [keys[0]['pubkey'], keys[1]['pubkey'], keys[2]['pubkey'], 3]
         with self.assertRaises(MissingStackItems):
             op_checkmultisig(stack, log=[], extras=extras)
 

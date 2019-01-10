@@ -2,11 +2,11 @@ import time
 
 from twisted.internet.task import Clock
 
-from tests import unittest
-from tests.utils import add_new_blocks
 from hathor.transaction import Transaction
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet.base_wallet import WalletOutputInfo
+from tests import unittest
+from tests.utils import add_new_blocks
 
 
 class MemoryNotSharedTest(unittest.TestCase):

@@ -1,13 +1,12 @@
+import time
+
 from twisted.internet.task import Clock
 
+from hathor.transaction import Transaction
+from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
+from hathor.wallet.exceptions import InsuficientFunds
 from tests import unittest
 from tests.utils import add_new_blocks
-
-from hathor.transaction import Transaction
-from hathor.wallet.base_wallet import WalletOutputInfo, WalletInputInfo, WalletBalance
-from hathor.wallet.exceptions import InsuficientFunds
-
-import time
 
 
 class TimelockTransactionTestCase(unittest.TestCase):
@@ -27,18 +26,12 @@ class TimelockTransactionTestCase(unittest.TestCase):
 
         outputs = [
             WalletOutputInfo(
-                address=self.manager.wallet.decode_address(address),
-                value=500,
-                timelock=int(self.clock.seconds()) + 10
-            ), WalletOutputInfo(
-                address=self.manager.wallet.decode_address(address),
-                value=700,
-                timelock=int(self.clock.seconds()) - 10
-            ), WalletOutputInfo(
-                address=self.manager.wallet.decode_address(address),
-                value=800,
-                timelock=None
-            )
+                address=self.manager.wallet.decode_address(address), value=500,
+                timelock=int(self.clock.seconds()) + 10),
+            WalletOutputInfo(
+                address=self.manager.wallet.decode_address(address), value=700,
+                timelock=int(self.clock.seconds()) - 10),
+            WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=800, timelock=None)
         ]
 
         tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
@@ -56,9 +49,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
             WalletOutputInfo(address=self.manager.wallet.decode_address(outside_address), value=500, timelock=None)
         ]
 
-        inputs1 = [
-            WalletInputInfo(tx_id=tx1.hash, index=0, private_key=None)
-        ]
+        inputs1 = [WalletInputInfo(tx_id=tx1.hash, index=0, private_key=None)]
 
         tx2 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs1, outputs1)
         tx2.weight = 10
@@ -76,9 +67,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
             WalletOutputInfo(address=self.manager.wallet.decode_address(outside_address), value=700, timelock=None)
         ]
 
-        inputs2 = [
-            WalletInputInfo(tx_id=tx1.hash, index=1, private_key=None)
-        ]
+        inputs2 = [WalletInputInfo(tx_id=tx1.hash, index=1, private_key=None)]
 
         tx3 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs2, outputs2)
         tx3.weight = 10
@@ -93,9 +82,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
             WalletOutputInfo(address=self.manager.wallet.decode_address(outside_address), value=800, timelock=None)
         ]
 
-        inputs3 = [
-            WalletInputInfo(tx_id=tx1.hash, index=2, private_key=None)
-        ]
+        inputs3 = [WalletInputInfo(tx_id=tx1.hash, index=2, private_key=None)]
 
         tx4 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs3, outputs3)
         tx4.weight = 10
@@ -119,10 +106,8 @@ class TimelockTransactionTestCase(unittest.TestCase):
 
         outputs = [
             WalletOutputInfo(
-                address=self.manager.wallet.decode_address(address),
-                value=2000,
-                timelock=int(self.clock.seconds()) + 10
-            )
+                address=self.manager.wallet.decode_address(address), value=2000,
+                timelock=int(self.clock.seconds()) + 10)
         ]
 
         tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
@@ -135,13 +120,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
 
         self.assertEqual(self.manager.wallet.balance, WalletBalance(2000, 0))
 
-        outputs = [
-            WalletOutputInfo(
-                address=self.manager.wallet.decode_address(address),
-                value=2000,
-                timelock=None
-            )
-        ]
+        outputs = [WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=2000, timelock=None)]
 
         with self.assertRaises(InsuficientFunds):
             self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)

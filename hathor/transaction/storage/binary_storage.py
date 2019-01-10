@@ -1,15 +1,15 @@
-from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionMetadataDoesNotExist
-from hathor.transaction.transaction_metadata import TransactionMetadata
-from hathor.util import deprecated, skip_warning
-
 import json
 import os
 import re
 
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionMetadataDoesNotExist
+from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
+from hathor.transaction.transaction_metadata import TransactionMetadata
+from hathor.util import deprecated, skip_warning
+
 
 class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
-    def __init__(self, path='./',  with_index=True):
+    def __init__(self, path='./', with_index=True):
         os.makedirs(path, exist_ok=True)
         self.path = path
         super().__init__(with_index=with_index)

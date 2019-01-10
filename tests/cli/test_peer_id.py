@@ -1,10 +1,9 @@
-from hathor.cli.peer_id import main
-
-from tests import unittest
 import json
-
-from io import StringIO
 from contextlib import redirect_stdout
+from io import StringIO
+
+from hathor.cli.peer_id import main
+from tests import unittest
 
 
 class PeerIdTest(unittest.TestCase):

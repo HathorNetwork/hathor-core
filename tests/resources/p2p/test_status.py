@@ -1,11 +1,13 @@
-from hathor.p2p.resources import StatusResource
+import time
+
+from twisted.internet import endpoints
 from twisted.internet.defer import inlineCallbacks
 from twisted.internet.task import Clock
-from tests.resources.base_resource import StubSite, _BaseResourceTest
-from twisted.internet import endpoints
-from tests.utils import FakeConnection
+
 import hathor
-import time
+from hathor.p2p.resources import StatusResource
+from tests.resources.base_resource import StubSite, _BaseResourceTest
+from tests.utils import FakeConnection
 
 
 class StatusTest(_BaseResourceTest._ResourceTest):

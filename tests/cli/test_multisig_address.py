@@ -1,8 +1,8 @@
-from tests import unittest
-from hathor.cli.multisig_address import create_parser, execute
-
-from io import StringIO
 from contextlib import redirect_stdout
+from io import StringIO
+
+from hathor.cli.multisig_address import create_parser, execute
+from tests import unittest
 
 
 class MultisigAddressTest(unittest.TestCase):
@@ -22,7 +22,7 @@ class MultisigAddressTest(unittest.TestCase):
         # Last element is always empty string
         output.pop()
 
-        self.assertEqual(len(output), pubkey_count*10 + 11)
+        self.assertEqual(len(output), pubkey_count * 10 + 11)
 
         def get_data(output, index):
             return output[index].split(':')[1].strip()

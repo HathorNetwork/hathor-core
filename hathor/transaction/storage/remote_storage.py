@@ -1,15 +1,17 @@
+from math import inf
+from typing import Any, Iterator, Tuple
+
 import grpc
+from grpc._server import _Context
+from intervaltree import Interval
 from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.logger import Logger
 
 from hathor import protos
 from hathor.exception import HathorError
-from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.util import deprecated, skip_warning
-
-from intervaltree import Interval
-from math import inf
 
 
 class RemoteCommunicationError(HathorError):
@@ -58,7 +60,7 @@ def convert_hathor_exceptions(func):
     from functools import wraps
 
     @wraps(func)
-    def wrapper(self, request, context):
+    def wrapper(self: Any, request: Any, context: _Context) -> Any:
         try:
             return func(self, request, context)
         except TransactionDoesNotExist:
@@ -75,7 +77,7 @@ def convert_hathor_exceptions_generator(func):
     from functools import wraps
 
     @wraps(func)
-    def wrapper(self, request, context):
+    def wrapper(self: Any, request: Any, context: _Context) -> Iterator:
         try:
             yield from func(self, request, context)
         except TransactionDoesNotExist:
@@ -202,11 +204,29 @@ class TransactionRemoteStorage(TransactionStorage):
     # TransactionStorage interface implementation:
 
     @property
-    @convert_grpc_exceptions
     def latest_timestamp(self):
+        return self._latest_timestamp()
+
+    @convert_grpc_exceptions
+    def _latest_timestamp(self):
         self._check_connection()
         request = protos.LatestTimestampRequest()
         result = self._stub.LatestTimestamp(request)
+        return result.timestamp
+
+    @property
+    def first_timestamp(self):
+        if not hasattr(self, '_cached_first_timestamp'):
+            timestamp = self._first_timestamp()
+            if timestamp:
+                setattr(self, '_cached_first_timestamp', timestamp)
+        return getattr(self, '_cached_first_timestamp', None)
+
+    @convert_grpc_exceptions
+    def _first_timestamp(self):
+        self._check_connection()
+        request = protos.FirstTimestampRequest()
+        result = self._stub.FirstTimestamp(request)
         return result.timestamp
 
     @convert_grpc_exceptions
@@ -544,13 +564,13 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         self.storage = tx_storage
 
     @convert_hathor_exceptions
-    def Exists(self, request, context):
+    def Exists(self, request: protos.ExistsRequest, context: _Context) -> protos.ExistsResponse:
         hash_bytes = request.hash
         exists = skip_warning(self.storage.transaction_exists)(hash_bytes)
         return protos.ExistsResponse(exists=exists)
 
     @convert_hathor_exceptions
-    def Get(self, request, context):
+    def Get(self, request: protos.GetRequest, context: _Context) -> protos.GetResponse:
         hash_bytes = request.hash
         exclude_metadata = request.exclude_metadata
 
@@ -564,7 +584,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         return protos.GetResponse(transaction=tx.to_proto())
 
     @convert_hathor_exceptions
-    def Save(self, request, context):
+    def Save(self, request: protos.SaveRequest, context: _Context) -> protos.SaveResponse:
         from hathor.transaction import tx_or_block_from_proto
 
         tx_proto = request.transaction
@@ -579,7 +599,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         return result
 
     @convert_hathor_exceptions
-    def Count(self, request, context):
+    def Count(self, request: protos.CountRequest, context: _Context) -> protos.CountResponse:
         tx_type = request.tx_type
         if tx_type is protos.ANY_TYPE:
             count = skip_warning(self.storage.get_count_tx_blocks)()
@@ -592,8 +612,14 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         return protos.CountResponse(count=count)
 
     @convert_hathor_exceptions
-    def LatestTimestamp(self, request, context):
+    def LatestTimestamp(self, request: protos.LatestTimestampRequest,
+                        context: _Context) -> protos.LatestTimestampResponse:
         return protos.LatestTimestampResponse(timestamp=self.storage.latest_timestamp)
+
+    @convert_hathor_exceptions
+    def FirstTimestamp(self, request: protos.FirstTimestampRequest,
+                       context: _Context) -> protos.FirstTimestampResponse:
+        return protos.FirstTimestampResponse(timestamp=self.storage.first_timestamp)
 
     @convert_hathor_exceptions
     def MarkAs(self, request, context):
@@ -618,7 +644,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         return protos.MarkAsResponse(marked=True)
 
     @convert_hathor_exceptions_generator
-    def List(self, request, context):
+    def List(self, request: protos.ListRequest, context: _Context) -> Iterator[protos.ListItemResponse]:
         from hathor.transaction import tx_or_block_from_proto
 
         exclude_metadata = request.exclude_metadata
@@ -688,7 +714,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
             yield protos.ListItemResponse(has_more=has_more)
 
     @convert_hathor_exceptions_generator
-    def ListTips(self, request, context):
+    def ListTips(self, request: protos.ListTipsRequest, context: _Context) -> Iterator[protos.Interval]:
         # XXX: using HasField (and oneof) to differentiate None from 0, which is very important in this context
         timestamp = None
         if request.HasField('timestamp'):
@@ -707,7 +733,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
             yield protos.Interval(begin=interval.begin, end=interval.end, data=interval.data)
 
     @convert_hathor_exceptions_generator
-    def ListNewest(self, request, context):
+    def ListNewest(self, request: protos.ListNewestRequest, context: _Context) -> Iterator[protos.ListItemResponse]:
         has_more = False
         if request.tx_type == protos.ANY_TYPE:
             raise NotImplementedError
@@ -723,7 +749,8 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         yield protos.ListItemResponse(has_more=has_more)
 
 
-def create_transaction_storage_server(server, tx_storage, port=None):
+def create_transaction_storage_server(server: grpc.Server, tx_storage: TransactionStorage,
+                                      port=None) -> Tuple[protos.TransactionStorageServicer, int]:
     """Create a GRPC servicer for the given storage, returns a (servicer, port) tuple.
 
     :param server: a GRPC server

@@ -1,8 +1,9 @@
-from tests import unittest
-from hathor.cli.wallet import create_parser, execute
-import tempfile
 import json
 import shutil
+import tempfile
+
+from hathor.cli.wallet import create_parser, execute
+from tests import unittest
 
 
 class WalletTest(unittest.TestCase):

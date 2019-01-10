@@ -1,11 +1,12 @@
+import json
+import re
+import struct
+
 from twisted.web import resource
-from hathor.api_util import set_cors, get_missing_params_msg
+
+from hathor.api_util import get_missing_params_msg, set_cors
 from hathor.transaction import Transaction
 from hathor.transaction.scripts import NanoContractMatchValues
-
-import json
-import struct
-import re
 
 
 class NanoContractDecodeResource(resource.Resource):

@@ -1,9 +1,10 @@
-from twisted.web import resource
-from hathor.api_util import set_cors
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-
 import json
 import re
+
+from twisted.web import resource
+
+from hathor.api_util import set_cors
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
 
 class TransactionResource(resource.Resource):
@@ -64,10 +65,7 @@ class TransactionResource(resource.Resource):
                 if meta.twins:
                     serialized['twins'] = [h.hex() for h in meta.twins]
 
-                data = {
-                    'success': True,
-                    'tx': serialized
-                }
+                data = {'success': True, 'tx': serialized}
             else:
                 data = {'success': False}
         except TransactionDoesNotExist:
@@ -96,30 +94,18 @@ class TransactionResource(resource.Resource):
             if type_tx == 'block':
                 if page == 'previous':
                     elements, has_more = self.manager.tx_storage.get_newer_blocks_after(
-                        ref_timestamp,
-                        bytes.fromhex(ref_hash),
-                        count
-                    )
+                        ref_timestamp, bytes.fromhex(ref_hash), count)
                 else:
                     elements, has_more = self.manager.tx_storage.get_older_blocks_after(
-                        ref_timestamp,
-                        bytes.fromhex(ref_hash),
-                        count
-                    )
+                        ref_timestamp, bytes.fromhex(ref_hash), count)
 
             else:
                 if page == 'previous':
                     elements, has_more = self.manager.tx_storage.get_newer_txs_after(
-                        ref_timestamp,
-                        bytes.fromhex(ref_hash),
-                        count
-                    )
+                        ref_timestamp, bytes.fromhex(ref_hash), count)
                 else:
                     elements, has_more = self.manager.tx_storage.get_older_txs_after(
-                        ref_timestamp,
-                        bytes.fromhex(ref_hash),
-                        count
-                    )
+                        ref_timestamp, bytes.fromhex(ref_hash), count)
         else:
             if type_tx == 'block':
                 elements, has_more = self.manager.tx_storage.get_newest_blocks(count=count)
@@ -128,8 +114,5 @@ class TransactionResource(resource.Resource):
 
         serialized = [element.to_json() for element in elements]
 
-        data = {
-            'transactions': serialized,
-            'has_more': has_more
-        }
+        data = {'transactions': serialized, 'has_more': has_more}
         return data

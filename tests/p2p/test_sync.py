@@ -1,14 +1,14 @@
-from twisted.python import log
+import random
+import sys
+import time
+
 from twisted.internet.task import Clock
+from twisted.python import log
 
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
-from hathor.transaction.storage.remote_storage import TransactionRemoteStorage, RemoteCommunicationError
-from tests.utils import FakeConnection, start_remote_storage
+from hathor.transaction.storage.remote_storage import RemoteCommunicationError, TransactionRemoteStorage
 from tests import unittest
-
-import sys
-import random
-import time
+from tests.utils import FakeConnection, start_remote_storage
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):
@@ -32,8 +32,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         outputs = []
         outputs.append(
-            WalletOutputInfo(address=self.manager1.wallet.decode_address(address), value=int(value), timelock=None)
-        )
+            WalletOutputInfo(address=self.manager1.wallet.decode_address(address), value=int(value), timelock=None))
 
         tx = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
         tx.timestamp = int(self.clock.seconds())

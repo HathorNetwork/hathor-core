@@ -1,8 +1,9 @@
-from twisted.web import resource
-from hathor.api_util import set_cors
-
 import json
 import math
+
+from twisted.web import resource
+
+from hathor.api_util import set_cors
 
 
 class HistoryResource(resource.Resource):
@@ -41,8 +42,5 @@ class HistoryResource(resource.Resource):
                 history_dict['from_tx_id'] = history_dict['from_tx_id']
             history.append(history_dict)
 
-        data = {
-            'history': history,
-            'total_pages': math.ceil(total / count)
-        }
+        data = {'history': history, 'total_pages': math.ceil(total / count)}
         return json.dumps(data, indent=4).encode('utf-8')

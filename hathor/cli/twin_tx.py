@@ -1,27 +1,27 @@
 import argparse
-import urllib.parse
-import requests
 import struct
-from hathor.transaction import Transaction
+import urllib.parse
+from argparse import ArgumentParser, Namespace
 from json.decoder import JSONDecodeError
 
+import requests
 
-def create_parser():
+
+def create_parser() -> ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('--url', help='URL to access tx storage in case the hash was passed')
     parser.add_argument('--hash', help='Hash of tx to create a twin')
     parser.add_argument('--raw_tx', help='Raw tx to create a twin')
     parser.add_argument('--human', action='store_true', help='Print in human readable (json)')
-    parser.add_argument(
-        '--parents',
-        action='store_true',
-        help='Change the parents, so they can have different accumulated weight'
-    )
+    parser.add_argument('--parents', action='store_true',
+                        help='Change the parents, so they can have different accumulated weight')
     parser.add_argument('--weight', type=int, help='Weight of twin transaction')
     return parser
 
 
-def execute(args):
+def execute(args: Namespace) -> None:
+    from hathor.transaction import Transaction
+
     # Get tx you want to create a twin
     if args.url and args.hash:
         get_tx_url = urllib.parse.urljoin(args.url, '/transaction/')

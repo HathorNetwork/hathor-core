@@ -1,10 +1,11 @@
-import unittest
-import json
 import base64
+import json
+import unittest
+
 import base58
 
 from hathor.transaction import Transaction, TxInput, TxOutput
-from hathor.transaction.scripts import NanoContractMatchValues, P2PKH, script_eval
+from hathor.transaction.scripts import P2PKH, NanoContractMatchValues, script_eval
 
 
 class NanoContracts(unittest.TestCase):
@@ -22,8 +23,8 @@ class NanoContracts(unittest.TestCase):
         address = base58.b58decode('1Pa4MMsr5DMRAeU1PzthFXyEJeVNXsMHoz')
 
         # they should be the same
-        nc = NanoContractMatchValues(base64.b64decode(pubkey_hash), 1543970403,
-                                     'some_id'.encode('utf-8'), {address: 100})
+        nc = NanoContractMatchValues(
+            base64.b64decode(pubkey_hash), 1543970403, 'some_id'.encode('utf-8'), {address: 100})
         script = nc.create_output_script()
         nc2 = NanoContractMatchValues.parse_script(script)
         self.assertIsNotNone(nc2)
@@ -36,8 +37,7 @@ class NanoContracts(unittest.TestCase):
 
         # test script eval is true
         input_data = NanoContractMatchValues.create_input_data(
-            base64.b64decode(oracle_data), base64.b64decode(oracle_signature), base64.b64decode(pubkey)
-        )
+            base64.b64decode(oracle_data), base64.b64decode(oracle_signature), base64.b64decode(pubkey))
         txin = TxInput(b'aa', 0, input_data)
         spent_tx = Transaction(outputs=[TxOutput(20, script)])
         tx = Transaction(outputs=[TxOutput(20, P2PKH.create_output_script(address))])

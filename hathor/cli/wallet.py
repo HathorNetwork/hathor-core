@@ -1,20 +1,19 @@
-# encoding: utf-8
-
-from hathor.wallet import Wallet
-
 import argparse
 import getpass
+from argparse import ArgumentParser, Namespace
 
 
-def create_parser():
+def create_parser() -> ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('--count', type=int, default=20, help='Number of keys/addresses (default=20)')
     parser.add_argument('--directory', help='Wallet directory')
     return parser
 
 
-def execute(args, passwd):
-    passwd = passwd.encode('utf-8')
+def execute(args: Namespace, password: str) -> None:
+    from hathor.wallet import Wallet
+
+    passwd: bytes = password.encode('utf-8')
 
     count = args.count
     directory = args.directory or './'

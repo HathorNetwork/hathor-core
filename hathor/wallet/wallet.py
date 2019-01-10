@@ -1,23 +1,25 @@
-import os
-import json
 import hashlib
+import json
+import os
+from typing import Any, Dict, Optional, Tuple
 
+from cryptography.hazmat.backends.openssl.ec import _EllipticCurvePrivateKey
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
 from twisted.logger import Logger
 
-from hathor.wallet.keypair import KeyPair
-from hathor.wallet.exceptions import OutOfUnusedAddresses
-from hathor.wallet import BaseWallet
-from hathor.pubsub import HathorEvents
 from hathor.crypto.util import get_public_key_bytes_compressed
-
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import hashes
+from hathor.pubsub import HathorEvents
+from hathor.wallet import BaseWallet
+from hathor.wallet.exceptions import OutOfUnusedAddresses
+from hathor.wallet.keypair import KeyPair
 
 
 class Wallet(BaseWallet):
     log = Logger()
 
-    def __init__(self, keys=None, directory='./', filename='keys.json', pubsub=None, reactor=None):
+    def __init__(self, keys: Optional[Any] = None, directory: str = './', filename: str = 'keys.json',
+                 pubsub: Optional[Any] = None, reactor: Optional[Any] = None) -> None:
         """ A wallet will hold key pair objects and the unspent and
         spent transactions associated with the keys.
 
@@ -36,19 +38,15 @@ class Wallet(BaseWallet):
         :param pubsub: If not given, a new one is created.
         :type pubsub: :py:class:`hathor.pubsub.PubSubManager`
         """
-        super().__init__(
-            directory=directory,
-            pubsub=pubsub,
-            reactor=reactor
-        )
+        super().__init__(directory=directory, pubsub=pubsub, reactor=reactor)
 
         self.filepath = os.path.join(directory, filename)
-        self.keys = keys or {}  # Dict[string(b58_address), KeyPair]
+        self.keys: Dict[str, Any] = keys or {}  # Dict[string(b58_address), KeyPair]
 
         # Set[string(base58)]
         self.unused_keys = set(key.address for key in self.keys.values() if not key.used)
 
-        self.password = None
+        self.password: Optional[bytes] = None
 
         # Used in admin frontend to know which wallet is being used
         self.type = self.WalletType.KEY_PAIR
@@ -59,7 +57,7 @@ class Wallet(BaseWallet):
         self.last_flush_time = 0
         self.flush_schedule = None
 
-    def _manually_initialize(self):
+    def _manually_initialize(self) -> None:
         if os.path.isfile(self.filepath):
             self.log.info('Loading keys...')
             self.read_keys_from_file()
@@ -76,13 +74,14 @@ class Wallet(BaseWallet):
             json_data = json.loads(json_file.read())
             for data in json_data:
                 keypair = KeyPair.from_json(data)
+                assert keypair.address is not None
                 new_keys[keypair.address] = keypair
                 if not keypair.used:
                     self.unused_keys.add(keypair.address)
 
         self.keys.update(new_keys)
 
-    def _write_keys_to_file_or_delay(self):
+    def _write_keys_to_file_or_delay(self) -> None:
         dt = self.reactor.seconds() - self.last_flush_time
         if dt > self.flush_to_disk_interval:
             self._write_keys_to_file()
@@ -93,7 +92,7 @@ class Wallet(BaseWallet):
                 assert remaining >= 0
                 self.flush_schedule = self.reactor.callLater(remaining, self._write_keys_to_file)
 
-    def _write_keys_to_file(self):
+    def _write_keys_to_file(self) -> None:
         self.flush_schedule = None
         self.last_flush_time = self.reactor.seconds()
         data = [keypair.to_json() for keypair in self.keys.values()]
@@ -101,7 +100,7 @@ class Wallet(BaseWallet):
             json_file.write(json.dumps(data, indent=4))
         self.log.info('Wallet: Keys successfully written to disk.')
 
-    def unlock(self, password):
+    def unlock(self, password: bytes) -> None:
         """ Validates if the password is valid
             Then saves the password as bytes.
 
@@ -126,14 +125,14 @@ class Wallet(BaseWallet):
         else:
             raise ValueError('Password must be in bytes')
 
-    def lock(self):
+    def lock(self) -> None:
         """ Lock wallet and clear all caches.
         """
         self.password = None
         for keypair in self.keys.values():
             keypair.clear_cache()
 
-    def get_unused_address(self, mark_as_used=True):
+    def get_unused_address(self, mark_as_used: bool = True) -> str:
         """
         :raises OutOfUnusedAddresses: When there is no unused address left
             to be returned and wallet is locked
@@ -158,16 +157,17 @@ class Wallet(BaseWallet):
 
         return address
 
-    def generate_keys(self, count=20):
+    def generate_keys(self, count: int = 20) -> None:
         for _ in range(count):
             key = KeyPair.create(self.password)
+            assert key.address is not None
             self.keys[key.address] = key
             self.unused_keys.add(key.address)
 
         # Publish to pubsub that new keys were generated
         self.publish_update(HathorEvents.WALLET_KEYS_GENERATED, keys_count=count)
 
-    def get_private_key(self, address58):
+    def get_private_key(self, address58: str) -> _EllipticCurvePrivateKey:
         """ Get private key from the address58
 
             :param address58: address in base58
@@ -178,7 +178,7 @@ class Wallet(BaseWallet):
         """
         return self.keys[address58].get_private_key(self.password)
 
-    def tokens_received(self, address58):
+    def tokens_received(self, address58: str) -> None:
         """ Method called when the wallet receive new tokens
 
             We set the address as used and remove it from the unused_keys
@@ -192,7 +192,7 @@ class Wallet(BaseWallet):
     def is_locked(self):
         return self.password is None
 
-    def get_input_aux_data(self, data_to_sign, private_key):
+    def get_input_aux_data(self, data_to_sign: bytes, private_key: _EllipticCurvePrivateKey) -> Tuple[bytes, bytes]:
         """ Sign the data to be used in input and get public key compressed in bytes
 
             :param data_to_sign: Data to be signed

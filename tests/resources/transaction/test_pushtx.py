@@ -1,11 +1,13 @@
-from hathor.transaction.resources import PushTxResource
-from hathor.p2p.resources import MiningResource
-from hathor.wallet.resources import SendTokensResource, BalanceResource, HistoryResource
-from twisted.internet.defer import inlineCallbacks
-from tests.resources.base_resource import StubSite, _BaseResourceTest
-from hathor.transaction.genesis import genesis_transactions
-from tests.utils import resolve_block_bytes
 import base64
+
+from twisted.internet.defer import inlineCallbacks
+
+from hathor.p2p.resources import MiningResource
+from hathor.transaction.genesis import genesis_transactions
+from hathor.transaction.resources import PushTxResource
+from hathor.wallet.resources import BalanceResource, HistoryResource, SendTokensResource
+from tests.resources.base_resource import StubSite, _BaseResourceTest
+from tests.utils import resolve_block_bytes
 
 
 class DecodeTxTest(_BaseResourceTest._ResourceTest):
@@ -29,14 +31,8 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         self.manager.wallet.unlock(b'MYPASS')
 
         # Sending token to random address without input
-        data_json = {
-            'outputs': [{'address': '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH', 'value': 5}],
-            'inputs': []
-        }
-        yield self.web_tokens.post(
-            'wallet/send_tokens',
-            {'data': data_json}
-        )
+        data_json = {'outputs': [{'address': '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH', 'value': 5}], 'inputs': []}
+        yield self.web_tokens.post('wallet/send_tokens', {'data': data_json})
 
         # Valid
         (valid_tx, _) = self.manager.tx_storage.get_newest_txs(count=1)

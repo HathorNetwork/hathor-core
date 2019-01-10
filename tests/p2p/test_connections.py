@@ -1,15 +1,14 @@
-from tests import unittest
-from tests.utils import run_server
-from hathor.manager import HathorManager
-from hathor.wallet import Wallet
-import tempfile
 import shutil
-
-from hathor.transaction.storage import TransactionMemoryStorage
-
+import tempfile
 import time
 
 from twisted.internet.task import Clock
+
+from hathor.manager import HathorManager
+from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.wallet import Wallet
+from tests import unittest
+from tests.utils import run_server
 
 
 class ConnectionsTest(unittest.TestCase):

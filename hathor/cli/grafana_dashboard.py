@@ -1,7 +1,9 @@
+import argparse
 import json
 import math
-import argparse
 import os
+from argparse import ArgumentParser, Namespace
+from typing import Any, Callable, Dict, List, Optional
 
 # Path of this file
 dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -31,38 +33,23 @@ CHARTS_FOLDER = os.path.join(json_path, 'charts')
 
 # All charts json
 CHARTS_ARRAY = [
-    'transactions',
-    'blocks',
-    'tx_rate',
-    'hash_rate_stacked',
-    'peers',
-    'cpu',
-    'cpu_load1m',
-    'cpu_load5m',
-    'ram_percent',
-    'ram_line',
-    'network',
-    'cpu_line',
-    'load',
-    'disk'
+    'transactions', 'blocks', 'tx_rate', 'hash_rate_stacked', 'peers', 'cpu', 'cpu_load1m', 'cpu_load5m',
+    'ram_percent', 'ram_line', 'network', 'cpu_line', 'load', 'disk'
 ]
 
 
-def load_json(filename):
+def load_json(filename: str) -> Any:
     """ Load json file from disk and transform in dict
 
-        :param filename: Name of json file
-        :type filename: str
-
-        :return: Json loaded
-        :rtype: Dict
+    :param filename: Name of json file
+    :return: Json loaded
     """
     with open(filename, 'rb') as json_file:
         json_data = json_file.read()
         return json.loads(json_data)
 
 
-def get_grafana_dashboard_json(title, data_source=DATA_SOURCE):
+def get_grafana_dashboard_json(title: str, data_source: str = DATA_SOURCE) -> str:
     """ Get data for each node and chart in the files and
         return a json ready to be imported in Grafana
 
@@ -83,13 +70,13 @@ def get_grafana_dashboard_json(title, data_source=DATA_SOURCE):
     id_count = 1
 
     # Load nodes from file
-    nodes = load_json(NODES_FILE)
+    nodes: List[Dict['str', Any]] = load_json(NODES_FILE)
 
     chart_width_floor = math.floor(MAX_WIDTH / len(nodes))
 
     extra_width = MAX_WIDTH - chart_width_floor * len(nodes)
 
-    def get_width(add_extra):
+    def get_width(add_extra: bool) -> int:
         if add_extra:
             return chart_width_floor + 1
         else:
@@ -137,12 +124,7 @@ def get_grafana_dashboard_json(title, data_source=DATA_SOURCE):
 
             w = get_width(index + 1 <= extra_width)
 
-            kwargs['pos'] = {
-                'h': chart['height'],
-                'w': w,
-                'x': x,
-                'y': y
-            }
+            kwargs['pos'] = {'h': chart['height'], 'w': w, 'x': x, 'y': y}
             chart_data = method_to_call(**kwargs)
             chart_data['id'] = id_count
             id_count += 1
@@ -158,7 +140,7 @@ def get_grafana_dashboard_json(title, data_source=DATA_SOURCE):
     return json.dumps(data, indent=4)
 
 
-def get_text_panel_data(pos, name):
+def get_text_panel_data(pos: Dict[str, int], name: str) -> Dict[str, Any]:
     """ Loads text panel and fill with chart data
         Text panel is the chart that is only a text
 
@@ -178,7 +160,7 @@ def get_text_panel_data(pos, name):
     return data
 
 
-def get_default_panel(title, data_source):
+def get_default_panel(title: str, data_source: str) -> Dict[str, str]:
     """ Gets data that is common for all panels
 
         :param title: Title of the chart
@@ -191,13 +173,14 @@ def get_default_panel(title, data_source):
         :rtype: Dict[str,str]
     """
     data_panel = {
-      'datasource': data_source,
-      'title': title,
+        'datasource': data_source,
+        'title': title,
     }
     return data_panel
 
 
-def get_percent_data(pos, query, node, port, job, description):
+def get_percent_data(pos: Dict[str, int], query: str, node: str, port: str, job: str,
+                     description: str) -> Dict[str, Any]:
     """ Gets data from percent chart
 
         :param pos: Position and size of the chart in Grafana
@@ -231,7 +214,9 @@ def get_percent_data(pos, query, node, port, job, description):
     return data
 
 
-def get_graph_data(pos, targets, node, port, job, stack=False, y_format='short', y_min=None, y_max=None):
+def get_graph_data(pos: Dict[str, int], targets: List[Dict[str, Any]], node: str, port: str, job: str,
+                   stack: bool = False, y_format: str = 'short', y_min: Optional[Any] = None,
+                   y_max: Optional[Any] = None) -> Dict[str, Any]:
     """ Gets data from graph chart
 
         :param pos: Position and size of the chart in Grafana
@@ -283,7 +268,7 @@ def get_graph_data(pos, targets, node, port, job, stack=False, y_format='short',
     return graph_data
 
 
-def get_initial_data(title):
+def get_initial_data(title: str) -> Dict[str, Any]:
     """ Gets data common from all dashboards
 
         :param title: Title of the dashboard
@@ -298,7 +283,7 @@ def get_initial_data(title):
     return data
 
 
-def get_method_to_call(chart_type):
+def get_method_to_call(chart_type: str) -> Callable:
     """ Gets method to be called depending on the type of chart
 
         :param chart_type: Type of the chart I want the data
@@ -307,21 +292,21 @@ def get_method_to_call(chart_type):
         :return: Method to be called
         :rtype: function
     """
-    CHART_TO_METHOD = {
+    CHART_TO_METHOD: Dict[str, Callable] = {
         'graph': get_graph_data,
         'percent': get_percent_data,
     }
     return CHART_TO_METHOD[chart_type]
 
 
-def create_parser():
+def create_parser() -> ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('title', help='Title of the dashboard')
     parser.add_argument('--data_source', help='Name of data source')
     return parser
 
 
-def execute(args):
+def execute(args: Namespace) -> None:
     kwargs = {'title': args.title}
 
     if args.data_source:

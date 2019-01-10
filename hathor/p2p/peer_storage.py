@@ -1,4 +1,4 @@
-# encoding: utf-8
+from hathor.p2p.peer_id import PeerId
 
 
 class PeerStorage(dict):
@@ -6,7 +6,7 @@ class PeerStorage(dict):
     It is a dict of peer objects, and peers can be retrieved by their `peer.id`.
     """
 
-    def add(self, peer):
+    def add(self, peer: PeerId) -> None:
         """ Add a new peer to the storage.
 
         Raises a `ValueError` if the peer has already been added.
@@ -15,7 +15,7 @@ class PeerStorage(dict):
             raise ValueError('Peer has already been added')
         self[peer.id] = peer
 
-    def add_or_merge(self, peer):
+    def add_or_merge(self, peer: PeerId) -> None:
         """ Add a peer to the storage if it has not been added yet.
         Otherwise, merge the current peer with the given one.
         """

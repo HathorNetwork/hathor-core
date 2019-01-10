@@ -1,8 +1,9 @@
-from hathor.transaction.resources import GraphvizResource
-from hathor.transaction import Transaction
 from twisted.internet.defer import inlineCallbacks
-from tests.resources.base_resource import StubSite, _BaseResourceTest, TestDummyRequest
-from tests.utils import add_new_transactions, add_new_blocks
+
+from hathor.transaction import Transaction
+from hathor.transaction.resources import GraphvizResource
+from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
+from tests.utils import add_new_blocks, add_new_transactions
 
 
 class GraphvizTest(_BaseResourceTest._ResourceTest):

@@ -1,12 +1,12 @@
-from twisted.python import log
-from twisted.internet.task import Clock
-
-from tests.utils import FakeConnection, add_new_block, add_new_transactions
-from tests import unittest
-
-import sys
 import random
+import sys
 import time
+
+from twisted.internet.task import Clock
+from twisted.python import log
+
+from tests import unittest
+from tests.utils import FakeConnection, add_new_block, add_new_transactions
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):

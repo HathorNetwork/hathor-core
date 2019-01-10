@@ -1,12 +1,12 @@
-from twisted.python import log
+import random
+import sys
+import time
+
 from twisted.internet.task import Clock
+from twisted.python import log
 
 from tests import unittest
 from tests.utils import add_new_blocks, add_new_tx, start_remote_storage
-
-import sys
-import time
-import random
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):
@@ -42,8 +42,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         outputs = []
         outputs.append(
-            WalletOutputInfo(address=self.manager1.wallet.decode_address(address), value=int(value), timelock=None)
-        )
+            WalletOutputInfo(address=self.manager1.wallet.decode_address(address), value=int(value), timelock=None))
 
         tx1 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
         tx1.weight = 10
@@ -130,9 +129,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager1.wallet.get_unused_address_bytes()
         value = 100
-        outputs = [
-            WalletOutputInfo(address=address, value=int(value), timelock=None)
-        ]
+        outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         self.clock.advance(1)
         tx1 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
         tx1.weight = 5
@@ -142,9 +139,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager1.wallet.get_unused_address_bytes()
         value = 1000
-        outputs = [
-            WalletOutputInfo(address=address, value=int(value), timelock=None)
-        ]
+        outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         self.clock.advance(1)
         tx4 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
         tx4.weight = 5
@@ -166,12 +161,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager1.wallet.get_unused_address_bytes()
         value = 100
-        inputs = [
-            WalletInputInfo(tx_id=tx1.hash, index=1, private_key=None)
-        ]
-        outputs = [
-            WalletOutputInfo(address=address, value=int(value), timelock=None)
-        ]
+        inputs = [WalletInputInfo(tx_id=tx1.hash, index=1, private_key=None)]
+        outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         self.clock.advance(1)
         tx2 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
         tx2.weight = 5
@@ -189,9 +180,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager1.wallet.get_unused_address_bytes()
         value = 500
-        outputs = [
-            WalletOutputInfo(address=address, value=int(value), timelock=None)
-        ]
+        outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         self.clock.advance(1)
         tx3 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
         self.assertNotEqual(tx3.inputs[0].tx_id, tx1.hash)
@@ -223,20 +212,11 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager1.wallet.get_unused_address_bytes()
         value = 1000
-        inputs = [
-            WalletInputInfo(tx_id=tx4.hash, index=0, private_key=None)
-        ]
-        outputs = [
-            WalletOutputInfo(address=address, value=int(value), timelock=None)
-        ]
+        inputs = [WalletInputInfo(tx_id=tx4.hash, index=0, private_key=None)]
+        outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         self.clock.advance(1)
-        tx5 = self.manager1.wallet.prepare_transaction_incomplete_inputs(
-            Transaction,
-            inputs,
-            outputs,
-            force=True,
-            tx_storage=self.manager1.tx_storage
-        )
+        tx5 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs, force=True,
+                                                                         tx_storage=self.manager1.tx_storage)
         tx5.weight = 5
         tx5.parents = tx1.parents
         tx5.timestamp = int(self.clock.seconds())
@@ -271,12 +251,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager1.wallet.get_unused_address_bytes()
         value = 2000
-        inputs = [
-            WalletInputInfo(tx_id=blocks[3].hash, index=0, private_key=None)
-        ]
-        outputs = [
-            WalletOutputInfo(address=address, value=int(value), timelock=None)
-        ]
+        inputs = [WalletInputInfo(tx_id=blocks[3].hash, index=0, private_key=None)]
+        outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         self.clock.advance(1)
         tx7 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
         tx7.weight = 10

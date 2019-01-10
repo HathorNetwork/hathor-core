@@ -1,8 +1,8 @@
 import unittest
-from hathor.cli import main
-
-from io import StringIO
 from contextlib import redirect_stdout
+from io import StringIO
+
+from hathor.cli import main
 
 
 class CliMainTest(unittest.TestCase):

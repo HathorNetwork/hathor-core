@@ -1,7 +1,8 @@
-from hathor.wallet.resources import UnlockWalletResource, StateWalletResource, LockWalletResource
 from twisted.internet.defer import inlineCallbacks
-from tests.resources.base_resource import StubSite, _BaseResourceTest
+
 from hathor.wallet import HDWallet
+from hathor.wallet.resources import LockWalletResource, StateWalletResource, UnlockWalletResource
+from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
 class UnlockTest(_BaseResourceTest._ResourceTest):

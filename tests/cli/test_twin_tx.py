@@ -1,18 +1,17 @@
-from tests import unittest
-from tests.utils import add_new_blocks, add_new_transactions, run_server, request_server
-from twisted.internet.task import Clock
-from hathor.transaction import Transaction, TransactionMetadata
+import json
+import time
+import urllib.parse
+from contextlib import redirect_stdout
+from io import StringIO
 
+from twisted.internet.task import Clock
+
+from hathor.cli.mining import create_parser as create_parser_mining, execute as execute_mining
 from hathor.cli.twin_tx import create_parser, execute
 from hathor.cli.tx_generator import create_parser as create_parser_tx, execute as execute_tx
-from hathor.cli.mining import create_parser as create_parser_mining, execute as execute_mining
-import urllib.parse
-
-import time
-import json
-
-from io import StringIO
-from contextlib import redirect_stdout
+from hathor.transaction import Transaction, TransactionMetadata
+from tests import unittest
+from tests.utils import add_new_blocks, add_new_transactions, request_server, run_server
 
 
 def prepare_transactions(host):

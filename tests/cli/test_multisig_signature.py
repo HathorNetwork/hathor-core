@@ -1,19 +1,18 @@
+import hashlib
+import shutil
+import tempfile
+import time
+from contextlib import redirect_stdout
+from io import StringIO
+
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
 from twisted.internet.task import Clock
 
+from hathor.cli.multisig_signature import create_parser, execute
+from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import add_new_blocks, add_new_transactions
-from hathor.cli.multisig_signature import create_parser, execute
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import hashes
-
-from hathor.wallet import Wallet
-
-from io import StringIO
-from contextlib import redirect_stdout
-import tempfile
-import hashlib
-import time
-import shutil
 
 
 class SignatureTest(unittest.TestCase):

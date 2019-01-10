@@ -1,9 +1,9 @@
-from twisted.internet.task import Clock
-from hathor.p2p.rate_limiter import RateLimiter
-
-from tests import unittest
-
 import time
+
+from twisted.internet.task import Clock
+
+from hathor.p2p.rate_limiter import RateLimiter
+from tests import unittest
 
 
 class RateLimiterTestCase(unittest.TestCase):

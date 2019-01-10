@@ -1,26 +1,27 @@
-from twisted.internet import reactor
-from twisted.logger import FileLogObserver, formatEventAsClassicLogText
-from twisted.logger import globalLogPublisher, FilteringLogObserver, LogLevelFilterPredicate, LogLevel
-
-from hathor.p2p.peer_id import PeerId
-from hathor.manager import HathorManager
-from hathor.transaction.storage import TransactionCompactStorage, TransactionMemoryStorage, TransactionCacheStorage
-from hathor.wallet import Wallet, HDWallet
-from hathor.p2p.peer_discovery import DNSPeerDiscovery, BootstrapPeerDiscovery
-import hathor
-
 import argparse
 import getpass
-import sys
 import json
 import os
+import sys
+from argparse import ArgumentParser, Namespace
+from typing import Any, Callable, Dict, List
+
+from twisted.internet import reactor
+from twisted.logger import (
+    FileLogObserver,
+    FilteringLogObserver,
+    LogLevel,
+    LogLevelFilterPredicate,
+    formatEventAsClassicLogText,
+    globalLogPublisher,
+)
 
 
-def formatLogEvent(event):
+def formatLogEvent(event: Dict[str, Any]) -> str:
     return formatEventAsClassicLogText(event)
 
 
-def get_ipython(extra_args, imported_objects):
+def get_ipython(extra_args: List, imported_objects: Dict[str, Any]) -> Callable:
     from IPython import start_ipython
 
     def run_ipython():
@@ -29,7 +30,7 @@ def get_ipython(extra_args, imported_objects):
     return run_ipython
 
 
-def create_parser():
+def create_parser() -> ArgumentParser:
     # TODO: reuse as much as possible from hathor.cli.run_node
     parser = argparse.ArgumentParser()
     parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
@@ -38,11 +39,8 @@ def create_parser():
     parser.add_argument('--peer', help='json file with peer info')
     parser.add_argument('--bootstrap', action='append', help='Address to connect to (eg: tcp:127.0.0.1:8000')
     parser.add_argument('--data', help='Data directory')
-    parser.add_argument(
-        '--wallet',
-        help='Set wallet type. Options are hd (Hierarchical Deterministic) or keypair',
-        default='hd'
-    )
+    parser.add_argument('--wallet', help='Set wallet type. Options are hd (Hierarchical Deterministic) or keypair',
+                        default='hd')
     parser.add_argument('--words', help='Words used to generate the seed for HD Wallet')
     parser.add_argument('--passphrase', action='store_true', help='Passphrase used to generate the seed for HD Wallet')
     parser.add_argument('--unlock-wallet', action='store_true', help='Ask for password to unlock wallet')
@@ -52,7 +50,19 @@ def create_parser():
     return parser
 
 
-def prepare(args, extra_args=[]):
+def prepare(args: Namespace, extra_args: List = []) -> Callable:
+    import hathor
+    from hathor.manager import HathorManager
+    from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
+    from hathor.p2p.peer_id import PeerId
+    from hathor.transaction.storage import (
+        TransactionCacheStorage,
+        TransactionCompactStorage,
+        TransactionMemoryStorage,
+        TransactionStorage,
+    )
+    from hathor.wallet import BaseWallet, HDWallet, Wallet
+
     loglevel_filter = LogLevelFilterPredicate(LogLevel.info)
     loglevel_filter.setLogLevelForNamespace('hathor.websocket.protocol.HathorAdminWebsocketProtocol', LogLevel.warn)
     loglevel_filter.setLogLevelForNamespace('twisted.python.log', LogLevel.warn)
@@ -71,9 +81,9 @@ def prepare(args, extra_args=[]):
     print('Hathor v{}'.format(hathor.__version__))
     print('My peer id is', peer_id.id)
 
-    imported_objects = {}
+    imported_objects: Dict[str, Any] = {}
 
-    def create_wallet():
+    def create_wallet() -> BaseWallet:
         if args.wallet == 'hd':
             kwargs = {
                 'words': args.words,
@@ -103,6 +113,8 @@ def prepare(args, extra_args=[]):
         else:
             raise ValueError('Invalid type for wallet')
 
+    tx_storage: TransactionStorage
+
     if args.data:
         tx_dir = os.path.join(args.data, 'tx')
         wallet_dir = args.data
@@ -115,8 +127,8 @@ def prepare(args, extra_args=[]):
                 tx_storage.capacity = args.cache_size
             if args.cache_interval:
                 tx_storage.interval = args.cache_interval
-            print('Using TransactionCacheStorage, capacity {}, interval {}s'
-                  .format(tx_storage.capacity, tx_storage.interval))
+            print('Using TransactionCacheStorage, capacity {}, interval {}s'.format(
+                tx_storage.capacity, tx_storage.interval))
             # tx_storage.start()
     else:
         # if using MemoryStorage, no need to have cache
@@ -128,8 +140,8 @@ def prepare(args, extra_args=[]):
     imported_objects['wallet'] = wallet
 
     network = 'testnet'
-    manager = HathorManager(reactor, peer_id=peer_id, network=network,
-                            hostname=args.hostname, tx_storage=tx_storage, wallet=wallet)
+    manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=args.hostname, tx_storage=tx_storage,
+                            wallet=wallet)
     imported_objects['manager'] = manager
 
     dns_hosts = []

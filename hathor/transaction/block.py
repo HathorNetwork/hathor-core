@@ -1,37 +1,32 @@
-from hathor.transaction.base_transaction import BaseTransaction
-from hathor.transaction.exceptions import BlockHeightError, BlockWithInputs, BlockWithTokensError
+from typing import TYPE_CHECKING, List, Optional
 
 from twisted.logger import Logger
+
+from hathor import protos
+from hathor.transaction.base_transaction import BaseTransaction, Output
+from hathor.transaction.exceptions import BlockHeightError, BlockWithInputs, BlockWithTokensError
+
+if TYPE_CHECKING:
+    from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 
 class Block(BaseTransaction):
     log = Logger()
 
-    def __init__(self, nonce=0, timestamp=None, version=1, weight=0, height=0,
-                 outputs=None, parents=None, hash=None, storage=None):
-        super().__init__(
-            nonce=nonce,
-            timestamp=timestamp,
-            version=version,
-            weight=weight,
-            height=height,
-            outputs=outputs or [],
-            parents=parents or [],
-            hash=hash,
-            storage=storage,
-            is_block=True
-        )
+    def __init__(self, nonce: int = 0, timestamp: Optional[int] = None, version: int = 1, weight: float = 0,
+                 height: int = 0, outputs: Optional[List[Output]] = None, parents: Optional[List[bytes]] = None,
+                 hash: Optional[bytes] = None, storage: Optional['TransactionStorage'] = None) -> None:
+        super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight, height=height,
+                         outputs=outputs or [], parents=parents or [], hash=hash, storage=storage, is_block=True)
 
-    def to_proto(self, include_metadata=True):
-        from hathor import protos
-        from hathor.transaction import TxOutput
+    def to_proto(self, include_metadata: bool = True) -> protos.BaseTransaction:
         tx_proto = protos.Block(
             version=self.version,
             weight=self.weight,
             timestamp=self.timestamp,
             height=self.height,
             parents=self.parents,
-            outputs=map(TxOutput.to_proto, self.outputs),
+            outputs=map(Output.to_proto, self.outputs),
             nonce=self.nonce,
             hash=self.hash,
         )
@@ -40,8 +35,8 @@ class Block(BaseTransaction):
         return protos.BaseTransaction(block=tx_proto)
 
     @classmethod
-    def create_from_proto(cls, tx_proto, storage=None):
-        from hathor.transaction import TxOutput
+    def create_from_proto(cls, tx_proto: protos.BaseTransaction,
+                          storage: Optional['TransactionStorage'] = None) -> 'Block':
         block_proto = tx_proto.block
         tx = cls(
             version=block_proto.version,
@@ -51,7 +46,7 @@ class Block(BaseTransaction):
             nonce=block_proto.nonce,
             hash=block_proto.hash or None,
             parents=list(block_proto.parents),
-            outputs=list(map(TxOutput.create_from_proto, block_proto.outputs)),
+            outputs=list(map(Output.create_from_proto, block_proto.outputs)),
             storage=storage,
         )
         if block_proto.HasField('metadata'):
@@ -61,7 +56,7 @@ class Block(BaseTransaction):
             tx._metadata = TransactionMetadata.create_from_proto(tx.hash, block_proto.metadata)
         return tx
 
-    def verify_height(self):
+    def verify_height(self) -> None:
         """Verify that the height is correct (should be parent + 1)."""
         error_height_message = 'Invalid height of block'
         if self.is_genesis and self.height != 1:
@@ -83,7 +78,7 @@ class Block(BaseTransaction):
         if self.height != expected_height:
             raise BlockHeightError(error_height_message)
 
-    def verify_no_inputs(self):
+    def verify_no_inputs(self) -> None:
         inputs = getattr(self, 'inputs', None)
         if inputs:
             raise BlockWithInputs('number of inputs {}'.format(len(inputs)))
@@ -110,14 +105,14 @@ class Block(BaseTransaction):
         height = max(x.height for x in parents_tx) + 1
         return height
 
-    def verify_without_storage(self):
+    def verify_without_storage(self) -> None:
         """ Run all verifications that do not need a storage.
         """
         self.verify_pow()
         self.verify_no_inputs()
         self.verify_outputs()
 
-    def verify(self):
+    def verify(self) -> None:
         """
             (1) confirms at least two pending transactions and references last block
             (2) solves the pow with the correct weight (done in HathorManager)

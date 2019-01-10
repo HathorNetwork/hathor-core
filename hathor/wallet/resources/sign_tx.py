@@ -1,10 +1,11 @@
-from twisted.web import resource
-from hathor.api_util import set_cors, get_missing_params_msg
-from hathor.transaction import Transaction
-
 import json
-import struct
 import re
+import struct
+
+from twisted.web import resource
+
+from hathor.api_util import get_missing_params_msg, set_cors
+from hathor.transaction import Transaction
 
 
 class SignTxResource(resource.Resource):
@@ -53,10 +54,7 @@ class SignTxResource(resource.Resource):
                     tx.weight = self.manager.minimum_tx_weight(tx)
                     tx.resolve()
 
-                data = {
-                    'hex_tx': tx.get_struct().hex(),
-                    'success': True
-                }
+                data = {'hex_tx': tx.get_struct().hex(), 'success': True}
             except struct.error:
                 data = {'success': False}
 
