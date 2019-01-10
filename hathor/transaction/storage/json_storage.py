@@ -30,9 +30,6 @@ class TransactionJSONStorage(BaseTransactionStorage, TransactionStorageAsyncFrom
             self._save_blockhash_by_height(tx)
 
     def _save_metadata(self, tx):
-        # genesis txs and metadata are kept in memory
-        if tx.is_genesis:
-            return
         metadata = tx.get_metadata()
         data = self.serialize_metadata(metadata)
         filepath = self.generate_metadata_filepath(tx.hash)

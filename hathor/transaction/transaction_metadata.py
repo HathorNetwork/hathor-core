@@ -13,9 +13,11 @@ class TransactionMetadata:
     children: Set[bytes]
     twins: Set[bytes]
     accumulated_weight: float
+    score: float
+    first_block: Optional[bytes]
 
     def __init__(self, spent_outputs: Optional[Dict[int, Set[bytes]]] = None, hash: Optional[bytes] = None,
-                 accumulated_weight: float = 0) -> None:
+                 accumulated_weight: float = 0, score: float = 0) -> None:
 
         # Hash of the transaction.
         self.hash = hash
@@ -29,8 +31,11 @@ class TransactionMetadata:
         self.conflict_with = set()
 
         # Hash of the transactions that void this transaction.
+        #
         # When a transaction has a conflict and is voided because of this conflict, its own hash is added to
         # voided_by. The logic is that the transaction is voiding itself.
+        #
+        # When a block is voided, its own hash is added to voided_by.
         self.voided_by = set()
 
         # List of peers which have sent this transaction.
@@ -48,12 +53,18 @@ class TransactionMetadata:
         # Accumulated weight
         self.accumulated_weight = accumulated_weight
 
+        # Score
+        self.score = score
+
+        # First valid block that verifies this transaction
+        # If two blocks verify the same parent block and have the same score, both are valid.
+        self.first_block = None
+
     def __eq__(self, other):
         """Override the default Equals behavior"""
-        for field in [
-                'hash', 'spent_outputs', 'conflict_with', 'voided_by', 'received_by', 'children', 'accumulated_weight',
-                'twins'
-        ]:
+        for field in ['hash', 'spent_outputs', 'conflict_with', 'voided_by',
+                      'received_by', 'children', 'accumulated_weight', 'twins',
+                      'score', 'first_block']:
             if getattr(self, field) != getattr(other, field):
                 return False
         return True
@@ -70,6 +81,11 @@ class TransactionMetadata:
         data['voided_by'] = [x.hex() for x in self.voided_by]
         data['twins'] = [x.hex() for x in self.twins]
         data['accumulated_weight'] = self.accumulated_weight
+        data['score'] = self.score
+        if self.first_block is not None:
+            data['first_block'] = self.first_block.hex()
+        else:
+            data['first_block'] = None
         return data
 
     @classmethod
@@ -98,6 +114,12 @@ class TransactionMetadata:
             meta.twins = set()
 
         meta.accumulated_weight = data['accumulated_weight']
+        meta.score = data.get('score', 0)
+
+        first_block_raw = data.get('first_block', None)
+        if first_block_raw:
+            meta.first_block = bytes.fromhex(first_block_raw)
+
         return meta
 
     # XXX(jansegre): I did not put the transaction hash in the protobuf object to keep it less redundant. Is this OK?
@@ -123,6 +145,8 @@ class TransactionMetadata:
         metadata.received_by = set(metadata_proto.received_by)
         metadata.children = set(metadata_proto.children.hashes)
         metadata.accumulated_weight = metadata_proto.accumulated_weight
+        metadata.score = metadata_proto.score
+        metadata.first_block = metadata_proto.first_block or None
         return metadata
 
     def to_proto(self) -> protos.Metadata:
@@ -141,6 +165,8 @@ class TransactionMetadata:
             received_by=self.received_by,
             children=protos.Metadata.Hashes(hashes=self.children),
             accumulated_weight=self.accumulated_weight,
+            score=self.score,
+            first_block=self.first_block,
         )
 
     def clone(self) -> 'TransactionMetadata':

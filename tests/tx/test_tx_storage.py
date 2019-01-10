@@ -137,7 +137,7 @@ class _BaseTransactionStorageTest:
             tx = self.block
             # First we save to the storage
             self.tx_storage.save_transaction(tx)
-            # Double saving to test specific part of _save_blockhash_by_height method code
+            # Saving twice to test specific part of _save_blockhash_by_height method code
             self.tx_storage.save_transaction(tx)
 
             metadata = tx.get_metadata()

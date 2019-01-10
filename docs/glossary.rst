@@ -28,3 +28,12 @@ Glossary
 
     Twin Transaction
       Transactions that have exactly the same inputs and ouputs. Their hash are different because they may have different parents, different timestamps, or simply different nounces.
+
+    Best chain
+      The block chain that has the highest score, like the best (or the longest) chain in Bitcoin.
+
+    Best chain candidates
+      When two or more chains have the same score, they are all best chain candidates.
+
+    Side chain (or voided side chain)
+      All chains whose scores are below the score of the best chain.

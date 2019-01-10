@@ -1,3 +1,5 @@
+# encoding: utf-8
+
 import base64
 import datetime
 import hashlib
@@ -263,36 +265,13 @@ class BaseTransaction(ABC):
                     return True
             return False
 
+    @abstractclassmethod
     def update_voided_info(self) -> None:
-        """ Transaction's voided_by must equal the union of the voided_by of both its parents and its inputs.
+        """ This method is called when a new transaction or block arrives and is added to the DAG.
+        It must check whether the transaction or block is voided or not. It has different implementation
+        in each case.
         """
-        assert self.hash is not None
-        assert self.storage is not None
-
-        voided_by = set()
-
-        for parent in self.get_parents():
-            parent_meta = parent.get_metadata()
-            voided_by.update(parent_meta.voided_by)
-
-        for txin in self.inputs:
-            spent_tx = self.storage.get_transaction(txin.tx_id)
-            spent_meta = spent_tx.get_metadata()
-            voided_by.update(spent_meta.voided_by)
-
-        meta = self.get_metadata()
-        if self.hash in meta.voided_by:
-            voided_by.add(self.hash)
-
-        if meta.voided_by != voided_by:
-            meta.voided_by = voided_by.copy()
-            self.storage.save_transaction(self, only_metadata=True)
-
-        for h in voided_by:
-            if h == self.hash:
-                continue
-            tx = self.storage.get_transaction(h)
-            tx.check_conflicts()
+        raise NotImplementedError
 
     def mark_inputs_as_used(self) -> None:
         """ Mark all its inputs as used
@@ -661,6 +640,8 @@ class BaseTransaction(ABC):
 
         Also, txs should have 2 other txs as parents, while blocks should have 2 txs + 1 block.
 
+        Parents must be ordered with blocks first, followed by transactions.
+
         :raises TimestampError: when our timestamp is less or equal than our parent's timestamp
         :raises ParentDoesNotExist: when at least one of our parents does not exist
         :raises IncorrectParents: when tx does not confirm the correct number/type of parent txs
@@ -675,8 +656,9 @@ class BaseTransaction(ABC):
         if len(self.parents) > len(parents_set):
             raise DuplicatedParents('Tx has duplicated parents: {}', [tx_hash.hex() for tx_hash in self.parents])
 
-        my_parents_txs = 0  # number of tx parents
-        my_parents_blocks = 0  # number of block parents
+        my_parents_txs = 0      # number of tx parents
+        my_parents_blocks = 0   # number of block parents
+        min_timestamp = None
 
         for parent_hash in self.parents:
             # TODO should check repeated hashes in parents?
@@ -691,8 +673,25 @@ class BaseTransaction(ABC):
                     ))
 
                 if parent.is_block:
+                    if my_parents_txs > 0:
+                        raise IncorrectParents('Parents which are blocks must come before transactions')
+                    for pi_hash in parent.parents:
+                        pi = self.storage.get_transaction(parent_hash)
+                        if not pi.is_block:
+                            min_timestamp = (
+                                min(min_timestamp, pi.timestamp) if min_timestamp is not None
+                                else pi.timestamp
+                            )
                     my_parents_blocks += 1
                 else:
+                    if min_timestamp and parent.timestamp < min_timestamp:
+                        raise TimestampError('tx={} timestamp={}, parent={} timestamp={}, min_timestamp={}'.format(
+                            self.hash.hex(),
+                            self.timestamp,
+                            parent.hash.hex(),
+                            parent.timestamp,
+                            min_timestamp
+                        ))
                     my_parents_txs += 1
             except TransactionDoesNotExist:
                 raise ParentDoesNotExist('tx={} parent={}'.format(self.hash.hex(), parent_hash))
