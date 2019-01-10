@@ -1,14 +1,14 @@
-from tests.resources.base_resource import TestDummyRequest
+from twisted.web.http import Request
 
 
-def set_cors(request: TestDummyRequest, method: str) -> None:
+def set_cors(request: Request, method: str) -> None:
     request.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000')
     request.setHeader('Access-Control-Allow-Methods', method)
     request.setHeader('Access-Control-Allow-Headers', 'x-prototype-version,x-requested-with,content-type')
     request.setHeader('Access-Control-Max-Age', 604800)
 
 
-def render_options(request: TestDummyRequest, verbs: str = 'GET, POST, OPTIONS') -> int:
+def render_options(request: Request, verbs: str = 'GET, POST, OPTIONS') -> int:
     """Function to return OPTIONS request.
 
     Most of the APIs only need it for GET, POST and OPTIONS, but verbs can be passed as parameter.
