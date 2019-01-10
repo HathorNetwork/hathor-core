@@ -1,22 +1,24 @@
 import argparse
 import getpass
-from hathor.wallet import Wallet
-from hathor.crypto.util import get_private_key_bytes, get_public_key_bytes_compressed
-from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script
+from argparse import ArgumentParser, Namespace
+
 from cryptography.hazmat.primitives import serialization
 
 
-def create_parser():
+def create_parser() -> ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('signatures_required', type=int, help='Mimimum quantity of signatures required')
     parser.add_argument('--pubkey_count', type=int, help='Quantity of public keys in the multisig')
     parser.add_argument('--public_keys', type=str, help='Public keys in hex separated by comma')
     parser.add_argument('--dir', type=str, help='Directory of key pair wallet keys')
-
     return parser
 
 
-def execute(args, wallet_passwd):
+def execute(args: Namespace, wallet_passwd: str) -> None:
+    from hathor.crypto.util import get_private_key_bytes, get_public_key_bytes_compressed
+    from hathor.wallet import Wallet
+    from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script
+
     if (args.pubkey_count and args.pubkey_count > 16) or args.signatures_required > 16:
         print('Error: maximum number of public keys or signatures required is 16')
         return
@@ -46,11 +48,10 @@ def execute(args, wallet_passwd):
             public_key_bytes = get_public_key_bytes_compressed(pk.public_key())
             public_bytes.append(public_key_bytes)
             print('------------------\n')
-            print('Key {}\n'.format(i+1))
-            print('Private key: {}\n'.format(get_private_key_bytes(
-                pk,
-                encryption_algorithm=serialization.BestAvailableEncryption(wallet_passwd.encode())).hex())
-            )
+            print('Key {}\n'.format(i + 1))
+            print('Private key: {}\n'.format(
+                get_private_key_bytes(
+                    pk, encryption_algorithm=serialization.BestAvailableEncryption(wallet_passwd.encode())).hex()))
             print('Public key: {}\n'.format(public_key_bytes.hex()))
             print('Address: {}\n'.format(addr))
 

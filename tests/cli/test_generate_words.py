@@ -1,8 +1,8 @@
-from tests import unittest
-from hathor.cli.generate_valid_words import create_parser, execute
-
-from io import StringIO
 from contextlib import redirect_stdout
+from io import StringIO
+
+from hathor.cli.generate_valid_words import create_parser, execute
+from tests import unittest
 
 
 class GenerateWordsTest(unittest.TestCase):

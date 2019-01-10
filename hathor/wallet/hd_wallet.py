@@ -1,9 +1,12 @@
+import hashlib
+from typing import Any, Dict, Optional
+
 from mnemonic import Mnemonic
 from pycoin.networks.registry import network_for_netcode
-from hathor.wallet import BaseWallet
+
 from hathor.pubsub import HathorEvents
+from hathor.wallet import BaseWallet
 from hathor.wallet.exceptions import InvalidWords
-import hashlib
 
 # TODO pycoin BIP32 uses their own ecdsa library to generate key that does not use OpenSSL
 # We must check if this brings any security problem to us later
@@ -14,8 +17,10 @@ WORD_COUNT_CHOICES = [12, 15, 18, 21, 24]
 class HDWallet(BaseWallet):
     """ Hierarchical Deterministic Wallet based in BIP32 (https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki)
     """
-    def __init__(self, words=None, language='english', passphrase=b'', gap_limit=20, word_count=24,
-                 directory='./', pubsub=None, reactor=None, initial_key_generation=None):
+
+    def __init__(self, words: Optional[Any] = None, language: str = 'english', passphrase: bytes = b'',
+                 gap_limit: int = 20, word_count: int = 24, directory: str = './', pubsub: Optional[Any] = None,
+                 reactor: Optional[Any] = None, initial_key_generation: Optional[Any] = None) -> None:
         """
         :param words: words to generate the seed. It's a string with the words separated by a single space.
         If None we generate new words when starting the wallet
@@ -41,14 +46,10 @@ class HDWallet(BaseWallet):
 
         :raises ValueError: Raised on invalid word_count
         """
-        super().__init__(
-            directory=directory,
-            pubsub=pubsub,
-            reactor=reactor
-        )
+        super().__init__(directory=directory, pubsub=pubsub, reactor=reactor)
 
         # Dict[string(base58), BIP32Key]
-        self.keys = {}
+        self.keys: Dict[str, Any] = {}
 
         # Last index that the address was shared
         # We use this index to know which address should be shared with the user
@@ -246,7 +247,7 @@ class HDWallet(BaseWallet):
             m = Mnemonic(self.language)
             # We can't pass the word_count to generate method, only the strength
             # Multiplying by 10.67 gives the result we expect
-            words = m.generate(strength=int(self.word_count*10.67))
+            words = m.generate(strength=int(self.word_count * 10.67))
         self.words = words
         self.passphrase = passphrase
         self._manually_initialize()

@@ -1,33 +1,36 @@
-# encoding: utf-8
 from abc import ABC, abstractmethod, abstractproperty
 from collections import deque
 from itertools import chain
+from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
 
-from twisted.internet.defer import succeed, inlineCallbacks
+from graphviz.dot import Digraph
+from intervaltree.interval import Interval
+from twisted.internet.defer import inlineCallbacks, succeed
 
-from hathor.transaction.storage.exceptions import TransactionIsNotABlock, TransactionDoesNotExist
-from hathor.indexes import TipsIndex, IndexesManager
+from hathor.indexes import IndexesManager, TipsIndex
+from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.transaction.block import Block
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
+from hathor.transaction.transaction import BaseTransaction, Transaction
+from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.util import deprecated, skip_warning
-from hathor.pubsub import HathorEvents
 
 
-class TransactionStorageSync(ABC):
+class TransactionStorage(ABC):
     """Legacy sync interface, please copy @deprecated decorator when implementing methods."""
+
+    pubsub: Optional[PubSubManager]
+    with_index: bool
 
     @abstractmethod
     @deprecated('Use save_transaction_deferred instead')
-    def save_transaction(self, tx, *, only_metadata=False):
+    def save_transaction(self: 'TransactionStorage', tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         # XXX: although this method is abstract (because a subclass must implement it) the implementer
         #      should call the base implementation for correctly interacting with the index
         """Saves the tx.
 
         :param tx: Transaction to save
-        :type tx: :py:class:`hathor.transaction.BaseTransaction`
-
         :param only_metadata: Don't save the transaction, only the metadata of this transaction
-        :type only_metadata: bool
-
-        :rtype: None
         """
         if self.with_index and not only_metadata:
             self._add_to_cache(tx)
@@ -38,9 +41,6 @@ class TransactionStorageSync(ABC):
         """Returns `True` if transaction with hash `hash_bytes` exists.
 
         :param hash_bytes: Hash in bytes that will be checked.
-        :type hash_bytes: bytes
-
-        :rtype: bool
         """
         raise NotImplementedError
 
@@ -50,26 +50,21 @@ class TransactionStorageSync(ABC):
         """Returns the transaction with hash `hash_bytes`.
 
         :param hash_bytes: Hash in bytes that will be checked.
-        :type hash_bytes: bytes
-
-        :rtype :py:class:`hathor.transaction.BaseTransaction`
         """
         raise NotImplementedError
 
     @deprecated('Use get_metadata_deferred instead')
-    def get_metadata(self, hash_bytes):
+    def get_metadata(self, hash_bytes: bytes) -> Optional[TransactionMetadata]:
         """Returns the transaction metadata with hash `hash_bytes`.
 
         :param hash_bytes: Hash in bytes that will be checked.
-        :type hash_bytes: bytes
-
         :rtype :py:class:`hathor.transaction.TransactionMetadata`
         """
         try:
             tx = self.get_transaction(hash_bytes)
             return tx.get_metadata(use_storage=False)
         except TransactionDoesNotExist:
-            pass
+            return None
 
     @abstractmethod
     @deprecated('Use get_all_transactions_deferred instead')
@@ -91,8 +86,6 @@ class TransactionStorageSync(ABC):
         """
         raise NotImplementedError
 
-
-class TransactionStorageAsync(ABC):
     """Async interface, all methods mirrorred from TransactionStorageSync, but suffixed with `_deferred`."""
 
     @abstractmethod
@@ -167,132 +160,83 @@ class TransactionStorageAsync(ABC):
         """
         raise NotImplementedError
 
-
-class TransactionStorageAsyncFromSync(TransactionStorageAsync):
-    """Implement async interface from sync interface, for legacy implementations."""
-
-    def save_transaction_deferred(self, tx, *, only_metadata=False):
-        return succeed(skip_warning(self.save_transaction)(tx, only_metadata=only_metadata))
-
-    def transaction_exists_deferred(self, hash_bytes):
-        return succeed(skip_warning(self.transaction_exists)(hash_bytes))
-
-    def get_transaction_deferred(self, hash_bytes):
-        return succeed(skip_warning(self.get_transaction)(hash_bytes))
-
-    def get_all_transactions_deferred(self):
-        return succeed(skip_warning(self.get_all_transactions)())
-
-    def get_count_tx_blocks_deferred(self):
-        return succeed(skip_warning(self.get_count_tx_blocks)())
-
-
-class TransactionStorage(TransactionStorageSync, TransactionStorageAsync):
     @abstractproperty
-    def latest_timestamp(self):
+    def latest_timestamp(self) -> int:
+        raise NotImplementedError
+
+    @abstractproperty
+    def first_timestamp(self) -> int:
         raise NotImplementedError
 
     @abstractmethod
-    def get_block_tips(self, timestamp=None):
+    def get_block_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         raise NotImplementedError
 
     @abstractmethod
-    def get_tx_tips(self, timestamp=None):
+    def get_tx_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         raise NotImplementedError
 
     @abstractmethod
-    def get_newest_blocks(self, count):
+    def get_newest_blocks(self, count: int) -> Tuple[List[Block], bool]:
         """ Get blocks from the newest to the oldest
 
         :param count: Number of blocks to be returned
-        :type count: int
-
         :return: List of blocks and a boolean indicating if has more blocks
-        :rtype: Tuple[List[Transaction], bool]
         """
         raise NotImplementedError
 
     @abstractmethod
-    def get_newest_txs(self, count):
+    def get_newest_txs(self, count: int) -> Tuple[List[BaseTransaction], bool]:
         """ Get transactions from the newest to the oldest
 
         :param count: Number of transactions to be returned
-        :type count: int
-
         :return: List of transactions and a boolean indicating if has more txs
-        :rtype: Tuple[List[Transaction], bool]
         """
         raise NotImplementedError
 
     @abstractmethod
-    def get_older_blocks_after(self, timestamp, hash_bytes, count):
+    def get_older_blocks_after(self, timestamp: int, hash_bytes: bytes,
+                               count: int) -> Tuple[List[BaseTransaction], bool]:
         """ Get blocks from the timestamp/hash_bytes reference to the oldest
 
         :param timestamp: Timestamp reference to start the search
-        :type timestamp: int
-
         :param hash_bytes: Hash reference to start the search
-        :type hash_bytes: bytes
-
         :param count: Number of blocks to be returned
-        :type count: int
-
         :return: List of blocks and a boolean indicating if has more blocks
-        :rtype: Tuple[List[Transaction], bool]
         """
         raise NotImplementedError
 
     @abstractmethod
-    def get_newer_blocks_after(self, timestamp, hash_bytes, count):
+    def get_newer_blocks_after(self, timestamp: int, hash_bytes: bytes,
+                               count: int) -> Tuple[List[BaseTransaction], bool]:
         """ Get blocks from the timestamp/hash_bytes reference to the newest
 
         :param timestamp: Timestamp reference to start the search
-        :type timestamp: int
-
         :param hash_bytes: Hash reference to start the search
-        :type hash_bytes: bytes
-
         :param count: Number of blocks to be returned
-        :type count: int
-
         :return: List of blocks and a boolean indicating if has more blocks
-        :rtype: Tuple[List[Transaction], bool]
         """
         raise NotImplementedError
 
     @abstractmethod
-    def get_older_txs_after(self, timestamp, hash_bytes, count):
+    def get_older_txs_after(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[BaseTransaction], bool]:
         """ Get transactions from the timestamp/hash_bytes reference to the oldest
 
         :param timestamp: Timestamp reference to start the search
-        :type timestamp: int
-
         :param hash_bytes: Hash reference to start the search
-        :type hash_bytes: bytes
-
         :param count: Number of transactions to be returned
-        :type count: int
-
         :return: List of transactions and a boolean indicating if has more txs
-        :rtype: Tuple[List[Transaction], bool]
         """
         raise NotImplementedError
 
     @abstractmethod
-    def get_newer_txs_after(self, timestamp, hash_bytes, count):
+    def get_newer_txs_after(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[BaseTransaction], bool]:
         """ Get transactions from the timestamp/hash_bytes reference to the newest
 
         :param timestamp: Timestamp reference to start the search
-        :type timestamp: int
-
         :param hash_bytes: Hash reference to start the search
-        :type hash_bytes: bytes
-
         :param count: Number of transactions to be returned
-        :type count: int
-
         :return: List of transactions and a boolean indicating if has more txs
-        :rtype: Tuple[List[Transaction], bool]
         """
         raise NotImplementedError
 
@@ -305,37 +249,30 @@ class TransactionStorage(TransactionStorageSync, TransactionStorageAsync):
         pass
 
     @abstractmethod
-    def _topological_sort(self):
+    def _topological_sort(self) -> Iterator[BaseTransaction]:
         """Return an iterable of the transactions in topological ordering, i.e., from
         genesis to the most recent transactions. The order is important because the
         transactions are always valid---their parents and inputs exist.
 
         :return: An iterable with the sorted transactions
-        :rtype: Iterable[BaseTransaction]
         """
         raise NotImplementedError
 
     @abstractmethod
-    def iter_bfs_children(self, root):
+    def iter_bfs_children(self, root) -> Iterator[BaseTransaction]:
         """Run a BFS starting from the given transaction to the tips (left-to-right)
 
         :param root: Starting point of the BFS, either a block or a transaction.
-        :type root: :py:class:`hathor.transaction.BaseTransaction`
-
         :return: An iterable with the transactions (without the root)
-        :rtype: Iterable[BaseTransaction]
         """
         raise NotImplementedError
 
     @abstractmethod
-    def iter_bfs_spent_by(self, root):
+    def iter_bfs_spent_by(self, root: Transaction) -> Iterator[BaseTransaction]:
         """Run a BFS starting from the given transaction (left-to-right)
 
         :param root: Starting point of the BFS, either a block or a transaction.
-        :type root: :py:class:`hathor.transaction.BaseTransaction`
-
         :return: An iterable with the transactions (without the root)
-        :rtype: Iterable[BaseTransaction]
         """
         raise NotImplementedError
 
@@ -373,63 +310,43 @@ class TransactionStorage(TransactionStorageSync, TransactionStorageAsync):
         raise NotImplementedError
 
     @abstractmethod
-    def get_transactions_before(self, hash_bytes, num_blocks=100):
+    def get_transactions_before(self, hash_bytes: bytes, num_blocks: int = 100) -> List[BaseTransaction]:
         """Run a BFS starting from the giving `hash_bytes`.
 
         :param hash_bytes: Starting point of the BFS, either a block or a transaction.
-        :type hash_bytes: bytes
-
         :param num_blocks: Number of blocks to be return.
-        :type num_blocks: int
-
         :return: List of transactions
-        :rtype: List[Transaction]
         """
         raise NotImplementedError
 
     @abstractmethod
-    def iter_bfs_ascendent_blocks(self, root, max_depth):
+    def iter_bfs_ascendent_blocks(self, root: Block, max_depth: int) -> Iterator[Block]:
         """Iterate through all ascendents in a BFS algorithm, starting from `root` until reach `max_depth`.
 
         Only blocks are yielded.
 
         :param root: Start point of the BSF
-        :type root: :py:class:`hathor.transactions.BaseTransaction`
-
         :return: An iterable of transactions
-        :rtype: Iterable[BaseTransaction]
         """
         raise NotImplementedError
 
     @abstractmethod
-    def get_blocks_before(self, hash_bytes, num_blocks=100):
+    def get_blocks_before(self, hash_bytes: bytes, num_blocks: int = 100) -> List[Block]:
         """Run a BFS starting from the giving `hash_bytes`.
 
         :param hash_bytes: Starting point of the BFS.
-        :type hash_bytes: bytes
-
         :param num_blocks: Number of blocks to be return.
-        :type num_blocks: int
-
         :return: List of transactions
-        :rtype: List[Transaction]
         """
         raise NotImplementedError
 
-    def graphviz(self, format='pdf', weight=False, acc_weight=False):
+    def graphviz(self, format: str = 'pdf', weight: bool = False, acc_weight: bool = False) -> Digraph:
         """Return a Graphviz object that can be rendered to generate a visualization of the DAG.
 
         :param format: Format of the visualization (pdf, png, or jpg)
-        :type format: string
-
         :param weight: Whether to display or not the tx weight
-        :type format: bool
-
         :param acc_weight: Whether to display or not the tx accumulated weight
-        :type format: bool
-
         :return: A Graphviz object
-        :rtype: :py:class:`graphviz.Digraph`
         """
         from graphviz import Digraph
 
@@ -453,6 +370,7 @@ class TransactionStorage(TransactionStorageSync, TransactionStorageAsync):
 
         with g_genesis as g_g, g_txs as g_t, g_blocks as g_b:
             for i, tx in enumerate(nodes_iter):
+                assert tx.hash is not None
                 name = tx.hash.hex()
                 attrs_node = {'label': tx.hash.hex()[-4:]}
                 attrs_edge = {}
@@ -470,8 +388,7 @@ class TransactionStorage(TransactionStorageSync, TransactionStorageAsync):
                 if acc_weight:
                     metadata = tx.get_metadata()
                     attrs_node.update(
-                        dict(label='{}\naw: {:.2f}'.format(attrs_node['label'], metadata.accumulated_weight))
-                    )
+                        dict(label='{}\naw: {:.2f}'.format(attrs_node['label'], metadata.accumulated_weight)))
 
                 if tx.is_genesis:
                     attrs_node.update(dict(fillcolor='#87D37C', style='filled'))
@@ -492,20 +409,13 @@ class TransactionStorage(TransactionStorageSync, TransactionStorageAsync):
         dot.attr(rankdir='RL')
         return dot
 
-    def graphviz_funds(self, format='pdf', weight=False, acc_weight=False):
+    def graphviz_funds(self, format: str = 'pdf', weight: bool = False, acc_weight: bool = False):
         """Return a Graphviz object that can be rendered to generate a visualization of the DAG.
 
         :param format: Format of the visualization (pdf, png, or jpg)
-        :type format: string
-
         :param weight: Whether to display or not the tx weight
-        :type format: bool
-
         :param acc_weight: Whether to display or not the tx accumulated weight
-        :type format: bool
-
         :return: A Graphviz object
-        :rtype: :py:class:`graphviz.Digraph`
         """
         from graphviz import Digraph
 
@@ -529,6 +439,7 @@ class TransactionStorage(TransactionStorageSync, TransactionStorageAsync):
 
         with g_genesis as g_g, g_txs as g_t, g_blocks as g_b:
             for i, tx in enumerate(nodes_iter):
+                assert tx.hash is not None
                 name = tx.hash.hex()
                 attrs_node = {'label': tx.hash.hex()[-4:]}
                 attrs_edge = {}
@@ -546,8 +457,7 @@ class TransactionStorage(TransactionStorageSync, TransactionStorageAsync):
                 if acc_weight:
                     metadata = tx.get_metadata()
                     attrs_node.update(
-                        dict(label='{}\naw: {:.2f}'.format(attrs_node['label'], metadata.accumulated_weight))
-                    )
+                        dict(label='{}\naw: {:.2f}'.format(attrs_node['label'], metadata.accumulated_weight)))
 
                 if tx.is_genesis:
                     attrs_node.update(dict(fillcolor='#87D37C', style='filled'))
@@ -569,21 +479,44 @@ class TransactionStorage(TransactionStorageSync, TransactionStorageAsync):
         return dot
 
 
+class TransactionStorageAsyncFromSync(TransactionStorage):
+    """Implement async interface from sync interface, for legacy implementations."""
+
+    def save_transaction_deferred(self, tx, *, only_metadata=False):
+        return succeed(skip_warning(self.save_transaction)(tx, only_metadata=only_metadata))
+
+    def transaction_exists_deferred(self, hash_bytes):
+        return succeed(skip_warning(self.transaction_exists)(hash_bytes))
+
+    def get_transaction_deferred(self, hash_bytes):
+        return succeed(skip_warning(self.get_transaction)(hash_bytes))
+
+    def get_all_transactions_deferred(self):
+        return succeed(skip_warning(self.get_all_transactions)())
+
+    def get_count_tx_blocks_deferred(self):
+        return succeed(skip_warning(self.get_count_tx_blocks)())
+
+
 class BaseTransactionStorage(TransactionStorage):
-    def __init__(self, with_index=True, pubsub=None):
+    def __init__(self, with_index: bool = True, pubsub: Optional[Any] = None) -> None:
         self.with_index = with_index
         if with_index:
             self._reset_cache()
-        self._genesis_cache = None
+        self._genesis_cache: Optional[Dict[bytes, BaseTransaction]] = None
 
         # Pubsub is used to publish tx voided and winner but it's optional
         self.pubsub = pubsub
 
     @property
-    def latest_timestamp(self):
+    def latest_timestamp(self) -> int:
         return self._latest_timestamp
 
-    def _reset_cache(self):
+    @property
+    def first_timestamp(self) -> int:
+        return self._first_timestamp
+
+    def _reset_cache(self) -> None:
         """Reset all caches. This function should not be called unless you know what you are doing."""
         if not self.with_index:
             raise NotImplementedError
@@ -596,7 +529,7 @@ class BaseTransactionStorage(TransactionStorage):
 
         self._latest_timestamp = 0
         from hathor.transaction.genesis import genesis_transactions
-        self.first_timestamp = min(x.timestamp for x in genesis_transactions(self))
+        self._first_timestamp = min(x.timestamp for x in genesis_transactions(self))
 
     def remove_cache(self):
         """Remove all caches in case we don't need it."""
@@ -605,21 +538,21 @@ class BaseTransactionStorage(TransactionStorage):
         self.tx_index = None
         self.voided_tips_index = None
 
-    def get_block_tips(self, timestamp=None):
+    def get_block_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         if not self.with_index:
             raise NotImplementedError
         if timestamp is None:
             timestamp = self.latest_timestamp
         return self.block_index.tips_index[timestamp]
 
-    def get_tx_tips(self, timestamp=None):
+    def get_tx_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         if not self.with_index:
             raise NotImplementedError
         if timestamp is None:
             timestamp = self.latest_timestamp
         return self.tx_index.tips_index[timestamp]
 
-    def get_newest_blocks(self, count):
+    def get_newest_blocks(self, count: int) -> Tuple[List[Block], bool]:
         if not self.with_index:
             raise NotImplementedError
         block_hashes, has_more = self.block_index.get_newest(count)
@@ -669,26 +602,27 @@ class BaseTransactionStorage(TransactionStorage):
         for tx in self._topological_sort():
             self._add_to_cache(tx)
 
-    def _topological_sort(self):
+    def _topological_sort(self) -> Iterator:
         # TODO We must optimize this algorithm to remove the `visited` set.
         #      It will consume too much memory when the number of transactions is big.
         #      A solution would be to store the ordering in disk, probably indexing by tx's height.
         #      Sorting the vertices by the lengths of their longest incoming paths produces a topological
         #      ordering (Dekel, Nassimi & Sahni 1981). See: https://epubs.siam.org/doi/10.1137/0210049
         #      See also: https://gitlab.com/HathorNetwork/hathor-python/merge_requests/31
-        visited = dict()  # Dict[bytes, int]
+        visited: Dict[bytes, int] = dict()  # Dict[bytes, int]
         cnt = 0
         for tx in self.get_all_transactions():
             cnt += 1
             yield from self._topological_sort_dfs(tx, visited)
 
-    def _topological_sort_dfs(self, root, visited):
+    def _topological_sort_dfs(self, root: BaseTransaction, visited: Dict[bytes, int]) -> Iterator[BaseTransaction]:
         if root.hash in visited:
             return
 
         stack = [root]
         while stack:
             tx = stack[-1]
+            assert tx.hash is not None
             if tx.hash in visited:
                 if visited[tx.hash] == 0:
                     visited[tx.hash] = 1  # 1 = Visited
@@ -713,10 +647,7 @@ class BaseTransactionStorage(TransactionStorage):
         """Run a BFS starting from the given transaction to genesis (right_to_left)
 
         :param root: Starting point of the BFS, either a block or a transaction.
-        :type root: :py:class:`hathor.transaction.BaseTransaction`
-
         :return: An iterable with the transactions (with the root)
-        :rtype: Iterable[BaseTransaction]
         """
         to_visit = deque([root.hash])  # List[bytes]
         seen = set(to_visit)  # Set[bytes]
@@ -731,7 +662,7 @@ class BaseTransactionStorage(TransactionStorage):
                     to_visit.append(parent_hash)
                     seen.add(parent_hash)
 
-    def iter_bfs_children(self, root):
+    def iter_bfs_children(self, root: Transaction) -> Iterator[BaseTransaction]:
         to_visit = deque(root.get_metadata().children)  # List[bytes(hash)]
         seen = set(to_visit)  # Set[bytes]
 
@@ -745,7 +676,7 @@ class BaseTransactionStorage(TransactionStorage):
                     to_visit.append(children_hash)
                     seen.add(children_hash)
 
-    def iter_bfs_spent_by(self, root):
+    def iter_bfs_spent_by(self, root: Transaction) -> Iterator[BaseTransaction]:
         to_visit = deque(chain(*root.get_metadata().spent_outputs.values()))  # Deque[bytes(hash)]
         seen = set(to_visit)  # Set[bytes]
 
@@ -759,21 +690,21 @@ class BaseTransactionStorage(TransactionStorage):
                     to_visit.append(spent_hash)
                     seen.add(spent_hash)
 
-    def _add_to_voided(self, tx):
+    def _add_to_voided(self, tx: Transaction) -> None:
         if not self.with_index:
             raise NotImplementedError
         self.voided_tips_index.add_tx(tx)
         if self.pubsub:
             self.pubsub.publish(HathorEvents.STORAGE_TX_VOIDED, tx=tx)
 
-    def _del_from_voided(self, tx):
+    def _del_from_voided(self, tx: Transaction) -> None:
         if not self.with_index:
             raise NotImplementedError
         self.voided_tips_index.del_tx(tx)
         if self.pubsub:
             self.pubsub.publish(HathorEvents.STORAGE_TX_WINNER, tx=tx)
 
-    def _add_to_cache(self, tx):
+    def _add_to_cache(self, tx: BaseTransaction) -> None:
         if not self.with_index:
             raise NotImplementedError
         self._latest_timestamp = max(self.latest_timestamp, tx.timestamp)
@@ -784,7 +715,7 @@ class BaseTransactionStorage(TransactionStorage):
             self._cache_tx_count += 1
             self.tx_index.add_tx(tx)
 
-    def _del_from_cache(self, tx):
+    def _del_from_cache(self, tx: Transaction) -> None:
         if not self.with_index:
             raise NotImplementedError
         if tx.is_block:
@@ -794,30 +725,34 @@ class BaseTransactionStorage(TransactionStorage):
             self._cache_tx_count -= 1
             self.tx_index.del_tx(tx)
 
-    def get_block_count(self):
+    def get_block_count(self) -> int:
         if not self.with_index:
             raise NotImplementedError
         return self._cache_block_count
 
-    def get_tx_count(self):
+    def get_tx_count(self) -> int:
         if not self.with_index:
             raise NotImplementedError
         return self._cache_tx_count
 
-    def get_genesis(self, hash_bytes):
+    def get_genesis(self, hash_bytes: bytes) -> Optional[BaseTransaction]:
         if not self._genesis_cache:
             self._create_genesis_cache()
+        assert self._genesis_cache is not None
         return self._genesis_cache.get(hash_bytes, None)
 
-    def get_all_genesis(self):
+    def get_all_genesis(self) -> Set[BaseTransaction]:
         if not self._genesis_cache:
             self._create_genesis_cache()
-        return self._genesis_cache.values()
+        assert self._genesis_cache is not None
+        return set(self._genesis_cache.values())
 
-    def _create_genesis_cache(self):
+    def _create_genesis_cache(self) -> None:
         from hathor.transaction.genesis import genesis_transactions
         self._genesis_cache = {}
+        assert self._genesis_cache is not None
         for genesis in genesis_transactions(self):
+            assert genesis.hash is not None
             self._genesis_cache[genesis.hash] = genesis
 
     def get_best_height(self):  # pragma: no cover
@@ -831,7 +766,7 @@ class BaseTransactionStorage(TransactionStorage):
         result = result[-num_blocks:]
         return result
 
-    def iter_bfs_ascendent_blocks(self, root, max_depth):
+    def iter_bfs_ascendent_blocks(self, root: Block, max_depth: int) -> Iterator[Block]:
         pending_visits = deque([(1, parent_hash) for parent_hash in root.parents])
         used = set(root.parents)
         while pending_visits:
@@ -839,15 +774,16 @@ class BaseTransactionStorage(TransactionStorage):
             tx = self.get_transaction(tx_hash)
             if not tx.is_block:
                 continue
+            assert isinstance(tx, Block)
             yield tx
             if depth >= max_depth:
                 continue
             for parent_hash in tx.parents:
                 if parent_hash not in used:
                     used.add(parent_hash)
-                    pending_visits.append((depth+1, parent_hash))
+                    pending_visits.append((depth + 1, parent_hash))
 
-    def get_blocks_before(self, hash_bytes, num_blocks=100):
+    def get_blocks_before(self, hash_bytes: bytes, num_blocks: int = 100) -> List[Block]:
         ref_tx = self.get_transaction(hash_bytes)
         if not ref_tx.is_block:
             raise TransactionIsNotABlock
@@ -859,6 +795,7 @@ class BaseTransactionStorage(TransactionStorage):
             tx = self.get_transaction(tx_hash)
             if not tx.is_block:
                 continue
+            assert isinstance(tx, Block)
             result.append(tx)
             if len(result) >= num_blocks:
                 break
@@ -898,16 +835,9 @@ class BaseTransactionStorage(TransactionStorage):
         If ref_hash is not None, we calculate the elements after ref_hash and if we still have more
 
         :param transactions: List of elements we need to paginate
-        :type transactions: List[BaseTransaction]
-
         :param ref_hash: Hash in bytes passed as reference, so we can return the blocks after this one
-        :type ref_hash: bytes
-
         :param count: Quantity of elements to return
-        :type format: int
-
         :return: List of blocks or txs and a boolean indicating if there are more blocks before
-        :rtype: Tuple[List[BaseTransaction], bool]
         """
         # XXX This method is not optimized, we need to improve this search
         txs = sorted(transactions, key=lambda t: t.timestamp, reverse=True)
@@ -931,16 +861,9 @@ class BaseTransactionStorage(TransactionStorage):
         We calculate the elements before ref_hash and if we still have more before it
 
         :param transactions: List of elements we need to paginate
-        :type transactions: List[BaseTransaction]
-
         :param ref_hash: Hash in bytes passed as reference, so we can return the blocks before this one
-        :type ref_hash: bytes
-
         :param count: Quantity of elements to return
-        :type format: int
-
         :return: List of blocks or txs and a boolean indicating if there are more blocks before
-        :rtype: Tuple[List[BaseTransaction], bool]
         """
         # XXX This method is not optimized, we need to improve this search
         txs = sorted(transactions, key=lambda t: t.timestamp, reverse=True)

@@ -1,10 +1,12 @@
-from hathor.transaction import Transaction, TxOutput
-from hathor.transaction.block import Block
-from hathor.constants import GENESIS_TOKENS, MAX_VALUE, MIN_WEIGHT
 import math
+from typing import List, Optional
+
+from hathor.constants import GENESIS_TOKENS, MAX_VALUE, MIN_WEIGHT
+from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput
+from hathor.transaction.storage import TransactionStorage
 
 
-def genesis_transactions(tx_storage):
+def genesis_transactions(tx_storage: Optional[TransactionStorage]) -> List[BaseTransaction]:
     TX_GENESIS1 = Transaction(
         hash=bytes.fromhex('00002b3be4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22f'),
         nonce=17076,
@@ -30,9 +32,7 @@ def genesis_transactions(tx_storage):
     total_tokens = GENESIS_TOKENS
     for x in range(0, num_outputs):
         value = min(total_tokens, MAX_VALUE)
-        GENESIS_OUTPUTS.append(
-            TxOutput(value, bytes.fromhex('76a914fd05059b6006249543b82f36876a17c73fd2267b88ac'))
-        )
+        GENESIS_OUTPUTS.append(TxOutput(value, bytes.fromhex('76a914fd05059b6006249543b82f36876a17c73fd2267b88ac')))
         total_tokens -= value
     BLOCK_GENESIS = Block(
         hash=bytes.fromhex('0001e298570e37d46f9101bcf903bde67186f26a83d88b9cb196f38b49623457'),
@@ -43,11 +43,7 @@ def genesis_transactions(tx_storage):
         outputs=GENESIS_OUTPUTS,
         storage=tx_storage,
     )
-    return [
-        BLOCK_GENESIS,
-        TX_GENESIS1,
-        TX_GENESIS2
-    ]
+    return [BLOCK_GENESIS, TX_GENESIS1, TX_GENESIS2]
 
 
 def get_genesis_output():

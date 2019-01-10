@@ -1,11 +1,9 @@
-# encoding: utf-8
+import base64
+import json
 
 from twisted.web import resource
 
 from hathor.transaction import Block
-
-import json
-import base64
 
 
 class MiningResource(resource.Resource):

@@ -1,20 +1,24 @@
-# encoding: utf-8
+import time
+from enum import Enum
+from typing import TYPE_CHECKING, Dict, Optional
 
+from autobahn.twisted.websocket import WebSocketClientProtocol, WebSocketServerProtocol
+from twisted.internet.interfaces import ITransport
+from twisted.logger import Logger
 from twisted.protocols.basic import LineReceiver
 from twisted.python import log
-from twisted.logger import Logger
-from autobahn.twisted.websocket import WebSocketServerProtocol
-from autobahn.twisted.websocket import WebSocketClientProtocol
 
-from hathor.p2p.states import HelloState, PeerIdState, ReadyState
 from hathor.p2p.messages import ProtocolMessages
+from hathor.p2p.peer_id import PeerId
 from hathor.p2p.rate_limiter import RateLimiter
+from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
 
-from enum import Enum
-import time
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager
+    from hathor.p2p.manager import ConnectionsManager  # noqa: F401
 
 
-class HathorProtocol(object):
+class HathorProtocol:
     """ Implements Hathor Peer-to-Peer Protocol. An instance of this class is
     created for each connection.
 
@@ -34,28 +38,37 @@ class HathorProtocol(object):
     """
     log = Logger()
 
-    class Metrics(object):
-        def __init__(self):
-            self.received_messages = 0
-            self.sent_messages = 0
-            self.received_bytes = 0
-            self.sent_bytes = 0
-
-    class RateLimitKeys(Enum):
-        GLOBAL = 'global'
-
     class PeerState(Enum):
         HELLO = HelloState
         PEER_ID = PeerIdState
         READY = ReadyState
 
-    def __init__(self, network, my_peer, connections=None, node=None):
-        """
-        :type network: string
-        :type my_peer: PeerId
-        :type connections: ConnectionsManager
-        :type node: HathorManager
-        """
+    class Metrics:
+        def __init__(self) -> None:
+            self.received_messages = 0
+            self.sent_messages = 0
+            self.received_bytes = 0
+            self.sent_bytes = 0
+
+    class RateLimitKeys(str, Enum):
+        GLOBAL = 'global'
+
+    network: str
+    my_peer: PeerId
+    connections: Optional['ConnectionsManager']
+    node: 'HathorManager'
+    hello_nonce_received: Optional[str]
+    hello_nonce_sent: Optional[str]
+    app_version: str
+    last_message: float
+    peer: Optional[PeerId]
+    transport: ITransport
+    state: Optional[BaseState]
+    connection_time: float
+    _state_instances: Dict[PeerState, BaseState]
+
+    def __init__(self, network: str, my_peer: PeerId, connections: Optional['ConnectionsManager'] = None, *,
+                 node: 'HathorManager') -> None:
         self.network = network
         self.my_peer = my_peer
         self.connections = connections
@@ -76,16 +89,16 @@ class HathorProtocol(object):
         self.last_request = 0
 
         # The time in which the connection was established.
-        self.connection_time = 0
+        self.connection_time = 0.0
 
         # The current state of the connection.
-        self.state = None
+        self.state: Optional[BaseState] = None
 
         # Default rate limit
         self.ratelimit = RateLimiter()
         # self.ratelimit.set_limit(self.RateLimitKeys.GLOBAL, 120, 60)
 
-    def change_state(self, state_enum):
+    def change_state(self, state_enum: PeerState) -> None:
         if state_enum not in self._state_instances:
             state_cls = state_enum.value
             instance = state_cls(self)
@@ -99,7 +112,7 @@ class HathorProtocol(object):
             if self.state:
                 self.state.on_enter()
 
-    def on_connect(self):
+    def on_connect(self) -> None:
         """ Executed when the connection is established.
         """
         remote = self.transport.getPeer()
@@ -113,7 +126,7 @@ class HathorProtocol(object):
         if self.connections:
             self.connections.on_peer_connect(self)
 
-    def on_disconnect(self, reason):
+    def on_disconnect(self, reason: str) -> None:
         """ Executed when the connection is lost.
         """
         remote = self.transport.getPeer()
@@ -123,16 +136,18 @@ class HathorProtocol(object):
         if self.connections:
             self.connections.on_peer_disconnect(self)
 
-    def send_message(self, cmd, payload):
+    def send_message(self, cmd: ProtocolMessages, payload: Optional[str] = None) -> None:
         """ A generic message which must be implemented to send a message
         to the peer. It depends on the underlying protocol in which
         HathorProtocol is running.
         """
         raise NotImplementedError
 
-    def recv_message(self, cmd, payload):
+    def recv_message(self, cmd: ProtocolMessages, payload: str) -> None:
         """ Executed when a new message arrives.
         """
+        assert self.state is not None
+
         self.last_message = self.node.reactor.seconds()
 
         if not self.ratelimit.add_hit(self.RateLimitKeys.GLOBAL):
@@ -149,12 +164,12 @@ class HathorProtocol(object):
         else:
             self.send_error('Invalid Command: {}'.format(cmd))
 
-    def send_error(self, msg):
+    def send_error(self, msg: str) -> None:
         """ Send an error message to the peer.
         """
         self.send_message(ProtocolMessages.ERROR, msg)
 
-    def send_error_and_close_connection(self, msg):
+    def send_error_and_close_connection(self, msg: str) -> None:
         """ Send an ERROR message to the peer, and then closes the connection.
         """
         self.send_error(msg)
@@ -172,29 +187,29 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
     """
     MAX_LENGTH = 65536
 
-    def connectionMade(self):
+    def connectionMade(self) -> None:
         super(HathorLineReceiver, self).connectionMade()
         self.setLineMode()
         self.on_connect()
 
-    def connectionLost(self, reason):
-        super(HathorLineReceiver, self).connectionMade()
+    def connectionLost(self, reason: str) -> None:
+        super(HathorLineReceiver, self).connectionLost()
         self.on_disconnect(reason)
 
     def lineLengthExceeded(self, line):
         self.log.warn('lineLengthExceeded {} > {}: {}'.format(len(line), self.MAX_LENGTH, line))
         super(HathorLineReceiver, self).lineLengthExceeded(line)
 
-    def lineReceived(self, line):
+    def lineReceived(self, line: bytes) -> None:
         self.metrics.received_messages += 1
         self.metrics.received_bytes += len(line)
         try:
-            line = line.decode('utf-8')
+            sline = line.decode('utf-8')
         except UnicodeDecodeError:
             self.transport.loseConnection()
             return
 
-        msgtype, _, msgdata = line.partition(' ')
+        msgtype, _, msgdata = sline.partition(' ')
         try:
             cmd = ProtocolMessages(msgtype)
         except ValueError:
@@ -203,7 +218,7 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
         else:
             self.recv_message(cmd, msgdata)
 
-    def send_message(self, cmd_enum, payload=None):
+    def send_message(self, cmd_enum: ProtocolMessages, payload: Optional[str] = None) -> None:
         cmd = cmd_enum.value
         if payload:
             line = '{} {}'.format(cmd, payload).encode('utf-8')

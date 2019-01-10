@@ -1,8 +1,8 @@
-from hathor.transaction.resources import TipsResource
 from twisted.internet.defer import inlineCallbacks
-from tests.resources.base_resource import StubSite, _BaseResourceTest
-from hathor.transaction.genesis import genesis_transactions
 
+from hathor.transaction.genesis import genesis_transactions
+from hathor.transaction.resources import TipsResource
+from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_new_blocks, add_new_transactions
 
 

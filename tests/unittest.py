@@ -1,14 +1,14 @@
-from twisted.trial import unittest
+import shutil
+import tempfile
+import time
+
 from twisted.internet import reactor
 from twisted.internet.task import Clock
+from twisted.trial import unittest
 
-from hathor.p2p.peer_id import PeerId
 from hathor.manager import HathorManager
+from hathor.p2p.peer_id import PeerId
 from hathor.wallet import Wallet
-
-import tempfile
-import shutil
-import time
 
 
 class TestCase(unittest.TestCase):

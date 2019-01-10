@@ -1,10 +1,10 @@
-
-from twisted.web import resource
-from hathor.api_util import set_cors
-import hathor
-
 import json
 import time
+
+from twisted.web import resource
+
+import hathor
+from hathor.api_util import set_cors
 
 
 class StatusResource(resource.Resource):
@@ -26,10 +26,7 @@ class StatusResource(resource.Resource):
         for endpoint, deferred in self.manager.connections.connecting_peers.items():
             host = getattr(endpoint, '_host', '')
             port = getattr(endpoint, '_port', '')
-            connecting_peers.append({
-                'deferred': str(deferred),
-                'address': '{}:{}'.format(host, port)
-            })
+            connecting_peers.append({'deferred': str(deferred), 'address': '{}:{}'.format(host, port)})
 
         handshaking_peers = []
         for conn in self.manager.connections.handshaking_peers:

@@ -1,11 +1,14 @@
-def set_cors(request, method):
+from tests.resources.base_resource import TestDummyRequest
+
+
+def set_cors(request: TestDummyRequest, method: str) -> None:
     request.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000')
     request.setHeader('Access-Control-Allow-Methods', method)
     request.setHeader('Access-Control-Allow-Headers', 'x-prototype-version,x-requested-with,content-type')
     request.setHeader('Access-Control-Max-Age', 604800)
 
 
-def render_options(request, verbs='GET, POST, OPTIONS'):
+def render_options(request: TestDummyRequest, verbs: str = 'GET, POST, OPTIONS') -> int:
     """Function to return OPTIONS request.
 
     Most of the APIs only need it for GET, POST and OPTIONS, but verbs can be passed as parameter.

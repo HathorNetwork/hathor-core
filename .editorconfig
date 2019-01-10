@@ -1,0 +1,24 @@
+# http://editorconfig.org
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.py]
+max_line_length = 119
+
+[*.{py,md,rst,ini}]
+indent_style = space
+indent_size = 4
+
+[*.{yml,js,css,html,json}]
+indent_style = space
+indent_size = 2
+
+[{Makefile,**.mk}]
+# Use tabs for indentation (Makefiles require tabs)
+indent_style = tab

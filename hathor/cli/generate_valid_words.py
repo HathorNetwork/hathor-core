@@ -1,10 +1,13 @@
-def generate_words(language='english', count=24):
+from argparse import ArgumentParser, Namespace
+
+
+def generate_words(language: str = 'english', count: int = 24) -> str:
     from mnemonic import Mnemonic
     mnemonic = Mnemonic(language)
-    return mnemonic.generate(strength=int(count*10.67))
+    return mnemonic.generate(strength=int(count * 10.67))
 
 
-def create_parser():
+def create_parser() -> ArgumentParser:
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--language', help='Words language')
@@ -12,7 +15,7 @@ def create_parser():
     return parser
 
 
-def execute(args):
+def execute(args: Namespace) -> None:
     kwargs = {}
 
     if args.language:

@@ -1,5 +1,6 @@
-from hathor.transaction.resources import DashboardTransactionResource
 from twisted.internet.defer import inlineCallbacks
+
+from hathor.transaction.resources import DashboardTransactionResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 

@@ -24,3 +24,4 @@ pytest-cov
 
 grpcio==1.16.0
 grpcio-tools==1.16.0
+mypy-protobuf==1.8

@@ -1,13 +1,17 @@
-from hathor.transaction.scripts import Opcode, HathorScript
+import hashlib
+from typing import List
+
+import base58
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+
 from hathor.constants import MULTISIG_VERSION_BYTE
 from hathor.crypto.util import get_hash160, get_private_key_from_bytes
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import hashes
-import hashlib
-import base58
+from hathor.transaction.scripts import HathorScript, Opcode
+from hathor.transaction.transaction import Transaction
 
 
-def generate_multisig_redeem_script(signatures_required, public_key_bytes):
+def generate_multisig_redeem_script(signatures_required: int, public_key_bytes: List[bytes]) -> bytes:
     """ Generate the redeem script for the multisig output
 
         <signatures_required> <pubkey 1> <pubkey 2> ... <pubkey N> <pubkey_count> <OP_CHECKMULTISIG>
@@ -30,7 +34,7 @@ def generate_multisig_redeem_script(signatures_required, public_key_bytes):
     return redeem_script.data
 
 
-def generate_multisig_address(redeem_script, version_byte=MULTISIG_VERSION_BYTE):
+def generate_multisig_address(redeem_script: bytes, version_byte: bytes = MULTISIG_VERSION_BYTE) -> str:
     """ Generate a multisig address for the multisig wallet
 
         <version_byte> <redeem_script_hash> <checksum>
@@ -57,11 +61,11 @@ def generate_multisig_address(redeem_script, version_byte=MULTISIG_VERSION_BYTE)
     checksum = hashlib.sha256(hashlib.sha256(address).digest()).digest()[:4]
     address.extend(checksum)
 
-    address = bytes(address)
-    return base58.b58encode(address).decode('utf-8')
+    baddress = bytes(address)
+    return base58.b58encode(baddress).decode('utf-8')
 
 
-def generate_signature(tx, private_key_bytes, password=None):
+def generate_signature(tx: Transaction, private_key_bytes: bytes, password: bytes = None) -> bytes:
     """ Create a signature for the tx
 
         :param tx: transaction with the data to be signed

@@ -1,13 +1,13 @@
-from tests import unittest
-from tests.utils import start_remote_storage, add_new_blocks, add_new_transactions
+import datetime
+import time
+
 from twisted.internet.task import Clock
 
-from hathor.transaction.storage.remote_storage import RemoteCommunicationError
-from hathor.transaction import Transaction, Block
+from hathor.transaction import Block, Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_proto
-
-import time
-import datetime
+from hathor.transaction.storage.remote_storage import RemoteCommunicationError
+from tests import unittest
+from tests.utils import add_new_blocks, add_new_transactions, start_remote_storage
 
 
 class RemoteStorageTest(unittest.TestCase):

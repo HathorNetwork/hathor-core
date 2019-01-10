@@ -1,13 +1,15 @@
-from twisted.web import resource
-from twisted.internet import threads
-
-from hathor.api_util import set_cors, render_options
-from hathor.wallet.base_wallet import WalletOutputInfo, WalletInputInfo
-from hathor.wallet.exceptions import InsuficientFunds, PrivateKeyNotFound, InputDuplicated, InvalidAddress
-from hathor.transaction import Transaction
-
 import json
 from threading import Lock
+from typing import Optional
+
+from twisted.internet import threads
+from twisted.web import resource
+
+from hathor.api_util import render_options, set_cors
+from hathor.transaction import Transaction
+from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
+from hathor.wallet.exceptions import InputDuplicated, InsuficientFunds, InvalidAddress, PrivateKeyNotFound
+from tests.resources.base_resource import TestDummyRequest
 
 
 class SendTokensResource(resource.Resource):
@@ -22,7 +24,7 @@ class SendTokensResource(resource.Resource):
         self.manager = manager
         self.lock = Lock()
 
-    def _render_POST_thread(self, request):
+    def _render_POST_thread(self, request: TestDummyRequest) -> bytes:
         """ POST request for /wallet/send_tokens/
             We expect 'data' as request args
             'data': stringified json with an array of inputs and array of outputs
@@ -109,7 +111,7 @@ class SendTokensResource(resource.Resource):
         """
         request.processingFailed(reason)
 
-    def return_POST(self, success, message, tx=None):
+    def return_POST(self, success: bool, message: str, tx: Optional[Transaction] = None) -> bytes:
         """ Auxiliar method to return result of POST method
 
             :param success: If tx was created successfully

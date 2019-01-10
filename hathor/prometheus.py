@@ -1,6 +1,7 @@
+import os
+
 from prometheus_client import CollectorRegistry, Gauge, write_to_textfile
 from twisted.internet import reactor
-import os
 
 # Define prometheus metrics and it's explanation
 METRIC_INFO = {
@@ -81,10 +82,7 @@ class PrometheusMetricsExporter:
             self.set_new_metrics()
 
             # Schedule next call
-            reactor.callLater(
-                self.call_interval,
-                self._schedule_and_write_data
-            )
+            reactor.callLater(self.call_interval, self._schedule_and_write_data)
 
     def stop(self):
         """ Stops exporter

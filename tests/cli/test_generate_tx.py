@@ -1,8 +1,9 @@
-from tests import unittest
-from hathor.cli.tx_generator import create_parser as create_parser_tx, execute as execute_tx
-from hathor.cli.mining import create_parser as create_parser_mining, execute as execute_mining
-from tests.utils import run_server, request_server
 import urllib.parse
+
+from hathor.cli.mining import create_parser as create_parser_mining, execute as execute_mining
+from hathor.cli.tx_generator import create_parser as create_parser_tx, execute as execute_tx
+from tests import unittest
+from tests.utils import request_server, run_server
 
 
 class GenerateTxTest(unittest.TestCase):
@@ -93,13 +94,7 @@ class GenerateTxTest(unittest.TestCase):
         value = 100
         # Now we will generate txs to outside the wallet
         args = self.parser_tx.parse_args([
-            self.host,
-            '--address',
-            '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH',
-            '--value',
-            '{}'.format(value),
-            '--count',
-            '1'
+            self.host, '--address', '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH', '--value', '{}'.format(value), '--count', '1'
         ])
         execute_tx(args)
 

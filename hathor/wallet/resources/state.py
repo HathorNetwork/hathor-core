@@ -1,7 +1,8 @@
-from twisted.web import resource
-from hathor.api_util import set_cors
-
 import json
+
+from twisted.web import resource
+
+from hathor.api_util import set_cors
 
 
 class StateWalletResource(resource.Resource):
@@ -26,9 +27,6 @@ class StateWalletResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        data = {
-            'is_locked': self.manager.wallet.is_locked(),
-            'type': self.manager.wallet.type.value
-        }
+        data = {'is_locked': self.manager.wallet.is_locked(), 'type': self.manager.wallet.type.value}
 
         return json.dumps(data, indent=4).encode('utf-8')

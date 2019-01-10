@@ -1,12 +1,13 @@
-# encoding: utf-8
+import collections
+from typing import Set
+
 from twisted.internet import threads
 from twisted.internet.defer import inlineCallbacks, succeed
 from twisted.logger import Logger
 
+from hathor.transaction import BaseTransaction
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.util import deprecated, skip_warning
-
-import collections
 
 
 class TransactionCacheStorage(BaseTransactionStorage):
@@ -41,11 +42,11 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self._clone_if_needed = _clone_if_needed
         self.cache = collections.OrderedDict()
         # dirty_txs has the txs that have been modified but are not persisted yet
-        self.dirty_txs = set()          # Set[bytes(hash)]
+        self.dirty_txs = set()  # Set[bytes(hash)]
         self.stats = dict(hit=0, miss=0)
         super().__init__()
 
-    def _clone(self, x):
+    def _clone(self, x: BaseTransaction) -> BaseTransaction:
         if self._clone_if_needed:
             return x.clone()
         else:
@@ -70,7 +71,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self.reactor.callLater(self.interval, self._start_flush_thread)
         self.flush_deferred = None
 
-    def _flush_to_storage(self, dirty_txs_copy):
+    def _flush_to_storage(self, dirty_txs_copy: Set) -> None:
         """Write dirty pages to disk."""
         for tx_hash in dirty_txs_copy:
             # a dirty tx might be removed from self.cache outside this thread: if _update_cache is called
@@ -82,7 +83,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
                 self.dirty_txs.discard(tx_hash)
 
     @deprecated('Use save_transaction_deferred instead')
-    def save_transaction(self, tx, *, only_metadata=False):
+    def save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         # genesis txs and metadata are kept in memory
         if tx.is_genesis and only_metadata:
             return
@@ -92,12 +93,12 @@ class TransactionCacheStorage(BaseTransactionStorage):
         # call super which adds to index if needed
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
 
-    def _save_transaction(self, tx):
+    def _save_transaction(self, tx: BaseTransaction) -> None:
         """Saves the transaction without modifying TimestampIndex entries (in superclass)."""
         self._update_cache(tx)
         self.dirty_txs.add(tx.hash)
 
-    def _update_cache(self, tx):
+    def _update_cache(self, tx: BaseTransaction) -> None:
         """Updates the cache making sure it has at most the number of elements configured
         as its capacity.
 
@@ -118,13 +119,13 @@ class TransactionCacheStorage(BaseTransactionStorage):
             self.cache.move_to_end(tx.hash, last=False)
 
     @deprecated('Use transaction_exists_deferred instead')
-    def transaction_exists(self, hash_bytes):
+    def transaction_exists(self, hash_bytes: bytes) -> bool:
         if hash_bytes in self.cache:
             return True
         return skip_warning(self.store.transaction_exists)(hash_bytes)
 
     @deprecated('Use get_transaction_deferred instead')
-    def get_transaction(self, hash_bytes):
+    def get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
         if hash_bytes in self.cache:
             tx = self._clone(self.cache[hash_bytes])
             self.cache.move_to_end(hash_bytes, last=False)
@@ -142,7 +143,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
         return skip_warning(self.store.get_all_transactions)()
 
     @deprecated('Use get_count_tx_blocks_deferred instead')
-    def get_count_tx_blocks(self):
+    def get_count_tx_blocks(self) -> int:
         self._flush_to_storage(self.dirty_txs.copy())
         return skip_warning(self.store.get_count_tx_blocks)()
 

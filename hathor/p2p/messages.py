@@ -1,33 +1,33 @@
 from enum import Enum
-from collections import namedtuple
+from typing import List, NamedTuple
 
-GetNextPayload = namedtuple('GetNextPayload', [
-    'timestamp',  # int
-    'offset',  # int, default=0
-])
 
-NextPayload = namedtuple('NextPayload', [
-    'timestamp',  # int
-    'next_timestamp',  # int
-    'next_offset',  # int
-    'hashes',  # List[str(hash)]
-])
+class GetNextPayload(NamedTuple):
+    timestamp: int
+    offset: int = 0
 
-GetTipsPayload = namedtuple('GetTipsPayload', [
-    'timestamp',  # int
-    'include_hashes',  # bool
-    'offset',  # int, default=0
-])
 
-TipsPayload = namedtuple('TipsPayload', [
-    'length',  # int
-    'timestamp',  # int
-    'prev_timestamp',  # int
-    'next_timestamp',  # int
-    'merkle_tree',  # str(hash)
-    'hashes',  # List[str(hash)]
-    'has_more',  # bool
-])
+class NextPayload(NamedTuple):
+    timestamp: int
+    next_timestamp: int
+    next_offset: int
+    hashes: List[bytes]
+
+
+class GetTipsPayload(NamedTuple):
+    timestamp: int
+    include_hashes: bool
+    offset: int = 0
+
+
+class TipsPayload(NamedTuple):
+    length: int
+    timestamp: int
+    prev_timestamp: int
+    next_timestamp: int
+    merkle_tree: str
+    hashes: List[str]
+    has_more: bool
 
 
 class ProtocolMessages(Enum):
@@ -66,8 +66,8 @@ class ProtocolMessages(Enum):
     # Hathor Specific Messages
     # ---
     NOTIFY_DATA = 'NOTIFY-DATA'  # Notify about a new piece of data.
-    GET_DATA = 'GET-DATA'        # Request the data for a specific transaction.
-    DATA = 'DATA'                # Send the data for a specific transaction.
+    GET_DATA = 'GET-DATA'  # Request the data for a specific transaction.
+    DATA = 'DATA'  # Send the data for a specific transaction.
 
     GET_TIPS = 'GET-TIPS'
     TIPS = 'TIPS'
@@ -76,10 +76,10 @@ class ProtocolMessages(Enum):
     NEXT = 'NEXT'
 
     GET_BLOCKS = 'GET-BLOCKS'  # Request a list of hashes for blocks. Payload is the current latest block.
-    BLOCKS = 'BLOCKS'          # Send a list of hashes for blocks. Payload is a list of hashes.
+    BLOCKS = 'BLOCKS'  # Send a list of hashes for blocks. Payload is a list of hashes.
 
     GET_TRANSACTIONS = 'GET-TRANSACTIONS'  # Request a list of hashes for transactions.
-    TRANSACTIONS = 'TRANSACTIONS'          # Send a list of hashes for transactions.
+    TRANSACTIONS = 'TRANSACTIONS'  # Send a list of hashes for transactions.
 
     HASHES = 'HASHES'
 

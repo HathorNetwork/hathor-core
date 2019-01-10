@@ -1,33 +1,33 @@
 # Documentation: https://docs.gitlab.com/ce/ci/yaml/README.html
 
 stages:
-    - linters
-    - unit-tests
+  - linters
+  - unit-tests
 
-pep8:
-    stage: linters
-    image: python:3.6
-    allow_failure: yes
-    only:
-        - dev
-        - web
-    before_script:
-        - pip install flake8
-    script:
-        - make pep8
+check:
+  stage: linters
+  image: python:3.6
+  allow_failure: yes
+  only:
+    - dev
+    - web
+  before_script:
+    - pip install flake8 isort mypy
+  script:
+    - make check
 
 unit-tests:
-    stage: unit-tests
-    image: python:3.6
-    only:
-        - dev
-        - web
-    before_script:
-        - apt update
-        - apt install -y graphviz
-        - pip install -r requirements.txt
-        - pip install grpcio-tools
-        - make protos
-    script:
-        - make tests
-    coverage: '/^TOTAL.*\s+(\d+\%)$/'
+  stage: unit-tests
+  image: python:3.6
+  only:
+    - dev
+    - web
+  before_script:
+    - apt update
+    - apt install -y graphviz
+    - pip install -r requirements.txt
+    - pip install grpcio-tools
+    - make protos
+  script:
+    - make tests
+  coverage: '/^TOTAL.*\s+(\d+\%)$/'

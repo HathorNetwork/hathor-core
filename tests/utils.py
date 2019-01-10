@@ -1,16 +1,19 @@
-from twisted.test import proto_helpers
 import random
 import subprocess
-import requests
 import time
 import urllib.parse
-from hathor.constants import TOKENS_PER_BLOCK, DECIMAL_PLACES
-
 from concurrent import futures
-import grpc
 
-from hathor.transaction.storage import TransactionMemoryStorage, TransactionRemoteStorage, \
-                                       create_transaction_storage_server
+import grpc
+import requests
+from twisted.test import proto_helpers
+
+from hathor.constants import DECIMAL_PLACES, TOKENS_PER_BLOCK
+from hathor.transaction.storage import (
+    TransactionMemoryStorage,
+    TransactionRemoteStorage,
+    create_transaction_storage_server,
+)
 
 
 def resolve_block_bytes(block_bytes):

@@ -1,17 +1,17 @@
-# encoding: utf-8
-
-import requests
-import time
 import argparse
 import random
 import signal
 import sys
+import time
+from argparse import ArgumentParser
 from json.decoder import JSONDecodeError
+
+import requests
 
 _SLEEP_ON_ERROR_SECONDS = 5
 
 
-def create_parser():
+def create_parser() -> ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('url', help='URL to get mining bytes')
     parser.add_argument('--address', action='append')
@@ -53,6 +53,7 @@ def execute(args):
             response = requests.post(profiler_url, json={'stop': True})
             print(response.text)
         sys.exit(0)
+
     signal.signal(signal.SIGINT, signal_handler)
 
     if args.profiler:
@@ -71,10 +72,7 @@ def execute(args):
             value = random.randint(10, 100)
         # print('Sending {} tokens to {}...'.format(address, value))
 
-        data = {
-            'outputs': [{'address': address, 'value': value}],
-            'inputs': []
-        }
+        data = {'outputs': [{'address': address, 'value': value}], 'inputs': []}
         if args.weight:
             data['weight'] = args.weight
         response = requests.post(send_tokens_url, json={'data': data})
@@ -100,7 +98,7 @@ def execute(args):
             if t1 - t0 > 5:
                 measure = count / (t1 - t0)
                 if interval:
-                    error = 1./measure - 1./args.rate
+                    error = 1. / measure - 1. / args.rate
                     assert interval > error, 'interval={} error={}'.format(interval, error)
                     interval -= error
                 print('')

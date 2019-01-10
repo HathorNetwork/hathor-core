@@ -1,14 +1,19 @@
-# encoding: utf-8
-
-import random
+from typing import Dict, Set
 
 from twisted.internet import endpoints
+from twisted.internet.base import ReactorBase
+from twisted.internet.defer import Deferred
+from twisted.internet.interfaces import IStreamClientEndpoint
 from twisted.logger import Logger
-from twisted.internet.task import LoopingCall
 
 from hathor.crypto.util import generate_privkey_crt_pem
+from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import PeerStorage
-from hathor.pubsub import HathorEvents
+# from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
+from hathor.p2p.protocol import HathorProtocol
+from hathor.p2p.states.ready import ReadyState
+from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.transaction import BaseTransaction
 
 
 class ConnectionsManager:
@@ -16,7 +21,14 @@ class ConnectionsManager:
     """
     log = Logger()
 
-    def __init__(self, reactor, my_peer, server_factory, client_factory, pubsub):
+    connected_peers: Dict[str, HathorProtocol]
+    connecting_peers: Dict[IStreamClientEndpoint, Deferred]
+    handshaking_peers: Set[HathorProtocol]
+
+    def __init__(self, reactor: ReactorBase, my_peer: PeerId, server_factory, client_factory,
+                 pubsub: PubSubManager) -> None:
+        from twisted.internet.task import LoopingCall
+
         self.reactor = reactor
         self.my_peer = my_peer
 
@@ -50,14 +62,14 @@ class ConnectionsManager:
         # Pubsub object to publish events
         self.pubsub = pubsub
 
-    def start(self):
+    def start(self) -> None:
         self.lc_reconnect.start(5)
 
     def stop(self):
         if self.lc_reconnect.running:
             self.lc_reconnect.stop()
 
-    def send_tx_to_peers(self, tx):
+    def send_tx_to_peers(self, tx: BaseTransaction) -> None:
         """ Send `tx` to all ready peers.
 
         The connections are shuffled to fairly propagate among peers.
@@ -67,20 +79,27 @@ class ConnectionsManager:
         :param tx: BaseTransaction to be sent.
         :type tx: py:class:`hathor.transaction.BaseTransaction`
         """
+        import random
+
         connections = list(self.get_ready_connections())
         random.shuffle(connections)
         for conn in connections:
+            assert conn.state is not None
+            assert isinstance(conn.state, ReadyState)
             conn.state.send_tx_to_peer(tx)
 
     def on_connection_failure(self, failure, endpoint):
         self.log.info('Connection failure: address={}:{} message={}'.format(endpoint._host, endpoint._port, failure))
         self.connecting_peers.pop(endpoint)
 
-    def on_peer_connect(self, protocol):
+    def on_peer_connect(self, protocol: HathorProtocol) -> None:
         self.log.info('on_peer_connect() {}'.format(protocol))
         self.handshaking_peers.add(protocol)
 
-    def on_peer_ready(self, protocol):
+    def on_peer_ready(self, protocol: HathorProtocol) -> None:
+        assert protocol.peer is not None
+        assert protocol.peer.id is not None
+
         self.log.info('on_peer_ready() {}'.format(protocol))
         self.handshaking_peers.remove(protocol)
         self.received_peer_storage.pop(protocol.peer.id, None)
@@ -91,32 +110,32 @@ class ConnectionsManager:
         # Notify other peers about this new peer connection.
         for conn in self.get_ready_connections():
             if conn != protocol:
+                assert conn.state is not None
+                assert isinstance(conn.state, ReadyState)
                 conn.state.send_peers([protocol])
 
         self.pubsub.publish(HathorEvents.NETWORK_PEER_CONNECTED, protocol=protocol)
 
-    def on_peer_disconnect(self, protocol):
+    def on_peer_disconnect(self, protocol: HathorProtocol) -> None:
         self.log.info('on_peer_disconnect() {}'.format(protocol))
         if protocol.peer:
+            assert protocol.peer.id is not None
             self.connected_peers.pop(protocol.peer.id)
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
 
         self.pubsub.publish(HathorEvents.NETWORK_PEER_DISCONNECTED, protocol=protocol)
 
-    def get_ready_connections(self):
-        """
-        :rtype: Iter[HathorProtocol]
-        """
-        return self.connected_peers.values()
+    def get_ready_connections(self) -> Set[HathorProtocol]:
+        return set(self.connected_peers.values())
 
-    def is_peer_connected(self, peer_id):
+    def is_peer_connected(self, peer_id: str) -> bool:
         """
         :type peer_id: string (peer.id)
         """
         return peer_id in self.connected_peers
 
-    def on_receive_peer(self, peer, origin=None):
+    def on_receive_peer(self, peer: PeerId, origin: ReadyState = None) -> None:
         """ Update a peer information in our storage, and instantly attempt to connect
         to it if it is not connected yet.
         """
@@ -125,7 +144,7 @@ class ConnectionsManager:
         self.received_peer_storage.add_or_merge(peer)
         self.connect_to_if_not_connected(peer)
 
-    def reconnect_to_all(self):
+    def reconnect_to_all(self) -> None:
         """ It is called by the `lc_reconnect` timer and tries to connect to all known
         peers.
 
@@ -134,9 +153,11 @@ class ConnectionsManager:
         for peer in self.peer_storage.values():
             self.connect_to_if_not_connected(peer)
 
-    def connect_to_if_not_connected(self, peer):
+    def connect_to_if_not_connected(self, peer: PeerId) -> None:
         """ Attempts to connect if it is not connected to the peer.
         """
+        import random
+
         if not peer.entrypoints:
             return
         if peer.id in self.connected_peers:

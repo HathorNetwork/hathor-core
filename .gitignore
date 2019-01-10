@@ -11,6 +11,9 @@ docs/_build/
 cover/
 coverage_html_report/
 
+.mypy_cache
+.pytest_cache
+
 extras/docker/_build/
 extras/docker/envvars
 

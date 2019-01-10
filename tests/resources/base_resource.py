@@ -1,14 +1,14 @@
-from twisted.internet.defer import succeed
-from twisted.web import server
-from twisted.web.test.requesthelper import DummyRequest
-from twisted.internet.task import Clock
-
-from hathor.p2p.peer_id import PeerId
-from hathor.manager import HathorManager
-
-from tests import unittest
 import json
 import time
+
+from twisted.internet.defer import succeed
+from twisted.internet.task import Clock
+from twisted.web import server
+from twisted.web.test.requesthelper import DummyRequest
+
+from hathor.manager import HathorManager
+from hathor.p2p.peer_id import PeerId
+from tests import unittest
 
 
 class _BaseResourceTest:
@@ -30,6 +30,7 @@ class RequestBody(object):
     """
     Dummy request body object to represent content
     """
+
     def __init__(self):
         self.content = None
 

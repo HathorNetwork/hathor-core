@@ -1,8 +1,9 @@
-from twisted.web import resource
-from hathor.api_util import set_cors, render_options
-from hathor.wallet.exceptions import IncorrectPassword, InvalidWords
-
 import json
+
+from twisted.web import resource
+
+from hathor.api_util import render_options, set_cors
+from hathor.wallet.exceptions import IncorrectPassword, InvalidWords
 
 
 class UnlockWalletResource(resource.Resource):

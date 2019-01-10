@@ -1,12 +1,11 @@
-import unittest
-from hathor.p2p.peer_id import PeerId, InvalidPeerIdException
-
-from hathor.p2p.peer_storage import PeerStorage
-
-import tempfile
-import shutil
-import os
 import json
+import os
+import shutil
+import tempfile
+import unittest
+
+from hathor.p2p.peer_id import InvalidPeerIdException, PeerId
+from hathor.p2p.peer_storage import PeerStorage
 
 
 class PeerIdTest(unittest.TestCase):

@@ -3,7 +3,7 @@
 import json
 from telnetlib import Telnet  # Quick hack to talk to Hathor node
 
-from flask import flash, Flask, render_template
+from flask import Flask, flash, render_template
 
 from hathor.p2p.peer_id import PeerId
 

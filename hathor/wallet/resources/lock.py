@@ -1,7 +1,8 @@
-from twisted.web import resource
-from hathor.api_util import set_cors, render_options
-
 import json
+
+from twisted.web import resource
+
+from hathor.api_util import render_options, set_cors
 
 
 class LockWalletResource(resource.Resource):

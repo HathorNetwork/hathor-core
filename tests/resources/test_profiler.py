@@ -1,10 +1,12 @@
-from hathor.resources import ProfilerResource
-from twisted.internet.defer import inlineCallbacks
-from tests.resources.base_resource import StubSite, _BaseResourceTest
-import tempfile
 import os
-import shutil
 import re
+import shutil
+import tempfile
+
+from twisted.internet.defer import inlineCallbacks
+
+from hathor.resources import ProfilerResource
+from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
 class ProfilerTest(_BaseResourceTest._ResourceTest):

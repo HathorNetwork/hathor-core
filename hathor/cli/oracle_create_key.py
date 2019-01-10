@@ -1,10 +1,10 @@
 import argparse
 import base64
 
-from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import ec
 
-from hathor.crypto.util import get_private_key_bytes, get_public_key_bytes_compressed, get_hash160
+from hathor.crypto.util import get_hash160, get_private_key_bytes, get_public_key_bytes_compressed
 
 
 def main():

@@ -1,12 +1,12 @@
-from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.transaction.transaction_metadata import TransactionMetadata
-from hathor.util import deprecated, skip_warning
-
+import base64
 import json
 import os
 import re
-import base64
+
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
+from hathor.transaction.transaction_metadata import TransactionMetadata
+from hathor.util import deprecated, skip_warning
 
 
 class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
@@ -14,6 +14,7 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
 
     It also uses JSON format. Saved file is of format {'tx': {...}, 'meta': {...}}
     """
+
     def __init__(self, path='./', with_index=True):
         os.makedirs(path, exist_ok=True)
         self.path = path

@@ -1,37 +1,21 @@
-# encoding: utf-8
-
-from twisted.internet import reactor
-from twisted.web import server
-from twisted.logger import FileLogObserver, formatEventAsClassicLogText
-from twisted.logger import globalLogPublisher, FilteringLogObserver, LogLevelFilterPredicate, LogLevel
-from twisted.web.resource import Resource
-from autobahn.twisted.resource import WebSocketResource
-
-from hathor.p2p.peer_id import PeerId
-from hathor.p2p.resources import StatusResource, MiningResource
-from hathor.manager import HathorManager
-from hathor.transaction.storage import TransactionCompactStorage, TransactionMemoryStorage, TransactionCacheStorage
-from hathor.wallet.resources import BalanceResource, HistoryResource, AddressResource, \
-                                    SendTokensResource, UnlockWalletResource, \
-                                    LockWalletResource, StateWalletResource, SignTxResource
-from hathor.wallet.resources.nano_contracts import NanoContractMatchValueResource, NanoContractDecodeResource, \
-                                                   NanoContractExecuteResource
-from hathor.resources import ProfilerResource
-from hathor.version_resource import VersionResource
-from hathor.wallet import Wallet, HDWallet
-from hathor.transaction.resources import DecodeTxResource, PushTxResource, GraphvizResource, \
-                                        TransactionResource, DashboardTransactionResource, \
-                                        TipsHistogramResource, TipsResource
-from hathor.websocket import HathorAdminWebsocketFactory
-from hathor.p2p.peer_discovery import DNSPeerDiscovery, BootstrapPeerDiscovery
-from hathor.prometheus import PrometheusMetricsExporter
-import hathor
-
 import argparse
 import getpass
-import sys
 import json
 import os
+import sys
+
+from autobahn.twisted.resource import WebSocketResource
+from twisted.internet import reactor
+from twisted.logger import (
+    FileLogObserver,
+    FilteringLogObserver,
+    LogLevel,
+    LogLevelFilterPredicate,
+    formatEventAsClassicLogText,
+    globalLogPublisher,
+)
+from twisted.web import server
+from twisted.web.resource import Resource
 
 
 def formatLogEvent(event):
@@ -39,6 +23,42 @@ def formatLogEvent(event):
 
 
 def main():
+    import hathor
+    from hathor.manager import HathorManager
+    from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
+    from hathor.p2p.peer_id import PeerId
+    from hathor.p2p.resources import MiningResource, StatusResource
+    from hathor.prometheus import PrometheusMetricsExporter
+    from hathor.resources import ProfilerResource
+    from hathor.transaction.resources import (
+        DashboardTransactionResource,
+        DecodeTxResource,
+        GraphvizResource,
+        PushTxResource,
+        TipsHistogramResource,
+        TipsResource,
+        TransactionResource,
+    )
+    from hathor.transaction.storage import TransactionCacheStorage, TransactionCompactStorage, TransactionMemoryStorage
+    from hathor.version_resource import VersionResource
+    from hathor.wallet import HDWallet, Wallet
+    from hathor.wallet.resources import (
+        AddressResource,
+        BalanceResource,
+        HistoryResource,
+        LockWalletResource,
+        SendTokensResource,
+        SignTxResource,
+        StateWalletResource,
+        UnlockWalletResource,
+    )
+    from hathor.wallet.resources.nano_contracts import (
+        NanoContractDecodeResource,
+        NanoContractExecuteResource,
+        NanoContractMatchValueResource,
+    )
+    from hathor.websocket import HathorAdminWebsocketFactory
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
     parser.add_argument('--testnet', action='store_true', help='Connect to Hathor testnet')
@@ -49,11 +69,8 @@ def main():
     parser.add_argument('--bootstrap', action='append', help='Address to connect to (eg: tcp:127.0.0.1:8000')
     parser.add_argument('--status', type=int, help='Port to run status server')
     parser.add_argument('--data', help='Data directory')
-    parser.add_argument(
-        '--wallet',
-        help='Set wallet type. Options are hd (Hierarchical Deterministic) or keypair',
-        default='hd'
-    )
+    parser.add_argument('--wallet', help='Set wallet type. Options are hd (Hierarchical Deterministic) or keypair',
+                        default='hd')
     parser.add_argument('--words', help='Words used to generate the seed for HD Wallet')
     parser.add_argument('--passphrase', action='store_true', help='Passphrase used to generate the seed for HD Wallet')
     parser.add_argument('--unlock-wallet', action='store_true', help='Ask for password to unlock wallet')
@@ -123,8 +140,8 @@ def main():
                 tx_storage.capacity = args.cache_size
             if args.cache_interval:
                 tx_storage.interval = args.cache_interval
-            print('Using TransactionCacheStorage, capacity {}, interval {}s'
-                  .format(tx_storage.capacity, tx_storage.interval))
+            print('Using TransactionCacheStorage, capacity {}, interval {}s'.format(
+                tx_storage.capacity, tx_storage.interval))
             tx_storage.start()
     else:
         # if using MemoryStorage, no need to have cache
@@ -134,8 +151,8 @@ def main():
     wallet = create_wallet()
 
     network = 'testnet'
-    manager = HathorManager(reactor, peer_id=peer_id, network=network,
-                            hostname=args.hostname, tx_storage=tx_storage, wallet=wallet)
+    manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=args.hostname, tx_storage=tx_storage,
+                            wallet=wallet)
 
     dns_hosts = []
     if args.testnet:

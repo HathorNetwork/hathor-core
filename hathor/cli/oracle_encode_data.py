@@ -2,8 +2,8 @@ import argparse
 import base64
 import struct
 
-from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
 
 from hathor.crypto.util import get_private_key_from_bytes
 

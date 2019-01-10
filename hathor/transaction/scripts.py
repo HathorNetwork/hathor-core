@@ -1,32 +1,55 @@
-from enum import IntEnum
-from collections import namedtuple
-import struct
-import hashlib
-import re
 import base64
 import datetime
-
-from twisted.logger import Logger
-
-from hathor.constants import P2PKH_VERSION_BYTE, MULTISIG_VERSION_BYTE
+import hashlib
+import re
+import struct
+from enum import IntEnum
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Pattern, Type, Union
 
 from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+from twisted.logger import Logger
 
-from hathor.crypto.util import get_hash160, get_public_key_from_bytes_compressed, get_address_b58_from_bytes, \
-                                get_address_b58_from_public_key_hash, get_address_b58_from_redeem_script_hash
+from hathor.constants import MULTISIG_VERSION_BYTE, P2PKH_VERSION_BYTE
+from hathor.crypto.util import (
+    get_address_b58_from_bytes,
+    get_address_b58_from_public_key_hash,
+    get_address_b58_from_redeem_script_hash,
+    get_hash160,
+    get_public_key_from_bytes_compressed,
+)
+from hathor.transaction import BaseTransaction, Transaction, TxInput
+from hathor.transaction.base_transaction import Input
+from hathor.transaction.exceptions import (
+    DataIndexError,
+    EqualVerifyFailed,
+    FinalStackInvalid,
+    InvalidStackData,
+    MissingStackItems,
+    OracleChecksigFailed,
+    OutOfData,
+    ScriptError,
+    TimeLocked,
+    VerifyFailed,
+)
 
-from hathor.transaction.exceptions import ScriptError, OutOfData, MissingStackItems, \
-                                          EqualVerifyFailed, FinalStackInvalid, TimeLocked, \
-                                          OracleChecksigFailed, DataIndexError, VerifyFailed, \
-                                          InvalidStackData
+# XXX: Because the Stack is a heterogeneous list of bytes and int, and some OPs only work for when the stack has some
+#      or the other type, there are many places that require an assert to prevent the wrong type from being used,
+#      alternatives include: 1. only using `List[bytes]` and operations that work on `int` to build them from `bytes`,
+#      2. using `bytearray` instead of `List[...]` and using type codes on the stack or at least value sizes on the
+#      stack and OPs should use the extra info accordingly 3. using some "in stack error" at least custom exceptions
+#      for signaling that an OP was applied on a wrongly typed stack.
+Stack = List[Union[bytes, int, str]]
 
 
-ScriptExtras = namedtuple('ScriptExtras', 'tx txin spent_tx')
+class ScriptExtras(NamedTuple):
+    tx: Transaction
+    txin: TxInput
+    spent_tx: BaseTransaction
 
 
-def re_compile(pattern):
+def re_compile(pattern: str) -> Pattern[bytes]:
     """ Transform a given script pattern into a regular expression.
 
     The script pattern is like a regular expression, but you may include five
@@ -46,6 +69,7 @@ def re_compile(pattern):
     :return: A compiled regular expression matcher
     :rtype: :py:class:`re.Pattern`
     """
+
     def _to_byte_pattern(m):
         x = m.group().decode('ascii').strip()
         if x.startswith('OP_'):
@@ -74,21 +98,12 @@ def _re_pushdata(length):
     :return: A non-compiled regular expression
     :rtype: bytes
     """
-    p1 = [
-        bytes([Opcode.OP_PUSHDATA1]),
-        b'.{',
-        str(length + 1).encode('ascii'),
-        b'}'
-    ]
+    p1 = [bytes([Opcode.OP_PUSHDATA1]), b'.{', str(length + 1).encode('ascii'), b'}']
 
     if length >= 75:
         ret = p1
     else:
-        p2 = [
-            b'[\0-\75].{',
-            str(length).encode('ascii'),
-            b'}'
-        ]
+        p2 = [b'[\0-\75].{', str(length).encode('ascii'), b'}']
         ret = [
             b'(?:(?:',
             b''.join(p1),
@@ -146,13 +161,13 @@ class HathorScript:
     """
     log = Logger()
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.data = b''
 
-    def addOpcode(self, opcode):
+    def addOpcode(self, opcode: Opcode) -> None:
         self.data += bytes([opcode])
 
-    def pushData(self, data):
+    def pushData(self, data: bytes) -> None:
         if isinstance(data, int):
             if data > 4294967295:
                 n = struct.pack('!Q', data)
@@ -170,12 +185,10 @@ class HathorScript:
 
 
 class P2PKH:
-    re_match = re_compile(
-        '^(?:(DATA_4) OP_GREATERTHAN_TIMESTAMP)? '
-        'OP_DUP OP_HASH160 (DATA_20) OP_EQUALVERIFY OP_CHECKSIG$'
-    )
+    re_match = re_compile('^(?:(DATA_4) OP_GREATERTHAN_TIMESTAMP)? '
+                          'OP_DUP OP_HASH160 (DATA_20) OP_EQUALVERIFY OP_CHECKSIG$')
 
-    def __init__(self, address, timelock=None):
+    def __init__(self, address: str, timelock: Optional[Any] = None) -> None:
         """This class represents the pay to public hash key script. It enables the person
         who has the corresponding private key of the address to spend the tokens.
 
@@ -204,7 +217,7 @@ class P2PKH:
         return ret
 
     @classmethod
-    def create_output_script(cls, address, timelock=None):
+    def create_output_script(cls, address: bytes, timelock: Optional[Any] = None) -> bytes:
         """
         :param address: address to send tokens
         :type address: bytes
@@ -228,7 +241,7 @@ class P2PKH:
         return s.data
 
     @classmethod
-    def create_input_data(cls, public_key_bytes, signature):
+    def create_input_data(cls, public_key_bytes: bytes, signature: bytes) -> bytes:
         """
         :param private_key: key corresponding to the address we want to spend tokens from
         :type private_key: :py:class:`cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey`
@@ -241,7 +254,7 @@ class P2PKH:
         return s.data
 
     @classmethod
-    def parse_script(cls, script):
+    def parse_script(cls, script: bytes) -> Optional['P2PKH']:
         """Checks if the given script is of type p2pkh. If it is, returns the P2PKH object.
         Otherwise, returns None.
 
@@ -265,13 +278,11 @@ class P2PKH:
         return None
 
 
+# TODO: `IAddress` class for defining the common interface of `Union[MultiSig, P2PKH]`
 class MultiSig:
-    re_match = re_compile(
-        '^(?:(DATA_4) OP_GREATERTHAN_TIMESTAMP)? '
-        'OP_HASH160 (DATA_20) OP_EQUAL$'
-    )
+    re_match = re_compile('^(?:(DATA_4) OP_GREATERTHAN_TIMESTAMP)? ' 'OP_HASH160 (DATA_20) OP_EQUAL$')
 
-    def __init__(self, address, timelock=None):
+    def __init__(self, address: str, timelock: Optional[Any] = None) -> None:
         """This class represents the multi signature script (MultiSig). It enables the group of persons
         who has the corresponding private keys of the address to spend the tokens.
 
@@ -304,7 +315,7 @@ class MultiSig:
         return ret
 
     @classmethod
-    def create_output_script(cls, address, timelock=None):
+    def create_output_script(cls, address: bytes, timelock: Optional[Any] = None) -> bytes:
         """
         :param address: address to send tokens
         :type address: bytes
@@ -326,7 +337,7 @@ class MultiSig:
         return s.data
 
     @classmethod
-    def create_input_data(cls, redeem_script, signatures):
+    def create_input_data(cls, redeem_script: bytes, signatures: List[bytes]) -> bytes:
         """
         :param redeem_script: script to redeem the tokens: <M> <pubkey1> ... <pubkeyN> <N> <OP_CHECKMULTISIG>
         :type redeem_script: bytes
@@ -343,7 +354,7 @@ class MultiSig:
         return s.data
 
     @classmethod
-    def parse_script(cls, script):
+    def parse_script(cls, script: bytes) -> Optional['MultiSig']:
         """Checks if the given script is of type multisig. If it is, returns the MultiSig object.
         Otherwise, returns None.
 
@@ -370,7 +381,7 @@ class MultiSig:
         return None
 
     @classmethod
-    def get_multisig_data(cls, input_data):
+    def get_multisig_data(cls, input_data: bytes) -> bytes:
         """ Input data has many signatures and a block with the redeem script
             In the second part of the script eval we need to evaluate the redeem script
             so we need to get the redeem script without the block, to evaluate the elements on it
@@ -386,7 +397,7 @@ class MultiSig:
         """
         pos = 0
         last_pos = 0
-        stack = []
+        stack: Stack = []
         data_len = len(input_data)
         while pos < data_len:
             last_pos = pos
@@ -397,17 +408,15 @@ class MultiSig:
                 pos = op_pushdata1(pos, input_data, stack)
 
         redeem_script = stack[-1]
+        assert isinstance(redeem_script, bytes)
         return input_data[:last_pos] + redeem_script
 
 
 class NanoContractMatchValues:
-    re_match = re_compile(
-        '^OP_DUP OP_HASH160 (DATA_20) OP_EQUALVERIFY OP_CHECKDATASIG OP_0 (BLOCK) OP_DATA_STREQUAL '
-        'OP_1 (NUMBER) OP_DATA_GREATERTHAN OP_2 (BLOCK) OP_DATA_MATCH_VALUE OP_FIND_P2PKH$'
-    )
+    re_match = re_compile('^OP_DUP OP_HASH160 (DATA_20) OP_EQUALVERIFY OP_CHECKDATASIG OP_0 (BLOCK) OP_DATA_STREQUAL '
+                          'OP_1 (NUMBER) OP_DATA_GREATERTHAN OP_2 (BLOCK) OP_DATA_MATCH_VALUE OP_FIND_P2PKH$')
 
-    def __init__(self, oracle_pubkey_hash, min_timestamp, oracle_data_id,
-                 value_dict, fallback_pubkey_hash=b'\x00'):
+    def __init__(self, oracle_pubkey_hash, min_timestamp, oracle_data_id, value_dict, fallback_pubkey_hash=b'\x00'):
         """This class represents a nano contract that tries to match on a single value. The pubKeyHash
         associated with the data given by the oracle will be able to spend the contract tokens.
 
@@ -432,7 +441,7 @@ class NanoContractMatchValues:
         self.oracle_pubkey_hash = oracle_pubkey_hash
         self.min_timestamp = min_timestamp
         self.oracle_data_id = oracle_data_id
-        self.value_dict = value_dict            # Dict[bytes, int]
+        self.value_dict = value_dict  # Dict[bytes, int]
         self.fallback_pubkey_hash = fallback_pubkey_hash
 
     def to_human_readable(self):
@@ -441,9 +450,7 @@ class NanoContractMatchValues:
         ret['oracle_pubkey_hash'] = base64.b64encode(self.oracle_pubkey_hash).decode('utf-8')
         ret['min_timestamp'] = self.min_timestamp
         ret['oracle_data_id'] = self.oracle_data_id.decode('utf-8')
-        ret['value_dict'] = {
-            get_address_b58_from_bytes(k): v for k, v in self.value_dict.items()
-        }
+        ret['value_dict'] = {get_address_b58_from_bytes(k): v for k, v in self.value_dict.items()}
         try:
             if len(self.fallback_pubkey_hash) == 1:
                 ret['fallback_pubkey_hash'] = None
@@ -567,12 +574,12 @@ class NanoContractMatchValues:
                 # shouldn't have data left
                 return None
 
-            return NanoContractMatchValues(oracle_pubkey_hash, min_timestamp, oracle_data_id,
-                                           value_dict, fallback_pubkey)
+            return NanoContractMatchValues(oracle_pubkey_hash, min_timestamp, oracle_data_id, value_dict,
+                                           fallback_pubkey)
         return None
 
 
-def create_output_script(address, timelock=None):
+def create_output_script(address: bytes, timelock: Optional[Any] = None) -> bytes:
     """ Verifies if address is P2PKH or Multisig and create correct output script
 
         :param address: address to send tokens
@@ -593,7 +600,7 @@ def create_output_script(address, timelock=None):
         raise ScriptError('The address is not valid')
 
 
-def parse_address_script(script):
+def parse_address_script(script: bytes) -> Optional[Union[P2PKH, MultiSig]]:
     """ Verifies if address is P2PKH or Multisig and calls correct parse_script method
 
         :param script: script to decode
@@ -602,7 +609,7 @@ def parse_address_script(script):
         :return: P2PKH or MultiSig class or None
         :rtype: class or None
     """
-    script_classes = [P2PKH, MultiSig]
+    script_classes: List[Type[Union[P2PKH, MultiSig]]] = [P2PKH, MultiSig]
     # Each class verifies its script
     for script_class in script_classes:
         if script_class.re_match.search(script):
@@ -610,7 +617,7 @@ def parse_address_script(script):
     return None
 
 
-def execute_eval(data, log, extras):
+def execute_eval(data: bytes, log: List[str], extras: ScriptExtras) -> None:
     """ Execute eval from data executing opcode methods
 
         :param data: data to be evaluate that contains data and opcodes
@@ -625,7 +632,7 @@ def execute_eval(data, log, extras):
         :raises ScriptError: case opcode is not found
         :raises FinalStackInvalid: case the evaluation fails
     """
-    stack = []
+    stack: Stack = []
     data_len = len(data)
     pos = 0
     while pos < data_len:
@@ -658,7 +665,7 @@ def execute_eval(data, log, extras):
             raise FinalStackInvalid('\n'.join(log))
 
 
-def script_eval(tx, txin, spent_tx):
+def script_eval(tx: Transaction, txin: Input, spent_tx: BaseTransaction) -> None:
     """Evaluates the output script and input data according to
     a very limited subset of Bitcoin's scripting language.
 
@@ -678,7 +685,7 @@ def script_eval(tx, txin, spent_tx):
 
     # merge input_data and output_script
     full_data = input_data + output_script
-    log = []
+    log: List[str] = []
     extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
     execute_eval(full_data, log, extras)
 
@@ -690,14 +697,14 @@ def script_eval(tx, txin, spent_tx):
         execute_eval(multisig_data, log, extras)
 
 
-def get_pushdata(data):
+def get_pushdata(data: bytes) -> bytes:
     if data[0] > 75:
         return data[2:]
     else:
         return data[1:]
 
 
-def get_data_value(k, data):
+def get_data_value(k: int, data: bytes) -> bytes:
     """Extracts the kth value from data.
 
     data should be in the format value0:value1:value2:...:valueN. This last representation
@@ -725,9 +732,8 @@ def get_data_value(k, data):
             pass
         position += 1
         if (position + length) > len(data):
-            raise OutOfData('trying to read {} bytes starting at {}, available {}'
-                            .format(length, position, len(data)))
-        value = data[position:position+length]
+            raise OutOfData('trying to read {} bytes starting at {}, available {}'.format(length, position, len(data)))
+        value = data[position:position + length]
         if iteration == k:
             return value
         iteration += 1
@@ -735,7 +741,7 @@ def get_data_value(k, data):
     raise DataIndexError
 
 
-def binary_to_int(binary):
+def binary_to_int(binary: bytes) -> int:
     """Receives a binary and transforms it to an integer
 
     :param binary: value to convert
@@ -756,7 +762,7 @@ def binary_to_int(binary):
     return value
 
 
-def op_pushdata(position, full_data, stack):
+def op_pushdata(position: int, full_data: bytes, stack: Stack) -> int:
     """Pushes to stack when data is up to 75 bytes
 
     :param position: current position we're reading from full_data
@@ -777,13 +783,13 @@ def op_pushdata(position, full_data, stack):
     assert length <= 75
     position += 1
     if (position + length) > len(full_data):
-        raise OutOfData('trying to read {} bytes starting at {}, available {}'
-                        .format(length, position, len(full_data)))
-    stack.append(full_data[position:position+length])
+        raise OutOfData('trying to read {} bytes starting at {}, available {}'.format(
+            length, position, len(full_data)))
+    stack.append(full_data[position:position + length])
     return position + length
 
 
-def op_pushdata1(position, full_data, stack):
+def op_pushdata1(position: int, full_data: bytes, stack: Stack) -> int:
     """Pushes data to stack; next byte contains number of bytes to be pushed
 
     :param position: current position we're reading from full_data
@@ -809,11 +815,11 @@ def op_pushdata1(position, full_data, stack):
     if (position + length) >= data_len:
         raise OutOfData('trying to read {} bytes starting at {}, available {}'.format(length, position, data_len))
     position += 1
-    stack.append(full_data[position:position+length])
+    stack.append(full_data[position:position + length])
     return position + length
 
 
-def op_dup(stack, log, extras):
+def op_dup(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     """Duplicates item on top of stack
 
     :param stack: the stack used when evaluating the script
@@ -826,7 +832,7 @@ def op_dup(stack, log, extras):
     stack.append(stack[-1])
 
 
-def op_greaterthan_timestamp(stack, log, extras):
+def op_greaterthan_timestamp(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     """Check whether transaction's timestamp is greater than the top of stack
 
     The top of stack must be a big-endian u32int.
@@ -839,16 +845,14 @@ def op_greaterthan_timestamp(stack, log, extras):
     if not len(stack):
         raise MissingStackItems('OP_GREATERTHAN_TIMESTAMP: empty stack')
     buf = stack.pop()
+    assert isinstance(buf, bytes)
     (timelock,) = struct.unpack('!I', buf)
     if extras.tx.timestamp <= timelock:
-        raise TimeLocked(
-            'The output is locked until {}'.format(
-                datetime.datetime.fromtimestamp(timelock).strftime("%m/%d/%Y %I:%M:%S %p")
-            )
-        )
+        raise TimeLocked('The output is locked until {}'.format(
+            datetime.datetime.fromtimestamp(timelock).strftime("%m/%d/%Y %I:%M:%S %p")))
 
 
-def op_equalverify(stack, log, extras):
+def op_equalverify(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     """Verifies top 2 elements from stack are equal
 
     :param stack: the stack used when evaluating the script
@@ -863,7 +867,7 @@ def op_equalverify(stack, log, extras):
         raise EqualVerifyFailed('Failed to verify if elements are equal')
 
 
-def op_equal(stack, log, extras):
+def op_equal(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     """Verifies top 2 elements from stack are equal
 
     In case they are the same, we push 1 to the stack and push 0 if they are different
@@ -875,6 +879,8 @@ def op_equal(stack, log, extras):
         raise MissingStackItems('OP_EQUALVERIFY: need 2 elements on stack, currently {}')
     elem1 = stack.pop()
     elem2 = stack.pop()
+    assert isinstance(elem1, bytes)
+    assert isinstance(elem2, bytes)
     if elem1 == elem2:
         stack.append(1)
     else:
@@ -882,7 +888,7 @@ def op_equal(stack, log, extras):
         log.append('OP_EQUAL: failed. elements: {} {}'.format(elem1.hex(), elem2.hex()))
 
 
-def op_checksig(stack, log, extras):
+def op_checksig(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     """Verifies public key and signature match. Expects public key to be on top of stack, followed
     by signature. If they match, put 1 on stack (meaning True); otherwise, push 0 (False)
 
@@ -898,6 +904,8 @@ def op_checksig(stack, log, extras):
         raise MissingStackItems('OP_CHECKSIG: need 2 elements on stack, currently {}'.format(len(stack)))
     pubkey = stack.pop()
     signature = stack.pop()
+    assert isinstance(pubkey, bytes)
+    assert isinstance(signature, bytes)
     public_key = get_public_key_from_bytes_compressed(pubkey)
     data_to_sign = extras.tx.get_sighash_all()
     hashed_data = hashlib.sha256(data_to_sign).digest()
@@ -911,7 +919,7 @@ def op_checksig(stack, log, extras):
         log.append('OP_CHECKSIG: failed')
 
 
-def op_hash160(stack, log, extras):
+def op_hash160(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     """Top stack item is hashed twice: first with SHA-256 and then with RIPEMD-160.
     Result is pushed back to stack.
 
@@ -923,11 +931,12 @@ def op_hash160(stack, log, extras):
     if not len(stack):
         raise MissingStackItems('OP_HASH160: empty stack')
     elem1 = stack.pop()
+    assert isinstance(elem1, bytes)
     new_elem = get_hash160(elem1)
     stack.append(new_elem)
 
 
-def op_checkdatasig(stack, log, extras):
+def op_checkdatasig(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     """Verifies public key, signature and data match. Expects public key to be on top of stack, followed
     by signature and data. If they match, put data on stack; otherwise, fail.
 
@@ -942,6 +951,9 @@ def op_checkdatasig(stack, log, extras):
     pubkey = stack.pop()
     signature = stack.pop()
     data = stack.pop()
+    assert isinstance(pubkey, bytes)
+    assert isinstance(signature, bytes)
+    assert isinstance(data, bytes)
     public_key = get_public_key_from_bytes_compressed(pubkey)
     try:
         public_key.verify(signature, data, ec.ECDSA(hashes.SHA256()))
@@ -951,7 +963,7 @@ def op_checkdatasig(stack, log, extras):
         raise OracleChecksigFailed from e
 
 
-def op_data_strequal(stack, log, extras):
+def op_data_strequal(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     """Equivalent to an OP_GET_DATA_STR followed by an OP_EQUALVERIFY.
 
     Consumes three parameters from stack: <data> <k> <value>. Gets the kth value
@@ -969,6 +981,8 @@ def op_data_strequal(stack, log, extras):
     value = stack.pop()
     data_k = stack.pop()
     data = stack.pop()
+    assert isinstance(value, bytes)
+    assert isinstance(data, bytes)
 
     if not isinstance(data_k, int):
         raise VerifyFailed('OP_DATA_STREQUAL: value on stack should be an integer ({})'.format(data_k))
@@ -980,7 +994,7 @@ def op_data_strequal(stack, log, extras):
     stack.append(data)
 
 
-def op_data_greaterthan(stack, log, extras):
+def op_data_greaterthan(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     """Equivalent to an OP_GET_DATA_INT followed by an OP_GREATERTHAN.
 
     Consumes three parameters from stack: <data> <k> <n>. Gets the kth value
@@ -997,6 +1011,8 @@ def op_data_greaterthan(stack, log, extras):
     value = stack.pop()
     data_k = stack.pop()
     data = stack.pop()
+    assert isinstance(value, bytes)
+    assert isinstance(data, bytes)
 
     if not isinstance(data_k, int):
         raise VerifyFailed('OP_DATA_STREQUAL: value on stack should be an integer ({})'.format(data_k))
@@ -1014,7 +1030,7 @@ def op_data_greaterthan(stack, log, extras):
     stack.append(data)
 
 
-def op_data_match_interval(stack, log, extras):
+def op_data_match_interval(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     """Equivalent to an OP_GET_DATA_INT followed by an OP_MATCH_INTERVAL.
 
     :param stack: the stack used when evaluating the script
@@ -1026,19 +1042,24 @@ def op_data_match_interval(stack, log, extras):
     if len(stack) < 1:
         raise MissingStackItems('OP_DATA_MATCH_INTERVAL: stack is empty')
 
-    # TODO test this is actually bytes and can transform in integer
-    n_items = stack.pop()[0]
+    data_n_items = stack.pop()
+    assert isinstance(data_n_items, bytes)
+    # TODO test this can be transformed to integer
+    n_items = data_n_items[0]
+
     # number of items in stack that will be used
-    will_use = 2 * n_items + 3      # n data_points, n + 1 pubkeys, k and data
+    will_use = 2 * n_items + 3  # n data_points, n + 1 pubkeys, k and data
     if len(stack) < will_use:
-        raise MissingStackItems('OP_DATA_MATCH_INTERVAL: need {} elements on stack, currently {}'
-                                .format(will_use, len(stack)))
+        raise MissingStackItems('OP_DATA_MATCH_INTERVAL: need {} elements on stack, currently {}'.format(
+            will_use, len(stack)))
 
     items = []
     try:
         for _ in range(n_items):
             pubkey = stack.pop()
             buf = stack.pop()
+            assert isinstance(pubkey, (str, bytes))
+            assert isinstance(buf, bytes)
             value = binary_to_int(buf)
             items.append((value, pubkey))
         # one pubkey is left on stack
@@ -1046,6 +1067,8 @@ def op_data_match_interval(stack, log, extras):
         # next two items are data index and data
         data_k = stack.pop()
         data = stack.pop()
+        assert isinstance(data_k, int)
+        assert isinstance(data, bytes)
         data_value = get_data_value(data_k, data)
         data_int = binary_to_int(data_value)
     except (ValueError, struct.error) as e:
@@ -1059,7 +1082,7 @@ def op_data_match_interval(stack, log, extras):
     stack.append(last_pubkey)
 
 
-def op_data_match_value(stack, log, extras):
+def op_data_match_value(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     """Equivalent to an OP_GET_DATA_STR followed by an OP_MATCH_VALUE.
 
     :param stack: the stack used when evaluating the script
@@ -1071,20 +1094,24 @@ def op_data_match_value(stack, log, extras):
     if len(stack) < 1:
         raise MissingStackItems('OP_DATA_MATCH_VALUE: empty stack')
 
-    # TODO test this is actually bytes and can transform in integer
-    n_items = stack.pop()[0]
+    data_n_items = stack.pop()
+    assert isinstance(data_n_items, bytes)
+    # TODO test this can be transformed to integer
+    n_items = data_n_items[0]
 
     # number of items in stack that will be used
-    will_use = 2 * n_items + 3      # n data_points, n + 1 keys, k and data
+    will_use = 2 * n_items + 3  # n data_points, n + 1 keys, k and data
     if len(stack) < will_use:
-        raise MissingStackItems('OP_DATA_MATCH_VALUE: need {} elements on stack, currently {}'
-                                .format(will_use, len(stack)))
+        raise MissingStackItems('OP_DATA_MATCH_VALUE: need {} elements on stack, currently {}'.format(
+            will_use, len(stack)))
 
     items = {}
     try:
         for _ in range(n_items):
             pubkey = stack.pop()
             buf = stack.pop()
+            assert isinstance(pubkey, (str, bytes))
+            assert isinstance(buf, bytes)
             value = binary_to_int(buf)
             items[value] = pubkey
     except (ValueError, struct.error) as e:
@@ -1095,13 +1122,16 @@ def op_data_match_value(stack, log, extras):
     # next two items are data index and data
     data_k = stack.pop()
     data = stack.pop()
+    assert isinstance(data_k, int)
+    assert isinstance(data, bytes)
     data_value = get_data_value(data_k, data)
     data_int = binary_to_int(data_value)
     winner_pubkey = items.get(data_int, last_pubkey)
+    assert isinstance(winner_pubkey, (str, bytes))
     stack.append(winner_pubkey)
 
 
-def op_find_p2pkh(stack, log, extras):
+def op_find_p2pkh(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     """Checks whether the current transaction has an output with a P2PKH script with
     the given public key hash and the same amount as the input.
 
@@ -1137,7 +1167,7 @@ def op_find_p2pkh(stack, log, extras):
     raise VerifyFailed
 
 
-def op_checkmultisig(stack, log, extras):
+def op_checkmultisig(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     """Checks if it has the minimum signatures required and if all of them are valid
 
     :param stack: the stack used when evaluating the script
@@ -1193,7 +1223,7 @@ def op_checkmultisig(stack, log, extras):
             op_checksig(new_stack, log, extras)
             result = new_stack.pop()
             if result == 1:
-                pubkeys = pubkeys[index+1:]
+                pubkeys = pubkeys[index + 1:]
                 valid = True
                 break
 
@@ -1206,7 +1236,7 @@ def op_checkmultisig(stack, log, extras):
     stack.append(1)
 
 
-def op_integer(opcode, stack, log, extras):
+def op_integer(opcode: int, stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     """ Appends an integer to the stack
         We get the opcode comparing to all integers opcodes
 
@@ -1226,7 +1256,7 @@ def op_integer(opcode, stack, log, extras):
     stack.append(to_append)
 
 
-MAP_OPCODE_TO_FN = {
+MAP_OPCODE_TO_FN: Dict[int, Callable] = {
     Opcode.OP_DUP: op_dup,
     Opcode.OP_EQUAL: op_equal,
     Opcode.OP_EQUALVERIFY: op_equalverify,

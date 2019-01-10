@@ -1,22 +1,33 @@
-from tests import unittest
-import os
-import json
 import base64
 import hashlib
-from hathor.wallet import Wallet
-from hathor.transaction import Transaction, Block, TxInput, TxOutput, MAX_NUM_INPUTS, MAX_NUM_OUTPUTS
-from hathor.transaction.storage import TransactionMemoryStorage
-from hathor.transaction.exceptions import InputOutputMismatch, TooManyInputs, TooManyOutputs, ConflictingInputs, \
-                                          InvalidInputData, BlockWithInputs, IncorrectParents, InexistentInput, \
-                                          DuplicatedParents, ParentDoesNotExist, PowError, TimestampError, \
-                                          BlockHeightError
-from hathor.transaction.scripts import P2PKH
-from hathor.crypto.util import get_private_key_from_bytes, get_public_key_from_bytes, get_address_from_public_key
-from tests.utils import add_new_blocks, add_new_transactions
+import json
+import os
+import time
 
 from twisted.internet.task import Clock
 
-import time
+from hathor.crypto.util import get_address_from_public_key, get_private_key_from_bytes, get_public_key_from_bytes
+from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, Block, Transaction, TxInput, TxOutput
+from hathor.transaction.exceptions import (
+    BlockHeightError,
+    BlockWithInputs,
+    ConflictingInputs,
+    DuplicatedParents,
+    IncorrectParents,
+    InexistentInput,
+    InputOutputMismatch,
+    InvalidInputData,
+    ParentDoesNotExist,
+    PowError,
+    TimestampError,
+    TooManyInputs,
+    TooManyOutputs,
+)
+from hathor.transaction.scripts import P2PKH
+from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.wallet import Wallet
+from tests import unittest
+from tests.utils import add_new_blocks, add_new_transactions
 
 
 class BasicTransaction(unittest.TestCase):
@@ -77,11 +88,7 @@ class BasicTransaction(unittest.TestCase):
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         output = TxOutput(value, script)
-        tx = Transaction(
-            inputs=[_input],
-            outputs=[output],
-            storage=self.tx_storage
-        )
+        tx = Transaction(inputs=[_input], outputs=[output], storage=self.tx_storage)
 
         data_to_sign = tx.get_sighash_all(clear_input_data=True)
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
@@ -101,11 +108,7 @@ class BasicTransaction(unittest.TestCase):
         script = P2PKH.create_output_script(address)
         output = TxOutput(value, script)
 
-        tx = Transaction(
-            inputs=[_input],
-            outputs=[output],
-            storage=self.tx_storage
-        )
+        tx = Transaction(inputs=[_input], outputs=[output], storage=self.tx_storage)
 
         data_to_sign = tx.get_sighash_all(clear_input_data=True)
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.private_key_random)
@@ -121,10 +124,7 @@ class BasicTransaction(unittest.TestCase):
         _input = TxInput(random_bytes, 0, random_bytes)
         inputs = [_input] * (MAX_NUM_INPUTS + 1)
 
-        tx = Transaction(
-            inputs=inputs,
-            storage=self.tx_storage
-        )
+        tx = Transaction(inputs=inputs, storage=self.tx_storage)
 
         with self.assertRaises(TooManyInputs):
             tx.verify_number_of_inputs()
@@ -135,10 +135,7 @@ class BasicTransaction(unittest.TestCase):
         output = TxOutput(1, random_bytes)
         outputs = [output] * (MAX_NUM_OUTPUTS + 1)
 
-        tx = Transaction(
-            outputs=outputs,
-            storage=self.tx_storage
-        )
+        tx = Transaction(outputs=outputs, storage=self.tx_storage)
 
         with self.assertRaises(TooManyOutputs):
             tx.verify_number_of_outputs()
@@ -154,13 +151,7 @@ class BasicTransaction(unittest.TestCase):
         script = P2PKH.create_output_script(address)
         output = TxOutput(value, script)
 
-        tx = Transaction(
-            nonce=100,
-            inputs=[_input],
-            outputs=[output],
-            parents=parents,
-            storage=self.tx_storage
-        )
+        tx = Transaction(nonce=100, inputs=[_input], outputs=[output], parents=parents, storage=self.tx_storage)
 
         data_to_sign = tx.get_sighash_all(clear_input_data=True)
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
@@ -191,24 +182,19 @@ class BasicTransaction(unittest.TestCase):
         parents = [tx.hash for tx in self.genesis]
         genesis_block = self.genesis_blocks[0]
 
-        tx_inputs = [
-            TxInput(genesis_block.hash, 0, b'')
-        ]
+        tx_inputs = [TxInput(genesis_block.hash, 0, b'')]
 
         address = get_address_from_public_key(self.genesis_public_key)
         output_script = P2PKH.create_output_script(address)
-        tx_outputs = [
-            TxOutput(100, output_script)
-        ]
+        tx_outputs = [TxOutput(100, output_script)]
 
         block = Block(
             nonce=100,
             outputs=tx_outputs,
             parents=parents,
-            height=genesis_block.height+1,
-            weight=1,               # low weight so we don't waste time with PoW
-            storage=self.tx_storage
-        )
+            height=genesis_block.height + 1,
+            weight=1,  # low weight so we don't waste time with PoW
+            storage=self.tx_storage)
 
         block.inputs = tx_inputs
 
@@ -232,13 +218,7 @@ class BasicTransaction(unittest.TestCase):
         output = TxOutput(value, script)
 
         parents = [self.genesis_txs[0].hash]
-        tx = Transaction(
-            weight=1,
-            inputs=[_input],
-            outputs=[output],
-            parents=parents,
-            storage=self.tx_storage
-        )
+        tx = Transaction(weight=1, inputs=[_input], outputs=[output], parents=parents, storage=self.tx_storage)
 
         data_to_sign = tx.get_sighash_all(clear_input_data=True)
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
@@ -268,9 +248,7 @@ class BasicTransaction(unittest.TestCase):
 
         address = get_address_from_public_key(self.genesis_public_key)
         output_script = P2PKH.create_output_script(address)
-        tx_outputs = [
-            TxOutput(100, output_script)
-        ]
+        tx_outputs = [TxOutput(100, output_script)]
 
         # Random unknown parent
         parents = [hashlib.sha256().digest()]
@@ -279,10 +257,9 @@ class BasicTransaction(unittest.TestCase):
             nonce=100,
             outputs=tx_outputs,
             parents=parents,
-            height=genesis_block.height+1,
-            weight=1,               # low weight so we don't waste time with PoW
-            storage=self.tx_storage
-        )
+            height=genesis_block.height + 1,
+            weight=1,  # low weight so we don't waste time with PoW
+            storage=self.tx_storage)
 
         block.resolve()
         with self.assertRaises(ParentDoesNotExist):
@@ -293,9 +270,7 @@ class BasicTransaction(unittest.TestCase):
 
         address = get_address_from_public_key(self.genesis_public_key)
         output_script = P2PKH.create_output_script(address)
-        tx_outputs = [
-            TxOutput(100, output_script)
-        ]
+        tx_outputs = [TxOutput(100, output_script)]
 
         parents = [tx.hash for tx in self.genesis_txs]
 
@@ -303,10 +278,9 @@ class BasicTransaction(unittest.TestCase):
             nonce=100,
             outputs=tx_outputs,
             parents=parents,
-            height=genesis_block.height+1,
-            weight=1,               # low weight so we don't waste time with PoW
-            storage=self.tx_storage
-        )
+            height=genesis_block.height + 1,
+            weight=1,  # low weight so we don't waste time with PoW
+            storage=self.tx_storage)
 
         block.resolve()
         with self.assertRaises(IncorrectParents):
@@ -323,13 +297,7 @@ class BasicTransaction(unittest.TestCase):
         output = TxOutput(value, script)
 
         _input = TxInput(genesis_block.hash, len(genesis_block.outputs) + 1, b'')
-        tx = Transaction(
-            weight=1,
-            inputs=[_input],
-            outputs=[output],
-            parents=parents,
-            storage=self.tx_storage
-        )
+        tx = Transaction(weight=1, inputs=[_input], outputs=[output], parents=parents, storage=self.tx_storage)
 
         data_to_sign = tx.get_sighash_all(clear_input_data=True)
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
@@ -369,13 +337,7 @@ class BasicTransaction(unittest.TestCase):
         outputs = [TxOutput(value, script), TxOutput(value, script)]
 
         _input = TxInput(genesis_block.hash, 0, b'')
-        tx = Transaction(
-            weight=1,
-            inputs=[_input, _input],
-            outputs=outputs,
-            parents=parents,
-            storage=self.tx_storage
-        )
+        tx = Transaction(weight=1, inputs=[_input, _input], outputs=outputs, parents=parents, storage=self.tx_storage)
 
         data_to_sign = tx.get_sighash_all(clear_input_data=True)
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
@@ -396,13 +358,7 @@ class BasicTransaction(unittest.TestCase):
         output = TxOutput(value, script)
 
         _input = TxInput(genesis_block.hash, 0, b'')
-        tx = Transaction(
-            weight=1,
-            inputs=[_input],
-            outputs=[output],
-            parents=parents,
-            storage=self.tx_storage
-        )
+        tx = Transaction(weight=1, inputs=[_input], outputs=[output], parents=parents, storage=self.tx_storage)
 
         data_to_sign = tx.get_sighash_all(clear_input_data=True)
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
@@ -422,13 +378,7 @@ class BasicTransaction(unittest.TestCase):
         output = TxOutput(value, script)
 
         _input = TxInput(genesis_block.hash, 0, b'')
-        tx = Transaction(
-            weight=1,
-            inputs=[_input],
-            outputs=[output],
-            parents=parents,
-            storage=self.tx_storage
-        )
+        tx = Transaction(weight=1, inputs=[_input], outputs=[output], parents=parents, storage=self.tx_storage)
 
         data_to_sign = tx.get_sighash_all(clear_input_data=True)
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
@@ -449,13 +399,8 @@ class BasicTransaction(unittest.TestCase):
 
         # update based on input
         _input = TxInput(genesis_block.hash, 0, b'')
-        tx = Transaction(
-            weight=1,
-            inputs=[_input],
-            outputs=[output],
-            parents=[p.hash for p in parents],
-            storage=self.tx_storage
-        )
+        tx = Transaction(weight=1, inputs=[_input], outputs=[output], parents=[p.hash for p in parents],
+                         storage=self.tx_storage)
 
         input_timestamp = genesis_block.timestamp
 

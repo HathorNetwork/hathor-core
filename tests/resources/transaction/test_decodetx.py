@@ -1,7 +1,8 @@
-from hathor.transaction.resources import DecodeTxResource
 from twisted.internet.defer import inlineCallbacks
-from tests.resources.base_resource import StubSite, _BaseResourceTest
+
 from hathor.transaction.genesis import genesis_transactions
+from hathor.transaction.resources import DecodeTxResource
+from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
 class DecodeTxTest(_BaseResourceTest._ResourceTest):

@@ -1,8 +1,11 @@
-from twisted.web import resource
-from hathor.api_util import set_cors, render_options
-
 import json
 import os
+
+from twisted.web import resource
+
+from hathor.api_util import render_options, set_cors
+from hathor.manager import HathorManager
+from tests.resources.base_resource import TestDummyRequest
 
 
 class ProfilerResource(resource.Resource):
@@ -12,7 +15,7 @@ class ProfilerResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: HathorManager) -> None:
         # Important to have the manager so we can know the wallet
         self.manager = manager
 
@@ -57,5 +60,5 @@ class ProfilerResource(resource.Resource):
 
         return json.dumps(ret, indent=4).encode('utf-8')
 
-    def render_OPTIONS(self, request):
+    def render_OPTIONS(self, request: TestDummyRequest) -> int:
         return render_options(request)

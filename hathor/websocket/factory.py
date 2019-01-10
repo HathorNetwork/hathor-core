@@ -1,11 +1,13 @@
-from hathor.pubsub import HathorEvents
-from hathor.websocket import HathorAdminWebsocketProtocol
-from hathor.metrics import Metrics
-from twisted.internet import reactor
-from autobahn.twisted.websocket import WebSocketServerFactory
 import json
 from collections import deque
+
+from autobahn.twisted.websocket import WebSocketServerFactory
+from twisted.internet import reactor
+
+from hathor.metrics import Metrics
 from hathor.p2p.rate_limiter import RateLimiter
+from hathor.pubsub import HathorEvents
+from hathor.websocket.protocol import HathorAdminWebsocketProtocol
 
 # CONTROLLED_TYPES define each Rate Limit parameter for each message type that should be limited
 # buffer_size (int): size of the deque that will hold the messages that will be processed in the future
@@ -19,17 +21,20 @@ CONTROLLED_TYPES = {
         'time_buffering': 0.1,
         'max_hits': 20,
         'hits_window_seconds': 2,
-    }, HathorEvents.WALLET_OUTPUT_RECEIVED.value: {
+    },
+    HathorEvents.WALLET_OUTPUT_RECEIVED.value: {
         'buffer_size': 20,
         'time_buffering': 0.1,
         'max_hits': 10,
         'hits_window_seconds': 2,
-    }, HathorEvents.WALLET_INPUT_SPENT.value: {
+    },
+    HathorEvents.WALLET_INPUT_SPENT.value: {
         'buffer_size': 20,
         'time_buffering': 0.1,
         'max_hits': 10,
         'hits_window_seconds': 2,
-    }, HathorEvents.WALLET_BALANCE_UPDATED.value: {
+    },
+    HathorEvents.WALLET_BALANCE_UPDATED.value: {
         'buffer_size': 3,
         'time_buffering': 0.4,
         'max_hits': 3,
@@ -102,10 +107,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
 
         if self.is_running:
             # Schedule next message
-            reactor.callLater(
-                1,
-                self._schedule_and_send_metric
-            )
+            reactor.callLater(1, self._schedule_and_send_metric)
 
     def subscribe(self, pubsub):
         """ Subscribe to defined events for the pubsub received
@@ -202,11 +204,8 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         self.buffer_deques[data['type']].append(data)
         if len(self.buffer_deques[data['type']]) == 1:
             # If it's the first time we hit the limit (only one message in deque), we schedule process_deque
-            reactor.callLater(
-                CONTROLLED_TYPES[data['type']]['time_buffering'],
-                self.process_deque,
-                data_type=data['type']
-            )
+            reactor.callLater(CONTROLLED_TYPES[data['type']]['time_buffering'], self.process_deque,
+                              data_type=data['type'])
 
     def process_deque(self, data_type):
         """ Process the deque and check if I have limit to send the messages now
@@ -222,11 +221,8 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
                     data['throttled'] = False
                 self.broadcast_message(data)
             else:
-                reactor.callLater(
-                    CONTROLLED_TYPES[data_type]['time_buffering'],
-                    self.process_deque,
-                    data_type=data_type
-                )
+                reactor.callLater(CONTROLLED_TYPES[data_type]['time_buffering'], self.process_deque,
+                                  data_type=data_type)
                 break
 
     def handle_message(self, connection, data):

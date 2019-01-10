@@ -1,5 +1,5 @@
-from tests import unittest
 from hathor.cli.shell import create_parser, prepare
+from tests import unittest
 
 
 class ShellTest(unittest.TestCase):

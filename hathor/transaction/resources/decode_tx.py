@@ -1,10 +1,11 @@
+import json
+import re
+import struct
+
 from twisted.web import resource
+
 from hathor.api_util import set_cors
 from hathor.transaction import Transaction
-
-import json
-import struct
-import re
 
 
 class DecodeTxResource(resource.Resource):
@@ -39,10 +40,7 @@ class DecodeTxResource(resource.Resource):
                 tx_data = tx.to_json(decode_script=True)
                 tx.storage = self.manager.tx_storage
                 tx_data['accumulated_weight'] = tx.get_metadata().accumulated_weight
-                data = {
-                    'transaction': tx_data,
-                    'success': True
-                }
+                data = {'transaction': tx_data, 'success': True}
             except struct.error:
                 data = {'success': False}
 

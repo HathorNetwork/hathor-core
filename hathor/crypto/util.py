@@ -1,23 +1,24 @@
 import hashlib
+
 import base58
-from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.backends.openssl.backend import Backend
+from cryptography.hazmat.backends.openssl.ec import _EllipticCurvePrivateKey, _EllipticCurvePublicKey
 from cryptography.hazmat.primitives import serialization
-from hathor.constants import P2PKH_VERSION_BYTE, MULTISIG_VERSION_BYTE
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import BestAvailableEncryption, Encoding, PrivateFormat
+
+from hathor.constants import MULTISIG_VERSION_BYTE, P2PKH_VERSION_BYTE
 
 
-def get_private_key_bytes(private_key,
-                          encoding=serialization.Encoding.DER,
-                          format=serialization.PrivateFormat.PKCS8,
-                          encryption_algorithm=serialization.NoEncryption()):
-    return private_key.private_bytes(
-        encoding=encoding,
-        format=format,
-        encryption_algorithm=encryption_algorithm
-    )
+def get_private_key_bytes(private_key: _EllipticCurvePrivateKey, encoding: Encoding = serialization.Encoding.DER,
+                          format: PrivateFormat = serialization.PrivateFormat.PKCS8,
+                          encryption_algorithm: BestAvailableEncryption = serialization.NoEncryption()) -> bytes:
+    return private_key.private_bytes(encoding=encoding, format=format, encryption_algorithm=encryption_algorithm)
 
 
-def get_private_key_from_bytes(private_key_bytes, password=None, backend=default_backend()):
+def get_private_key_from_bytes(private_key_bytes: bytes, password: bytes = None,
+                               backend: Backend = default_backend()) -> _EllipticCurvePrivateKey:
     """Returns the cryptography ec.EllipticCurvePrivateKey from bytes"""
     return serialization.load_der_private_key(private_key_bytes, password, backend)
 
@@ -27,7 +28,7 @@ def get_public_key_from_bytes(public_key_bytes, backend=default_backend()):
     return serialization.load_der_public_key(public_key_bytes, backend)
 
 
-def get_hash160(public_key_bytes):
+def get_hash160(public_key_bytes: bytes) -> bytes:
     """The input is hashed twice: first with SHA-256 and then with RIPEMD-160
 
     :type: bytes
@@ -66,7 +67,7 @@ def get_address_from_public_key_bytes(public_key_bytes):
     return get_address_from_public_key_hash(public_key_hash)
 
 
-def get_address_b58_from_public_key(public_key):
+def get_address_b58_from_public_key(public_key: _EllipticCurvePublicKey) -> str:
     """Gets the b58 address from a public key.
 
     :param: ec.EllipticCurvePublicKey
@@ -77,7 +78,7 @@ def get_address_b58_from_public_key(public_key):
     return get_address_b58_from_public_key_bytes(public_key_bytes)
 
 
-def get_address_b58_from_public_key_hash(public_key_hash):
+def get_address_b58_from_public_key_hash(public_key_hash: bytes) -> str:
     """Gets the b58 address from the hash of a public key.
 
         :param public_key_hash: hash of public key (sha256 and ripemd160)
@@ -90,7 +91,7 @@ def get_address_b58_from_public_key_hash(public_key_hash):
     return base58.b58encode(address).decode('utf-8')
 
 
-def get_address_from_public_key_hash(public_key_hash, version_byte=P2PKH_VERSION_BYTE):
+def get_address_from_public_key_hash(public_key_hash: bytes, version_byte: bytes = P2PKH_VERSION_BYTE) -> bytes:
     """Gets the address in bytes from the public key hash
 
         :param public_key_hash: hash of public key (sha256 and ripemd160)
@@ -112,7 +113,7 @@ def get_address_from_public_key_hash(public_key_hash, version_byte=P2PKH_VERSION
     return address
 
 
-def get_checksum(address_bytes):
+def get_checksum(address_bytes: bytes) -> bytes:
     """ Calculate double sha256 of address and gets first 4 bytes
 
         :param address_bytes: address before checksum
@@ -124,7 +125,7 @@ def get_checksum(address_bytes):
     return hashlib.sha256(hashlib.sha256(address_bytes).digest()).digest()[:4]
 
 
-def get_address_b58_from_public_key_bytes(public_key_bytes):
+def get_address_b58_from_public_key_bytes(public_key_bytes: bytes) -> str:
     """Gets the b58 address from a public key bytes.
 
         :param public_key_bytes: public key in bytes
@@ -195,7 +196,7 @@ def generate_privkey_crt_pem():
     return dump_privatekey(FILETYPE_PEM, key) + dump_certificate(FILETYPE_PEM, cert)
 
 
-def get_public_key_bytes_compressed(public_key):
+def get_public_key_bytes_compressed(public_key: _EllipticCurvePublicKey) -> bytes:
     """ Returns the bytes from a cryptography ec.EllipticCurvePublicKey in a compressed format
 
         :param public_key: Public key object
@@ -207,7 +208,8 @@ def get_public_key_bytes_compressed(public_key):
     return pn.encode_point(compressed=True)
 
 
-def get_public_key_from_bytes_compressed(public_key_bytes, backend=default_backend()):
+def get_public_key_from_bytes_compressed(public_key_bytes: bytes,
+                                         backend: Backend = default_backend()) -> _EllipticCurvePublicKey:
     """ Returns the cryptography public key from the compressed bytes format
 
         :param public_key_bytes: Compressed format of public key in bytes
@@ -218,7 +220,8 @@ def get_public_key_from_bytes_compressed(public_key_bytes, backend=default_backe
     return ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), public_key_bytes, backend)
 
 
-def get_address_b58_from_redeem_script_hash(redeem_script_hash, version_byte=MULTISIG_VERSION_BYTE):
+def get_address_b58_from_redeem_script_hash(redeem_script_hash: bytes,
+                                            version_byte: bytes = MULTISIG_VERSION_BYTE) -> str:
     """Gets the b58 address from the hash of the redeem script in multisig.
 
         :param redeem_script_hash: hash of the redeem script (sha256 and ripemd160)
@@ -231,7 +234,8 @@ def get_address_b58_from_redeem_script_hash(redeem_script_hash, version_byte=MUL
     return base58.b58encode(address).decode('utf-8')
 
 
-def get_address_from_redeem_script_hash(redeem_script_hash, version_byte=MULTISIG_VERSION_BYTE):
+def get_address_from_redeem_script_hash(redeem_script_hash: bytes,
+                                        version_byte: bytes = MULTISIG_VERSION_BYTE) -> bytes:
     """Gets the address in bytes from the redeem script hash
 
         :param redeem_script_hash: hash of redeem script (sha256 and ripemd160)

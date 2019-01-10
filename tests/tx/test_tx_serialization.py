@@ -1,14 +1,13 @@
 import time
 
 from twisted.internet.task import Clock
-from tests import unittest
-from tests.utils import add_new_blocks
 
+import hathor.protos.transaction_pb2_grpc  # noqa this file has nothing to test, only import
 from hathor.transaction import Transaction
 from hathor.transaction.storage import TransactionJSONStorage
 from hathor.wallet.base_wallet import WalletOutputInfo
-
-import hathor.protos.transaction_pb2_grpc # noqa this file has nothing to test, only import
+from tests import unittest
+from tests.utils import add_new_blocks
 
 
 class _Base:

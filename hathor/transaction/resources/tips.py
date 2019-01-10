@@ -1,7 +1,8 @@
-from twisted.web import resource
-from hathor.api_util import set_cors
-
 import json
+
+from twisted.web import resource
+
+from hathor.api_util import set_cors
 
 
 class TipsResource(resource.Resource):

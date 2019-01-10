@@ -1,21 +1,21 @@
-import os
-import json
 import base64
-import tempfile
+import json
+import os
 import shutil
-from tests import unittest
-from tests.utils import add_new_block
+import tempfile
 
+from cryptography.hazmat.primitives import serialization
+
+from hathor.crypto.util import get_address_b58_from_public_key, get_private_key_bytes, get_private_key_from_bytes
 from hathor.transaction import Transaction, TxInput
 from hathor.transaction.genesis import genesis_transactions
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet import Wallet
-from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo, WalletBalance
+from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
+from hathor.wallet.exceptions import InsuficientFunds, InvalidAddress, OutOfUnusedAddresses, WalletLocked
 from hathor.wallet.keypair import KeyPair
-from hathor.wallet.exceptions import WalletLocked, OutOfUnusedAddresses, InsuficientFunds, InvalidAddress
-from hathor.crypto.util import get_private_key_from_bytes, get_address_b58_from_public_key, get_private_key_bytes
-
-from cryptography.hazmat.primitives import serialization
+from tests import unittest
+from tests.utils import add_new_block
 
 BLOCK_REWARD = 300
 
@@ -36,9 +36,7 @@ class BasicWallet(unittest.TestCase):
         self.genesis_private_key = get_private_key_from_bytes(private_key_bytes)
         self.genesis_address = get_address_b58_from_public_key(self.genesis_private_key.public_key())
         self.genesis_private_key_bytes = get_private_key_bytes(
-            self.genesis_private_key,
-            encryption_algorithm=serialization.BestAvailableEncryption(PASSWORD)
-        )
+            self.genesis_private_key, encryption_algorithm=serialization.BestAvailableEncryption(PASSWORD))
         self.storage = TransactionMemoryStorage()
         self.manager = self.create_peer('testnet', unlock_wallet=True)
 
