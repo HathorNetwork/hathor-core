@@ -2,10 +2,10 @@ import json
 import os
 
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import render_options, set_cors
 from hathor.manager import HathorManager
-from tests.resources.base_resource import TestDummyRequest
 
 
 class ProfilerResource(resource.Resource):
@@ -60,5 +60,5 @@ class ProfilerResource(resource.Resource):
 
         return json.dumps(ret, indent=4).encode('utf-8')
 
-    def render_OPTIONS(self, request: TestDummyRequest) -> int:
+    def render_OPTIONS(self, request: Request) -> int:
         return render_options(request)

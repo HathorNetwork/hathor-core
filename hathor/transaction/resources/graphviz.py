@@ -1,8 +1,8 @@
 from twisted.internet import threads
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import set_cors
-from tests.resources.base_resource import TestDummyRequest
 
 
 class GraphvizResource(resource.Resource):
@@ -16,7 +16,7 @@ class GraphvizResource(resource.Resource):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
-    def _render_GET_thread(self, request: TestDummyRequest) -> bytes:
+    def _render_GET_thread(self, request: Request) -> bytes:
         """ GET request /graphviz/
             Expects 'format' parameter in request to set the content-type of the graph
             Format options are 'pdf', 'png' and 'jpg'. Default format is 'pdf'
