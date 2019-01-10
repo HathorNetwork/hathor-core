@@ -1,9 +1,9 @@
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List, Optional, Set
 
 from twisted.logger import Logger
 
 from hathor import protos
-from hathor.transaction.base_transaction import BaseTransaction, Output
+from hathor.transaction.base_transaction import BaseTransaction, Output, sum_weights
 from hathor.transaction.exceptions import BlockHeightError, BlockWithInputs, BlockWithTokensError
 
 if TYPE_CHECKING:
@@ -131,3 +131,293 @@ class Block(BaseTransaction):
         self.verify_parents()
         # (5)
         self.verify_height()
+
+    def _score_tx_dfs(self, tx: BaseTransaction, used: Set[bytes],
+                      mark_as_best_chain: bool, newest_timestamp: int) -> float:
+        """ Internal method to run a DFS. It is used by `calculate_score()`.
+        """
+        assert self.storage is not None
+
+        assert tx.hash is not None
+        assert not tx.is_block
+        if tx.hash in used:
+            return 0
+        used.add(tx.hash)
+
+        meta = tx.get_metadata()
+        if meta.first_block:
+            block = self.storage.get_transaction(meta.first_block)
+            if block.timestamp <= newest_timestamp:
+                return 0
+
+        if mark_as_best_chain:
+            assert meta.first_block is None
+            meta.first_block = self.hash
+            self.storage.save_transaction(tx, only_metadata=True)
+
+        score = tx.weight
+        for parent in tx.get_parents():
+            score = sum_weights(score, self._score_tx_dfs(parent, used, mark_as_best_chain, newest_timestamp))
+        return score
+
+    def _score_block_dfs(self, block: BaseTransaction, used: Set[bytes],
+                         mark_as_best_chain: bool, newest_timestamp: int) -> float:
+        """ Internal method to run a DFS. It is used by `calculate_score()`.
+        """
+        assert self.storage is not None
+
+        assert block.is_block
+        score = block.weight
+        for parent in block.get_parents():
+            if parent.is_block:
+                assert isinstance(parent, Block)
+                if parent.timestamp <= newest_timestamp:
+                    meta = parent.get_metadata()
+                    x = meta.score
+                else:
+                    x = parent._score_block_dfs(parent, used, mark_as_best_chain, newest_timestamp)
+                score = sum_weights(score, x)
+            else:
+                score = sum_weights(score, self._score_tx_dfs(parent, used, mark_as_best_chain, newest_timestamp))
+
+        # Always save the score when it is calculated.
+        meta = block.get_metadata()
+        if not meta.score:
+            meta.score = score
+            self.storage.save_transaction(block, only_metadata=True)
+        else:
+            # The score of a block is immutable since the sub-DAG behind it is immutable as well.
+            # Thus, if we have already calculated it, we just check the consistency of the calculation.
+            # Unfortunately we may have to calculate it more than once when a new block arrives in a side
+            # side because the `first_block` points only to the best chain.
+            assert abs(meta.score - score) < 1e-10
+
+        return score
+
+    def calculate_score(self, *, mark_as_best_chain: bool = False) -> float:
+        """ Calculate block's score, which is the accumulated work of the verified transactions and blocks.
+
+        :param: mark_as_best_chain: If `True`, the transactions' will point `meta.first_block` to
+                                    the blocks of the chain.
+        """
+        assert self.storage is not None
+        if self.is_genesis:
+            if mark_as_best_chain:
+                meta = self.get_metadata()
+                meta.score = self.weight
+                self.storage.save_transaction(self, only_metadata=True)
+            return self.weight
+
+        block = self._find_first_parent_in_best_chain()
+        newest_timestamp = block.timestamp
+
+        used: Set[bytes] = set()
+        return self._score_block_dfs(self, used, mark_as_best_chain, newest_timestamp)
+
+    def _remove_first_block_markers_dfs(self, tx: BaseTransaction, used: Set[bytes]) -> None:
+        """ Run a DFS removing the `meta.first_block` pointing to this block. The DFS stops when it finds
+        a transaction pointing to another block.
+        """
+        assert tx.hash is not None
+        assert self.storage is not None
+
+        if tx.hash in used:
+            return
+        used.add(tx.hash)
+        assert not tx.is_block
+
+        meta = tx.get_metadata()
+        if meta.first_block != self.hash:
+            return
+
+        meta.first_block = None
+        self.storage.save_transaction(tx, only_metadata=True)
+
+        for parent in tx.get_parents():
+            if not parent.is_block:
+                self._remove_first_block_markers_dfs(parent, used)
+
+    def remove_first_block_markers(self) -> None:
+        """ Remove all `meta.first_block` pointing to this block.
+        """
+        used: Set[bytes] = set()
+        for parent in self.get_parents():
+            if not parent.is_block:
+                self._remove_first_block_markers_dfs(parent, used)
+
+    def update_score_and_mark_as_the_best_chain(self) -> None:
+        """ Update score and mark the chain as the best chain.
+        Thus, transactions' first_block will point to the blocks in the chain.
+        """
+        self.calculate_score(mark_as_best_chain=True)
+
+    def update_voided_info(self) -> None:
+        """ This method is called only once when a new block arrives.
+
+        The blockchain part of the DAG is a tree with the genesis block as the root.
+        I'll say the a block A is connected to a block B when A verifies B, i.e., B is a parent of A.
+
+        A chain is a sequence of connected blocks starting in a leaf and ending in the root, i.e., any path from a leaf
+        to the root is a chain. Given a chain, its head is a leaf in the tree, and its tail is the sub-chain without
+        the head.
+
+        The best chain is a chain that has the highest score of all chains.
+
+        The score of a block is calculated as the sum of the weights of all transactions and blocks both direcly and
+        indirectly verified by the block. The score of a chain is defined as the score of its head.
+
+        The side chains are the chains whose scores are smaller than the best chain's.
+        The head of the side chains are always voided blocks.
+
+        There are two possible states for the block chain:
+        (i)  It has a single best chain, i.e., one chain has the highest score
+        (ii) It has multiple best chains, i.e., two or more chains have the same score (and this score is the highest
+             among the chains)
+
+        When there are multiple best chains, I'll call them best chain candidates.
+
+        The arrived block can be connected in four possible ways:
+        (i)   To the head of a best chain
+        (ii)  To the tail of the best chain
+        (iii) To the head of a side chain
+        (iv)  To the tail of a side chain
+
+        Thus, there are eight cases to be handled when a new block arrives, which are:
+        (i)    Single best chain, connected to the head of the best chain
+        (ii)   Single best chain, connected to the tail of the best chain
+        (iii)  Single best chain, connected to the head of a side chain
+        (iv)   Single best chain, connected to the tail of a side chain
+        (v)    Multiple best chains, connected to the head of a best chain
+        (vi)   Multiple best chains, connected to the tail of a best chain
+        (vii)  Multiple best chains, connected to the head of a side chain
+        (viii) Multiple best chains, connected to the tail of a side chain
+
+        Case (i) is trivial because the single best chain will remain as the best chain. So, just calculate the new
+        score and that's it.
+
+        Case (v) is also trivial. As there are multiple best chains and the new block is connected to the head of one
+        of them, this will be the new winner. So, the blockchain state will change to a single best chain again.
+
+        In the other cases, we must calculate the score and compare with the best score.
+
+        When there are multiple best chains, all their heads will be voided.
+        """
+        assert self.weight > 0, 'This algorithm assumes that block\'s weight is always greater than zero'
+        if not self.parents:
+            assert self.is_genesis is True
+            self.update_score_and_mark_as_the_best_chain()
+            return
+
+        assert self.storage is not None
+        assert self.hash is not None
+
+        parent = self.storage.get_transaction(self.parents[0])
+        parent_meta = parent.get_metadata()
+        assert self.hash in parent_meta.children
+
+        is_connected_to_the_head = bool(len(parent_meta.children) == 1)
+        is_connected_to_the_best_chain = bool(not parent_meta.voided_by)
+
+        if is_connected_to_the_head and is_connected_to_the_best_chain:
+            # Case (i): Single best chain, connected to the head of the best chain
+            heads = [self.storage.get_transaction(h) for h in self.storage.get_best_block_tips()]
+            assert len(heads) == 1
+            self.update_score_and_mark_as_the_best_chain()
+
+        else:
+            # Resolve all other cases, but (i).
+
+            # First, void this block.
+            meta = self.get_metadata()
+            meta.voided_by.add(self.hash)
+            self.storage.save_transaction(self, only_metadata=True)
+
+            # Get the score of the best chains.
+            # We need to void this block first, because otherwise it would always be one of the heads.
+            heads = [self.storage.get_transaction(h) for h in self.storage.get_best_block_tips()]
+            best_score = None
+            for block in heads:
+                block_meta = block.get_metadata(force_reload=True)
+                if best_score is None:
+                    best_score = block_meta.score
+                else:
+                    # All heads must have the same score.
+                    assert abs(best_score - block_meta.score) < 1e-10
+            assert isinstance(best_score, float)
+
+            # Calculate the score.
+            score = self.calculate_score()
+
+            # Finally, check who the winner is.
+            eps = 1e-10
+            if score <= best_score - eps:
+                # Nothing to do.
+                pass
+
+            else:
+                # Eveyone has the same score. \o/
+
+                valid_heads = []
+                for block in heads:
+                    meta = block.get_metadata()
+                    if not meta.voided_by:
+                        valid_heads.append(block)
+
+                # We must have at most one valid head.
+                # Either we have a single best chain or all chains have already been voided.
+                assert len(valid_heads) <= 1, 'We must never have more than one valid head'
+
+                if len(valid_heads) == 1:
+                    # Remove first block markers only if there is a single best chain.
+                    # Otherwise, the markers have already been removed before.
+                    first_block = self._find_first_parent_in_best_chain()
+                    block = heads[0]
+                    while True:
+                        if block.timestamp <= first_block.timestamp:
+                            break
+                        block.remove_first_block_markers()
+                        meta = block.get_metadata()
+                        meta.voided_by.add(block.hash)
+                        self.storage.save_transaction(block, only_metadata=True)
+                        block = self.storage.get_transaction(block.parents[0])
+
+                if score >= best_score + eps:
+                    # We have a new winner.
+                    self.update_score_and_mark_as_the_best_chain()
+                    self.remove_voided_from_chain()
+
+    def remove_voided_from_chain(self):
+        """ Remove voided_by from the chain. Now, it is the best chain.
+        """
+        block = self
+        while True:
+            assert block.is_block
+            meta = block.get_metadata()
+            if not meta.voided_by:
+                break
+            assert len(meta.voided_by) == 1
+            meta.voided_by.remove(block.hash)
+            block.storage.save_transaction(block, only_metadata=True)
+            block = self.storage.get_transaction(block.parents[0])
+
+    def _find_first_parent_in_best_chain(self) -> BaseTransaction:
+        """ Find the first block in the side chain that is not voided, i.e., the block where the fork started.
+
+        In the simple schema below, the best chain's blocks are O's, the side chain's blocks are I's, and the first
+        valid block is the [O].
+
+        O-O-O-O-[O]-O-O-O-O
+                 |
+                 +-I-I-I
+        """
+        assert self.storage is not None
+        assert len(self.parents) > 0, 'This should never happen because the genesis is always in the best chain'
+        parent_hash = self.parents[0]
+        while True:
+            parent = self.storage.get_transaction(parent_hash)
+            parent_meta = parent.get_metadata()
+            if not parent_meta.voided_by:
+                break
+            assert len(parent.parents) > 0, 'This should never happen because the genesis is always in the best chain'
+            parent_hash = parent.parents[0]
+        return parent

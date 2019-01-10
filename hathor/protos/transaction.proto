@@ -17,7 +17,7 @@ message BaseTransaction {
 
 message Transaction {
   uint32 version = 1; // 2 byte in practice
-  float weight = 2;
+  double weight = 2;
   uint32 timestamp = 3;
   uint64 height = 4;
   repeated bytes parents = 5; // each parent is a hash (32 bytes)
@@ -32,7 +32,7 @@ message Transaction {
 
 message Block {
   uint32 version = 1; // 2 byte in practice
-  float weight = 2;
+  double weight = 2;
   uint32 timestamp = 3;
   uint64 height = 4;
   repeated bytes parents = 5; // each parent is a hash (32 bytes)
@@ -65,5 +65,7 @@ message Metadata {
   Hashes twins = 7;
   repeated uint32 received_by = 4; // TODO: how is a node_id represented
   Hashes children = 5;
-  float accumulated_weight = 6;
+  double accumulated_weight = 6;
+  double score = 8;
+  bytes first_block = 9;
 }

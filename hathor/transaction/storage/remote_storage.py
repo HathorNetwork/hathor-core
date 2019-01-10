@@ -229,6 +229,9 @@ class TransactionRemoteStorage(TransactionStorage):
         result = self._stub.FirstTimestamp(request)
         return result.timestamp
 
+    def get_best_block_tips(self, timestamp=None):
+        return super().get_best_block_tips(timestamp)
+
     @convert_grpc_exceptions
     def get_block_tips(self, timestamp=None):
         self._check_connection()

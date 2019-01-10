@@ -169,6 +169,28 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def get_best_block_tips(self, timestamp: Optional[float] = None) -> List[bytes]:
+        """ Return a list of blocks that are heads in a best chain. It must be used when mining.
+
+        When more than one block is returned, it means that there are multiple best chains and
+        you can choose any of them.
+        """
+        best_score = 0
+        best_tip_blocks = []  # List[bytes(hash)]
+        tip_blocks = [x.data for x in self.get_block_tips(timestamp)]
+        for block_hash in tip_blocks:
+            meta = self.get_metadata(block_hash)
+            if meta.voided_by and meta.voided_by != set([block_hash]):
+                # If anyone but the block itself is voiding this block, then it must be skipped.
+                continue
+            if abs(meta.score - best_score) < 1e-10:
+                best_tip_blocks.append(block_hash)
+            elif meta.score > best_score:
+                best_score = meta.score
+                best_tip_blocks = [block_hash]
+        return best_tip_blocks
+
+    @abstractmethod
     def get_block_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         raise NotImplementedError
 
@@ -365,7 +387,10 @@ class TransactionStorage(ABC):
         dot.attr('node', shape='oval', style='')
         nodes_iter = self._topological_sort()
 
-        block_tips = set(x.data for x in self.get_block_tips())
+        blocks_set = set()  # Set[bytes(hash)]
+        txs_set = set()  # Set[bytes(hash)]
+
+        # block_tips = set(x.data for x in self.get_block_tips())
         tx_tips = set(x.data for x in self.get_tx_tips())
 
         with g_genesis as g_g, g_txs as g_t, g_blocks as g_b:
@@ -377,9 +402,11 @@ class TransactionStorage(ABC):
 
                 if tx.is_block:
                     attrs_node.update(block_attrs)
-                    attrs_edge.update(dict(penwidth='4'))
+                    blocks_set.add(tx.hash)
+                else:
+                    txs_set.add(tx.hash)
 
-                if (tx.hash in block_tips) or (tx.hash in tx_tips):
+                if tx.hash in tx_tips:
                     attrs_node.update(tx_tips_attrs)
 
                 if weight:
@@ -393,17 +420,23 @@ class TransactionStorage(ABC):
                 if tx.is_genesis:
                     attrs_node.update(dict(fillcolor='#87D37C', style='filled'))
                     g_g.node(name, **attrs_node)
-                elif tx.is_block:
-                    g_b.node(name, **attrs_node)
                 else:
                     meta = tx.get_metadata()
                     if len(meta.voided_by) > 0:
                         attrs_node.update(voided_attrs)
                         if tx.hash in meta.voided_by:
                             attrs_node.update(conflict_attrs)
-                    g_t.node(name, **attrs_node)
+
+                    if tx.is_block:
+                        g_b.node(name, **attrs_node)
+                    else:
+                        g_t.node(name, **attrs_node)
 
                 for parent_hash in tx.parents:
+                    if parent_hash in blocks_set:
+                        attrs_edge.update(dict(penwidth='3'))
+                    else:
+                        attrs_edge.update(dict(penwidth='1'))
                     dot.edge(name, parent_hash.hex(), **attrs_edge)
 
         dot.attr(rankdir='RL')
@@ -537,6 +570,9 @@ class BaseTransactionStorage(TransactionStorage):
         self.block_index = None
         self.tx_index = None
         self.voided_tips_index = None
+
+    def get_best_block_tips(self, timestamp: Optional[float] = None) -> List[bytes]:
+        return super().get_best_block_tips(timestamp)
 
     def get_block_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         if not self.with_index:

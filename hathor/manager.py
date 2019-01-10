@@ -215,7 +215,8 @@ class HathorManager:
             timestamp, [x.hex() for x in self.tx_storage.get_tx_tips(timestamp - 1)])
         return [x.data for x in ret]
 
-    def generate_mining_block(self, timestamp: Optional[float] = None) -> Block:
+    def generate_mining_block(self, timestamp: Optional[float] = None,
+                              parent_block_hash: Optional[bytes] = None) -> Block:
         """ Generates a block ready to be mined. The block includes new issued tokens,
         parents, and the weight.
 
@@ -232,7 +233,10 @@ class HathorManager:
 
         if not timestamp:
             timestamp = max(self.tx_storage.latest_timestamp, self.reactor.seconds())
-        tip_blocks = [x.data for x in self.tx_storage.get_block_tips(timestamp)]
+        if parent_block_hash is None:
+            tip_blocks = self.tx_storage.get_best_block_tips()
+        else:
+            tip_blocks = [parent_block_hash]
         tip_txs = self.get_new_tx_parents(timestamp)
 
         assert len(tip_blocks) >= 1
@@ -338,9 +342,10 @@ class HathorManager:
 
         if self.state != self.NodeState.INITIALIZING:
             self.tx_storage.save_transaction(tx)
-            tx.update_parents()
         else:
             self.tx_storage._add_to_cache(tx)
+
+        tx.update_parents()
 
         if not quiet:
             ts_date = datetime.datetime.fromtimestamp(tx.timestamp)
@@ -355,9 +360,12 @@ class HathorManager:
                     ' timestamp={tx.timestamp} datetime={ts_date} from_now={time_from_now}', tx=tx, ts_date=ts_date,
                     time_from_now=tx.get_time_from_now())
 
-        tx.mark_inputs_as_used()
-        tx.update_voided_info()
-        tx.set_conflict_twins()
+        if tx.is_block:
+            tx.update_voided_info()
+        else:
+            tx.mark_inputs_as_used()
+            tx.update_voided_info()
+            tx.set_conflict_twins()
 
         # Propagate to our peers.
         self.connections.send_tx_to_peers(tx)

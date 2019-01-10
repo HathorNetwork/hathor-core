@@ -16,12 +16,20 @@ class _BaseResourceTest:
         def setUp(self):
             super().setUp()
 
+            tx_storage = getattr(self, 'tx_storage', None)
+
             peer_id = PeerId()
             wallet = self._create_test_wallet()
             self.reactor = Clock()
             self.reactor.advance(time.time())
             network = 'testnet'
-            self.manager = HathorManager(self.reactor, peer_id=peer_id, network=network, wallet=wallet)
+            self.manager = HathorManager(
+                self.reactor,
+                peer_id=peer_id,
+                network=network,
+                wallet=wallet,
+                tx_storage=tx_storage
+            )
             self.manager.test_mode = True
             self.manager.start()
 

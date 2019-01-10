@@ -84,10 +84,6 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
     @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
-        # genesis txs and metadata are kept in memory
-        if tx.is_genesis and only_metadata:
-            return
-
         self._save_transaction(tx)
 
         # call super which adds to index if needed

@@ -282,3 +282,34 @@ class Transaction(BaseTransaction):
             spent_tx = self.storage.get_transaction(input_tx.tx_id)
             input_tx._tx = spent_tx
         return spent_tx
+
+    def update_voided_info(self) -> None:
+        """ Transaction's voided_by must equal the union of the voided_by of both its parents and its inputs.
+        """
+        assert self.hash is not None
+        assert self.storage is not None
+
+        voided_by = set()
+
+        for parent in self.get_parents():
+            parent_meta = parent.get_metadata()
+            voided_by.update(parent_meta.voided_by)
+
+        for txin in self.inputs:
+            spent_tx = self.storage.get_transaction(txin.tx_id)
+            spent_meta = spent_tx.get_metadata()
+            voided_by.update(spent_meta.voided_by)
+
+        meta = self.get_metadata()
+        if self.hash in meta.voided_by:
+            voided_by.add(self.hash)
+
+        if meta.voided_by != voided_by:
+            meta.voided_by = voided_by.copy()
+            self.storage.save_transaction(self, only_metadata=True)
+
+        for h in voided_by:
+            if h == self.hash:
+                continue
+            tx = self.storage.get_transaction(h)
+            tx.check_conflicts()

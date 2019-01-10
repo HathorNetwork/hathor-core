@@ -32,13 +32,11 @@ class TransactionMemoryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
         assert tx.hash is not None
         if not only_metadata:
-            self.transactions[tx.hash] = self._clone(tx)
+            if not tx.is_genesis:
+                self.transactions[tx.hash] = self._clone(tx)
         self._save_metadata(tx)
 
     def _save_metadata(self, tx: BaseTransaction) -> None:
-        # genesis txs and metadata are kept in memory
-        if tx.is_genesis:
-            return
         assert tx.hash is not None
         meta = getattr(tx, '_metadata', None)
         if meta:
@@ -55,6 +53,8 @@ class TransactionMemoryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
     def get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
         genesis = self.get_genesis(hash_bytes)
         if genesis:
+            if hash_bytes in self.metadata:
+                genesis._metadata = self._clone(self.metadata[hash_bytes])
             return genesis
 
         if hash_bytes in self.transactions:
