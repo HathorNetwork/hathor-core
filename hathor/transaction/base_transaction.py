@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Optional,
 from _hashlib import HASH
 
 from hathor import protos
+from hathor.constants import MAX_DISTANCE_BETWEEN_BLOCKS
 from hathor.transaction.exceptions import (
     DuplicatedParents,
     IncorrectParents,
@@ -673,6 +674,10 @@ class BaseTransaction(ABC):
                     ))
 
                 if parent.is_block:
+                    if self.is_block and not parent.is_genesis:
+                        if self.timestamp - parent.timestamp > MAX_DISTANCE_BETWEEN_BLOCKS:
+                            raise TimestampError('Distance between blocks is too big'
+                                                 ' ({} seconds)'.format(self.timestamp, parent.timestamp))
                     if my_parents_txs > 0:
                         raise IncorrectParents('Parents which are blocks must come before transactions')
                     for pi_hash in parent.parents:
