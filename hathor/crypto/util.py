@@ -2,30 +2,35 @@ import hashlib
 
 import base58
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.backends.openssl.backend import Backend
-from cryptography.hazmat.backends.openssl.ec import _EllipticCurvePrivateKey, _EllipticCurvePublicKey
-from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.serialization import BestAvailableEncryption, Encoding, PrivateFormat
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    KeySerializationEncryption,
+    NoEncryption,
+    PrivateFormat,
+    load_der_private_key,
+    load_der_public_key,
+)
 
 from hathor.constants import MULTISIG_VERSION_BYTE, P2PKH_VERSION_BYTE
 
+_BACKEND = default_backend()
 
-def get_private_key_bytes(private_key: _EllipticCurvePrivateKey, encoding: Encoding = serialization.Encoding.DER,
-                          format: PrivateFormat = serialization.PrivateFormat.PKCS8,
-                          encryption_algorithm: BestAvailableEncryption = serialization.NoEncryption()) -> bytes:
+
+def get_private_key_bytes(private_key: ec.EllipticCurvePrivateKey, encoding: Encoding = Encoding.DER,
+                          format: PrivateFormat = PrivateFormat.PKCS8,
+                          encryption_algorithm: KeySerializationEncryption = NoEncryption()) -> bytes:
     return private_key.private_bytes(encoding=encoding, format=format, encryption_algorithm=encryption_algorithm)
 
 
-def get_private_key_from_bytes(private_key_bytes: bytes, password: bytes = None,
-                               backend: Backend = default_backend()) -> _EllipticCurvePrivateKey:
+def get_private_key_from_bytes(private_key_bytes: bytes, password: bytes = None) -> ec.EllipticCurvePrivateKey:
     """Returns the cryptography ec.EllipticCurvePrivateKey from bytes"""
-    return serialization.load_der_private_key(private_key_bytes, password, backend)
+    return load_der_private_key(private_key_bytes, password, _BACKEND)
 
 
-def get_public_key_from_bytes(public_key_bytes, backend=default_backend()):
+def get_public_key_from_bytes(public_key_bytes: bytes) -> ec.EllipticCurvePublicKey:
     """Returns the cryptography ec.EllipticCurvePublicKey from bytes"""
-    return serialization.load_der_public_key(public_key_bytes, backend)
+    return load_der_public_key(public_key_bytes, _BACKEND)
 
 
 def get_hash160(public_key_bytes: bytes) -> bytes:
@@ -67,7 +72,7 @@ def get_address_from_public_key_bytes(public_key_bytes):
     return get_address_from_public_key_hash(public_key_hash)
 
 
-def get_address_b58_from_public_key(public_key: _EllipticCurvePublicKey) -> str:
+def get_address_b58_from_public_key(public_key: ec.EllipticCurvePublicKey) -> str:
     """Gets the b58 address from a public key.
 
     :param: ec.EllipticCurvePublicKey
@@ -196,7 +201,7 @@ def generate_privkey_crt_pem():
     return dump_privatekey(FILETYPE_PEM, key) + dump_certificate(FILETYPE_PEM, cert)
 
 
-def get_public_key_bytes_compressed(public_key: _EllipticCurvePublicKey) -> bytes:
+def get_public_key_bytes_compressed(public_key: ec.EllipticCurvePublicKey) -> bytes:
     """ Returns the bytes from a cryptography ec.EllipticCurvePublicKey in a compressed format
 
         :param public_key: Public key object
@@ -204,12 +209,23 @@ def get_public_key_bytes_compressed(public_key: _EllipticCurvePublicKey) -> byte
 
         :rtype: bytes
     """
+    from cryptography import utils
     pn = public_key.public_numbers()
-    return pn.encode_point(compressed=True)
+
+    # the following only works on `compressed-point-support` branch of `earonesty/cryptography` fork
+    # return pn.encode_point(compressed=True)
+
+    # the following will probably be available on 2.5 (not released yet) after merge of:
+    # - https://github.com/pyca/cryptography/pull/4638
+    # from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+    # return public_key.public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
+
+    # this will work on the official cryptography package:
+    byte_length = (pn.curve.key_size + 7) // 8
+    return (b'\x03' if pn.y % 2 else b'\x02') + utils.int_to_bytes(pn.x, byte_length)
 
 
-def get_public_key_from_bytes_compressed(public_key_bytes: bytes,
-                                         backend: Backend = default_backend()) -> _EllipticCurvePublicKey:
+def get_public_key_from_bytes_compressed(public_key_bytes: bytes) -> ec.EllipticCurvePublicKey:
     """ Returns the cryptography public key from the compressed bytes format
 
         :param public_key_bytes: Compressed format of public key in bytes
@@ -217,7 +233,9 @@ def get_public_key_from_bytes_compressed(public_key_bytes: bytes,
 
         :rtype: ec.EllipticCurvePublicKey
     """
-    return ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), public_key_bytes, backend)
+
+    # this one requires cryptography>=2.5
+    return ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), public_key_bytes)
 
 
 def get_address_b58_from_redeem_script_hash(redeem_script_hash: bytes,
