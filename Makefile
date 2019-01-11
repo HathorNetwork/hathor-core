@@ -5,14 +5,25 @@ all: check tests
 
 # testing:
 
-.PHONY: tests
-tests:
-	pytest --cov=hathor/cli/ --cov-config=.coveragerc_full --cov-fail-under=70 -p no:warnings ./tests/cli/
-	pytest --cov-report=term --cov-report=html --cov=hathor --cov-fail-under=95 -p no:warnings ./tests
+tests_cli = tests/cli/
+tests_lib = $(filter-out ${tests_cli} tests/__pycache__/, $(dir $(wildcard tests/*/.)))
 
-.PHONY: full_tests
-full_tests:
-	pytest --cov-report=term --cov-report=html --cov=hathor --cov-fail-under=90 --cov-config=.coveragerc_full -p no:warnings ./tests
+pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov=hathor
+
+.PHONY: tests-cli
+tests-cli:
+	pytest --cov=hathor/cli/ --cov-config=.coveragerc_full --cov-fail-under=70 -p no:warnings $(tests_cli)
+
+.PHONY: tests-lib
+tests-lib:
+	pytest $(pytest_flags) --cov-fail-under=95 $(tests_lib)
+
+.PHONY: tests
+tests: tests-cli tests-lib
+
+.PHONY: tests-full
+tests-full:
+	pytest $(pytest_flags) --cov-fail-under=90 --cov-config=.coveragerc_full ./tests
 
 # checking:
 
@@ -59,6 +70,14 @@ protos: $(proto_outputs)
 
 # cleaning:
 
-.PHONY:
-clean:
+.PHONY: clean-protos
+clean-protos:
 	rm -f $(proto_outputs)
+
+.PHONY: clean-pyc
+clean-pyc:
+	find hathor tests -name \*.pyc -delete
+	find hathor tests -name __pycache__ -delete
+
+.PHONY: clean
+clean: clean-pyc clean-protos
