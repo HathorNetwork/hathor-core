@@ -3,7 +3,7 @@ Twisted==18.7.0
 autobahn==18.8.1
 intervaltree
 
-https://github.com/earonesty/cryptography/archive/compressed-point-support.zip#egg=cryptography
+https://github.com/pyca/cryptography/archive/master.zip#egg=cryptography >= 2.5.dev1
 
 pyOpenSSL==18.0.0
 service-identity
