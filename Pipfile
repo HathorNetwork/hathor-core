@@ -1,0 +1,37 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+flake8 = "==3.6.0"
+grpcio-tools = "==1.16.0"
+isort = "==4.3.4"
+mypy = "==0.641"
+mypy-protobuf = "==1.8"
+pytest = "==3.10.1"
+pytest-cov = "==2.6.0"
+yapf = "==0.25.0"
+numpy = "==1.16.0"
+
+[packages]
+Twisted = "==18.7.0"
+autobahn = "==18.8.1"
+base58 = "==1.0.0"
+colorama = "==0.4.0"
+cryptography = {git = "https://github.com/pyca/cryptography.git",version = ">=2.5.dev1"}
+graphviz = "==0.9"
+grpcio = "==1.16.0"
+intervaltree = "==2.1.0"
+ipython = "==7.1.1"
+mnemonic = "==0.18"
+prometheus_client = "==0.4.2"
+protobuf = "==3.6.1"
+pyOpenSSL = "==18.0.0"
+pycoin = {git = "https://github.com/richardkiss/pycoin.git",version = ">=0.90a0"}
+requests = "==2.21.0"
+service_identity = "==18.1.0"
+hathor = {editable = true,path = "."}
+
+[requires]
+python_version = "3.6"
