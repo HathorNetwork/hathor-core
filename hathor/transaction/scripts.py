@@ -20,7 +20,6 @@ from hathor.crypto.util import (
     get_public_key_from_bytes_compressed,
 )
 from hathor.transaction import BaseTransaction, Transaction, TxInput
-from hathor.transaction.base_transaction import Input
 from hathor.transaction.exceptions import (
     DataIndexError,
     EqualVerifyFailed,
@@ -665,7 +664,7 @@ def execute_eval(data: bytes, log: List[str], extras: ScriptExtras) -> None:
             raise FinalStackInvalid('\n'.join(log))
 
 
-def script_eval(tx: Transaction, txin: Input, spent_tx: BaseTransaction) -> None:
+def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction) -> None:
     """Evaluates the output script and input data according to
     a very limited subset of Bitcoin's scripting language.
 

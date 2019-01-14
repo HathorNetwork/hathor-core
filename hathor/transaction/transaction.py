@@ -1,6 +1,6 @@
 import hashlib
 from collections import namedtuple
-from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Set, Tuple
 
 from hathor import protos
 from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, BaseTransaction, TxInput, TxOutput
@@ -312,4 +312,143 @@ class Transaction(BaseTransaction):
             if h == self.hash:
                 continue
             tx = self.storage.get_transaction(h)
-            tx.check_conflicts()
+            if not tx.is_block:
+                tx.check_conflicts()
+
+    def mark_inputs_as_used(self) -> None:
+        """ Mark all its inputs as used
+        """
+        for txin in self.inputs:
+            self.mark_input_as_used(txin)
+
+    def mark_input_as_used(self, txin: 'TxInput') -> None:
+        """ Mark a given input as used
+        """
+        assert self.hash is not None
+        assert self.storage is not None
+
+        spent_tx = self.storage.get_transaction(txin.tx_id)
+        spent_meta = spent_tx.get_metadata()
+        spent_by = spent_meta.spent_outputs[txin.index]  # Set[bytes(hash)]
+        spent_by.add(self.hash)
+        self.storage.save_transaction(spent_tx, only_metadata=True)
+
+        if len(spent_by) > 1:
+            for h in spent_by:
+                tx = self.storage.get_transaction(h)
+                tx_meta = tx.get_metadata()
+                tx_meta.conflict_with.update(spent_by)
+                tx_meta.conflict_with.discard(tx.hash)
+                tx.storage.save_transaction(tx, only_metadata=True)
+
+        self.check_conflicts()
+
+    def check_conflicts(self) -> None:
+        """ Check which transaction is the winner of a conflict, the remaining are voided.
+        """
+        assert self.hash is not None
+        assert self.storage is not None
+
+        meta = self.get_metadata(force_reload=True)
+        if not meta.conflict_with:
+            return
+
+        meta = self.update_accumulated_weight()
+
+        # Conflicting transaction.
+        tx_list = [self]
+        winner_set = set()
+        max_acc_weight = 0.0
+
+        if len(meta.voided_by - set([self.hash])) == 0:
+            winner_set.add(self.hash)
+            max_acc_weight = meta.accumulated_weight
+
+        for h in meta.conflict_with:
+            # now we need to update accumulated weight and get new metadata info
+            tx = self.storage.get_transaction(h)
+            meta = tx.update_accumulated_weight()
+            assert tx.hash is not None
+            assert meta.hash is not None
+            tx_list.append(tx)
+
+            if len(meta.voided_by - set([tx.hash])) > 0:
+                continue
+
+            if meta.accumulated_weight == max_acc_weight:
+                winner_set.add(meta.hash)
+            elif meta.accumulated_weight > max_acc_weight:
+                max_acc_weight = meta.accumulated_weight
+                winner_set = set([meta.hash])
+
+        if len(winner_set) > 1:
+            winner_set = set()
+
+        for tx in tx_list:
+            if tx.hash in winner_set:
+                tx.mark_as_winner()
+            else:
+                tx.mark_as_voided()
+
+    def set_conflict_twins(self) -> None:
+        """ Get all transactions that conflict with self
+            and check if they are also a twin of self
+        """
+        assert self.storage is not None
+
+        meta = self.get_metadata()
+        if not meta.conflict_with:
+            return
+
+        conflict_txs = [self.storage.get_transaction(h) for h in meta.conflict_with]
+        self.check_twins(conflict_txs)
+
+    def check_twins(self, transactions: Iterable['BaseTransaction']) -> None:
+        """ Check if the tx has any twins in transactions list
+            A twin tx is a tx that has the same inputs and outputs
+            We add all the hashes of the twin txs in the metadata
+
+        :param transactions: list of transactions to be checked if they are twins with self
+        """
+        assert self.hash is not None
+        assert self.storage is not None
+
+        # Getting self metadata to save the new twins
+        meta = self.get_metadata()
+
+        # Sorting inputs and outputs to easir validation
+        sorted_inputs = sorted(self.inputs, key=lambda x: (x.tx_id, x.index, x.data))
+        sorted_outputs = sorted(self.outputs, key=lambda x: (x.script, x.value))
+
+        for tx in transactions:
+            assert tx.hash is not None
+
+            # If quantity of inputs or outputs is different, it's not a twin
+            # If the hash is the same it's not a twin
+            if len(tx.inputs) != len(self.inputs) or len(tx.outputs) != len(self.outputs) or tx.hash == self.hash:
+                continue
+
+            # Verify if all the inputs are the same
+            equal = True
+            for index, tx_input in enumerate(sorted(tx.inputs, key=lambda x: (x.tx_id, x.index, x.data))):
+                if (tx_input.tx_id != sorted_inputs[index].tx_id or tx_input.data != sorted_inputs[index].data
+                        or tx_input.index != sorted_inputs[index].index):
+                    equal = False
+                    break
+
+            # Verify if all the outputs are the same
+            if equal:
+                for index, tx_output in enumerate(sorted(tx.outputs, key=lambda x: (x.script, x.value))):
+                    if (tx_output.value != sorted_outputs[index].value
+                            or tx_output.script != sorted_outputs[index].script):
+                        equal = False
+                        break
+
+            # If everything is equal we add in both metadatas
+            if equal:
+                meta.twins.add(tx.hash)
+                tx_meta = tx.get_metadata()
+                tx_meta.twins.add(self.hash)
+                self.storage.save_transaction(tx, only_metadata=True)
+
+        self.storage.save_transaction(self, only_metadata=True)

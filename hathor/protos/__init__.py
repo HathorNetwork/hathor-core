@@ -1,4 +1,4 @@
-from hathor.protos.transaction_pb2 import BaseTransaction, Block, Input, Metadata, Output, Transaction
+from hathor.protos.transaction_pb2 import BaseTransaction, Block, Metadata, Transaction, TxInput, TxOutput
 from hathor.protos.transaction_storage_pb2 import (
     ANY_ORDER,
     ANY_TYPE,
@@ -43,8 +43,8 @@ __all__ = [
     'BaseTransaction',
     'Transaction',
     'Block',
-    'Input',
-    'Output',
+    'TxInput',
+    'TxOutput',
     'Metadata',
     'ExistsRequest',
     'ExistsResponse',

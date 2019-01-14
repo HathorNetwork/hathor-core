@@ -13,7 +13,7 @@ from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents, PubSubManager
-from hathor.transaction import BaseTransaction, Block, TxOutput, sum_weights
+from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput, sum_weights
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.wallet import BaseWallet
@@ -361,8 +361,10 @@ class HathorManager:
                     time_from_now=tx.get_time_from_now())
 
         if tx.is_block:
+            assert isinstance(tx, Block)
             tx.update_voided_info()
         else:
+            assert isinstance(tx, Transaction)
             tx.mark_inputs_as_used()
             tx.update_voided_info()
             tx.set_conflict_twins()
