@@ -9,7 +9,7 @@ from abc import ABC, abstractclassmethod, abstractmethod
 from enum import Enum
 from itertools import chain
 from math import log
-from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Set, Tuple
 
 from _hashlib import HASH
 
@@ -81,7 +81,7 @@ class BaseTransaction(ABC):
         CONNECTED = 1
 
     def __init__(self, nonce: int = 0, timestamp: Optional[int] = None, version: int = 1, weight: float = 0,
-                 height: int = 0, inputs: Optional[List['Input']] = None, outputs: Optional[List['Output']] = None,
+                 height: int = 0, inputs: Optional[List['TxInput']] = None, outputs: Optional[List['TxOutput']] = None,
                  parents: List[bytes] = None, tokens: Optional[List[bytes]] = None, hash: Optional[bytes] = None,
                  storage: Optional['TransactionStorage'] = None, is_block: bool = True) -> None:
         """
@@ -157,13 +157,13 @@ class BaseTransaction(ABC):
             input_tx_id, buf = unpack_len(_INPUT_SIZE_BYTES, buf)  # 256bits
             (input_index, data_len), buf = unpack('!BH', buf)
             input_data, buf = unpack_len(data_len, buf)
-            txin = Input(input_tx_id, input_index, input_data)
+            txin = TxInput(input_tx_id, input_index, input_data)
             tx.inputs.append(txin)
 
         for _ in range(outputs_len):
             (value, token_data, script_len), buf = unpack('!IBH', buf)
             script, buf = unpack_len(script_len, buf)
-            txout = Output(value, script, token_data)
+            txout = TxOutput(value, script, token_data)
             tx.outputs.append(txout)
 
         (tx.nonce,), buf = unpack('!I', buf)
@@ -274,81 +274,6 @@ class BaseTransaction(ABC):
         """
         raise NotImplementedError
 
-    def mark_inputs_as_used(self) -> None:
-        """ Mark all its inputs as used
-        """
-        for txin in self.inputs:
-            self.mark_input_as_used(txin)
-
-    def mark_input_as_used(self, txin: 'Input') -> None:
-        """ Mark a given input as used
-        """
-        assert self.hash is not None
-        assert self.storage is not None
-
-        spent_tx = self.storage.get_transaction(txin.tx_id)
-        spent_meta = spent_tx.get_metadata()
-        spent_by = spent_meta.spent_outputs[txin.index]  # Set[bytes(hash)]
-        spent_by.add(self.hash)
-        self.storage.save_transaction(spent_tx, only_metadata=True)
-
-        if len(spent_by) > 1:
-            for h in spent_by:
-                tx = self.storage.get_transaction(h)
-                tx_meta = tx.get_metadata()
-                tx_meta.conflict_with.update(spent_by)
-                tx_meta.conflict_with.discard(tx.hash)
-                tx.storage.save_transaction(tx, only_metadata=True)
-
-        self.check_conflicts()
-
-    def check_conflicts(self) -> None:
-        """ Check which transaction is the winner of a conflict, the remaining are voided.
-        """
-        assert self.hash is not None
-        assert self.storage is not None
-
-        meta = self.get_metadata(force_reload=True)
-        if not meta.conflict_with:
-            return
-
-        meta = self.update_accumulated_weight()
-
-        # Conflicting transaction.
-        tx_list = [self]
-        winner_set = set()
-        max_acc_weight = 0.0
-
-        if len(meta.voided_by - set([self.hash])) == 0:
-            winner_set.add(self.hash)
-            max_acc_weight = meta.accumulated_weight
-
-        for h in meta.conflict_with:
-            # now we need to update accumulated weight and get new metadata info
-            tx = self.storage.get_transaction(h)
-            meta = tx.update_accumulated_weight()
-            assert tx.hash is not None
-            assert meta.hash is not None
-            tx_list.append(tx)
-
-            if len(meta.voided_by - set([tx.hash])) > 0:
-                continue
-
-            if meta.accumulated_weight == max_acc_weight:
-                winner_set.add(meta.hash)
-            elif meta.accumulated_weight > max_acc_weight:
-                max_acc_weight = meta.accumulated_weight
-                winner_set = set([meta.hash])
-
-        if len(winner_set) > 1:
-            winner_set = set()
-
-        for tx in tx_list:
-            if tx.hash in winner_set:
-                tx.mark_as_winner()
-            else:
-                tx.mark_as_voided()
-
     # XXX: should be moved away from BaseTransaction and into Transaction
     def mark_as_voided(self) -> None:
         """ Mark a transaction as voided when it has a conflict and its aggregated weight
@@ -391,6 +316,7 @@ class BaseTransaction(ABC):
             self.storage._add_to_voided(tx)
 
             if check_conflicts:
+                assert isinstance(tx, Transaction)
                 tx.check_conflicts()
 
     # XXX: should be moved away from BaseTransaction and into Transaction
@@ -428,131 +354,6 @@ class BaseTransaction(ABC):
             self.storage.save_transaction(tx, only_metadata=True)
             self.storage._del_from_voided(tx)
             self.storage._add_to_cache(tx)
-
-    def set_conflict_twins(self) -> None:
-        """ Get all transactions that conflict with self
-            and check if they are also a twin of self
-        """
-        assert self.storage is not None
-
-        meta = self.get_metadata()
-        if not meta.conflict_with:
-            return
-
-        conflict_txs = [self.storage.get_transaction(h) for h in meta.conflict_with]
-        self.check_twins(conflict_txs)
-
-    def check_twins(self, transactions: Iterable['BaseTransaction']) -> None:
-        """ Check if the tx has any twins in transactions list
-            A twin tx is a tx that has the same inputs and outputs
-            We add all the hashes of the twin txs in the metadata
-
-        :param transactions: list of transactions to be checked if they are twins with self
-        """
-        assert self.hash is not None
-        assert self.storage is not None
-
-        # Getting self metadata to save the new twins
-        meta = self.get_metadata()
-
-        # Sorting inputs and outputs to easir validation
-        sorted_inputs = sorted(self.inputs, key=lambda x: (x.tx_id, x.index, x.data))
-        sorted_outputs = sorted(self.outputs, key=lambda x: (x.script, x.value))
-
-        for tx in transactions:
-            assert tx.hash is not None
-
-            # If quantity of inputs or outputs is different, it's not a twin
-            # If the hash is the same it's not a twin
-            if len(tx.inputs) != len(self.inputs) or len(tx.outputs) != len(self.outputs) or tx.hash == self.hash:
-                continue
-
-            # Verify if all the inputs are the same
-            equal = True
-            for index, tx_input in enumerate(sorted(tx.inputs, key=lambda x: (x.tx_id, x.index, x.data))):
-                if (tx_input.tx_id != sorted_inputs[index].tx_id or tx_input.data != sorted_inputs[index].data
-                        or tx_input.index != sorted_inputs[index].index):
-                    equal = False
-                    break
-
-            # Verify if all the outputs are the same
-            if equal:
-                for index, tx_output in enumerate(sorted(tx.outputs, key=lambda x: (x.script, x.value))):
-                    if (tx_output.value != sorted_outputs[index].value
-                            or tx_output.script != sorted_outputs[index].script):
-                        equal = False
-                        break
-
-            # If everything is equal we add in both metadatas
-            if equal:
-                meta.twins.add(tx.hash)
-                tx_meta = tx.get_metadata()
-                tx_meta.twins.add(self.hash)
-                self.storage.save_transaction(tx, only_metadata=True)
-
-        self.storage.save_transaction(self, only_metadata=True)
-
-    def compute_genesis_dag_connectivity(self, storage, storage_sync,
-                                         use_memoized_negative_results=True):  # pragma: no cover
-        """Computes the connectivity state from this tx bach to the genesis transactions.
-
-        Returns True if this transaction has a complete path of confirmations back to the genesis transactions.
-        If only one parent has a path back to the genesis DAG, we return False, since there is more work to do
-        do get the graph connected.
-
-        storage is the main storage object for this node, storing validated transactions. We assume
-           "storage" to only have valid transactions that connect back to a genesis transaction.
-        storage_sync is the *temp* storage object for this node, using while downloading data to synchronize.
-
-        Results are memoized in self.genesis_dag_connectivity, so this only has to be calculated once per tx
-        unless new info is added to the DAG. N.B. Memoization only works if storage_sync is in-memory.
-
-        To recompute, re-memoize, and ignore previously-memoized results, set use_memoized_negative_results=False.
-        This only recomputes results that were UNKNOWN or DISCONNECTED; we assume CONNECTED doesn't change; otherwise
-        we would have to recompute conenctivity for every tx in the entire graph.
-        """
-        if (self.genesis_dag_connectivity == self.GenesisDagConnectivity.CONNECTED) or self.is_genesis:
-            return True
-
-        # Ensure that both parents are connected to the genesis DAG.
-        # TODO(epnichols): Is this overkill? Only one path is needed to establish a connection, but if we're in a
-        # state where one parent doesn't have a path back, we shouldn't yet consider this node really connected.
-        connected = True  # Assume connected.
-        for parent_hash_bytes in self.parents:
-            # Find the parent.
-            if storage.transaction_exists(parent_hash_bytes):
-                # If the parent is in the main storage, it's valid.
-                continue
-            if not storage_sync.transaction_exists(parent_hash_bytes):
-                # We can't even find the parent in temp storage. So our state is "disconnected" for now.
-                connected = False
-                break
-
-            # The parent is in storage_sync. Get the data.
-            parent = storage_sync.get_transaction(parent_hash_bytes)
-
-            # Now check the parent connectivity, using memoized results.
-            # TODO: assumes that our temp storage_sync is in-memory; otherwise memoization data will be lost.
-            parent_connected = parent.compute_genesis_dag_connectivity(storage, storage_sync, True)
-            if parent_connected:
-                continue
-            if use_memoized_negative_results:
-                connected = False
-                break
-
-            # Recompute for unknown/disconnected parents
-            assert not use_memoized_negative_results  # Assert here to clarify code logic.
-
-            parent_connected = parent.compute_genesis_dag_connectivity(storage, storage_sync, False)
-            if not parent_connected:
-                connected = False
-                break
-
-        # Done with recursion on parents.
-        # Memoize results and return.
-        self.genesis_dag_connectivity = (self.GenesisDagConnectivity.CONNECTED
-                                         if connected else self.GenesisDagConnectivity.DISCONNECTED)
-        return connected
 
     def get_sighash_all(self, clear_input_data: bool = True) -> bytes:
         """Return a  serialization of the inputs and outputs, without including any other field
@@ -979,7 +780,7 @@ class BaseTransaction(ABC):
         return self.tokens[index - 1]
 
 
-class Input:
+class TxInput:
     _tx: BaseTransaction  # XXX: used for caching on hathor.transaction.Transaction.get_spent_tx
 
     def __init__(self, tx_id: bytes, index: int, data: bytes) -> None:
@@ -1009,8 +810,8 @@ class Input:
         }
 
     @classmethod
-    def create_from_proto(cls, input_proto: protos.Input) -> 'Input':
-        """ Creates an Input from a protobuf Input object
+    def create_from_proto(cls, input_proto: protos.TxInput) -> 'TxInput':
+        """ Creates a TxInput from a protobuf TxInput object
 
         :param input_proto: Bytes of a serialized output
         :return: An input
@@ -1021,20 +822,20 @@ class Input:
             data=input_proto.data,
         )
 
-    def to_proto(self) -> protos.Input:
+    def to_proto(self) -> protos.TxInput:
         """ Creates a Protobuf object from self
 
         :return: Protobuf object
-        :rtype: :py:class:`hathor.protos.Input`
+        :rtype: :py:class:`hathor.protos.TxInput`
         """
-        return protos.Input(
+        return protos.TxInput(
             tx_id=self.tx_id,
             index=self.index,
             data=self.data,
         )
 
 
-class Output:
+class TxOutput:
 
     # first bit in the index byte indicates whether it's an authority output
     TOKEN_INDEX_MASK = 0b01111111
@@ -1100,14 +901,14 @@ class Output:
         return {}
 
     @classmethod
-    def create_from_proto(cls, output_proto: protos.Output) -> 'Output':
-        """ Creates an Output from a protobuf Input object
+    def create_from_proto(cls, output_proto: protos.TxOutput) -> 'TxOutput':
+        """ Creates a TxOutput from a protobuf TxOutput object
 
         :param output_proto: Bytes of a serialized output
-        :type output_proto: :py:class:`hathor.protos.Output`
+        :type output_proto: :py:class:`hathor.protos.TxOutput`
 
         :return: An output
-        :rtype: Output
+        :rtype: TxOutput
         """
         return cls(
             value=output_proto.value,
@@ -1115,12 +916,12 @@ class Output:
             token_data=output_proto.token_data,
         )
 
-    def to_proto(self) -> protos.Output:
+    def to_proto(self) -> protos.TxOutput:
         """ Creates a Protobuf object from self
 
         :return: Protobuf object
         """
-        return protos.Output(
+        return protos.TxOutput(
             value=self.value,
             script=self.script,
             token_data=self.token_data,

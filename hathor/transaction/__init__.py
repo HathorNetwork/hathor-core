@@ -2,8 +2,8 @@ from hathor.transaction.base_transaction import (
     MAX_NUM_INPUTS,
     MAX_NUM_OUTPUTS,
     BaseTransaction,
-    Input as TxInput,
-    Output as TxOutput,
+    TxInput,
+    TxOutput,
     sum_weights,
     tx_or_block_from_proto,
 )

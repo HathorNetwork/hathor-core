@@ -101,7 +101,7 @@ class TransactionJSONStorage(BaseTransactionStorage, TransactionStorageAsyncFrom
     def load(self, data):
         from hathor.transaction.transaction import Transaction
         from hathor.transaction.block import Block
-        from hathor.transaction.base_transaction import Output, Input
+        from hathor.transaction.base_transaction import TxOutput, TxInput
 
         nonce = data['nonce']
         timestamp = data['timestamp']
@@ -119,13 +119,13 @@ class TransactionJSONStorage(BaseTransactionStorage, TransactionStorageAsyncFrom
             tx_id = bytes.fromhex(input_tx['tx_id'])
             index = input_tx['index']
             input_data = base64.b64decode(input_tx['data'])
-            inputs.append(Input(tx_id, index, input_data))
+            inputs.append(TxInput(tx_id, index, input_data))
 
         outputs = []
         for output in data['outputs']:
             value = output['value']
             script = base64.b64decode(output['script'])
-            outputs.append(Output(value, script))
+            outputs.append(TxOutput(value, script))
 
         tokens = [bytes.fromhex(uid) for uid in data['tokens']]
 

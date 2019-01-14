@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, List, Optional, Set
 from twisted.logger import Logger
 
 from hathor import protos
-from hathor.transaction.base_transaction import BaseTransaction, Output, sum_weights
+from hathor.transaction.base_transaction import BaseTransaction, TxOutput, sum_weights
 from hathor.transaction.exceptions import BlockHeightError, BlockWithInputs, BlockWithTokensError
 
 if TYPE_CHECKING:
@@ -14,7 +14,7 @@ class Block(BaseTransaction):
     log = Logger()
 
     def __init__(self, nonce: int = 0, timestamp: Optional[int] = None, version: int = 1, weight: float = 0,
-                 height: int = 0, outputs: Optional[List[Output]] = None, parents: Optional[List[bytes]] = None,
+                 height: int = 0, outputs: Optional[List[TxOutput]] = None, parents: Optional[List[bytes]] = None,
                  hash: Optional[bytes] = None, storage: Optional['TransactionStorage'] = None) -> None:
         super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight, height=height,
                          outputs=outputs or [], parents=parents or [], hash=hash, storage=storage, is_block=True)
@@ -26,7 +26,7 @@ class Block(BaseTransaction):
             timestamp=self.timestamp,
             height=self.height,
             parents=self.parents,
-            outputs=map(Output.to_proto, self.outputs),
+            outputs=map(TxOutput.to_proto, self.outputs),
             nonce=self.nonce,
             hash=self.hash,
         )
@@ -46,7 +46,7 @@ class Block(BaseTransaction):
             nonce=block_proto.nonce,
             hash=block_proto.hash or None,
             parents=list(block_proto.parents),
-            outputs=list(map(Output.create_from_proto, block_proto.outputs)),
+            outputs=list(map(TxOutput.create_from_proto, block_proto.outputs)),
             storage=storage,
         )
         if block_proto.HasField('metadata'):
