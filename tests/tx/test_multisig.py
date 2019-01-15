@@ -3,6 +3,7 @@ import time
 import base58
 from twisted.internet.task import Clock
 
+from hathor.constants import HATHOR_TOKEN_UID
 from hathor.crypto.util import get_private_key_from_bytes, get_public_key_bytes_compressed
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import ScriptError
@@ -56,7 +57,7 @@ class MultisigTestCase(unittest.TestCase):
     def test_spend_multisig(self):
         # Adding funds to the wallet
         add_new_blocks(self.manager, 2, advance_clock=15)
-        self.assertEqual(self.manager.wallet.balance, WalletBalance(0, 4000))
+        self.assertEqual(self.manager.wallet.balance[HATHOR_TOKEN_UID], WalletBalance(0, 4000))
 
         # First we send tokens to a multisig address
         outputs = [
@@ -71,7 +72,7 @@ class MultisigTestCase(unittest.TestCase):
         self.manager.propagate_tx(tx1)
         self.clock.advance(10)
 
-        self.assertEqual(self.manager.wallet.balance, WalletBalance(0, 2000))
+        self.assertEqual(self.manager.wallet.balance[HATHOR_TOKEN_UID], WalletBalance(0, 2000))
 
         # Then we create a new tx that spends this tokens from multisig wallet
         tx = Transaction.create_from_struct(tx1.get_struct())
@@ -119,7 +120,7 @@ class MultisigTestCase(unittest.TestCase):
         # Now we propagate the correct
         self.assertTrue(self.manager.propagate_tx(tx))
 
-        self.assertEqual(self.manager.wallet.balance, WalletBalance(0, 2800))
+        self.assertEqual(self.manager.wallet.balance[HATHOR_TOKEN_UID], WalletBalance(0, 2800))
 
         # Testing the MultiSig class methods
         cls_script = parse_address_script(multisig_script)

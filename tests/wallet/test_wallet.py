@@ -1,12 +1,11 @@
-import base64
-import json
-import os
 import shutil
 import tempfile
+from collections import defaultdict
 
 from cryptography.hazmat.primitives import serialization
 
-from hathor.crypto.util import get_address_b58_from_public_key, get_private_key_bytes, get_private_key_from_bytes
+from hathor.constants import HATHOR_TOKEN_UID
+from hathor.crypto.util import get_address_b58_from_public_key, get_private_key_bytes
 from hathor.transaction import Transaction, TxInput
 from hathor.transaction.genesis import genesis_transactions
 from hathor.transaction.storage import TransactionMemoryStorage
@@ -15,7 +14,7 @@ from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutp
 from hathor.wallet.exceptions import InsuficientFunds, InvalidAddress, OutOfUnusedAddresses, WalletLocked
 from hathor.wallet.keypair import KeyPair
 from tests import unittest
-from tests.utils import add_new_block
+from tests.utils import add_new_block, create_tokens, get_genesis_key
 
 BLOCK_REWARD = 300
 
@@ -26,19 +25,11 @@ class BasicWallet(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.directory = tempfile.mkdtemp(dir='/tmp/')
-        # read genesis keys
-        filepath = os.path.join(os.getcwd(), 'hathor/wallet/genesis_keys.json')
-        dict_data = None
-        with open(filepath, 'r') as json_file:
-            dict_data = json.loads(json_file.read())
-        b64_private_key = dict_data['private_key']
-        private_key_bytes = base64.b64decode(b64_private_key)
-        self.genesis_private_key = get_private_key_from_bytes(private_key_bytes)
-        self.genesis_address = get_address_b58_from_public_key(self.genesis_private_key.public_key())
-        self.genesis_private_key_bytes = get_private_key_bytes(
-            self.genesis_private_key, encryption_algorithm=serialization.BestAvailableEncryption(PASSWORD))
         self.storage = TransactionMemoryStorage()
         self.manager = self.create_peer('testnet', unlock_wallet=True)
+        # read genesis keys
+        self.genesis_private_key = get_genesis_key()
+        self.genesis_public_key = self.genesis_private_key.public_key()
 
     def tearDown(self):
         shutil.rmtree(self.directory)
@@ -61,8 +52,13 @@ class BasicWallet(unittest.TestCase):
             self.assertEqual(key, key2)
 
     def test_wallet_create_transaction(self):
+        genesis_private_key_bytes = get_private_key_bytes(
+            self.genesis_private_key,
+            encryption_algorithm=serialization.BestAvailableEncryption(PASSWORD)
+        )
+        genesis_address = get_address_b58_from_public_key(self.genesis_public_key)
         # create wallet with genesis block key
-        key_pair = KeyPair(private_key_bytes=self.genesis_private_key_bytes, address=self.genesis_address, used=True)
+        key_pair = KeyPair(private_key_bytes=genesis_private_key_bytes, address=genesis_address, used=True)
         keys = {}
         keys[key_pair.address] = key_pair
         w = Wallet(keys=keys, directory=self.directory)
@@ -74,9 +70,9 @@ class BasicWallet(unittest.TestCase):
         # wallet will receive genesis block and store in unspent_tx
         w.on_new_tx(genesis_block)
         for index in range(len(genesis_block.outputs)):
-            utxo = w.unspent_txs.get((genesis_block.hash, index))
+            utxo = w.unspent_txs[HATHOR_TOKEN_UID].get((genesis_block.hash, index))
             self.assertIsNotNone(utxo)
-        self.assertEqual(w.balance, WalletBalance(0, genesis_value))
+        self.assertEqual(w.balance[HATHOR_TOKEN_UID], WalletBalance(0, genesis_value))
 
         # create transaction spending this value, but sending to same wallet
         new_address = w.get_unused_address()
@@ -87,7 +83,7 @@ class BasicWallet(unittest.TestCase):
         self.storage.save_transaction(tx1)
         w.on_new_tx(tx1)
         self.assertEqual(len(w.spent_txs), 1)
-        self.assertEqual(w.balance, WalletBalance(0, genesis_value))
+        self.assertEqual(w.balance[HATHOR_TOKEN_UID], WalletBalance(0, genesis_value))
 
         # pass inputs and outputs to prepare_transaction, but not the input keys
         # spend output last transaction
@@ -95,13 +91,14 @@ class BasicWallet(unittest.TestCase):
         new_address = w.get_unused_address()
         key2 = w.keys[new_address]
         out = WalletOutputInfo(w.decode_address(key2.address), 100, timelock=None)
-        tx2 = w.prepare_transaction_incomplete_inputs(Transaction, inputs=[input_info], outputs=[out])
+        tx2 = w.prepare_transaction_incomplete_inputs(Transaction, inputs=[input_info],
+                                                      outputs=[out], tx_storage=self.storage)
         tx2.storage = self.storage
         tx2.update_hash()
         self.storage.save_transaction(tx2)
         w.on_new_tx(tx2)
         self.assertEqual(len(w.spent_txs), 2)
-        self.assertEqual(w.balance, WalletBalance(0, genesis_value))
+        self.assertEqual(w.balance[HATHOR_TOKEN_UID], WalletBalance(0, genesis_value))
 
         # test keypair exception
         with self.assertRaises(WalletLocked):
@@ -117,9 +114,9 @@ class BasicWallet(unittest.TestCase):
         tx = w.prepare_transaction(Transaction, inputs=[], outputs=[out])
         tx.update_hash()
         w.on_new_tx(tx)
-        utxo = w.unspent_txs.get((tx.hash, 0))
+        utxo = w.unspent_txs[HATHOR_TOKEN_UID].get((tx.hash, 0))
         self.assertIsNotNone(utxo)
-        self.assertEqual(w.balance, WalletBalance(0, BLOCK_REWARD))
+        self.assertEqual(w.balance[HATHOR_TOKEN_UID], WalletBalance(0, BLOCK_REWARD))
 
     def test_locked(self):
         # generate a new block and check if we increase balance
@@ -174,8 +171,51 @@ class BasicWallet(unittest.TestCase):
         genesis_blocks = [tx for tx in genesis_transactions(None) if tx.is_block]
         genesis_block = genesis_blocks[0]
         other_input = TxInput(genesis_block.hash, 0, b'')
-        my_inputs, other_inputs = self.manager.wallet.separate_inputs([my_input, other_input])
+        my_inputs, other_inputs = self.manager.wallet.separate_inputs([my_input, other_input], self.manager.tx_storage)
         self.assertEqual(len(my_inputs), 1)
         self.assertEqual(my_inputs[0], my_input)
         self.assertEqual(len(other_inputs), 1)
         self.assertEqual(other_inputs[0], other_input)
+
+    def test_create_token_transaction(self):
+        add_new_block(self.manager, advance_clock=5)
+        tx = create_tokens(self.manager)
+
+        tokens_created = tx.outputs[0].value
+        token_uid = tx.tokens[0]
+        address_b58 = self.manager.wallet.get_unused_address()
+        address = self.manager.wallet.decode_address(address_b58)
+
+        _, hathor_balance = self.manager.wallet.balance[HATHOR_TOKEN_UID]
+        # prepare tx with hathors and another token
+        # hathor tx
+        hathor_out = WalletOutputInfo(address, hathor_balance, None)
+        # token tx
+        token_out = WalletOutputInfo(address, tokens_created - 20, None, token_uid.hex())
+
+        tx2 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, [hathor_out, token_out])
+        tx2.storage = self.manager.tx_storage
+        tx2.timestamp = tx.timestamp + 1
+        tx2.parents = self.manager.get_new_tx_parents()
+        tx2.resolve()
+        tx2.verify()
+
+        self.assertNotEqual(len(tx2.inputs), 0)
+        token_dict = defaultdict(int)
+        for _input in tx2.inputs:
+            output_tx = self.manager.tx_storage.get_transaction(_input.tx_id)
+            output = output_tx.outputs[_input.index]
+            token_uid = output_tx.get_token_uid(output.get_token_index())
+            token_dict[token_uid] += output.value
+
+        # make sure balance is the same and we've checked both balances
+        did_enter = 0
+        for token_uid, value in token_dict.items():
+            if token_uid == HATHOR_TOKEN_UID:
+                self.assertEqual(value, hathor_balance)
+                did_enter += 1
+            elif token_uid == token_uid:
+                self.assertEqual(value, tokens_created)
+                did_enter += 1
+
+        self.assertEqual(did_enter, 2)

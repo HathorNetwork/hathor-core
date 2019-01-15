@@ -164,7 +164,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         inputs = [WalletInputInfo(tx_id=tx1.hash, index=1, private_key=None)]
         outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         self.clock.advance(1)
-        tx2 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
+        tx2 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
+                                                                         self.manager1.tx_storage)
         tx2.weight = 5
         tx2.parents = tx1.parents
         tx2.timestamp = int(self.clock.seconds())
@@ -254,7 +255,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         inputs = [WalletInputInfo(tx_id=blocks[3].hash, index=0, private_key=None)]
         outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         self.clock.advance(1)
-        tx7 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
+        tx7 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
+                                                                         self.manager1.tx_storage)
         tx7.weight = 10
         tx7.parents = [tx4.hash, tx5.hash]
         tx7.timestamp = int(self.clock.seconds())

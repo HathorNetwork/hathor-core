@@ -1,7 +1,5 @@
 import base64
 import hashlib
-import json
-import os
 import time
 
 from twisted.internet.task import Clock
@@ -28,7 +26,7 @@ from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet import Wallet
 from tests import unittest
-from tests.utils import add_new_blocks, add_new_transactions
+from tests.utils import add_new_blocks, add_new_transactions, get_genesis_key
 
 
 class BasicTransaction(unittest.TestCase):
@@ -41,16 +39,8 @@ class BasicTransaction(unittest.TestCase):
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
 
         # read genesis keys
-        filepath = os.path.join(os.getcwd(), 'hathor/wallet/genesis_keys.json')
-        dict_data = None
-        with open(filepath, 'r') as json_file:
-            dict_data = json.loads(json_file.read())
-        b64_private_key = dict_data['private_key']
-        b64_public_key = dict_data['public_key']
-        private_key_bytes = base64.b64decode(b64_private_key)
-        public_key_bytes = base64.b64decode(b64_public_key)
-        self.genesis_private_key = get_private_key_from_bytes(private_key_bytes)
-        self.genesis_public_key = get_public_key_from_bytes(public_key_bytes)
+        self.genesis_private_key = get_genesis_key()
+        self.genesis_public_key = self.genesis_private_key.public_key()
 
         # random keys to be used
         random_priv = 'MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQgMnAHVIyj7Hym2yI' \

@@ -55,7 +55,7 @@ class NanoContractDecodeResource(resource.Resource):
                 else:
                     outputs.append(_output.to_human_readable())
 
-            my_inputs, other_inputs = self.manager.wallet.separate_inputs(tx.inputs)
+            my_inputs, other_inputs = self.manager.wallet.separate_inputs(tx.inputs, self.manager.tx_storage)
 
             my_inputs = [_in.to_human_readable() for _in in my_inputs]
             other_inputs = [_in.to_human_readable() for _in in other_inputs]

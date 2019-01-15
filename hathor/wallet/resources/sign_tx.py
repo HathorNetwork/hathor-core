@@ -46,7 +46,7 @@ class SignTxResource(resource.Resource):
             try:
                 tx = Transaction.create_from_struct(tx_bytes)
                 tx.storage = self.manager.tx_storage
-                self.manager.wallet.sign_transaction(tx)
+                self.manager.wallet.sign_transaction(tx, self.manager.tx_storage)
 
                 if prepare_to_send:
                     tx.parents = self.manager.get_new_tx_parents()

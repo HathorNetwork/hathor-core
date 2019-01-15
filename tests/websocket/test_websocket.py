@@ -3,6 +3,7 @@ from unittest.mock import Mock
 
 from twisted.test import proto_helpers
 
+from hathor.constants import HATHOR_TOKEN_UID
 from hathor.metrics import Metrics
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.transaction.genesis import genesis_transactions
@@ -62,7 +63,8 @@ class TestWebsocket(unittest.TestCase):
     def test_balance(self):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
-        self.manager.pubsub.publish(HathorEvents.WALLET_BALANCE_UPDATED, balance=WalletBalance(10, 20))
+        self.manager.pubsub.publish(HathorEvents.WALLET_BALANCE_UPDATED,
+                                    balance={HATHOR_TOKEN_UID: WalletBalance(10, 20)})
         value = self._decode_value(self.transport.value())
         self.assertEqual(value['balance']['locked'], 10)
         self.assertEqual(value['balance']['available'], 20)
@@ -72,7 +74,7 @@ class TestWebsocket(unittest.TestCase):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
         gen_tx = genesis_transactions(None)[0]
-        output = UnspentTx(gen_tx.hash, 0, 10, gen_tx.timestamp, '')
+        output = UnspentTx(gen_tx.hash, 0, 10, gen_tx.timestamp, '', gen_tx.outputs[0].token_data)
         self.manager.pubsub.publish(HathorEvents.WALLET_OUTPUT_RECEIVED, total=10, output=output)
         value = self._decode_value(self.transport.value())
         self.assertEqual(value['total'], 10)
