@@ -3,6 +3,7 @@ from collections import namedtuple
 from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Set, Tuple
 
 from hathor import protos
+from hathor.constants import HATHOR_TOKEN_UID
 from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, BaseTransaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
     ConflictingInputs,
@@ -213,6 +214,9 @@ class Transaction(BaseTransaction):
             if token_info.amount == 0:
                 # that's the usual behavior, nothing to do
                 pass
+            elif token_uid == HATHOR_TOKEN_UID:
+                raise InputOutputMismatch('Sum of inputs is different than the sum of outputs (difference: {})'.format(
+                    token_info.amount))
             elif token_info.amount > 0:
                 # tokens have been melted
                 if not token_info.can_melt:

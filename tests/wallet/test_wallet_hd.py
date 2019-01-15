@@ -1,4 +1,4 @@
-from hathor.constants import DECIMAL_PLACES, TOKENS_PER_BLOCK
+from hathor.constants import DECIMAL_PLACES, HATHOR_TOKEN_UID, TOKENS_PER_BLOCK
 from hathor.transaction import Transaction
 from hathor.wallet import HDWallet
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
@@ -25,9 +25,9 @@ class WalletHD(unittest.TestCase):
         out = WalletOutputInfo(self.wallet.decode_address(new_address), TOKENS, timelock=None)
         block = add_new_block(self.manager)
         block.verify()
-        utxo = self.wallet.unspent_txs.get((block.hash, 0))
+        utxo = self.wallet.unspent_txs[HATHOR_TOKEN_UID].get((block.hash, 0))
         self.assertIsNotNone(utxo)
-        self.assertEqual(self.wallet.balance, WalletBalance(0, BLOCK_TOKENS))
+        self.assertEqual(self.wallet.balance[HATHOR_TOKEN_UID], WalletBalance(0, BLOCK_TOKENS))
 
         # create transaction spending this value, but sending to same wallet
         new_address2 = self.wallet.get_unused_address()
@@ -39,16 +39,17 @@ class WalletHD(unittest.TestCase):
         self.wallet.on_new_tx(tx1)
         self.tx_storage.save_transaction(tx1)
         self.assertEqual(len(self.wallet.spent_txs), 1)
-        utxo = self.wallet.unspent_txs.get((tx1.hash, 0))
+        utxo = self.wallet.unspent_txs[HATHOR_TOKEN_UID].get((tx1.hash, 0))
         self.assertIsNotNone(utxo)
-        self.assertEqual(self.wallet.balance, WalletBalance(0, TOKENS))
+        self.assertEqual(self.wallet.balance[HATHOR_TOKEN_UID], WalletBalance(0, TOKENS))
 
         # pass inputs and outputs to prepare_transaction, but not the input keys
         # spend output last transaction
         input_info = WalletInputInfo(tx1.hash, 0, None)
         new_address3 = self.wallet.get_unused_address()
         out = WalletOutputInfo(self.wallet.decode_address(new_address3), TOKENS, timelock=None)
-        tx2 = self.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs=[input_info], outputs=[out])
+        tx2 = self.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs=[input_info],
+                                                                outputs=[out], tx_storage=self.tx_storage)
         tx2.storage = self.tx_storage
         tx2.update_hash()
         tx2.storage = self.tx_storage
@@ -56,7 +57,7 @@ class WalletHD(unittest.TestCase):
         self.tx_storage.save_transaction(tx2)
         self.wallet.on_new_tx(tx2)
         self.assertEqual(len(self.wallet.spent_txs), 2)
-        self.assertEqual(self.wallet.balance, WalletBalance(0, TOKENS))
+        self.assertEqual(self.wallet.balance[HATHOR_TOKEN_UID], WalletBalance(0, TOKENS))
 
         # Test getting more unused addresses than the gap limit
         for i in range(3):

@@ -64,7 +64,8 @@ class SendTokensResource(resource.Resource):
                     input_tx['tx_id'] = bytes.fromhex(input_tx['tx_id'])
                     inputs.append(WalletInputInfo(**input_tx))
                 try:
-                    tx = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs)
+                    tx = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
+                                                                                   self.manager.tx_storage)
                 except (PrivateKeyNotFound, InputDuplicated):
                     return self.return_POST(False, 'Invalid input to create transaction')
 

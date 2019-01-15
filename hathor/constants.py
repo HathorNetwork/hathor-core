@@ -18,6 +18,8 @@ MULTISIG_VERSION_BYTE = b'\x05'
 # Weight of genesis and minimum weight of a tx/block
 MIN_WEIGHT = 14
 
+HATHOR_TOKEN_UID = b'\x00'
+
 # Maximum distance between two consecutive blocks (in seconds), except for genesis.
 # This prevent some DoS attacks exploiting the calculation of the score of a side chain.
 MAX_DISTANCE_BETWEEN_BLOCKS = 30*64  # P(t > T) = 1/e^30 = 9.35e-14

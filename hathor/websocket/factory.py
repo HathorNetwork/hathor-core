@@ -4,6 +4,7 @@ from collections import deque
 from autobahn.twisted.websocket import WebSocketServerFactory
 from twisted.internet import reactor
 
+from hathor.constants import HATHOR_TOKEN_UID
 from hathor.metrics import Metrics
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.pubsub import HathorEvents
@@ -158,7 +159,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             data['is_block'] = tx.is_block
             return data
         elif event == HathorEvents.WALLET_BALANCE_UPDATED:
-            data['balance'] = data['balance']._asdict()
+            data['balance'] = data['balance'][HATHOR_TOKEN_UID]._asdict()
             return data
         else:
             raise ValueError('Should never have entered here! We dont know this event')

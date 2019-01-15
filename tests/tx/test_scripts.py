@@ -1,18 +1,9 @@
-import base64
-import json
-import os
 import struct
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from hathor.crypto.util import (
-    get_address_from_public_key,
-    get_hash160,
-    get_private_key_from_bytes,
-    get_public_key_bytes_compressed,
-    get_public_key_from_bytes,
-)
+from hathor.crypto.util import get_address_from_public_key, get_hash160, get_public_key_bytes_compressed
 from hathor.transaction.exceptions import (
     DataIndexError,
     EqualVerifyFailed,
@@ -49,9 +40,20 @@ from hathor.transaction.scripts import (
 )
 from hathor.wallet import HDWallet
 from tests import unittest
+from tests.utils import get_genesis_key
 
 
 class BasicTransaction(unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        from hathor.transaction.genesis import genesis_transactions
+        self.genesis_blocks = [tx for tx in genesis_transactions(None) if tx.is_block]
+        self.genesis_txs = [tx for tx in genesis_transactions(None) if not tx.is_block]
+
+        # read genesis keys
+        self.genesis_private_key = get_genesis_key()
+        self.genesis_public_key = self.genesis_private_key.public_key()
+
     def test_pushdata(self):
         stack = []
         random_bytes = b'a' * 50
@@ -100,22 +102,10 @@ class BasicTransaction(unittest.TestCase):
             op_equalverify([elem, b'aaaa'], log=[], extras=None)
 
     def test_checksig(self):
-        filepath = os.path.join(os.getcwd(), 'hathor/wallet/genesis_keys.json')
-        dict_data = None
-        with open(filepath, 'r') as json_file:
-            dict_data = json.loads(json_file.read())
-        b64_private_key = dict_data['private_key']
-        b64_public_key = dict_data['public_key']
-        private_key_bytes = base64.b64decode(b64_private_key)
-        public_key_bytes = base64.b64decode(b64_public_key)
-        genesis_private_key = get_private_key_from_bytes(private_key_bytes)
-        genesis_public_key = get_public_key_from_bytes(public_key_bytes)
-
         with self.assertRaises(MissingStackItems):
             op_checksig([1], log=[], extras=None)
 
-        from hathor.transaction.genesis import genesis_transactions
-        block = [x for x in genesis_transactions(None) if x.is_block][0]
+        block = self.genesis_blocks[0]
 
         from hathor.transaction import Transaction, TxInput, TxOutput
         txin = TxInput(tx_id=block.hash, index=0, data=b'')
@@ -125,8 +115,8 @@ class BasicTransaction(unittest.TestCase):
         import hashlib
         data_to_sign = tx.get_sighash_all()
         hashed_data = hashlib.sha256(data_to_sign).digest()
-        signature = genesis_private_key.sign(hashed_data, ec.ECDSA(hashes.SHA256()))
-        pubkey_bytes = get_public_key_bytes_compressed(genesis_public_key)
+        signature = self.genesis_private_key.sign(hashed_data, ec.ECDSA(hashes.SHA256()))
+        pubkey_bytes = get_public_key_bytes_compressed(self.genesis_public_key)
 
         extras = ScriptExtras(tx=tx, txin=None, spent_tx=None)
 
@@ -150,23 +140,12 @@ class BasicTransaction(unittest.TestCase):
         self.assertEqual(hash160, stack.pop())
 
     def test_checkdatasig(self):
-        filepath = os.path.join(os.getcwd(), 'hathor/wallet/genesis_keys.json')
-        dict_data = None
-        with open(filepath, 'r') as json_file:
-            dict_data = json.loads(json_file.read())
-        b64_private_key = dict_data['private_key']
-        b64_public_key = dict_data['public_key']
-        private_key_bytes = base64.b64decode(b64_private_key)
-        public_key_bytes = base64.b64decode(b64_public_key)
-        genesis_private_key = get_private_key_from_bytes(private_key_bytes)
-        genesis_public_key = get_public_key_from_bytes(public_key_bytes)
-
         with self.assertRaises(MissingStackItems):
             op_checkdatasig([1, 1], log=[], extras=None)
 
         data = b'some_random_data'
-        signature = genesis_private_key.sign(data, ec.ECDSA(hashes.SHA256()))
-        pubkey_bytes = get_public_key_bytes_compressed(genesis_public_key)
+        signature = self.genesis_private_key.sign(data, ec.ECDSA(hashes.SHA256()))
+        pubkey_bytes = get_public_key_bytes_compressed(self.genesis_public_key)
 
         stack = [data, signature, pubkey_bytes]
         # no exception should be raised and data is left on stack
@@ -324,14 +303,7 @@ class BasicTransaction(unittest.TestCase):
         out3 = P2PKH.create_output_script(base58.b58decode(addr3))
 
         # read genesis keys
-        filepath = os.path.join(os.getcwd(), 'hathor/wallet/genesis_keys.json')
-        dict_data = None
-        with open(filepath, 'r') as json_file:
-            dict_data = json.loads(json_file.read())
-        b64_private_key = dict_data['private_key']
-        private_key_bytes = base64.b64decode(b64_private_key)
-        genesis_private_key = get_private_key_from_bytes(private_key_bytes)
-        genesis_address = get_address_from_public_key(genesis_private_key.public_key())
+        genesis_address = get_address_from_public_key(self.genesis_public_key)
         out_genesis = P2PKH.create_output_script(genesis_address)
 
         from hathor.transaction import Transaction, TxOutput, TxInput

@@ -3,6 +3,7 @@ import json
 from twisted.web import resource
 
 from hathor.api_util import set_cors
+from hathor.constants import HATHOR_TOKEN_UID
 
 
 class BalanceResource(resource.Resource):
@@ -25,5 +26,5 @@ class BalanceResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        data = {'balance': self.manager.wallet.balance._asdict()}
+        data = {'balance': self.manager.wallet.balance[HATHOR_TOKEN_UID]._asdict()}
         return json.dumps(data, indent=4).encode('utf-8')
