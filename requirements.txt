@@ -19,8 +19,10 @@ colorama
 ipython
 
 flake8
+isort
+mypy
 pytest
-pytest-cov
+pytest_cov
 
 grpcio==1.16.0
 grpcio-tools==1.16.0
