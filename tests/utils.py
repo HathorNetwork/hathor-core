@@ -6,14 +6,16 @@ import subprocess
 import time
 import urllib.parse
 from concurrent import futures
-from typing import TYPE_CHECKING
 
 import grpc
+import numpy.random
 import requests
+from twisted.internet.task import Clock
 from twisted.test import proto_helpers
 
-from hathor.constants import DECIMAL_PLACES, TOKENS_PER_BLOCK
+from hathor.constants import DECIMAL_PLACES, HATHOR_TOKEN_UID, TOKENS_PER_BLOCK
 from hathor.crypto.util import get_private_key_from_bytes
+from hathor.manager import HathorEvents, HathorManager
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import (
@@ -21,9 +23,6 @@ from hathor.transaction.storage import (
     TransactionRemoteStorage,
     create_transaction_storage_server,
 )
-
-if TYPE_CHECKING:
-    from hathor.manager import HathorManager
 
 
 def resolve_block_bytes(block_bytes):
@@ -142,12 +141,18 @@ def add_new_blocks(manager, num_blocks, advance_clock=None, *, parent_block_hash
 
 
 class FakeConnection:
-    def __init__(self, server_manager, client_manager):
-        self.server_manager = server_manager
-        self.client_manager = client_manager
+    def __init__(self, manager1, manager2, *, latency: float = 0):
+        """
+        :param: latency: Latency between nodes in seconds
+        """
+        self.manager1 = manager1
+        self.manager2 = manager2
 
-        self.proto1 = server_manager.server_factory.buildProtocol(('127.0.0.1', 0))
-        self.proto2 = client_manager.client_factory.buildProtocol(('127.0.0.1', 0))
+        self.latency = latency
+        self.is_connected = True
+
+        self.proto1 = manager1.server_factory.buildProtocol(('127.0.0.1', 0))
+        self.proto2 = manager2.client_factory.buildProtocol(('127.0.0.1', 0))
 
         self.tr1 = proto_helpers.StringTransport()
         self.tr2 = proto_helpers.StringTransport()
@@ -155,32 +160,198 @@ class FakeConnection:
         self.proto1.makeConnection(self.tr1)
         self.proto2.makeConnection(self.tr2)
 
-    def run_one_step(self, debug=False):
+    def run_one_step(self, debug=False, force=False):
+        if not self.is_connected:
+            raise Exception()
+
         line1 = self.tr1.value()
         line2 = self.tr2.value()
-
-        if debug:
-            print('--')
-            print('line1', line1)
-            print('line2', line2)
-            print('--')
 
         self.tr1.clear()
         self.tr2.clear()
 
-        if line1:
-            self.proto2.dataReceived(line1)
-        if line2:
-            self.proto1.dataReceived(line2)
+        if self.latency > 0:
+            if line1:
+                self.manager1.reactor.callLater(self.latency, self.deliver_message, self.proto2, line1)
+            if line2:
+                self.manager2.reactor.callLater(self.latency, self.deliver_message, self.proto1, line2)
+
+        else:
+            if line1:
+                self.proto2.dataReceived(line1)
+                if debug:
+                    print('[1->2]', line1)
+
+            if line2:
+                self.proto1.dataReceived(line2)
+                if debug:
+                    print('[2->1]', line2)
+
+        return True
+
+    def deliver_message(self, proto, data):
+        proto.dataReceived(data)
 
     def disconnect(self, reason):
         self.tr1.loseConnection()
         self.proto1.connectionLost(reason)
         self.tr2.loseConnection()
         self.proto2.connectionLost(reason)
+        self.is_connected = False
 
     def is_empty(self):
         return not self.tr1.value() and not self.tr2.value()
+
+
+class Simulator:
+    def __init__(self, clock: Clock):
+        self.clock = clock
+        self.connections = []
+
+    def add_connection(self, conn: FakeConnection):
+        self.connections.append(conn)
+
+    def run(self, interval: float, step: float = 0.25, status_interval: float = 60.0):
+        initial = self.clock.seconds()
+        latest_time = self.clock.seconds()
+        while self.clock.seconds() <= initial + interval:
+            for conn in self.connections:
+                conn.run_one_step()
+            if self.clock.seconds() - latest_time >= status_interval:
+                print('t={:15.2f}    dt={:8.2f}    toBeRun={:8.2f}    delayedCall={}'.format(
+                    self.clock.seconds(),
+                    self.clock.seconds() - initial,
+                    interval - self.clock.seconds() + initial,
+                    len(self.clock.getDelayedCalls()),
+                ))
+                latest_time = self.clock.seconds()
+            self.clock.advance(step)
+
+
+class MinerSimulator:
+    """ Simulate block mining with actually solving the block. It is supposed to be used
+    with Simulator class. The mining part is simulated using the geometrical distribution.
+    """
+    def __init__(self, manager: HathorManager, *, hashpower: float):
+        """
+        :param: hashpower: Number of hashes per second
+        """
+        self.manager = manager
+        self.hashpower = hashpower
+        self.clock = manager.reactor
+        self.block = None
+        self.delayedcall = None
+
+    def start(self) -> None:
+        """ Start mining blocks.
+        """
+        self.manager.pubsub.subscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, self.on_new_tx)
+        self.schedule_next_block()
+
+    def stop(self) -> None:
+        """ Stop mining blocks.
+        """
+        if self.delayedcall:
+            self.delayedcall.cancel()
+            self.delayedcall = None
+        self.manager.pubsub.unsubscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, self.on_new_tx)
+
+    def on_new_tx(self, key: HathorEvents, args):
+        """ Called when a new tx or block is received. It updates the current mining to the
+        new block.
+        """
+        tx = args.tx
+        if not tx.is_block:
+            return
+        if not self.block:
+            return
+
+        tips = tx.storage.get_best_block_tips()
+        if self.block.parents[0] not in tips:
+            # Head changed
+            self.block = None
+            self.schedule_next_block()
+
+    def schedule_next_block(self):
+        """ Schedule the propagation of the next block, and propagate a block if it has been found.
+        """
+        if self.block:
+            self.block.nonce = random.randrange(0, 2**32)
+            self.block.update_hash()
+            self.manager.propagate_tx(self.block)
+            self.block = None
+
+        block = self.manager.generate_mining_block()
+        geometric_p = 2**(-block.weight)
+        trials = numpy.random.geometric(geometric_p)
+        dt = 1.0 * trials / self.hashpower
+
+        self.block = block
+        if self.delayedcall and self.delayedcall.active():
+            self.delayedcall.cancel()
+        self.delayedcall = self.clock.callLater(dt, self.schedule_next_block)
+
+
+class RandomTransactionGenerator:
+    """ Generates random transactions without mining. It is supposed to be used
+    with Simulator class. The mining part is simulated using the geometrical distribution.
+    """
+    def __init__(self, manager: HathorManager, *, rate: float, hashpower: float, ignore_no_funds: bool = False):
+        """
+        :param: rate: Number of transactions per second
+        :param: hashpower: Number of hashes per second
+        """
+        self.manager = manager
+        self.clock = manager.reactor
+        self.rate = rate
+        self.hashpower = hashpower
+        self.ignore_no_funds = ignore_no_funds
+        self.tx = None
+        self.delayedcall = None
+
+    def start(self):
+        """ Start generating random transactions.
+        """
+        self.schedule_next_transaction()
+
+    def stop(self):
+        """ Stop generating random transactions.
+        """
+        if self.delayedcall:
+            self.delayedcall.cancel()
+            self.delayedcall = None
+
+    def schedule_next_transaction(self):
+        """ Schedule the generation of a new transaction.
+        """
+        if self.tx:
+            self.manager.propagate_tx(self.tx)
+            self.tx = None
+
+        dt = random.expovariate(self.rate)
+        self.delayedcall = self.clock.callLater(dt, self.new_tx_step1)
+
+    def new_tx_step1(self):
+        """ Generate a new transaction and schedule the mining part of the transaction.
+        """
+        balance = self.manager.wallet.balance[HATHOR_TOKEN_UID]
+        if balance.available == 0 and self.ignore_no_funds:
+            self.delayedcall = self.clock.callLater(0, self.schedule_next_transaction)
+            return
+
+        address = self.manager.wallet.get_unused_address(mark_as_used=False)
+        value = random.choice([1, 2, 3, 4])
+        tx = gen_new_tx(self.manager, address, value)
+        tx.timestamp = int(self.clock.seconds())
+        tx.weight = self.manager.minimum_tx_weight(tx)
+        tx.update_hash()
+
+        geometric_p = 2**(-tx.weight)
+        trials = numpy.random.geometric(geometric_p)
+        dt = 1.0 * trials / self.hashpower
+
+        self.tx = tx
+        self.delayedcall = self.clock.callLater(dt, self.schedule_next_transaction)
 
 
 def run_server(hostname='localhost', listen=8005, listen_ssl=False, status=8085, bootstrap=None, tries=100):

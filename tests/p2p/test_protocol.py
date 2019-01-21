@@ -1,9 +1,7 @@
 import json
-import sys
 import time
 
 from twisted.internet.task import Clock
-from twisted.python import log
 
 from hathor.p2p.node_sync import NodeSyncTimestamp
 from hathor.p2p.peer_id import PeerId
@@ -15,7 +13,6 @@ from tests.utils import FakeConnection, add_new_block
 class HathorProtocolTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        log.startLogging(sys.stdout)
 
         self.clock = Clock()
         self.clock.advance(time.time())

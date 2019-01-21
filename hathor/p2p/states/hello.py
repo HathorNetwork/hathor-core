@@ -7,7 +7,7 @@ from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.states.base import BaseState
 
 if TYPE_CHECKING:
-    from hathor.p2p.protocol import HathorProtocol
+    from hathor.p2p.protocol import HathorProtocol  # noqa: F401
 
 
 class HelloState(BaseState):

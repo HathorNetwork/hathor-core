@@ -12,7 +12,6 @@ from hathor.protos.transaction_storage_pb2 import (
     ONLY_OLDER,
     TOPOLOGICAL_ORDER,
     TRANSACTION_TYPE,
-    VOIDED,
     CountRequest,
     CountResponse,
     ExistsRequest,

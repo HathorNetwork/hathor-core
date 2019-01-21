@@ -7,7 +7,7 @@ from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorLineReceiver
 
 if TYPE_CHECKING:
-    from hathor.manager import HathorManager
+    from hathor.manager import HathorManager  # noqa: F401
 
 MyServerProtocol = HathorLineReceiver
 MyClientProtocol = HathorLineReceiver

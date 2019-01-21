@@ -14,7 +14,7 @@ from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
 
 if TYPE_CHECKING:
-    from hathor.manager import HathorManager
+    from hathor.manager import HathorManager  # noqa: F401
     from hathor.p2p.manager import ConnectionsManager  # noqa: F401
 
 
@@ -45,10 +45,52 @@ class HathorProtocol:
 
     class Metrics:
         def __init__(self) -> None:
-            self.received_messages = 0
-            self.sent_messages = 0
-            self.received_bytes = 0
-            self.sent_bytes = 0
+            self.received_messages: int = 0
+            self.sent_messages: int = 0
+            self.received_bytes: int = 0
+            self.sent_bytes: int = 0
+            self.received_txs: int = 0
+            self.discarded_txs: int = 0
+            self.received_blocks: int = 0
+            self.discarded_blocks: int = 0
+
+        def format_bytes(self, value: int):
+            """ Format bytes in MB and kB.
+            """
+            if value > 1024*1024:
+                return '{:11.2f} MB'.format(value / 1024 / 1024)
+            elif value > 1024:
+                return '{:11.2f} kB'.format(value / 1024)
+            else:
+                return '{} B'.format(value)
+
+        def print_stats(self, prefix=''):
+            """ Print a status of the metrics in stdout.
+            """
+            print('----')
+            print('{}Received:       {:8d} messages  {}'.format(
+                prefix,
+                self.received_messages,
+                self.format_bytes(self.received_bytes))
+            )
+            print('{}Sent:           {:8d} messages  {}'.format(
+                prefix,
+                self.sent_messages,
+                self.format_bytes(self.sent_bytes))
+            )
+            print('{}Blocks:         {:8d} received  {:8d} discarded ({:2.0f}%)'.format(
+                prefix,
+                self.received_blocks,
+                self.discarded_blocks,
+                100.0 * self.discarded_blocks / (self.received_blocks + self.discarded_blocks)
+            ))
+            print('{}Transactions:   {:8d} received  {:8d} discarded ({:2.0f}%)'.format(
+                prefix,
+                self.received_txs,
+                self.discarded_txs,
+                100.0 * self.discarded_txs / (self.received_txs + self.discarded_txs)
+            ))
+            print('----')
 
     class RateLimitKeys(str, Enum):
         GLOBAL = 'global'

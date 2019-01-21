@@ -1,9 +1,7 @@
 import random
-import sys
 import time
 
 from twisted.internet.task import Clock
-from twisted.python import log
 
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
 from hathor.transaction.storage.remote_storage import RemoteCommunicationError, TransactionRemoteStorage
@@ -15,7 +13,10 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
-        log.startLogging(sys.stdout)
+        # import sys
+        # from twisted.python import log
+        # log.startLogging(sys.stdout)
+
         self.clock = Clock()
         self.clock.advance(time.time())
         self.network = 'testnet'
@@ -91,15 +92,6 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
             expected_result = expected_result[::-1]
             self.assertEqual(result, expected_result)
 
-    def assertTipsEqual(self, manager1, manager2):
-        s1 = set(manager1.tx_storage.get_tx_tips())
-        s1.update(manager1.tx_storage.get_block_tips())
-
-        s2 = set(manager2.tx_storage.get_tx_tips())
-        s2.update(manager2.tx_storage.get_block_tips())
-
-        self.assertEqual(s1, s2)
-
     def test_block_sync_only_genesis(self):
         manager2 = self.create_peer(self.network)
         self.assertEqual(manager2.state, manager2.NodeState.READY)
@@ -166,13 +158,18 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         conn = FakeConnection(self.manager1, manager2)
 
-        for _ in range(500):
-            if conn.is_empty():
-                break
+        for _ in range(1000):
             conn.run_one_step()
             self.clock.advance(0.1)
 
+        # dot1 = self.manager1.tx_storage.graphviz(format='pdf')
+        # dot1.render('dot1')
+
+        # dot2 = manager2.tx_storage.graphviz(format='pdf')
+        # dot2.render('dot2')
+
         node_sync = conn.proto1.state.get_sync_plugin()
+        self.assertEqual(self.manager1.tx_storage.latest_timestamp, manager2.tx_storage.latest_timestamp)
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
         self.assertTipsEqual(self.manager1, manager2)
 

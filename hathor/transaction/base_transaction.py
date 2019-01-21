@@ -7,9 +7,8 @@ import struct
 import time
 from abc import ABC, abstractclassmethod, abstractmethod
 from enum import Enum
-from itertools import chain
 from math import log
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
 
 from _hashlib import HASH
 
@@ -274,87 +273,6 @@ class BaseTransaction(ABC):
         """
         raise NotImplementedError
 
-    # XXX: should be moved away from BaseTransaction and into Transaction
-    def mark_as_voided(self) -> None:
-        """ Mark a transaction as voided when it has a conflict and its aggregated weight
-        is NOT the greatest one.
-        """
-        from hathor.transaction.transaction import Transaction
-
-        assert self.hash is not None
-        assert self.storage is not None
-        assert isinstance(self, Transaction)
-
-        meta = self.get_metadata()
-        assert (len(meta.conflict_with) > 0)
-
-        meta.voided_by.add(self.hash)
-        self.storage.save_transaction(self, only_metadata=True)
-        self.storage._del_from_cache(self)  # XXX: accessing private method
-        self.storage._add_to_voided(self)  # XXX: accessing private method
-
-        used: Set[bytes] = set()
-        # TODO FIXME Run in topological sort.
-        it = chain(
-            self.storage.iter_bfs_children(self),
-            self.storage.iter_bfs_spent_by(self),
-        )
-        for tx in it:
-            assert tx.hash is not None
-            if tx.hash in used:
-                continue
-            used.add(tx.hash)
-            meta = tx.get_metadata()
-
-            check_conflicts = False
-            if meta.conflict_with and not meta.voided_by:
-                check_conflicts = True
-
-            meta.voided_by.add(self.hash)
-            self.storage.save_transaction(tx, only_metadata=True)
-            self.storage._del_from_cache(tx)
-            self.storage._add_to_voided(tx)
-
-            if check_conflicts:
-                assert isinstance(tx, Transaction)
-                tx.check_conflicts()
-
-    # XXX: should be moved away from BaseTransaction and into Transaction
-    def mark_as_winner(self) -> None:
-        """ Mark a transaction as winner when it has a conflict and its aggregated weight
-        is the greatest one.
-        """
-        from hathor.transaction.transaction import Transaction
-
-        assert self.hash is not None
-        assert self.storage is not None
-        assert isinstance(self, Transaction)
-
-        meta = self.get_metadata()
-        assert (len(meta.conflict_with) > 0)  # FIXME: this looks like a runtime guarantee, MUST NOT be an assert
-
-        meta.voided_by.discard(self.hash)
-        self.storage.save_transaction(self, only_metadata=True)
-        self.storage._del_from_voided(self)
-        self.storage._add_to_cache(self)
-
-        used: Set[bytes] = set()
-        # TODO FIXME Run in topological sort.
-        it = chain(
-            self.storage.iter_bfs_children(self),
-            self.storage.iter_bfs_spent_by(self),
-        )
-        for tx in it:
-            assert tx.hash is not None
-            if tx.hash in used:
-                continue
-            used.add(tx.hash)
-            meta = tx.get_metadata()
-            meta.voided_by.discard(self.hash)
-            self.storage.save_transaction(tx, only_metadata=True)
-            self.storage._del_from_voided(tx)
-            self.storage._add_to_cache(tx)
-
     def get_sighash_all(self, clear_input_data: bool = True) -> bytes:
         """Return a  serialization of the inputs and outputs, without including any other field
 
@@ -500,7 +418,7 @@ class BaseTransaction(ABC):
                         ))
                     my_parents_txs += 1
             except TransactionDoesNotExist:
-                raise ParentDoesNotExist('tx={} parent={}'.format(self.hash.hex(), parent_hash))
+                raise ParentDoesNotExist('tx={} parent={}'.format(self.hash.hex(), parent_hash.hex()))
 
         # check for correct number of parents
         if self.is_block:

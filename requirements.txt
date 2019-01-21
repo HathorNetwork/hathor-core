@@ -23,6 +23,7 @@ isort
 mypy
 pytest
 pytest_cov
+numpy
 
 grpcio==1.16.0
 grpcio-tools==1.16.0

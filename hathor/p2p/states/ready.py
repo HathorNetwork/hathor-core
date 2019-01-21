@@ -12,7 +12,7 @@ from hathor.p2p.states.base import BaseState
 from hathor.transaction import BaseTransaction
 
 if TYPE_CHECKING:
-    from hathor.p2p.protocol import HathorProtocol
+    from hathor.p2p.protocol import HathorProtocol  # noqa: F401
 
 
 class ReadyState(BaseState):

@@ -5,7 +5,7 @@ from twisted.logger import Logger
 from hathor.p2p.messages import ProtocolMessages
 
 if TYPE_CHECKING:
-    from hathor.p2p.protocol import HathorProtocol
+    from hathor.p2p.protocol import HathorProtocol  # noqa: F401
 
 
 class BaseState:

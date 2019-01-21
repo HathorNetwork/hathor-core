@@ -1,7 +1,9 @@
+import random
 import shutil
 import tempfile
 import time
 
+import numpy.random
 from twisted.internet import reactor
 from twisted.internet.task import Clock
 from twisted.trial import unittest
@@ -45,6 +47,22 @@ class TestCase(unittest.TestCase):
         manager.test_mode = True
         manager.start()
         return manager
+
+    def set_random_seed(self, seed=None):
+        if seed is None:
+            seed = numpy.random.randint(2**32)
+        self.random_seed = seed
+        random.seed(self.random_seed)
+        numpy.random.seed(self.random_seed)
+
+    def assertTipsEqual(self, manager1, manager2):
+        s1 = set(manager1.tx_storage.get_all_tips())
+        s2 = set(manager2.tx_storage.get_all_tips())
+        self.assertEqual(s1, s2)
+
+        s1 = set(manager1.tx_storage.get_tx_tips())
+        s2 = set(manager2.tx_storage.get_tx_tips())
+        self.assertEqual(s1, s2)
 
     def clean_tmpdirs(self):
         for tmpdir in self.tmpdirs:

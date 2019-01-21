@@ -1,9 +1,7 @@
 import random
-import sys
 import time
 
 from twisted.internet.task import Clock
-from twisted.python import log
 
 from tests import unittest
 from tests.utils import add_new_blocks, add_new_tx, start_remote_storage
@@ -13,7 +11,6 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
-        log.startLogging(sys.stdout)
         self.clock = Clock()
         self.clock.advance(time.time())
         self.network = 'testnet'

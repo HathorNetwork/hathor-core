@@ -1,4 +1,5 @@
-from typing import TYPE_CHECKING, List, Optional, Set
+from itertools import chain
+from typing import TYPE_CHECKING, Iterable, List, Optional, Set
 
 from twisted.logger import Logger
 
@@ -320,17 +321,15 @@ class Block(BaseTransaction):
 
         if is_connected_to_the_head and is_connected_to_the_best_chain:
             # Case (i): Single best chain, connected to the head of the best chain
+            self.update_score_and_mark_as_the_best_chain()
             heads = [self.storage.get_transaction(h) for h in self.storage.get_best_block_tips()]
             assert len(heads) == 1
-            self.update_score_and_mark_as_the_best_chain()
 
         else:
             # Resolve all other cases, but (i).
 
             # First, void this block.
-            meta = self.get_metadata()
-            meta.voided_by.add(self.hash)
-            self.storage.save_transaction(self, only_metadata=True)
+            self.mark_as_voided(skip_remove_first_block_markers=True)
 
             # Get the score of the best chains.
             # We need to void this block first, because otherwise it would always be one of the heads.
@@ -375,29 +374,80 @@ class Block(BaseTransaction):
                     while True:
                         if block.timestamp <= first_block.timestamp:
                             break
-                        block.remove_first_block_markers()
-                        meta = block.get_metadata()
-                        meta.voided_by.add(block.hash)
-                        self.storage.save_transaction(block, only_metadata=True)
+                        block.mark_as_voided()
                         block = self.storage.get_transaction(block.parents[0])
 
                 if score >= best_score + eps:
                     # We have a new winner.
                     self.update_score_and_mark_as_the_best_chain()
-                    self.remove_voided_from_chain()
+                    self.remove_voided_by_from_chain()
 
-    def remove_voided_from_chain(self):
+    def mark_as_voided(self, *, skip_remove_first_block_markers: bool = False):
+        """ Mark a block as voided. By default, it will remove the first block markers from
+        `meta.first_block` of the transactions that point to it.
+        """
+        if not skip_remove_first_block_markers:
+            self.remove_first_block_markers()
+        assert self.add_voided_by()
+
+    def add_voided_by(self, voided_hash: Optional[bytes] = None) -> bool:
+        """ Add a new hash in its `meta.voided_by`. If `voided_hash` is None, it includes
+        the block's own hash.
+        """
+        assert self.storage is not None
+
+        if voided_hash is None:
+            voided_hash = self.hash
+        assert voided_hash is not None
+
+        meta = self.get_metadata()
+        if self.hash in meta.voided_by:
+            return False
+
+        meta.voided_by.add(voided_hash)
+        self.storage.save_transaction(self, only_metadata=True)
+
+        spent_by: Iterable[bytes] = chain(*meta.spent_outputs.values())
+        for tx_hash in spent_by:
+            tx = self.storage.get_transaction(tx_hash)
+            assert not tx.is_block
+            tx.add_voided_by(voided_hash)
+        return True
+
+    def remove_voided_by(self, voided_hash: Optional[bytes] = None) -> bool:
+        """ Remove a hash from its `meta.voided_by`. If `voided_hash` is None, it removes
+        the block's own hash.
+        """
+        assert self.storage is not None
+
+        if voided_hash is None:
+            voided_hash = self.hash
+
+        meta = self.get_metadata()
+        if voided_hash not in meta.voided_by:
+            return False
+
+        meta.voided_by.remove(voided_hash)
+        self.storage.save_transaction(self, only_metadata=True)
+
+        spent_by: Iterable[bytes] = chain(*meta.spent_outputs.values())
+        for tx_hash in spent_by:
+            tx = self.storage.get_transaction(tx_hash)
+            assert not tx.is_block
+            tx.remove_voided_by(voided_hash)
+        return True
+
+    def remove_voided_by_from_chain(self):
         """ Remove voided_by from the chain. Now, it is the best chain.
+
+        The blocks are visited from right to left (most recent to least recent).
         """
         block = self
         while True:
             assert block.is_block
-            meta = block.get_metadata()
-            if not meta.voided_by:
+            success = block.remove_voided_by()
+            if not success:
                 break
-            assert len(meta.voided_by) == 1
-            meta.voided_by.remove(block.hash)
-            block.storage.save_transaction(block, only_metadata=True)
             block = self.storage.get_transaction(block.parents[0])
 
     def _find_first_parent_in_best_chain(self) -> BaseTransaction:
