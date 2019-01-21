@@ -1,10 +1,10 @@
 import random
-import sys
-import time
 
+from mnemonic import Mnemonic
 from twisted.internet.task import Clock
-from twisted.python import log
 
+from hathor.transaction.genesis import genesis_transactions
+from hathor.wallet import HDWallet
 from tests import unittest
 from tests.utils import FakeConnection, add_new_block, add_new_transactions
 
@@ -13,28 +13,40 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
-        log.startLogging(sys.stdout)
+        # import sys
+        # from twisted.python import log
+        # log.startLogging(sys.stdout)
+
+        # self.set_random_seed(0)
+
         self.clock = Clock()
-        self.clock.advance(time.time())
+        first_timestamp = min(tx.timestamp for tx in genesis_transactions(None))
+        self.clock.advance(first_timestamp + random.randint(3600, 120*24*3600))
+
         self.network = 'testnet'
 
-    def assertTipsEqual(self, manager1, manager2):
-        s1 = set(manager1.tx_storage.get_tx_tips())
-        s1.update(manager1.tx_storage.get_block_tips())
+    def create_peer(self, network, unlock_wallet=True):
+        wallet = HDWallet(gap_limit=2)
+        wallet._manually_initialize()
 
-        s2 = set(manager2.tx_storage.get_tx_tips())
-        s2.update(manager2.tx_storage.get_block_tips())
+        manager = super().create_peer(network, wallet=wallet)
+        manager.reactor = self.clock
+        manager.test_mode = True
+        manager.avg_time_between_blocks = 64
 
-        self.assertEqual(s1, s2)
+        # Don't use it anywhere else. It is unsafe to generate mnemonic words like this.
+        # It should be used only for testing purposes.
+        m = Mnemonic('english')
+        words = m.to_mnemonic(bytes(random.randint(0, 255) for _ in range(32)))
+        wallet.unlock(words=words, tx_storage=manager.tx_storage)
+        return manager
 
     def test_split_brain(self):
         manager1 = self.create_peer(self.network, unlock_wallet=True)
         manager1.avg_time_between_blocks = 3
-        manager1.reactor = self.clock
 
         manager2 = self.create_peer(self.network, unlock_wallet=True)
         manager2.avg_time_between_blocks = 3
-        manager2.reactor = self.clock
 
         for _ in range(10):
             add_new_block(manager1)
@@ -46,12 +58,6 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
                 self.clock.advance(10)
 
         self.clock.advance(20)
-
-        # dot1 = manager1.tx_storage.graphviz(format='pdf')
-        # dot1.render('dot1')
-
-        # dot2 = manager2.tx_storage.graphviz(format='pdf')
-        # dot2.render('dot2')
 
         conn = FakeConnection(manager1, manager2)
 
@@ -66,8 +72,15 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
                     break
             else:
                 empty_counter = 0
-            conn.run_one_step(debug=True)
+
+            conn.run_one_step()
             self.clock.advance(0.2)
+
+        # dot1 = manager1.tx_storage.graphviz(format='pdf')
+        # dot1.render('dot1')
+
+        # dot2 = manager2.tx_storage.graphviz(format='pdf')
+        # dot2.render('dot2')
 
         node_sync = conn.proto1.state.get_sync_plugin()
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)

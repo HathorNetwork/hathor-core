@@ -20,7 +20,7 @@ class TransactionStorage(ABC):
     """Legacy sync interface, please copy @deprecated decorator when implementing methods."""
 
     pubsub: Optional[PubSubManager]
-    with_index: bool
+    with_index: bool  # noqa: E701
 
     @abstractmethod
     @deprecated('Use save_transaction_deferred instead')
@@ -32,6 +32,13 @@ class TransactionStorage(ABC):
         :param tx: Transaction to save
         :param only_metadata: Don't save the transaction, only the metadata of this transaction
         """
+        meta = tx.get_metadata()
+        if self.pubsub:
+            if not meta.voided_by:
+                self.pubsub.publish(HathorEvents.STORAGE_TX_WINNER, tx=tx)
+            else:
+                self.pubsub.publish(HathorEvents.STORAGE_TX_VOIDED, tx=tx)
+
         if self.with_index and not only_metadata:
             self._add_to_cache(tx)
 
@@ -195,6 +202,10 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def get_all_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
+        raise NotImplementedError
+
+    @abstractmethod
     def get_tx_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         raise NotImplementedError
 
@@ -299,14 +310,6 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _add_to_voided(self, tx):
-        raise NotImplementedError
-
-    @abstractmethod
-    def _del_from_voided(self, tx):
-        raise NotImplementedError
-
-    @abstractmethod
     def _add_to_cache(self, tx):
         raise NotImplementedError
 
@@ -362,7 +365,8 @@ class TransactionStorage(ABC):
         """
         raise NotImplementedError
 
-    def graphviz(self, format: str = 'pdf', weight: bool = False, acc_weight: bool = False) -> Digraph:
+    def graphviz(self, format: str = 'pdf', weight: bool = False, acc_weight: bool = False,
+                 block_only: bool = False) -> Digraph:
         """Return a Graphviz object that can be rendered to generate a visualization of the DAG.
 
         :param format: Format of the visualization (pdf, png, or jpg)
@@ -400,6 +404,9 @@ class TransactionStorage(ABC):
                 attrs_node = {'label': tx.hash.hex()[-4:]}
                 attrs_edge = {}
 
+                if block_only and not tx.is_block:
+                    continue
+
                 if tx.is_block:
                     attrs_node.update(block_attrs)
                     blocks_set.add(tx.hash)
@@ -433,6 +440,8 @@ class TransactionStorage(ABC):
                         g_t.node(name, **attrs_node)
 
                 for parent_hash in tx.parents:
+                    if block_only and parent_hash not in blocks_set:
+                        continue
                     if parent_hash in blocks_set:
                         attrs_edge.update(dict(penwidth='3'))
                     else:
@@ -467,7 +476,7 @@ class TransactionStorage(ABC):
         dot.attr('node', shape='oval', style='')
         nodes_iter = self._topological_sort()
 
-        block_tips = set(x.data for x in self.get_block_tips())
+        # block_tips = set(x.data for x in self.get_block_tips())
         tx_tips = set(x.data for x in self.get_tx_tips())
 
         with g_genesis as g_g, g_txs as g_t, g_blocks as g_b:
@@ -481,7 +490,7 @@ class TransactionStorage(ABC):
                     attrs_node.update(block_attrs)
                     attrs_edge.update(dict(penwidth='4'))
 
-                if (tx.hash in block_tips) or (tx.hash in tx_tips):
+                if tx.hash in tx_tips:
                     attrs_node.update(tx_tips_attrs)
 
                 if weight:
@@ -558,7 +567,7 @@ class BaseTransactionStorage(TransactionStorage):
 
         self.block_index = IndexesManager()
         self.tx_index = IndexesManager()
-        self.voided_tips_index = TipsIndex()
+        self.all_index = TipsIndex()
 
         self._latest_timestamp = 0
         from hathor.transaction.genesis import genesis_transactions
@@ -569,7 +578,7 @@ class BaseTransactionStorage(TransactionStorage):
         self.with_index = False
         self.block_index = None
         self.tx_index = None
-        self.voided_tips_index = None
+        self.all_index = None
 
     def get_best_block_tips(self, timestamp: Optional[float] = None) -> List[bytes]:
         return super().get_best_block_tips(timestamp)
@@ -586,7 +595,22 @@ class BaseTransactionStorage(TransactionStorage):
             raise NotImplementedError
         if timestamp is None:
             timestamp = self.latest_timestamp
-        return self.tx_index.tips_index[timestamp]
+        tips = self.tx_index.tips_index[timestamp]
+
+        # This `for` is for assert only. How to skip it when running with `-O` parameter?
+        for interval in tips:
+            meta = self.get_metadata(interval.data)
+            assert not meta.voided_by
+
+        return tips
+
+    def get_all_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
+        if not self.with_index:
+            raise NotImplementedError
+        if timestamp is None:
+            timestamp = self.latest_timestamp
+        tips = self.all_index[timestamp]
+        return tips
 
     def get_newest_blocks(self, count: int) -> Tuple[List[Block], bool]:
         if not self.with_index:
@@ -726,24 +750,11 @@ class BaseTransactionStorage(TransactionStorage):
                     to_visit.append(spent_hash)
                     seen.add(spent_hash)
 
-    def _add_to_voided(self, tx: Transaction) -> None:
-        if not self.with_index:
-            raise NotImplementedError
-        self.voided_tips_index.add_tx(tx)
-        if self.pubsub:
-            self.pubsub.publish(HathorEvents.STORAGE_TX_VOIDED, tx=tx)
-
-    def _del_from_voided(self, tx: Transaction) -> None:
-        if not self.with_index:
-            raise NotImplementedError
-        self.voided_tips_index.del_tx(tx)
-        if self.pubsub:
-            self.pubsub.publish(HathorEvents.STORAGE_TX_WINNER, tx=tx)
-
     def _add_to_cache(self, tx: BaseTransaction) -> None:
         if not self.with_index:
             raise NotImplementedError
         self._latest_timestamp = max(self.latest_timestamp, tx.timestamp)
+        self.all_index.add_tx(tx)
         if tx.is_block:
             self._cache_block_count += 1
             self.block_index.add_tx(tx)

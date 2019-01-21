@@ -82,7 +82,13 @@ class TipsIndex:
     TODO Use an interval tree stored in disk, possibly using a B-tree.
     """
 
+    # An interval tree used to know the tips at any timestamp.
+    # The intervals are in the form (begin, end), where begin is the timestamp
+    # of the transaction, and end is the smallest timestamp of the tx's children.
     tree: IntervalTree
+
+    # It is a way to access the interval by the hash of the transaction.
+    # It is useful because the interval tree allows access only by the interval.
     tx_last_interval: Dict[bytes, Interval]
 
     def __init__(self) -> None:
@@ -95,35 +101,88 @@ class TipsIndex:
         :param tx: Transaction to be added
         """
         assert tx.hash is not None
+        assert tx.storage is not None
         if tx.hash in self.tx_last_interval:
             return
 
+        # Fix the end of the interval of its parents.
         for parent_hash in tx.parents:
             pi = self.tx_last_interval.get(parent_hash, None)
             if not pi:
                 continue
             if tx.timestamp < pi.end:
-                self.tree.discard(pi)
+                self.tree.remove(pi)
                 new_interval = Interval(pi.begin, tx.timestamp, pi.data)
                 self.tree.add(new_interval)
                 self.tx_last_interval[parent_hash] = new_interval
 
-        interval = Interval(tx.timestamp, inf, tx.hash)
+        # Check whether any children has already been added.
+        # It so, the end of the interval is equal to the smallest timestamp of the children.
+        min_timestamp = inf
+        meta = tx.get_metadata()
+        for child_hash in meta.children:
+            if child_hash in self.tx_last_interval:
+                child = tx.storage.get_transaction(child_hash)
+                min_timestamp = min(min_timestamp, child.timestamp)
+
+        # Add the interval to the tree.
+        interval = Interval(tx.timestamp, min_timestamp, tx.hash)
         self.tree.add(interval)
         self.tx_last_interval[tx.hash] = interval
 
     def del_tx(self, tx: BaseTransaction) -> None:
+        """ Remove a transaction from the index.
+        """
         assert tx.hash is not None
+        assert tx.storage is not None
+
         interval = self.tx_last_interval.pop(tx.hash, None)
         if interval is None:
             return
+        assert interval.end == inf
         self.tree.remove(interval)
+
+        # Update its parents as tips if needed.
+        # FIXME Although it works, it does not seem to be a good solution.
+        for parent_hash in tx.parents:
+            parent = tx.storage.get_transaction(parent_hash)
+            if parent.is_block != tx.is_block:
+                continue
+            self.update_tx(parent)
+
+    def update_tx(self, tx: BaseTransaction) -> None:
+        """ Update a tx according to its children.
+        """
+        assert tx.storage is not None
+        assert tx.hash is not None
+
+        meta = tx.get_metadata()
+        if meta.voided_by:
+            assert tx.hash not in self.tx_last_interval
+            return
+
+        pi = self.tx_last_interval[tx.hash]
+
+        min_timestamp = inf
+        for child_hash in meta.children:
+            if child_hash in self.tx_last_interval:
+                child = tx.storage.get_transaction(child_hash)
+                min_timestamp = min(min_timestamp, child.timestamp)
+
+        if min_timestamp != pi.end:
+            self.tree.remove(pi)
+            new_interval = Interval(pi.begin, min_timestamp, pi.data)
+            self.tree.add(new_interval)
+            self.tx_last_interval[tx.hash] = new_interval
 
     def __getitem__(self, index: float) -> Set[Interval]:
         return self.tree[index]
 
 
 class TransactionsIndex:
+    """ Index of transactions sorted by their timestamps.
+    """
+
     transactions: 'SortedKeyList[TransactionIndexElement]'
 
     def __init__(self) -> None:

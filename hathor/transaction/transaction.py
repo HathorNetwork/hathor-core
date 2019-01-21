@@ -1,5 +1,6 @@
 import hashlib
 from collections import namedtuple
+from itertools import chain
 from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Set, Tuple
 
 from hathor import protos
@@ -308,6 +309,9 @@ class Transaction(BaseTransaction):
         if self.hash in meta.voided_by:
             voided_by.add(self.hash)
 
+        if voided_by:
+            self.storage._del_from_cache(self)  # XXX: accessing private method
+
         if meta.voided_by != voided_by:
             meta.voided_by = voided_by.copy()
             self.storage.save_transaction(self, only_metadata=True)
@@ -318,6 +322,83 @@ class Transaction(BaseTransaction):
             tx = self.storage.get_transaction(h)
             if not tx.is_block:
                 tx.check_conflicts()
+
+    def mark_as_voided(self) -> None:
+        """ Mark a transaction as voided when it has a conflict and its aggregated weight
+        is NOT the greatest one.
+        """
+        assert self.hash is not None
+        meta = self.get_metadata()
+        assert (len(meta.conflict_with) > 0)
+        self.add_voided_by(self.hash)
+
+    def add_voided_by(self, voided_hash: bytes) -> bool:
+        """ Add a hash from `meta.voided_by` and its descendants (both from verification DAG
+        and funds tree).
+        """
+        assert self.hash is not None
+        assert self.storage is not None
+
+        meta = self.get_metadata()
+        if voided_hash in meta.voided_by:
+            return False
+
+        check_conflicts = False
+        if meta.conflict_with and not meta.voided_by:
+            check_conflicts = True
+
+        it = chain(
+            meta.children,
+            chain(*meta.spent_outputs.values()),
+        )
+        for tx_hash in it:
+            tx = self.storage.get_transaction(tx_hash)
+            tx.add_voided_by(voided_hash)
+
+        meta.voided_by.add(voided_hash)
+        self.storage.save_transaction(self, only_metadata=True)
+        self.storage._del_from_cache(self)  # XXX: accessing private method
+
+        if check_conflicts:
+            self.check_conflicts()
+
+        return True
+
+    def mark_as_winner(self) -> None:
+        """ Mark a transaction as winner when it has a conflict and its aggregated weight
+        is the greatest one.
+        """
+        assert self.hash is not None
+        meta = self.get_metadata()
+        assert (len(meta.conflict_with) > 0)  # FIXME: this looks like a runtime guarantee, MUST NOT be an assert
+        self.remove_voided_by(self.hash)
+
+    def remove_voided_by(self, voided_hash: bytes) -> bool:
+        """ Remove a hash from `meta.voided_by` and its descendants (both from verification DAG
+        and funds tree).
+        """
+        assert self.hash is not None
+        assert self.storage is not None
+
+        meta = self.get_metadata()
+        if voided_hash not in meta.voided_by:
+            return False
+
+        meta.voided_by.discard(voided_hash)
+        self.storage.save_transaction(self, only_metadata=True)
+
+        if not meta.voided_by:
+            self.storage._add_to_cache(self)
+
+        it = chain(
+            meta.children,
+            chain(*meta.spent_outputs.values()),
+        )
+        for tx_hash in it:
+            tx = self.storage.get_transaction(tx_hash)
+            tx.remove_voided_by(voided_hash)
+
+        return True
 
     def mark_inputs_as_used(self) -> None:
         """ Mark all its inputs as used

@@ -374,6 +374,7 @@ class HathorManager:
 
         # Publish to pubsub manager the new tx accepted
         self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
+
         return True
 
     def calculate_block_difficulty(self, block: Block) -> float:
@@ -400,9 +401,7 @@ class HathorManager:
             return MIN_WEIGHT
 
         dt = blocks[-1].timestamp - blocks[0].timestamp
-
-        if dt <= 0:
-            dt = 1  # Strange situation, so, let's just increase difficulty.
+        assert dt > 0
 
         logH = 0.0
         for blk in blocks:

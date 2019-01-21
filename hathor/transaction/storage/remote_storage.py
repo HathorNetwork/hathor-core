@@ -233,6 +233,19 @@ class TransactionRemoteStorage(TransactionStorage):
         return super().get_best_block_tips(timestamp)
 
     @convert_grpc_exceptions
+    def get_all_tips(self, timestamp=None):
+        self._check_connection()
+        if isinstance(timestamp, float) and timestamp != inf:
+            self.log.warn('timestamp given in float will be truncated, use int instead')
+            timestamp = int(timestamp)
+        request = protos.ListTipsRequest(tx_type=protos.ANY_TYPE, timestamp=timestamp)
+        result = self._stub.ListTips(request)
+        tips = set()
+        for interval_proto in result:
+            tips.add(Interval(interval_proto.begin, interval_proto.end, interval_proto.data))
+        return tips
+
+    @convert_grpc_exceptions
     def get_block_tips(self, timestamp=None):
         self._check_connection()
         if isinstance(timestamp, float) and timestamp != inf:
@@ -459,20 +472,6 @@ class TransactionRemoteStorage(TransactionStorage):
         })
 
     @convert_grpc_exceptions
-    def _add_to_voided(self, tx):
-        self._check_connection()
-        tx_proto = tx.to_proto()
-        request = protos.MarkAsRequest(transaction=tx_proto, mark_type=protos.VOIDED)
-        result = self._stub.MarkAs(request)  # noqa: F841
-
-    @convert_grpc_exceptions
-    def _del_from_voided(self, tx):
-        self._check_connection()
-        tx_proto = tx.to_proto()
-        request = protos.MarkAsRequest(transaction=tx_proto, mark_type=protos.VOIDED, remove_mark=True)
-        result = self._stub.MarkAs(request)  # noqa: F841
-
-    @convert_grpc_exceptions
     def _add_to_cache(self, tx):
         self._check_connection()
         tx_proto = tx.to_proto()
@@ -635,11 +634,6 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
                 self.storage._del_from_cache(tx)
             else:
                 self.storage._add_to_cache(tx)
-        elif request.mark_type == protos.VOIDED:
-            if request.remove_mark:
-                self.storage._del_from_voided(tx)
-            else:
-                self.storage._add_to_voided(tx)
         else:
             raise ValueError('invalid mark_type')
 
@@ -724,7 +718,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
             timestamp = request.timestamp
 
         if request.tx_type == protos.ANY_TYPE:
-            raise NotImplementedError
+            tx_intervals = self.storage.get_all_tips(timestamp)
         elif request.tx_type == protos.TRANSACTION_TYPE:
             tx_intervals = self.storage.get_tx_tips(timestamp)
         elif request.tx_type == protos.BLOCK_TYPE:

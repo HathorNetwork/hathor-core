@@ -519,7 +519,7 @@ class BaseWallet:
 
                     # Save in voided_unspent, if it's not there yet
                     # First try to find it in voided_unspent
-                    voided_utxo = self.voided_unspent.pop(key, None)
+                    voided_utxo = self.voided_unspent.get(key, None)
                     if not voided_utxo:
                         # If it's not there, we add it
                         voided = UnspentTx(tx.hash, index, tx_output.value, tx.timestamp, script_type_out.address,

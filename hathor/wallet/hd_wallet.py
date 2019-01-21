@@ -18,7 +18,7 @@ class HDWallet(BaseWallet):
     """ Hierarchical Deterministic Wallet based in BIP32 (https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki)
     """
 
-    def __init__(self, words: Optional[Any] = None, language: str = 'english', passphrase: bytes = b'',
+    def __init__(self, *, words: Optional[Any] = None, language: str = 'english', passphrase: bytes = b'',
                  gap_limit: int = 20, word_count: int = 24, directory: str = './', pubsub: Optional[Any] = None,
                  reactor: Optional[Any] = None, initial_key_generation: Optional[Any] = None) -> None:
         """

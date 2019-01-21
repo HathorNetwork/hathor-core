@@ -73,7 +73,6 @@ message FirstTimestampResponse {
 
 enum MarkType {
   FOR_CACHING = 0;
-  VOIDED = 1;
 }
 
 message MarkAsRequest {

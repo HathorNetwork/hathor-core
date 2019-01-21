@@ -15,11 +15,14 @@ from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
 if TYPE_CHECKING:
-    from hathor.p2p.protocol import HathorProtocol
+    from hathor.p2p.protocol import HathorProtocol  # noqa: F401
 
 
 class NodeSyncTimestamp(Plugin):
     """ An algorithm to sync the DAG between two peers using the timestamp of the transactions.
+
+    This algorithm must assume that a new item may arrive while it is running. The item's timestamp
+    may be recent or old, changing the tips of any timestamp.
     """
     log = Logger()
 
@@ -44,16 +47,17 @@ class NodeSyncTimestamp(Plugin):
         self.call_later_id: Optional[IDelayedCall] = None
         self.call_later_interval: int = 1  # seconds
 
-        # Latest data timestamp of the peer.
         self.peer_timestamp: int = 0
+
+        # Latest data timestamp of the peer.
         self.peer_merkle_hash: Optional[int] = None
-        self.next_timestamp: int = 0
         self.previous_timestamp: int = 0
 
         # Latest deferred waiting for a reply.
         self.deferred_by_key: Dict[str, Deferred] = {}
 
         # Latest timestamp in which we're synced.
+        # This number may decrease if a new transaction/block arrives in a timestamp smaller than it.
         self.synced_timestamp: int = 0
 
         self.is_running: bool = False
@@ -107,11 +111,9 @@ class NodeSyncTimestamp(Plugin):
 
         :rtype: Tuple[bytes(hash), List[bytes(hash)]]
         """
-        tx_intervals = self.manager.tx_storage.get_tx_tips(timestamp)
-        blk_intervals = self.manager.tx_storage.get_block_tips(timestamp)
+        intervals = self.manager.tx_storage.get_all_tips(timestamp)
 
-        hashes = [x.data for x in tx_intervals]
-        hashes.extend(x.data for x in blk_intervals)
+        hashes = [x.data for x in intervals]
         hashes.sort()
 
         merkle = hashlib.sha256()
@@ -173,63 +175,15 @@ class NodeSyncTimestamp(Plugin):
         return deferred
 
     @inlineCallbacks
-    def find_synced_timestamp(self) -> Iterator[Union[Iterator, Iterator[Deferred]]]:
-        """ Search time highest timestamp in which we are synced.
-
-        It uses an exponential search followed by a binary search.
-        """
-        # self.log.debug('Running find_synced_timestamp...')
-        tips = cast(TipsPayload, (yield self.get_peer_tips()))
-        if self.peer_timestamp:
-            assert tips.timestamp >= self.peer_timestamp, '{} < {}'.format(tips.timestamp, self.peer_timestamp)
-        self.peer_timestamp = tips.timestamp
-
-        # Exponential search to find an interval.
-        cur = min(self.manager.tx_storage.latest_timestamp, tips.timestamp)
-        local_merkle_tree, _ = self.get_merkle_tree(cur)
-        step = 1
-        while tips.merkle_tree != local_merkle_tree:
-            if cur <= self.manager.tx_storage.first_timestamp:
-                raise Exception('Should never happen.')
-            cur = max(cur - step, self.manager.tx_storage.first_timestamp)
-            tips = cast(TipsPayload, (yield self.get_peer_tips(cur)))
-            local_merkle_tree, _ = self.get_merkle_tree(cur)
-            step *= 2
-
-        # Binary search to find inside the interval.
-        low = cur
-        high = cur + step - 1
-        while low < high:
-            mid = (low + high + 1) // 2
-            tips = cast(TipsPayload, (yield self.get_peer_tips(mid)))
-            local_merkle_tree, _ = self.get_merkle_tree(mid)
-            if tips.merkle_tree == local_merkle_tree:
-                low = mid
-            else:
-                high = tips.prev_timestamp
-
-        # Timestamp found.
-        assert low == high
-        self.synced_timestamp = low
-
-        tips = cast(TipsPayload, (yield self.get_peer_tips(self.synced_timestamp)))
-        local_merkle_tree, _ = self.get_merkle_tree(self.synced_timestamp)
-        assert tips.merkle_tree == local_merkle_tree
-
-        self.next_timestamp = tips.next_timestamp
-        # self.log.debug('Synced at {} (latest timestamp {})'.format(self.synced_timestamp, self.peer_timestamp))
-
-    @inlineCallbacks
-    def sync_until_timestamp(self, timestamp: int) -> Iterator[Deferred]:
+    def sync_from_timestamp(self, next_timestamp: int) -> Iterator[Deferred]:
         """ Download all unknown hashes until synced timestamp reaches `timestamp`.
+        It assumes that we're synced in all timestamps smaller than `next_timestamp`.
 
-        :param timestamp: Timestamp to be reached
-        :type timestamp: int
+        :param next_timestamp: Timestamp to start the sync
         """
-        # self.log.debug('Syncing at {}'.format(timestamp))
-        assert self.next_timestamp < inf
+        self.log.debug('Sync starting at {}'.format(next_timestamp))
+        assert next_timestamp < inf
         pending = []
-        next_timestamp = self.next_timestamp
         next_offset = 0
         while True:
             payload = cast(NextPayload, (yield self.get_peer_next(next_timestamp, offset=next_offset)))
@@ -245,33 +199,82 @@ class NodeSyncTimestamp(Plugin):
             if next_timestamp == inf:
                 break
             if next_timestamp > self.peer_timestamp:
-                self.peer_timestamp = next_timestamp
+                break
         for deferred in pending:
             yield deferred
-        if self.synced_timestamp > self.peer_timestamp:
-            self.peer_timestamp = self.synced_timestamp
 
     @inlineCallbacks
-    def sync_at_timestamp(self, timestamp):
-        """ Download all unknown hashes at a given timestamp.
+    def find_synced_timestamp(self) -> Iterator[Union[Iterator, Iterator[Deferred]]]:
+        """ Search for the highest timestamp in which we are synced.
 
-        :param timestamp: Timestamp to be synced
-        :type timestamp: int
+        It uses an exponential search followed by a binary search.
         """
+        # self.log.debug('Running find_synced_timestamp...')
+        tips = cast(TipsPayload, (yield self.get_peer_tips()))
+        if self.peer_timestamp:
+            # Peer's timestamp cannot go backwards.
+            assert tips.timestamp >= self.peer_timestamp, '{} < {}'.format(tips.timestamp, self.peer_timestamp)
+        self.peer_timestamp = tips.timestamp
+
+        # Assumption: Both exponential search and binary search are safe to run even when new
+        #             items are arriving in the network.
+
+        # Exponential search to find an interval.
+        # Maximum of ceil(log(k)), where k is the number of items between the new one and the latest item.
+        prev_cur = None
+        cur = self.peer_timestamp
+        local_merkle_tree, _ = self.get_merkle_tree(cur)
+        step = 1
+        while tips.merkle_tree != local_merkle_tree:
+            if cur <= self.manager.tx_storage.first_timestamp:
+                raise Exception('We cannot go before genesis. Is it an attacker?!')
+            prev_cur = cur
+            cur = min(cur - step, tips.prev_timestamp)
+            cur = max(cur, self.manager.tx_storage.first_timestamp)
+            tips = cast(TipsPayload, (yield self.get_peer_tips(cur)))
+            local_merkle_tree, _ = self.get_merkle_tree(cur)
+            step *= 2
+
+        # Here, both nodes are synced at timestamp `cur` and not synced at timestamp `prev_cur`.
+        if prev_cur is None:
+            self.synced_timestamp = cur
+            return None
+
+        # Binary search to find inside the interval.
+        # Maximum of ceil(log(k)) - 1, where k is the number of items between the new one and the latest item.
+        # During the binary search, we are synced at `low` and not synced at `high`.
+        low = cur
+        high = prev_cur
+        while high - low > 1:
+            mid = (low + high + 1) // 2
+            tips = cast(TipsPayload, (yield self.get_peer_tips(mid)))
+            local_merkle_tree, _ = self.get_merkle_tree(mid)
+            if tips.merkle_tree == local_merkle_tree:
+                low = mid
+            else:
+                high = mid
+
+        # Synced timestamp found.
+        self.synced_timestamp = low
+        assert self.synced_timestamp <= self.peer_timestamp
+
+        if low == high:
+            assert low == tips.timestamp
+            return None
+
+        assert low + 1 == high
+        self.log.debug('Synced at {} (latest timestamp {})'.format(self.synced_timestamp, self.peer_timestamp))
+        return self.synced_timestamp + 1
 
     @inlineCallbacks
     def _next_step(self) -> Iterator[Union[Iterator, Iterator[Deferred]]]:
         """ Run the next step to keep nodes synced.
         """
-        yield self.find_synced_timestamp()
+        next_timestamp = yield self.find_synced_timestamp()
+        if next_timestamp is None:
+            return
 
-        delta = self.peer_timestamp - self.synced_timestamp
-        assert delta >= 0
-
-        if delta > 0:
-            assert self.next_timestamp <= self.peer_timestamp
-            assert self.next_timestamp > self.synced_timestamp
-            yield self.sync_until_timestamp(self.peer_timestamp)
+        yield self.sync_from_timestamp(next_timestamp)
 
     @inlineCallbacks
     def next_step(self) -> Iterator[Union[Iterator, Iterator[Deferred]]]:
@@ -322,8 +325,7 @@ class NodeSyncTimestamp(Plugin):
         """ Send a NEXT message.
         """
         # Tips that won't be sent.
-        ignore_intervals = self.manager.tx_storage.get_tx_tips(timestamp - 1)
-        ignore_intervals.update(self.manager.tx_storage.get_block_tips(timestamp - 1))
+        ignore_intervals = self.manager.tx_storage.get_all_tips(timestamp - 1)
         ignore_hashes = set(x.data for x in ignore_intervals)
 
         hashes = []
@@ -331,8 +333,7 @@ class NodeSyncTimestamp(Plugin):
         next_timestamp = timestamp
         next_offset = 0
         while True:
-            partial = self.manager.tx_storage.get_tx_tips(next_timestamp)
-            partial.update(self.manager.tx_storage.get_block_tips(next_timestamp))
+            partial = self.manager.tx_storage.get_all_tips(next_timestamp)
 
             if len(partial) == 0:
                 break
@@ -356,8 +357,7 @@ class NodeSyncTimestamp(Plugin):
 
             # Look for transactions confirming already confirmed transactions
             while min_end != inf:
-                tmp = self.manager.tx_storage.get_tx_tips(min_end - 1)
-                tmp.update(self.manager.tx_storage.get_block_tips(min_end - 1))
+                tmp = self.manager.tx_storage.get_all_tips(min_end - 1)
                 tmp.difference_update(partial)
                 if not tmp:
                     break
@@ -421,9 +421,7 @@ class NodeSyncTimestamp(Plugin):
             timestamp = self.manager.tx_storage.latest_timestamp
 
         # All tips
-        tx_intervals = self.manager.tx_storage.get_tx_tips(timestamp)
-        blk_intervals = self.manager.tx_storage.get_block_tips(timestamp)
-        intervals = tx_intervals.union(blk_intervals)
+        intervals = self.manager.tx_storage.get_all_tips(timestamp)
 
         if len(intervals) == 0:
             raise Exception('No tips for timestamp {}'.format(timestamp))
@@ -436,9 +434,7 @@ class NodeSyncTimestamp(Plugin):
 
         # Look for transactions confirming already confirmed transactions
         while min_end != inf:
-            tx_tmp = self.manager.tx_storage.get_tx_tips(min_end - 1)
-            blk_tmp = self.manager.tx_storage.get_block_tips(min_end - 1)
-            tmp = tx_tmp.union(blk_tmp)
+            tmp = self.manager.tx_storage.get_all_tips(min_end - 1)
             tmp.difference_update(intervals)
             if not tmp:
                 break
@@ -554,7 +550,20 @@ class NodeSyncTimestamp(Plugin):
             # Will it reduce peer reputation score?
             return
         tx.storage = self.protocol.node.tx_storage
+
         result = self.manager.on_new_tx(tx, conn=self.protocol)
+
+        # Update statistics.
+        if result:
+            if tx.is_block:
+                self.protocol.metrics.received_blocks += 1
+            else:
+                self.protocol.metrics.received_txs += 1
+        else:
+            if tx.is_block:
+                self.protocol.metrics.discarded_blocks += 1
+            else:
+                self.protocol.metrics.discarded_txs += 1
 
         assert tx.hash is not None
         key = 'get-data-{}'.format(tx.hash.hex())
