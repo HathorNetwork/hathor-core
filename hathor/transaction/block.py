@@ -354,7 +354,7 @@ class Block(BaseTransaction):
                 pass
 
             else:
-                # Eveyone has the same score. \o/
+                # Either eveyone has the same score or there is a winner.
 
                 valid_heads = []
                 for block in heads:
@@ -366,15 +366,22 @@ class Block(BaseTransaction):
                 # Either we have a single best chain or all chains have already been voided.
                 assert len(valid_heads) <= 1, 'We must never have more than one valid head'
 
-                if len(valid_heads) == 1:
-                    # Remove first block markers only if there is a single best chain.
-                    # Otherwise, the markers have already been removed before.
-                    first_block = self._find_first_parent_in_best_chain()
-                    block = heads[0]
+                # We need to go through all side chains because there may be non-voided blocks
+                # that must be voided.
+                # For instance, imagine two chains with intersection with both heads voided.
+                # Now, a new chain starting in genesis reaches the same score. Then, the tail
+                # of the two chains must be voided.
+                first_block = self._find_first_parent_in_best_chain()
+                for block in heads:
                     while True:
                         if block.timestamp <= first_block.timestamp:
                             break
-                        block.mark_as_voided()
+                        meta = block.get_metadata()
+                        if not meta.voided_by:
+                            # Only mark as voided when it is non-voided.
+                            block.mark_as_voided()
+                        # We have to go through the chain until the first parent in the best
+                        # chain because the head may be voided with part of the tail non-voided.
                         block = self.storage.get_transaction(block.parents[0])
 
                 if score >= best_score + eps:
