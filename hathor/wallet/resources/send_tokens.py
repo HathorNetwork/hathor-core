@@ -7,11 +7,13 @@ from twisted.web import resource
 from twisted.web.http import Request
 
 from hathor.api_util import render_options, set_cors
+from hathor.cli.openapi_files.register import register_resource
 from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InputDuplicated, InsuficientFunds, InvalidAddress, PrivateKeyNotFound
 
 
+@register_resource
 class SendTokensResource(resource.Resource):
     """ Implements a web server API to send tokens.
 
@@ -133,3 +135,143 @@ class SendTokensResource(resource.Resource):
 
     def render_OPTIONS(self, request):
         return render_options(request)
+
+
+SendTokensResource.openapi = {
+    '/wallet/send_tokens': {
+        'post': {
+            'tags': ['wallet'],
+            'operationId': 'wallet_send_tokens',
+            'summary': 'Send tokens',
+            'requestBody': {
+                'description': 'Data to create transactions',
+                'required': True,
+                'content': {
+                    'application/json': {
+                        'schema': {
+                            '$ref': '#/components/schemas/SendToken'
+                        },
+                        'examples': {
+                            'data': {
+                                'summary': 'Data to create transactions',
+                                'value': {
+                                    'data': {
+                                        'outputs': [
+                                            {
+                                                'address': '15VZc2jy1L3LGFweZeKVbWMsTzfKFJLpsN',
+                                                'value': 1000
+                                            },
+                                            {
+                                                'address': '1C5xEjewerH4zTWPC6wqzhoEkMhiHEHPZ8',
+                                                'value': 800
+                                            }
+                                        ],
+                                        'inputs': [
+                                            {
+                                                'tx_id': ('00000257054251161adff5899a451ae9'
+                                                          '74ac62ca44a7a31179eec5750b0ea406'),
+                                                'index': 0
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success',
+                                    'value': {
+                                        'success': True,
+                                        'message': '',
+                                        'tx': {
+                                            'hash': '00000c064ec72c8561a24b65bd50095a401b8d9a66c360cfe99cfcfeed73afc4',
+                                            'nonce': 2979,
+                                            'timestamp': 1547211690,
+                                            'version': 1,
+                                            'weight': 17.93619278054934,
+                                            'height': 0,
+                                            'parents': [
+                                                '00000257054251161adff5899a451ae974ac62ca44a7a31179eec5750b0ea406',
+                                                '00000b8792cb13e8adb51cc7d866541fc29b532e8dec95ae4661cf3da4d42cb4'
+                                            ],
+                                            'inputs': [
+                                                {
+                                                    'tx_id': ('00000257054251161adff5899a451ae9'
+                                                              '74ac62ca44a7a31179eec5750b0ea406'),
+                                                    'index': 0,
+                                                    'data': ('RzBFAiAh6Jq+HOn9laOq3A5uUcaGLdWB4gM6RehsaP9OIMrOrwIhAOjW'
+                                                             'T+4ceSQI8CNXqaNNJgaOzCDhmFF1z1rhxOMCgonxIQNhXZKwBZeKxJps'
+                                                             'JEqP4gIS4FFbEpG284HhmBfp1p5gUw==')
+                                                }
+                                            ],
+                                            'outputs': [
+                                                {
+                                                    'value': 1109,
+                                                    'script': 'dqkUMUdd0fmGCmGfv7B5UriM5VS5g16IrA=='
+                                                },
+                                                {
+                                                    'value': 800,
+                                                    'script': 'dqkUeZkoJssEgwjPw/1ubA9XXZNk+xGIrA=='
+                                                }
+                                            ],
+                                            'tokens': []
+                                        }
+                                    }
+                                },
+                                'error1': {
+                                    'summary': 'Invalid address',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'The address abc is invalid'
+                                    }
+                                },
+                                'error2': {
+                                    'summary': 'Insufficient funds',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Insufficient funds'
+                                    }
+                                },
+                                'error3': {
+                                    'summary': 'Invalid input',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Invalid input to create transaction'
+                                    }
+                                },
+                                'error4': {
+                                    'summary': 'Propagation error',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Propagation error message',
+                                        'tx': {
+                                            'hash': '00002b3be4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22f',
+                                            'nonce': 17076,
+                                            'timestamp': 1539271482,
+                                            'version': 1,
+                                            'weight': 14.0,
+                                            'height': 1,
+                                            'parents': [],
+                                            'inputs': [],
+                                            'outputs': [],
+                                            'tokens': [],
+                                            'accumulated_weight': 14
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

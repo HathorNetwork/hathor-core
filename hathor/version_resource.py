@@ -4,8 +4,10 @@ from twisted.web import resource
 
 import hathor
 from hathor.api_util import set_cors
+from hathor.cli.openapi_files.register import register_resource
 
 
+@register_resource
 class VersionResource(resource.Resource):
     """ Implements a web server API with POST to return the api version
 
@@ -25,3 +27,30 @@ class VersionResource(resource.Resource):
             'version': hathor.__version__,
         }
         return json.dumps(data, indent=4).encode('utf-8')
+
+
+VersionResource.openapi = {
+    '/version': {
+        'get': {
+            'operationId': 'version',
+            'summary': 'Hathor version',
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success',
+                                    'value': {
+                                        'version': '0.16.0-beta'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

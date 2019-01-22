@@ -28,10 +28,12 @@ class CliManager:
         from . import oracle_create_key
         from . import oracle_get_pubkey
         from . import oracle_encode_data
+        from . import openapi_json
 
         self.add_cmd('mining', 'run_miner', mining, 'Run a mining process (running node required)')
         self.add_cmd('hathor', 'run_node', run_node, 'Run a node')
         self.add_cmd('hathor', 'gen_peer_id', peer_id, 'Generate a new random peer-id')
+        self.add_cmd('docs', 'generate_openapi_json', openapi_json, 'Generate openapi json for api docs')
         self.add_cmd('multisig', 'gen_multisig_address', multisig_address, 'Generate a new multisig address')
         self.add_cmd('multisig', 'spend_multisig_output', multisig_spend, 'Generate tx that spends a multisig output')
         self.add_cmd('multisig', 'tx_signature', multisig_signature, 'Generate a signature of a multisig tx')

@@ -5,9 +5,11 @@ import struct
 from twisted.web import resource
 
 from hathor.api_util import set_cors
+from hathor.cli.openapi_files.register import register_resource
 from hathor.transaction import Transaction
 
 
+@register_resource
 class PushTxResource(resource.Resource):
     """ Implements a web server API that receives hex form of a tx and send it to the network
 
@@ -67,3 +69,58 @@ class PushTxResource(resource.Resource):
             }
 
         return json.dumps(data, indent=4).encode('utf-8')
+
+
+PushTxResource.openapi = {
+    '/push_tx': {
+        'get': {
+            'tags': ['transaction'],
+            'operationId': 'push_tx',
+            'summary': 'Push transaction to the network',
+            'parameters': [
+                {
+                    'name': 'hex_tx',
+                    'in': 'query',
+                    'description': 'Transaction to be pushed in hexadecimal',
+                    'required': True,
+                    'schema': {
+                        'type': 'string'
+                    }
+                }
+            ],
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success',
+                                    'value': {
+                                        'success': True
+                                    }
+                                },
+                                'error1': {
+                                    'summary': 'Transaction invalid',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'This transaction is invalid.',
+                                        'can_force': False
+                                    }
+                                },
+                                'error2': {
+                                    'summary': 'Error propagating transaction',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Error message',
+                                        'can_force': True
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

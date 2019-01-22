@@ -1,0 +1,210 @@
+{
+    "components": {
+        "schemas": {
+            "UnlockBody": {
+                "type": "object",
+                "properties": {
+                    "words": {
+                        "type": "string",
+                        "description": "24 words for HD Wallet"
+                    },
+                    "passphrase": {
+                        "type": "string",
+                        "description": "Passphrase for HD Wallet (can be empty string)"
+                    },
+                    "password": {
+                        "type": "string",
+                        "description": "Password to unlock keypair wallet"
+                    }
+                }
+            },
+            "MinedBlock": {
+                "type": "object",
+                "required": ["block_bytes"],
+                "properties": {
+                    "block_bytes": {
+                        "type": "string",
+                        "description": "Bytes of block after pow in base 64"
+                    }
+                }
+            },
+            "Output": {
+                "type": "object",
+                "required": ["address", "value"],
+                "properties": {
+                    "address": {
+                        "type": "string",
+                        "description": "Destination address in base58"
+                    },
+                    "value": {
+                        "type": "int",
+                        "description": "Value to be sent to the address (without decimal places, e.g. if you want to send 10.02 the value must be 1002)"
+                    },
+                    "timelock": {
+                        "type": "int",
+                        "description": "Timestamp until when the output is locked"
+                    }
+                }
+            },
+            "Input": {
+                "type": "object",
+                "required": ["tx_id", "index"],
+                "properties": {
+                    "tx_id": {
+                        "type": "string",
+                        "description": "Hash in hex of the spend transaction"
+                    },
+                    "index": {
+                        "type": "int",
+                        "description": "Index of the output is being spent"
+                    }
+                }
+            },
+            "SendToken": {
+                "type": "object",
+                "required": ["data"],
+                "properties": {
+                    "data": {
+                        "type": "object",
+                        "required": ["outputs", "inputs"],
+                        "properties": {
+                            "outputs": {
+                                "type": "array",
+                                "description": "List of outputs to send the tokens",
+                                "items": {
+                                    "$ref": "#/components/schemas/Output"
+                                }
+                            },
+                            "inputs": {
+                                "type": "array",
+                                "description": "List of inputs to spend the tokens (can be empty)",
+                                "items": {
+                                    "$ref": "#/components/schemas/Input"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "NanoContractExecute": {
+                "type": "object",
+                "required": ["spent_tx_id", "spent_tx_index", "oracle_data", "oracle_signature", "oracle_pubkey", "address", "value"],
+                "properties": {
+                    "spent_tx_id": {
+                        "type": "string",
+                        "description": "Id in hex of the transaction being spent"
+                    },
+                    "spent_tx_index": {
+                        "type": "index",
+                        "description": "Index of the output of the transaction being spent"
+                    },
+                    "oracle_data": {
+                        "type": "string",
+                        "description": "Data in base64 provided by the oracle"
+                    },
+                    "oracle_signature": {
+                        "type": "string",
+                        "description": "Signature in base64 of the oracle data"
+                    },
+                    "oracle_pubkey": {
+                        "type": "string",
+                        "description": "Public key of the oracle in base64"
+                    },
+                    "address": {
+                        "type": "string",
+                        "description": "Winning address in base58"
+                    },
+                    "value": {
+                        "type": "int",
+                        "description": "Total value of the nano contract (without decimal places)"
+                    }
+                }
+            },
+            "NanoContractBet": {
+                "type": "object",
+                "required": ["address", "value"],
+                "properties": {
+                    "address": {
+                        "type": "string",
+                        "description": "Destination address of the bet in base58"
+                    },
+                    "value": {
+                        "type": "int",
+                        "description": "Value of the bet"
+                    }
+                }
+            },
+            "NanoContractPOST": {
+                "type": "object",
+                "required": ["values", "fallback_address", "oracle_pubkey_hash", "oracle_data_id", "total_value", "input_value"],
+                "properties": {
+                    "values": {
+                        "type": "array",
+                        "description": "List of bets",
+                        "items": {
+                            "$ref": "#/components/schemas/NanoContractBet"
+                        }
+                    },
+                    "fallback_address": {
+                        "type": "string",
+                        "description": "Address in base58 that will execute the contract in case none of the bets is the winner"
+                    },
+                    "oracle_pubkey_hash": {
+                        "type": "string",
+                        "description": "Oracle public key in base64"
+                    },
+                    "oracle_data_id": {
+                        "type": "string",
+                        "description": "Id of the oracle of this nano contract"
+                    },
+                    "total_value": {
+                        "type": "int",
+                        "description": "Total value of the nano contract"
+                    },
+                    "input_value": {
+                        "type": "int",
+                        "description": "Amount this wallet should stake in the nano contract"
+                    }
+                }
+            },
+            "NanoContractPUT": {
+                "type": "object",
+                "required": ["hex_tx", "new_values", "input_value"],
+                "properties": {
+                    "hex_tx": {
+                        "type": "string",
+                        "description": "Nano contract transaction being updated in hexadecimal"
+                    },
+                    "new_values": {
+                        "type": "array",
+                        "description": "New list of bets",
+                        "items": {
+                            "$ref": "#/components/schemas/NanoContractBet"
+                        }
+                    },
+                    "input_value": {
+                        "type": "int",
+                        "description": "New amount this wallet should stake in the nano contract"
+                    }
+                }
+            },
+            "ProfilerPOST": {
+                "type": "object",
+                "properties": {
+                    "start": {
+                        "type": "bool",
+                        "description": "Only sent if should start profiler"
+                    },
+                    "stop": {
+                        "type": "bool",
+                        "description": "Only sent if should stop profiler"
+                    },
+                    "filepath": {
+                        "type": "string",
+                        "description": "Path to save the profiler path (only in case of stop)"
+                    }
+                }
+            }
+        }
+    }
+}

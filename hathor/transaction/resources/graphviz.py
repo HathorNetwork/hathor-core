@@ -3,8 +3,10 @@ from twisted.web import resource
 from twisted.web.http import Request
 
 from hathor.api_util import set_cors
+from hathor.cli.openapi_files.register import register_resource
 
 
+@register_resource
 class GraphvizResource(resource.Resource):
     """ Implements a web server API that returns a visualization of the DAG using Graphviz.
 
@@ -89,3 +91,58 @@ class GraphvizResource(resource.Resource):
             return False
 
         return True
+
+
+GraphvizResource.openapi = {
+    '/graphviz': {
+        'get': {
+            'tags': ['transaction'],
+            'operationId': 'graphviz',
+            'summary': 'Dashboard of transactions',
+            'description': 'Returns the generated file with the graph in the format requested',
+            'parameters': [
+                {
+                    'name': 'format',
+                    'in': 'query',
+                    'description': 'Format of the returned file',
+                    'required': True,
+                    'schema': {
+                        'type': 'string'
+                    }
+                },
+                {
+                    'name': 'weight',
+                    'in': 'query',
+                    'description': 'If we will show the weight',
+                    'required': False,
+                    'schema': {
+                        'type': 'boolean'
+                    }
+                },
+                {
+                    'name': 'acc_weight',
+                    'in': 'query',
+                    'description': 'If we will show the accumulated weight',
+                    'required': False,
+                    'schema': {
+                        'type': 'boolean'
+                    }
+                },
+                {
+                    'name': 'funds',
+                    'in': 'query',
+                    'description': 'If we will generate the network graph or the funds graph',
+                    'required': False,
+                    'schema': {
+                        'type': 'boolean'
+                    }
+                }
+            ],
+            'responses': {
+                '200': {
+                    'description': 'Success'
+                }
+            }
+        }
+    }
+}

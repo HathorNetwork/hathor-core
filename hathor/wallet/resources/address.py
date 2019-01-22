@@ -3,8 +3,10 @@ import json
 from twisted.web import resource
 
 from hathor.api_util import set_cors
+from hathor.cli.openapi_files.register import register_resource
 
 
+@register_resource
 class AddressResource(resource.Resource):
     """ Implements a web server API to return an unused address of the wallet.
 
@@ -43,3 +45,43 @@ class AddressResource(resource.Resource):
             'address': address,
         }
         return json.dumps(data, indent=4).encode('utf-8')
+
+
+AddressResource.openapi = {
+    '/wallet/address': {
+        'get': {
+            'tags': ['wallet'],
+            'operationId': 'wallet_address',
+            'summary': 'Address',
+            'description': 'Returns an address to be used in the wallet',
+            'parameters': [
+                {
+                    'name': 'new',
+                    'in': 'query',
+                    'description': 'New or old address',
+                    'required': True,
+                    'schema': {
+                        'type': 'boolean'
+                    }
+                }
+            ],
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success',
+                                    'value': {
+                                        'address': '15VZc2jy1L3LGFweZeKVbWMsTzfKFJLpsN'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
