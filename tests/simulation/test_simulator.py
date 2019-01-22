@@ -1,13 +1,15 @@
 import random
 
 from mnemonic import Mnemonic
-from twisted.internet.task import Clock
 
 from hathor.transaction import BaseTransaction
 from hathor.transaction.genesis import genesis_transactions
 from hathor.wallet import HDWallet
 from tests import unittest
+from tests.clock import HeapClock
 from tests.utils import FakeConnection, MinerSimulator, RandomTransactionGenerator, Simulator
+
+# from twisted.internet.task import Clock
 
 
 class HathorSimulatorTestCase(unittest.TestCase):
@@ -16,7 +18,7 @@ class HathorSimulatorTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
-        self.clock = Clock()
+        self.clock = HeapClock()
         self.set_random_seed(self.seed_config)
 
         print('-'*30)
