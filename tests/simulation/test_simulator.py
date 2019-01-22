@@ -10,15 +10,14 @@ from tests import unittest
 from tests.utils import FakeConnection, MinerSimulator, RandomTransactionGenerator, Simulator
 
 
-class HathorSyncMethodsTestCase(unittest.TestCase):
+class HathorSimulatorTestCase(unittest.TestCase):
+    seed_config = None
+
     def setUp(self):
         super().setUp()
 
-        seed_config = None
-        # seed_config = 1242032928  # Strange voided transactions (with voiding blocks)
-
         self.clock = Clock()
-        self.set_random_seed(seed_config)
+        self.set_random_seed(self.seed_config)
 
         print('-'*30)
         print('Simulation seed config:', self.random_seed)
@@ -285,3 +284,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         for node in nodes[1:]:
             self.assertTipsEqual(nodes[0], node)
+
+
+class HathorSimulatorSeed1TestCase(HathorSimulatorTestCase):
+    seed_config = 3917895745  # Non-trivial block reorg
