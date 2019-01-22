@@ -5,6 +5,7 @@ import base58
 from twisted.web import resource
 
 from hathor.api_util import get_missing_params_msg, render_options, set_cors
+from hathor.cli.openapi_files.register import register_resource
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, NanoContractMatchValues
 
@@ -13,6 +14,7 @@ PARAMS_POST = ['values', 'fallback_address', 'oracle_pubkey_hash', 'oracle_data_
 PARAMS_PUT = ['hex_tx', 'new_values', 'input_value']
 
 
+@register_resource
 class NanoContractMatchValueResource(resource.Resource):
     """ Implements a web server API to create/update MatchValue nano contract txs.
 
@@ -137,3 +139,156 @@ class NanoContractMatchValueResource(resource.Resource):
 
     def render_OPTIONS(self, request):
         return render_options(request, 'GET, POST, PUT, OPTIONS')
+
+
+NanoContractMatchValueResource.openapi = {
+    '/wallet/nano-contract/match-value': {
+        'post': {
+            'tags': ['nano-contract'],
+            'operationId': 'nano_contract_match_value_post',
+            'summary': 'Create a match value nano contract',
+            'description': 'Returns the hexadecimal of the created nano contract',
+            'requestBody': {
+                'description': 'Data to create the nano contract',
+                'required': True,
+                'content': {
+                    'application/json': {
+                        'schema': {
+                            '$ref': '#/components/schemas/NanoContractPOST'
+                        },
+                        'examples': {
+                            'data': {
+                                'summary': 'Data to create the nano contract',
+                                'value': {
+                                    'oracle_data_id': 'some_id',
+                                    'total_value': 2000,
+                                    'input_value': 2000,
+                                    'min_timestamp': 1,
+                                    'fallback_address': '1CBxvu6tFPTU8ygSPj9vyEadf9DsqTwy3D',
+                                    'values': [
+                                        {
+                                            'address': '1Pa4MMsr5DMRAeU1PzthFXyEJeVNXsMHoz',
+                                            'value': 300
+                                        }
+                                    ],
+                                    'oracle_pubkey_hash': '6o6ul2c+sqAariBVW+CwNaSJb9w='
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success',
+                                    'value': {
+                                        'success': True,
+                                        'hex_tx': ('00013ff00000000000005c3899fc0000000000000000000100010002005d9e609'
+                                                   'fb85c512ac590221aed8cc5e7b7f646a4511e61ec401eba7bda794bd30002bb17'
+                                                   '1de3490828028ec5eef3325956acb6bcffa6a50466bb9a81d38363c25d9e609fb'
+                                                   '85c512ac590221aed8cc5e7b7f646a4511e61ec401eba7bda794bd300007b1007'
+                                                   '736f6d655f6964045bfc631902012c473045022067aa6e62d123a96b817332e2c'
+                                                   '40480af781799b5e2854be59ee82cb54823b054022100a4a4ccb96970bf0b39ef'
+                                                   '8fa3b6a296e7f02e1fe2020f4bbe1f23321ded1aae27210309a5a288617b2f168'
+                                                   '5a8dd0d4460bdb935cf72475f6bf10d2063cfdb86f70129000007d000001976a9'
+                                                   '14f7934a91973cd100d753304f9a98267c8d4e6c0a88ac00000000')
+                                    }
+                                },
+                                'error': {
+                                    'summary': 'Parameter error',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Parameter error message'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        'put': {
+            'tags': ['nano-contract'],
+            'operationId': 'nano_contract_match_value_put',
+            'summary': 'Update a match value nano contract',
+            'description': 'Returns the hexadecimal of the updated nano contract',
+            'requestBody': {
+                'description': 'Data to update the nano contract',
+                'required': True,
+                'content': {
+                    'application/json': {
+                        'schema': {
+                            '$ref': '#/components/schemas/NanoContractPUT'
+                        },
+                        'examples': {
+                            'data': {
+                                'summary': 'Data to update the nano contract',
+                                'value': {
+                                    'new_values': [
+                                        {
+                                            'address': '1CBxvu6tFPTU8ygSPj9vyEadf9DsqTwy3D',
+                                            'value': 500
+                                        }
+                                    ],
+                                    'input_value': 2000,
+                                    'hex_tx': ('000100000000000000005c38a2bd00000000000000000001000200000075b16110c1b'
+                                               'b244c6b8f23882c1846c1f6ec4e03427ecb676549381cecf11711000000000007d000'
+                                               '006676a914ea8eae97673eb2a01aae20555be0b035a4896fdc88ba5007736f6d655f6'
+                                               '964c0510400000001c15219007abc3b0c0425d3065c43f6bccdc16aa871f3bbad9ced'
+                                               '28f002012c1900f7934a91973cd100d753304f9a98267c8d4e6c0a5554da250101d1d'
+                                               '0ffffffff00001976a914fd05059b6006249543b82f36876a17c73fd2267b88ac0000'
+                                               '0000')
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success',
+                                    'value': {
+                                        'success': True,
+                                        'hex_tx': ('00013ff00000000000005c3899fc0000000000000000000100010002005d9e609'
+                                                   'fb85c512ac590221aed8cc5e7b7f646a4511e61ec401eba7bda794bd30002bb17'
+                                                   '1de3490828028ec5eef3325956acb6bcffa6a50466bb9a81d38363c25d9e609fb'
+                                                   '85c512ac590221aed8cc5e7b7f646a4511e61ec401eba7bda794bd300007b1007'
+                                                   '736f6d655f6964045bfc631902012c473045022067aa6e62d123a96b817332e2c'
+                                                   '40480af781799b5e2854be59ee82cb54823b054022100a4a4ccb96970bf0b39ef'
+                                                   '8fa3b6a296e7f02e1fe2020f4bbe1f23321ded1aae27210309a5a288617b2f168'
+                                                   '5a8dd0d4460bdb935cf72475f6bf10d2063cfdb86f70129000007d000001976a9'
+                                                   '14f7934a91973cd100d753304f9a98267c8d4e6c0a88ac00000000')
+                                    }
+                                },
+                                'error1': {
+                                    'summary': 'Parameter error',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Parameter error message'
+                                    }
+                                },
+                                'error2': {
+                                    'summary': 'Nano contract not found',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Nano contract not found'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -5,10 +5,12 @@ import struct
 from twisted.web import resource
 
 from hathor.api_util import get_missing_params_msg, set_cors
+from hathor.cli.openapi_files.register import register_resource
 from hathor.transaction import Transaction
 from hathor.transaction.scripts import NanoContractMatchValues
 
 
+@register_resource
 class NanoContractDecodeResource(resource.Resource):
     """ Implements a web server API that receives hex form of a tx and returns decoded value
 
@@ -41,7 +43,7 @@ class NanoContractDecodeResource(resource.Resource):
             try:
                 tx = Transaction.create_from_struct(tx_bytes)
             except struct.error:
-                data = {'success': False}
+                data = {'success': False, 'message': 'Invalid transaction'}
                 return json.dumps(data).encode('utf-8')
 
             outputs = []
@@ -67,7 +69,82 @@ class NanoContractDecodeResource(resource.Resource):
                 'my_inputs': my_inputs,
                 'other_inputs': other_inputs
             }
-
         else:
-            data = {'success': False}
+            data = {'success': False, 'message': 'Invalid transaction'}
         return json.dumps(data).encode('utf-8')
+
+
+NanoContractDecodeResource.openapi = {
+    '/wallet/nano-contract/decode': {
+        'get': {
+            'tags': ['nano-contract'],
+            'operationId': 'nano_contract_decode',
+            'summary': 'Decode nano contract',
+            'description': 'Returns the nano contract transaction decoded',
+            'parameters': [
+                {
+                    'name': 'hex_tx',
+                    'in': 'query',
+                    'description': 'Nano contract to be decoded in hexadecimal',
+                    'required': True,
+                    'schema': {
+                        'type': 'string'
+                    }
+                }
+            ],
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success',
+                                    'value': {
+                                        'success': True,
+                                        'nano_contract': {
+                                            'type': 'NanoContractMatchValues',
+                                            'oracle_pubkey_hash': '6o6ul2c+sqAariBVW+CwNaSJb9w=',
+                                            'min_timestamp': 1,
+                                            'oracle_data_id': 'some_id',
+                                            'value_dict': {
+                                                '1Pa4MMsr5DMRAeU1PzthFXyEJeVNXsMHoz': 300
+                                            },
+                                            'fallback_pubkey_hash': '13Y2oCMN8Lb6F3RLoPEofZz1bvX75dvEb',
+                                            'value': 2000
+                                        },
+                                        'outputs': [
+                                            {
+                                                'type': 'P2PKH',
+                                                'address': '1Q4qyTjhpUXUZXzwKs6Yvh2RNnF5J1XN9a',
+                                                'timelock': None,
+                                                'value': 4294967295,
+                                                'token_data': 0
+                                            }
+                                        ],
+                                        'my_inputs': [
+                                            {
+                                                'tx_id': ('7918fd6dfe9df2abf3010b1403efbeda'
+                                                          'fcc86167a5c44cf65cd525ca40ca43b7'),
+                                                'index': 0,
+                                                'data': ''
+                                            }
+                                        ],
+                                        'other_inputs': []
+                                    }
+                                },
+                                'error': {
+                                    'summary': 'Invalid transaction',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Invalid transaction'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

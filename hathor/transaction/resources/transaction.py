@@ -4,9 +4,11 @@ import re
 from twisted.web import resource
 
 from hathor.api_util import set_cors
+from hathor.cli.openapi_files.register import register_resource
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
 
+@register_resource
 class TransactionResource(resource.Resource):
     """ Implements a web server API to return the tx.
 
@@ -67,9 +69,9 @@ class TransactionResource(resource.Resource):
 
                 data = {'success': True, 'tx': serialized}
             else:
-                data = {'success': False}
+                data = {'success': False, 'message': 'Transaction not found'}
         except TransactionDoesNotExist:
-            data = {'success': False}
+            data = {'success': False, 'message': 'Transaction not found'}
 
         return data
 
@@ -116,3 +118,186 @@ class TransactionResource(resource.Resource):
 
         data = {'transactions': serialized, 'has_more': has_more}
         return data
+
+
+TransactionResource.openapi = {
+    '/transaction': {
+        'get': {
+            'tags': ['transaction'],
+            'operationId': 'transaction',
+            'summary': 'Transaction or list of transactions/blocks',
+            'description': ('Returns a transaction by hash or a list of transactions/blocks depending on the '
+                            'parameters sent. If "id" is sent as parameter, we return only one transaction, '
+                            'else we return a list. In the list return we have a key "has_more" that indicates'
+                            'if there are more transactions/blocks to be fetched'),
+            'parameters': [
+                {
+                    'name': 'id',
+                    'in': 'query',
+                    'description': 'Hash in hex of the transaction/block',
+                    'required': False,
+                    'schema': {
+                        'type': 'string'
+                    }
+                },
+                {
+                    'name': 'type',
+                    'in': 'query',
+                    'description': 'Type of list to return (block or tx)',
+                    'required': False,
+                    'schema': {
+                        'type': 'string'
+                    }
+                },
+                {
+                    'name': 'count',
+                    'in': 'query',
+                    'description': 'Quantity of elements to return',
+                    'required': False,
+                    'schema': {
+                        'type': 'int'
+                    }
+                },
+                {
+                    'name': 'page',
+                    'in': 'query',
+                    'description': 'If the user clicked "previous" or "next" button',
+                    'required': False,
+                    'schema': {
+                        'type': 'string'
+                    }
+                },
+                {
+                    'name': 'hash',
+                    'in': 'query',
+                    'description': 'Hash reference for the pagination',
+                    'required': False,
+                    'schema': {
+                        'type': 'string'
+                    }
+                }
+            ],
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'One success',
+                                    'value': {
+                                        'tx': {
+                                            'hash': '00002b3be4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22f',
+                                            'nonce': 17076,
+                                            'timestamp': 1539271482,
+                                            'version': 1,
+                                            'weight': 14.0,
+                                            'height': 1,
+                                            'parents': [],
+                                            'inputs': [],
+                                            'outputs': [],
+                                            'tokens': [],
+                                            'accumulated_weight': 14
+                                        },
+                                        'success': True
+                                    }
+                                },
+                                'error': {
+                                    'summary': 'Transaction not found',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Transaction not found'
+                                    }
+                                },
+                                'success_list': {
+                                    'summary': 'List success',
+                                    'value': {
+                                        'transactions': [
+                                            {
+                                                'hash': ('00000257054251161adff5899a451ae9'
+                                                         '74ac62ca44a7a31179eec5750b0ea406'),
+                                                'nonce': 99579,
+                                                'timestamp': 1547163030,
+                                                'version': 1,
+                                                'weight': 18.861583646228,
+                                                'height': 0,
+                                                'parents': [
+                                                    '00000b8792cb13e8adb51cc7d866541fc29b532e8dec95ae4661cf3da4d42cb4',
+                                                    '00001417652b9d7bd53eb14267834eab08f27e5cbfaca45a24370e79e0348bb9'
+                                                ],
+                                                'inputs': [
+                                                    {
+                                                        'tx_id': ('0000088c5a4dfcef7fd3c04a5b1eccfd'
+                                                                  '2de032b23749deff871b0a090000f5f6'),
+                                                        'index': 1,
+                                                        'data': ('RzBFAiEAvv17vp8XyHYq36PFlOGd7V2vzIkf+XIuqfyUnc2fZugC'
+                                                                 'IDnwM7PdkA/qwt2QXLB3WnegtdOqV8gv+H63voWVbsScIQPqg7y2'
+                                                                 'RanTdnQcDvFneIzjrUzJoPzkmoNStoN8XtLTUA==')
+                                                    },
+                                                    {
+                                                        'tx_id': ('0000003398322f99355f37439e32881c'
+                                                                  '83ff08b83e744e799b1d6a67f73bee45'),
+                                                        'index': 0,
+                                                        'data': ('RzBFAiEAqPvD18Uzd6NsMVkGMaI9RsxWqLow22W1KBHUUW/35UEC'
+                                                                 'IEUU9pxJEHBvXyEwYAB2/bCiWxNd4iLvyvQXGKaSaDV2IQPDL3iZ'
+                                                                 'vsDS8jdFDmlcvc2Em/ZNYYDOBWd3oZWxpuA5DQ==')
+                                                    }
+                                                ],
+                                                'outputs': [
+                                                    {
+                                                        'value': 1909,
+                                                        'script': 'dqkUllFFDJByV5TjVUly3Zc3bB4mMH2IrA=='
+                                                    },
+                                                    {
+                                                        'value': 55,
+                                                        'script': 'dqkUjjPg+zwG6JDe901I0ybQxcAPrAuIrA=='
+                                                    }
+                                                ],
+                                                'tokens': []
+                                            },
+                                            {
+                                                'hash': ('00000b8792cb13e8adb51cc7d866541f'
+                                                         'c29b532e8dec95ae4661cf3da4d42cb4'),
+                                                'nonce': 119816,
+                                                'timestamp': 1547163025,
+                                                'version': 1,
+                                                'weight': 17.995048894541107,
+                                                'height': 0,
+                                                'parents': [
+                                                    '00001417652b9d7bd53eb14267834eab08f27e5cbfaca45a24370e79e0348bb9',
+                                                    '0000088c5a4dfcef7fd3c04a5b1eccfd2de032b23749deff871b0a090000f5f6'
+                                                ],
+                                                'inputs': [
+                                                    {
+                                                        'tx_id': ('0000088c5a4dfcef7fd3c04a5b1eccfd'
+                                                                  '2de032b23749deff871b0a090000f5f6'),
+                                                        'index': 0,
+                                                        'data': ('SDBGAiEA/rtsn1oQ68uGeTj/7IVtqijxoUxzr9S/u3UGAC7wQvU'
+                                                                 'CIQDaYkL1R8LICfSCpYIn4xx6A+lxU0Fw3oKR1hK91fRnSiEDCo'
+                                                                 'A74tfBQa4IR7iXtlz+jH9UV7+YthKX4yQNaMSMfb0=')
+                                                    }
+                                                ],
+                                                'outputs': [
+                                                    {
+                                                        'value': 1894,
+                                                        'script': 'dqkUduvtU77hZm++Pwavtl9OrOSA+XiIrA=='
+                                                    },
+                                                    {
+                                                        'value': 84,
+                                                        'script': 'dqkUjjPg+zwG6JDe901I0ybQxcAPrAuIrA=='
+                                                    }
+                                                ],
+                                                'tokens': []
+                                            }
+                                        ],
+                                        'has_more': True
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

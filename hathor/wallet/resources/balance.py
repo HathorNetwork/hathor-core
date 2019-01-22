@@ -3,9 +3,11 @@ import json
 from twisted.web import resource
 
 from hathor.api_util import set_cors
+from hathor.cli.openapi_files.register import register_resource
 from hathor.constants import HATHOR_TOKEN_UID
 
 
+@register_resource
 class BalanceResource(resource.Resource):
     """ Implements a web server API to return the balance of the wallet.
 
@@ -28,3 +30,35 @@ class BalanceResource(resource.Resource):
 
         data = {'balance': self.manager.wallet.balance[HATHOR_TOKEN_UID]._asdict()}
         return json.dumps(data, indent=4).encode('utf-8')
+
+
+BalanceResource.openapi = {
+    '/wallet/balance': {
+        'get': {
+            'tags': ['wallet'],
+            'operationId': 'wallet_address',
+            'summary': 'Balance',
+            'description': 'Returns the current balance of the wallet (available and locked tokens)',
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success',
+                                    'value': {
+                                        'balance': {
+                                            'available': 5000,
+                                            'locked': 1000
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

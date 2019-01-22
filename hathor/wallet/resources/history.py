@@ -4,8 +4,10 @@ import math
 from twisted.web import resource
 
 from hathor.api_util import set_cors
+from hathor.cli.openapi_files.register import register_resource
 
 
+@register_resource
 class HistoryResource(resource.Resource):
     """ Implements a web server API to return the history of tx of the wallet.
 
@@ -44,3 +46,73 @@ class HistoryResource(resource.Resource):
 
         data = {'history': history, 'total_pages': math.ceil(total / count)}
         return json.dumps(data, indent=4).encode('utf-8')
+
+
+HistoryResource.openapi = {
+    '/wallet/history': {
+        'get': {
+            'tags': ['wallet'],
+            'operationId': 'wallet_history',
+            'summary': 'History of transactions of the wallet',
+            'description': ('Returns a list with all the transactions of this'
+                            ' wallet (in the page requested) and the total pages'),
+            'parameters': [
+                {
+                    'name': 'page',
+                    'in': 'query',
+                    'description': 'Number of requested page',
+                    'required': True,
+                    'schema': {
+                        'type': 'int'
+                    }
+                },
+                {
+                    'name': 'count',
+                    'in': 'query',
+                    'description': 'Quantity of elements in each page',
+                    'required': True,
+                    'schema': {
+                        'type': 'int'
+                    }
+                }
+            ],
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success',
+                                    'value': {
+                                        'history': [
+                                            {
+                                                'timestamp': 1547163030,
+                                                'tx_id': ('00000257054251161adff5899a451ae9'
+                                                          '74ac62ca44a7a31179eec5750b0ea406'),
+                                                'index': 0,
+                                                'value': 1909,
+                                                'address': '1EhoiVeWRDqzyabqNhsnSzhUvhBWNWvCsg',
+                                                'voided': False
+                                            },
+                                            {
+                                                'timestamp': 1547163030,
+                                                'tx_id': ('00000257054251161adff5899a451ae9'
+                                                          '74ac62ca44a7a31179eec5750b0ea406'),
+                                                'index': 1,
+                                                'value': 55,
+                                                'address': '1Dxu6qynYeX8CmipocnYPQy8X7TaHHCtrM',
+                                                'voided': False
+                                            }
+                                        ],
+                                        'total_pages': 7
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

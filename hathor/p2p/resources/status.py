@@ -5,8 +5,10 @@ from twisted.web import resource
 
 import hathor
 from hathor.api_util import set_cors
+from hathor.cli.openapi_files.register import register_resource
 
 
+@register_resource
 class StatusResource(resource.Resource):
     """ Implements an status web server API, which responds with a summary
     of the node state.
@@ -84,3 +86,65 @@ class StatusResource(resource.Resource):
             }
         }
         return json.dumps(data, indent=4).encode('utf-8')
+
+
+StatusResource.openapi = {
+    '/status': {
+        'get': {
+            'tags': ['p2p'],
+            'operationId': 'status',
+            'summary': 'Status of Hathor network',
+            'description': 'Returns the server data and the details of peers',
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Server and peers data',
+                                    'value': {
+                                        'server': {
+                                            'id': '5578ab3bcaa861fb9d07135b8b167dd230d4487b147be8fd2c94a79bd349d123',
+                                            'app_version': 'Hathor v0.14.0-beta',
+                                            'state': 'READY',
+                                            'network': 'testnet',
+                                            'uptime': 118.37029600143433,
+                                            'entrypoints': [
+                                                'tcp:localhost:8000'
+                                            ]
+                                        },
+                                        'known_peers': [],
+                                        'connections': {
+                                            'connected_peers': [],
+                                            'handshaking_peers': [
+                                                {
+                                                    'address': '192.168.1.1:54321',
+                                                    'state': 'HELLO',
+                                                    'uptime': 0.0010249614715576172,
+                                                    'app_version': 'Unknown'
+                                                }
+                                            ],
+                                            'connecting_peers': [
+                                                {
+                                                    'deferred': ('<bound method TCP4ClientEndpoint.connect of <twisted'
+                                                                 '.internet.endpoints.TCP4ClientEndpoint object at '
+                                                                 '0x10b16b470>>'),
+                                                    'address': '192.168.1.1:54321'
+                                                }
+                                            ]
+                                        },
+                                        'dag': {
+                                            'first_timestamp': 1539271481,
+                                            'latest_timestamp': 1539271483
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

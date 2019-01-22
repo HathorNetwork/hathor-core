@@ -3,8 +3,10 @@ import json
 from twisted.web import resource
 
 from hathor.api_util import set_cors
+from hathor.cli.openapi_files.register import register_resource
 
 
+@register_resource
 class TipsHistogramResource(resource.Resource):
     """ Implements a web server API to return the tips in a timestamp interval.
         Returns a list of timestamps and numbers of tips.
@@ -38,3 +40,64 @@ class TipsHistogramResource(resource.Resource):
             v.append((timestamp, len(tx_tips)))
 
         return json.dumps(v).encode('utf-8')
+
+
+TipsHistogramResource.openapi = {
+    '/tips-histogram': {
+        'get': {
+            'tags': ['transaction'],
+            'operationId': 'tips_histogram',
+            'summary': 'Histogram of tips',
+            'description': ('Returns a list of tuples (timestamp, quantity)'
+                            'for each timestamp in the requested interval'),
+            'parameters': [
+                {
+                    'name': 'begin',
+                    'in': 'query',
+                    'description': 'Beggining of the timestamp interval',
+                    'required': True,
+                    'schema': {
+                        'type': 'int'
+                    }
+                },
+                {
+                    'name': 'end',
+                    'in': 'query',
+                    'description': 'End of the timestamp interval',
+                    'required': True,
+                    'schema': {
+                        'type': 'int'
+                    }
+                }
+            ],
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success',
+                                    'value': [
+                                        [
+                                            1547163020,
+                                            1
+                                        ],
+                                        [
+                                            1547163021,
+                                            4
+                                        ],
+                                        [
+                                            1547163022,
+                                            2
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -5,9 +5,11 @@ from twisted.web import resource
 from twisted.web.http import Request
 
 from hathor.api_util import render_options, set_cors
+from hathor.cli.openapi_files.register import register_resource
 from hathor.manager import HathorManager
 
 
+@register_resource
 class ProfilerResource(resource.Resource):
     """ Implements a web server API with POST to start a profiler
 
@@ -62,3 +64,69 @@ class ProfilerResource(resource.Resource):
 
     def render_OPTIONS(self, request: Request) -> int:
         return render_options(request)
+
+
+ProfilerResource.openapi = {
+    '/profiler': {
+        'post': {
+            'operationId': 'profiler',
+            'summary': 'Run full node profiler',
+            'requestBody': {
+                'description': 'Profiler data',
+                'required': True,
+                'content': {
+                    'application/json': {
+                        'schema': {
+                            '$ref': '#/components/schemas/ProfilerPOST'
+                        },
+                        'examples': {
+                            'start': {
+                                'summary': 'Start profiler',
+                                'value': {
+                                    'start': True
+                                }
+                            },
+                            'stop': {
+                                'summary': 'Stop profiler',
+                                'value': {
+                                    'stop': True,
+                                    'filepath': 'filepath'
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success_start': {
+                                    'summary': 'Success start',
+                                    'value': {
+                                        'success': True
+                                    }
+                                },
+                                'success_stop': {
+                                    'summary': 'Success stop',
+                                    'value': {
+                                        'success': True,
+                                        'saved_to': 'filepath'
+                                    }
+                                },
+                                'error': {
+                                    'summary': 'Error',
+                                    'value': {
+                                        'success': False
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
