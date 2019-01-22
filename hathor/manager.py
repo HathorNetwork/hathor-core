@@ -409,6 +409,14 @@ class HathorManager:
 
         weight = logH - log(dt, 2) + log(self.avg_time_between_blocks, 2)
 
+        # Maximum change in difficulty is 1.
+        # This means that hashpower has doubled or halved since previous block.
+        dw = weight - blocks[-1].weight
+        if dw > 1:
+            weight = blocks[-1].weight + 1
+        elif dw < -1:
+            weight = blocks[-1].weight - 1
+
         if weight < self.min_block_weight:
             weight = self.min_block_weight
 
