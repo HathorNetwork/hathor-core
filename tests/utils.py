@@ -6,6 +6,7 @@ import subprocess
 import time
 import urllib.parse
 from concurrent import futures
+from typing import List
 
 import grpc
 import numpy.random
@@ -214,11 +215,15 @@ class Simulator:
     def run(self, interval: float, step: float = 0.25, status_interval: float = 60.0):
         initial = self.clock.seconds()
         latest_time = self.clock.seconds()
+        t0 = time.time()
         while self.clock.seconds() <= initial + interval:
             for conn in self.connections:
                 conn.run_one_step()
             if self.clock.seconds() - latest_time >= status_interval:
-                print('t={:15.2f}    dt={:8.2f}    toBeRun={:8.2f}    delayedCall={}'.format(
+                t1 = time.time()
+                print('[{:8.2f}][rate={:8.2f}] t={:15.2f}    dt={:8.2f}    toBeRun={:8.2f}    delayedCall={}'.format(
+                    t1 - t0,
+                    (self.clock.seconds() - initial) / (t1 - t0),
                     self.clock.seconds(),
                     self.clock.seconds() - initial,
                     interval - self.clock.seconds() + initial,
@@ -302,6 +307,11 @@ class RandomTransactionGenerator:
         :param: hashpower: Number of hashes per second
         """
         self.manager = manager
+
+        # List of addresses to send tokens. If this list is empty, tokens will be sent to an address
+        # of its own wallet.
+        self.send_to: List[HathorManager] = []
+
         self.clock = manager.reactor
         self.rate = rate
         self.hashpower = hashpower
@@ -339,8 +349,12 @@ class RandomTransactionGenerator:
             self.delayedcall = self.clock.callLater(0, self.schedule_next_transaction)
             return
 
-        address = self.manager.wallet.get_unused_address(mark_as_used=False)
-        value = random.choice([1, 2, 3, 4])
+        if not self.send_to:
+            address = self.manager.wallet.get_unused_address(mark_as_used=False)
+        else:
+            address = random.choice(self.send_to)
+
+        value = random.randint(1, balance.available)
         tx = gen_new_tx(self.manager, address, value)
         tx.timestamp = int(self.clock.seconds())
         tx.weight = self.manager.minimum_tx_weight(tx)
