@@ -1,13 +1,16 @@
 import base64
 import hashlib
 import json
+from collections import OrderedDict
 from math import inf
 from typing import TYPE_CHECKING, Callable, Dict, Iterator, List, Optional, Tuple, Union, cast
 
 from twisted.internet.defer import Deferred, inlineCallbacks
-from twisted.internet.interfaces import IDelayedCall, IReactorCore
+from twisted.internet.error import ConnectionLost
+from twisted.internet.interfaces import IDelayedCall, IProtocol, IPushProducer, IReactorCore
 from twisted.internet.task import Clock
 from twisted.logger import Logger
+from zope.interface import implementer
 
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
 from hathor.p2p.plugin import Plugin
@@ -16,6 +19,130 @@ from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
+
+
+@implementer(IPushProducer)
+class SendDataPush:
+    """ Prioritize blocks over transactions when pushing data to peers.
+    """
+    def __init__(self, node_sync: 'NodeSyncTimestamp'):
+        self.node_sync = node_sync
+        self.protocol: IProtocol = node_sync.protocol
+        self.consumer = self.protocol.transport
+
+        self.is_running: bool = False
+        self.is_producing: bool = False
+
+        self.queue: OrderedDict[bytes, Tuple[BaseTransaction, List[bytes]]] = OrderedDict()
+        self.priority_queue: OrderedDict[bytes, Tuple[BaseTransaction, List[bytes]]] = OrderedDict()
+
+        self.delayed_call = None
+
+    def start(self) -> None:
+        """ Start pushing data.
+        """
+        self.is_running = True
+        self.consumer.registerProducer(self, True)
+        self.resumeProducing()
+
+    def stop(self) -> None:
+        """ Stop pushing data.
+        """
+        self.is_running = False
+        self.pauseProducing()
+        self.consumer.unregisterProducer()
+
+    def schedule_if_needed(self) -> None:
+        """ Schedule `send_next` if needed.
+        """
+        if not self.is_running:
+            return
+
+        if not self.is_producing:
+            return
+
+        if self.delayed_call and self.delayed_call.active():
+            return
+
+        if len(self.queue) > 0 or len(self.priority_queue) > 0:
+            self.delayed_call = self.node_sync.reactor.callLater(0, self.send_next)
+
+    def _get_deps(self, tx: BaseTransaction) -> Iterator[bytes]:
+        """ Internal method to get dependencies of a block/transaction.
+        """
+        for h in tx.parents:
+            yield h
+        for txin in tx.inputs:
+            yield txin.tx_id
+
+    def add(self, tx: BaseTransaction) -> None:
+        """ Add a new block/transaction to be pushed.
+        """
+        assert tx.hash is not None
+        if tx.is_block:
+            self.add_to_priority(tx)
+        else:
+            deps = list(self._get_deps(tx))
+            self.queue[tx.hash] = (tx, deps)
+            self.schedule_if_needed()
+
+    def add_to_priority(self, tx: BaseTransaction) -> None:
+        """ Add a new block/transaction to be pushed with priority.
+        """
+        assert tx.hash is not None
+        assert tx.hash not in self.queue
+        if tx.hash in self.priority_queue:
+            return
+        deps = list(self._get_deps(tx))
+        for h in deps:
+            if h in self.queue:
+                tx2, deps = self.queue.pop(h)
+                self.add_to_priority(tx2)
+        self.priority_queue[tx.hash] = (tx, deps)
+        self.schedule_if_needed()
+
+    def send_next(self) -> None:
+        """ Push next block/transaction to peer.
+        """
+        assert self.is_running
+        assert self.is_producing
+
+        if len(self.priority_queue) > 0:
+            # Send blocks first.
+            _, (tx, _) = self.priority_queue.popitem(last=False)
+
+        elif len(self.queue) > 0:
+            # Otherwise, send in order.
+            _, (tx, _) = self.queue.popitem(last=False)
+
+        else:
+            # Nothing to send.
+            self.delayed_call = None
+            return
+
+        self.node_sync.send_data(tx)
+        self.schedule_if_needed()
+
+    def resumeProducing(self) -> None:
+        """ This method is automatically called to resume pushing data.
+        """
+        self.is_producing = True
+        self.schedule_if_needed()
+
+    def pauseProducing(self) -> None:
+        """ This method is automatically called to pause pushing data.
+        """
+        self.is_producing = False
+        if self.delayed_call and self.delayed_call.active():
+            self.delayed_call.cancel()
+
+    def stopProducing(self) -> None:
+        """ This method is automatically called to stop pushing data.
+        """
+        self.pauseProducing()
+        self.queue.clear()
+        self.priority_queue.clear()
+        self.protocol.connectionLost(ConnectionLost('Push data stopped'))
 
 
 class NodeSyncTimestamp(Plugin):
@@ -48,6 +175,8 @@ class NodeSyncTimestamp(Plugin):
         self.call_later_interval: int = 1  # seconds
 
         self.peer_timestamp: int = 0
+
+        self.send_data_queue: SendDataPush = SendDataPush(self)
 
         # Latest data timestamp of the peer.
         self.peer_merkle_hash: Optional[int] = None
@@ -86,11 +215,15 @@ class NodeSyncTimestamp(Plugin):
     def start(self) -> None:
         """ Start sync.
         """
+        if self.send_data_queue:
+            self.send_data_queue.start()
         self.next_step()
 
     def stop(self) -> None:
         """ Stop sync.
         """
+        if self.send_data_queue:
+            self.send_data_queue.stop()
         if self.call_later_id and self.call_later_id.active():
             self.call_later_id.cancel()
 
@@ -104,7 +237,10 @@ class NodeSyncTimestamp(Plugin):
         #     if parent.timestamp > self.synced_timestamp:
         #         # print('send_tx_to_peer_if_possible(): discarded')
         #         return
-        self.send_data(tx)
+        if self.send_data_queue:
+            self.send_data_queue.add(tx)
+        else:
+            self.send_data(tx)
 
     def get_merkle_tree(self, timestamp: int) -> Tuple[bytes, List[bytes]]:
         """ Generate a hash to check whether the DAG is the same at that timestamp.
