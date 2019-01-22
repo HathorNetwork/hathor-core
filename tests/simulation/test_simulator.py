@@ -62,7 +62,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         miner1.start()
         simulator.run(10)
 
-        gen_tx1 = RandomTransactionGenerator(manager1, rate=2 / 60., hashpower=1e6)
+        gen_tx1 = RandomTransactionGenerator(manager1, rate=2 / 60., hashpower=1e6, ignore_no_funds=True)
         gen_tx1.start()
         simulator.run(60 * 60)
 
@@ -94,7 +94,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         miner1.start()
         simulator.run(10)
 
-        gen_tx1 = RandomTransactionGenerator(manager1, rate=3 / 60., hashpower=1e6)
+        gen_tx1 = RandomTransactionGenerator(manager1, rate=3 / 60., hashpower=1e6, ignore_no_funds=True)
         gen_tx1.start()
         simulator.run(60)
 
@@ -106,7 +106,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         miner2.start()
         simulator.run(120)
 
-        gen_tx2 = RandomTransactionGenerator(manager2, rate=10 / 60., hashpower=1e6)
+        gen_tx2 = RandomTransactionGenerator(manager2, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
         gen_tx2.start()
         simulator.run(10 * 60)
 
@@ -175,7 +175,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         miners.append(miner1)
         simulator.run(10)
 
-        gen_tx1 = RandomTransactionGenerator(manager1, rate=3 / 60., hashpower=1e6)
+        gen_tx1 = RandomTransactionGenerator(manager1, rate=3 / 60., hashpower=1e6, ignore_no_funds=True)
         gen_tx1.start()
         simulator.run(60)
 
@@ -188,7 +188,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         miners.append(miner2)
         simulator.run(120)
 
-        gen_tx2 = RandomTransactionGenerator(manager2, rate=10 / 60., hashpower=1e6)
+        gen_tx2 = RandomTransactionGenerator(manager2, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
         gen_tx2.start()
         simulator.run(10 * 60)
 
