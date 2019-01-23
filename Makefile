@@ -7,7 +7,7 @@ all: check tests
 
 tests_simulation = tests/simulation/
 tests_cli = tests/cli/
-tests_lib = $(filter-out ${tests_cli} tests/__pycache__/, $(dir $(wildcard tests/*/.)))
+tests_lib = $(filter-out ${tests_cli} ${tests_simulation} tests/__pycache__/, $(dir $(wildcard tests/*/.)))
 
 pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov=hathor
 
@@ -21,10 +21,10 @@ tests-lib:
 
 .PHONY: tests-simulation
 tests-simulation:
-	pytest -v --cov=hathor --cov-report=term --cov-fail-under=70 -p no:warnings $(tests_simulation)
+	pytest --cov=hathor --cov-report=term -p no:warnings $(tests_simulation)
 
 .PHONY: tests
-tests: tests-cli tests-lib
+tests: tests-cli tests-lib tests-simulation
 
 .PHONY: tests-full
 tests-full:
