@@ -5,7 +5,7 @@ Quick start
 Connect to Hathor testnet
 -------------------------
 
-Run:
+Run (assuming virtualenv is active):
 
 .. code-block:: shell
 
@@ -69,17 +69,30 @@ Then, you can use this id in any server or client through the `--peer` parameter
 Cheat Sheets
 ------------
 
-Run flake8:
+Assuming virtualenv is active, otherwise prefix `make` commands with `pipenv run`.
+
+Check if code seems alright:
 
 .. code-block:: shell
 
-    flake8 hathor/ tests/ *.py
+    make check
 
-Run tests with coverage:
+Test and coverage:
 
 .. code-block:: shell
 
-	nosetests --with-coverage --cover-package=hathor --cover-html
+    make tests
+
+Generate Sphinx docs:
+
+.. code-block:: shell
+
+    cd docs
+    make html
+    make latexpdf
+
+The output will be written to `docs/_build/html/`.
+
 
 
 
@@ -91,10 +104,9 @@ First, install all packages:
 .. code-block:: shell
 
     sudo apt update
-    sudo apt install --assume-yes python3 python3-dev python3-setuptools build-essential
+    sudo apt install --assume-yes python3 python3-dev python3-pip build-essential
     sudo apt install --assume-yes supervisor  # optional
-    sudo easy_install3 pip
-    pip3 install virtualenv --user
+    pip3 install -U pipenv
 
 Then, install `hathor-python`:
 
@@ -102,21 +114,19 @@ Then, install `hathor-python`:
 
     git clone git@gitlab.com:HathorNetwork/hathor-python.git
     cd hathor-python/
-    virtualenv --python=python3 venv
-    source ./venv/bin/activate
-    pip install -r requirements.txt
+    pipenv sync
 
-Generate grpc/protobuf modules (in virtualenv):
+Generate grpc/protobuf modules:
 
 .. code-block:: shell
 
-    make protos
+    pipenv run make protos
 
 Then, generate your `peer_id.json`:
 
 .. code-block:: shell
 
-    hathor-cli gen_peer_id > peer_id.json
+    pipenv run hathor-cli gen_peer_id > peer_id.json
 
 Finally, you can run your node.
 
@@ -126,17 +136,29 @@ Updating and cleanup
 
 For development, make sure to have the required dependencies and latest generated files after updating the repo.
 
-Installing new dependencies (in virtualenv):
+Get up to date with dependencies added by new commits, after a `git pull` do:
 
 .. code-block:: shell
 
-    pip install -r requirements.txt
+    pipenv sync -d
 
-Regenerate grpc/protobuf modules (in virtualenv):
+And regenerate grpc/protobuf, if needed:
 
 .. code-block:: shell
 
-    make protos
+    pipenv run make protos
+
+For adding new runtime dependencies:
+
+.. code-block:: shell
+
+    pipenv install my-new-runtime-dep
+
+If the new dependencies are used in tests, scripts, build tools, etc, do:
+
+.. code-block:: shell
+
+    pipenv install -d my-new-dev-dep
 
 
 Daemonizing with Supervisor
@@ -148,7 +170,7 @@ Create a `run_hathord` with execution permission:
 
     #!/bin/bash
     source ./venv/bin/activate
-    exec hathor-cli run_node --hostname <YOUR_HOSTNAME_OR_PUBLIC_IP_ADDRESS> --listen tcp:40403 --status 8001 --testnet --peer peer_id.json
+    exec pipenv run hathor-cli run_node --hostname <YOUR_HOSTNAME_OR_PUBLIC_IP_ADDRESS> --listen tcp:40403 --status 8001 --testnet --peer peer_id.json
 
 There follows a configuration template to Supervisor:
 
