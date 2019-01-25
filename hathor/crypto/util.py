@@ -8,6 +8,7 @@ from cryptography.hazmat.primitives.serialization import (
     KeySerializationEncryption,
     NoEncryption,
     PrivateFormat,
+    PublicFormat,
     load_der_private_key,
     load_der_public_key,
 )
@@ -209,20 +210,7 @@ def get_public_key_bytes_compressed(public_key: ec.EllipticCurvePublicKey) -> by
 
         :rtype: bytes
     """
-    from cryptography import utils
-    pn = public_key.public_numbers()
-
-    # the following only works on `compressed-point-support` branch of `earonesty/cryptography` fork
-    # return pn.encode_point(compressed=True)
-
-    # the following will probably be available on 2.5 (not released yet) after merge of:
-    # - https://github.com/pyca/cryptography/pull/4638
-    # from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-    # return public_key.public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
-
-    # this will work on the official cryptography package:
-    byte_length = (pn.curve.key_size + 7) // 8
-    return (b'\x03' if pn.y % 2 else b'\x02') + utils.int_to_bytes(pn.x, byte_length)
+    return public_key.public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
 
 
 def get_public_key_from_bytes_compressed(public_key_bytes: bytes) -> ec.EllipticCurvePublicKey:
@@ -233,8 +221,6 @@ def get_public_key_from_bytes_compressed(public_key_bytes: bytes) -> ec.Elliptic
 
         :rtype: ec.EllipticCurvePublicKey
     """
-
-    # this one requires cryptography>=2.5
     return ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), public_key_bytes)
 
 
