@@ -398,7 +398,7 @@ class HathorManager:
         hash_algorithm = block.hash_algorithm
 
         current = self.tx_storage.get_transaction(block.parents[0])
-        n_target = 1440
+        n_target = 120
         max_depth = n_target * 3
         blocks = []
         for _ in range(max_depth):

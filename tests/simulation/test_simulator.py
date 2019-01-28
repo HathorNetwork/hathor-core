@@ -55,6 +55,49 @@ class HathorSimulatorTestCase(unittest.TestCase):
         wallet.unlock(words=words, tx_storage=manager.tx_storage)
         return manager
 
+    def export_best_chain_csv(self, filename, manager):
+        import csv
+        fp = open(filename, 'w')
+        writer = csv.writer(fp)
+        writer.writerow(['timestamp', 'dt', 'weight', 'dw'])
+
+        best_blocks = manager.tx_storage.get_best_block_tips()
+        block = manager.tx_storage.get_transaction(best_blocks[0])
+        prev = None
+        while True:
+            if prev:
+                dt = prev.timestamp - block.timestamp
+                dw = prev.weight - block.weight
+                writer.writerow([
+                    block.timestamp,
+                    dt,
+                    block.weight,
+                    dw
+                ])
+
+            if len(block.parents) == 0:
+                break
+            prev = block
+            block = manager.tx_storage.get_transaction(block.parents[0])
+        fp.close()
+
+    def test_blocks_only(self):
+        manager1 = self.create_peer(self.network)
+        simulator = Simulator(self.clock)
+
+        miner1 = MinerSimulator(manager1, hashpower=100e6)
+        miner1.start()
+        simulator.run(1 * 60 * 60, status_interval=3600.0)
+
+        # self.export_best_chain_csv('best_chain.csv', manager1)
+
+        miner2 = MinerSimulator(manager1, hashpower=100e6)
+        miner2.start()
+        simulator.run(1 * 60 * 60, status_interval=3600.0)
+
+        # dot1 = manager1.tx_storage.graphviz(format='pdf')
+        # dot1.render('test_sync1')
+
     def test_one_node(self):
         manager1 = self.create_peer(self.network)
         simulator = Simulator(self.clock)
