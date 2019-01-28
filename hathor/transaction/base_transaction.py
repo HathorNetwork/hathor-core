@@ -6,7 +6,6 @@ import hashlib
 import struct
 import time
 from abc import ABC, abstractclassmethod, abstractmethod
-from enum import Enum
 from math import log
 from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
 
@@ -74,11 +73,6 @@ def aux_calc_weight(w1: float, w2: float, multiplier: int) -> float:
 class BaseTransaction(ABC):
     """Hathor base transaction"""
 
-    class GenesisDagConnectivity(Enum):
-        UNKNOWN = -1
-        DISCONNECTED = 0
-        CONNECTED = 1
-
     def __init__(self, nonce: int = 0, timestamp: Optional[int] = None, version: int = 1, weight: float = 0,
                  height: int = 0, inputs: Optional[List['TxInput']] = None, outputs: Optional[List['TxOutput']] = None,
                  parents: List[bytes] = None, tokens: Optional[List[bytes]] = None, hash: Optional[bytes] = None,
@@ -104,9 +98,6 @@ class BaseTransaction(ABC):
         self.storage = storage
         self.hash = hash  # Stored as bytes.
         self.is_block = is_block
-
-        # Locally we keep track of whether this tx is connected back to a genesis tx.
-        self.genesis_dag_connectivity = self.GenesisDagConnectivity.UNKNOWN
 
     def __repr__(self):
         class_name = type(self).__name__
