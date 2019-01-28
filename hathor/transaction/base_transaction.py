@@ -396,7 +396,7 @@ class BaseTransaction(ABC):
                     if self.is_block and not parent.is_genesis:
                         if self.timestamp - parent.timestamp > MAX_DISTANCE_BETWEEN_BLOCKS:
                             raise TimestampError('Distance between blocks is too big'
-                                                 ' ({} seconds)'.format(self.timestamp, parent.timestamp))
+                                                 ' ({} seconds)'.format(self.timestamp - parent.timestamp))
                     if my_parents_txs > 0:
                         raise IncorrectParents('Parents which are blocks must come before transactions')
                     for pi_hash in parent.parents:

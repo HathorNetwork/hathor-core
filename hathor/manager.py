@@ -386,36 +386,58 @@ class HathorManager:
 
         The new difficulty cannot be smaller than `self.min_block_weight`.
         """
+        assert isinstance(block, Block)
+
         # In test mode we don't validate the block difficulty
         if self.test_mode:
             return 1
 
         if block.is_genesis:
-            return MIN_WEIGHT
+            return self.min_block_weight
 
-        it = self.tx_storage.iter_bfs_ascendent_blocks(block, max_depth=10)
-        blocks = list(it)
-        blocks.sort(key=lambda tx: tx.timestamp)
+        hash_algorithm = block.hash_algorithm
+
+        current = self.tx_storage.get_transaction(block.parents[0])
+        n_target = 1440
+        max_depth = n_target * 3
+        blocks = []
+        for _ in range(max_depth):
+            assert isinstance(current, Block)
+            if current.hash_algorithm == hash_algorithm:
+                blocks.append(current)
+                if len(blocks) == n_target:
+                    break
+            if len(current.parents) == 0:
+                # We've reached genesis.
+                assert current.is_genesis
+                break
+            current = self.tx_storage.get_transaction(current.parents[0])
+
+        if len(blocks) == 0:
+            return self.min_block_weight
 
         if blocks[-1].is_genesis:
-            return MIN_WEIGHT
+            blocks.pop()
 
-        dt = blocks[-1].timestamp - blocks[0].timestamp
-        assert dt > 0
+        if len(blocks) <= 1:
+            return self.min_block_weight
 
         logH = 0.0
         for blk in blocks:
             logH = sum_weights(logH, blk.weight)
 
+        dt = blocks[0].timestamp - blocks[-1].timestamp
+        assert dt > 0
+
         weight = logH - log(dt, 2) + log(self.avg_time_between_blocks, 2)
 
-        # Maximum change in difficulty is 1.
-        # This means that hashpower has doubled or halved since previous block.
-        dw = weight - blocks[-1].weight
-        if dw > 1:
-            weight = blocks[-1].weight + 1
-        elif dw < -1:
-            weight = blocks[-1].weight - 1
+        # Apply a maximum change in difficulty.
+        max_dw = 0.25
+        dw = weight - blocks[0].weight
+        if dw > max_dw:
+            weight = blocks[0].weight + max_dw
+        elif dw < -max_dw:
+            weight = blocks[0].weight - max_dw
 
         if weight < self.min_block_weight:
             weight = self.min_block_weight

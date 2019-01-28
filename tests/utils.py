@@ -283,7 +283,7 @@ class MinerSimulator:
         if self.block:
             self.block.nonce = random.randrange(0, 2**32)
             self.block.update_hash()
-            self.manager.propagate_tx(self.block)
+            assert self.manager.propagate_tx(self.block)
             self.block = None
 
         block = self.manager.generate_mining_block()
