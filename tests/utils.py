@@ -285,7 +285,6 @@ class MinerSimulator:
             self.block.nonce = random.randrange(0, 2**32)
             self.block.update_hash()
             assert self.manager.propagate_tx(self.block)
-            print('New block found. version={} weight={}'.format(self.block.version, self.block.weight))
             self.block = None
 
         block = self.manager.generate_mining_block(version=self.version)
