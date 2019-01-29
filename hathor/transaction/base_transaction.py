@@ -2,7 +2,6 @@
 
 import base64
 import datetime
-import hashlib
 import struct
 import time
 from abc import ABC, abstractclassmethod, abstractmethod

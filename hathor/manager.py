@@ -8,7 +8,15 @@ from typing import Any, List, Optional, cast
 from twisted.internet.interfaces import IReactorCore
 from twisted.logger import Logger
 
-from hathor.constants import DECIMAL_PLACES, MIN_WEIGHT, TOKENS_PER_BLOCK
+from hathor.constants import (
+    AVG_TIME_BETWEEN_BLOCKS,
+    BLOCK_DIFFICULTY_MAX_DEPTH,
+    BLOCK_DIFFICULTY_MAX_DW,
+    BLOCK_DIFFICULTY_N_BLOCKS,
+    DECIMAL_PLACES,
+    MIN_WEIGHT,
+    TOKENS_PER_BLOCK,
+)
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
@@ -84,7 +92,7 @@ class HathorManager:
         self.tx_storage = tx_storage or TransactionMemoryStorage()
         self.tx_storage.pubsub = self.pubsub
 
-        self.avg_time_between_blocks = 64  # in seconds
+        self.avg_time_between_blocks = AVG_TIME_BETWEEN_BLOCKS  # in seconds
         self.min_block_weight = MIN_WEIGHT
         self.tokens_issued_per_block = TOKENS_PER_BLOCK * (10**DECIMAL_PLACES)
 
@@ -398,9 +406,10 @@ class HathorManager:
         hash_algorithm = block.hash_algorithm
         algorithms_found = set()
 
+        n_target = BLOCK_DIFFICULTY_N_BLOCKS
+        max_depth = BLOCK_DIFFICULTY_MAX_DEPTH
+
         current = self.tx_storage.get_transaction(block.parents[0])
-        n_target = 120
-        max_depth = n_target * 3
         blocks = []
         for _ in range(max_depth):
             assert isinstance(current, Block)
@@ -434,7 +443,7 @@ class HathorManager:
         weight = logH - log(dt, 2) + log(self.avg_time_between_blocks, 2) + log(len(algorithms_found), 2)
 
         # Apply a maximum change in difficulty.
-        max_dw = 0.25
+        max_dw = BLOCK_DIFFICULTY_MAX_DW
         dw = weight - blocks[0].weight
         if dw > max_dw:
             weight = blocks[0].weight + max_dw
