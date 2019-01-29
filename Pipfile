@@ -34,6 +34,7 @@ pywin32 = {version = "*",os_name = "== 'nt'"}
 requests = "==2.21.0"
 service_identity = "==18.1.0"
 pexpect = "==4.6.0"
+scrypt = "==1.0"
 
 [requires]
 python_version = "3.6"
