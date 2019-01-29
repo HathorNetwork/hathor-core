@@ -216,7 +216,7 @@ class HathorManager:
         return [x.data for x in ret]
 
     def generate_mining_block(self, timestamp: Optional[float] = None,
-                              parent_block_hash: Optional[bytes] = None) -> Block:
+                              parent_block_hash: Optional[bytes] = None, version: int = 1) -> Block:
         """ Generates a block ready to be mined. The block includes new issued tokens,
         parents, and the weight.
 
@@ -250,7 +250,7 @@ class HathorManager:
         timestamp1 = int(self.reactor.seconds())
         timestamp2 = max(x.timestamp for x in parents_tx) + 1
 
-        blk = Block(outputs=tx_outputs, parents=parents, storage=self.tx_storage, height=new_height)
+        blk = Block(version=version, outputs=tx_outputs, parents=parents, storage=self.tx_storage, height=new_height)
         blk.timestamp = max(timestamp1, timestamp2)
         blk.weight = self.calculate_block_difficulty(blk)
         return blk
@@ -396,6 +396,7 @@ class HathorManager:
             return self.min_block_weight
 
         hash_algorithm = block.hash_algorithm
+        algorithms_found = set()
 
         current = self.tx_storage.get_transaction(block.parents[0])
         n_target = 120
@@ -403,6 +404,7 @@ class HathorManager:
         blocks = []
         for _ in range(max_depth):
             assert isinstance(current, Block)
+            algorithms_found.add(current.hash_algorithm)
             if current.hash_algorithm == hash_algorithm:
                 blocks.append(current)
                 if len(blocks) == n_target:
@@ -429,7 +431,7 @@ class HathorManager:
         dt = blocks[0].timestamp - blocks[-1].timestamp
         assert dt > 0
 
-        weight = logH - log(dt, 2) + log(self.avg_time_between_blocks, 2)
+        weight = logH - log(dt, 2) + log(self.avg_time_between_blocks, 2) + log(len(algorithms_found), 2)
 
         # Apply a maximum change in difficulty.
         max_dw = 0.25

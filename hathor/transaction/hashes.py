@@ -5,7 +5,7 @@ from typing import Optional
 try:
     from hashlib import scrypt
 except ImportError:
-    import _scrypt
+    import scrypt as _scrypt
     from typing import Union
 
     _DataType = Union[bytes, bytearray, memoryview]

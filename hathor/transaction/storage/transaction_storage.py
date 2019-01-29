@@ -366,7 +366,7 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     def graphviz(self, format: str = 'pdf', weight: bool = False, acc_weight: bool = False,
-                 block_only: bool = False) -> Digraph:
+                 block_only: bool = False, version: bool = False) -> Digraph:
         """Return a Graphviz object that can be rendered to generate a visualization of the DAG.
 
         :param format: Format of the visualization (pdf, png, or jpg)
@@ -423,6 +423,10 @@ class TransactionStorage(ABC):
                     metadata = tx.get_metadata()
                     attrs_node.update(
                         dict(label='{}\naw: {:.2f}'.format(attrs_node['label'], metadata.accumulated_weight)))
+
+                if version:
+                    attrs_node.update(
+                        dict(label='{}\nv{}'.format(attrs_node['label'], tx.version)))
 
                 if tx.is_genesis:
                     attrs_node.update(dict(fillcolor='#87D37C', style='filled'))

@@ -59,7 +59,7 @@ class HathorSimulatorTestCase(unittest.TestCase):
         import csv
         fp = open(filename, 'w')
         writer = csv.writer(fp)
-        writer.writerow(['timestamp', 'dt', 'weight', 'dw'])
+        writer.writerow(['timestamp', 'dt', 'weight', 'dw', 'version'])
 
         best_blocks = manager.tx_storage.get_best_block_tips()
         block = manager.tx_storage.get_transaction(best_blocks[0])
@@ -72,7 +72,8 @@ class HathorSimulatorTestCase(unittest.TestCase):
                     block.timestamp,
                     dt,
                     block.weight,
-                    dw
+                    dw,
+                    block.version,
                 ])
 
             if len(block.parents) == 0:
@@ -329,6 +330,23 @@ class HathorSimulatorTestCase(unittest.TestCase):
 
         for node in nodes[1:]:
             self.assertTipsEqual(nodes[0], node)
+
+    def test_multimining(self):
+        manager1 = self.create_peer(self.network)
+        simulator = Simulator(self.clock)
+
+        miner1 = MinerSimulator(manager1, hashpower=100e6)
+        miner1.start()
+
+        miner2 = MinerSimulator(manager1, hashpower=10e6, version=2)
+        miner2.start()
+
+        simulator.run(1 * 60 * 60, status_interval=3600.0)
+
+        dot1 = manager1.tx_storage.graphviz(format='pdf', block_only=True, version=True)
+        dot1.render('test_sync1')
+
+        self.export_best_chain_csv('best_chain.csv', manager1)
 
 
 class HathorSimulatorSeed1TestCase(HathorSimulatorTestCase):

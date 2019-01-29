@@ -99,7 +99,15 @@ class BaseTransaction(ABC):
         self.storage = storage
         self.hash = hash  # Stored as bytes.
         self.is_block = is_block
-        self.hash_algorithm: Type[hashes.BaseHashAlgorithm] = hashes.SHA256dHash
+
+        self.hash_algorithm: Type[hashes.BaseHashAlgorithm]
+        self.update_hash_algorithm()
+
+    def update_hash_algorithm(self):
+        if self.version == 1:
+            self.hash_algorithm = hashes.SHA256dHash
+        else:
+            self.hash_algorithm = hashes.ScryptHash
 
     def __repr__(self):
         class_name = type(self).__name__
@@ -136,6 +144,8 @@ class BaseTransaction(ABC):
         tx = cls()
         (tx.version, tx.weight, tx.timestamp, tx.height, inputs_len, outputs_len, parents_len,
          tokens_len), buf = (unpack(_TRANSACTION_FORMAT_STRING, buf))
+
+        tx.update_hash_algorithm()
 
         for _ in range(parents_len):
             parent, buf = unpack_len(32, buf)  # 256bits

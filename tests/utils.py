@@ -237,12 +237,13 @@ class MinerSimulator:
     """ Simulate block mining with actually solving the block. It is supposed to be used
     with Simulator class. The mining part is simulated using the geometrical distribution.
     """
-    def __init__(self, manager: HathorManager, *, hashpower: float):
+    def __init__(self, manager: HathorManager, *, hashpower: float, version: int = 1):
         """
         :param: hashpower: Number of hashes per second
         """
         self.manager = manager
         self.hashpower = hashpower
+        self.version = version
         self.clock = manager.reactor
         self.block = None
         self.delayedcall = None
@@ -284,9 +285,10 @@ class MinerSimulator:
             self.block.nonce = random.randrange(0, 2**32)
             self.block.update_hash()
             assert self.manager.propagate_tx(self.block)
+            print('New block found. version={} weight={}'.format(self.block.version, self.block.weight))
             self.block = None
 
-        block = self.manager.generate_mining_block()
+        block = self.manager.generate_mining_block(version=self.version)
         geometric_p = 2**(-block.weight)
         trials = numpy.random.geometric(geometric_p)
         dt = 1.0 * trials / self.hashpower
