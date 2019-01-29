@@ -7,12 +7,13 @@ import struct
 import time
 from abc import ABC, abstractclassmethod, abstractmethod
 from math import log
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple, Type
 
 from _hashlib import HASH
 
 from hathor import protos
 from hathor.constants import HATHOR_TOKEN_UID, MAX_DISTANCE_BETWEEN_BLOCKS
+from hathor.transaction import hashes
 from hathor.transaction.exceptions import (
     DuplicatedParents,
     IncorrectParents,
@@ -98,6 +99,7 @@ class BaseTransaction(ABC):
         self.storage = storage
         self.hash = hash  # Stored as bytes.
         self.is_block = is_block
+        self.hash_algorithm: Type[hashes.BaseHashAlgorithm] = hashes.SHA256dHash
 
     def __repr__(self):
         class_name = type(self).__name__
@@ -456,7 +458,7 @@ class BaseTransaction(ABC):
         :return: A partial hash of the transaction
         :rtype: :py:class:`_hashlib.HASH`
         """
-        calculate_hash1 = hashlib.sha256()
+        calculate_hash1 = self.hash_algorithm()
         calculate_hash1.update(self.get_struct_without_nonce())
         return calculate_hash1
 
@@ -472,7 +474,7 @@ class BaseTransaction(ABC):
         :rtype: bytes
         """
         part1.update(self.nonce.to_bytes(4, byteorder='big', signed=False))
-        return hashlib.sha256(part1.digest()).digest()
+        return part1.digest()
 
     def calculate_hash(self) -> bytes:
         """Return the full hash of the transaction

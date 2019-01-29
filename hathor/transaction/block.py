@@ -1,4 +1,3 @@
-from enum import Enum
 from itertools import chain
 from typing import TYPE_CHECKING, Iterable, List, Optional, Set
 
@@ -12,10 +11,6 @@ if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 
-class HashAlgorithm(Enum):
-    SHA256D = 'sha256d'
-
-
 class Block(BaseTransaction):
     log = Logger()
 
@@ -24,7 +19,6 @@ class Block(BaseTransaction):
                  hash: Optional[bytes] = None, storage: Optional['TransactionStorage'] = None) -> None:
         super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight, height=height,
                          outputs=outputs or [], parents=parents or [], hash=hash, storage=storage, is_block=True)
-        self.hash_algorithm = HashAlgorithm.SHA256D
 
     def to_proto(self, include_metadata: bool = True) -> protos.BaseTransaction:
         tx_proto = protos.Block(
