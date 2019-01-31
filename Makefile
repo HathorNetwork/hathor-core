@@ -86,3 +86,17 @@ clean-pyc:
 
 .PHONY: clean
 clean: clean-pyc clean-protos
+
+# docker:
+
+docker_dir := .
+docker_tag := $(shell git describe)
+
+.PHONY: docker
+docker: $(docker_dir)/Dockerfile $(proto_outputs)
+	docker build -t hathor-full-node:$(docker_tag) $(docker_dir)
+
+.PHONY: docker-push
+docker-push: docker
+	docker tag hathor-full-node:$(docker_tag) 769498303037.dkr.ecr.us-east-1.amazonaws.com/hathor-full-node:$(docker_tag)
+	docker push 769498303037.dkr.ecr.us-east-1.amazonaws.com/hathor-full-node:$(docker_tag)

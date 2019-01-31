@@ -1,0 +1,11 @@
+**/*.pyc
+**/*.swp
+**/__pycache__
+cover/
+coverage*/
+data/
+docs/
+*.egg-info
+.git
+.mypy_cache
+.pytest_cache

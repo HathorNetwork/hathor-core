@@ -8,8 +8,8 @@ def generate_words(language: str = 'english', count: int = 24) -> str:
 
 
 def create_parser() -> ArgumentParser:
-    import argparse
-    parser = argparse.ArgumentParser()
+    from hathor.cli.util import create_parser
+    parser = create_parser()
     parser.add_argument('--language', help='Words language')
     parser.add_argument('--count', type=int, help='Word count')
     return parser
