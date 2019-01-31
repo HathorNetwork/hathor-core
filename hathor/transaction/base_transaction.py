@@ -553,6 +553,14 @@ class BaseTransaction(ABC):
             self._metadata = metadata
         return metadata
 
+    def reset_metadata(self) -> None:
+        """ Reset transaction's metadata. It is used when a node is initializing and
+        recalculating all metadata.
+        """
+        assert self.storage is not None
+        self._metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight)
+        self.storage.save_transaction(self, only_metadata=True)
+
     def update_accumulated_weight(self, save_file: bool = True) -> TransactionMetadata:
         """Calculates the tx's accumulated weight and update its metadata.
 
