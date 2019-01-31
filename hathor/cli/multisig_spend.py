@@ -1,9 +1,9 @@
-import argparse
 from argparse import ArgumentParser, Namespace
 
 
 def create_parser() -> ArgumentParser:
-    parser = argparse.ArgumentParser()
+    from hathor.cli.util import create_parser
+    parser = create_parser()
     parser.add_argument('partial_tx', type=str, help='Tx to spend multisig fund')
     parser.add_argument(
         'signatures', type=str,

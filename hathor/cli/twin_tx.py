@@ -1,4 +1,3 @@
-import argparse
 import struct
 import urllib.parse
 from argparse import ArgumentParser, Namespace
@@ -8,7 +7,8 @@ import requests
 
 
 def create_parser() -> ArgumentParser:
-    parser = argparse.ArgumentParser()
+    from hathor.cli.util import create_parser
+    parser = create_parser()
     parser.add_argument('--url', help='URL to access tx storage in case the hash was passed')
     parser.add_argument('--hash', help='Hash of tx to create a twin')
     parser.add_argument('--raw_tx', help='Raw tx to create a twin')

@@ -1,4 +1,3 @@
-import argparse
 import getpass
 import json
 import os
@@ -59,8 +58,9 @@ def main():
         NanoContractMatchValueResource,
     )
     from hathor.websocket import HathorAdminWebsocketFactory
+    from hathor.cli.util import create_parser
 
-    parser = argparse.ArgumentParser()
+    parser = create_parser()
     parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
     parser.add_argument('--auto-hostname', action='store_true', help='Try to discover the hostname automatically')
     parser.add_argument('--testnet', action='store_true', help='Connect to Hathor testnet')

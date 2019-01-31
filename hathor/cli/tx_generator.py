@@ -1,4 +1,3 @@
-import argparse
 import random
 import signal
 import sys
@@ -12,7 +11,8 @@ _SLEEP_ON_ERROR_SECONDS = 5
 
 
 def create_parser() -> ArgumentParser:
-    parser = argparse.ArgumentParser()
+    from hathor.cli.util import create_parser
+    parser = create_parser()
     parser.add_argument('url', help='URL to get mining bytes')
     parser.add_argument('--address', action='append')
     parser.add_argument('--value', action='append')

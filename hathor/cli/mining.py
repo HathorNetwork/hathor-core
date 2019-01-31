@@ -1,4 +1,3 @@
-import argparse
 import base64
 import datetime
 import signal
@@ -12,6 +11,7 @@ from typing import Tuple
 import requests
 
 _SLEEP_ON_ERROR_SECONDS = 5
+_MAX_CONN_RETRIES = 10
 
 
 def signal_handler(sig, frame):
@@ -26,19 +26,27 @@ def worker(q_in, q_out):
 
 
 def create_parser() -> ArgumentParser:
-    parser = argparse.ArgumentParser()
+    from hathor.cli.util import create_parser
+    parser = create_parser()
     parser.add_argument('url', help='URL to get mining bytes')
+    parser.add_argument('--init-delay', type=float, help='Wait N seconds before starting (in seconds)', default=None)
     parser.add_argument('--sleep', type=float, help='Sleep every 2 seconds (in seconds)')
     parser.add_argument('--count', type=int, help='Quantity of blocks to be mined')
     return parser
 
 
 def execute(args: Namespace) -> None:
+    from requests.exceptions import ConnectionError
+
     from hathor.transaction import Block
     from hathor.transaction.exceptions import HathorError
 
     print('Hathor CPU Miner v1.0.0')
     print('URL: {}'.format(args.url))
+
+    if args.init_delay:
+        print('Init delay {} seconds'.format(args.init_delay))
+        time.sleep(args.init_delay)
 
     signal.signal(signal.SIGINT, signal_handler)
 
@@ -47,9 +55,24 @@ def execute(args: Namespace) -> None:
         sleep_seconds = args.sleep
 
     total = 0
+    conn_retries = 0
     while True:
         print('Requesting mining information...')
-        response = requests.get(args.url)
+        try:
+            response = requests.get(args.url)
+        except ConnectionError as e:
+            print('Error connecting to server: %s' % args.url)
+            print(e)
+            if conn_retries >= _MAX_CONN_RETRIES:
+                print('Too many connection failures, giving up.')
+                sys.exit(1)
+            else:
+                conn_retries += 1
+                print('Waiting %d seconds to try again (%i of %i)...' % (_SLEEP_ON_ERROR_SECONDS, conn_retries,
+                                                                         _MAX_CONN_RETRIES))
+                time.sleep(_SLEEP_ON_ERROR_SECONDS)
+                continue
+        conn_retries = 0
         try:
             data = response.json()
         except JSONDecodeError as e:

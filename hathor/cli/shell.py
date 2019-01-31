@@ -1,4 +1,3 @@
-import argparse
 import getpass
 import json
 import os
@@ -32,7 +31,8 @@ def get_ipython(extra_args: List, imported_objects: Dict[str, Any]) -> Callable:
 
 def create_parser() -> ArgumentParser:
     # TODO: reuse as much as possible from hathor.cli.run_node
-    parser = argparse.ArgumentParser()
+    from hathor.cli.util import create_parser
+    parser = create_parser()
     parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
     parser.add_argument('--testnet', action='store_true', help='Connect to Hathor testnet')
     parser.add_argument('--dns', action='append', help='Seed DNS')

@@ -1,4 +1,3 @@
-import argparse
 import getpass
 from argparse import ArgumentParser, Namespace
 
@@ -6,7 +5,8 @@ from cryptography.hazmat.primitives import serialization
 
 
 def create_parser() -> ArgumentParser:
-    parser = argparse.ArgumentParser()
+    from hathor.cli.util import create_parser
+    parser = create_parser()
     parser.add_argument('signatures_required', type=int, help='Mimimum quantity of signatures required')
     parser.add_argument('--pubkey_count', type=int, help='Quantity of public keys in the multisig')
     parser.add_argument('--public_keys', type=str, help='Public keys in hex separated by comma')

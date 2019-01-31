@@ -1,4 +1,3 @@
-import argparse
 import base64
 import struct
 
@@ -9,7 +8,8 @@ from hathor.crypto.util import get_private_key_from_bytes
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    from hathor.cli.util import create_parser
+    parser = create_parser()
 
     parser.add_argument('data', nargs='+', help='Encode data in oracle format.')
     parser.add_argument('--keyfile', help='Path to a private key file, used to sign the data')

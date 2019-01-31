@@ -1,4 +1,3 @@
-import argparse
 import json
 import math
 import os
@@ -300,7 +299,8 @@ def get_method_to_call(chart_type: str) -> Callable:
 
 
 def create_parser() -> ArgumentParser:
-    parser = argparse.ArgumentParser()
+    from hathor.cli.util import create_parser
+    parser = create_parser()
     parser.add_argument('title', help='Title of the dashboard')
     parser.add_argument('--data_source', help='Name of data source')
     return parser
