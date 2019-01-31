@@ -1,6 +1,9 @@
+import base64
+
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.p2p.resources import MiningResource
+from hathor.transaction import Block
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
@@ -20,7 +23,23 @@ class MiningTest(_BaseResourceTest._ResourceTest):
     def test_post(self):
         response_get = yield self.web.get('mining')
         data_get = response_get.json_value()
-        block_bytes = data_get.get('block_bytes')
+        block_bytes_str = data_get.get('block_bytes')
 
-        response_post = yield self.web.post('mining', {'block_bytes': block_bytes})
-        self.assertEqual(response_post.written[0], b'')
+        block_bytes = base64.b64decode(block_bytes_str)
+        block = Block.create_from_struct(block_bytes)
+        block.weight = 4
+        block.resolve()
+
+        block_bytes = bytes(block)
+        block_bytes_str = base64.b64encode(block_bytes).decode('ascii')
+
+        response_post = yield self.web.post('mining', {'block_bytes': block_bytes_str})
+        self.assertEqual(response_post.written[0], b'1')
+
+        block.weight = 100
+        block_bytes = bytes(block)
+        block_bytes_str = base64.b64encode(block_bytes).decode('ascii')
+
+        response_post = yield self.web.post('mining', {'block_bytes': block_bytes_str})
+        # Probability 2^(100 - 256) of failing
+        self.assertEqual(response_post.written[0], b'0')

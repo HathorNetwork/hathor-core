@@ -74,18 +74,23 @@ def execute(args: Namespace) -> None:
 
         block.nonce = q_out.get()
         block.update_hash()
+        print('[{}] New block found: {} (nonce={}, weight={}, height={})'.format(
+            datetime.datetime.now(), block.hash.hex(), block.nonce, block.weight, block.height))
+
         try:
             block.verify_without_storage()
         except HathorError:
-            pass
+            print('[{}] ERROR: Block has not been pushed because it is not valid.'.format(datetime.datetime.now()))
         else:
             block_bytes = block.get_struct()
+            response = requests.post(args.url, json={'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
+            if not response.ok:
+                print('[{}] ERROR: Block has been rejected. Unknown exception.'.format(datetime.datetime.now()))
 
-            print('[{}] New block found: {} (nonce={}, weight={}, height={})'.format(
-                datetime.datetime.now(), block.hash.hex(), block.nonce, block.weight, block.height))
-            print('')
+            if response.ok and response.text != '1':
+                print('[{}] ERROR: Block has been rejected.'.format(datetime.datetime.now()))
 
-            requests.post(args.url, json={'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
+        print('')
 
         total += 1
         if args.count and total == args.count:
