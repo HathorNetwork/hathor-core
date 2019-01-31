@@ -1,4 +1,4 @@
 #!/bin/bash
 
 cd ../
-exec ./hathor-cli run_miner http://localhost:8080/mining --sleep 0.0001
+exec ./hathor-cli run_miner http://localhost:8080/mining

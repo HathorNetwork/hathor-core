@@ -33,6 +33,7 @@ def execute(args):
     print('Rate: {} tx/s'.format(args.rate))
 
     latest_timestamp = 0
+    latest_weight = 0
 
     if args.rate:
         interval = 1. / args.rate
@@ -83,6 +84,7 @@ def execute(args):
             if args.count and total == args.count:
                 break
             latest_timestamp = data['tx']['timestamp']
+            latest_weight = data['tx']['weight']
         except (AssertionError, JSONDecodeError) as e:
             print('Error reading response from server: %s' % response)
             print(response.text)
@@ -97,12 +99,15 @@ def execute(args):
             t1 = time.time()
             if t1 - t0 > 5:
                 measure = count / (t1 - t0)
-                if interval:
+                if interval is not None:
                     error = 1. / measure - 1. / args.rate
-                    assert interval > error, 'interval={} error={}'.format(interval, error)
-                    interval -= error
+                    if interval > error:
+                        interval -= error
+                    else:
+                        interval = 0
                 print('')
-                print('  {} tx/s (latest timestamp={})'.format(measure, latest_timestamp))
+                print('  {} tx/s (latest timestamp={}, latest weight={}, sleep interval={})'.format(
+                      measure, latest_timestamp, latest_weight, interval))
                 print('')
                 count = 0
                 t0 = t1
