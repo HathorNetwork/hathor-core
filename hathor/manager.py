@@ -194,19 +194,20 @@ class HathorManager:
         t0 = time.time()
         t1 = t0
         cnt = 0
+        # self.start_profiler()
         for tx in self.tx_storage._topological_sort():
             t2 = time.time()
             if t2 - t1 > 5:
-                # self.start_profiler()
                 ts_date = datetime.datetime.fromtimestamp(self.tx_storage.latest_timestamp)
                 self.log.info('Verifying transations in storage...'
                               ' avg={:.4f} tx/s total={} (latest timedate: {})'.format(cnt / (t2 - t0), cnt, ts_date))
                 t1 = t2
             cnt += 1
             self.on_new_tx(tx, quiet=True)
-        # self.stop_profiler(save_to='initializing.prof')
+        # self.stop_profiler(save_to='profiles/initializing.prof')
         self.state = self.NodeState.READY
-        self.log.info('Node successfully initialized ({} seconds).'.format(t2 - t0))
+        self.log.info('Node successfully initialized'
+                      ' (total={}, avg={:.2f} tx/s in {} seconds).'.format(cnt, cnt / (t2 - t0), t2 - t0))
 
     def add_peer_discovery(self, peer_discovery: PeerDiscovery):
         self.peer_discoveries.append(peer_discovery)

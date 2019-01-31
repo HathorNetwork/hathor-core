@@ -10,7 +10,8 @@ def deprecated(msg):
     def decorator(func):
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            warnings.warn('{} is deprecated. {}'.format(func.__name__, msg), category=DeprecationWarning, stacklevel=2)
+            # warnings.warn('{} is deprecated. {}'.format(func.__name__, msg),
+            #               category=DeprecationWarning, stacklevel=2)
             return func(*args, **kwargs)
 
         wrapper.__deprecated = func
