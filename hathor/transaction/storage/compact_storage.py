@@ -124,7 +124,7 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
             return genesis
 
         filepath = self.generate_filepath(hash_bytes)
-        data = self.load_from_json(filepath, TransactionDoesNotExist())
+        data = self.load_from_json(filepath, TransactionDoesNotExist(hash_bytes.hex()))
         tx = self.load(data['tx'])
         if 'meta' in data.keys():
             meta = TransactionMetadata.create_from_json(data['meta'])

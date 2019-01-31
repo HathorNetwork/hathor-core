@@ -358,13 +358,14 @@ class HathorManager:
             self.log.debug('Transaction/Block discarded {}'.format(tx.hash_hex))
             return False
 
-        if self.wallet:
-            self.wallet.on_new_tx(tx)
-
         if self.state != self.NodeState.INITIALIZING:
             self.tx_storage.save_transaction(tx)
         else:
+            tx.reset_metadata()
             self.tx_storage._add_to_cache(tx)
+
+        if self.wallet:
+            self.wallet.on_new_tx(tx)
 
         tx.update_parents()
 
