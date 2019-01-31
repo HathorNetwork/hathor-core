@@ -6,7 +6,7 @@ from twisted.internet.task import Clock
 from twisted.web import server
 from twisted.web.test.requesthelper import DummyRequest
 
-from hathor.manager import HathorManager
+from hathor.manager import HathorManager, TestMode
 from hathor.p2p.peer_id import PeerId
 from tests import unittest
 
@@ -30,7 +30,7 @@ class _BaseResourceTest:
                 wallet=wallet,
                 tx_storage=tx_storage
             )
-            self.manager.test_mode = True
+            self.manager.test_mode = TestMode.TEST_ALL_WEIGHT
             self.manager.start()
 
 

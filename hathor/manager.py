@@ -1,14 +1,20 @@
 import datetime
 import random
 import time
-from enum import Enum
+from enum import Enum, IntFlag
 from math import log
 from typing import Any, List, Optional, cast
 
 from twisted.internet.interfaces import IReactorCore
 from twisted.logger import Logger
 
-from hathor.constants import DECIMAL_PLACES, MAX_DISTANCE_BETWEEN_BLOCKS, MIN_WEIGHT, TOKENS_PER_BLOCK
+from hathor.constants import (
+    DECIMAL_PLACES,
+    MAX_DISTANCE_BETWEEN_BLOCKS,
+    MIN_BLOCK_WEIGHT,
+    MIN_TX_WEIGHT,
+    TOKENS_PER_BLOCK,
+)
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
@@ -17,6 +23,13 @@ from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput, su
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.wallet import BaseWallet
+
+
+class TestMode(IntFlag):
+    DISABLED = 0
+    TEST_TX_WEIGHT = 1
+    TEST_BLOCK_WEIGHT = 2
+    TEST_ALL_WEIGHT = 3
 
 
 class HathorManager:
@@ -85,7 +98,8 @@ class HathorManager:
         self.tx_storage.pubsub = self.pubsub
 
         self.avg_time_between_blocks = 64  # in seconds
-        self.min_block_weight = MIN_WEIGHT
+        self.min_block_weight = MIN_BLOCK_WEIGHT
+        self.min_tx_weight = MIN_TX_WEIGHT
         self.tokens_issued_per_block = TOKENS_PER_BLOCK * (10**DECIMAL_PLACES)
 
         self.max_future_timestamp_allowed = 3600  # in seconds
@@ -109,8 +123,8 @@ class HathorManager:
             self.wallet.pubsub = self.pubsub
             self.wallet.reactor = self.reactor
 
-        # When manager is in test mode we exclude some verifications
-        self.test_mode = False
+        # When manager is in test mode we reduce the weight of blocks/transactions.
+        self.test_mode: int = 0
 
         # Multiplier coefficient to adjust the minimum weight of a normal tx to 18
         self.min_tx_weight_coefficient = 1.6
@@ -394,18 +408,18 @@ class HathorManager:
         The new difficulty cannot be smaller than `self.min_block_weight`.
         """
         # In test mode we don't validate the block difficulty
-        if self.test_mode:
+        if self.test_mode & TestMode.TEST_BLOCK_WEIGHT:
             return 1
 
         if block.is_genesis:
-            return MIN_WEIGHT
+            return self.min_block_weight
 
         it = self.tx_storage.iter_bfs_ascendent_blocks(block, max_depth=10)
         blocks = list(it)
         blocks.sort(key=lambda tx: tx.timestamp)
 
         if blocks[-1].is_genesis:
-            return MIN_WEIGHT
+            return self.min_block_weight
 
         dt = blocks[-1].timestamp - blocks[0].timestamp
         assert dt > 0
@@ -443,11 +457,11 @@ class HathorManager:
         """
         # In test mode we don't validate the minimum weight for tx
         # We do this to allow generating many txs for testing
-        if self.test_mode:
+        if self.test_mode & TestMode.TEST_TX_WEIGHT:
             return 1
 
         if tx.is_genesis:
-            return MIN_WEIGHT
+            return self.min_tx_weight
 
         tx_size = len(tx.get_struct())
 
@@ -457,7 +471,7 @@ class HathorManager:
             10**DECIMAL_PLACES, 2) + 0.5)
 
         # Make sure the calculated weight is at least the minimum
-        weight = max(weight, MIN_WEIGHT)
+        weight = max(weight, self.min_tx_weight)
 
         return weight
 

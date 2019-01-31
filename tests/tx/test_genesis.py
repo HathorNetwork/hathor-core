@@ -3,6 +3,7 @@ import time
 from twisted.internet.task import Clock
 
 from hathor.constants import GENESIS_TOKENS
+from hathor.manager import TestMode
 from hathor.transaction.genesis import genesis_transactions, get_genesis_output
 from tests import unittest
 
@@ -47,6 +48,6 @@ class GenesisTest(unittest.TestCase):
         # in test mode weight is always 1
         self.assertEqual(manager.calculate_block_difficulty(genesis_block), 1)
         self.assertEqual(manager.minimum_tx_weight(genesis_tx), 1)
-        manager.test_mode = False
+        manager.test_mode = TestMode.DISABLED
         self.assertEqual(manager.calculate_block_difficulty(genesis_block), genesis_block.weight)
         self.assertEqual(manager.minimum_tx_weight(genesis_tx), genesis_tx.weight)

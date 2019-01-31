@@ -24,7 +24,7 @@ def formatLogEvent(event):
 
 def main():
     import hathor
-    from hathor.manager import HathorManager
+    from hathor.manager import HathorManager, TestMode
     from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
     from hathor.p2p.peer_id import PeerId
     from hathor.p2p.resources import MiningResource, StatusResource
@@ -64,6 +64,8 @@ def main():
     parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
     parser.add_argument('--auto-hostname', action='store_true', help='Try to discover the hostname automatically')
     parser.add_argument('--testnet', action='store_true', help='Connect to Hathor testnet')
+    parser.add_argument('--test-mode-tx-weight', action='store_true',
+                        help='Reduces tx weight to 1 for testing purposes')
     parser.add_argument('--dns', action='append', help='Seed DNS')
     parser.add_argument('--peer', help='json file with peer info')
     parser.add_argument('--listen', action='append', help='Address to listen for new connections (eg: tcp:8000)')
@@ -183,6 +185,9 @@ def main():
 
     if args.bootstrap:
         manager.add_peer_discovery(BootstrapPeerDiscovery(args.bootstrap))
+
+    if args.test_mode_tx_weight:
+        manager.test_mode = TestMode.TEST_TX_WEIGHT
 
     manager.start()
 

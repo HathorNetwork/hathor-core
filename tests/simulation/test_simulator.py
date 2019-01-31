@@ -2,6 +2,7 @@ import random
 
 from mnemonic import Mnemonic
 
+from hathor.manager import TestMode
 from hathor.transaction import BaseTransaction
 from hathor.transaction.genesis import genesis_transactions
 from hathor.wallet import HDWallet
@@ -45,7 +46,7 @@ class HathorSimulatorTestCase(unittest.TestCase):
 
         manager = super().create_peer(network, wallet=wallet)
         manager.reactor = self.clock
-        manager.test_mode = False
+        manager.test_mode = TestMode.DISABLED
         manager.avg_time_between_blocks = 64
 
         # Don't use it anywhere else. It is unsafe to generate mnemonic words like this.
