@@ -8,7 +8,7 @@ from typing import Any, List, Optional, cast
 from twisted.internet.interfaces import IReactorCore
 from twisted.logger import Logger
 
-from hathor.constants import DECIMAL_PLACES, MIN_WEIGHT, TOKENS_PER_BLOCK
+from hathor.constants import DECIMAL_PLACES, MAX_DISTANCE_BETWEEN_BLOCKS, MIN_WEIGHT, TOKENS_PER_BLOCK
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
@@ -233,21 +233,28 @@ class HathorManager:
 
         if not timestamp:
             timestamp = max(self.tx_storage.latest_timestamp, self.reactor.seconds())
+
         if parent_block_hash is None:
-            tip_blocks = self.tx_storage.get_best_block_tips()
+            tip_blocks = self.tx_storage.get_best_block_tips(timestamp)
         else:
             tip_blocks = [parent_block_hash]
-        tip_txs = self.get_new_tx_parents(timestamp)
+
+        parent_block = self.tx_storage.get_transaction(random.choice(tip_blocks))
+        if not parent_block.is_genesis and timestamp - parent_block.timestamp > MAX_DISTANCE_BETWEEN_BLOCKS:
+            timestamp = parent_block.timestamp + MAX_DISTANCE_BETWEEN_BLOCKS
+
+        assert timestamp is not None
+        tip_txs = self.get_new_tx_parents(timestamp - 1)
 
         assert len(tip_blocks) >= 1
         assert len(tip_txs) == 2
 
-        parents = [random.choice(tip_blocks)] + tip_txs
+        parents = [parent_block.hash] + tip_txs
 
         parents_tx = [self.tx_storage.get_transaction(x) for x in parents]
         new_height = max(x.height for x in parents_tx) + 1
 
-        timestamp1 = int(self.reactor.seconds())
+        timestamp1 = int(timestamp)
         timestamp2 = max(x.timestamp for x in parents_tx) + 1
 
         blk = Block(outputs=tx_outputs, parents=parents, storage=self.tx_storage, height=new_height)
