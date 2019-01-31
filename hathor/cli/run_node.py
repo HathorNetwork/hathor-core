@@ -39,6 +39,7 @@ def main():
         TipsResource,
         TransactionResource,
     )
+    from hathor.p2p.utils import discover_hostname
     from hathor.transaction.storage import TransactionCacheStorage, TransactionCompactStorage, TransactionMemoryStorage
     from hathor.version_resource import VersionResource
     from hathor.wallet import HDWallet, Wallet
@@ -61,6 +62,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
+    parser.add_argument('--auto-hostname', action='store_true', help='Try to discover the hostname automatically')
     parser.add_argument('--testnet', action='store_true', help='Connect to Hathor testnet')
     parser.add_argument('--dns', action='append', help='Seed DNS')
     parser.add_argument('--peer', help='json file with peer info')
@@ -150,8 +152,23 @@ def main():
 
     wallet = create_wallet()
 
+    if args.hostname and args.auto_hostname:
+        print('You cannot use --hostname and --auto-hostname together.')
+        sys.exit(-1)
+
+    if not args.auto_hostname:
+        hostname = args.hostname
+    else:
+        print('Trying to discover your hostname...')
+        hostname = discover_hostname()
+        if not hostname:
+            print('Aborting because we could not discover your hostname.')
+            print('Try again or run without --auto-hostname.')
+            sys.exit(-1)
+        print('Hostname discovered and set to {}'.format(hostname))
+
     network = 'testnet'
-    manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=args.hostname, tx_storage=tx_storage,
+    manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname, tx_storage=tx_storage,
                             wallet=wallet)
 
     dns_hosts = []
