@@ -6,6 +6,7 @@ from twisted.internet.task import Clock
 
 from hathor.constants import MAX_DISTANCE_BETWEEN_BLOCKS
 from hathor.crypto.util import get_address_from_public_key, get_private_key_from_bytes, get_public_key_from_bytes
+from hathor.manager import TestMode
 from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
     BlockHeightError,
@@ -408,7 +409,7 @@ class BasicTransaction(unittest.TestCase):
         clock.advance(time.time())
         network = 'testnet'
         manager = self.create_peer(network, unlock_wallet=True)
-        manager.test_mode = False
+        manager.test_mode = TestMode.DISABLED
 
         # 1. propagate genesis
         genesis_block = self.genesis_blocks[0]

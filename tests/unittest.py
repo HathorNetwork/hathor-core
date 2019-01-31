@@ -8,7 +8,7 @@ from twisted.internet import reactor
 from twisted.internet.task import Clock
 from twisted.trial import unittest
 
-from hathor.manager import HathorManager
+from hathor.manager import HathorManager, TestMode
 from hathor.p2p.peer_id import PeerId
 from hathor.wallet import Wallet
 
@@ -44,7 +44,7 @@ class TestCase(unittest.TestCase):
                 wallet.unlock(b'MYPASS')
         manager = HathorManager(self.clock, peer_id=peer_id, network=network, wallet=wallet, tx_storage=tx_storage)
         manager.avg_time_between_blocks = 0.0001
-        manager.test_mode = True
+        manager.test_mode = TestMode.TEST_ALL_WEIGHT
         manager.start()
         return manager
 

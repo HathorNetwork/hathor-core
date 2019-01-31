@@ -1,7 +1,7 @@
 import math
 from typing import List, Optional
 
-from hathor.constants import GENESIS_TOKENS, MAX_VALUE, MIN_WEIGHT
+from hathor.constants import GENESIS_TOKENS, MAX_VALUE, MIN_BLOCK_WEIGHT, MIN_TX_WEIGHT
 from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput
 from hathor.transaction.storage import TransactionStorage
 
@@ -11,7 +11,7 @@ def genesis_transactions(tx_storage: Optional[TransactionStorage]) -> List[BaseT
         hash=bytes.fromhex('00002b3be4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22f'),
         nonce=17076,
         timestamp=1539271482,
-        weight=MIN_WEIGHT,
+        weight=MIN_TX_WEIGHT,
         height=1,
         storage=tx_storage,
     )
@@ -20,7 +20,7 @@ def genesis_transactions(tx_storage: Optional[TransactionStorage]) -> List[BaseT
         hash=bytes.fromhex('0002bb171de3490828028ec5eef3325956acb6bcffa6a50466bb9a81d38363c2'),
         nonce=91696,
         timestamp=1539271483,
-        weight=MIN_WEIGHT,
+        weight=MIN_TX_WEIGHT,
         height=1,
         storage=tx_storage,
     )
@@ -38,7 +38,7 @@ def genesis_transactions(tx_storage: Optional[TransactionStorage]) -> List[BaseT
         hash=bytes.fromhex('0001e298570e37d46f9101bcf903bde67186f26a83d88b9cb196f38b49623457'),
         nonce=14204,
         timestamp=1539271481,
-        weight=MIN_WEIGHT,
+        weight=MIN_BLOCK_WEIGHT,
         height=1,
         outputs=GENESIS_OUTPUTS,
         storage=tx_storage,

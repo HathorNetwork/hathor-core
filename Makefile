@@ -13,22 +13,22 @@ pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov=hathor
 
 .PHONY: tests-cli
 tests-cli:
-	pytest --cov=hathor/cli/ --cov-config=.coveragerc_full --cov-fail-under=70 -p no:warnings $(tests_cli)
+	pytest --durations=10 --cov=hathor/cli/ --cov-config=.coveragerc_full --cov-fail-under=70 -p no:warnings $(tests_cli)
 
 .PHONY: tests-lib
 tests-lib:
-	pytest $(pytest_flags) --cov-fail-under=94 $(tests_lib)
+	pytest --durations=10 $(pytest_flags) --cov-fail-under=94 $(tests_lib)
 
 .PHONY: tests-simulation
 tests-simulation:
-	pytest --cov=hathor --cov-report=term -p no:warnings $(tests_simulation)
+	pytest --durations=10 --cov=hathor --cov-report=term -p no:warnings $(tests_simulation)
 
 .PHONY: tests
-tests: tests-cli tests-lib tests-simulation
+tests: tests-cli tests-lib
 
 .PHONY: tests-full
 tests-full:
-	pytest $(pytest_flags) --cov-fail-under=90 --cov-config=.coveragerc_full ./tests
+	pytest $(pytest_flags) --durations=10 --cov-fail-under=90 --cov-config=.coveragerc_full ./tests
 
 # checking:
 
