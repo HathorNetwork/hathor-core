@@ -1,5 +1,6 @@
 import base64
 import datetime
+import math
 import signal
 import sys
 import time
@@ -11,7 +12,7 @@ from typing import Tuple
 import requests
 
 _SLEEP_ON_ERROR_SECONDS = 5
-_MAX_CONN_RETRIES = 10
+_MAX_CONN_RETRIES = math.inf
 
 
 def signal_handler(sig, frame):
@@ -72,7 +73,8 @@ def execute(args: Namespace) -> None:
                                                                          _MAX_CONN_RETRIES))
                 time.sleep(_SLEEP_ON_ERROR_SECONDS)
                 continue
-        conn_retries = 0
+        else:
+            conn_retries = 0
         try:
             data = response.json()
         except JSONDecodeError as e:

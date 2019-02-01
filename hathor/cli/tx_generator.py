@@ -1,3 +1,4 @@
+import math
 import random
 import signal
 import sys
@@ -8,6 +9,7 @@ from json.decoder import JSONDecodeError
 import requests
 
 _SLEEP_ON_ERROR_SECONDS = 5
+_MAX_CONN_RETRIES = math.inf
 
 
 def create_parser() -> ArgumentParser:
@@ -25,6 +27,9 @@ def create_parser() -> ArgumentParser:
 
 def execute(args):
     import urllib.parse
+
+    from requests.exceptions import ConnectionError
+
     send_tokens_url = urllib.parse.urljoin(args.url, '/wallet/send_tokens/')
 
     print('Hathor TX Sender v1.0.0')
@@ -34,6 +39,7 @@ def execute(args):
 
     latest_timestamp = 0
     latest_weight = 0
+    conn_retries = 0
 
     if args.rate:
         interval = 1. / args.rate
@@ -43,8 +49,25 @@ def execute(args):
     if args.address:
         addresses = args.address
     else:
-        address_url = urllib.parse.urljoin(args.url, '/wallet/address')
-        response = requests.get(address_url + '?new=false')
+        address_url = urllib.parse.urljoin(args.url, '/wallet/address') + '?new=false'
+        while True:
+            try:
+                response = requests.get(address_url)
+                break
+            except ConnectionError as e:
+                print('Error connecting to server: %s' % address_url)
+                print(e)
+                if conn_retries >= _MAX_CONN_RETRIES:
+                    print('Too many connection failures, giving up.')
+                    sys.exit(1)
+                else:
+                    conn_retries += 1
+                    print('Waiting %d seconds to try again (%i of %i)...' % (_SLEEP_ON_ERROR_SECONDS, conn_retries,
+                                                                             _MAX_CONN_RETRIES))
+                    time.sleep(_SLEEP_ON_ERROR_SECONDS)
+                    continue
+            else:
+                conn_retries = 0
         addresses = [response.json()['address']]
 
     print('Addresses: {}'.format(addresses))
@@ -76,7 +99,22 @@ def execute(args):
         data = {'outputs': [{'address': address, 'value': value}], 'inputs': []}
         if args.weight:
             data['weight'] = args.weight
-        response = requests.post(send_tokens_url, json={'data': data})
+        try:
+            response = requests.post(send_tokens_url, json={'data': data})
+        except ConnectionError as e:
+            print('Error connecting to server: %s' % send_tokens_url)
+            print(e)
+            if conn_retries >= _MAX_CONN_RETRIES:
+                print('Too many connection failures, giving up.')
+                sys.exit(1)
+            else:
+                conn_retries += 1
+                print('Waiting %d seconds to try again (%i of %i)...' % (_SLEEP_ON_ERROR_SECONDS, conn_retries,
+                                                                         _MAX_CONN_RETRIES))
+                time.sleep(_SLEEP_ON_ERROR_SECONDS)
+                continue
+        else:
+            conn_retries = 0
         try:
             data = response.json()
             assert data['success']
