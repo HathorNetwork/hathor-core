@@ -13,7 +13,7 @@ pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov=hathor
 
 .PHONY: tests-cli
 tests-cli:
-	pytest --durations=10 --cov=hathor/cli/ --cov-config=.coveragerc_full --cov-fail-under=69 -p no:warnings $(tests_cli)
+	pytest --durations=10 --cov=hathor/cli/ --cov-config=.coveragerc_full --cov-fail-under=68 -p no:warnings $(tests_cli)
 
 .PHONY: tests-lib
 tests-lib:
