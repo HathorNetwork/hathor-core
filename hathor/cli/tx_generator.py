@@ -55,15 +55,15 @@ def execute(args):
                 response = requests.get(address_url)
                 break
             except ConnectionError as e:
-                print('Error connecting to server: %s' % address_url)
+                print('Error connecting to server: {}'.format(address_url))
                 print(e)
                 if conn_retries >= _MAX_CONN_RETRIES:
                     print('Too many connection failures, giving up.')
                     sys.exit(1)
                 else:
                     conn_retries += 1
-                    print('Waiting %d seconds to try again (%i of %i)...' % (_SLEEP_ON_ERROR_SECONDS, conn_retries,
-                                                                             _MAX_CONN_RETRIES))
+                    print('Waiting %d seconds to try again ({} of {})...'.format(_SLEEP_ON_ERROR_SECONDS, conn_retries,
+                                                                                 _MAX_CONN_RETRIES))
                     time.sleep(_SLEEP_ON_ERROR_SECONDS)
                     continue
             else:
@@ -102,15 +102,15 @@ def execute(args):
         try:
             response = requests.post(send_tokens_url, json={'data': data})
         except ConnectionError as e:
-            print('Error connecting to server: %s' % send_tokens_url)
+            print('Error connecting to server: {}'.format(send_tokens_url))
             print(e)
             if conn_retries >= _MAX_CONN_RETRIES:
                 print('Too many connection failures, giving up.')
                 sys.exit(1)
             else:
                 conn_retries += 1
-                print('Waiting %d seconds to try again (%i of %i)...' % (_SLEEP_ON_ERROR_SECONDS, conn_retries,
-                                                                         _MAX_CONN_RETRIES))
+                print('Waiting %d seconds to try again ({} of {})...'.format(_SLEEP_ON_ERROR_SECONDS, conn_retries,
+                                                                             _MAX_CONN_RETRIES))
                 time.sleep(_SLEEP_ON_ERROR_SECONDS)
                 continue
         else:
@@ -124,10 +124,10 @@ def execute(args):
             latest_timestamp = data['tx']['timestamp']
             latest_weight = data['tx']['weight']
         except (AssertionError, JSONDecodeError) as e:
-            print('Error reading response from server: %s' % response)
+            print('Error reading response from server: {}'.format(response))
             print(response.text)
             print(e)
-            print('Waiting %d seconds to try again...' % _SLEEP_ON_ERROR_SECONDS)
+            print('Waiting {} seconds to try again...'.format(_SLEEP_ON_ERROR_SECONDS))
             time.sleep(_SLEEP_ON_ERROR_SECONDS)
         else:
             # print('Response:', data)
