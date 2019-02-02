@@ -62,15 +62,15 @@ def execute(args: Namespace) -> None:
         try:
             response = requests.get(args.url)
         except ConnectionError as e:
-            print('Error connecting to server: %s' % args.url)
+            print('Error connecting to server: {}'.format(args.url))
             print(e)
             if conn_retries >= _MAX_CONN_RETRIES:
                 print('Too many connection failures, giving up.')
                 sys.exit(1)
             else:
                 conn_retries += 1
-                print('Waiting %d seconds to try again (%i of %i)...' % (_SLEEP_ON_ERROR_SECONDS, conn_retries,
-                                                                         _MAX_CONN_RETRIES))
+                print('Waiting %d seconds to try again ({} of {})...'.format(_SLEEP_ON_ERROR_SECONDS, conn_retries,
+                                                                             _MAX_CONN_RETRIES))
                 time.sleep(_SLEEP_ON_ERROR_SECONDS)
                 continue
         else:
@@ -78,9 +78,9 @@ def execute(args: Namespace) -> None:
         try:
             data = response.json()
         except JSONDecodeError as e:
-            print('Error reading response from server: %s' % response)
+            print('Error reading response from server: {}'.format(response))
             print(e)
-            print('Waiting %d seconds to try again...' % _SLEEP_ON_ERROR_SECONDS)
+            print('Waiting {} seconds to try again...'.format(_SLEEP_ON_ERROR_SECONDS))
             time.sleep(_SLEEP_ON_ERROR_SECONDS)
             continue
         block_bytes = base64.b64decode(data['block_bytes'])
