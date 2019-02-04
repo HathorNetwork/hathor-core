@@ -129,6 +129,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
             return tx
         else:
             tx = skip_warning(self.store.get_transaction)(hash_bytes)
+            tx.storage = self
             self._update_cache(tx)
             self.stats['miss'] += 1
             return tx
@@ -136,7 +137,9 @@ class TransactionCacheStorage(BaseTransactionStorage):
     @deprecated('Use get_all_transactions_deferred instead')
     def get_all_transactions(self):
         self._flush_to_storage(self.dirty_txs.copy())
-        return skip_warning(self.store.get_all_transactions)()
+        for tx in skip_warning(self.store.get_all_transactions)():
+            tx.storage = self
+            yield tx
 
     @deprecated('Use get_count_tx_blocks_deferred instead')
     def get_count_tx_blocks(self) -> int:
@@ -177,8 +180,9 @@ class TransactionCacheStorage(BaseTransactionStorage):
     def get_all_transactions_deferred(self):
         # TODO: yield self._flush_to_storage_deferred(self.dirty_txs.copy())
         self._flush_to_storage(self.dirty_txs.copy())
-        res = yield self.store.get_all_transactions_deferred()
-        return res
+        for tx in self.store.get_all_transactions_deferred():
+            tx.storage = self
+            yield tx
 
     @inlineCallbacks
     def get_count_tx_blocks_deferred(self):

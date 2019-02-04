@@ -1,4 +1,3 @@
-import argparse
 import base64
 
 from cryptography.hazmat.backends import default_backend
@@ -8,7 +7,8 @@ from hathor.crypto.util import get_hash160, get_private_key_bytes, get_public_ke
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    from hathor.cli.util import create_parser
+    parser = create_parser()
 
     parser.add_argument('filepath', help='Create a new private key in the given file')
     args = parser.parse_args()

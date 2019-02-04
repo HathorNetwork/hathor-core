@@ -1,4 +1,4 @@
-import argparse
+import math
 import random
 import signal
 import sys
@@ -9,10 +9,12 @@ from json.decoder import JSONDecodeError
 import requests
 
 _SLEEP_ON_ERROR_SECONDS = 5
+_MAX_CONN_RETRIES = math.inf
 
 
 def create_parser() -> ArgumentParser:
-    parser = argparse.ArgumentParser()
+    from hathor.cli.util import create_parser
+    parser = create_parser()
     parser.add_argument('url', help='URL to get mining bytes')
     parser.add_argument('--address', action='append')
     parser.add_argument('--value', action='append')
@@ -25,6 +27,9 @@ def create_parser() -> ArgumentParser:
 
 def execute(args):
     import urllib.parse
+
+    from requests.exceptions import ConnectionError
+
     send_tokens_url = urllib.parse.urljoin(args.url, '/wallet/send_tokens/')
 
     print('Hathor TX Sender v1.0.0')
@@ -33,6 +38,8 @@ def execute(args):
     print('Rate: {} tx/s'.format(args.rate))
 
     latest_timestamp = 0
+    latest_weight = 0
+    conn_retries = 0
 
     if args.rate:
         interval = 1. / args.rate
@@ -42,8 +49,25 @@ def execute(args):
     if args.address:
         addresses = args.address
     else:
-        address_url = urllib.parse.urljoin(args.url, '/wallet/address')
-        response = requests.get(address_url + '?new=false')
+        address_url = urllib.parse.urljoin(args.url, '/wallet/address') + '?new=false'
+        while True:
+            try:
+                response = requests.get(address_url)
+                break
+            except ConnectionError as e:
+                print('Error connecting to server: {}'.format(address_url))
+                print(e)
+                if conn_retries >= _MAX_CONN_RETRIES:
+                    print('Too many connection failures, giving up.')
+                    sys.exit(1)
+                else:
+                    conn_retries += 1
+                    print('Waiting %d seconds to try again ({} of {})...'.format(_SLEEP_ON_ERROR_SECONDS, conn_retries,
+                                                                                 _MAX_CONN_RETRIES))
+                    time.sleep(_SLEEP_ON_ERROR_SECONDS)
+                    continue
+            else:
+                conn_retries = 0
         addresses = [response.json()['address']]
 
     print('Addresses: {}'.format(addresses))
@@ -75,7 +99,22 @@ def execute(args):
         data = {'outputs': [{'address': address, 'value': value}], 'inputs': []}
         if args.weight:
             data['weight'] = args.weight
-        response = requests.post(send_tokens_url, json={'data': data})
+        try:
+            response = requests.post(send_tokens_url, json={'data': data})
+        except ConnectionError as e:
+            print('Error connecting to server: {}'.format(send_tokens_url))
+            print(e)
+            if conn_retries >= _MAX_CONN_RETRIES:
+                print('Too many connection failures, giving up.')
+                sys.exit(1)
+            else:
+                conn_retries += 1
+                print('Waiting %d seconds to try again ({} of {})...'.format(_SLEEP_ON_ERROR_SECONDS, conn_retries,
+                                                                             _MAX_CONN_RETRIES))
+                time.sleep(_SLEEP_ON_ERROR_SECONDS)
+                continue
+        else:
+            conn_retries = 0
         try:
             data = response.json()
             assert data['success']
@@ -83,11 +122,12 @@ def execute(args):
             if args.count and total == args.count:
                 break
             latest_timestamp = data['tx']['timestamp']
+            latest_weight = data['tx']['weight']
         except (AssertionError, JSONDecodeError) as e:
-            print('Error reading response from server: %s' % response)
+            print('Error reading response from server: {}'.format(response))
             print(response.text)
             print(e)
-            print('Waiting %d seconds to try again...' % _SLEEP_ON_ERROR_SECONDS)
+            print('Waiting {} seconds to try again...'.format(_SLEEP_ON_ERROR_SECONDS))
             time.sleep(_SLEEP_ON_ERROR_SECONDS)
         else:
             # print('Response:', data)
@@ -97,12 +137,15 @@ def execute(args):
             t1 = time.time()
             if t1 - t0 > 5:
                 measure = count / (t1 - t0)
-                if interval:
+                if interval is not None:
                     error = 1. / measure - 1. / args.rate
-                    assert interval > error, 'interval={} error={}'.format(interval, error)
-                    interval -= error
+                    if interval > error:
+                        interval -= error
+                    else:
+                        interval = 0
                 print('')
-                print('  {} tx/s (latest timestamp={})'.format(measure, latest_timestamp))
+                print('  {} tx/s (latest timestamp={}, latest weight={}, sleep interval={})'.format(
+                      measure, latest_timestamp, latest_weight, interval))
                 print('')
                 count = 0
                 t0 = t1

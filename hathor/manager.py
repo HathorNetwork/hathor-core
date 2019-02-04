@@ -1,7 +1,7 @@
 import datetime
 import random
 import time
-from enum import Enum
+from enum import Enum, IntFlag
 from math import log
 from typing import Any, List, Optional, cast
 
@@ -14,7 +14,9 @@ from hathor.constants import (
     BLOCK_DIFFICULTY_MAX_DW,
     BLOCK_DIFFICULTY_N_BLOCKS,
     DECIMAL_PLACES,
-    MIN_WEIGHT,
+    MAX_DISTANCE_BETWEEN_BLOCKS,
+    MIN_BLOCK_WEIGHT,
+    MIN_TX_WEIGHT,
     TOKENS_PER_BLOCK,
 )
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -25,6 +27,13 @@ from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput, su
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.wallet import BaseWallet
+
+
+class TestMode(IntFlag):
+    DISABLED = 0
+    TEST_TX_WEIGHT = 1
+    TEST_BLOCK_WEIGHT = 2
+    TEST_ALL_WEIGHT = 3
 
 
 class HathorManager:
@@ -93,7 +102,8 @@ class HathorManager:
         self.tx_storage.pubsub = self.pubsub
 
         self.avg_time_between_blocks = AVG_TIME_BETWEEN_BLOCKS  # in seconds
-        self.min_block_weight = MIN_WEIGHT
+        self.min_block_weight = MIN_BLOCK_WEIGHT
+        self.min_tx_weight = MIN_TX_WEIGHT
         self.tokens_issued_per_block = TOKENS_PER_BLOCK * (10**DECIMAL_PLACES)
 
         self.max_future_timestamp_allowed = 3600  # in seconds
@@ -117,8 +127,8 @@ class HathorManager:
             self.wallet.pubsub = self.pubsub
             self.wallet.reactor = self.reactor
 
-        # When manager is in test mode we exclude some verifications
-        self.test_mode = False
+        # When manager is in test mode we reduce the weight of blocks/transactions.
+        self.test_mode: int = 0
 
         # Multiplier coefficient to adjust the minimum weight of a normal tx to 18
         self.min_tx_weight_coefficient = 1.6
@@ -188,19 +198,20 @@ class HathorManager:
         t0 = time.time()
         t1 = t0
         cnt = 0
+        # self.start_profiler()
         for tx in self.tx_storage._topological_sort():
             t2 = time.time()
             if t2 - t1 > 5:
-                # self.start_profiler()
                 ts_date = datetime.datetime.fromtimestamp(self.tx_storage.latest_timestamp)
                 self.log.info('Verifying transations in storage...'
                               ' avg={:.4f} tx/s total={} (latest timedate: {})'.format(cnt / (t2 - t0), cnt, ts_date))
                 t1 = t2
             cnt += 1
             self.on_new_tx(tx, quiet=True)
-        # self.stop_profiler(save_to='initializing.prof')
+        # self.stop_profiler(save_to='profiles/initializing.prof')
         self.state = self.NodeState.READY
-        self.log.info('Node successfully initialized ({} seconds).'.format(t2 - t0))
+        self.log.info('Node successfully initialized'
+                      ' (total={}, avg={:.2f} tx/s in {} seconds).'.format(cnt, cnt / (t2 - t0), t2 - t0))
 
     def add_peer_discovery(self, peer_discovery: PeerDiscovery):
         self.peer_discoveries.append(peer_discovery)
@@ -241,21 +252,28 @@ class HathorManager:
 
         if not timestamp:
             timestamp = max(self.tx_storage.latest_timestamp, self.reactor.seconds())
+
         if parent_block_hash is None:
-            tip_blocks = self.tx_storage.get_best_block_tips()
+            tip_blocks = self.tx_storage.get_best_block_tips(timestamp)
         else:
             tip_blocks = [parent_block_hash]
-        tip_txs = self.get_new_tx_parents(timestamp)
+
+        parent_block = self.tx_storage.get_transaction(random.choice(tip_blocks))
+        if not parent_block.is_genesis and timestamp - parent_block.timestamp > MAX_DISTANCE_BETWEEN_BLOCKS:
+            timestamp = parent_block.timestamp + MAX_DISTANCE_BETWEEN_BLOCKS
+
+        assert timestamp is not None
+        tip_txs = self.get_new_tx_parents(timestamp - 1)
 
         assert len(tip_blocks) >= 1
         assert len(tip_txs) == 2
 
-        parents = [random.choice(tip_blocks)] + tip_txs
+        parents = [parent_block.hash] + tip_txs
 
         parents_tx = [self.tx_storage.get_transaction(x) for x in parents]
         new_height = max(x.height for x in parents_tx) + 1
 
-        timestamp1 = int(self.reactor.seconds())
+        timestamp1 = int(timestamp)
         timestamp2 = max(x.timestamp for x in parents_tx) + 1
 
         blk = Block(version=version, outputs=tx_outputs, parents=parents, storage=self.tx_storage, height=new_height)
@@ -345,13 +363,14 @@ class HathorManager:
             self.log.debug('Transaction/Block discarded {}'.format(tx.hash_hex))
             return False
 
-        if self.wallet:
-            self.wallet.on_new_tx(tx)
-
         if self.state != self.NodeState.INITIALIZING:
             self.tx_storage.save_transaction(tx)
         else:
+            tx.reset_metadata()
             self.tx_storage._add_to_cache(tx)
+
+        if self.wallet:
+            self.wallet.on_new_tx(tx)
 
         tx.update_parents()
 
@@ -397,7 +416,7 @@ class HathorManager:
         assert isinstance(block, Block)
 
         # In test mode we don't validate the block difficulty
-        if self.test_mode:
+        if self.test_mode & TestMode.TEST_BLOCK_WEIGHT:
             return 1
 
         if block.is_genesis:
@@ -469,11 +488,11 @@ class HathorManager:
         """
         # In test mode we don't validate the minimum weight for tx
         # We do this to allow generating many txs for testing
-        if self.test_mode:
+        if self.test_mode & TestMode.TEST_TX_WEIGHT:
             return 1
 
         if tx.is_genesis:
-            return MIN_WEIGHT
+            return self.min_tx_weight
 
         tx_size = len(tx.get_struct())
 
@@ -483,7 +502,7 @@ class HathorManager:
             10**DECIMAL_PLACES, 2) + 0.5)
 
         # Make sure the calculated weight is at least the minimum
-        weight = max(weight, MIN_WEIGHT)
+        weight = max(weight, self.min_tx_weight)
 
         return weight
 

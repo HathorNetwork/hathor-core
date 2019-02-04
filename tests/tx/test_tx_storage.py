@@ -5,6 +5,7 @@ import unittest
 
 from twisted.internet.task import Clock
 
+from hathor.manager import TestMode
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.storage import (
     TransactionBinaryStorage,
@@ -203,7 +204,7 @@ class _BaseTransactionStorageTest:
             return block
 
         def test_topological_sort(self):
-            self.manager.test_mode = True
+            self.manager.test_mode = TestMode.TEST_ALL_WEIGHT
             add_new_blocks(self.manager, 1, advance_clock=1)
             tx = add_new_transactions(self.manager, 1, advance_clock=1)[0]
 

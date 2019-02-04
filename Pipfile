@@ -13,16 +13,17 @@ pytest = "==3.10.1"
 pytest-cov = "==2.6.0"
 yapf = "==0.25.0"
 numpy = "==1.16.0"
+hathor = {editable = true,path = "."}
 
 [packages]
 Twisted = "==18.7.0"
 autobahn = "==18.8.1"
 base58 = "==1.0.0"
 colorama = "==0.4.0"
+ConfigArgParse = "==0.14.0"
 cryptography = "==2.5"
 graphviz = "==0.9"
 grpcio = "==1.16.0"
-hathor = {editable = true,path = "."}
 intervaltree = "==2.1.0"
 ipython = "==7.1.1"
 mnemonic = "==0.18"

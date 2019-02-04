@@ -1,6 +1,6 @@
-import argparse
 import base64
 import datetime
+import math
 import signal
 import sys
 import time
@@ -12,6 +12,7 @@ from typing import Tuple
 import requests
 
 _SLEEP_ON_ERROR_SECONDS = 5
+_MAX_CONN_RETRIES = math.inf
 
 
 def signal_handler(sig, frame):
@@ -26,19 +27,27 @@ def worker(q_in, q_out):
 
 
 def create_parser() -> ArgumentParser:
-    parser = argparse.ArgumentParser()
+    from hathor.cli.util import create_parser
+    parser = create_parser()
     parser.add_argument('url', help='URL to get mining bytes')
+    parser.add_argument('--init-delay', type=float, help='Wait N seconds before starting (in seconds)', default=None)
     parser.add_argument('--sleep', type=float, help='Sleep every 2 seconds (in seconds)')
     parser.add_argument('--count', type=int, help='Quantity of blocks to be mined')
     return parser
 
 
 def execute(args: Namespace) -> None:
+    from requests.exceptions import ConnectionError
+
     from hathor.transaction import Block
     from hathor.transaction.exceptions import HathorError
 
     print('Hathor CPU Miner v1.0.0')
     print('URL: {}'.format(args.url))
+
+    if args.init_delay:
+        print('Init delay {} seconds'.format(args.init_delay))
+        time.sleep(args.init_delay)
 
     signal.signal(signal.SIGINT, signal_handler)
 
@@ -47,15 +56,31 @@ def execute(args: Namespace) -> None:
         sleep_seconds = args.sleep
 
     total = 0
+    conn_retries = 0
     while True:
         print('Requesting mining information...')
-        response = requests.get(args.url)
+        try:
+            response = requests.get(args.url)
+        except ConnectionError as e:
+            print('Error connecting to server: {}'.format(args.url))
+            print(e)
+            if conn_retries >= _MAX_CONN_RETRIES:
+                print('Too many connection failures, giving up.')
+                sys.exit(1)
+            else:
+                conn_retries += 1
+                print('Waiting %d seconds to try again ({} of {})...'.format(_SLEEP_ON_ERROR_SECONDS, conn_retries,
+                                                                             _MAX_CONN_RETRIES))
+                time.sleep(_SLEEP_ON_ERROR_SECONDS)
+                continue
+        else:
+            conn_retries = 0
         try:
             data = response.json()
         except JSONDecodeError as e:
-            print('Error reading response from server: %s' % response)
+            print('Error reading response from server: {}'.format(response))
             print(e)
-            print('Waiting %d seconds to try again...' % _SLEEP_ON_ERROR_SECONDS)
+            print('Waiting {} seconds to try again...'.format(_SLEEP_ON_ERROR_SECONDS))
             time.sleep(_SLEEP_ON_ERROR_SECONDS)
             continue
         block_bytes = base64.b64decode(data['block_bytes'])
@@ -74,18 +99,23 @@ def execute(args: Namespace) -> None:
 
         block.nonce = q_out.get()
         block.update_hash()
+        print('[{}] New block found: {} (nonce={}, weight={}, height={})'.format(
+            datetime.datetime.now(), block.hash.hex(), block.nonce, block.weight, block.height))
+
         try:
             block.verify_without_storage()
         except HathorError:
-            pass
+            print('[{}] ERROR: Block has not been pushed because it is not valid.'.format(datetime.datetime.now()))
         else:
             block_bytes = block.get_struct()
+            response = requests.post(args.url, json={'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
+            if not response.ok:
+                print('[{}] ERROR: Block has been rejected. Unknown exception.'.format(datetime.datetime.now()))
 
-            print('[{}] New block found: {} (nonce={}, weight={}, height={})'.format(
-                datetime.datetime.now(), block.hash.hex(), block.nonce, block.weight, block.height))
-            print('')
+            if response.ok and response.text != '1':
+                print('[{}] ERROR: Block has been rejected.'.format(datetime.datetime.now()))
 
-            requests.post(args.url, json={'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
+        print('')
 
         total += 1
         if args.count and total == args.count:

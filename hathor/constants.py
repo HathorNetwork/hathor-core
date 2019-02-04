@@ -16,7 +16,8 @@ P2PKH_VERSION_BYTE = b'\x00'
 MULTISIG_VERSION_BYTE = b'\x05'
 
 # Weight of genesis and minimum weight of a tx/block
-MIN_WEIGHT = 14
+MIN_BLOCK_WEIGHT = 14
+MIN_TX_WEIGHT = 14
 
 HATHOR_TOKEN_UID = b'\x00'
 

@@ -393,7 +393,7 @@ def run_server(hostname='localhost', listen=8005, listen_ssl=False, status=8085,
         :return: Subprocess created
         :rtype: :py:class:`subprocess.Popen`
     """
-    command = 'bash hathor-cli run_node --hostname {} --listen tcp:{} --status {}'.format(hostname, listen, status)
+    command = 'python -m hathor run_node --hostname {} --listen tcp:{} --status {}'.format(hostname, listen, status)
     if listen_ssl:
         command = '{} --ssl'.format(command)
 

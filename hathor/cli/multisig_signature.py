@@ -1,10 +1,10 @@
-import argparse
 import getpass
 from argparse import ArgumentParser, Namespace
 
 
 def create_parser() -> ArgumentParser:
-    parser = argparse.ArgumentParser()
+    from hathor.cli.util import create_parser
+    parser = create_parser()
     parser.add_argument('partial_tx', type=str, help='Tx to be signed in hex')
     parser.add_argument('private_key', type=str, help='Encrypted private key in hex')
     return parser

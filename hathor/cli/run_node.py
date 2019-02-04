@@ -1,4 +1,3 @@
-import argparse
 import getpass
 import json
 import os
@@ -24,7 +23,7 @@ def formatLogEvent(event):
 
 def main():
     import hathor
-    from hathor.manager import HathorManager
+    from hathor.manager import HathorManager, TestMode
     from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
     from hathor.p2p.peer_id import PeerId
     from hathor.p2p.resources import MiningResource, StatusResource
@@ -39,6 +38,7 @@ def main():
         TipsResource,
         TransactionResource,
     )
+    from hathor.p2p.utils import discover_hostname
     from hathor.transaction.storage import TransactionCacheStorage, TransactionCompactStorage, TransactionMemoryStorage
     from hathor.version_resource import VersionResource
     from hathor.wallet import HDWallet, Wallet
@@ -58,10 +58,14 @@ def main():
         NanoContractMatchValueResource,
     )
     from hathor.websocket import HathorAdminWebsocketFactory
+    from hathor.cli.util import create_parser
 
-    parser = argparse.ArgumentParser()
+    parser = create_parser()
     parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
+    parser.add_argument('--auto-hostname', action='store_true', help='Try to discover the hostname automatically')
     parser.add_argument('--testnet', action='store_true', help='Connect to Hathor testnet')
+    parser.add_argument('--test-mode-tx-weight', action='store_true',
+                        help='Reduces tx weight to 1 for testing purposes')
     parser.add_argument('--dns', action='append', help='Seed DNS')
     parser.add_argument('--peer', help='json file with peer info')
     parser.add_argument('--listen', action='append', help='Address to listen for new connections (eg: tcp:8000)')
@@ -150,8 +154,23 @@ def main():
 
     wallet = create_wallet()
 
+    if args.hostname and args.auto_hostname:
+        print('You cannot use --hostname and --auto-hostname together.')
+        sys.exit(-1)
+
+    if not args.auto_hostname:
+        hostname = args.hostname
+    else:
+        print('Trying to discover your hostname...')
+        hostname = discover_hostname()
+        if not hostname:
+            print('Aborting because we could not discover your hostname.')
+            print('Try again or run without --auto-hostname.')
+            sys.exit(-1)
+        print('Hostname discovered and set to {}'.format(hostname))
+
     network = 'testnet'
-    manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=args.hostname, tx_storage=tx_storage,
+    manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname, tx_storage=tx_storage,
                             wallet=wallet)
 
     dns_hosts = []
@@ -166,6 +185,9 @@ def main():
 
     if args.bootstrap:
         manager.add_peer_discovery(BootstrapPeerDiscovery(args.bootstrap))
+
+    if args.test_mode_tx_weight:
+        manager.test_mode = TestMode.TEST_TX_WEIGHT
 
     manager.start()
 

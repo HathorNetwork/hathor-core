@@ -30,8 +30,10 @@ class MiningResource(resource.Resource):
         block_bytes_str = post_data['block_bytes']
         block_bytes = base64.b64decode(block_bytes_str)
         block = Block.create_from_struct(block_bytes, storage=self.manager.tx_storage)
-        self.manager.propagate_tx(block)
-        return b''
+        ret = self.manager.propagate_tx(block)
+        if ret:
+            return b'1'
+        return b'0'
 
     def render_GET(self, request):
         """ GET request /mining/
@@ -119,7 +121,8 @@ MiningResource.openapi = {
                     'content': {
                         'application/json': {
                             'examples': {
-                                'success': ''
+                                'success': '1',
+                                'error': '0'
                             }
                         }
                     }

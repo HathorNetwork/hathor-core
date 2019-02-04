@@ -75,7 +75,7 @@ class TransactionStorage(ABC):
 
     @abstractmethod
     @deprecated('Use get_all_transactions_deferred instead')
-    def get_all_transactions(self):
+    def get_all_transactions(self) -> Iterator[BaseTransaction]:
         # TODO: verify the following claim:
         """Return all transactions that are not blocks.
 
@@ -85,7 +85,7 @@ class TransactionStorage(ABC):
 
     @abstractmethod
     @deprecated('Use get_count_tx_blocks_deferred instead')
-    def get_count_tx_blocks(self):
+    def get_count_tx_blocks(self) -> int:
         # TODO: verify the following claim:
         """Return the number of transactions/blocks stored.
 
