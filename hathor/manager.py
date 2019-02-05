@@ -197,6 +197,7 @@ class HathorManager:
         t0 = time.time()
         t1 = t0
         cnt = 0
+
         # self.start_profiler()
         for tx in self.tx_storage._topological_sort():
             assert tx.hash is not None
@@ -208,15 +209,18 @@ class HathorManager:
                               ' avg={:.4f} tx/s total={} (latest timedate: {})'.format(cnt / (t2 - t0), cnt, ts_date))
                 t1 = t2
             cnt += 1
+
             try:
                 assert self.on_new_tx(tx, quiet=True, fails_silently=False)
-            except (InvalidNewTransaction, TxValidationError) as e:
+            except (InvalidNewTransaction, TxValidationError):
                 pretty_json = json.dumps(tx.to_json(), indent=4)
-                self.log.failure('An unexpected error occurred when initializing {tx.hash_hex}\n{pretty_json}', tx=tx, pretty_json=pretty_json)
+                self.log.failure('An unexpected error occurred when initializing {tx.hash_hex}\n'
+                                 '{pretty_json}', tx=tx, pretty_json=pretty_json)
                 sys.exit(-1)
 
             if time.time() - t2 > 1:
                 self.log.warn('Warning: {} took {} seconds to be processed.'.format(tx.hash.hex(), time.time() - t2))
+
         # self.stop_profiler(save_to='profiles/initializing.prof')
         self.state = self.NodeState.READY
         self.log.info('Node successfully initialized'

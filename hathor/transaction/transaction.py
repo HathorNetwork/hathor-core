@@ -458,32 +458,28 @@ class Transaction(BaseTransaction):
 
         meta = self.get_metadata(force_reload=True)
         if not meta.conflict_with:
+            # No conflicts to be checked.
             return
 
-        winners: List[bytes] = []
+        winners: Set[bytes] = set()
         wins_all = True
         for txin in self.inputs:
             w = self.check_conflict_winner(txin)
             if w != self.hash:
                 wins_all = False
             if w is not None:
-                winners.append(w)
+                winners.add(w)
 
-        winner_set: Set[bytes] = set()
         if wins_all:
             self.mark_as_winner()
         else:
             self.mark_as_voided()
-
-            for w in winners:
-                if w != self.hash:
-                    winner_set.add(w)
-            assert self.hash not in winner_set
+            winners.discard(self.hash)
 
         meta = self.get_metadata()
         for h in meta.conflict_with:
             tx = self.storage.get_transaction(h)
-            if tx.hash in winner_set:
+            if tx.hash in winners:
                 tx.mark_as_winner()
             else:
                 tx.mark_as_voided()
@@ -514,15 +510,14 @@ class Transaction(BaseTransaction):
             # now we need to update accumulated weight and get new metadata info
             tx = self.storage.get_transaction(h)
 
-            skip = True
             for txin2 in tx.inputs:
                 if (txin.tx_id, txin.index) == (txin2.tx_id, txin2.index):
-                    skip = False
                     break
-            if skip:
+            else:
                 continue
 
-            # TODO FIXME Using stop_value, this algorithm may find the wrong winners.
+            # TODO FIXME When using `stop_value`, we may have to go calculate the
+            # accumulated weight again if other get a higher value.
             meta = tx.update_accumulated_weight()
             assert tx.hash is not None
             assert meta.hash is not None
