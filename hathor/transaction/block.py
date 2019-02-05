@@ -402,14 +402,17 @@ class Block(BaseTransaction):
         the block's own hash.
         """
         assert self.storage is not None
+        assert self.hash is not None
 
         if voided_hash is None:
             voided_hash = self.hash
         assert voided_hash is not None
 
         meta = self.get_metadata()
-        if self.hash in meta.voided_by:
+        if voided_hash in meta.voided_by:
             return False
+
+        self.log.debug('add_voided_by block={} voided_hash={}'.format(self.hash.hex(), voided_hash.hex()))
 
         meta.voided_by.add(voided_hash)
         self.storage.save_transaction(self, only_metadata=True)
@@ -426,6 +429,7 @@ class Block(BaseTransaction):
         the block's own hash.
         """
         assert self.storage is not None
+        assert self.hash is not None
 
         if voided_hash is None:
             voided_hash = self.hash
@@ -433,6 +437,8 @@ class Block(BaseTransaction):
         meta = self.get_metadata()
         if voided_hash not in meta.voided_by:
             return False
+
+        self.log.debug('remove_voided_by block={} voided_hash={}'.format(self.hash.hex(), voided_hash.hex()))
 
         meta.voided_by.remove(voided_hash)
         self.storage.save_transaction(self, only_metadata=True)

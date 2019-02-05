@@ -7,7 +7,7 @@ import struct
 import time
 from abc import ABC, abstractclassmethod, abstractmethod
 from enum import Enum
-from math import log
+from math import inf, log
 from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
 
 from _hashlib import HASH
@@ -561,7 +561,7 @@ class BaseTransaction(ABC):
         self._metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight)
         self.storage.save_transaction(self, only_metadata=True)
 
-    def update_accumulated_weight(self, save_file: bool = True) -> TransactionMetadata:
+    def update_accumulated_weight(self, *, stop_value: float = inf, save_file: bool = True) -> TransactionMetadata:
         """Calculates the tx's accumulated weight and update its metadata.
 
         It starts at the current transaction and does a BFS to the tips. In the
@@ -572,13 +572,17 @@ class BaseTransaction(ABC):
         """
         assert self.storage is not None
 
+        metadata = self.get_metadata()
+        if metadata.accumulated_weight > stop_value:
+            return metadata
+
         accumulated_weight = self.weight
         for tx in self.storage.iter_bfs_children(self):
             accumulated_weight = sum_weights(accumulated_weight, tx.weight)
+            if accumulated_weight > stop_value:
+                break
 
-        metadata = self.get_metadata()
         metadata.accumulated_weight = accumulated_weight
-
         if save_file:
             self.storage.save_transaction(self, only_metadata=True)
 

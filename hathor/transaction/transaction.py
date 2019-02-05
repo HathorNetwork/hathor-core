@@ -3,6 +3,8 @@ from collections import namedtuple
 from itertools import chain
 from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Set, Tuple
 
+from twisted.logger import Logger
+
 from hathor import protos
 from hathor.constants import HATHOR_TOKEN_UID
 from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, BaseTransaction, TxInput, TxOutput
@@ -25,6 +27,8 @@ TokenInfo = namedtuple('TokenInfo', 'amount can_mint can_melt')
 
 
 class Transaction(BaseTransaction):
+    log = Logger()
+
     def __init__(self, nonce: int = 0, timestamp: Optional[int] = None, version: int = 1, weight: float = 0,
                  height: int = 0, inputs: Optional[List[TxInput]] = None, outputs: Optional[List[TxOutput]] = None,
                  parents: Optional[List[bytes]] = None, tokens: Optional[List[bytes]] = None,
@@ -328,6 +332,7 @@ class Transaction(BaseTransaction):
         is NOT the greatest one.
         """
         assert self.hash is not None
+        self.log.debug('tx.mark_as_voided {}'.format(self.hash.hex()))
         meta = self.get_metadata()
         assert (len(meta.conflict_with) > 0)
         self.add_voided_by(self.hash)
@@ -342,6 +347,8 @@ class Transaction(BaseTransaction):
         meta = self.get_metadata()
         if voided_hash in meta.voided_by:
             return False
+
+        self.log.debug('add_voided_by tx={} voided_hash={}'.format(self.hash.hex(), voided_hash.hex()))
 
         check_conflicts = False
         if meta.conflict_with and not meta.voided_by:
@@ -369,6 +376,7 @@ class Transaction(BaseTransaction):
         is the greatest one.
         """
         assert self.hash is not None
+        self.log.debug('tx.mark_as_winner {}'.format(self.hash.hex()))
         meta = self.get_metadata()
         assert (len(meta.conflict_with) > 0)  # FIXME: this looks like a runtime guarantee, MUST NOT be an assert
         self.remove_voided_by(self.hash)
@@ -383,6 +391,8 @@ class Transaction(BaseTransaction):
         meta = self.get_metadata()
         if voided_hash not in meta.voided_by:
             return False
+
+        self.log.debug('remove_voided_by tx={} voided_hash={}'.format(self.hash.hex(), voided_hash.hex()))
 
         meta.voided_by.discard(voided_hash)
         self.storage.save_transaction(self, only_metadata=True)
@@ -415,28 +425,79 @@ class Transaction(BaseTransaction):
         spent_tx = self.storage.get_transaction(txin.tx_id)
         spent_meta = spent_tx.get_metadata()
         spent_by = spent_meta.spent_outputs[txin.index]  # Set[bytes(hash)]
+        assert self.hash not in spent_by
+
+        # Update our meta.conflict_with.
+        meta = self.get_metadata()
+        meta.conflict_with.update(spent_by)
+        self.storage.save_transaction(self, only_metadata=True)
+
+        for h in spent_by:
+            # Update meta.conflict_with of our conflict transactions.
+            tx = self.storage.get_transaction(h)
+            tx_meta = tx.get_metadata()
+            tx_meta.conflict_with.add(self.hash)
+            tx.storage.save_transaction(tx, only_metadata=True)
+
+        # Add ourselves to meta.spent_by of our input.
         spent_by.add(self.hash)
         self.storage.save_transaction(spent_tx, only_metadata=True)
 
-        if len(spent_by) > 1:
-            for h in spent_by:
-                tx = self.storage.get_transaction(h)
-                tx_meta = tx.get_metadata()
-                tx_meta.conflict_with.update(spent_by)
-                tx_meta.conflict_with.discard(tx.hash)
-                tx.storage.save_transaction(tx, only_metadata=True)
-
+        # Finally, resolve the conflicts.
         self.check_conflicts()
 
     def check_conflicts(self) -> None:
         """ Check which transaction is the winner of a conflict, the remaining are voided.
+
+        The verification is made for each input, and `self` is only marked as winner if it
+        wins in all its inputs.
+        """
+        assert self.hash is not None
+        assert self.storage is not None
+        self.log.debug('tx.check_conflicts {}'.format(self.hash.hex()))
+
+        meta = self.get_metadata(force_reload=True)
+        if not meta.conflict_with:
+            return
+
+        winners: List[bytes] = []
+        wins_all = True
+        for txin in self.inputs:
+            w = self.check_conflict_winner(txin)
+            if w != self.hash:
+                wins_all = False
+            if w is not None:
+                winners.append(w)
+
+        winner_set: Set[bytes] = set()
+        if wins_all:
+            self.mark_as_winner()
+        else:
+            self.mark_as_voided()
+
+            for w in winners:
+                if w != self.hash:
+                    winner_set.add(w)
+            assert self.hash not in winner_set
+
+        meta = self.get_metadata()
+        for h in meta.conflict_with:
+            tx = self.storage.get_transaction(h)
+            if tx.hash in winner_set:
+                tx.mark_as_winner()
+            else:
+                tx.mark_as_voided()
+
+    def check_conflict_winner(self, txin: TxInput) -> Optional[bytes]:
+        """ Check which transaction is the winner of a conflict for the input `txin`.
+
+        :return: Returns the hash of the winner or None
         """
         assert self.hash is not None
         assert self.storage is not None
 
         meta = self.get_metadata(force_reload=True)
-        if not meta.conflict_with:
-            return
+        assert len(meta.conflict_with) > 0
 
         meta = self.update_accumulated_weight()
 
@@ -452,6 +513,16 @@ class Transaction(BaseTransaction):
         for h in meta.conflict_with:
             # now we need to update accumulated weight and get new metadata info
             tx = self.storage.get_transaction(h)
+
+            skip = True
+            for txin2 in tx.inputs:
+                if (txin.tx_id, txin.index) == (txin2.tx_id, txin2.index):
+                    skip = False
+                    break
+            if skip:
+                continue
+
+            # TODO FIXME Using stop_value, this algorithm may find the wrong winners.
             meta = tx.update_accumulated_weight()
             assert tx.hash is not None
             assert meta.hash is not None
@@ -466,14 +537,9 @@ class Transaction(BaseTransaction):
                 max_acc_weight = meta.accumulated_weight
                 winner_set = set([meta.hash])
 
-        if len(winner_set) > 1:
-            winner_set = set()
-
-        for tx in tx_list:
-            if tx.hash in winner_set:
-                tx.mark_as_winner()
-            else:
-                tx.mark_as_voided()
+        if len(winner_set) == 1:
+            return winner_set.pop()
+        return None
 
     def set_conflict_twins(self) -> None:
         """ Get all transactions that conflict with self
@@ -501,7 +567,7 @@ class Transaction(BaseTransaction):
         # Getting self metadata to save the new twins
         meta = self.get_metadata()
 
-        # Sorting inputs and outputs to easir validation
+        # Sorting inputs and outputs for easier validation
         sorted_inputs = sorted(self.inputs, key=lambda x: (x.tx_id, x.index, x.data))
         sorted_outputs = sorted(self.outputs, key=lambda x: (x.script, x.value))
 
