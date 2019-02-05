@@ -261,3 +261,14 @@ class HathorProtocolTestCase(unittest.TestCase):
         # Just to test specific part of code
         self.conn1.proto1.state.lc_ping.running = False
         self.conn1.disconnect('Testing')
+
+    def test_duplicate_disconnect(self):
+        self.conn1.run_one_step()  # HELLO
+        self.conn1.run_one_step()  # PEER-ID
+        self.conn1.run_one_step()  # GET-PEERS
+        self.conn1.run_one_step()  # GET-TIPS
+        self.conn1.run_one_step()  # READY
+
+        protocol = list(self.manager1.connections.connected_peers.values())[0]
+        self.conn1.disconnect('Testing')
+        self.manager1.connections.on_peer_disconnect(protocol)
