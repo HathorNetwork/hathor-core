@@ -567,6 +567,12 @@ class BaseTransaction(ABC):
         It starts at the current transaction and does a BFS to the tips. In the
         end, updates the accumulated weight on metadata
 
+        It stops calculating the accumulated weight when the value passes the `stop_value`.
+        This may be used when the accumulated weight is being calculated to be compared to another value.
+        In this case, we may stop calculating when we are already higher than `stop_value`.
+
+        :param: stop_value: Threshold to stop calculating the accumulated weight.
+
         :return: transaction metadata
         :rtype: :py:class:`hathor.transaction.TransactionMetadata`
         """
