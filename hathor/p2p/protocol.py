@@ -6,7 +6,6 @@ from autobahn.twisted.websocket import WebSocketClientProtocol, WebSocketServerP
 from twisted.internet.interfaces import ITransport
 from twisted.logger import Logger
 from twisted.protocols.basic import LineReceiver
-from twisted.python import log
 
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
@@ -158,7 +157,7 @@ class HathorProtocol:
         """ Executed when the connection is established.
         """
         remote = self.transport.getPeer()
-        log.msg('HathorProtocol.connectionMade()', remote)
+        self.log.info('HathorProtocol.connectionMade(): {remote}', remote=remote)
 
         self.connection_time = time.time()
 
@@ -172,7 +171,7 @@ class HathorProtocol:
         """ Executed when the connection is lost.
         """
         remote = self.transport.getPeer()
-        log.msg('HathorProtocol.connectionLost()', remote, reason)
+        self.log.info('HathorProtocol.connectionLost(): {remote} {reason}', remote=remote, reason=reason)
         if self.state:
             self.state.on_exit()
         if self.connections:
@@ -201,7 +200,7 @@ class HathorProtocol:
             try:
                 fn(payload)
             except Exception as e:
-                self.log.warn('Unhandled Exception: {}'.format(e))
+                self.log.warn('Unhandled Exception: {e!r}', e=e)
                 raise
         else:
             self.send_error('Invalid Command: {}'.format(cmd))
@@ -220,7 +219,7 @@ class HathorProtocol:
     def handle_error(self, payload):
         """ Executed when an ERROR command is received.
         """
-        self.log.warn('ERROR {}'.format(payload))
+        self.log.warn('ERROR {payload}', payload=payload)
 
 
 class HathorLineReceiver(HathorProtocol, LineReceiver):
@@ -239,7 +238,7 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
         self.on_disconnect(reason)
 
     def lineLengthExceeded(self, line):
-        self.log.warn('lineLengthExceeded {} > {}: {}'.format(len(line), self.MAX_LENGTH, line))
+        self.log.warn('lineLengthExceeded {line_len} > {log_source.MAX_LENGTH}: {line}', line=line, line_len=len(line))
         super(HathorLineReceiver, self).lineLengthExceeded(line)
 
     def lineReceived(self, line: bytes) -> None:

@@ -205,8 +205,12 @@ class HathorManager:
             t2 = time.time()
             if t2 - t1 > 5:
                 ts_date = datetime.datetime.fromtimestamp(self.tx_storage.latest_timestamp)
-                self.log.info('Verifying transations in storage...'
-                              ' avg={:.4f} tx/s total={} (latest timedate: {})'.format(cnt / (t2 - t0), cnt, ts_date))
+                self.log.info(
+                    'Verifying transations in storage... avg={avg:.4f} tx/s total={total} (latest timedate: {ts})',
+                    avg=cnt / (t2 - t0),
+                    total=cnt,
+                    ts=ts_date,
+                )
                 t1 = t2
             cnt += 1
 
@@ -223,8 +227,12 @@ class HathorManager:
 
         # self.stop_profiler(save_to='profiles/initializing.prof')
         self.state = self.NodeState.READY
-        self.log.info('Node successfully initialized'
-                      ' (total={}, avg={:.2f} tx/s in {} seconds).'.format(cnt, cnt / (t2 - t0), t2 - t0))
+        self.log.info(
+            'Node successfully initialized (total={total}, avg={avg:.2f} tx/s in {dt} seconds).',
+            total=cnt,
+            avg=cnt / (t2 - t0),
+            dt=t2 - t0,
+        )
 
     def add_peer_discovery(self, peer_discovery: PeerDiscovery):
         self.peer_discoveries.append(peer_discovery)
@@ -382,7 +390,7 @@ class HathorManager:
             assert self.validate_new_tx(tx) is True
         except (InvalidNewTransaction, TxValidationError) as e:
             # Discard invalid Transaction/block.
-            self.log.debug('Transaction/Block discarded {}: {}'.format(tx.hash_hex, str(e)))
+            self.log.debug('Transaction/Block discarded {tx.hash_hex}: {e}', tx=tx, e=e)
             if not fails_silently:
                 raise
             return False

@@ -15,15 +15,15 @@ class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
         super().__init__()
 
     def onConnect(self, request):
-        self.log.info("Client connecting: {0}".format(request.peer))
+        self.log.info('Client connecting: {request.peer}', request=request)
 
     def onOpen(self):
         self.factory.connections.add(self)
-        self.log.info("WebSocket connection open.")
+        self.log.info('WebSocket connection open.')
 
     def onClose(self, wasClean, code, reason):
         self.factory.connections.remove(self)
-        self.log.info("Websocket closed: {}".format(reason))
+        self.log.info('Websocket closed: {reason}', reason=reason)
 
     def onMessage(self, payload, isBinary):
         self.factory.handle_message(self, payload)

@@ -92,10 +92,10 @@ class DNSPeerDiscovery(PeerDiscovery):
             for txt in data:
                 txt = txt.decode('utf-8')
                 try:
-                    self.log.info('Seed DNS TXT: "{}" found'.format(txt))
+                    self.log.info('Seed DNS TXT: {txt!r} found', txt=txt)
                     self.connect_to(txt)
                 except ValueError:
-                    self.log.info('Seed DNS TXT: Error parsing "{}"'.format(txt))
+                    self.log.info('Seed DNS TXT: Error parsing {txt!r}', txt=txt)
 
     def on_dns_seed_found_ipv4(self, results):
         """ Executed only when a new peer is discovered by `dns_seed_lookup_address`.
@@ -105,7 +105,7 @@ class DNSPeerDiscovery(PeerDiscovery):
             address = x.payload.address
             host = socket.inet_ntoa(address)
             self.connect_to('tcp:{}:{}'.format(host, self.default_port))
-            self.log.info('Seed DNS A: "{}" found'.format(host))
+            self.log.info('Seed DNS A: {host!r} found', host=host)
 
     def on_dns_seed_found_ipv6(self, results):
         """ Executed only when a new peer is discovered by `dns_seed_lookup_ipv6_address`.

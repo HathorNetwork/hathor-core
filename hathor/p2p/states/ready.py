@@ -98,7 +98,7 @@ class ReadyState(BaseState):
                 'last_message': conn.last_message,
             })
         self.send_message(ProtocolMessages.PEERS, json.dumps(peers))
-        self.log.debug('Peers: {}'.format(str(peers)))
+        self.log.debug('Peers: {peers}', peers=peers)
 
     def handle_peers(self, payload: str) -> None:
         """ Executed when a PEERS command is received. It updates the list
@@ -111,7 +111,7 @@ class ReadyState(BaseState):
             if self.protocol.connections:
                 self.protocol.connections.on_receive_peer(peer, origin=self)
         remote = self.protocol.transport.getPeer()
-        self.log.info('{} PEERS {}'.format(remote, payload))
+        self.log.info('{remote} PEERS {payload}', remote=remote, payload=payload)
 
     def send_ping_if_necessary(self) -> None:
         """ Send a PING command if the connection has been idle for 3 seconds or more.
