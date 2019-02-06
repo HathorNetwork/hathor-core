@@ -122,17 +122,13 @@ class ConnectionsManager:
 
     def on_peer_disconnect(self, protocol: HathorProtocol) -> None:
         self.log.info('on_peer_disconnect() {protocol}', protocol=protocol)
-        peer_removed = False
         if protocol.peer:
             assert protocol.peer.id is not None
-            peer = self.connected_peers.pop(protocol.peer.id, None)
-            peer_removed = (peer is not None)
+            self.connected_peers.pop(protocol.peer.id)
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
-            peer_removed = True
 
-        if peer_removed:
-            self.pubsub.publish(HathorEvents.NETWORK_PEER_DISCONNECTED, protocol=protocol)
+        self.pubsub.publish(HathorEvents.NETWORK_PEER_DISCONNECTED, protocol=protocol)
 
     def get_ready_connections(self) -> Set[HathorProtocol]:
         return set(self.connected_peers.values())

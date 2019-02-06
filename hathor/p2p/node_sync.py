@@ -142,7 +142,6 @@ class SendDataPush:
         self.pauseProducing()
         self.queue.clear()
         self.priority_queue.clear()
-        self.protocol.connectionLost(ConnectionLost('Push data stopped'))
 
 
 class NodeSyncTimestamp(Plugin):
