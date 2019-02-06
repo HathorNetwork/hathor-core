@@ -317,7 +317,7 @@ class NodeSyncTimestamp(Plugin):
 
         :param next_timestamp: Timestamp to start the sync
         """
-        self.log.debug('Sync starting at {}'.format(next_timestamp))
+        self.log.debug('Sync starting at {next_timestamp}', next_timestamp=next_timestamp)
         assert next_timestamp < inf
         pending = []
         next_offset = 0
@@ -399,7 +399,7 @@ class NodeSyncTimestamp(Plugin):
             return None
 
         assert low + 1 == high
-        self.log.debug('Synced at {} (latest timestamp {})'.format(self.synced_timestamp, self.peer_timestamp))
+        self.log.debug('Synced at {log_source.synced_timestamp} (latest timestamp {log_source.peer_timestamp})')
         return self.synced_timestamp + 1
 
     @inlineCallbacks
@@ -418,14 +418,14 @@ class NodeSyncTimestamp(Plugin):
         """
         if self.is_running:
             # Already running...
-            # self.log.debug('Already running: {}'.format(self.is_running))
+            # self.log.debug('Already running: {log_source.is_running}')
             return
 
         try:
             self.is_running = True
             yield self._next_step()
         except Exception as e:
-            self.log.warn('Exception: {}'.format(repr(e)))
+            self.log.warn('Exception: {e!r}', e=e)
             raise
         else:
             if self.call_later_id and self.call_later_id.active():
@@ -651,7 +651,7 @@ class NodeSyncTimestamp(Plugin):
         """ Handle a received GET-DATA message.
         """
         hash_hex = payload
-        # self.log.debug('handle_get_data {}'.format(hash_hex))
+        # self.log.debug('handle_get_data {hash_hex}', hash_hex=hash_hex)
         try:
             tx = self.protocol.node.tx_storage.get_transaction(bytes.fromhex(hash_hex))
             self.send_data(tx)
@@ -662,7 +662,7 @@ class NodeSyncTimestamp(Plugin):
     def send_data(self, tx: BaseTransaction) -> None:
         """ Send a DATA message.
         """
-        # self.log.debug('Sending {}...'.format(tx.hash.hex()))
+        # self.log.debug('Sending {tx.hash_hex}...', tx=tx)
         payload_type = 'tx' if not tx.is_block else 'block'
         payload = base64.b64encode(tx.get_struct()).decode('ascii')
         self.send_message(ProtocolMessages.DATA, '{}:{}'.format(payload_type, payload))

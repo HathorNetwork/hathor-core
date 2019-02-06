@@ -89,18 +89,22 @@ class ConnectionsManager:
             conn.state.send_tx_to_peer(tx)
 
     def on_connection_failure(self, failure, endpoint):
-        self.log.info('Connection failure: address={}:{} message={}'.format(endpoint._host, endpoint._port, failure))
+        self.log.info(
+            'Connection failure: address={endpoint._host}:{endpoint._port} message={failure}',
+            endpoint=endpoint,
+            failure=failure,
+        )
         self.connecting_peers.pop(endpoint)
 
     def on_peer_connect(self, protocol: HathorProtocol) -> None:
-        self.log.info('on_peer_connect() {}'.format(protocol))
+        self.log.info('on_peer_connect() {protocol}', protocol=protocol)
         self.handshaking_peers.add(protocol)
 
     def on_peer_ready(self, protocol: HathorProtocol) -> None:
         assert protocol.peer is not None
         assert protocol.peer.id is not None
 
-        self.log.info('on_peer_ready() {}'.format(protocol))
+        self.log.info('on_peer_ready() {protocol}', protocol=protocol)
         self.handshaking_peers.remove(protocol)
         self.received_peer_storage.pop(protocol.peer.id, None)
 
@@ -117,7 +121,7 @@ class ConnectionsManager:
         self.pubsub.publish(HathorEvents.NETWORK_PEER_CONNECTED, protocol=protocol)
 
     def on_peer_disconnect(self, protocol: HathorProtocol) -> None:
-        self.log.info('on_peer_disconnect() {}'.format(protocol))
+        self.log.info('on_peer_disconnect() {protocol}', protocol=protocol)
         peer_removed = False
         if protocol.peer:
             assert protocol.peer.id is not None
@@ -192,7 +196,7 @@ class ConnectionsManager:
 
         deferred.addCallback(self._connect_to_callback, endpoint)
         deferred.addErrback(self.on_connection_failure, endpoint)
-        self.log.info('Connecting to: {}...'.format(description))
+        self.log.info('Connecting to: {description}...', description=description)
 
     def listen(self, description, ssl=False):
         """ Start to listen to new connection according to the description.
@@ -228,5 +232,5 @@ class ConnectionsManager:
             factory = self.server_factory
 
         endpoint.listen(factory)
-        self.log.info('Listening to: {}...'.format(description))
+        self.log.info('Listening to: {description}...', description=description)
         return endpoint
