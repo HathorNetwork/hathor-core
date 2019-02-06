@@ -30,7 +30,7 @@ class BaseState:
         self.protocol.handle_error(payload)
 
     def handle_throttle(self, payload: str):
-        self.log.info('Got throttled: {}'.format(payload))
+        self.log.info('Got throttled: {payload}', payload=payload)
 
     def send_message(self, cmd: ProtocolMessages, payload: Optional[str] = None) -> None:
         self.protocol.send_message(cmd, payload)
