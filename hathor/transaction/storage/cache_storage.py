@@ -67,7 +67,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self.flush_deferred = None
 
     def _err_flush_thread(self, reason):
-        self.log.info('Error flushing transactions: {}'.format(reason))
+        self.log.error('Error flushing transactions: {reason}', reason=reason)
         self.reactor.callLater(self.interval, self._start_flush_thread)
         self.flush_deferred = None
 

@@ -88,7 +88,7 @@ class Wallet(BaseWallet):
         else:
             if self.flush_schedule is None:
                 remaining = self.flush_to_disk_interval - dt
-                self.log.info('Wallet: Flush delayed {} seconds...'.format(remaining))
+                self.log.info('Wallet: Flush delayed {remaining} seconds...', remaining=remaining)
                 assert remaining >= 0
                 self.flush_schedule = self.reactor.callLater(remaining, self._write_keys_to_file)
 

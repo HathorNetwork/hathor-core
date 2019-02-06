@@ -1,5 +1,7 @@
 import datetime
+import json
 import random
+import sys
 import time
 from enum import Enum, IntFlag
 from math import log
@@ -19,6 +21,7 @@ from hathor.constants import (
     MIN_TX_WEIGHT,
     TOKENS_PER_BLOCK,
 )
+from hathor.exception import InvalidNewTransaction
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
@@ -198,20 +201,42 @@ class HathorManager:
         t0 = time.time()
         t1 = t0
         cnt = 0
+
         # self.start_profiler()
         for tx in self.tx_storage._topological_sort():
+            assert tx.hash is not None
+
             t2 = time.time()
             if t2 - t1 > 5:
                 ts_date = datetime.datetime.fromtimestamp(self.tx_storage.latest_timestamp)
-                self.log.info('Verifying transations in storage...'
-                              ' avg={:.4f} tx/s total={} (latest timedate: {})'.format(cnt / (t2 - t0), cnt, ts_date))
+                self.log.info(
+                    'Verifying transations in storage... avg={avg:.4f} tx/s total={total} (latest timedate: {ts})',
+                    avg=cnt / (t2 - t0),
+                    total=cnt,
+                    ts=ts_date,
+                )
                 t1 = t2
             cnt += 1
-            self.on_new_tx(tx, quiet=True)
+
+            try:
+                assert self.on_new_tx(tx, quiet=True, fails_silently=False)
+            except (InvalidNewTransaction, TxValidationError):
+                pretty_json = json.dumps(tx.to_json(), indent=4)
+                self.log.failure('An unexpected error occurred when initializing {tx.hash_hex}\n'
+                                 '{pretty_json}', tx=tx, pretty_json=pretty_json)
+                sys.exit(-1)
+
+            if time.time() - t2 > 1:
+                self.log.warn('Warning: {} took {} seconds to be processed.'.format(tx.hash.hex(), time.time() - t2))
+
         # self.stop_profiler(save_to='profiles/initializing.prof')
         self.state = self.NodeState.READY
-        self.log.info('Node successfully initialized'
-                      ' (total={}, avg={:.2f} tx/s in {} seconds).'.format(cnt, cnt / (t2 - t0), t2 - t0))
+        self.log.info(
+            'Node successfully initialized (total={total}, avg={avg:.2f} tx/s in {dt} seconds).',
+            total=cnt,
+            avg=cnt / (t2 - t0),
+            dt=t2 - t0,
+        )
 
     def add_peer_discovery(self, peer_discovery: PeerDiscovery):
         self.peer_discoveries.append(peer_discovery)
@@ -287,28 +312,20 @@ class HathorManager:
         """
         assert tx.hash is not None
 
-        if self.state != self.NodeState.INITIALIZING:
-            if tx.is_genesis:
-                self.log.debug('validate_new_tx(): Genesis? {}'.format(tx.hash.hex()))
-                return False
-
-            if self.tx_storage.transaction_exists(tx.hash):
-                self.log.debug('validate_new_tx(): Already have transaction {}'.format(tx.hash.hex()))
-                return False
-
-        else:
+        if self.state == self.NodeState.INITIALIZING:
             if tx.is_genesis:
                 return True
 
-        if tx.timestamp - self.reactor.seconds() > self.max_future_timestamp_allowed:
-            self.log.debug('validate_new_tx(): Ignoring transaction in the future {}'.format(tx.hash.hex()))
-            return False
+        else:
+            if tx.is_genesis:
+                raise InvalidNewTransaction('Genesis? {}'.format(tx.hash.hex()))
 
-        try:
-            tx.verify()
-        except TxValidationError as e:
-            self.log.debug('validate_new_tx(): Error verifying transaction {} tx={}'.format(repr(e), tx.hash.hex()))
-            return False
+        if tx.timestamp - self.reactor.seconds() > self.max_future_timestamp_allowed:
+            raise InvalidNewTransaction('Ignoring transaction in the future {} (timestamp={})'.format(
+                tx.hash.hex(), tx.timestamp))
+
+        # Verify transaction and raises an TxValidationError if tx is not valid.
+        tx.verify()
 
         if tx.is_block:
             tx = cast(Block, tx)
@@ -317,26 +334,30 @@ class HathorManager:
             # Validate minimum block difficulty
             block_weight = self.calculate_block_difficulty(tx)
             if tx.weight < block_weight:
-                self.log.debug('Invalid new block {}: weight ({}) is smaller than the minimum weight ({})'.format(
-                    tx.hash.hex(), tx.weight, block_weight))
-                return False
-            if tx.sum_outputs != self.tokens_issued_per_block:
-                self.log.info(
-                    'Invalid number of issued tokens tag=invalid_issued_tokens'
-                    ' tx.hash={tx.hash_hex} issued={tx.sum_outputs} allowed={allowed}',
-                    tx=tx,
-                    allowed=self.tokens_issued_per_block,
+                raise InvalidNewTransaction(
+                    'Invalid new block {}: weight ({}) is smaller than the minimum weight ({})'.format(
+                        tx.hash.hex(), tx.weight, block_weight
+                    )
                 )
-                return False
+            if tx.sum_outputs != self.tokens_issued_per_block:
+                raise InvalidNewTransaction(
+                    'Invalid number of issued tokens tag=invalid_issued_tokens'
+                    ' tx.hash={tx.hash_hex} issued={tx.sum_outputs} allowed={allowed}'.format(
+                        tx=tx,
+                        allowed=self.tokens_issued_per_block,
+                    )
+                )
         else:
             assert tx.hash is not None  # XXX: it appears that after casting this assert "casting" is lost
 
             # Validate minimum tx difficulty
             min_tx_weight = self.minimum_tx_weight(tx)
             if tx.weight < min_tx_weight:
-                self.log.debug('Invalid new tx {}: weight ({}) is smaller than the minimum weight ({})'.format(
-                    tx.hash.hex(), tx.weight, min_tx_weight))
-                return False
+                raise InvalidNewTransaction(
+                    'Invalid new tx {}: weight ({}) is smaller than the minimum weight ({})'.format(
+                        tx.hash.hex(), tx.weight, min_tx_weight
+                    )
+                )
 
         return True
 
@@ -352,15 +373,30 @@ class HathorManager:
             tx.storage = self.tx_storage
         return self.on_new_tx(tx)
 
-    def on_new_tx(self, tx: BaseTransaction, conn: Optional[HathorProtocol] = None, quiet: bool = False) -> bool:
+    def on_new_tx(self, tx: BaseTransaction, *, conn: Optional[HathorProtocol] = None,
+                  quiet: bool = False, fails_silently=True) -> bool:
         """This method is called when any transaction arrive.
+
+        If `fails_silently` is True, it may raise either InvalidNewTransaction or TxValidationError.
 
         :return: True if the transaction was accepted
         :rtype: bool
         """
-        if not self.validate_new_tx(tx):
+        assert tx.hash is not None
+        if self.state != self.NodeState.INITIALIZING:
+            if self.tx_storage.transaction_exists(tx.hash):
+                if not fails_silently:
+                    raise InvalidNewTransaction('Transaction already exists {}'.format(tx.hash.hex()))
+                self.log.debug('on_new_tx(): Already have transaction {}'.format(tx.hash.hex()))
+                return False
+
+        try:
+            assert self.validate_new_tx(tx) is True
+        except (InvalidNewTransaction, TxValidationError) as e:
             # Discard invalid Transaction/block.
-            self.log.debug('Transaction/Block discarded {}'.format(tx.hash_hex))
+            self.log.debug('Transaction/Block discarded {tx.hash_hex}: {e}', tx=tx, e=e)
+            if not fails_silently:
+                raise
             return False
 
         if self.state != self.NodeState.INITIALIZING:
