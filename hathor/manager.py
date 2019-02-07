@@ -456,7 +456,7 @@ class HathorManager:
         if block.is_genesis:
             return self.min_block_weight
 
-        hash_algorithm = block.hash_algorithm
+        hash_algorithm_class = block.hash_algorithm_class
         algorithms_found = set()
 
         n_target = BLOCK_DIFFICULTY_N_BLOCKS
@@ -466,8 +466,8 @@ class HathorManager:
         blocks = []
         for _ in range(max_depth):
             assert isinstance(current, Block)
-            algorithms_found.add(current.hash_algorithm)
-            if current.hash_algorithm == hash_algorithm:
+            algorithms_found.add(current.hash_algorithm_class)
+            if current.hash_algorithm_class == hash_algorithm_class:
                 blocks.append(current)
                 if len(blocks) == n_target:
                     break
