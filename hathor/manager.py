@@ -256,7 +256,8 @@ class HathorManager:
         return [x.data for x in ret]
 
     def generate_mining_block(self, timestamp: Optional[float] = None,
-                              parent_block_hash: Optional[bytes] = None) -> Block:
+                              parent_block_hash: Optional[bytes] = None,
+                              data: bytes = b'') -> Block:
         """ Generates a block ready to be mined. The block includes new issued tokens,
         parents, and the weight.
 
@@ -297,7 +298,7 @@ class HathorManager:
         timestamp1 = int(timestamp)
         timestamp2 = max(x.timestamp for x in parents_tx) + 1
 
-        blk = Block(outputs=tx_outputs, parents=parents, storage=self.tx_storage, height=new_height)
+        blk = Block(outputs=tx_outputs, parents=parents, storage=self.tx_storage, height=new_height, data=data)
         blk.timestamp = max(timestamp1, timestamp2)
         blk.weight = self.calculate_block_difficulty(blk)
         return blk

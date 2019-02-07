@@ -24,3 +24,10 @@ HATHOR_TOKEN_UID = b'\x00'
 # Maximum distance between two consecutive blocks (in seconds), except for genesis.
 # This prevent some DoS attacks exploiting the calculation of the score of a side chain.
 MAX_DISTANCE_BETWEEN_BLOCKS = 30*64  # P(t > T) = 1/e^30 = 9.35e-14
+
+# Number of bytes that each transaction type nonce have
+BLOCK_NONCE_BYTES = 16
+TX_NONCE_BYTES = 4
+
+# Size limit in bytes for Block data field
+BLOCK_DATA_MAX_SIZE = 100
