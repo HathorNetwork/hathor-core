@@ -1,4 +1,4 @@
 #!/bin/bash
 
 cd ../
-exec ./hathor-cli run_miner http://localhost:8080/mining
+exec ./hathor-cli run_miner http://localhost:8080/mining $@

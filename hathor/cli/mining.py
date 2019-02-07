@@ -4,7 +4,7 @@ import math
 import signal
 import sys
 import time
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser, ArgumentTypeError, Namespace
 from json.decoder import JSONDecodeError
 from multiprocessing import Process, Queue
 from typing import Tuple
@@ -52,12 +52,9 @@ def execute(args: Namespace) -> None:
 
     signal.signal(signal.SIGINT, signal_handler)
 
-    if args.hash_algorithm == 'sha256d':
-        block_version = 1
-    elif args.hash_algorithm == 'scrypt':
-        block_version = 2
-    else:
-        raise argparse.ArgumentTypeError('Invalid hash algorithm')
+    hash_algorithm = args.hash_algorithm
+    if hash_algorithm not in ('sha256d', 'scrypt'):
+        raise ArgumentTypeError('Invalid hash algorithm')
 
     sleep_seconds = 0
     if args.sleep:
@@ -68,7 +65,7 @@ def execute(args: Namespace) -> None:
     while True:
         print('Requesting mining information...')
         try:
-            response = requests.get(args.url)
+            response = requests.get(args.url, params={'hash_algorithm': hash_algorithm})
         except ConnectionError as e:
             print('Error connecting to server: {}'.format(args.url))
             print(e)
@@ -93,11 +90,6 @@ def execute(args: Namespace) -> None:
             continue
         block_bytes = base64.b64decode(data['block_bytes'])
         block = Block.create_from_struct(block_bytes)
-
-        block.version = block_version
-        block.update_hash_algorithm()
-        block.update_hash()
-
         assert block.hash is not None
         assert isinstance(block, Block)
         print('Mining block with weight {}'.format(block.weight))

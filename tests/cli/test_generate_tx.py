@@ -13,6 +13,7 @@ class GenerateTxTest(unittest.TestCase):
         self.parser_mining = create_parser_mining()
         self.parser_tx = create_parser_tx()
         self.host = 'http://localhost:8085'
+        self.hash_algorithm = 'sha256d'
 
     def tearDown(self):
         self.process.terminate()
@@ -34,7 +35,7 @@ class GenerateTxTest(unittest.TestCase):
         request_server('wallet/unlock', 'POST', data={'passphrase': '123'})
 
         # Start mining process
-        args = self.parser_mining.parse_args([urllib.parse.urljoin(self.host, 'mining'), '--count', '3'])
+        args = self.parser_mining.parse_args([urllib.parse.urljoin(self.host, 'mining'), self.hash_algorithm, '--count', '3'])
         execute_mining(args)
 
         response = request_server('transaction', 'GET', data=block_payload)
@@ -68,7 +69,7 @@ class GenerateTxTest(unittest.TestCase):
         request_server('wallet/unlock', 'POST', data={'passphrase': '123'})
 
         # Start mining process
-        args = self.parser_mining.parse_args([urllib.parse.urljoin(self.host, 'mining'), '--count', '1'])
+        args = self.parser_mining.parse_args([urllib.parse.urljoin(self.host, 'mining'), self.hash_algorithm, '--count', '1'])
         execute_mining(args)
 
         response = request_server('transaction', 'GET', data=block_payload)
