@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
 from _hashlib import HASH
 
 from hathor import protos
-from hathor.constants import TX_NONCE_BYTES as NONCE_BYTES, HATHOR_TOKEN_UID, MAX_DISTANCE_BETWEEN_BLOCKS
+from hathor.constants import HATHOR_TOKEN_UID, MAX_DISTANCE_BETWEEN_BLOCKS, TX_NONCE_BYTES as NONCE_BYTES
 from hathor.transaction.exceptions import (
     DuplicatedParents,
     IncorrectParents,
