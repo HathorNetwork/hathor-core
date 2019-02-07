@@ -19,6 +19,7 @@ from hathor.transaction.exceptions import (
     TooManyInputs,
     TooManyOutputs,
 )
+from hathor.transaction.util import unpack
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -80,6 +81,21 @@ class Transaction(BaseTransaction):
             # make sure hash is not empty
             tx.hash = tx.hash or tx.calculate_hash()
             tx._metadata = TransactionMetadata.create_from_proto(tx.hash, transaction_proto.metadata)
+        return tx
+
+    @classmethod
+    def create_from_struct(cls, struct_bytes: bytes,
+                           storage: Optional['TransactionStorage'] = None) -> 'Transaction':
+        tx = cls()
+        buf = tx.get_fields_from_struct(struct_bytes)
+
+        [tx.nonce, ], buf = unpack('!I', buf)
+        if len(buf) != 0:
+            raise ValueError('Invalid sequence of bytes')
+
+        tx.hash = tx.calculate_hash()
+        tx.storage = storage
+
         return tx
 
     def verify(self) -> None:

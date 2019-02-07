@@ -3,17 +3,17 @@
 import base64
 import datetime
 import hashlib
-import struct
 import time
 from abc import ABC, abstractclassmethod, abstractmethod
 from enum import Enum
 from math import inf, log
+from struct import pack
 from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
 
 from _hashlib import HASH
 
 from hathor import protos
-from hathor.constants import HATHOR_TOKEN_UID, MAX_DISTANCE_BETWEEN_BLOCKS
+from hathor.constants import TX_NONCE_BYTES as NONCE_BYTES, HATHOR_TOKEN_UID, MAX_DISTANCE_BETWEEN_BLOCKS
 from hathor.transaction.exceptions import (
     DuplicatedParents,
     IncorrectParents,
@@ -23,6 +23,7 @@ from hathor.transaction.exceptions import (
     TxValidationError,
 )
 from hathor.transaction.transaction_metadata import TransactionMetadata
+from hathor.transaction.util import int_to_bytes, unpack, unpack_len
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -32,15 +33,15 @@ MAX_NUM_INPUTS = MAX_NUM_OUTPUTS = 256
 
 _INPUT_SIZE_BYTES = 32  # 256 bits
 
-# Version (H), weight (d), timestamp (I), height (Q), inputs len (H), outputs len (H) and
-# parents len (H), token uids len (B).
+# Version (H), weight (d), timestamp (I), height (Q), inputs len (B), outputs len (B) and
+# parents len (B), token uids len (B).
 # H = unsigned short (2 bytes), d = double(8), f = float(4), I = unsigned int (4),
 # Q = unsigned long long int (64), B = unsigned char (1 byte)
-_TRANSACTION_FORMAT_STRING = '!HdIQHHHB'  # Update code below if this changes.
+_TRANSACTION_FORMAT_STRING = '!HdIQBBBB'  # Update code below if this changes.
 
-# Version (H), inputs len (H), and outputs len (H), token uids len (B).
+# Version (H), inputs len (B), and outputs len (B), token uids len (B).
 # H = unsigned short (2 bytes)
-_SIGHASH_ALL_FORMAT_STRING = '!HHHB'
+_SIGHASH_ALL_FORMAT_STRING = '!HBBB'
 
 # tx should have 2 parents, both other transactions
 _TX_PARENTS_TXS = 2
@@ -120,7 +121,46 @@ class BaseTransaction(ABC):
         return ('%s(nonce=%d, timestamp=%s, version=%s, weight=%f, height=%d, hash=%s)' % (class_name, self.nonce,
                 self.timestamp, self.version, self.weight, self.height, self.hash_hex))
 
+    def get_fields_from_struct(self, struct_bytes: bytes) -> bytes:
+        """ Gets all common fields for a Transaction and a Block from a buffer.
+
+        :param struct_bytes: Bytes of a serialized transaction
+        :type struct_bytes: bytes
+
+        :return: A buffer containing the remaining struct bytes
+
+        :raises ValueError: when the sequence of bytes is incorect
+        """
+        buf = struct_bytes
+
+        (self.version, self.weight, self.timestamp, self.height, inputs_len, outputs_len, parents_len,
+         tokens_len), buf = (unpack(_TRANSACTION_FORMAT_STRING, buf))
+
+        for _ in range(parents_len):
+            parent, buf = unpack_len(32, buf)  # 256bits
+            self.parents.append(parent)
+
+        for _ in range(tokens_len):
+            token_uid, buf = unpack_len(32, buf)  # 256bits
+            self.tokens.append(token_uid)
+
+        for _ in range(inputs_len):
+            input_tx_id, buf = unpack_len(_INPUT_SIZE_BYTES, buf)  # 256bits
+            (input_index, data_len), buf = unpack('!BH', buf)
+            input_data, buf = unpack_len(data_len, buf)
+            txin = TxInput(input_tx_id, input_index, input_data)
+            self.inputs.append(txin)
+
+        for _ in range(outputs_len):
+            (value, token_data, script_len), buf = unpack('!IBH', buf)
+            script, buf = unpack_len(script_len, buf)
+            txout = TxOutput(value, script, token_data)
+            self.outputs.append(txout)
+
+        return buf
+
     @classmethod
+    @abstractmethod
     def create_from_struct(cls, struct_bytes: bytes,
                            storage: Optional['TransactionStorage'] = None) -> 'BaseTransaction':
         """ Create a transaction from its bytes.
@@ -129,50 +169,10 @@ class BaseTransaction(ABC):
         :type struct_bytes: bytes
 
         :return: A transaction or a block, depending on the class `cls`
+
+        :raises ValueError: when the sequence of bytes is incorrect
         """
-
-        def unpack(fmt, buf):
-            size = struct.calcsize(fmt)
-            return struct.unpack(fmt, buf[:size]), buf[size:]
-
-        def unpack_len(n, buf):
-            return buf[:n], buf[n:]
-
-        buf = struct_bytes
-
-        tx = cls()
-        (tx.version, tx.weight, tx.timestamp, tx.height, inputs_len, outputs_len, parents_len,
-         tokens_len), buf = (unpack(_TRANSACTION_FORMAT_STRING, buf))
-
-        for _ in range(parents_len):
-            parent, buf = unpack_len(32, buf)  # 256bits
-            tx.parents.append(parent)
-
-        for _ in range(tokens_len):
-            token_uid, buf = unpack_len(32, buf)  # 256bits
-            tx.tokens.append(token_uid)
-
-        for _ in range(inputs_len):
-            input_tx_id, buf = unpack_len(_INPUT_SIZE_BYTES, buf)  # 256bits
-            (input_index, data_len), buf = unpack('!BH', buf)
-            input_data, buf = unpack_len(data_len, buf)
-            txin = TxInput(input_tx_id, input_index, input_data)
-            tx.inputs.append(txin)
-
-        for _ in range(outputs_len):
-            (value, token_data, script_len), buf = unpack('!IBH', buf)
-            script, buf = unpack_len(script_len, buf)
-            txout = TxOutput(value, script, token_data)
-            tx.outputs.append(txout)
-
-        (tx.nonce,), buf = unpack('!I', buf)
-
-        if len(buf) > 0:
-            raise ValueError('Invalid sequence of bytes')
-
-        tx.hash = tx.calculate_hash()
-        tx.storage = storage
-        return tx
+        raise NotImplementedError
 
     @abstractclassmethod
     def create_from_proto(cls, tx_proto: protos.BaseTransaction, storage=None):
@@ -279,8 +279,8 @@ class BaseTransaction(ABC):
         :return: Serialization of the inputs and outputs
         :rtype: bytes
         """
-        struct_bytes = struct.pack(_SIGHASH_ALL_FORMAT_STRING, self.version, len(self.inputs), len(self.outputs),
-                                   len(self.tokens))
+        struct_bytes = pack(_SIGHASH_ALL_FORMAT_STRING, self.version, len(self.inputs), len(self.outputs),
+                            len(self.tokens))
 
         for token_uid in self.tokens:
             struct_bytes += token_uid
@@ -314,8 +314,8 @@ class BaseTransaction(ABC):
         :return: Partial serialization of the transaction
         :rtype: bytes
         """
-        struct_bytes = struct.pack(_TRANSACTION_FORMAT_STRING, self.version, self.weight, self.timestamp, self.height,
-                                   len(self.inputs), len(self.outputs), len(self.parents), len(self.tokens))
+        struct_bytes = pack(_TRANSACTION_FORMAT_STRING, self.version, self.weight, self.timestamp, self.height,
+                            len(self.inputs), len(self.outputs), len(self.parents), len(self.tokens))
 
         for parent in self.parents:
             struct_bytes += parent
@@ -349,7 +349,7 @@ class BaseTransaction(ABC):
         :rtype: bytes
         """
         struct_bytes = self.get_struct_without_nonce()
-        struct_bytes += int_to_bytes(self.nonce, 4)
+        struct_bytes += int_to_bytes(self.nonce, NONCE_BYTES)
         return struct_bytes
 
     def verify(self):
@@ -480,7 +480,7 @@ class BaseTransaction(ABC):
         :return: The transaction hash
         :rtype: bytes
         """
-        part1.update(self.nonce.to_bytes(4, byteorder='big', signed=False))
+        part1.update(self.nonce.to_bytes(NONCE_BYTES, byteorder='big', signed=False))
         return hashlib.sha256(part1.digest()).digest()
 
     def calculate_hash(self) -> bytes:
@@ -862,10 +862,6 @@ class TxOutput:
             script=self.script,
             token_data=self.token_data,
         )
-
-
-def int_to_bytes(number: int, size: int, signed: bool = False) -> bytes:
-    return number.to_bytes(size, byteorder='big', signed=signed)
 
 
 def tx_or_block_from_proto(tx_proto: protos.BaseTransaction,

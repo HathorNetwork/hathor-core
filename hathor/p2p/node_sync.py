@@ -675,7 +675,7 @@ class NodeSyncTimestamp(Plugin):
         payload_type, _, payload = payload.partition(':')
         data = base64.b64decode(payload)
         if payload_type == 'tx':
-            tx = Transaction.create_from_struct(data)
+            tx: BaseTransaction = Transaction.create_from_struct(data)
         elif payload_type == 'block':
             tx = Block.create_from_struct(data)
         else:
