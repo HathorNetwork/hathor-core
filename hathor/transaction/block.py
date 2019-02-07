@@ -60,7 +60,7 @@ class Block(BaseTransaction):
     def get_block_parent_hash(self) -> bytes:
         """Return the hash of the parent block.
         """
-        return block.parents[0]
+        return self.parents[0]
 
     def verify_height(self) -> None:
         """Verify that the height is correct (should be parent + 1)."""

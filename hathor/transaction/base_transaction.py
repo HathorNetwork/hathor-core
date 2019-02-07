@@ -73,7 +73,7 @@ def aux_calc_weight(w1: float, w2: float, multiplier: int) -> float:
 class BaseTransaction(ABC):
     """Hathor base transaction"""
 
-     hash_algorithm: Type[hashes.BaseHashAlgorithm] = hashes.SHA256dHash)
+    hash_algorithm: Type[hashes.BaseHashAlgorithm]
 
     def __init__(self, nonce: int = 0, timestamp: Optional[int] = None, version: int = 1, weight: float = 0,
                  height: int = 0, inputs: Optional[List['TxInput']] = None, outputs: Optional[List['TxOutput']] = None,
