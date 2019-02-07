@@ -73,7 +73,7 @@ def aux_calc_weight(w1: float, w2: float, multiplier: int) -> float:
 class BaseTransaction(ABC):
     """Hathor base transaction"""
 
-    hash_algorithm: Type[hashes.BaseHashAlgorithm]
+    hash_algorithm_class: Type[hashes.BaseHashAlgorithm]
 
     def __init__(self, nonce: int = 0, timestamp: Optional[int] = None, version: int = 1, weight: float = 0,
                  height: int = 0, inputs: Optional[List['TxInput']] = None, outputs: Optional[List['TxOutput']] = None,
@@ -106,9 +106,9 @@ class BaseTransaction(ABC):
         """ Update `self.hash_algorithm` according to our version.
         """
         if self.version == 1:
-            self.hash_algorithm = hashes.SHA256dHash
+            self.hash_algorithm_class = hashes.SHA256dHash
         elif self.version == 2:
-            self.hash_algorithm = hashes.ScryptHash
+            self.hash_algorithm_class = hashes.ScryptHash
         else:
             raise ValueError('Invalid version')
 
@@ -471,7 +471,7 @@ class BaseTransaction(ABC):
         :return: A partial hash of the transaction
         :rtype: :py:class:`_hashlib.HASH`
         """
-        calculate_hash1 = self.hash_algorithm()
+        calculate_hash1 = self.hash_algorithm_class()
         calculate_hash1.update(self.get_struct_without_nonce())
         return calculate_hash1
 
