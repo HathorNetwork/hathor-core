@@ -38,6 +38,17 @@ BLOCK_DIFFICULTY_N_BLOCKS = 120
 # The variance of the hash rate estimator is high when the hash rate is increasing
 # or decreasing. Many times it will overreact and increase/decrease the weight too
 # much. This limit is used to make the weight change more smooth.
+#
+# [msbrogli]
+# Why 0.25? I have some arguments in favor of 0.25 based on the models I've been studying.
+# But my arguments are not very solid. They may be good to compare 0.25 with 5.0 or higher values, but not to 0.50.
+# My best answer for now is that it will be rare to reach this limit due to the variance of the hash rate estimator.
+# So, it will be reached only when the hash rate has really changed (increased or decreased). It also reduces
+# significantly the ripple effect overreacting to changes in the hash rate. For example, during my simulations without
+# a max_dw, when the hash rate increased from 2^20 to 2^30, the weight change was too big, and it took more than
+# 10 minutes to find the next block. After, it took so long that the weight change was reduced too much.
+# This ripple was amortized over time reaching the right value. Applying a max_dw, the ripple has been reduced.
+# Maybe 0.50 or 1.0 are good values as well.
 BLOCK_DIFFICULTY_MAX_DW = 0.25
 
 # Maximum depth looking for blocks with the same hash algorithm.

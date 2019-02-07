@@ -449,8 +449,6 @@ class HathorManager:
 
         The new difficulty cannot be smaller than `self.min_block_weight`.
         """
-        assert isinstance(block, Block)
-
         # In test mode we don't validate the block difficulty
         if self.test_mode & TestMode.TEST_BLOCK_WEIGHT:
             return 1
@@ -464,7 +462,7 @@ class HathorManager:
         n_target = BLOCK_DIFFICULTY_N_BLOCKS
         max_depth = BLOCK_DIFFICULTY_MAX_DEPTH
 
-        current = self.tx_storage.get_transaction(block.parents[0])
+        current = self.tx_storage.get_transaction(block.get_block_parent_hash())
         blocks = []
         for _ in range(max_depth):
             assert isinstance(current, Block)
@@ -477,7 +475,7 @@ class HathorManager:
                 # We've reached genesis.
                 assert current.is_genesis
                 break
-            current = self.tx_storage.get_transaction(current.parents[0])
+            current = self.tx_storage.get_transaction(current.get_block_parent_hash())
 
         if len(blocks) == 0:
             return self.min_block_weight
