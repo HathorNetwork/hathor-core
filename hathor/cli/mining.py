@@ -30,6 +30,7 @@ def create_parser() -> ArgumentParser:
     from hathor.cli.util import create_parser
     parser = create_parser()
     parser.add_argument('url', help='URL to get mining bytes')
+    parser.add_argument('hash_algorithm', help='sha256d or scrypt')
     parser.add_argument('--init-delay', type=float, help='Wait N seconds before starting (in seconds)', default=None)
     parser.add_argument('--sleep', type=float, help='Sleep every 2 seconds (in seconds)')
     parser.add_argument('--count', type=int, help='Quantity of blocks to be mined')
@@ -50,6 +51,13 @@ def execute(args: Namespace) -> None:
         time.sleep(args.init_delay)
 
     signal.signal(signal.SIGINT, signal_handler)
+
+    if args.hash_algorithm == 'sha256d':
+        block_version = 1
+    elif args.hash_algorithm == 'scrypt':
+        block_version = 2
+    else:
+        raise argparse.ArgumentTypeError('Invalid hash algorithm')
 
     sleep_seconds = 0
     if args.sleep:
@@ -85,6 +93,11 @@ def execute(args: Namespace) -> None:
             continue
         block_bytes = base64.b64decode(data['block_bytes'])
         block = Block.create_from_struct(block_bytes)
+
+        block.version = block_version
+        block.update_hash_algorithm()
+        block.update_hash()
+
         assert block.hash is not None
         assert isinstance(block, Block)
         print('Mining block with weight {}'.format(block.weight))
