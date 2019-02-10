@@ -81,6 +81,10 @@
                                 "items": {
                                     "$ref": "#/components/schemas/Input"
                                 }
+                            },
+                            "timestamp": {
+                                "type": "int",
+                                "description": "The timestamp for the transaction. If sent without the inputs, server will chose inputs whose timestamp is smaller than the given value (so the tx is valid). If user sends timestamp=0, server will use current time."
                             }
                         }
                     }

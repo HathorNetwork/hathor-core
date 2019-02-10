@@ -27,7 +27,7 @@ class IncorrectPassword(HathorWalletError):
     """
 
 
-class InsuficientFunds(HathorWalletError):
+class InsufficientFunds(HathorWalletError):
     """Wallet does not have enough funds for the total outputs
     """
 

@@ -10,7 +10,7 @@ from hathor.api_util import render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
-from hathor.wallet.exceptions import InputDuplicated, InsuficientFunds, InvalidAddress, PrivateKeyNotFound
+from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, InvalidAddress, PrivateKeyNotFound
 
 
 @register_resource
@@ -53,11 +53,18 @@ class SendTokensResource(resource.Resource):
                 timelock = output.get('timelock')
                 outputs.append(WalletOutputInfo(address=address, value=value, timelock=timelock))
 
+            timestamp = None
+            if 'timestamp' in data:
+                if data['timestamp'] > 0:
+                    timestamp = data['timestamp']
+                else:
+                    timestamp = int(self.manager.reactor.seconds())
+
             if len(data['inputs']) == 0:
                 try:
-                    tx = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
-                except InsuficientFunds:
-                    return self.return_POST(False, 'Insufficient funds')
+                    tx = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, timestamp)
+                except InsufficientFunds as e:
+                    return self.return_POST(False, 'Insufficient funds, {}'.format(str(e)))
             else:
                 inputs = []
                 for input_tx in data['inputs']:
@@ -67,15 +74,16 @@ class SendTokensResource(resource.Resource):
                     inputs.append(WalletInputInfo(**input_tx))
                 try:
                     tx = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
-                                                                                   self.manager.tx_storage)
+                                                                                   self.manager.tx_storage, timestamp)
                 except (PrivateKeyNotFound, InputDuplicated):
                     return self.return_POST(False, 'Invalid input to create transaction')
 
             tx.storage = self.manager.tx_storage
             # TODO Send tx to be mined
 
-            max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
-            tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
+            if timestamp is None:
+                max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
+                tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
             tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
 
             # Calculating weight
@@ -172,7 +180,8 @@ SendTokensResource.openapi = {
                                                           '74ac62ca44a7a31179eec5750b0ea406'),
                                                 'index': 0
                                             }
-                                        ]
+                                        ],
+                                        'timestamp': 1549667726
                                     }
                                 }
                             }
@@ -237,7 +246,7 @@ SendTokensResource.openapi = {
                                     'summary': 'Insufficient funds',
                                     'value': {
                                         'success': False,
-                                        'message': 'Insufficient funds'
+                                        'message': 'Insufficient funds. Requested amount: 200 / Available: 50'
                                     }
                                 },
                                 'error3': {

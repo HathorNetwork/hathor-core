@@ -11,7 +11,7 @@ from hathor.transaction.genesis import genesis_transactions
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet import Wallet
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
-from hathor.wallet.exceptions import InsuficientFunds, InvalidAddress, OutOfUnusedAddresses, WalletLocked
+from hathor.wallet.exceptions import InsufficientFunds, InvalidAddress, OutOfUnusedAddresses, WalletLocked
 from hathor.wallet.keypair import KeyPair
 from tests import unittest
 from tests.utils import add_new_block, create_tokens, get_genesis_key
@@ -144,7 +144,7 @@ class BasicWallet(unittest.TestCase):
         # create transaction spending some value
         new_address = w.get_unused_address()
         out = WalletOutputInfo(w.decode_address(new_address), 100, timelock=None)
-        with self.assertRaises(InsuficientFunds):
+        with self.assertRaises(InsufficientFunds):
             w.prepare_transaction_compute_inputs(Transaction, outputs=[out])
 
     def test_invalid_address(self):
@@ -219,3 +219,11 @@ class BasicWallet(unittest.TestCase):
                 did_enter += 1
 
         self.assertEqual(did_enter, 2)
+
+    def test_prepare_transaction(self):
+        block = add_new_block(self.manager, advance_clock=5)
+        w = self.manager.wallet
+        new_address = w.get_unused_address()
+        out = WalletOutputInfo(w.decode_address(new_address), 1, timelock=None)
+        with self.assertRaises(InsufficientFunds):
+            w.prepare_transaction_compute_inputs(Transaction, outputs=[out], timestamp=block.timestamp)

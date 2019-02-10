@@ -17,7 +17,7 @@ from hathor.transaction.base_transaction import int_to_bytes
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.transaction import Transaction
-from hathor.wallet.exceptions import InputDuplicated, InsuficientFunds, InvalidAddress, PrivateKeyNotFound
+from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, InvalidAddress, PrivateKeyNotFound
 
 
 class WalletInputInfo(NamedTuple):
@@ -176,7 +176,7 @@ class BaseWallet:
         raise NotImplementedError
 
     def prepare_transaction(self, cls: ABCMeta, inputs: List[WalletInputInfo],
-                            outputs: List[WalletOutputInfo]) -> Transaction:
+                            outputs: List[WalletOutputInfo], timestamp: Optional[int] = None) -> Transaction:
         """Prepares the tx inputs and outputs.
 
         Can be used to create blocks by passing empty list to inputs.
@@ -189,6 +189,9 @@ class BaseWallet:
 
         :param outputs: the tx outputs
         :type inputs: List[WalletOutputInfo]
+
+        :param timestamp: timestamp to use for the transaction
+        :type timestamp: int
         """
         tx_outputs = []
         token_dict: Dict[bytes, int] = {}   # Dict[token_uid, index]
@@ -213,7 +216,7 @@ class BaseWallet:
             private_keys.append(wtxin.private_key)
             tx_inputs.append(TxInput(wtxin.tx_id, wtxin.index, b''))
 
-        tx = cls(inputs=tx_inputs, outputs=tx_outputs, tokens=tokens)
+        tx = cls(inputs=tx_inputs, outputs=tx_outputs, tokens=tokens, timestamp=timestamp)
         data_to_sign = tx.get_sighash_all(clear_input_data=True)
 
         for txin, privkey in zip(tx.inputs, private_keys):
@@ -224,7 +227,7 @@ class BaseWallet:
 
     def prepare_transaction_incomplete_inputs(self, cls: ABCMeta, inputs: List[WalletInputInfo],
                                               outputs: List[WalletOutputInfo], tx_storage: TransactionStorage,
-                                              force: bool = False) -> Transaction:
+                                              force: bool = False, timestamp: Optional[int] = None) -> Transaction:
         """Uses prepare_transaction() to prepare transaction.
 
         The difference is that the inputs argument does not contain the private key
@@ -249,6 +252,9 @@ class BaseWallet:
 
         :param tx_storage: storage to search for output tx
         :type tx_storage: TransactionStorage
+
+        :param timestamp: the tx timestamp
+        :type timestamp: int
 
         :raises PrivateKeyNotFound: when trying to spend output and we don't have the corresponding
             key in our wallet
@@ -278,9 +284,10 @@ class BaseWallet:
             else:
                 raise PrivateKeyNotFound
 
-        return self.prepare_transaction(cls, new_inputs, outputs)
+        return self.prepare_transaction(cls, new_inputs, outputs, timestamp)
 
-    def prepare_transaction_compute_inputs(self, cls: ABCMeta, outputs: List[WalletOutputInfo]) -> Transaction:
+    def prepare_transaction_compute_inputs(self, cls: ABCMeta, outputs: List[WalletOutputInfo],
+                                           timestamp: Optional[int] = None) -> Transaction:
         """Calculates de inputs given the outputs. Handles change.
 
         :param cls: defines if we're creating a Transaction or Block
@@ -288,21 +295,27 @@ class BaseWallet:
 
         :param outputs: the tx outputs
         :type outputs: List[WalletOutputInfo]
+
+        :param timestamp: the tx timestamp
+        :type timestamp: int
         """
         token_dict: Dict[bytes, int] = defaultdict(int)
         for output in outputs:
             token_uid = bytes.fromhex(output.token_uid)
             token_dict[token_uid] += output.value
 
+        max_spent_ts = None
+        if timestamp is not None:
+            max_spent_ts = timestamp - 1
         tx_inputs = []
         for token_uid, amount in token_dict.items():
-            inputs, total_inputs_amount = self.get_inputs_from_amount(amount, token_uid)
+            inputs, total_inputs_amount = self.get_inputs_from_amount(amount, token_uid, max_spent_ts)
             change_tx = self.handle_change_tx(total_inputs_amount, amount, token_uid)
             if change_tx:
                 # change is usually the first output
                 outputs.insert(0, change_tx)
             tx_inputs.extend(inputs)
-        return self.prepare_transaction(cls, tx_inputs, outputs)
+        return self.prepare_transaction(cls, tx_inputs, outputs, timestamp)
 
     def separate_inputs(self, inputs, tx_storage):
         """Separates the inputs from a tx into 2 groups: the ones that belong to this wallet and the ones that don't
@@ -373,8 +386,8 @@ class BaseWallet:
             return new_output
         return None
 
-    def get_inputs_from_amount(self, amount: int,
-                               token_uid: bytes = HATHOR_TOKEN_UID) -> Tuple[List[WalletInputInfo], int]:
+    def get_inputs_from_amount(self, amount: int, token_uid: bytes = HATHOR_TOKEN_UID,
+                               max_ts: Optional[int] = None) -> Tuple[List[WalletInputInfo], int]:
         """Creates inputs from our pool of unspent tx given a value
 
         This is a very simple algorithm, so it does not try to find the best combination
@@ -386,13 +399,18 @@ class BaseWallet:
         :param token_uid: the token uid for the requested amount
         :type token_uid: bytes
 
-        :raises InsuficientFunds: if the wallet does not have enough ballance
+        :param max_ts: maximum timestamp the inputs can have
+        :type max_ts: int
+
+        :raises InsufficientFunds: if the wallet does not have enough ballance
         """
         inputs_tx = []
         total_inputs_amount = 0
 
         utxos = self.unspent_txs[token_uid]
         for utxo in utxos.values():
+            if max_ts is not None and utxo.timestamp > max_ts:
+                continue
             if not utxo.is_locked(self.reactor) and not utxo.is_token_authority():
                 # I can only use the outputs that are not locked and are not an authority utxo
                 inputs_tx.append(WalletInputInfo(utxo.tx_id, utxo.index, self.get_private_key(utxo.address)))
@@ -405,7 +423,7 @@ class BaseWallet:
                 break
 
         if total_inputs_amount < amount:
-            raise InsuficientFunds('Requested amount: {} / Available: {}'.format(amount, total_inputs_amount))
+            raise InsufficientFunds('Requested amount: {} / Available: {}'.format(amount, total_inputs_amount))
 
         return inputs_tx, total_inputs_amount
 
