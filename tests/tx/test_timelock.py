@@ -5,7 +5,7 @@ from twisted.internet.task import Clock
 from hathor.constants import HATHOR_TOKEN_UID
 from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
-from hathor.wallet.exceptions import InsuficientFunds
+from hathor.wallet.exceptions import InsufficientFunds
 from tests import unittest
 from tests.utils import add_new_blocks
 
@@ -126,7 +126,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
 
         outputs = [WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=2000, timelock=None)]
 
-        with self.assertRaises(InsuficientFunds):
+        with self.assertRaises(InsufficientFunds):
             self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
 
         self.clock.advance(10)

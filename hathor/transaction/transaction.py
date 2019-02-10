@@ -271,7 +271,7 @@ class Transaction(BaseTransaction):
                 raise InexistentInput('Input tx does not exist: {}'.format(input_tx.tx_id.hex()))
 
             if self.timestamp <= spent_tx.timestamp:
-                raise TimestampError('tx={} timestamp={}, parent={} timestamp={}'.format(
+                raise TimestampError('tx={} timestamp={}, spent_tx={} timestamp={}'.format(
                     self.hash and self.hash.hex(),
                     self.timestamp,
                     spent_tx.hash.hex(),
