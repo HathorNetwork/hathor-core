@@ -37,10 +37,11 @@ message Block {
   uint64 height = 4;
   repeated bytes parents = 5; // each parent is a hash (32 bytes)
   repeated TxOutput outputs = 7;
-  uint32 nonce = 8;
+  bytes nonce = 8;
   // hash may be precomputed, should only be trusted if // it is sent by the storage
   bytes hash = 9; // always of size 32 or empty
   Metadata metadata = 10;
+  bytes data = 11;
 }
 
 message TxInput {

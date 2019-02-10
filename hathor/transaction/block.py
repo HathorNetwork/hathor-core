@@ -1,11 +1,16 @@
+import base64
+import hashlib
 from itertools import chain
-from typing import TYPE_CHECKING, Iterable, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set
 
+from _hashlib import HASH
 from twisted.logger import Logger
 
 from hathor import protos
+from hathor.constants import BLOCK_DATA_MAX_SIZE, BLOCK_NONCE_BYTES as NONCE_BYTES
 from hathor.transaction.base_transaction import BaseTransaction, TxOutput, sum_weights
-from hathor.transaction.exceptions import BlockHeightError, BlockWithInputs, BlockWithTokensError
+from hathor.transaction.exceptions import BlockDataError, BlockHeightError, BlockWithInputs, BlockWithTokensError
+from hathor.transaction.util import int_to_bytes, unpack, unpack_len
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -16,9 +21,11 @@ class Block(BaseTransaction):
 
     def __init__(self, nonce: int = 0, timestamp: Optional[int] = None, version: int = 1, weight: float = 0,
                  height: int = 0, outputs: Optional[List[TxOutput]] = None, parents: Optional[List[bytes]] = None,
-                 hash: Optional[bytes] = None, storage: Optional['TransactionStorage'] = None) -> None:
+                 hash: Optional[bytes] = None, storage: Optional['TransactionStorage'] = None,
+                 data: bytes = b'') -> None:
         super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight, height=height,
                          outputs=outputs or [], parents=parents or [], hash=hash, storage=storage, is_block=True)
+        self.data = data
 
     def to_proto(self, include_metadata: bool = True) -> protos.BaseTransaction:
         tx_proto = protos.Block(
@@ -28,8 +35,9 @@ class Block(BaseTransaction):
             height=self.height,
             parents=self.parents,
             outputs=map(TxOutput.to_proto, self.outputs),
-            nonce=self.nonce,
+            nonce=int_to_bytes(self.nonce, 16),
             hash=self.hash,
+            data=self.data
         )
         if include_metadata:
             tx_proto.metadata.CopyFrom(self.get_metadata().to_proto())
@@ -44,11 +52,12 @@ class Block(BaseTransaction):
             weight=block_proto.weight,
             timestamp=block_proto.timestamp,
             height=block_proto.height,
-            nonce=block_proto.nonce,
+            nonce=int.from_bytes(block_proto.nonce, 'big'),
             hash=block_proto.hash or None,
             parents=list(block_proto.parents),
             outputs=list(map(TxOutput.create_from_proto, block_proto.outputs)),
             storage=storage,
+            data=block_proto.data
         )
         if block_proto.HasField('metadata'):
             from hathor.transaction import TransactionMetadata
@@ -61,6 +70,49 @@ class Block(BaseTransaction):
         """Return the hash of the parent block.
         """
         return self.parents[0]
+
+    @classmethod
+    def create_from_struct(cls, struct_bytes: bytes,
+                           storage: Optional['TransactionStorage'] = None) -> 'Block':
+        blc = cls()
+        buf = blc.get_fields_from_struct(struct_bytes)
+
+        [data_bytes, ], buf = unpack('B', buf)
+        blc.data, buf = unpack_len(data_bytes, buf)
+
+        blc.nonce = int.from_bytes(buf, byteorder='big')
+        if len(buf) != NONCE_BYTES:
+            raise ValueError('Invalid sequence of bytes')
+
+        blc.hash = blc.calculate_hash()
+        blc.storage = storage
+
+        return blc
+
+    def get_struct_without_nonce(self) -> bytes:
+        struct_bytes_without_data = super().get_struct_without_nonce()
+        # TODO: should we validate data length here?
+        data_bytes = int_to_bytes(len(self.data), 1)
+        return struct_bytes_without_data + data_bytes + self.data
+
+    def get_struct(self) -> bytes:
+        """Return the complete serialization of the transaction
+
+        :rtype: bytes
+        """
+        struct_bytes = self.get_struct_without_nonce()
+        struct_bytes += int_to_bytes(self.nonce, NONCE_BYTES)
+        return struct_bytes
+
+    def calculate_hash2(self, part1: HASH) -> bytes:
+        part1.update(int_to_bytes(self.nonce, NONCE_BYTES))
+        return hashlib.sha256(part1.digest()).digest()
+
+    # TODO: maybe introduce convention on serialization methods names (e.g. to_json vs get_struct)
+    def to_json(self, decode_script: bool = False) -> Dict[str, Any]:
+        json = super().to_json(decode_script)
+        json['data'] = base64.b64encode(self.data).decode('utf-8')
+        return json
 
     def verify_height(self) -> None:
         """Verify that the height is correct (should be parent + 1)."""
@@ -99,6 +151,10 @@ class Block(BaseTransaction):
             if output.get_token_index() > 0:
                 raise BlockWithTokensError('in output: {}'.format(output.to_human_readable()))
 
+    def verify_data(self) -> None:
+        if len(self.data) > BLOCK_DATA_MAX_SIZE:
+            raise BlockDataError('block data has {} bytes'.format(len(self.data)))
+
     def calculate_height(self):
         """ Calculate block height according to its parents
 
@@ -117,6 +173,7 @@ class Block(BaseTransaction):
         self.verify_pow()
         self.verify_no_inputs()
         self.verify_outputs()
+        self.verify_data()
 
     def verify(self) -> None:
         """
@@ -125,6 +182,7 @@ class Block(BaseTransaction):
             (3) creates the correct amount of tokens in the output (done in HathorManager)
             (4) all parents must exist and have timestamp smaller than ours
             (5) height of block == height of previous block + 1
+            (6) data field must contain at most 100 bytes
         """
         # TODO Should we validate a limit of outputs?
         if self.is_genesis:

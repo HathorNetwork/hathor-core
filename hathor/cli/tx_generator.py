@@ -21,6 +21,9 @@ def create_parser() -> ArgumentParser:
     parser.add_argument('--rate', type=float, help='tx/s')
     parser.add_argument('--weight', type=float, help='Weight')
     parser.add_argument('--count', type=int, help='Quantity of txs to be generated')
+    parser.add_argument('--timestamp', action='append', choices=['client', 'server'], help='If the tx timestamp '
+                        'should be set on the client or server. If this parameter is not given, server will set '
+                        'the timestamp as part of regular tx creation')
     parser.add_argument('--profiler', action='store_true', default=False, help='Enable profiling')
     return parser
 
@@ -62,7 +65,7 @@ def execute(args):
                     sys.exit(1)
                 else:
                     conn_retries += 1
-                    print('Waiting %d seconds to try again ({} of {})...'.format(_SLEEP_ON_ERROR_SECONDS, conn_retries,
+                    print('Waiting {} seconds to try again ({} of {})...'.format(_SLEEP_ON_ERROR_SECONDS, conn_retries,
                                                                                  _MAX_CONN_RETRIES))
                     time.sleep(_SLEEP_ON_ERROR_SECONDS)
                     continue
@@ -97,6 +100,13 @@ def execute(args):
         # print('Sending {} tokens to {}...'.format(address, value))
 
         data = {'outputs': [{'address': address, 'value': value}], 'inputs': []}
+
+        if args.timestamp:
+            if args.timestamp == 'server':
+                data['timestamp'] = 0
+            elif args.timestamp == 'client':
+                data['timestamp'] = int(time.time())
+
         if args.weight:
             data['weight'] = args.weight
         try:
@@ -109,7 +119,7 @@ def execute(args):
                 sys.exit(1)
             else:
                 conn_retries += 1
-                print('Waiting %d seconds to try again ({} of {})...'.format(_SLEEP_ON_ERROR_SECONDS, conn_retries,
+                print('Waiting {} seconds to try again ({} of {})...'.format(_SLEEP_ON_ERROR_SECONDS, conn_retries,
                                                                              _MAX_CONN_RETRIES))
                 time.sleep(_SLEEP_ON_ERROR_SECONDS)
                 continue
@@ -143,10 +153,10 @@ def execute(args):
                         interval -= error
                     else:
                         interval = 0
-                print('')
+                # print('')
                 print('  {} tx/s (latest timestamp={}, latest weight={}, sleep interval={})'.format(
                       measure, latest_timestamp, latest_weight, interval))
-                print('')
+                # print('')
                 count = 0
                 t0 = t1
 

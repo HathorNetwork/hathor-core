@@ -106,3 +106,19 @@ class GenerateTxTest(unittest.TestCase):
         tx_balance = request_server('wallet/balance/', 'GET')
         # Now we have lost some tokens because the tx have sent tokens outside the wallet
         self.assertEqual(tx_balance['balance']['available'], 2000 - value)
+
+        # generate tx with timestamp set on client
+        args = self.parser_tx.parse_args([self.host, '--count', '1', '--timestamp', 'client'])
+        execute_tx(args)
+
+        response = request_server('transaction', 'GET', data=tx_payload)
+        last_len_tx = len(response['transactions'])
+        self.assertEqual(last_len_tx, 5)
+
+        # generate tx with timestamp set on server
+        args = self.parser_tx.parse_args([self.host, '--count', '1', '--timestamp', 'server'])
+        execute_tx(args)
+
+        response = request_server('transaction', 'GET', data=tx_payload)
+        last_len_tx = len(response['transactions'])
+        self.assertEqual(last_len_tx, 6)

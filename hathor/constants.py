@@ -61,3 +61,10 @@ BLOCK_DIFFICULTY_MAX_DW = 0.25
 #
 # Thus, K=3 is the least value to find all the 120 most of the times.
 BLOCK_DIFFICULTY_MAX_DEPTH = 3 * BLOCK_DIFFICULTY_N_BLOCKS
+
+# Number of bytes that each transaction type nonce have
+BLOCK_NONCE_BYTES = 16
+TX_NONCE_BYTES = 4
+
+# Size limit in bytes for Block data field
+BLOCK_DATA_MAX_SIZE = 100

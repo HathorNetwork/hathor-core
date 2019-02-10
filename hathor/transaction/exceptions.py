@@ -80,6 +80,10 @@ class BlockWithTokensError(BlockError):
     """Block has tokens other than hathor"""
 
 
+class BlockDataError(BlockError):
+    """Block data max length exceeded"""
+
+
 class ScriptError(HathorError):
     """Base class for script evaluation errors"""
 

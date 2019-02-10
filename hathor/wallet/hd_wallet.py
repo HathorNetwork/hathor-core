@@ -2,7 +2,6 @@ import hashlib
 from typing import Any, Dict, Optional
 
 from mnemonic import Mnemonic
-from pycoin.networks.registry import network_for_netcode
 
 from hathor.pubsub import HathorEvents
 from hathor.wallet import BaseWallet
@@ -98,20 +97,30 @@ class HDWallet(BaseWallet):
         seed = self.mnemonic.to_seed(self.words, self.passphrase.decode('utf-8'))
 
         # Master node
-        # TODO Change to hathor code in the future (we will need to fork this lib)
-        network = network_for_netcode('btc')
+        from pycoin.networks.registry import network_for_netcode
+        self._register_pycoin_networks()
+        network = network_for_netcode('htr')
         key = network.extras.BIP32Node.from_master_secret(seed)
 
         # Until account key should be hardened
         # Chain path = 44'/0'/0'/0
         # 44' (hardened) -> BIP44
-        # 0' (hardened) -> Coin type (0 = bitcoin) TODO change to hathor
+        # 280' (hardened) -> Coin type (280 = hathor)
         # 0' (hardened) -> Account
         # 0 -> Chain
-        self.chain_key = key.subkey_for_path('44H/0H/0H/0')
+        self.chain_key = key.subkey_for_path('44H/280H/0H/0')
 
         for key in self.chain_key.children(self.initial_key_generation, 0, False):
             self._key_generated(key, key.child_index())
+
+    def _register_pycoin_networks(self) -> None:
+        """ Register HTR (mainnet) and XHTR (testnet) in pycoin networks
+        """
+        import os
+        paths = os.environ.get('PYCOIN_NETWORK_PATHS', '').split()
+        if 'hathor.pycoin' not in paths:
+            paths.append('hathor.pycoin')
+        os.environ['PYCOIN_NETWORK_PATHS'] = ' '.join(paths)
 
     def get_private_key(self, address58):
         """ We get the private key bytes and generate the cryptography object

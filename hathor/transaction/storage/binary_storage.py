@@ -106,8 +106,9 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
             with open(filepath, 'rb') as fp:
                 from hathor.transaction import Transaction
                 tx_bytes = fp.read()
-                tx = Transaction.create_from_struct(tx_bytes)
-                if len(tx.inputs) == 0:
+                try:
+                    tx = Transaction.create_from_struct(tx_bytes)
+                except ValueError:
                     from hathor.transaction import Block
                     tx = Block.create_from_struct(tx_bytes)
                 tx.storage = self

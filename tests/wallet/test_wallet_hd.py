@@ -2,7 +2,7 @@ from hathor.constants import DECIMAL_PLACES, HATHOR_TOKEN_UID, TOKENS_PER_BLOCK
 from hathor.transaction import Transaction
 from hathor.wallet import HDWallet
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
-from hathor.wallet.exceptions import InsuficientFunds
+from hathor.wallet.exceptions import InsufficientFunds
 from tests import unittest
 from tests.utils import add_new_block
 
@@ -72,7 +72,7 @@ class WalletHD(unittest.TestCase):
         # create transaction spending some value
         new_address = self.wallet.get_unused_address()
         out = WalletOutputInfo(self.wallet.decode_address(new_address), TOKENS, timelock=None)
-        with self.assertRaises(InsuficientFunds):
+        with self.assertRaises(InsufficientFunds):
             self.wallet.prepare_transaction_compute_inputs(Transaction, outputs=[out])
 
     def test_lock(self):

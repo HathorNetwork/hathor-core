@@ -131,6 +131,34 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         data_response_timelock = response_timelock.json_value()
         self.assertTrue(data_response_timelock['success'])
 
+        self.reactor.advance(5)
+        # Sending token with timestamp
+        data_timestamp = {
+            "outputs": [{
+                "address": "15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH",
+                "value": 5
+            }],
+            "inputs": [],
+            "timestamp": int(self.reactor.seconds())
+        }
+        response_timestamp = yield self.web.post("wallet/send_tokens", {'data': data_timestamp})
+        data_response_timestamp = response_timestamp.json_value()
+        self.assertTrue(data_response_timestamp['success'])
+
+        self.reactor.advance(5)
+        # Sending token with timestamp=0
+        data_timestamp = {
+            "outputs": [{
+                "address": "15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH",
+                "value": 5
+            }],
+            "inputs": [],
+            "timestamp": 0
+        }
+        response_timestamp = yield self.web.post("wallet/send_tokens", {'data': data_timestamp})
+        data_response_timestamp = response_timestamp.json_value()
+        self.assertTrue(data_response_timestamp['success'])
+
     @inlineCallbacks
     def test_tx_weight(self):
         add_new_blocks(self.manager, 3)

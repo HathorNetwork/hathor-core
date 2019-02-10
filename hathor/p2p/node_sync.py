@@ -6,7 +6,6 @@ from math import inf
 from typing import TYPE_CHECKING, Callable, Dict, Iterator, List, Optional, Tuple, Union, cast
 
 from twisted.internet.defer import Deferred, inlineCallbacks
-from twisted.internet.error import ConnectionLost
 from twisted.internet.interfaces import IDelayedCall, IProtocol, IPushProducer, IReactorCore
 from twisted.internet.task import Clock
 from twisted.logger import Logger
@@ -142,7 +141,6 @@ class SendDataPush:
         self.pauseProducing()
         self.queue.clear()
         self.priority_queue.clear()
-        self.protocol.connectionLost(ConnectionLost('Push data stopped'))
 
 
 class NodeSyncTimestamp(Plugin):
@@ -675,7 +673,7 @@ class NodeSyncTimestamp(Plugin):
         payload_type, _, payload = payload.partition(':')
         data = base64.b64decode(payload)
         if payload_type == 'tx':
-            tx = Transaction.create_from_struct(data)
+            tx: BaseTransaction = Transaction.create_from_struct(data)
         elif payload_type == 'block':
             tx = Block.create_from_struct(data)
         else:

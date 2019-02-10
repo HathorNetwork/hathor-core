@@ -9,6 +9,7 @@ from hathor.crypto.util import get_address_from_public_key, get_private_key_from
 from hathor.manager import TestMode
 from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
+    BlockDataError,
     BlockHeightError,
     BlockWithInputs,
     ConflictingInputs,
@@ -525,6 +526,34 @@ class BasicTransaction(unittest.TestCase):
         block2.timestamp += 1
         with self.assertRaises(TimestampError):
             block2.verify_parents()
+
+    def test_block_big_nonce(self):
+        block = self.genesis_blocks[0]
+
+        # Integer with more than 4 bytes of representation
+        start = 1 << (8 * 12)
+        end = start + 1 << (8*4)
+
+        hash = block.start_mining(start, end)
+        assert hash is not None
+
+        block.hash = hash
+        cloned_block = block.clone()
+
+        assert cloned_block == block
+
+    def test_block_data(self):
+        network = 'testnet'
+        manager = self.create_peer(network, unlock_wallet=True)
+
+        def add_block_with_data(data: bytes = b''):
+            add_new_blocks(manager, 1, advance_clock=1, block_data=data)[0]
+
+        add_block_with_data()
+        add_block_with_data(b'Testing, testing 1, 2, 3...')
+        add_block_with_data(100*b'a')
+        with self.assertRaises(BlockDataError):
+            add_block_with_data(101*b'a')
 
 
 if __name__ == '__main__':

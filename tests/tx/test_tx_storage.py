@@ -206,7 +206,7 @@ class _BaseTransactionStorageTest:
         def test_topological_sort(self):
             self.manager.test_mode = TestMode.TEST_ALL_WEIGHT
             add_new_blocks(self.manager, 1, advance_clock=1)
-            tx = add_new_transactions(self.manager, 1, advance_clock=1)[0]
+            add_new_transactions(self.manager, 1, advance_clock=1)[0]
 
             total = 0
             for tx in self.tx_storage._topological_sort():
