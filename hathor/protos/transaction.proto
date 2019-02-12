@@ -51,7 +51,7 @@ message TxInput {
 }
 
 message TxOutput {
-  uint32 value = 1;
+  uint64 value = 1;
   uint32 token_data = 2;
   bytes script = 3;
 }

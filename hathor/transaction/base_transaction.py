@@ -31,6 +31,9 @@ if TYPE_CHECKING:
 MAX_NONCE = 2**32
 MAX_NUM_INPUTS = MAX_NUM_OUTPUTS = 256
 
+MAX_OUTPUT_VALUE = 2 ** 63  # max value (inclusive) that is possible to encode: 9223372036854775808 ~= 9.22337e+18
+_MAX_OUTPUT_VALUE_32 = 2 ** 31  # max value (inclusive) before having to use 8 bytes: 2147483648 ~= 2.14748e+09
+
 _INPUT_SIZE_BYTES = 32  # 256 bits
 
 # Version (H), weight (d), timestamp (I), height (Q), inputs len (B), outputs len (B) and
@@ -152,7 +155,18 @@ class BaseTransaction(ABC):
             self.inputs.append(txin)
 
         for _ in range(outputs_len):
-            (value, token_data, script_len), buf = unpack('!IBH', buf)
+            (value_high_byte,), _ = unpack('!b', buf)
+            if value_high_byte < 0:
+                output_struct = '!qBH'
+                value_sign = -1
+            else:
+                output_struct = '!iBH'
+                value_sign = 1
+            (signed_value, token_data, script_len), buf = unpack(output_struct, buf)
+            value = signed_value * value_sign
+            assert value >= 0
+            if value < _MAX_OUTPUT_VALUE_32 and value_high_byte < 0:
+                raise ValueError('Value fits in 4 bytes but is using 8 bytes')
             script, buf = unpack_len(script_len, buf)
             txout = TxOutput(value, script, token_data)
             self.outputs.append(txout)
@@ -297,7 +311,7 @@ class BaseTransaction(ABC):
                 struct_bytes += int_to_bytes(0, 2)
 
         for output_tx in self.outputs:
-            struct_bytes += int_to_bytes(output_tx.value, 4)
+            struct_bytes += output_value_to_bytes(output_tx.value)
 
             # token index
             struct_bytes += int_to_bytes(output_tx.token_data, 1)
@@ -332,7 +346,7 @@ class BaseTransaction(ABC):
             struct_bytes += input_tx.data
 
         for output_tx in self.outputs:
-            struct_bytes += int_to_bytes(output_tx.value, 4)
+            struct_bytes += output_value_to_bytes(output_tx.value)
 
             # token index
             struct_bytes += int_to_bytes(output_tx.token_data, 1)
@@ -793,6 +807,7 @@ class TxOutput:
         assert isinstance(value, int), 'value is %s, type %s' % (str(value), type(value))
         assert isinstance(script, bytes), 'script is %s, type %s' % (str(script), type(script))
         assert isinstance(token_data, int), 'token_data is %s, type %s' % (str(token_data), type(token_data))
+        assert value <= MAX_OUTPUT_VALUE
 
         self.value = value  # int
         self.script = script  # bytes
@@ -862,6 +877,13 @@ class TxOutput:
             script=self.script,
             token_data=self.token_data,
         )
+
+
+def output_value_to_bytes(number: int) -> bytes:
+    if number > _MAX_OUTPUT_VALUE_32:
+        return (-number).to_bytes(8, byteorder='big', signed=True)
+    else:
+        return number.to_bytes(4, byteorder='big', signed=True)  # `signed` makes no difference, but oh well
 
 
 def tx_or_block_from_proto(tx_proto: protos.BaseTransaction,

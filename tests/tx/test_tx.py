@@ -4,10 +4,10 @@ import time
 
 from twisted.internet.task import Clock
 
-from hathor.constants import MAX_DISTANCE_BETWEEN_BLOCKS
-from hathor.crypto.util import get_address_from_public_key, get_private_key_from_bytes, get_public_key_from_bytes
+from hathor.constants import MAX_DISTANCE_BETWEEN_BLOCKS, TX_NONCE_BYTES as NONCE_BYTES
+from hathor.crypto.util import get_address_from_public_key, get_private_key_from_bytes
 from hathor.manager import TestMode
-from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, Block, Transaction, TxInput, TxOutput
+from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
     BlockDataError,
     BlockHeightError,
@@ -26,6 +26,7 @@ from hathor.transaction.exceptions import (
 )
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.transaction.util import int_to_bytes
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import add_new_blocks, add_new_transactions, get_genesis_key
@@ -43,33 +44,6 @@ class BasicTransaction(unittest.TestCase):
         # read genesis keys
         self.genesis_private_key = get_genesis_key()
         self.genesis_public_key = self.genesis_private_key.public_key()
-
-        # random keys to be used
-        random_priv = 'MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQgMnAHVIyj7Hym2yI' \
-                      'w+JcKEfdCHByIp+FHfPoIkcnjqGyhRANCAATX76SGshGeoacUcZDhXEzERt' \
-                      'AHbd30CVpUg8RRnAIhaFcuMY3G+YFr/mReAPRuiLKCnolWz3kCltTtNj36rJyd'
-        random_pub = 'MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAE1++khrIRnqGnFHGQ4VxMxEbQB23d' \
-                     '9AlaVIPEUZwCIWhXLjGNxvmBa/5kXgD0boiygp6JVs95ApbU7TY9+qycnQ=='
-        self.private_key_random = get_private_key_from_bytes(base64.b64decode(random_priv))
-        self.public_key_random = get_public_key_from_bytes(base64.b64decode(random_pub))
-
-    # def test_wrong_weight(self):
-    #     # we don't care about input data or tx id, so us anything
-    #     random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
-    #     tx_input = TxInput(
-    #         tx_id=random_bytes,
-    #         index=0,
-    #         data=random_bytes
-    #     )
-    #     tx = Transaction(
-    #         weight=0,
-    #         hash=random_bytes,
-    #         inputs=[tx_input],
-    #         storage=self.tx_storage
-    #     )
-    #
-    #     with self.assertRaises(WeightError):
-    #         tx.verify_pow()
 
     def test_input_output_match(self):
         genesis_block = self.genesis_blocks[0]
@@ -93,6 +67,12 @@ class BasicTransaction(unittest.TestCase):
     def test_script(self):
         genesis_block = self.genesis_blocks[0]
 
+        # random keys to be used
+        random_priv = 'MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQgMnAHVIyj7Hym2yI' \
+                      'w+JcKEfdCHByIp+FHfPoIkcnjqGyhRANCAATX76SGshGeoacUcZDhXEzERt' \
+                      'AHbd30CVpUg8RRnAIhaFcuMY3G+YFr/mReAPRuiLKCnolWz3kCltTtNj36rJyd'
+        private_key_random = get_private_key_from_bytes(base64.b64decode(random_priv))
+
         # create input data with incorrect private key
         _input = TxInput(genesis_block.hash, 0, b'')
         value = genesis_block.outputs[0].value
@@ -104,7 +84,7 @@ class BasicTransaction(unittest.TestCase):
         tx = Transaction(inputs=[_input], outputs=[output], storage=self.tx_storage)
 
         data_to_sign = tx.get_sighash_all(clear_input_data=True)
-        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.private_key_random)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, private_key_random)
         data_wrong = P2PKH.create_input_data(public_bytes, signature)
         _input.data = data_wrong
 
@@ -554,6 +534,36 @@ class BasicTransaction(unittest.TestCase):
         add_block_with_data(100*b'a')
         with self.assertRaises(BlockDataError):
             add_block_with_data(101*b'a')
+
+    def test_output_value(self):
+        # first test using a small output value with 8 bytes. It should fail
+        outputs = [TxOutput(1, b'')]
+        tx = Transaction(outputs=outputs)
+        original_struct = tx.get_struct()
+        struct_bytes = tx.get_struct_without_nonce()
+
+        # we'll get the struct without the last output bytes and add it ourselves
+        struct_bytes = struct_bytes[:-7]
+        # add small value using 8 bytes
+        struct_bytes += (-1).to_bytes(8, byteorder='big', signed=True)
+        struct_bytes += int_to_bytes(0, 1)
+        struct_bytes += int_to_bytes(0, 2)
+        struct_bytes += int_to_bytes(0, NONCE_BYTES)
+
+        len_difference = len(struct_bytes) - len(original_struct)
+        assert len_difference == 4, 'new struct is incorrect, len difference={}'.format(len_difference)
+
+        with self.assertRaises(ValueError):
+            Transaction.create_from_struct(struct_bytes)
+
+        # now use 8 bytes and make sure it's working
+        outputs = [TxOutput(MAX_OUTPUT_VALUE, b'')]
+        tx = Transaction(outputs=outputs)
+        tx.update_hash()
+        original_struct = tx.get_struct()
+        tx2 = Transaction.create_from_struct(original_struct)
+        tx2.update_hash()
+        assert tx == tx2
 
 
 if __name__ == '__main__':

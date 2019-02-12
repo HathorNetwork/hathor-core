@@ -1,7 +1,6 @@
-import math
 from typing import List, Optional
 
-from hathor.constants import GENESIS_TOKENS, MAX_VALUE, MIN_BLOCK_WEIGHT, MIN_TX_WEIGHT
+from hathor.constants import GENESIS_TOKENS, MIN_BLOCK_WEIGHT, MIN_TX_WEIGHT
 from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput
 from hathor.transaction.storage import TransactionStorage
 
@@ -26,17 +25,12 @@ def genesis_transactions(tx_storage: Optional[TransactionStorage]) -> List[BaseT
     )
 
     # Genesis will have 2B tokens (we use 200B because of two decimal places)
-    # We separate in outputs of 2B tokens because our value is only 4 bytes
-    GENESIS_OUTPUTS = []
-    num_outputs = math.ceil(GENESIS_TOKENS / MAX_VALUE)
-    total_tokens = GENESIS_TOKENS
-    for x in range(0, num_outputs):
-        value = min(total_tokens, MAX_VALUE)
-        GENESIS_OUTPUTS.append(TxOutput(value, bytes.fromhex('76a914fd05059b6006249543b82f36876a17c73fd2267b88ac')))
-        total_tokens -= value
+    GENESIS_OUTPUTS = [
+        TxOutput(GENESIS_TOKENS, bytes.fromhex('76a914fd05059b6006249543b82f36876a17c73fd2267b88ac')),
+    ]
     BLOCK_GENESIS = Block(
-        hash=bytes.fromhex('0000172845397bda136aa7d8472f61eda0432bf86731bfb014e171341a1643df'),
-        nonce=28905,
+        hash=bytes.fromhex('0002ed2460bcdcd804b2fe04ec92e53447efe393b11432d4d1cf68bc05606b67'),
+        nonce=4854,
         timestamp=1539271481,
         weight=MIN_BLOCK_WEIGHT,
         height=1,
