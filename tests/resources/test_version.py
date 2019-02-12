@@ -8,7 +8,7 @@ from tests.resources.base_resource import StubSite, _BaseResourceTest
 class VersionTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
-        self.web = StubSite(VersionResource())
+        self.web = StubSite(VersionResource(self.manager))
 
     @inlineCallbacks
     def test_get(self):

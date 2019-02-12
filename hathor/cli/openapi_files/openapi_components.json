@@ -60,28 +60,6 @@
                     }
                 }
             },
-            "ThinWalletInput": {
-                "type": "object",
-                "required": ["tx_id", "index", "signature", "public_key"],
-                "properties": {
-                    "tx_id": {
-                        "type": "string",
-                        "description": "Hash in hex of the spending transaction"
-                    },
-                    "index": {
-                        "type": "int",
-                        "description": "Index of the output is being spent"
-                    },
-                    "signature": {
-                        "type": "string",
-                        "description": "Signature of input in hex"
-                    },
-                    "public_key": {
-                        "type": "string",
-                        "description": "Public key of input in hex"
-                    }
-                }
-            },
             "SendToken": {
                 "type": "object",
                 "required": ["data"],
@@ -114,26 +92,11 @@
             },
             "ThinWalletSendToken": {
                 "type": "object",
-                "required": ["data"],
+                "required": ["tx_hex"],
                 "properties": {
-                    "data": {
-                        "type": "object",
-                        "required": ["outputs", "inputs"],
-                        "properties": {
-                            "outputs": {
-                                "type": "array",
-                                "description": "List of outputs to send the tokens",
-                                "items": {
-                                    "$ref": "#/components/schemas/Output"
-                                }
-                            },
-                            "inputs": {
-                                "type": "array",
-                                "description": "List of inputs to spend the tokens",
-                                "items": {
-                                    "$ref": "#/components/schemas/ThinWalletInput"
-                                }
-                            }
+                    "tx_hex": {
+                        "type": "string",
+                        "description": "Serialized transaction in hexadecimal before parents and pow"
                         }
                     }
                 }

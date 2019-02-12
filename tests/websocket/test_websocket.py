@@ -141,6 +141,7 @@ class TestWebsocket(unittest.TestCase):
         self.assertEqual(value['element']['timestamp'], block_genesis.timestamp)
         self.assertTrue(value['element']['is_output'])
 
+        element = None
         for el in WalletIndex.tx_to_elements(block_genesis, False):
             element = el.element
             break

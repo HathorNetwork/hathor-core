@@ -34,7 +34,6 @@ def main():
         DecodeTxResource,
         GraphvizResource,
         PushTxResource,
-        SignDataResource,
         TipsHistogramResource,
         TipsResource,
         TransactionResource,
@@ -231,12 +230,11 @@ def main():
 
         resources = (
             (b'status', StatusResource(manager), root),
-            (b'version', VersionResource(), root),
+            (b'version', VersionResource(manager), root),
             (b'mining', MiningResource(manager), root),
             (b'decode_tx', DecodeTxResource(manager), root),
             (b'push_tx', PushTxResource(manager), root),
             (b'graphviz', GraphvizResource(manager), root),
-            (b'sign_data', SignDataResource(), root),
             (b'tips-histogram', TipsHistogramResource(manager), root),
             (b'tips', TipsResource(manager), root),
             (b'transaction', TransactionResource(manager), root),
