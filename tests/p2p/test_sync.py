@@ -3,6 +3,7 @@ import time
 
 from twisted.internet.task import Clock
 
+from hathor.crypto.util import decode_address
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
 from hathor.transaction.storage.remote_storage import RemoteCommunicationError, TransactionRemoteStorage
 from tests import unittest
@@ -33,7 +34,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         outputs = []
         outputs.append(
-            WalletOutputInfo(address=self.manager1.wallet.decode_address(address), value=int(value), timelock=None))
+            WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None))
 
         tx = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
         tx.timestamp = int(self.clock.seconds())

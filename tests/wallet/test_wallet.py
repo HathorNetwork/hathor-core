@@ -5,7 +5,7 @@ from collections import defaultdict
 from cryptography.hazmat.primitives import serialization
 
 from hathor.constants import HATHOR_TOKEN_UID
-from hathor.crypto.util import get_address_b58_from_public_key, get_private_key_bytes
+from hathor.crypto.util import decode_address, get_address_b58_from_public_key, get_private_key_bytes
 from hathor.transaction import Transaction, TxInput
 from hathor.transaction.genesis import genesis_transactions
 from hathor.transaction.storage import TransactionMemoryStorage
@@ -76,7 +76,7 @@ class BasicWallet(unittest.TestCase):
 
         # create transaction spending this value, but sending to same wallet
         new_address = w.get_unused_address()
-        out = WalletOutputInfo(w.decode_address(new_address), 100, timelock=None)
+        out = WalletOutputInfo(decode_address(new_address), 100, timelock=None)
         tx1 = w.prepare_transaction_compute_inputs(Transaction, outputs=[out])
         tx1.storage = self.storage
         tx1.update_hash()
@@ -90,7 +90,7 @@ class BasicWallet(unittest.TestCase):
         input_info = WalletInputInfo(tx1.hash, 1, None)
         new_address = w.get_unused_address()
         key2 = w.keys[new_address]
-        out = WalletOutputInfo(w.decode_address(key2.address), 100, timelock=None)
+        out = WalletOutputInfo(decode_address(key2.address), 100, timelock=None)
         tx2 = w.prepare_transaction_incomplete_inputs(Transaction, inputs=[input_info],
                                                       outputs=[out], tx_storage=self.storage)
         tx2.storage = self.storage
@@ -110,7 +110,7 @@ class BasicWallet(unittest.TestCase):
         w.unlock(PASSWORD)
         new_address = w.get_unused_address()
         key = w.keys[new_address]
-        out = WalletOutputInfo(w.decode_address(key.address), BLOCK_REWARD, timelock=None)
+        out = WalletOutputInfo(decode_address(key.address), BLOCK_REWARD, timelock=None)
         tx = w.prepare_transaction(Transaction, inputs=[], outputs=[out])
         tx.update_hash()
         w.on_new_tx(tx)
@@ -143,7 +143,7 @@ class BasicWallet(unittest.TestCase):
 
         # create transaction spending some value
         new_address = w.get_unused_address()
-        out = WalletOutputInfo(w.decode_address(new_address), 100, timelock=None)
+        out = WalletOutputInfo(decode_address(new_address), 100, timelock=None)
         with self.assertRaises(InsufficientFunds):
             w.prepare_transaction_compute_inputs(Transaction, outputs=[out])
 
@@ -153,17 +153,17 @@ class BasicWallet(unittest.TestCase):
 
         # creating valid address
         valid_address = '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'
-        WalletOutputInfo(w.decode_address(valid_address), 100, None)
+        WalletOutputInfo(decode_address(valid_address), 100, None)
 
         # creating invalid address
         invalid_address = '5d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'
         with self.assertRaises(InvalidAddress):
-            WalletOutputInfo(w.decode_address(invalid_address), 100, None)
+            WalletOutputInfo(decode_address(invalid_address), 100, None)
 
         # invalid address (checksum invalid)
         invalid_address2 = '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1Bfnq'
         with self.assertRaises(InvalidAddress):
-            WalletOutputInfo(w.decode_address(invalid_address2), 100, None)
+            WalletOutputInfo(decode_address(invalid_address2), 100, None)
 
     def test_separate_inputs(self):
         block = add_new_block(self.manager, advance_clock=5)
@@ -184,7 +184,7 @@ class BasicWallet(unittest.TestCase):
         tokens_created = tx.outputs[0].value
         token_uid = tx.tokens[0]
         address_b58 = self.manager.wallet.get_unused_address()
-        address = self.manager.wallet.decode_address(address_b58)
+        address = decode_address(address_b58)
 
         _, hathor_balance = self.manager.wallet.balance[HATHOR_TOKEN_UID]
         # prepare tx with hathors and another token
@@ -224,6 +224,6 @@ class BasicWallet(unittest.TestCase):
         block = add_new_block(self.manager, advance_clock=5)
         w = self.manager.wallet
         new_address = w.get_unused_address()
-        out = WalletOutputInfo(w.decode_address(new_address), 1, timelock=None)
+        out = WalletOutputInfo(decode_address(new_address), 1, timelock=None)
         with self.assertRaises(InsufficientFunds):
             w.prepare_transaction_compute_inputs(Transaction, outputs=[out], timestamp=block.timestamp)

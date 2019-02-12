@@ -34,6 +34,7 @@ def main():
         DecodeTxResource,
         GraphvizResource,
         PushTxResource,
+        SignDataResource,
         TipsHistogramResource,
         TipsResource,
         TransactionResource,
@@ -51,6 +52,10 @@ def main():
         SignTxResource,
         StateWalletResource,
         UnlockWalletResource,
+    )
+    from hathor.wallet.resources.thin_wallet import (
+        AddressHistoryResource,
+        SendTokensResource as SendTokensThinResource,
     )
     from hathor.wallet.resources.nano_contracts import (
         NanoContractDecodeResource,
@@ -78,6 +83,11 @@ def main():
     parser.add_argument('--words', help='Words used to generate the seed for HD Wallet')
     parser.add_argument('--passphrase', action='store_true', help='Passphrase used to generate the seed for HD Wallet')
     parser.add_argument('--unlock-wallet', action='store_true', help='Ask for password to unlock wallet')
+    parser.add_argument(
+        '--wallet-index',
+        action='store_true',
+        help='Create an index of transactions by address and allow searching queries'
+    )
     parser.add_argument('--prometheus', action='store_true', help='Send metric data to Prometheus')
     parser.add_argument('--cache', action='store_true', help='Use cache for tx storage')
     parser.add_argument('--cache-size', type=int, help='Number of txs to keep on cache')
@@ -170,8 +180,8 @@ def main():
         print('Hostname discovered and set to {}'.format(hostname))
 
     network = 'testnet'
-    manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname, tx_storage=tx_storage,
-                            wallet=wallet)
+    manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=args.hostname, tx_storage=tx_storage,
+                            wallet=wallet, wallet_index=args.wallet_index)
 
     dns_hosts = []
     if args.testnet:
@@ -214,6 +224,8 @@ def main():
         root = Resource()
         wallet_resource = Resource()
         root.putChild(b'wallet', wallet_resource)
+        thin_wallet_resource = Resource()
+        root.putChild(b'thin_wallet', thin_wallet_resource)
         contracts_resource = Resource()
         wallet_resource.putChild(b'nano-contract', contracts_resource)
 
@@ -224,6 +236,7 @@ def main():
             (b'decode_tx', DecodeTxResource(manager), root),
             (b'push_tx', PushTxResource(manager), root),
             (b'graphviz', GraphvizResource(manager), root),
+            (b'sign_data', SignDataResource(), root),
             (b'tips-histogram', TipsHistogramResource(manager), root),
             (b'tips', TipsResource(manager), root),
             (b'transaction', TransactionResource(manager), root),
@@ -238,6 +251,9 @@ def main():
             (b'unlock', UnlockWalletResource(manager), wallet_resource),
             (b'lock', LockWalletResource(manager), wallet_resource),
             (b'state', StateWalletResource(manager), wallet_resource),
+            # /thin_wallet
+            (b'address_history', AddressHistoryResource(manager), thin_wallet_resource),
+            (b'send_tokens', SendTokensThinResource(manager), thin_wallet_resource),
             # /wallet/nano-contract
             (b'match-value', NanoContractMatchValueResource(manager), contracts_resource),
             (b'decode', NanoContractDecodeResource(manager), contracts_resource),

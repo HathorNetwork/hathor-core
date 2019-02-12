@@ -4,20 +4,19 @@ from enum import Enum
 from math import inf
 from typing import Any, DefaultDict, Dict, List, NamedTuple, Optional, Tuple
 
-import base58
 from twisted.internet.interfaces import IDelayedCall, IReactorCore
 from twisted.internet.task import Clock
 from twisted.logger import Logger
 
 from hathor.constants import HATHOR_TOKEN_UID
-from hathor.crypto.util import get_checksum
+from hathor.crypto.util import decode_address
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction, TxInput, TxOutput
 from hathor.transaction.base_transaction import int_to_bytes
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.transaction import Transaction
-from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, InvalidAddress, PrivateKeyNotFound
+from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
 
 
 class WalletInputInfo(NamedTuple):
@@ -135,36 +134,9 @@ class BaseWallet:
     def get_unused_address(self, mark_as_used=True):
         raise NotImplementedError
 
-    def decode_address(self, address58: str) -> bytes:
-        """ Decode address in base58 to bytes
-
-        :param address58: Wallet address in base58
-        :type address58: string
-
-        :raises InvalidAddress: if address58 is not a valid base58 string or
-                                not a valid address or has invalid checksum
-
-        :return: Address in bytes
-        :rtype: bytes
-        """
-        try:
-            decoded_address = base58.b58decode(address58)
-        except ValueError:
-            # Invalid base58 string
-            raise InvalidAddress
-        # Validate address size [25 bytes]
-        if len(decoded_address) != 25:
-            raise InvalidAddress
-        # Validate the checksum
-        address_checksum = decoded_address[-4:]
-        valid_checksum = get_checksum(decoded_address[:-4])
-        if address_checksum != valid_checksum:
-            raise InvalidAddress
-        return decoded_address
-
     def get_unused_address_bytes(self, mark_as_used: bool = True) -> bytes:
         address_str = self.get_unused_address(mark_as_used)
-        return self.decode_address(address_str)
+        return decode_address(address_str)
 
     def tokens_received(self, address58):
         raise NotImplementedError
@@ -380,7 +352,7 @@ class BaseWallet:
         if sum_inputs > sum_outputs:
             difference = sum_inputs - sum_outputs
             address_b58 = self.get_unused_address()
-            address = self.decode_address(address_b58)
+            address = decode_address(address_b58)
             # Changes txs don't have timelock
             new_output = WalletOutputInfo(address, difference, None, token_uid.hex())
             return new_output

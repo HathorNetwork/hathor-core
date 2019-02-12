@@ -7,7 +7,7 @@ from graphviz.dot import Digraph
 from intervaltree.interval import Interval
 from twisted.internet.defer import inlineCallbacks, succeed
 
-from hathor.indexes import IndexesManager, TipsIndex
+from hathor.indexes import IndexesManager, TipsIndex, WalletIndex
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction.block import Block
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
@@ -21,6 +21,7 @@ class TransactionStorage(ABC):
 
     pubsub: Optional[PubSubManager]
     with_index: bool  # noqa: E701
+    wallet_index: Optional[WalletIndex]
 
     @abstractmethod
     @deprecated('Use save_transaction_deferred instead')
@@ -568,6 +569,7 @@ class BaseTransactionStorage(TransactionStorage):
         self.block_index = IndexesManager()
         self.tx_index = IndexesManager()
         self.all_index = TipsIndex()
+        self.wallet_index = None
 
         self._latest_timestamp = 0
         from hathor.transaction.genesis import genesis_transactions
@@ -755,6 +757,8 @@ class BaseTransactionStorage(TransactionStorage):
             raise NotImplementedError
         self._latest_timestamp = max(self.latest_timestamp, tx.timestamp)
         self.all_index.add_tx(tx)
+        if self.wallet_index:
+            self.wallet_index.add_tx(tx)
         if tx.is_block:
             self._cache_block_count += 1
             self.block_index.add_tx(tx)
