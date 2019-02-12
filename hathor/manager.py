@@ -299,12 +299,11 @@ class HathorManager:
         parents = [parent_block.hash] + tip_txs
 
         parents_tx = [self.tx_storage.get_transaction(x) for x in parents]
-        new_height = max(x.height for x in parents_tx) + 1
 
         timestamp1 = int(timestamp)
         timestamp2 = max(x.timestamp for x in parents_tx) + 1
 
-        blk = Block(outputs=tx_outputs, parents=parents, storage=self.tx_storage, height=new_height, data=data)
+        blk = Block(outputs=tx_outputs, parents=parents, storage=self.tx_storage, data=data)
         blk.timestamp = max(timestamp1, timestamp2)
         blk.weight = self.calculate_block_difficulty(blk)
         return blk

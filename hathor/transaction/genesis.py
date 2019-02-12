@@ -7,20 +7,18 @@ from hathor.transaction.storage import TransactionStorage
 
 def genesis_transactions(tx_storage: Optional[TransactionStorage]) -> List[BaseTransaction]:
     TX_GENESIS1 = Transaction(
-        hash=bytes.fromhex('00012a1df41aaf1dda05942c522ff4f56fdca5160193e0111ef84e474d294603'),
-        nonce=3325,
+        hash=bytes.fromhex('0001b424e66e654fa0300329b720170f8d83ff7c6685fab5b66056f209c95a58'),
+        nonce=9160,
         timestamp=1539271482,
         weight=MIN_TX_WEIGHT,
-        height=1,
         storage=tx_storage,
     )
 
     TX_GENESIS2 = Transaction(
-        hash=bytes.fromhex('00002dd4f867bfb1cba75c6073469bf76faa3aff24cf80fb006ed848ec771373'),
-        nonce=30489,
+        hash=bytes.fromhex('0001181d91e0f4deb77bcb90364d7d69c7ac7eafb445a82d2b643a2c38173868'),
+        nonce=9959,
         timestamp=1539271483,
         weight=MIN_TX_WEIGHT,
-        height=1,
         storage=tx_storage,
     )
 
@@ -29,11 +27,10 @@ def genesis_transactions(tx_storage: Optional[TransactionStorage]) -> List[BaseT
         TxOutput(GENESIS_TOKENS, bytes.fromhex('76a914fd05059b6006249543b82f36876a17c73fd2267b88ac')),
     ]
     BLOCK_GENESIS = Block(
-        hash=bytes.fromhex('0002ed2460bcdcd804b2fe04ec92e53447efe393b11432d4d1cf68bc05606b67'),
-        nonce=4854,
+        hash=bytes.fromhex('00011851a7eddddc521901e0dba30e45d7ff57eb862649f313abe103b39c5267'),
+        nonce=10923,
         timestamp=1539271481,
         weight=MIN_BLOCK_WEIGHT,
-        height=1,
         outputs=GENESIS_OUTPUTS,
         storage=tx_storage,
     )

@@ -86,7 +86,6 @@ DecodeTxResource.openapi = {
                                             'timestamp': 1539271482,
                                             'version': 1,
                                             'weight': 14.0,
-                                            'height': 1,
                                             'parents': [],
                                             'inputs': [],
                                             'outputs': [],

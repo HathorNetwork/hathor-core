@@ -32,7 +32,6 @@ class TokenTest(unittest.TestCase):
     def test_tokens_in_block(self):
         # a block with tokens should be invalid
         parents = [tx.hash for tx in self.genesis]
-        genesis_block = self.genesis_blocks[0]
 
         output_script = P2PKH.create_output_script(self.address)
         tx_outputs = [TxOutput(100, output_script, 1)]
@@ -41,7 +40,6 @@ class TokenTest(unittest.TestCase):
             nonce=100,
             outputs=tx_outputs,
             parents=parents,
-            height=genesis_block.height + 1,
             weight=1,  # low weight so we don't waste time with PoW
             storage=self.manager.tx_storage)
 

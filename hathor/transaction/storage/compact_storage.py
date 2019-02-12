@@ -72,7 +72,6 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
 
         nonce = data['nonce']
         timestamp = data['timestamp']
-        height = data['height']
         version = data['version']
         weight = data['weight']
         hash_bytes = bytes.fromhex(data['hash'])
@@ -100,7 +99,6 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
             'nonce': nonce,
             'timestamp': timestamp,
             'version': version,
-            'height': height,
             'weight': weight,
             'outputs': outputs,
             'parents': parents,

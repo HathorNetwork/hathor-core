@@ -10,7 +10,6 @@ from hathor.manager import TestMode
 from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
     BlockDataError,
-    BlockHeightError,
     BlockWithInputs,
     ConflictingInputs,
     DuplicatedParents,
@@ -165,7 +164,6 @@ class BasicTransaction(unittest.TestCase):
             nonce=100,
             outputs=tx_outputs,
             parents=parents,
-            height=genesis_block.height + 1,
             weight=1,  # low weight so we don't waste time with PoW
             storage=self.tx_storage)
 
@@ -217,8 +215,6 @@ class BasicTransaction(unittest.TestCase):
             tx.verify()
 
     def test_block_unknown_parent(self):
-        genesis_block = self.genesis_blocks[0]
-
         address = get_address_from_public_key(self.genesis_public_key)
         output_script = P2PKH.create_output_script(address)
         tx_outputs = [TxOutput(100, output_script)]
@@ -230,7 +226,6 @@ class BasicTransaction(unittest.TestCase):
             nonce=100,
             outputs=tx_outputs,
             parents=parents,
-            height=genesis_block.height + 1,
             weight=1,  # low weight so we don't waste time with PoW
             storage=self.tx_storage)
 
@@ -239,8 +234,6 @@ class BasicTransaction(unittest.TestCase):
             block.verify()
 
     def test_block_number_parents(self):
-        genesis_block = self.genesis_blocks[0]
-
         address = get_address_from_public_key(self.genesis_public_key)
         output_script = P2PKH.create_output_script(address)
         tx_outputs = [TxOutput(100, output_script)]
@@ -251,7 +244,6 @@ class BasicTransaction(unittest.TestCase):
             nonce=100,
             outputs=tx_outputs,
             parents=parents,
-            height=genesis_block.height + 1,
             weight=1,  # low weight so we don't waste time with PoW
             storage=self.tx_storage)
 
@@ -469,37 +461,8 @@ class BasicTransaction(unittest.TestCase):
             tx2.verify_inputs()
         tx2.timestamp = tx2_timestamp
 
-        # Validating block height
-        genesis_block = self.genesis_blocks[0]
-        self.assertEqual(genesis_block.calculate_height(), 1)
-
-        genesis_block.verify_height()
-        genesis_block_height = genesis_block.height
-        genesis_block.height = 2
-        with self.assertRaises(BlockHeightError):
-            genesis_block.verify_height()
-        genesis_block.height = genesis_block_height
-
-        block = blocks[0]
-        block.verify_height()
-        block_storage = block.storage
-        block.storage = None
-        # This part of the code does nothing but it's good to do this verification here
-        # because in the future it might raise an exception so the person will have to change the test also
-        block.verify_height()
-
-        block.storage = block_storage
-        block.height += 1
-        with self.assertRaises(BlockHeightError):
-            block.verify_height()
-
-        block.height -= 2
-        with self.assertRaises(BlockHeightError):
-            block.verify_height()
-
-        block.height += 1  # Back to the correct value
-
         # Validate maximum distance between blocks
+        block = blocks[0]
         block2 = blocks[1]
         block2.timestamp = block.timestamp + MAX_DISTANCE_BETWEEN_BLOCKS
         block2.verify_parents()

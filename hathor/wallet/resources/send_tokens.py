@@ -207,7 +207,6 @@ SendTokensResource.openapi = {
                                             'timestamp': 1547211690,
                                             'version': 1,
                                             'weight': 17.93619278054934,
-                                            'height': 0,
                                             'parents': [
                                                 '00000257054251161adff5899a451ae974ac62ca44a7a31179eec5750b0ea406',
                                                 '00000b8792cb13e8adb51cc7d866541fc29b532e8dec95ae4661cf3da4d42cb4'
@@ -268,7 +267,6 @@ SendTokensResource.openapi = {
                                             'timestamp': 1539271482,
                                             'version': 1,
                                             'weight': 14.0,
-                                            'height': 1,
                                             'parents': [],
                                             'inputs': [],
                                             'outputs': [],
