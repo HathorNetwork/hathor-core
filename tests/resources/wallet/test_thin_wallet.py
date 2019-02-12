@@ -1,12 +1,12 @@
-import json
 import time
 
 from twisted.internet.defer import inlineCallbacks
 from twisted.internet.task import Clock
 
 from hathor.constants import DECIMAL_PLACES, HATHOR_TOKEN_UID, TOKENS_PER_BLOCK
-from hathor.transaction.resources import SignDataResource
-from hathor.transaction.scripts import parse_address_script
+from hathor.crypto.util import decode_address
+from hathor.transaction import Transaction, TxInput, TxOutput
+from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.wallet.resources.thin_wallet import AddressHistoryResource, SendTokensResource
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
 from tests.utils import add_new_blocks
@@ -23,7 +23,6 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         self.web = StubSite(SendTokensResource(self.manager2))
         self.web_address_history = StubSite(AddressHistoryResource(self.manager2))
-        self.web_sign_data = StubSite(SignDataResource())
 
     @inlineCallbacks
     def test_post(self):
@@ -40,87 +39,45 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         # Options
         yield self.web.options('thin_wallet/send_tokens')
 
-        tx_id = blocks[0].hash_hex
+        tx_id = blocks[0].hash
         output = blocks[0].outputs[0]
         script_type_out = parse_address_script(output.script)
         address = script_type_out.address
         private_key = self.manager2.wallet.get_private_key(address)
 
-        output_address = '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'
-        invalid_address = '1234'
+        output_address = decode_address('15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH')
         value = per_block
-        o = json.dumps({'address': output_address, 'value': value}).encode('utf-8')
-        o_invalid = json.dumps({'address': invalid_address, 'value': value}).encode('utf-8')
-        i = json.dumps({'tx_id': tx_id, 'index': 0}).encode('utf-8')
+        o = TxOutput(value, create_output_script(output_address, None))
+        o_invalid_amount = TxOutput(value-1, create_output_script(output_address, None))
+        i = TxInput(tx_id, 0, b'')
 
-        # Error with invalid address
-        response_error = yield self.web_sign_data.get(
-            'sign_data', {
-                b'outputs[]': o_invalid,
-                b'inputs[]': i
-            }
-        )
-        error_data = response_error.json_value()
-        self.assertFalse(error_data['success'])
+        tx2 = Transaction(inputs=[i], outputs=[o_invalid_amount])
 
-        # First get data to be signed
-        response_sign_data = yield self.web_sign_data.get(
-            'sign_data', {
-                b'outputs[]': o,
-                b'inputs[]': i
-            }
-        )
-
-        # First get data to be signed
-        response_sign_data = yield self.web_sign_data.get(
-            'sign_data', {
-                b'outputs[]': o,
-                b'inputs[]': i
-            }
-        )
-
-        data_to_sign = bytes.fromhex(response_sign_data.json_value()['data_to_sign'])
+        data_to_sign = tx2.get_sighash_all()
         public_key_bytes, signature_bytes = self.manager2.wallet.get_input_aux_data(data_to_sign, private_key)
 
-        public_key = public_key_bytes.hex()
-        signature = signature_bytes.hex()
+        i.data = P2PKH.create_input_data(public_key_bytes, signature_bytes)
+        tx2.inputs = [i]
+        tx2.timestamp = int(self.clock.seconds())
+        tx2.weight = self.manager2.minimum_tx_weight(tx2)
 
-        data_invalid_json = {
-            'outputs': [
-                {'address': invalid_address, 'value': value}
-            ],
-            'inputs': [
-                {'tx_id': tx_id, 'index': 0, 'signature': signature, 'public_key': public_key}
-            ]
-        }
-        # Error invalid address
-        response_invalid = yield self.web.post('wallet/send_tokens', {'data': data_invalid_json})
-        data_invalid = response_invalid.json_value()
-        self.assertFalse(data_invalid['success'])
-
-        data_wrong_amount_json = {
-            'outputs': [
-                {'address': output_address, 'value': value-1}
-            ],
-            'inputs': [
-                {'tx_id': tx_id, 'index': 0, 'signature': signature, 'public_key': public_key}
-            ]
-        }
         # Error wrong amount
-        response_wrong_amount = yield self.web.post('wallet/send_tokens', {'data': data_wrong_amount_json})
+        response_wrong_amount = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx2.get_struct().hex()})
         data_wrong_amount = response_wrong_amount.json_value()
         self.assertFalse(data_wrong_amount['success'])
 
-        data_json = {
-            'outputs': [
-                {'address': output_address, 'value': value}
-            ],
-            'inputs': [
-                {'tx_id': tx_id, 'index': 0, 'signature': signature, 'public_key': public_key}
-            ]
-        }
+        tx3 = Transaction(inputs=[i], outputs=[o])
+
+        data_to_sign = tx3.get_sighash_all()
+        public_key_bytes, signature_bytes = self.manager2.wallet.get_input_aux_data(data_to_sign, private_key)
+
+        i.data = P2PKH.create_input_data(public_key_bytes, signature_bytes)
+        tx3.inputs = [i]
+        tx3.timestamp = int(self.clock.seconds())
+        tx3.weight = self.manager2.minimum_tx_weight(tx3)
+
         # Then send tokens
-        response = yield self.web.post('wallet/send_tokens', {'data': data_json})
+        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx3.get_struct().hex()})
         data = response.json_value()
         self.assertTrue(data['success'])
 

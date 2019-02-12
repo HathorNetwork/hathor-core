@@ -8,11 +8,7 @@ from twisted.web.http import Request
 
 from hathor.api_util import render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.crypto.util import decode_address
-from hathor.transaction import Transaction, TxInput, TxOutput
-from hathor.transaction.base_transaction import int_to_bytes
-from hathor.transaction.scripts import P2PKH, create_output_script
-from hathor.wallet.exceptions import InvalidAddress
+from hathor.transaction import Transaction
 
 
 @register_resource
@@ -30,9 +26,9 @@ class SendTokensResource(resource.Resource):
 
     def _render_POST_thread(self, request: Request) -> bytes:
         """ POST request for /thin_wallet/send_tokens/
-            We expect 'data' as request args
-            'data': stringified json with an array of inputs and array of outputs
-            We return success (bool) and the data_to_sign
+            We expect 'tx_hex' as request args
+            'tx_hex': serialized tx in hexadecimal
+            We return success (bool)
 
             :rtype: string (json)
         """
@@ -41,37 +37,18 @@ class SendTokensResource(resource.Resource):
             set_cors(request, 'POST')
 
             post_data = json.loads(request.content.read().decode('utf-8'))
-            data = post_data['data']
+            tx_hex = post_data['tx_hex']
 
-            outputs = []
-            for output in data['outputs']:
-                try:
-                    address = decode_address(output['address'])  # bytes
-                except InvalidAddress:
-                    return self.return_POST(False, 'The address {} is invalid'.format(output['address']))
-
-                value = int(output['value'])
-                timelock_value = output.get('timelock')
-                timelock = int_to_bytes(int(timelock_value), 4) if timelock_value else None
-                # XXX Fixing token_index to 0
-                outputs.append(TxOutput(value, create_output_script(address, timelock), 0))
-
-            inputs = []
-            for input_tx in data['inputs']:
-                index = int(input_tx['index'])
-                tx_id = bytes.fromhex(input_tx['tx_id'])
-                signature = bytes.fromhex(input_tx['signature'])
-                public_key_bytes = bytes.fromhex(input_tx['public_key'])
-                input_data = P2PKH.create_input_data(public_key_bytes, signature)
-                inputs.append(TxInput(tx_id, index, input_data))
-
-            tx = Transaction(outputs=outputs, inputs=inputs)
+            tx = Transaction.create_from_struct(bytes.fromhex(tx_hex))
+            assert isinstance(tx, Transaction)
+            # Set tx storage
             tx.storage = self.manager.tx_storage
 
             max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
-            tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
+            # Set tx timestamp as max between tx and inputs
+            tx.timestamp = max(max_ts_spent_tx + 1, tx.timestamp)
+            # Set parents
             tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
-            tx.weight = self.manager.minimum_tx_weight(tx)
 
         # There is no need to synchonize this slow part.
         # TODO Tx should be resolved in the frontend
@@ -134,7 +111,7 @@ SendTokensResource.openapi = {
             'operationId': 'thin_wallet_send_tokens',
             'summary': 'Send tokens in a thin wallet',
             'requestBody': {
-                'description': 'Data to create transactions',
+                'description': 'Data to create the transaction',
                 'required': True,
                 'content': {
                     'application/json': {
@@ -143,29 +120,9 @@ SendTokensResource.openapi = {
                         },
                         'examples': {
                             'data': {
-                                'summary': 'Data to create transactions',
+                                'summary': 'Data to create the transaction',
                                 'value': {
-                                    'data': {
-                                        'outputs': [
-                                            {
-                                                'address': '15VZc2jy1L3LGFweZeKVbWMsTzfKFJLpsN',
-                                                'value': 1000
-                                            },
-                                            {
-                                                'address': '1C5xEjewerH4zTWPC6wqzhoEkMhiHEHPZ8',
-                                                'value': 800
-                                            }
-                                        ],
-                                        'inputs': [
-                                            {
-                                                'tx_id': ('00000257054251161adff5899a451ae9'
-                                                          '74ac62ca44a7a31179eec5750b0ea406'),
-                                                'index': 0,
-                                                'signature': '00000257054251161adff5899a451ae9',
-                                                'public_key': '74ac62ca44a7a31179eec5750b0ea406',
-                                            }
-                                        ]
-                                    }
+                                    'tx_hex': '00000c064ec72c8561a24b65bd50095a401b8d9a66c360cfe99cfcfeed73afc4',
                                 }
                             }
                         }
