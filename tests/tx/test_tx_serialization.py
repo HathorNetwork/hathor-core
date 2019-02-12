@@ -3,6 +3,7 @@ import time
 from twisted.internet.task import Clock
 
 import hathor.protos.transaction_pb2_grpc  # noqa this file has nothing to test, only import
+from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction
 from hathor.transaction.storage import TransactionJSONStorage
 from hathor.wallet.base_wallet import WalletOutputInfo
@@ -28,7 +29,7 @@ class _Base:
             value = 100
 
             outputs = [
-                WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=int(value), timelock=None)
+                WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None)
             ]
 
             self.tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)

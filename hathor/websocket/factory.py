@@ -1,10 +1,12 @@
 import json
-from collections import deque
+from collections import defaultdict, deque
+from typing import Any, DefaultDict, Dict, Set
 
 from autobahn.twisted.websocket import WebSocketServerFactory
 from twisted.internet import reactor
 
 from hathor.constants import HATHOR_TOKEN_UID
+from hathor.indexes import WalletIndex
 from hathor.metrics import Metrics
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.pubsub import HathorEvents
@@ -60,6 +62,9 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         """
         # Opened websocket connections so I can broadcast messages later
         self.connections = set()
+
+        # Websocket connection for each address
+        self.address_connections: DefaultDict[str, Set[HathorAdminWebsocketProtocol]] = defaultdict(set)
         super().__init__()
 
         # Limit the send message rate for specific type of data
@@ -115,12 +120,15 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         """
         events = [
             HathorEvents.NETWORK_NEW_TX_ACCEPTED,
+            HathorEvents.STORAGE_TX_VOIDED,
+            HathorEvents.STORAGE_TX_WINNER,
             HathorEvents.WALLET_OUTPUT_RECEIVED,
             HathorEvents.WALLET_INPUT_SPENT,
             HathorEvents.WALLET_BALANCE_UPDATED,
             HathorEvents.WALLET_KEYS_GENERATED,
             HathorEvents.WALLET_GAP_LIMIT,
             HathorEvents.WALLET_HISTORY_UPDATED,
+            HathorEvents.WALLET_ADDRESS_HISTORY,
         ]
 
         for event in events:
@@ -147,6 +155,9 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         data = args.__dict__
         if event in ready_events:
             return data
+        elif event == HathorEvents.WALLET_ADDRESS_HISTORY:
+            data['history'] = data['history'].__dict__
+            return data
         elif event == HathorEvents.WALLET_OUTPUT_RECEIVED:
             data['output'] = data['output'].to_dict()
             return data
@@ -161,15 +172,40 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         elif event == HathorEvents.WALLET_BALANCE_UPDATED:
             data['balance'] = data['balance'][HATHOR_TOKEN_UID]._asdict()
             return data
+        elif event == HathorEvents.STORAGE_TX_VOIDED or event == HathorEvents.STORAGE_TX_WINNER:
+            tx = data['tx']
+            voided = event == HathorEvents.STORAGE_TX_VOIDED
+            data['history'] = []
+            for el in WalletIndex.tx_to_elements(tx, voided):
+                data['history'].append({'address': el.address, 'element': el.element.__dict__})
+            return data
         else:
             raise ValueError('Should never have entered here! We dont know this event')
 
-    def broadcast_message(self, data):
-        """ Broadcast the update message to all connected clients
+    def execute_send(self, data: Dict[str, Any], connections: Set[HathorAdminWebsocketProtocol]) -> None:
+        """ Send data in ws message for the connections
         """
         payload = json.dumps(data).encode('utf-8')
-        for c in self.connections:
+        for c in connections:
             c.sendMessage(payload, False)
+
+    def broadcast_message(self, data: Dict[str, Any]) -> None:
+        """ Broadcast the update message to the connections
+        """
+        self.execute_send(data, self.connections)
+
+    def send_message(self, data: Dict[str, Any]) -> None:
+        """ Check if should broadcast the message to all connections or send directly to some connections only
+        """
+        if data['type'] == HathorEvents.WALLET_ADDRESS_HISTORY.value:
+            self.execute_send(data, self.address_connections[data['address']])
+        elif (data['type'] == HathorEvents.STORAGE_TX_VOIDED.value or
+              data['type'] == HathorEvents.STORAGE_TX_WINNER.value):
+            for history in data['history']:
+                history['type'] = data['type']
+                self.execute_send(history, self.address_connections[history['address']])
+        else:
+            self.broadcast_message(data)
 
     def send_or_enqueue(self, data):
         """ Try to broadcast the message, or enqueue it when rate limit is exceeded and we've been throttled.
@@ -187,9 +223,9 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
                 self.enqueue_for_later(data)
             else:
                 data['throttled'] = False
-                self.broadcast_message(data)
+                self.send_message(data)
         else:
-            self.broadcast_message(data)
+            self.send_message(data)
 
     def enqueue_for_later(self, data):
         """ Add this date to the correct deque to be processed later
@@ -220,7 +256,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
                 data = self.buffer_deques[data_type].popleft()
                 if len(self.buffer_deques[data_type]) == 0:
                     data['throttled'] = False
-                self.broadcast_message(data)
+                self.send_message(data)
             else:
                 reactor.callLater(CONTROLLED_TYPES[data_type]['time_buffering'], self.process_deque,
                                   data_type=data_type)
@@ -232,3 +268,12 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         if message['type'] == 'ping':
             payload = json.dumps({'type': 'pong'}).encode('utf-8')
             connection.sendMessage(payload, False)
+        elif message['type'] == 'subscribe_address':
+            self.address_connections[message['address']].add(connection)
+            payload = json.dumps({'type': 'subscribe_address', 'success': True}).encode('utf-8')
+            connection.sendMessage(payload, False)
+        elif message['type'] == 'unsubscribe_address':
+            if connection in self.address_connections[message['address']]:
+                self.address_connections[message['address']].remove(connection)
+                payload = json.dumps({'type': 'unsubscribe_address', 'success': True}).encode('utf-8')
+                connection.sendMessage(payload, False)

@@ -3,6 +3,7 @@ import time
 
 from twisted.internet.task import Clock
 
+from hathor.crypto.util import decode_address
 from tests import unittest
 from tests.utils import add_new_blocks, add_new_tx, start_remote_storage
 
@@ -39,7 +40,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         outputs = []
         outputs.append(
-            WalletOutputInfo(address=self.manager1.wallet.decode_address(address), value=int(value), timelock=None))
+            WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None))
 
         tx1 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
         tx1.weight = 10

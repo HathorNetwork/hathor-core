@@ -3,6 +3,7 @@ import time
 from twisted.internet.task import Clock
 
 from hathor.constants import HATHOR_TOKEN_UID
+from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
 from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance, WalletInputInfo, WalletOutputInfo
@@ -26,7 +27,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         value = 100
 
         outputs = [
-            WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=int(value), timelock=None)
+            WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None)
         ]
 
         self.tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
@@ -240,7 +241,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         value = 100
 
         outputs = [
-            WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=int(value), timelock=None)
+            WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None)
         ]
 
         tx3 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
@@ -304,7 +305,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         wallet_address = self.manager.wallet.get_unused_address()
 
         outputs2 = [
-            WalletOutputInfo(address=self.manager.wallet.decode_address(wallet_address), value=1000, timelock=None)
+            WalletOutputInfo(address=decode_address(wallet_address), value=1000, timelock=None)
         ]
 
         tx2 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs2)
@@ -317,7 +318,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.clock.advance(1)
 
         outputs3 = [
-            WalletOutputInfo(address=self.manager.wallet.decode_address(wallet_address), value=2000, timelock=None)
+            WalletOutputInfo(address=decode_address(wallet_address), value=2000, timelock=None)
         ]
         tx3 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs3)
         tx3.weight = 10
@@ -362,7 +363,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # initial tokens
         address_b58 = self.manager.wallet.get_unused_address()
-        address = self.manager.wallet.decode_address(address_b58)
+        address = decode_address(address_b58)
         tx = create_tokens(self.manager, address_b58)
         token_id = tx.tokens[0]
         amount = tx.outputs[0].value

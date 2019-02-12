@@ -2,6 +2,7 @@ import time
 
 from twisted.internet.task import Clock
 
+from hathor.crypto.util import decode_address
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import BlockWithTokensError, InputOutputMismatch, InvalidToken
 from hathor.transaction.scripts import P2PKH
@@ -22,7 +23,7 @@ class TokenTest(unittest.TestCase):
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
 
         self.address_b58 = self.manager.wallet.get_unused_address()
-        self.address = self.manager.wallet.decode_address(self.address_b58)
+        self.address = decode_address(self.address_b58)
 
         # read genesis keys
         self.genesis_private_key = get_genesis_key()

@@ -52,11 +52,33 @@
                 "properties": {
                     "tx_id": {
                         "type": "string",
-                        "description": "Hash in hex of the spend transaction"
+                        "description": "Hash in hex of the spending transaction"
                     },
                     "index": {
                         "type": "int",
                         "description": "Index of the output is being spent"
+                    }
+                }
+            },
+            "ThinWalletInput": {
+                "type": "object",
+                "required": ["tx_id", "index", "signature", "public_key"],
+                "properties": {
+                    "tx_id": {
+                        "type": "string",
+                        "description": "Hash in hex of the spending transaction"
+                    },
+                    "index": {
+                        "type": "int",
+                        "description": "Index of the output is being spent"
+                    },
+                    "signature": {
+                        "type": "string",
+                        "description": "Signature of input in hex"
+                    },
+                    "public_key": {
+                        "type": "string",
+                        "description": "Public key of input in hex"
                     }
                 }
             },
@@ -85,6 +107,32 @@
                             "timestamp": {
                                 "type": "int",
                                 "description": "The timestamp for the transaction. If sent without the inputs, server will chose inputs whose timestamp is smaller than the given value (so the tx is valid). If user sends timestamp=0, server will use current time."
+                            }
+                        }
+                    }
+                }
+            },
+            "ThinWalletSendToken": {
+                "type": "object",
+                "required": ["data"],
+                "properties": {
+                    "data": {
+                        "type": "object",
+                        "required": ["outputs", "inputs"],
+                        "properties": {
+                            "outputs": {
+                                "type": "array",
+                                "description": "List of outputs to send the tokens",
+                                "items": {
+                                    "$ref": "#/components/schemas/Output"
+                                }
+                            },
+                            "inputs": {
+                                "type": "array",
+                                "description": "List of inputs to spend the tokens",
+                                "items": {
+                                    "$ref": "#/components/schemas/ThinWalletInput"
+                                }
                             }
                         }
                     }

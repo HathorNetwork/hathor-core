@@ -4,7 +4,7 @@ import base58
 from twisted.internet.task import Clock
 
 from hathor.constants import HATHOR_TOKEN_UID
-from hathor.crypto.util import get_private_key_from_bytes, get_public_key_bytes_compressed
+from hathor.crypto.util import decode_address, get_private_key_from_bytes, get_public_key_bytes_compressed
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import ScriptError
 from hathor.transaction.scripts import P2PKH, MultiSig, create_output_script, parse_address_script, script_eval
@@ -50,9 +50,9 @@ class MultisigTestCase(unittest.TestCase):
         self.redeem_script = generate_multisig_redeem_script(2, self.public_keys)
 
         self.multisig_address_b58 = generate_multisig_address(self.redeem_script)
-        self.multisig_address = self.manager.wallet.decode_address(self.multisig_address_b58)
-        self.address = self.manager.wallet.decode_address(self.manager.wallet.get_unused_address())
-        self.outside_address = self.manager.wallet.decode_address('15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH')
+        self.multisig_address = decode_address(self.multisig_address_b58)
+        self.address = decode_address(self.manager.wallet.get_unused_address())
+        self.outside_address = decode_address('15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH')
 
     def test_spend_multisig(self):
         # Adding funds to the wallet
