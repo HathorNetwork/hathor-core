@@ -99,8 +99,8 @@ def execute(args: Namespace) -> None:
 
         block.nonce = q_out.get()
         block.update_hash()
-        print('[{}] New block found: {} (nonce={}, weight={}, height={})'.format(
-            datetime.datetime.now(), block.hash.hex(), block.nonce, block.weight, block.height))
+        print('[{}] New block found: {} (nonce={}, weight={})'.format(datetime.datetime.now(), block.hash.hex(),
+                                                                      block.nonce, block.weight))
 
         try:
             block.verify_without_storage()

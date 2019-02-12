@@ -138,8 +138,6 @@ class _BaseTransactionStorageTest:
             tx = self.block
             # First we save to the storage
             self.tx_storage.save_transaction(tx)
-            # Saving twice to test specific part of _save_blockhash_by_height method code
-            self.tx_storage.save_transaction(tx)
 
             metadata = tx.get_metadata()
             metadata.spent_outputs[1].add(self.genesis_blocks[0].hash)
@@ -195,7 +193,6 @@ class _BaseTransactionStorageTest:
             block = self.manager.generate_mining_block()
             if parents is not None:
                 block.parents = parents
-                block.height = block.calculate_height()
             block.weight = 10
             self.assertTrue(block.resolve())
             block.verify()
