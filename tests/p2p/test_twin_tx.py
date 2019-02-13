@@ -2,6 +2,7 @@ import time
 
 from twisted.internet.task import Clock
 
+from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletOutputInfo
 from tests import unittest
@@ -26,13 +27,13 @@ class TwinTransactionTestCase(unittest.TestCase):
         value3 = 102
 
         outputs = [
-            WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=int(value1), timelock=None),
-            WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=int(value2), timelock=None)
+            WalletOutputInfo(address=decode_address(address), value=int(value1), timelock=None),
+            WalletOutputInfo(address=decode_address(address), value=int(value2), timelock=None)
         ]
 
         outputs2 = [
-            WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=int(value1), timelock=None),
-            WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=int(value3), timelock=None)
+            WalletOutputInfo(address=decode_address(address), value=int(value1), timelock=None),
+            WalletOutputInfo(address=decode_address(address), value=int(value3), timelock=None)
         ]
 
         tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)

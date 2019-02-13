@@ -68,10 +68,6 @@ class BlockError(TxValidationError):
     """Base class for Block-specific errors"""
 
 
-class BlockHeightError(BlockError):
-    """Block not using correct height"""
-
-
 class BlockWithInputs(BlockError):
     """Block has inputs"""
 

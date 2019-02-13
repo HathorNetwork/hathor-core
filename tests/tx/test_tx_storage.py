@@ -1,3 +1,4 @@
+import os
 import shutil
 import tempfile
 import time
@@ -5,13 +6,13 @@ import unittest
 
 from twisted.internet.task import Clock
 
+from hathor.constants import STORAGE_SUBFOLDERS
 from hathor.manager import TestMode
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.storage import (
     TransactionBinaryStorage,
     TransactionCacheStorage,
     TransactionCompactStorage,
-    TransactionJSONStorage,
     TransactionMemoryStorage,
     TransactionSubprocessStorage,
 )
@@ -138,8 +139,6 @@ class _BaseTransactionStorageTest:
             tx = self.block
             # First we save to the storage
             self.tx_storage.save_transaction(tx)
-            # Saving twice to test specific part of _save_blockhash_by_height method code
-            self.tx_storage.save_transaction(tx)
 
             metadata = tx.get_metadata()
             metadata.spent_outputs[1].add(self.genesis_blocks[0].hash)
@@ -195,7 +194,6 @@ class _BaseTransactionStorageTest:
             block = self.manager.generate_mining_block()
             if parents is not None:
                 block.parents = parents
-                block.height = block.calculate_height()
             block.weight = 10
             self.assertTrue(block.resolve())
             block.verify()
@@ -243,22 +241,17 @@ class TransactionBinaryStorageTest(_BaseTransactionStorageTest._TransactionStora
         super().tearDown()
 
 
-class TransactionJSONStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
-    def setUp(self):
-        self.directory = tempfile.mkdtemp(dir='/tmp/')
-        super().setUp(TransactionJSONStorage(self.directory))
-
-    def tearDown(self):
-        shutil.rmtree(self.directory)
-        super().tearDown()
-
-
 class TransactionCompactStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
     def setUp(self):
         self.directory = tempfile.mkdtemp(dir='/tmp/')
         # Creating random file just to test specific part of code
-        tempfile.NamedTemporaryFile(dir=self.directory, delete=False)
+        tempfile.NamedTemporaryFile(dir=self.directory, delete=True)
         super().setUp(TransactionCompactStorage(self.directory))
+
+    def test_subfolders(self):
+        # test we have the subfolders under the main tx folder
+        subfolders = os.listdir(self.directory)
+        self.assertEqual(STORAGE_SUBFOLDERS, len(subfolders))
 
     def tearDown(self):
         shutil.rmtree(self.directory)

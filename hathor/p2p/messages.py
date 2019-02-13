@@ -82,9 +82,3 @@ class ProtocolMessages(Enum):
     TRANSACTIONS = 'TRANSACTIONS'  # Send a list of hashes for transactions.
 
     HASHES = 'HASHES'
-
-    # Request the height of the last known block.
-    GET_BEST_HEIGHT = 'GET-BEST-HEIGHT'
-
-    # Send the height of the last known block.
-    BEST_HEIGHT = 'BEST-HEIGHT'

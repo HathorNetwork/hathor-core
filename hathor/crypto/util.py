@@ -259,3 +259,32 @@ def get_address_from_redeem_script_hash(redeem_script_hash: bytes,
     checksum = get_checksum(address)
     address += checksum
     return address
+
+
+def decode_address(address58: str) -> bytes:
+    """ Decode address in base58 to bytes
+
+    :param address58: Wallet address in base58
+    :type address58: string
+
+    :raises InvalidAddress: if address58 is not a valid base58 string or
+                            not a valid address or has invalid checksum
+
+    :return: Address in bytes
+    :rtype: bytes
+    """
+    from hathor.wallet.exceptions import InvalidAddress
+    try:
+        decoded_address = base58.b58decode(address58)
+    except ValueError:
+        # Invalid base58 string
+        raise InvalidAddress('Invalid base58 address')
+    # Validate address size [25 bytes]
+    if len(decoded_address) != 25:
+        raise InvalidAddress('Address size must have 25 bytes')
+    # Validate the checksum
+    address_checksum = decoded_address[-4:]
+    valid_checksum = get_checksum(decoded_address[:-4])
+    if address_checksum != valid_checksum:
+        raise InvalidAddress('Invalid checksum of address')
+    return decoded_address

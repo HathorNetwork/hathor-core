@@ -26,8 +26,6 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         filepath = self.generate_filepath(tx.hash)
         with open(filepath, 'wb') as fp:
             fp.write(tx_bytes)
-        if tx.is_block:
-            self._save_blockhash_by_height(tx)
 
     def _save_metadata(self, tx):
         # genesis txs and metadata are kept in memory
@@ -73,33 +71,6 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
                 return dict_data
         else:
             raise error
-
-    def generate_blocks_at_height_filepath(self, height):
-        filename = 'blks_h_{}.json'.format(height)
-        filepath = os.path.join(self.path, filename)
-        return filepath
-
-    def _save_blockhash_by_height(self, block):
-        """Adds the given block's hash string to the list of block hashes at the given height.
-
-        Input is a block object, but only the hash is saved, in a file with name based on the height of the block.
-        """
-        # Load existing blocks at height, if any.
-        height = block.height
-        data, filepath = self._get_block_hashes_at_height(height)
-        hash_hex = block.hash.hex()
-        if hash_hex not in data:
-            data.append(hash_hex)
-            self.save_to_json(filepath, data)
-
-    def _get_block_hashes_at_height(self, height):
-        """Returns a tuple of list of hashes of blocks at the given height and the storage filename."""
-        filepath = self.generate_blocks_at_height_filepath(height)
-        try:
-            data = self.load_from_json(filepath, FileNotFoundError)
-        except FileNotFoundError:
-            data = []
-        return data, filepath
 
     def _load_transaction_from_filepath(self, filepath):
         try:

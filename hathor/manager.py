@@ -22,6 +22,7 @@ from hathor.constants import (
     TOKENS_PER_BLOCK,
 )
 from hathor.exception import InvalidNewTransaction
+from hathor.indexes import WalletIndex
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
@@ -56,7 +57,7 @@ class HathorManager:
     def __init__(self, reactor: IReactorCore, peer_id: Optional[PeerId] = None, network: Optional[str] = None,
                  hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
-                 peer_storage: Optional[Any] = None, default_port: int = 40403) -> None:
+                 peer_storage: Optional[Any] = None, default_port: int = 40403, wallet_index: bool = False) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node. If not given, a new one is created.
@@ -77,6 +78,9 @@ class HathorManager:
 
         :param default_port: Network default port. It is used when only ip addresses are discovered.
         :type default_port: int
+
+        :param wallet_index: If should add a wallet index in the storage
+        :type wallet_index: bool
         """
         from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
         from hathor.p2p.manager import ConnectionsManager
@@ -103,6 +107,8 @@ class HathorManager:
         self.pubsub = pubsub or PubSubManager()
         self.tx_storage = tx_storage or TransactionMemoryStorage()
         self.tx_storage.pubsub = self.pubsub
+        if wallet_index and self.tx_storage.with_index:
+            self.tx_storage.wallet_index = WalletIndex(self.pubsub)
 
         self.avg_time_between_blocks = AVG_TIME_BETWEEN_BLOCKS  # in seconds
         self.min_block_weight = MIN_BLOCK_WEIGHT
@@ -297,12 +303,11 @@ class HathorManager:
         parents = [parent_block.hash] + tip_txs
 
         parents_tx = [self.tx_storage.get_transaction(x) for x in parents]
-        new_height = max(x.height for x in parents_tx) + 1
 
         timestamp1 = int(timestamp)
         timestamp2 = max(x.timestamp for x in parents_tx) + 1
 
-        blk = Block(version=version, outputs=tx_outputs, parents=parents, storage=self.tx_storage, height=new_height, data=data)
+        blk = Block(version=version, outputs=tx_outputs, parents=parents, storage=self.tx_storage, data=data)
         blk.timestamp = max(timestamp1, timestamp2)
         blk.weight = self.calculate_block_difficulty(blk)
         return blk

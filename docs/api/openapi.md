@@ -34,4 +34,4 @@ Updating openapi json
 
 After adding new requests or components you need to generate a new openapi json, so your changes appear in the docs page. To do it just run
 
-    ./hathor-cli openapi_json
+    ./hathor-cli generate_openapi_json

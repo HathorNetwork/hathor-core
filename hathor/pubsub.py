@@ -43,6 +43,9 @@ class HathorEvents(Enum):
 
         WALLET_HISTORY_UPDATED:
             Triggered when the wallet history is updated by a voided/winner transaction
+
+        WALLET_ADDRESS_HISTORY:
+            Triggered when the we receive any transaction and send input/output by each address
     """
     MANAGER_ON_START = 'manager:on_start'
     MANAGER_ON_STOP = 'manager:on_stop'
@@ -53,9 +56,9 @@ class HathorEvents(Enum):
 
     NETWORK_NEW_TX_ACCEPTED = 'network:new_tx_accepted'
 
-    STORAGE_TX_VOIDED = 'storage.tx_voided'
+    STORAGE_TX_VOIDED = 'storage:tx_voided'
 
-    STORAGE_TX_WINNER = 'storage.tx_winner'
+    STORAGE_TX_WINNER = 'storage:tx_winner'
 
     WALLET_OUTPUT_RECEIVED = 'wallet:output_received'
 
@@ -68,6 +71,8 @@ class HathorEvents(Enum):
     WALLET_GAP_LIMIT = 'wallet:gap_limit'
 
     WALLET_HISTORY_UPDATED = 'wallet:history_updated'
+
+    WALLET_ADDRESS_HISTORY = 'wallet:address_history'
 
 
 class EventArguments:

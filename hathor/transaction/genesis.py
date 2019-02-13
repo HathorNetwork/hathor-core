@@ -1,45 +1,36 @@
-import math
 from typing import List, Optional
 
-from hathor.constants import GENESIS_TOKENS, MAX_VALUE, MIN_BLOCK_WEIGHT, MIN_TX_WEIGHT
+from hathor.constants import GENESIS_TOKENS, MIN_BLOCK_WEIGHT, MIN_TX_WEIGHT
 from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput
 from hathor.transaction.storage import TransactionStorage
 
 
 def genesis_transactions(tx_storage: Optional[TransactionStorage]) -> List[BaseTransaction]:
     TX_GENESIS1 = Transaction(
-        hash=bytes.fromhex('00012a1df41aaf1dda05942c522ff4f56fdca5160193e0111ef84e474d294603'),
-        nonce=3325,
+        hash=bytes.fromhex('0001b424e66e654fa0300329b720170f8d83ff7c6685fab5b66056f209c95a58'),
+        nonce=9160,
         timestamp=1539271482,
         weight=MIN_TX_WEIGHT,
-        height=1,
         storage=tx_storage,
     )
 
     TX_GENESIS2 = Transaction(
-        hash=bytes.fromhex('00002dd4f867bfb1cba75c6073469bf76faa3aff24cf80fb006ed848ec771373'),
-        nonce=30489,
+        hash=bytes.fromhex('0001181d91e0f4deb77bcb90364d7d69c7ac7eafb445a82d2b643a2c38173868'),
+        nonce=9959,
         timestamp=1539271483,
         weight=MIN_TX_WEIGHT,
-        height=1,
         storage=tx_storage,
     )
 
     # Genesis will have 2B tokens (we use 200B because of two decimal places)
-    # We separate in outputs of 2B tokens because our value is only 4 bytes
-    GENESIS_OUTPUTS = []
-    num_outputs = math.ceil(GENESIS_TOKENS / MAX_VALUE)
-    total_tokens = GENESIS_TOKENS
-    for x in range(0, num_outputs):
-        value = min(total_tokens, MAX_VALUE)
-        GENESIS_OUTPUTS.append(TxOutput(value, bytes.fromhex('76a914fd05059b6006249543b82f36876a17c73fd2267b88ac')))
-        total_tokens -= value
+    GENESIS_OUTPUTS = [
+        TxOutput(GENESIS_TOKENS, bytes.fromhex('76a914fd05059b6006249543b82f36876a17c73fd2267b88ac')),
+    ]
     BLOCK_GENESIS = Block(
-        hash=bytes.fromhex('0000172845397bda136aa7d8472f61eda0432bf86731bfb014e171341a1643df'),
-        nonce=28905,
+        hash=bytes.fromhex('00011851a7eddddc521901e0dba30e45d7ff57eb862649f313abe103b39c5267'),
+        nonce=10923,
         timestamp=1539271481,
         weight=MIN_BLOCK_WEIGHT,
-        height=1,
         outputs=GENESIS_OUTPUTS,
         storage=tx_storage,
     )

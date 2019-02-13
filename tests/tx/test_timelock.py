@@ -3,6 +3,7 @@ import time
 from twisted.internet.task import Clock
 
 from hathor.constants import HATHOR_TOKEN_UID
+from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InsufficientFunds
@@ -27,12 +28,12 @@ class TimelockTransactionTestCase(unittest.TestCase):
 
         outputs = [
             WalletOutputInfo(
-                address=self.manager.wallet.decode_address(address), value=500,
+                address=decode_address(address), value=500,
                 timelock=int(self.clock.seconds()) + 10),
             WalletOutputInfo(
-                address=self.manager.wallet.decode_address(address), value=700,
+                address=decode_address(address), value=700,
                 timelock=int(self.clock.seconds()) - 10),
-            WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=800, timelock=None)
+            WalletOutputInfo(address=decode_address(address), value=800, timelock=None)
         ]
 
         tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
@@ -47,7 +48,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
         self.clock.advance(1)
 
         outputs1 = [
-            WalletOutputInfo(address=self.manager.wallet.decode_address(outside_address), value=500, timelock=None)
+            WalletOutputInfo(address=decode_address(outside_address), value=500, timelock=None)
         ]
 
         inputs1 = [WalletInputInfo(tx_id=tx1.hash, index=0, private_key=None)]
@@ -66,7 +67,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
         self.clock.advance(1)
 
         outputs2 = [
-            WalletOutputInfo(address=self.manager.wallet.decode_address(outside_address), value=700, timelock=None)
+            WalletOutputInfo(address=decode_address(outside_address), value=700, timelock=None)
         ]
 
         inputs2 = [WalletInputInfo(tx_id=tx1.hash, index=1, private_key=None)]
@@ -82,7 +83,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
         self.clock.advance(1)
 
         outputs3 = [
-            WalletOutputInfo(address=self.manager.wallet.decode_address(outside_address), value=800, timelock=None)
+            WalletOutputInfo(address=decode_address(outside_address), value=800, timelock=None)
         ]
 
         inputs3 = [WalletInputInfo(tx_id=tx1.hash, index=2, private_key=None)]
@@ -110,7 +111,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
 
         outputs = [
             WalletOutputInfo(
-                address=self.manager.wallet.decode_address(address), value=2000,
+                address=decode_address(address), value=2000,
                 timelock=int(self.clock.seconds()) + 10)
         ]
 
@@ -124,7 +125,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
 
         self.assertEqual(self.manager.wallet.balance[HATHOR_TOKEN_UID], WalletBalance(2000, 0))
 
-        outputs = [WalletOutputInfo(address=self.manager.wallet.decode_address(address), value=2000, timelock=None)]
+        outputs = [WalletOutputInfo(address=decode_address(address), value=2000, timelock=None)]
 
         with self.assertRaises(InsufficientFunds):
             self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)

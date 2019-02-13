@@ -30,13 +30,16 @@ if TYPE_CHECKING:
 MAX_NONCE = 2**32
 MAX_NUM_INPUTS = MAX_NUM_OUTPUTS = 256
 
+MAX_OUTPUT_VALUE = 2 ** 63  # max value (inclusive) that is possible to encode: 9223372036854775808 ~= 9.22337e+18
+_MAX_OUTPUT_VALUE_32 = 2 ** 31  # max value (inclusive) before having to use 8 bytes: 2147483648 ~= 2.14748e+09
+
 _INPUT_SIZE_BYTES = 32  # 256 bits
 
-# Version (H), weight (d), timestamp (I), height (Q), inputs len (B), outputs len (B) and
+# Version (H), weight (d), timestamp (I), inputs len (B), outputs len (B) and
 # parents len (B), token uids len (B).
 # H = unsigned short (2 bytes), d = double(8), f = float(4), I = unsigned int (4),
 # Q = unsigned long long int (64), B = unsigned char (1 byte)
-_TRANSACTION_FORMAT_STRING = '!HdIQBBBB'  # Update code below if this changes.
+_TRANSACTION_FORMAT_STRING = '!HdIBBBB'  # Update code below if this changes.
 
 # Version (H), inputs len (B), and outputs len (B), token uids len (B).
 # H = unsigned short (2 bytes)
@@ -77,7 +80,7 @@ class BaseTransaction(ABC):
     hash_algorithm_class: Type[hashes.BaseHashAlgorithm]
 
     def __init__(self, nonce: int = 0, timestamp: Optional[int] = None, version: int = 1, weight: float = 0,
-                 height: int = 0, inputs: Optional[List['TxInput']] = None, outputs: Optional[List['TxOutput']] = None,
+                 inputs: Optional[List['TxInput']] = None, outputs: Optional[List['TxOutput']] = None,
                  parents: List[bytes] = None, tokens: Optional[List[bytes]] = None, hash: Optional[bytes] = None,
                  storage: Optional['TransactionStorage'] = None, is_block: bool = True) -> None:
         """
@@ -93,7 +96,6 @@ class BaseTransaction(ABC):
         self.timestamp = timestamp or int(time.time())
         self.version = version
         self.weight = weight
-        self.height = height  # TODO(epnichols): Is there any useful meaning here for non-block transactions?
         self.inputs = inputs or []
         self.outputs = outputs or []
         self.parents = parents or []
@@ -115,15 +117,15 @@ class BaseTransaction(ABC):
 
     def __repr__(self):
         class_name = type(self).__name__
-        return ('%s(nonce=%d, timestamp=%s, version=%s, weight=%f, height=%d, inputs=%s, outputs=%s, parents=%s, '
+        return ('%s(nonce=%d, timestamp=%s, version=%s, weight=%f, inputs=%s, outputs=%s, parents=%s, '
                 'hash=%s, storage=%s)' %
-                (class_name, self.nonce, self.timestamp, self.version, self.weight, self.height,
+                (class_name, self.nonce, self.timestamp, self.version, self.weight,
                  repr(self.inputs), repr(self.outputs), repr(self.parents), self.hash_hex, repr(self.storage)))
 
     def __str__(self):
         class_name = 'Block' if self.is_block else 'Transaction'
-        return ('%s(nonce=%d, timestamp=%s, version=%s, weight=%f, height=%d, hash=%s)' % (class_name, self.nonce,
-                self.timestamp, self.version, self.weight, self.height, self.hash_hex))
+        return ('%s(nonce=%d, timestamp=%s, version=%s, weight=%f, hash=%s)' % (class_name, self.nonce, self.timestamp,
+                self.version, self.weight, self.hash_hex))
 
     def get_fields_from_struct(self, struct_bytes: bytes) -> bytes:
         """ Gets all common fields for a Transaction and a Block from a buffer.
@@ -137,7 +139,7 @@ class BaseTransaction(ABC):
         """
         buf = struct_bytes
 
-        (self.version, self.weight, self.timestamp, self.height, inputs_len, outputs_len, parents_len,
+        (self.version, self.weight, self.timestamp, inputs_len, outputs_len, parents_len,
          tokens_len), buf = (unpack(_TRANSACTION_FORMAT_STRING, buf))
 
         tx.update_hash_algorithm()
@@ -158,7 +160,18 @@ class BaseTransaction(ABC):
             self.inputs.append(txin)
 
         for _ in range(outputs_len):
-            (value, token_data, script_len), buf = unpack('!IBH', buf)
+            (value_high_byte,), _ = unpack('!b', buf)
+            if value_high_byte < 0:
+                output_struct = '!qBH'
+                value_sign = -1
+            else:
+                output_struct = '!iBH'
+                value_sign = 1
+            (signed_value, token_data, script_len), buf = unpack(output_struct, buf)
+            value = signed_value * value_sign
+            assert value >= 0
+            if value < _MAX_OUTPUT_VALUE_32 and value_high_byte < 0:
+                raise ValueError('Value fits in 4 bytes but is using 8 bytes')
             script, buf = unpack_len(script_len, buf)
             txout = TxOutput(value, script, token_data)
             self.outputs.append(txout)
@@ -303,7 +316,7 @@ class BaseTransaction(ABC):
                 struct_bytes += int_to_bytes(0, 2)
 
         for output_tx in self.outputs:
-            struct_bytes += int_to_bytes(output_tx.value, 4)
+            struct_bytes += output_value_to_bytes(output_tx.value)
 
             # token index
             struct_bytes += int_to_bytes(output_tx.token_data, 1)
@@ -320,7 +333,7 @@ class BaseTransaction(ABC):
         :return: Partial serialization of the transaction
         :rtype: bytes
         """
-        struct_bytes = struct.pack(_TRANSACTION_FORMAT_STRING, self.version, self.weight, self.timestamp, self.height,
+        struct_bytes = struct.pack(_TRANSACTION_FORMAT_STRING, self.version, self.weight, self.timestamp,
                             len(self.inputs), len(self.outputs), len(self.parents), len(self.tokens))
 
         for parent in self.parents:
@@ -338,7 +351,7 @@ class BaseTransaction(ABC):
             struct_bytes += input_tx.data
 
         for output_tx in self.outputs:
-            struct_bytes += int_to_bytes(output_tx.value, 4)
+            struct_bytes += output_value_to_bytes(output_tx.value)
 
             # token index
             struct_bytes += int_to_bytes(output_tx.token_data, 1)
@@ -377,7 +390,7 @@ class BaseTransaction(ABC):
         assert self.hash is not None
         assert self.storage is not None
 
-        # check if parents are duplicated   # TODO should we have parents as a set to begin with?
+        # check if parents are duplicated
         parents_set = set(self.parents)
         if len(self.parents) > len(parents_set):
             raise DuplicatedParents('Tx has duplicated parents: {}', [tx_hash.hex() for tx_hash in self.parents])
@@ -387,7 +400,6 @@ class BaseTransaction(ABC):
         min_timestamp = None
 
         for parent_hash in self.parents:
-            # TODO should check repeated hashes in parents?
             try:
                 parent = self.storage.get_transaction(parent_hash)
                 if self.timestamp <= parent.timestamp:
@@ -633,7 +645,6 @@ class BaseTransaction(ABC):
         data['timestamp'] = self.timestamp
         data['version'] = self.version
         data['weight'] = self.weight
-        data['height'] = self.height
 
         data['parents'] = []
         for parent in self.parents:
@@ -656,7 +667,6 @@ class BaseTransaction(ABC):
         data['outputs'] = []
         for output in self.outputs:
             data_output: Dict[str, Any] = {}
-            # TODO use base58 and ripemd160
             data_output['value'] = output.value
             data_output['script'] = base64.b64encode(output.script).decode('utf-8')
             if decode_script:
@@ -799,6 +809,7 @@ class TxOutput:
         assert isinstance(value, int), 'value is %s, type %s' % (str(value), type(value))
         assert isinstance(script, bytes), 'script is %s, type %s' % (str(script), type(script))
         assert isinstance(token_data, int), 'token_data is %s, type %s' % (str(token_data), type(token_data))
+        assert value <= MAX_OUTPUT_VALUE
 
         self.value = value  # int
         self.script = script  # bytes
@@ -868,6 +879,13 @@ class TxOutput:
             script=self.script,
             token_data=self.token_data,
         )
+
+
+def output_value_to_bytes(number: int) -> bytes:
+    if number > _MAX_OUTPUT_VALUE_32:
+        return (-number).to_bytes(8, byteorder='big', signed=True)
+    else:
+        return number.to_bytes(4, byteorder='big', signed=True)  # `signed` makes no difference, but oh well
 
 
 def tx_or_block_from_proto(tx_proto: protos.BaseTransaction,

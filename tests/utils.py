@@ -15,7 +15,7 @@ from twisted.internet.task import Clock
 from twisted.test import proto_helpers
 
 from hathor.constants import DECIMAL_PLACES, HATHOR_TOKEN_UID, TOKENS_PER_BLOCK
-from hathor.crypto.util import get_private_key_from_bytes
+from hathor.crypto.util import decode_address, get_private_key_from_bytes
 from hathor.manager import HathorEvents, HathorManager
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
@@ -44,7 +44,7 @@ def gen_new_tx(manager, address, value, verify=True):
     from hathor.wallet.base_wallet import WalletOutputInfo
 
     outputs = []
-    outputs.append(WalletOutputInfo(address=manager.wallet.decode_address(address), value=int(value), timelock=None))
+    outputs.append(WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None))
 
     tx = manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
     tx.storage = manager.tx_storage
@@ -503,12 +503,12 @@ def create_tokens(manager: 'HathorManager', address_b58: str = None, genesis_ind
 
     if address_b58 is None:
         address_b58 = wallet.get_unused_address(mark_as_used=True)
-    address = wallet.decode_address(address_b58)
+    address = decode_address(address_b58)
 
     _input1 = TxInput(genesis_block.hash, genesis_index, b'')
 
     # we send genesis tokens to a random address so we don't add hathors to the user's wallet
-    rand_address = wallet.decode_address('1Pa4MMsr5DMRAeU1PzthFXyEJeVNXsMHoz')
+    rand_address = decode_address('1Pa4MMsr5DMRAeU1PzthFXyEJeVNXsMHoz')
     rand_script = P2PKH.create_output_script(rand_address)
     value = genesis_block.outputs[genesis_index].value
     output = TxOutput(value, rand_script, 0)

@@ -31,14 +31,14 @@ class Transaction(BaseTransaction):
     log = Logger()
 
     def __init__(self, nonce: int = 0, timestamp: Optional[int] = None, version: int = 1, weight: float = 0,
-                 height: int = 0, inputs: Optional[List[TxInput]] = None, outputs: Optional[List[TxOutput]] = None,
+                 inputs: Optional[List[TxInput]] = None, outputs: Optional[List[TxOutput]] = None,
                  parents: Optional[List[bytes]] = None, tokens: Optional[List[bytes]] = None,
                  hash: Optional[bytes] = None, storage: Optional['TransactionStorage'] = None) -> None:
         """
             Creating new init just to make sure inputs will always be empty array
             Inputs: all inputs that are being used (empty in case of a block)
         """
-        super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight, height=height, inputs=inputs
+        super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight, inputs=inputs
                          or [], outputs=outputs or [], parents=parents or [], tokens=tokens or [], hash=hash,
                          storage=storage, is_block=False)
 
@@ -47,7 +47,6 @@ class Transaction(BaseTransaction):
             version=self.version,
             weight=self.weight,
             timestamp=self.timestamp,
-            height=self.height,
             parents=self.parents,
             tokens=self.tokens,
             inputs=map(TxInput.to_proto, self.inputs),
@@ -67,7 +66,6 @@ class Transaction(BaseTransaction):
             version=transaction_proto.version,
             weight=transaction_proto.weight,
             timestamp=transaction_proto.timestamp,
-            height=transaction_proto.height,
             nonce=transaction_proto.nonce,
             hash=transaction_proto.hash or None,
             parents=list(transaction_proto.parents),

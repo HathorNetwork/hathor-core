@@ -4,6 +4,7 @@ from unittest.mock import Mock
 from twisted.test import proto_helpers
 
 from hathor.constants import HATHOR_TOKEN_UID
+from hathor.indexes import WalletIndex
 from hathor.metrics import Metrics
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.transaction.genesis import genesis_transactions
@@ -17,7 +18,7 @@ class TestWebsocket(unittest.TestCase):
         super().setUp()
 
         self.network = 'testnet'
-        self.manager = self.create_peer(self.network)
+        self.manager = self.create_peer(self.network, wallet_index=True)
 
         self.factory = HathorAdminWebsocketFactory(self.manager.metrics)
         self.factory.subscribe(self.manager.pubsub)
@@ -70,6 +71,14 @@ class TestWebsocket(unittest.TestCase):
         self.assertEqual(value['balance']['available'], 20)
         self.assertEqual(value['type'], 'wallet:balance_updated')
 
+    def test_gap_limit(self):
+        self.factory.connections.add(self.protocol)
+        self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
+        self.manager.pubsub.publish(HathorEvents.WALLET_GAP_LIMIT, limit=10)
+        value = self._decode_value(self.transport.value())
+        self.assertEqual(value['limit'], 10)
+        self.assertEqual(value['type'], 'wallet:gap_limit')
+
     def test_output_received(self):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
@@ -111,6 +120,39 @@ class TestWebsocket(unittest.TestCase):
         self.protocol.onMessage(payload, False)
         value = self._decode_value(self.transport.value())
         self.assertEqual(value['type'], 'pong')
+
+    def test_subscribe_address(self):
+        self.assertEqual(len(self.factory.address_connections), 0)
+        self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
+        # Subscribe to address
+        address = '1Q4qyTjhpUXUZXzwKs6Yvh2RNnF5J1XN9a'
+        payload = json.dumps({'type': 'subscribe_address', 'address': address}).encode('utf-8')
+        self.protocol.onMessage(payload, False)
+        self.assertEqual(len(self.factory.address_connections), 1)
+
+        block_genesis = [tx for tx in genesis_transactions(self.manager.tx_storage) if tx.is_block][0]
+
+        # Test publish tx voided
+        self.manager.pubsub.publish(HathorEvents.STORAGE_TX_VOIDED, tx=block_genesis)
+        value = self._decode_value(self.transport.value())
+        self.assertEqual(value['type'], 'storage:tx_voided')
+        self.assertEqual(value['address'], address)
+        self.assertEqual(value['element']['tx_id'], block_genesis.hash_hex)
+        self.assertEqual(value['element']['timestamp'], block_genesis.timestamp)
+        self.assertTrue(value['element']['is_output'])
+
+        element = None
+        for el in WalletIndex.tx_to_elements(block_genesis, False):
+            element = el.element
+            break
+        # Test publish address history
+        self.manager.pubsub.publish(HathorEvents.WALLET_ADDRESS_HISTORY, address=address, history=element)
+        value = self._decode_value(self.transport.value())
+        self.assertEqual(value['type'], 'wallet:address_history')
+        self.assertEqual(value['address'], address)
+        self.assertEqual(value['history']['tx_id'], block_genesis.hash_hex)
+        self.assertEqual(value['history']['timestamp'], block_genesis.timestamp)
+        self.assertTrue(value['history']['is_output'])
 
     def test_connections(self):
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN

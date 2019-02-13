@@ -192,7 +192,6 @@ TransactionResource.openapi = {
                                             'timestamp': 1539271482,
                                             'version': 1,
                                             'weight': 14.0,
-                                            'height': 1,
                                             'parents': [],
                                             'inputs': [],
                                             'outputs': [],
@@ -220,7 +219,6 @@ TransactionResource.openapi = {
                                                 'timestamp': 1547163030,
                                                 'version': 1,
                                                 'weight': 18.861583646228,
-                                                'height': 0,
                                                 'parents': [
                                                     '00000b8792cb13e8adb51cc7d866541fc29b532e8dec95ae4661cf3da4d42cb4',
                                                     '00001417652b9d7bd53eb14267834eab08f27e5cbfaca45a24370e79e0348bb9'
@@ -262,7 +260,6 @@ TransactionResource.openapi = {
                                                 'timestamp': 1547163025,
                                                 'version': 1,
                                                 'weight': 17.995048894541107,
-                                                'height': 0,
                                                 'parents': [
                                                     '00001417652b9d7bd53eb14267834eab08f27e5cbfaca45a24370e79e0348bb9',
                                                     '0000088c5a4dfcef7fd3c04a5b1eccfd2de032b23749deff871b0a090000f5f6'

@@ -1,8 +1,10 @@
 import base64
+import glob
 import json
 import os
 import re
 
+from hathor.constants import STORAGE_SUBFOLDERS
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
 from hathor.transaction.transaction_metadata import TransactionMetadata
@@ -22,6 +24,21 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
 
         filename_pattern = r'tx_[\dabcdef]{64}\.json'
         self.re_pattern = re.compile(filename_pattern)
+        self.create_subfolders(self.path, STORAGE_SUBFOLDERS)
+
+    def create_subfolders(self, path: str, num_subfolders: int):
+        """ Create subfolders in the main tx storage folder.
+
+        :param path: the main tx storage folder
+        :type path: str
+
+        :param num_subfolders: number of subfolders to create
+        :type num_subfolders: int
+        """
+        # create subfolders
+        for i in range(num_subfolders):
+            folder = '%0.2x' % i
+            os.makedirs(os.path.join(path, folder), exist_ok=True)
 
     @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx, *, only_metadata=False):
@@ -41,8 +58,10 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
         self.save_to_json(filepath, data)
 
     def generate_filepath(self, hash_bytes):
-        filename = 'tx_{}.json'.format(hash_bytes.hex())
-        filepath = os.path.join(self.path, filename)
+        hash_hex = hash_bytes.hex()
+        filename = 'tx_{}.json'.format(hash_hex)
+        subfolder = hash_hex[-2:]
+        filepath = os.path.join(self.path, subfolder, filename)
         return filepath
 
     @deprecated('Use transaction_exists_deferred instead')
@@ -72,7 +91,6 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
 
         nonce = data['nonce']
         timestamp = data['timestamp']
-        height = data['height']
         version = data['version']
         weight = data['weight']
         hash_bytes = bytes.fromhex(data['hash'])
@@ -100,7 +118,6 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
             'nonce': nonce,
             'timestamp': timestamp,
             'version': version,
-            'height': height,
             'weight': weight,
             'outputs': outputs,
             'parents': parents,
@@ -136,22 +153,18 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
         for tx in self.get_all_genesis():
             yield tx
 
-        path = self.path
-
-        with os.scandir(path) as it:
-            for f in it:
-                if self.re_pattern.match(f.name):
-                    # TODO Return a proxy that will load the transaction only when it is used.
-                    data = self.load_from_json(f.path, TransactionDoesNotExist())
-                    tx = self.load(data['tx'])
-                    if 'meta' in data.keys():
-                        meta = TransactionMetadata.create_from_json(data['meta'])
-                        tx._metadata = meta
-                    yield tx
+        for f in glob.iglob(os.path.join(self.path, '*/*')):
+            if self.re_pattern.match(os.path.basename(f)):
+                # TODO Return a proxy that will load the transaction only when it is used.
+                data = self.load_from_json(f, TransactionDoesNotExist())
+                tx = self.load(data['tx'])
+                if 'meta' in data.keys():
+                    meta = TransactionMetadata.create_from_json(data['meta'])
+                    tx._metadata = meta
+                yield tx
 
     @deprecated('Use get_count_tx_blocks_deferred instead')
     def get_count_tx_blocks(self):
         genesis_len = len(self.get_all_genesis())
-        path = self.path
-        files = [f for f in os.listdir(path) if self.re_pattern.match(f)]
+        files = [f for f in glob.iglob(os.path.join(self.path, '*/*')) if self.re_pattern.match(f)]
         return len(files) + genesis_len

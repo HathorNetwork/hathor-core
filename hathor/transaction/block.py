@@ -9,7 +9,7 @@ from twisted.logger import Logger
 from hathor import protos
 from hathor.constants import BLOCK_DATA_MAX_SIZE, BLOCK_NONCE_BYTES as NONCE_BYTES
 from hathor.transaction.base_transaction import BaseTransaction, TxOutput, sum_weights
-from hathor.transaction.exceptions import BlockDataError, BlockHeightError, BlockWithInputs, BlockWithTokensError
+from hathor.transaction.exceptions import BlockDataError, BlockWithInputs, BlockWithTokensError
 from hathor.transaction.util import int_to_bytes, unpack, unpack_len
 
 if TYPE_CHECKING:
@@ -20,10 +20,10 @@ class Block(BaseTransaction):
     log = Logger()
 
     def __init__(self, nonce: int = 0, timestamp: Optional[int] = None, version: int = 1, weight: float = 0,
-                 height: int = 0, outputs: Optional[List[TxOutput]] = None, parents: Optional[List[bytes]] = None,
+                 outputs: Optional[List[TxOutput]] = None, parents: Optional[List[bytes]] = None,
                  hash: Optional[bytes] = None, storage: Optional['TransactionStorage'] = None,
                  data: bytes = b'') -> None:
-        super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight, height=height,
+        super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight,
                          outputs=outputs or [], parents=parents or [], hash=hash, storage=storage, is_block=True)
         self.data = data
 
@@ -32,7 +32,6 @@ class Block(BaseTransaction):
             version=self.version,
             weight=self.weight,
             timestamp=self.timestamp,
-            height=self.height,
             parents=self.parents,
             outputs=map(TxOutput.to_proto, self.outputs),
             nonce=int_to_bytes(self.nonce, 16),
@@ -51,7 +50,6 @@ class Block(BaseTransaction):
             version=block_proto.version,
             weight=block_proto.weight,
             timestamp=block_proto.timestamp,
-            height=block_proto.height,
             nonce=int.from_bytes(block_proto.nonce, 'big'),
             hash=block_proto.hash or None,
             parents=list(block_proto.parents),
@@ -114,28 +112,6 @@ class Block(BaseTransaction):
         json['data'] = base64.b64encode(self.data).decode('utf-8')
         return json
 
-    def verify_height(self) -> None:
-        """Verify that the height is correct (should be parent + 1)."""
-        error_height_message = 'Invalid height of block'
-        if self.is_genesis and self.height != 1:
-            raise BlockHeightError(error_height_message)
-
-        # TODO: How to verify parent height stuff without access to storage?
-        if not self.storage:
-            self.log.warn("WARNING(transaction/block.py): Can't verify block height without transaction storage.")
-            return
-
-        # Get all parents.
-        parent_blocks = [parent for parent in self.get_parents()]
-
-        if self.is_genesis:
-            expected_height = 1
-        else:
-            expected_height = max(x.height for x in parent_blocks) + 1
-
-        if self.height != expected_height:
-            raise BlockHeightError(error_height_message)
-
     def verify_no_inputs(self) -> None:
         inputs = getattr(self, 'inputs', None)
         if inputs:
@@ -155,18 +131,6 @@ class Block(BaseTransaction):
         if len(self.data) > BLOCK_DATA_MAX_SIZE:
             raise BlockDataError('block data has {} bytes'.format(len(self.data)))
 
-    def calculate_height(self):
-        """ Calculate block height according to its parents
-
-        :return: Block height
-        :rtype: int
-        """
-        if self.is_genesis:
-            return 1
-        parents_tx = [self.storage.get_transaction(h) for h in self.parents]
-        height = max(x.height for x in parents_tx) + 1
-        return height
-
     def verify_without_storage(self) -> None:
         """ Run all verifications that do not need a storage.
         """
@@ -181,8 +145,7 @@ class Block(BaseTransaction):
             (2) solves the pow with the correct weight (done in HathorManager)
             (3) creates the correct amount of tokens in the output (done in HathorManager)
             (4) all parents must exist and have timestamp smaller than ours
-            (5) height of block == height of previous block + 1
-            (6) data field must contain at most 100 bytes
+            (5) data field must contain at most 100 bytes
         """
         # TODO Should we validate a limit of outputs?
         if self.is_genesis:
@@ -193,8 +156,6 @@ class Block(BaseTransaction):
 
         # (1) and (4)
         self.verify_parents()
-        # (5)
-        self.verify_height()
 
     def _score_tx_dfs(self, tx: BaseTransaction, used: Set[bytes],
                       mark_as_best_chain: bool, newest_timestamp: int) -> float:

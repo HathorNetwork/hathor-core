@@ -7,7 +7,7 @@ from graphviz.dot import Digraph
 from intervaltree.interval import Interval
 from twisted.internet.defer import inlineCallbacks, succeed
 
-from hathor.indexes import IndexesManager, TipsIndex
+from hathor.indexes import IndexesManager, TipsIndex, WalletIndex
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction.block import Block
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
@@ -21,6 +21,7 @@ class TransactionStorage(ABC):
 
     pubsub: Optional[PubSubManager]
     with_index: bool  # noqa: E701
+    wallet_index: Optional[WalletIndex]
 
     @abstractmethod
     @deprecated('Use save_transaction_deferred instead')
@@ -572,6 +573,7 @@ class BaseTransactionStorage(TransactionStorage):
         self.block_index = IndexesManager()
         self.tx_index = IndexesManager()
         self.all_index = TipsIndex()
+        self.wallet_index = None
 
         self._latest_timestamp = 0
         from hathor.transaction.genesis import genesis_transactions
@@ -759,6 +761,8 @@ class BaseTransactionStorage(TransactionStorage):
             raise NotImplementedError
         self._latest_timestamp = max(self.latest_timestamp, tx.timestamp)
         self.all_index.add_tx(tx)
+        if self.wallet_index:
+            self.wallet_index.add_tx(tx)
         if tx.is_block:
             self._cache_block_count += 1
             self.block_index.add_tx(tx)
@@ -806,10 +810,6 @@ class BaseTransactionStorage(TransactionStorage):
             assert genesis.hash is not None
             self._genesis_cache[genesis.hash] = genesis
 
-    def get_best_height(self):  # pragma: no cover
-        latest_block = self.get_latest_block()
-        return latest_block.height
-
     def get_transactions_before(self, hash_bytes, num_blocks=100):  # pragma: no cover
         ref_tx = self.get_transaction(hash_bytes)
         visited = dict()  # Dict[bytes, int]
@@ -855,71 +855,3 @@ class BaseTransactionStorage(TransactionStorage):
                     used.add(parent_hash)
                     pending_visits.append(parent_hash)
         return result
-
-    # XXX: NOT IN USE:
-    def get_block_hashes_after(self, hash_bytes, num_blocks=100):  # pragma: no cover
-        """Retrieve the next num_blocks block hashes after the given hash. Return value is a list of hashes."""
-        hashes = []
-        tx = self.get_transaction(hash_bytes)
-        if not tx.is_block:
-            raise TransactionIsNotABlock
-        for i in range(tx.height + 1, tx.height + 1 + num_blocks):
-            for h in self.get_block_hashes_at_height(i):
-                hashes.append(h)
-        return hashes
-
-    # XXX: NOT IN USE:
-    def get_latest(self, transactions, count=2, page=1):  # pragma: no cover
-        transactions = sorted(transactions, key=lambda t: t.timestamp, reverse=True)
-
-        # Calculating indexes based on count and page
-        start_index = (page - 1) * count
-        end_index = start_index + count
-        return transactions[start_index:end_index]
-
-    # XXX: NOT IN USE:
-    def get_all_after_hash(self, transactions, ref_hash, count):  # pragma: no cover
-        """ Receives the list of elements (txs or blocks) to be paginated.
-
-        We first order the elements by timestamp and then
-        If ref_hash is None, we return the first count elements
-        If ref_hash is not None, we calculate the elements after ref_hash and if we still have more
-
-        :param transactions: List of elements we need to paginate
-        :param ref_hash: Hash in bytes passed as reference, so we can return the blocks after this one
-        :param count: Quantity of elements to return
-        :return: List of blocks or txs and a boolean indicating if there are more blocks before
-        """
-        # XXX This method is not optimized, we need to improve this search
-        txs = sorted(transactions, key=lambda t: t.timestamp, reverse=True)
-
-        total = len(txs)
-
-        if not ref_hash:
-            return txs[:count], total > count
-        else:
-            for idx, tx in enumerate(txs):
-                if tx.hash == ref_hash:
-                    start_idx = idx + 1
-                    end_idx = start_idx + count
-                    return txs[start_idx:end_idx], total > end_idx
-
-    # XXX: NOT IN USE:
-    def get_all_before_hash(self, transactions, ref_hash, count):  # pragma: no cover
-        """ Receives the list of elements (txs or blocks) to be paginated.
-
-        We first order the elements by timestamp and then
-        We calculate the elements before ref_hash and if we still have more before it
-
-        :param transactions: List of elements we need to paginate
-        :param ref_hash: Hash in bytes passed as reference, so we can return the blocks before this one
-        :param count: Quantity of elements to return
-        :return: List of blocks or txs and a boolean indicating if there are more blocks before
-        """
-        # XXX This method is not optimized, we need to improve this search
-        txs = sorted(transactions, key=lambda t: t.timestamp, reverse=True)
-
-        for idx, tx in enumerate(txs):
-            if tx.hash == ref_hash:
-                start_idx = max(0, idx - count)
-                return txs[start_idx:idx], start_idx > 0

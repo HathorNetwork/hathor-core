@@ -52,7 +52,7 @@
                 "properties": {
                     "tx_id": {
                         "type": "string",
-                        "description": "Hash in hex of the spend transaction"
+                        "description": "Hash in hex of the spending transaction"
                     },
                     "index": {
                         "type": "int",
@@ -86,6 +86,17 @@
                                 "type": "int",
                                 "description": "The timestamp for the transaction. If sent without the inputs, server will chose inputs whose timestamp is smaller than the given value (so the tx is valid). If user sends timestamp=0, server will use current time."
                             }
+                        }
+                    }
+                }
+            },
+            "ThinWalletSendToken": {
+                "type": "object",
+                "required": ["tx_hex"],
+                "properties": {
+                    "tx_hex": {
+                        "type": "string",
+                        "description": "Serialized transaction in hexadecimal before parents and pow"
                         }
                     }
                 }

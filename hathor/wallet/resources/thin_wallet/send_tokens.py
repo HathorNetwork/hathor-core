@@ -8,15 +8,12 @@ from twisted.web.http import Request
 
 from hathor.api_util import render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction
-from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
-from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, InvalidAddress, PrivateKeyNotFound
 
 
 @register_resource
 class SendTokensResource(resource.Resource):
-    """ Implements a web server API to send tokens.
+    """ Implements a web server API to create a tx and propagate
 
     You must run with option `--status <PORT>`.
     """
@@ -28,10 +25,9 @@ class SendTokensResource(resource.Resource):
         self.lock = Lock()
 
     def _render_POST_thread(self, request: Request) -> bytes:
-        """ POST request for /wallet/send_tokens/
-            We expect 'data' as request args
-            'data': stringified json with an array of inputs and array of outputs
-            If inputs array is empty we use 'prepare_transaction_compute_inputs', that calculate the inputs
+        """ POST request for /thin_wallet/send_tokens/
+            We expect 'tx_hex' as request args
+            'tx_hex': serialized tx in hexadecimal
             We return success (bool)
 
             :rtype: string (json)
@@ -41,59 +37,21 @@ class SendTokensResource(resource.Resource):
             set_cors(request, 'POST')
 
             post_data = json.loads(request.content.read().decode('utf-8'))
-            data = post_data['data']
+            tx_hex = post_data['tx_hex']
 
-            outputs = []
-            for output in data['outputs']:
-                try:
-                    address = decode_address(output['address'])  # bytes
-                except InvalidAddress:
-                    return self.return_POST(False, 'The address {} is invalid'.format(output['address']))
-
-                value = int(output['value'])
-                timelock = output.get('timelock')
-                outputs.append(WalletOutputInfo(address=address, value=value, timelock=timelock))
-
-            timestamp = None
-            if 'timestamp' in data:
-                if data['timestamp'] > 0:
-                    timestamp = data['timestamp']
-                else:
-                    timestamp = int(self.manager.reactor.seconds())
-
-            if len(data['inputs']) == 0:
-                try:
-                    tx = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, timestamp)
-                except InsufficientFunds as e:
-                    return self.return_POST(False, 'Insufficient funds, {}'.format(str(e)))
-            else:
-                inputs = []
-                for input_tx in data['inputs']:
-                    input_tx['private_key'] = None
-                    input_tx['index'] = int(input_tx['index'])
-                    input_tx['tx_id'] = bytes.fromhex(input_tx['tx_id'])
-                    inputs.append(WalletInputInfo(**input_tx))
-                try:
-                    tx = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
-                                                                                   self.manager.tx_storage, timestamp)
-                except (PrivateKeyNotFound, InputDuplicated):
-                    return self.return_POST(False, 'Invalid input to create transaction')
-
+            tx = Transaction.create_from_struct(bytes.fromhex(tx_hex))
+            assert isinstance(tx, Transaction)
+            # Set tx storage
             tx.storage = self.manager.tx_storage
-            # TODO Send tx to be mined
 
-            if timestamp is None:
-                max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
-                tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
+            max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
+            # Set tx timestamp as max between tx and inputs
+            tx.timestamp = max(max_ts_spent_tx + 1, tx.timestamp)
+            # Set parents
             tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
 
-            # Calculating weight
-            weight = data.get('weight')
-            if weight is None:
-                weight = self.manager.minimum_tx_weight(tx)
-            tx.weight = weight
-
         # There is no need to synchonize this slow part.
+        # TODO Tx should be resolved in the frontend
         tx.resolve()
 
         # Then, we synchonize again.
@@ -104,7 +62,7 @@ class SendTokensResource(resource.Resource):
 
         return self.return_POST(success, message, tx=tx)
 
-    def render_POST(self, request):
+    def render_POST(self, request: Request):
         deferred = threads.deferToThread(self._render_POST_thread, request)
         deferred.addCallback(self._cb_tx_resolve, request)
         deferred.addErrback(self._err_tx_resolve, request)
@@ -147,43 +105,24 @@ class SendTokensResource(resource.Resource):
 
 
 SendTokensResource.openapi = {
-    '/wallet/send_tokens': {
+    '/thin_wallet/send_tokens': {
         'post': {
-            'tags': ['wallet'],
-            'operationId': 'wallet_send_tokens',
-            'summary': 'Send tokens',
+            'tags': ['thin_wallet'],
+            'operationId': 'thin_wallet_send_tokens',
+            'summary': 'Send tokens in a thin wallet',
             'requestBody': {
-                'description': 'Data to create transactions',
+                'description': 'Data to create the transaction',
                 'required': True,
                 'content': {
                     'application/json': {
                         'schema': {
-                            '$ref': '#/components/schemas/SendToken'
+                            '$ref': '#/components/schemas/ThinWalletSendToken'
                         },
                         'examples': {
                             'data': {
-                                'summary': 'Data to create transactions',
+                                'summary': 'Data to create the transaction',
                                 'value': {
-                                    'data': {
-                                        'outputs': [
-                                            {
-                                                'address': '15VZc2jy1L3LGFweZeKVbWMsTzfKFJLpsN',
-                                                'value': 1000
-                                            },
-                                            {
-                                                'address': '1C5xEjewerH4zTWPC6wqzhoEkMhiHEHPZ8',
-                                                'value': 800
-                                            }
-                                        ],
-                                        'inputs': [
-                                            {
-                                                'tx_id': ('00000257054251161adff5899a451ae9'
-                                                          '74ac62ca44a7a31179eec5750b0ea406'),
-                                                'index': 0
-                                            }
-                                        ],
-                                        'timestamp': 1549667726
-                                    }
+                                    'tx_hex': '00000c064ec72c8561a24b65bd50095a401b8d9a66c360cfe99cfcfeed73afc4',
                                 }
                             }
                         }
@@ -207,6 +146,7 @@ SendTokensResource.openapi = {
                                             'timestamp': 1547211690,
                                             'version': 1,
                                             'weight': 17.93619278054934,
+                                            'height': 0,
                                             'parents': [
                                                 '00000257054251161adff5899a451ae974ac62ca44a7a31179eec5750b0ea406',
                                                 '00000b8792cb13e8adb51cc7d866541fc29b532e8dec95ae4661cf3da4d42cb4'
@@ -246,7 +186,7 @@ SendTokensResource.openapi = {
                                     'summary': 'Insufficient funds',
                                     'value': {
                                         'success': False,
-                                        'message': 'Insufficient funds. Requested amount: 200 / Available: 50'
+                                        'message': 'Insufficient funds'
                                     }
                                 },
                                 'error3': {
@@ -267,6 +207,7 @@ SendTokensResource.openapi = {
                                             'timestamp': 1539271482,
                                             'version': 1,
                                             'weight': 14.0,
+                                            'height': 1,
                                             'parents': [],
                                             'inputs': [],
                                             'outputs': [],
