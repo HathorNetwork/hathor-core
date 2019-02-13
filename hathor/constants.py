@@ -28,3 +28,6 @@ TX_NONCE_BYTES = 4
 
 # Size limit in bytes for Block data field
 BLOCK_DATA_MAX_SIZE = 100
+
+# number of subfolders in the storage folder (used in JSONStorage and CompactStorage)
+STORAGE_SUBFOLDERS = 256
