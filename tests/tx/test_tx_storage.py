@@ -1,3 +1,4 @@
+import os
 import shutil
 import tempfile
 import time
@@ -5,13 +6,13 @@ import unittest
 
 from twisted.internet.task import Clock
 
+from hathor.constants import STORAGE_SUBFOLDERS
 from hathor.manager import TestMode
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.storage import (
     TransactionBinaryStorage,
     TransactionCacheStorage,
     TransactionCompactStorage,
-    TransactionJSONStorage,
     TransactionMemoryStorage,
     TransactionSubprocessStorage,
 )
@@ -240,22 +241,17 @@ class TransactionBinaryStorageTest(_BaseTransactionStorageTest._TransactionStora
         super().tearDown()
 
 
-class TransactionJSONStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
-    def setUp(self):
-        self.directory = tempfile.mkdtemp(dir='/tmp/')
-        super().setUp(TransactionJSONStorage(self.directory))
-
-    def tearDown(self):
-        shutil.rmtree(self.directory)
-        super().tearDown()
-
-
 class TransactionCompactStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
     def setUp(self):
         self.directory = tempfile.mkdtemp(dir='/tmp/')
         # Creating random file just to test specific part of code
-        tempfile.NamedTemporaryFile(dir=self.directory, delete=False)
+        tempfile.NamedTemporaryFile(dir=self.directory, delete=True)
         super().setUp(TransactionCompactStorage(self.directory))
+
+    def test_subfolders(self):
+        # test we have the subfolders under the main tx folder
+        subfolders = os.listdir(self.directory)
+        self.assertEqual(STORAGE_SUBFOLDERS, len(subfolders))
 
     def tearDown(self):
         shutil.rmtree(self.directory)

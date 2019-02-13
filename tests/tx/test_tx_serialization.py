@@ -5,7 +5,6 @@ from twisted.internet.task import Clock
 import hathor.protos.transaction_pb2_grpc  # noqa this file has nothing to test, only import
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction
-from hathor.transaction.storage import TransactionJSONStorage
 from hathor.wallet.base_wallet import WalletOutputInfo
 from tests import unittest
 from tests.utils import add_new_blocks
@@ -96,21 +95,6 @@ class StructSerializationTest(_Base._SerializationWithoutMetadataTest):
         cls = tx.__class__
         tx_struct = tx.get_struct()
         return cls.create_from_struct(tx_struct)
-
-
-class JSONSerializationTest(_Base._SerializationWithMetadataTest):
-    def setUp(self):
-        super().setUp()
-        # XXX: this is only needed because there is no `create_from_json` anylonger
-        self.aux_storage = TransactionJSONStorage()
-
-    def _reserialize(self, tx):
-        from hathor.transaction import TransactionMetadata
-        tx_json = tx.to_json()
-        tx_metadata_json = tx.get_metadata().to_json()
-        tx_re = self.aux_storage.load(tx_json)
-        tx_re._metadata = TransactionMetadata.create_from_json(tx_metadata_json)
-        return tx_re
 
 
 class ProtobufSerializationTest(_Base._SerializationWithMetadataTest):
