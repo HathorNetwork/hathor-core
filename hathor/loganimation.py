@@ -1,5 +1,6 @@
 import os
 
+from hathor import graphviz
 from hathor.manager import HathorEvents, HathorManager
 
 
@@ -37,10 +38,11 @@ class GraphvizLogAnimation:
 
         n = self.sequence
 
-        dot1 = self.manager.tx_storage.graphviz(format=self.format)
+        tx_storage = self.manager.tx_storage
+        dot1 = graphviz.verifications(tx_storage, format=self.format)
         dot1.render(os.path.join(self.dirname, 'seq_v_{:010d}'.format(n)))
 
-        dot2 = self.manager.tx_storage.graphviz_funds(format='png')
+        dot2 = graphviz.funds(tx_storage, format='png')
         dot2.render(os.path.join(self.dirname, 'seq_f_{:010d}'.format(n)))
 
         self.sequence += 1

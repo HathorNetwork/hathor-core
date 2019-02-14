@@ -2,6 +2,7 @@ from twisted.internet import threads
 from twisted.web import resource
 from twisted.web.http import Request
 
+from hathor import graphviz
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
 
@@ -49,10 +50,11 @@ class GraphvizResource(resource.Resource):
         if b'funds' in request.args:
             funds = self.parseBoolArg(request.args[b'funds'][0].decode('utf-8'))
 
+        tx_storage = self.manager.tx_storage
         if not funds:
-            dot = self.manager.tx_storage.graphviz(format=dotformat, weight=weight, acc_weight=acc_weight)
+            dot = graphviz.verifications(tx_storage, format=dotformat, weight=weight, acc_weight=acc_weight)
         else:
-            dot = self.manager.tx_storage.graphviz_funds(format=dotformat, weight=weight, acc_weight=acc_weight)
+            dot = graphviz.funds(tx_storage, format=dotformat, weight=weight, acc_weight=acc_weight)
 
         if dotformat == 'dot':
             request.setHeader(b'content-type', contenttype[dotformat])
