@@ -31,8 +31,8 @@ if TYPE_CHECKING:
 MAX_NONCE = 2**32
 MAX_NUM_INPUTS = MAX_NUM_OUTPUTS = 256
 
-MAX_OUTPUT_VALUE = 2 ** 63  # max value (inclusive) that is possible to encode: 9223372036854775808 ~= 9.22337e+18
-_MAX_OUTPUT_VALUE_32 = 2 ** 31  # max value (inclusive) before having to use 8 bytes: 2147483648 ~= 2.14748e+09
+MAX_OUTPUT_VALUE = 2**63  # max value (inclusive) that is possible to encode: 9223372036854775808 ~= 9.22337e+18
+_MAX_OUTPUT_VALUE_32 = 2**31 - 1  # max value (inclusive) before having to use 8 bytes: 2147483647 ~= 2.14748e+09
 
 _INPUT_SIZE_BYTES = 32  # 256 bits
 
@@ -154,18 +154,8 @@ class BaseTransaction(ABC):
             self.inputs.append(txin)
 
         for _ in range(outputs_len):
-            (value_high_byte,), _ = unpack('!b', buf)
-            if value_high_byte < 0:
-                output_struct = '!qBH'
-                value_sign = -1
-            else:
-                output_struct = '!iBH'
-                value_sign = 1
-            (signed_value, token_data, script_len), buf = unpack(output_struct, buf)
-            value = signed_value * value_sign
-            assert value >= 0
-            if value < _MAX_OUTPUT_VALUE_32 and value_high_byte < 0:
-                raise ValueError('Value fits in 4 bytes but is using 8 bytes')
+            value, buf = bytes_to_output_value(buf)
+            (token_data, script_len), buf = unpack('!BH', buf)
             script, buf = unpack_len(script_len, buf)
             txout = TxOutput(value, script, token_data)
             self.outputs.append(txout)
@@ -873,6 +863,22 @@ class TxOutput:
             script=self.script,
             token_data=self.token_data,
         )
+
+
+def bytes_to_output_value(buf: bytes) -> Tuple[int, bytes]:
+    (value_high_byte,), _ = unpack('!b', buf)
+    if value_high_byte < 0:
+        output_struct = '!q'
+        value_sign = -1
+    else:
+        output_struct = '!i'
+        value_sign = 1
+    (signed_value,), buf = unpack(output_struct, buf)
+    value = signed_value * value_sign
+    assert value >= 0
+    if value < _MAX_OUTPUT_VALUE_32 and value_high_byte < 0:
+        raise ValueError('Value fits in 4 bytes but is using 8 bytes')
+    return value, buf
 
 
 def output_value_to_bytes(number: int) -> bytes:
