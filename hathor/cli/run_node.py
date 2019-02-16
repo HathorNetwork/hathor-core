@@ -91,6 +91,7 @@ def main():
     parser.add_argument('--cache', action='store_true', help='Use cache for tx storage')
     parser.add_argument('--cache-size', type=int, help='Number of txs to keep on cache')
     parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
+    parser.add_argument('--recursion-limit', type=int, help='Set python recursion limit')
     args = parser.parse_args()
 
     loglevel_filter = LogLevelFilterPredicate(LogLevel.info)
@@ -101,6 +102,9 @@ def main():
         [loglevel_filter],
     )
     globalLogPublisher.addObserver(observer)
+
+    if args.recursion_limit:
+        sys.setrecursionlimit(args.recursion_limit)
 
     if not args.peer:
         peer_id = PeerId()

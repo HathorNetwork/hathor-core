@@ -131,7 +131,8 @@ class TransactionRemoteStorage(TransactionStorage):
         tx_proto = tx.to_proto()
         request = protos.SaveRequest(transaction=tx_proto, only_metadata=only_metadata)
         result = self._stub.Save(request)  # noqa: F841
-        # TODO: verify result.saved
+        assert result.saved
+        self._save_to_weakref(tx)
 
     @deprecated('Use transaction_exists_deferred instead')
     @convert_grpc_exceptions
@@ -144,11 +145,17 @@ class TransactionRemoteStorage(TransactionStorage):
     @deprecated('Use get_transaction_deferred instead')
     @convert_grpc_exceptions
     def get_transaction(self, hash_bytes):
+        tx = self.get_transaction_from_weakref(hash_bytes)
+        if tx is not None:
+            return tx
+
         from hathor.transaction import tx_or_block_from_proto
         self._check_connection()
         request = protos.GetRequest(hash=hash_bytes)
         result = self._stub.Get(request)
-        return tx_or_block_from_proto(result.transaction, storage=self)
+        tx = tx_or_block_from_proto(result.transaction, storage=self)
+        self._save_to_weakref(tx)
+        return tx
 
     @deprecated('Use get_all_transactions_deferred instead')
     @convert_grpc_exceptions_generator
@@ -161,7 +168,13 @@ class TransactionRemoteStorage(TransactionStorage):
             if not list_item.HasField('transaction'):
                 break
             tx_proto = list_item.transaction
-            yield tx_or_block_from_proto(tx_proto, storage=self)
+            tx = tx_or_block_from_proto(tx_proto, storage=self)
+            tx2 = self.get_transaction_from_weakref(tx.hash)
+            if tx2:
+                yield tx2
+            else:
+                self._save_to_weakref(tx)
+                yield tx
 
     @deprecated('Use get_count_tx_blocks_deferred instead')
     @convert_grpc_exceptions

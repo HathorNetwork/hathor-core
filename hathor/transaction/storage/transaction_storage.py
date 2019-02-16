@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod, abstractproperty
 from collections import deque
 from itertools import chain
-from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
+from typing import Any, Dict, Generator, Iterator, List, Optional, Set, Tuple
+from weakref import WeakValueDictionary
 
-from graphviz.dot import Digraph
 from intervaltree.interval import Interval
 from twisted.internet.defer import inlineCallbacks, succeed
 
@@ -22,6 +22,40 @@ class TransactionStorage(ABC):
     pubsub: Optional[PubSubManager]
     with_index: bool  # noqa: E701
     wallet_index: Optional[WalletIndex]
+
+    def __init__(self):
+        # Weakref is used to guarantee that there is only one instance of each transaction in memory.
+        self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
+        self._tx_weakref_disabled: bool = False
+
+    def _save_to_weakref(self, tx: BaseTransaction) -> None:
+        """ Save transaction to weakref.
+        """
+        if self._tx_weakref_disabled:
+            return
+        assert tx.hash is not None
+        tx2 = self._tx_weakref.get(tx.hash, None)
+        if tx2 is None:
+            self._tx_weakref[tx.hash] = tx
+        else:
+            assert tx is tx2, 'There are two instance of the same transaction in memory'
+
+    def get_transaction_from_weakref(self, hash_bytes: bytes) -> Optional[BaseTransaction]:
+        """ Get a transaction from weakref if it exists. Otherwise, returns None.
+        """
+        if self._tx_weakref_disabled:
+            return None
+        return self._tx_weakref.get(hash_bytes, None)
+
+    def _enable_weakref(self) -> None:
+        """ For testing purposes. Weakref should never be disabled unless you know exactly what you are doing.
+        """
+        self._tx_weakref_disabled = False
+
+    def _disable_weakref(self) -> None:
+        """ For testing purposes. Weakref should never be disabled unless you know exactly what you are doing.
+        """
+        self._tx_weakref_disabled = True
 
     @abstractmethod
     @deprecated('Use save_transaction_deferred instead')
@@ -45,7 +79,7 @@ class TransactionStorage(ABC):
 
     @abstractmethod
     @deprecated('Use transaction_exists_deferred instead')
-    def transaction_exists(self, hash_bytes):
+    def transaction_exists(self, hash_bytes: bytes) -> bool:
         """Returns `True` if transaction with hash `hash_bytes` exists.
 
         :param hash_bytes: Hash in bytes that will be checked.
@@ -54,7 +88,7 @@ class TransactionStorage(ABC):
 
     @abstractmethod
     @deprecated('Use get_transaction_deferred instead')
-    def get_transaction(self, hash_bytes):
+    def get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
         """Returns the transaction with hash `hash_bytes`.
 
         :param hash_bytes: Hash in bytes that will be checked.
@@ -97,7 +131,7 @@ class TransactionStorage(ABC):
     """Async interface, all methods mirrorred from TransactionStorageSync, but suffixed with `_deferred`."""
 
     @abstractmethod
-    def save_transaction_deferred(self, tx, *, only_metadata=False):
+    def save_transaction_deferred(self, tx: BaseTransaction, *, only_metadata=False) -> None:
         """Saves the tx.
 
         :param tx: Transaction to save
@@ -113,7 +147,7 @@ class TransactionStorage(ABC):
         return succeed(None)
 
     @abstractmethod
-    def transaction_exists_deferred(self, hash_bytes):
+    def transaction_exists_deferred(self, hash_bytes: bytes) -> bool:
         """Returns `True` if transaction with hash `hash_bytes` exists.
 
         :param hash_bytes: Hash in bytes that will be checked.
@@ -124,7 +158,7 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_transaction_deferred(self, hash_bytes):
+    def get_transaction_deferred(self, hash_bytes: bytes) -> BaseTransaction:
         """Returns the transaction with hash `hash_bytes`.
 
         :param hash_bytes: Hash in bytes that will be checked.
@@ -135,7 +169,7 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @inlineCallbacks
-    def get_metadata_deferred(self, hash_bytes):
+    def get_metadata_deferred(self, hash_bytes: bytes) -> Generator[Any, Any, Optional[TransactionMetadata]]:
         """Returns the transaction metadata with hash `hash_bytes`.
 
         :param hash_bytes: Hash in bytes that will be checked.
@@ -147,10 +181,10 @@ class TransactionStorage(ABC):
             tx = yield self.get_transaction_deferred(hash_bytes)
             return tx.get_metadata(use_storage=False)
         except TransactionDoesNotExist:
-            pass
+            return None
 
     @abstractmethod
-    def get_all_transactions_deferred(self):
+    def get_all_transactions_deferred(self) -> Iterator[BaseTransaction]:
         # TODO: find an `async generator` type
         # TODO: verify the following claim:
         """Return all transactions that are not blocks.
@@ -160,7 +194,7 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_count_tx_blocks_deferred(self):
+    def get_count_tx_blocks_deferred(self) -> int:
         # TODO: verify the following claim:
         """Return the number of transactions/blocks stored.
 
@@ -366,165 +400,6 @@ class TransactionStorage(ABC):
         """
         raise NotImplementedError
 
-    def graphviz(self, format: str = 'pdf', weight: bool = False, acc_weight: bool = False,
-                 block_only: bool = False, version: bool = False) -> Digraph:
-        """Return a Graphviz object that can be rendered to generate a visualization of the DAG.
-
-        :param format: Format of the visualization (pdf, png, or jpg)
-        :param weight: Whether to display or not the tx weight
-        :param acc_weight: Whether to display or not the tx accumulated weight
-        :return: A Graphviz object
-        """
-        from graphviz import Digraph
-
-        dot = Digraph(format=format)
-
-        g_blocks = dot.subgraph(name='blocks')
-        g_txs = dot.subgraph(name='txs')
-        g_genesis = dot.subgraph(name='genesis')
-
-        tx_tips_attrs = dict(style='filled', fillcolor='#F5D76E')
-        block_attrs = dict(shape='box', style='filled', fillcolor='#EC644B')
-
-        voided_attrs = dict(style='dashed,filled', penwidth='0.25', fillcolor='#BDC3C7')
-        conflict_attrs = dict(style='dashed,filled', penwidth='2.0', fillcolor='#BDC3C7')
-
-        dot.attr('node', shape='oval', style='')
-        nodes_iter = self._topological_sort()
-
-        blocks_set = set()  # Set[bytes(hash)]
-        txs_set = set()  # Set[bytes(hash)]
-
-        # block_tips = set(x.data for x in self.get_block_tips())
-        tx_tips = set(x.data for x in self.get_tx_tips())
-
-        with g_genesis as g_g, g_txs as g_t, g_blocks as g_b:
-            for i, tx in enumerate(nodes_iter):
-                assert tx.hash is not None
-                name = tx.hash.hex()
-                attrs_node = {'label': tx.hash.hex()[-4:]}
-                attrs_edge = {}
-
-                if block_only and not tx.is_block:
-                    continue
-
-                if tx.is_block:
-                    attrs_node.update(block_attrs)
-                    blocks_set.add(tx.hash)
-                else:
-                    txs_set.add(tx.hash)
-
-                if tx.hash in tx_tips:
-                    attrs_node.update(tx_tips_attrs)
-
-                if weight:
-                    attrs_node.update(dict(label='{}\nw: {:.2f}'.format(attrs_node['label'], tx.weight)))
-
-                if acc_weight:
-                    metadata = tx.get_metadata()
-                    attrs_node.update(
-                        dict(label='{}\naw: {:.2f}'.format(attrs_node['label'], metadata.accumulated_weight)))
-
-                if version:
-                    attrs_node.update(
-                        dict(label='{}\nv{}'.format(attrs_node['label'], tx.version)))
-
-                if tx.is_genesis:
-                    attrs_node.update(dict(fillcolor='#87D37C', style='filled'))
-                    g_g.node(name, **attrs_node)
-                else:
-                    meta = tx.get_metadata()
-                    if len(meta.voided_by) > 0:
-                        attrs_node.update(voided_attrs)
-                        if tx.hash in meta.voided_by:
-                            attrs_node.update(conflict_attrs)
-
-                    if tx.is_block:
-                        g_b.node(name, **attrs_node)
-                    else:
-                        g_t.node(name, **attrs_node)
-
-                for parent_hash in tx.parents:
-                    if block_only and parent_hash not in blocks_set:
-                        continue
-                    if parent_hash in blocks_set:
-                        attrs_edge.update(dict(penwidth='3'))
-                    else:
-                        attrs_edge.update(dict(penwidth='1'))
-                    dot.edge(name, parent_hash.hex(), **attrs_edge)
-
-        dot.attr(rankdir='RL')
-        return dot
-
-    def graphviz_funds(self, format: str = 'pdf', weight: bool = False, acc_weight: bool = False):
-        """Return a Graphviz object that can be rendered to generate a visualization of the DAG.
-
-        :param format: Format of the visualization (pdf, png, or jpg)
-        :param weight: Whether to display or not the tx weight
-        :param acc_weight: Whether to display or not the tx accumulated weight
-        :return: A Graphviz object
-        """
-        from graphviz import Digraph
-
-        dot = Digraph(format=format)
-
-        g_blocks = dot.subgraph(name='blocks')
-        g_txs = dot.subgraph(name='txs')
-        g_genesis = dot.subgraph(name='genesis')
-
-        tx_tips_attrs = dict(style='filled', fillcolor='#F5D76E')
-        block_attrs = dict(shape='box', style='filled', fillcolor='#EC644B')
-
-        voided_attrs = dict(style='dashed,filled', penwidth='0.25', fillcolor='#BDC3C7')
-        conflict_attrs = dict(style='dashed,filled', penwidth='2.0', fillcolor='#BDC3C7')
-
-        dot.attr('node', shape='oval', style='')
-        nodes_iter = self._topological_sort()
-
-        # block_tips = set(x.data for x in self.get_block_tips())
-        tx_tips = set(x.data for x in self.get_tx_tips())
-
-        with g_genesis as g_g, g_txs as g_t, g_blocks as g_b:
-            for i, tx in enumerate(nodes_iter):
-                assert tx.hash is not None
-                name = tx.hash.hex()
-                attrs_node = {'label': tx.hash.hex()[-4:]}
-                attrs_edge = {}
-
-                if tx.is_block:
-                    attrs_node.update(block_attrs)
-                    attrs_edge.update(dict(penwidth='4'))
-
-                if tx.hash in tx_tips:
-                    attrs_node.update(tx_tips_attrs)
-
-                if weight:
-                    attrs_node.update(dict(label='{}\nw: {:.2f}'.format(attrs_node['label'], tx.weight)))
-
-                if acc_weight:
-                    metadata = tx.get_metadata()
-                    attrs_node.update(
-                        dict(label='{}\naw: {:.2f}'.format(attrs_node['label'], metadata.accumulated_weight)))
-
-                if tx.is_genesis:
-                    attrs_node.update(dict(fillcolor='#87D37C', style='filled'))
-                    g_g.node(name, **attrs_node)
-                elif tx.is_block:
-                    g_b.node(name, **attrs_node)
-                else:
-                    meta = tx.get_metadata()
-                    if len(meta.voided_by) > 0:
-                        attrs_node.update(voided_attrs)
-                        if tx.hash in meta.voided_by:
-                            attrs_node.update(conflict_attrs)
-                    g_t.node(name, **attrs_node)
-
-                for txin in tx.inputs:
-                    dot.edge(name, txin.tx_id.hex(), **attrs_edge)
-
-        dot.attr(rankdir='RL')
-        return dot
-
 
 class TransactionStorageAsyncFromSync(TransactionStorage):
     """Implement async interface from sync interface, for legacy implementations."""
@@ -547,6 +422,8 @@ class TransactionStorageAsyncFromSync(TransactionStorage):
 
 class BaseTransactionStorage(TransactionStorage):
     def __init__(self, with_index: bool = True, pubsub: Optional[Any] = None) -> None:
+        super().__init__()
+
         self.with_index = with_index
         if with_index:
             self._reset_cache()
