@@ -14,12 +14,18 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         self.path = path
         super().__init__(with_index=with_index)
 
+        filename_pattern = r'^tx_([\dabcdef]{64})\.bin$'
+        self.re_pattern = re.compile(filename_pattern)
+
     @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx, *, only_metadata=False):
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
+        if tx.is_genesis:
+            return
         if not only_metadata:
             self._save_transaction(tx)
         self._save_metadata(tx)
+        self._save_to_weakref(tx)
 
     def _save_transaction(self, tx):
         tx_bytes = tx.get_struct()
@@ -93,10 +99,14 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         return self._load_transaction_from_filepath(filepath)
 
     @deprecated('Use get_transaction_deferred instead')
-    def get_transaction(self, hash_bytes):
+    def get_transaction(self, hash_bytes: bytes):
         genesis = self.get_genesis(hash_bytes)
         if genesis:
             return genesis
+
+        tx = self.get_transaction_from_weakref(hash_bytes)
+        if tx is not None:
+            return tx
 
         tx = self.load_transaction(hash_bytes)
         try:
@@ -104,6 +114,7 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
             tx._metadata = meta
         except TransactionMetadataDoesNotExist:
             pass
+        self._save_to_weakref(tx)
         return tx
 
     def _get_metadata_by_hash(self, hash_bytes):
@@ -117,15 +128,20 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
             yield tx
 
         path = self.path
-        pattern = r'tx_[\dabcdef]{64}\.bin'
-        re_pattern = re.compile(pattern)
 
         with os.scandir(path) as it:
             for f in it:
-                if re_pattern.match(f.name):
-                    # TODO Return a proxy that will load the transaction only when it is used.
-                    tx = self._load_transaction_from_filepath(f.path)
-                    yield tx
+                match = self.re_pattern.match(f.name)
+                if match:
+                    hash_bytes = bytes.fromhex(match.groups()[0])
+                    tx = self.get_transaction_from_weakref(hash_bytes)
+                    if tx is not None:
+                        yield tx
+                    else:
+                        # TODO Return a proxy that will load the transaction only when it is used.
+                        tx = self._load_transaction_from_filepath(f.path)
+                        self._save_to_weakref(tx)
+                        yield tx
 
     @deprecated('Use get_count_tx_blocks_deferred instead')
     def get_count_tx_blocks(self):

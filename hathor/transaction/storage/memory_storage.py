@@ -10,7 +10,7 @@ _Clonable = TypeVar('_Clonable', BaseTransaction, TransactionMetadata)
 
 
 class TransactionMemoryStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
-    def __init__(self, with_index: bool = True, *, _clone_if_needed: bool = True) -> None:
+    def __init__(self, with_index: bool = True, *, _clone_if_needed: bool = False) -> None:
         """
         :param _clone_if_needed: *private parameter*, defaults to True, controls whether to clone
                                  transaction/blocks/metadata when returning those objects.

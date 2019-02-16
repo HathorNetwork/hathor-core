@@ -22,7 +22,7 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
         self.path = path
         super().__init__(with_index=with_index)
 
-        filename_pattern = r'tx_[\dabcdef]{64}\.json'
+        filename_pattern = r'^tx_([\dabcdef]{64})\.json$'
         self.re_pattern = re.compile(filename_pattern)
         self.create_subfolders(self.path, STORAGE_SUBFOLDERS)
 
@@ -44,7 +44,7 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
     def save_transaction(self, tx, *, only_metadata=False):
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
         # genesis txs and metadata are kept in memory
-        if tx.is_genesis and only_metadata:
+        if tx.is_genesis:
             return
         self._save_transaction(tx)
 
@@ -56,6 +56,7 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
             data['meta'] = tx._metadata.to_json()
         filepath = self.generate_filepath(tx.hash)
         self.save_to_json(filepath, data)
+        self._save_to_weakref(tx)
 
     def generate_filepath(self, hash_bytes):
         hash_hex = hash_bytes.hex()
@@ -140,12 +141,17 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
         if genesis:
             return genesis
 
+        tx = self.get_transaction_from_weakref(hash_bytes)
+        if tx is not None:
+            return tx
+
         filepath = self.generate_filepath(hash_bytes)
         data = self.load_from_json(filepath, TransactionDoesNotExist(hash_bytes.hex()))
         tx = self.load(data['tx'])
         if 'meta' in data.keys():
             meta = TransactionMetadata.create_from_json(data['meta'])
             tx._metadata = meta
+        self._save_to_weakref(tx)
         return tx
 
     @deprecated('Use get_all_transactions_deferred instead')
@@ -154,14 +160,21 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
             yield tx
 
         for f in glob.iglob(os.path.join(self.path, '*/*')):
-            if self.re_pattern.match(os.path.basename(f)):
-                # TODO Return a proxy that will load the transaction only when it is used.
-                data = self.load_from_json(f, TransactionDoesNotExist())
-                tx = self.load(data['tx'])
-                if 'meta' in data.keys():
-                    meta = TransactionMetadata.create_from_json(data['meta'])
-                    tx._metadata = meta
-                yield tx
+            match = self.re_pattern.match(os.path.basename(f))
+            if match:
+                hash_bytes = bytes.fromhex(match.groups()[0])
+                tx = self.get_transaction_from_weakref(hash_bytes)
+                if tx is not None:
+                    yield tx
+                else:
+                    # TODO Return a proxy that will load the transaction only when it is used.
+                    data = self.load_from_json(f, TransactionDoesNotExist())
+                    tx = self.load(data['tx'])
+                    if 'meta' in data.keys():
+                        meta = TransactionMetadata.create_from_json(data['meta'])
+                        tx._metadata = meta
+                    self._save_to_weakref(tx)
+                    yield tx
 
     @deprecated('Use get_count_tx_blocks_deferred instead')
     def get_count_tx_blocks(self):

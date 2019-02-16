@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod, abstractproperty
 from collections import deque
 from itertools import chain
-from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
+from typing import Any, Dict, Generator, Iterator, List, Optional, Set, Tuple
+from weakref import WeakValueDictionary
 
 from intervaltree.interval import Interval
 from twisted.internet.defer import inlineCallbacks, succeed
@@ -21,6 +22,40 @@ class TransactionStorage(ABC):
     pubsub: Optional[PubSubManager]
     with_index: bool  # noqa: E701
     wallet_index: Optional[WalletIndex]
+
+    def __init__(self):
+        # Weakref is used to guarantee that there is only one instance of each transaction in memory.
+        self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
+        self._tx_weakref_disabled: bool = False
+
+    def _save_to_weakref(self, tx: BaseTransaction) -> None:
+        """ Save transaction to weakref.
+        """
+        if self._tx_weakref_disabled:
+            return
+        assert tx.hash is not None
+        tx2 = self._tx_weakref.get(tx.hash, None)
+        if tx2 is None:
+            self._tx_weakref[tx.hash] = tx
+        else:
+            assert tx is tx2, 'There are two instance of the same transaction in memory'
+
+    def get_transaction_from_weakref(self, hash_bytes: bytes) -> Optional[BaseTransaction]:
+        """ Get a transaction from weakref if it exists. Otherwise, returns None.
+        """
+        if self._tx_weakref_disabled:
+            return None
+        return self._tx_weakref.get(hash_bytes, None)
+
+    def _enable_weakref(self) -> None:
+        """ For testing purposes. Weakref should never be disabled unless you know exactly what you are doing.
+        """
+        self._tx_weakref_disabled = False
+
+    def _disable_weakref(self) -> None:
+        """ For testing purposes. Weakref should never be disabled unless you know exactly what you are doing.
+        """
+        self._tx_weakref_disabled = True
 
     @abstractmethod
     @deprecated('Use save_transaction_deferred instead')
@@ -44,7 +79,7 @@ class TransactionStorage(ABC):
 
     @abstractmethod
     @deprecated('Use transaction_exists_deferred instead')
-    def transaction_exists(self, hash_bytes):
+    def transaction_exists(self, hash_bytes: bytes) -> bool:
         """Returns `True` if transaction with hash `hash_bytes` exists.
 
         :param hash_bytes: Hash in bytes that will be checked.
@@ -53,7 +88,7 @@ class TransactionStorage(ABC):
 
     @abstractmethod
     @deprecated('Use get_transaction_deferred instead')
-    def get_transaction(self, hash_bytes):
+    def get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
         """Returns the transaction with hash `hash_bytes`.
 
         :param hash_bytes: Hash in bytes that will be checked.
@@ -96,7 +131,7 @@ class TransactionStorage(ABC):
     """Async interface, all methods mirrorred from TransactionStorageSync, but suffixed with `_deferred`."""
 
     @abstractmethod
-    def save_transaction_deferred(self, tx, *, only_metadata=False):
+    def save_transaction_deferred(self, tx: BaseTransaction, *, only_metadata=False) -> None:
         """Saves the tx.
 
         :param tx: Transaction to save
@@ -112,7 +147,7 @@ class TransactionStorage(ABC):
         return succeed(None)
 
     @abstractmethod
-    def transaction_exists_deferred(self, hash_bytes):
+    def transaction_exists_deferred(self, hash_bytes: bytes) -> bool:
         """Returns `True` if transaction with hash `hash_bytes` exists.
 
         :param hash_bytes: Hash in bytes that will be checked.
@@ -123,7 +158,7 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_transaction_deferred(self, hash_bytes):
+    def get_transaction_deferred(self, hash_bytes: bytes) -> BaseTransaction:
         """Returns the transaction with hash `hash_bytes`.
 
         :param hash_bytes: Hash in bytes that will be checked.
@@ -134,7 +169,7 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @inlineCallbacks
-    def get_metadata_deferred(self, hash_bytes):
+    def get_metadata_deferred(self, hash_bytes: bytes) -> Generator[Any, Any, Optional[TransactionMetadata]]:
         """Returns the transaction metadata with hash `hash_bytes`.
 
         :param hash_bytes: Hash in bytes that will be checked.
@@ -146,10 +181,10 @@ class TransactionStorage(ABC):
             tx = yield self.get_transaction_deferred(hash_bytes)
             return tx.get_metadata(use_storage=False)
         except TransactionDoesNotExist:
-            pass
+            return None
 
     @abstractmethod
-    def get_all_transactions_deferred(self):
+    def get_all_transactions_deferred(self) -> Iterator[BaseTransaction]:
         # TODO: find an `async generator` type
         # TODO: verify the following claim:
         """Return all transactions that are not blocks.
@@ -159,7 +194,7 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_count_tx_blocks_deferred(self):
+    def get_count_tx_blocks_deferred(self) -> int:
         # TODO: verify the following claim:
         """Return the number of transactions/blocks stored.
 
@@ -387,6 +422,8 @@ class TransactionStorageAsyncFromSync(TransactionStorage):
 
 class BaseTransactionStorage(TransactionStorage):
     def __init__(self, with_index: bool = True, pubsub: Optional[Any] = None) -> None:
+        super().__init__()
+
         self.with_index = with_index
         if with_index:
             self._reset_cache()
