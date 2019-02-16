@@ -62,6 +62,9 @@ class _BaseTransactionStorageTest:
                 storage=tx_storage)
             self.tx.resolve()
 
+            # Disable weakref to test the internal methods. Otherwise, most methods return objects from weakref.
+            self.tx_storage._disable_weakref()
+
         def tearDown(self):
             shutil.rmtree(self.tmpdir)
 
@@ -126,6 +129,32 @@ class _BaseTransactionStorageTest:
 
         def test_save_tx(self):
             self.validate_save(self.tx)
+
+        def test_shared_memory(self):
+            # Enable weakref to this test only.
+            self.tx_storage._enable_weakref()
+
+            self.validate_save(self.block)
+            self.validate_save(self.tx)
+
+            for tx in [self.tx, self.block]:
+                # just making sure, if it is genesis the test is wrong
+                self.assertFalse(tx.is_genesis)
+
+                # load transactions twice
+                tx1 = self.tx_storage.get_transaction(tx.hash)
+                tx2 = self.tx_storage.get_transaction(tx.hash)
+
+                # naturally they should be equal, but this time so do the objects
+                self.assertTrue(tx1 == tx2)
+                self.assertTrue(tx1 is tx2)
+
+                meta1 = tx1.get_metadata()
+                meta2 = tx2.get_metadata()
+
+                # and naturally the metadata too
+                self.assertTrue(meta1 == meta2)
+                self.assertTrue(meta1 is meta2)
 
         def test_get_wrong_tx(self):
             hex_error = bytes.fromhex('00001c5c0b69d13b05534c94a69b2c8272294e6b0c536660a3ac264820677024')
@@ -252,6 +281,32 @@ class TransactionCompactStorageTest(_BaseTransactionStorageTest._TransactionStor
         # test we have the subfolders under the main tx folder
         subfolders = os.listdir(self.directory)
         self.assertEqual(STORAGE_SUBFOLDERS, len(subfolders))
+
+    def tearDown(self):
+        shutil.rmtree(self.directory)
+        super().tearDown()
+
+
+class CacheBinaryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
+    def setUp(self):
+        self.directory = tempfile.mkdtemp(dir='/tmp/')
+        store = TransactionBinaryStorage(self.directory)
+        reactor = Clock()
+        super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
+
+    def tearDown(self):
+        shutil.rmtree(self.directory)
+        super().tearDown()
+
+
+class CacheCompactStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
+    def setUp(self):
+        self.directory = tempfile.mkdtemp(dir='/tmp/')
+        # Creating random file just to test specific part of code
+        tempfile.NamedTemporaryFile(dir=self.directory, delete=True)
+        store = TransactionCompactStorage(self.directory)
+        reactor = Clock()
+        super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
 
     def tearDown(self):
         shutil.rmtree(self.directory)

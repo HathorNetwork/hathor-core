@@ -15,7 +15,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
     """
     log = Logger()
 
-    def __init__(self, store, reactor, interval=5, capacity=10000, *, _clone_if_needed=True):
+    def __init__(self, store, reactor, interval=5, capacity=10000, *, _clone_if_needed=False):
         """
         :param store: a subclass of TransactionStorage
         :type store: :py:class:`hathor.transaction.storage.TransactionStorage`
