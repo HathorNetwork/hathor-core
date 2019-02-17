@@ -4,7 +4,7 @@
     "params": {
         "targets": [
             {
-                "expr": "irate(node_cpu_seconds_total{{instance='{0}:{1}', mode!='idle'}}[5m])",
+                "expr": "irate(node_cpu_seconds_total{{instance='{0}', mode!='idle'}}[5m])",
                 "format": "time_series",
                 "hide": false,
                 "instant": false,

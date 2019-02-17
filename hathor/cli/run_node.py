@@ -183,7 +183,7 @@ def main():
         print('Hostname discovered and set to {}'.format(hostname))
 
     network = 'testnet'
-    manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=args.hostname, tx_storage=tx_storage,
+    manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname, tx_storage=tx_storage,
                             wallet=wallet, wallet_index=args.wallet_index)
 
     dns_hosts = []

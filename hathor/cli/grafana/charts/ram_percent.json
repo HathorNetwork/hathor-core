@@ -2,7 +2,7 @@
     "title": "Used RAM Memory",
     "type": "percent",
     "params": {
-        "query": "((node_memory_MemTotal_bytes{{instance='{0}:{1}',job='{2}'}} - node_memory_MemFree_bytes{{instance='{0}:{1}',job='{2}'}}) / (node_memory_MemTotal_bytes{{instance='{0}:{1}',job='{2}'}} )) * 100",
+        "query": "((node_memory_MemTotal_bytes{{instance='{0}',job='{1}'}} - node_memory_MemFree_bytes{{instance='{0}',job='{1}'}}) / (node_memory_MemTotal_bytes{{instance='{0}',job='{1}'}} )) * 100",
         "description": "Non available RAM memory"
     },
     "height": 3

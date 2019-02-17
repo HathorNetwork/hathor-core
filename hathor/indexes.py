@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, DefaultDict, Dict, Iterator, List, NamedTuple,
 
 from intervaltree import Interval, IntervalTree
 from sortedcontainers import SortedKeyList
+from twisted.logger import Logger
 
 from hathor.pubsub import HathorEvents
 from hathor.transaction import BaseTransaction
@@ -88,6 +89,8 @@ class TipsIndex:
 
     TODO Use an interval tree stored in disk, possibly using a B-tree.
     """
+
+    log = Logger()
 
     # An interval tree used to know the tips at any timestamp.
     # The intervals are in the form (begin, end), where begin is the timestamp

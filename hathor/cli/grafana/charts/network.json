@@ -4,7 +4,7 @@
     "params": {
         "targets": [
             {
-                "expr": "irate(node_network_transmit_bytes_total{{instance='{0}:{1}', device!~'lo|bond[0-9]|cbr[0-9]|veth.*'}}[5m]) > 0",
+                "expr": "irate(node_network_transmit_bytes_total{{instance='{0}', device!~'lo|bond[0-9]|cbr[0-9]|veth.*'}}[5m]) > 0",
                 "format": "time_series",
                 "hide": false,
                 "instant": false,
@@ -14,7 +14,7 @@
                 "step": 40
             },
             {
-                "expr": "irate(node_network_receive_bytes_total{{instance='{0}:{1}', device!~'lo|bond[0-9]|cbr[0-9]|veth.*'}}[5m]) > 0",
+                "expr": "irate(node_network_receive_bytes_total{{instance='{0}', device!~'lo|bond[0-9]|cbr[0-9]|veth.*'}}[5m]) > 0",
                 "format": "time_series",
                 "hide": false,
                 "instant": false,

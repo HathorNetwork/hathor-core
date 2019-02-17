@@ -2,7 +2,7 @@
     "title": "CPU System Load (1m avg)",
     "type": "percent",
     "params": {
-        "query": "avg(node_load1{{instance='{0}:{1}',job='{2}'}}) /  count(count(node_cpu_seconds_total{{instance='{0}:{1}',job='{2}'}}) by (cpu)) * 100",
+        "query": "avg(node_load1{{instance='{0}',job='{1}'}}) /  count(count(node_cpu_seconds_total{{instance='{0}',job='{1}'}}) by (cpu)) * 100",
         "description": "Busy state of all CPU cores together (1 min average)"
     },
     "height": 3

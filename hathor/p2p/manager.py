@@ -1,4 +1,4 @@
-from typing import Dict, Set
+from typing import Dict, Optional, Set
 
 from twisted.internet import endpoints
 from twisted.internet.base import ReactorBase
@@ -88,13 +88,16 @@ class ConnectionsManager:
             assert isinstance(conn.state, ReadyState)
             conn.state.send_tx_to_peer(tx)
 
-    def on_connection_failure(self, failure, endpoint):
+    def on_connection_failure(self, failure: str, peer: Optional[PeerId], endpoint: IStreamClientEndpoint):
         self.log.info(
             'Connection failure: address={endpoint._host}:{endpoint._port} message={failure}',
             endpoint=endpoint,
             failure=failure,
         )
         self.connecting_peers.pop(endpoint)
+        if peer is not None:
+            now = int(self.reactor.seconds())
+            peer.update_retry_timestamp(now)
 
     def on_peer_connect(self, protocol: HathorProtocol) -> None:
         self.log.info('on_peer_connect() {protocol}', protocol=protocol)
@@ -146,7 +149,7 @@ class ConnectionsManager:
         if peer.id == self.my_peer.id:
             return
         self.received_peer_storage.add_or_merge(peer)
-        self.connect_to_if_not_connected(peer)
+        self.connect_to_if_not_connected(peer, 0)
 
     def reconnect_to_all(self) -> None:
         """ It is called by the `lc_reconnect` timer and tries to connect to all known
@@ -154,10 +157,11 @@ class ConnectionsManager:
 
         TODO(epnichols): Should we always conect to *all*? Should there be a max #?
         """
+        now = int(self.reactor.seconds())
         for peer in self.peer_storage.values():
-            self.connect_to_if_not_connected(peer)
+            self.connect_to_if_not_connected(peer, now)
 
-    def connect_to_if_not_connected(self, peer: PeerId) -> None:
+    def connect_to_if_not_connected(self, peer: PeerId, now: int) -> None:
         """ Attempts to connect if it is not connected to the peer.
         """
         import random
@@ -166,20 +170,25 @@ class ConnectionsManager:
             return
         if peer.id in self.connected_peers:
             return
-        self.connect_to(random.choice(peer.entrypoints))
 
-    def _connect_to_callback(self, protocol, endpoint):
+        assert peer.id is not None
+        if now >= peer.retry_timestamp:
+            self.connect_to(random.choice(peer.entrypoints), peer)
+
+    def _connect_to_callback(self, protocol: HathorProtocol, peer: Optional[PeerId], endpoint: IStreamClientEndpoint):
         self.connecting_peers.pop(endpoint)
+        if peer is not None:
+            peer.reset_retry_timestamp()
 
-    def connect_to(self, description, ssl=False):
+    def connect_to(self, description, peer: Optional[PeerId] = None, use_ssl=False):
         """ Attempt to connect to a peer, even if a connection already exists.
         Usually you should call `connect_to_if_not_connected`.
 
-        If `ssl` is True, then the connection will be wraped by a TLS.
+        If `use_ssl` is True, then the connection will be wraped by a TLS.
         """
         endpoint = endpoints.clientFromString(self.reactor, description)
 
-        if ssl:
+        if use_ssl:
             from twisted.internet import ssl
             from twisted.protocols.tls import TLSMemoryBIOFactory
             context = ssl.ClientContextFactory()
@@ -190,8 +199,8 @@ class ConnectionsManager:
         deferred = endpoint.connect(factory)
         self.connecting_peers[endpoint] = deferred
 
-        deferred.addCallback(self._connect_to_callback, endpoint)
-        deferred.addErrback(self.on_connection_failure, endpoint)
+        deferred.addCallback(self._connect_to_callback, peer, endpoint)
+        deferred.addErrback(self.on_connection_failure, peer, endpoint)
         self.log.info('Connecting to: {description}...', description=description)
 
     def listen(self, description, ssl=False):
