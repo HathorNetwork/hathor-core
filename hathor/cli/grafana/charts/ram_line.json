@@ -4,7 +4,7 @@
     "params": {
         "targets": [
             {
-                "expr": "node_memory_MemTotal_bytes{{instance='{0}:{1}'}} - node_memory_MemFree_bytes{{instance='{0}:{1}'}} - node_memory_Cached_bytes{{instance='{0}:{1}'}} - node_memory_Buffers_bytes{{instance='{0}:{1}'}} - node_memory_Slab_bytes{{instance='{0}:{1}'}}",
+                "expr": "node_memory_MemTotal_bytes{{instance='{0}'}} - node_memory_MemFree_bytes{{instance='{0}'}} - node_memory_Cached_bytes{{instance='{0}'}} - node_memory_Buffers_bytes{{instance='{0}'}} - node_memory_Slab_bytes{{instance='{0}'}}",
                 "format": "time_series",
                 "intervalFactor": 2,
                 "legendFormat": "Used",
@@ -14,7 +14,7 @@
                 "target": ""
             },
             {
-              "expr": "node_memory_Buffers_bytes{{instance='{0}:{1}'}}",
+              "expr": "node_memory_Buffers_bytes{{instance='{0}'}}",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Buffers",
@@ -22,7 +22,7 @@
               "step": 40
             },
             {
-              "expr": "node_memory_Cached_bytes{{instance='{0}:{1}'}} + node_memory_Slab_bytes{{instance='{0}:{1}'}}",
+              "expr": "node_memory_Cached_bytes{{instance='{0}'}} + node_memory_Slab_bytes{{instance='{0}'}}",
               "format": "time_series",
               "intervalFactor": 2,
               "legendFormat": "Cached",
@@ -30,7 +30,7 @@
               "step": 40
             },
             {
-              "expr": "node_memory_MemFree_bytes{{instance='{0}:{1}'}}",
+              "expr": "node_memory_MemFree_bytes{{instance='{0}'}}",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 2,

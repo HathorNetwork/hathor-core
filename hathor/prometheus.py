@@ -44,8 +44,8 @@ class PrometheusMetricsExporter:
         # Setup initial prometheus lib objects for each metric
         self._initial_setup()
 
-        # Interval in which the write data method will be called
-        self.call_interval = 1
+        # Interval in which the write data method will be called (in seconds)
+        self.call_interval = 5
 
         # If exporter is running
         self.running = False

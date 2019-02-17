@@ -4,7 +4,7 @@
     "params": {
         "targets": [
             {
-                "expr": "peers{{instance='{0}:{1}',job='{2}'}}",
+                "expr": "peers{{instance='{0}',job='{1}'}}",
                 "format": "time_series",
                 "intervalFactor": 1,
                 "refId": "A"

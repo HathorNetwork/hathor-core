@@ -27,15 +27,23 @@ class PeerId:
     entrypoints: List[str]
     private_key: Optional['rsa._RSAPrivateKey']
     public_key: Optional['rsa._RSAPublicKey']
+    retry_timestamp: int    # should only try connecting to this peer after this timestamp
+    retry_interval: int     # how long to wait for next connection retry. It will double for each failure
 
     def __init__(self, auto_generate_keys: bool = True) -> None:
         self.id = None
         self.private_key = None
         self.public_key = None
         self.entrypoints = []
+        self.retry_timestamp = 0
+        self.retry_interval = 5
 
         if auto_generate_keys:
             self.generate_keys()
+
+    def __str__(self):
+        return ('PeerId(id=%s, entrypoints=%s, retry_timestamp=%d, retry_interval=%d)' % (self.id, self.entrypoints,
+                self.retry_timestamp, self.retry_interval))
 
     def merge(self, other: 'PeerId') -> None:
         """ Merge two PeerId objects, checking that they have the same
@@ -192,3 +200,19 @@ class PeerId:
         fp = open(path, 'w')
         json.dump(data, fp, indent=4)
         fp.close()
+
+    def update_retry_timestamp(self, now: int) -> None:
+        """ Updates timestamp for next retry.
+
+        :param now: current timestamp
+        """
+        self.retry_interval = self.retry_interval * 2
+        if self.retry_interval > 180:
+            self.retry_interval = 180
+        self.retry_timestamp = now + self.retry_interval
+
+    def reset_retry_timestamp(self) -> None:
+        """ Resets retry values.
+        """
+        self.retry_interval = 5
+        self.retry_timestamp = 0
