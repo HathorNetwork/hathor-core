@@ -19,11 +19,11 @@ class GraphvizTest(_BaseResourceTest._ResourceTest):
         txs = add_new_transactions(self.manager, 2, advance_clock=2)
         tx = txs[0]
 
-        tx2 = Transaction.create_from_struct(tx.get_struct())
-        tx2.parents = [tx.parents[1], tx.parents[0]]
-        tx2.resolve()
+        self.tx2 = Transaction.create_from_struct(tx.get_struct())
+        self.tx2.parents = [tx.parents[1], tx.parents[0]]
+        self.tx2.resolve()
 
-        self.manager.propagate_tx(tx2)
+        self.manager.propagate_tx(self.tx2)
 
     @inlineCallbacks
     def test_get(self):
@@ -46,6 +46,22 @@ class GraphvizTest(_BaseResourceTest._ResourceTest):
         response4 = yield self.web.get('graphviz', {b'funds': b'true', b'weight': b'true', b'acc_weight': b'true'})
         data4 = response4.written[0]
         self.assertIsNotNone(data4)
+
+        # Tx neighbor graph
+        response5 = yield self.web.get(
+            'graphviz',
+            {b'tx': self.tx2.hash_hex.encode('utf-8'), b'graph_type': b'funds', b'max_level': b'2'}
+        )
+        data5 = response5.written[0]
+        self.assertIsNotNone(data5)
+
+        # Tx neighbor error
+        response6 = yield self.web.get(
+            'graphviz',
+            {b'tx': self.tx2.hash_hex.encode('utf-8'), b'graph_type': b'funds', b'max_level': b'20'}
+        )
+        data6 = response6.json_value()
+        self.assertFalse(data6['success'])
 
     def test_parse_arg(self):
         resource = GraphvizResource(self.manager)

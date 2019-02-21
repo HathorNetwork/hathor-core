@@ -97,7 +97,6 @@
                     "tx_hex": {
                         "type": "string",
                         "description": "Serialized transaction in hexadecimal before parents and pow"
-                        }
                     }
                 }
             },
