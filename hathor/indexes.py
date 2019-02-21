@@ -39,12 +39,12 @@ class IndexesManager:
         self.tips_index.add_tx(tx)
         self.txs_index.add_tx(tx)
 
-    def del_tx(self, tx: BaseTransaction) -> None:
+    def del_tx(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
         """ Delete a transaction from the indexes
 
         :param tx: Transaction to be deleted
         """
-        self.tips_index.del_tx(tx)
+        self.tips_index.del_tx(tx, relax_assert=relax_assert)
         self.txs_index.del_tx(tx)
 
     def get_newest(self, count: int) -> Tuple[List[bytes], bool]:
@@ -140,7 +140,7 @@ class TipsIndex:
         self.tree.add(interval)
         self.tx_last_interval[tx.hash] = interval
 
-    def del_tx(self, tx: BaseTransaction) -> None:
+    def del_tx(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
         """ Remove a transaction from the index.
         """
         assert tx.hash is not None
@@ -149,7 +149,10 @@ class TipsIndex:
         interval = self.tx_last_interval.pop(tx.hash, None)
         if interval is None:
             return
-        assert interval.end == inf
+
+        if not relax_assert:
+            assert interval.end == inf
+
         self.tree.remove(interval)
 
         # Update its parents as tips if needed.
@@ -158,9 +161,9 @@ class TipsIndex:
             parent = tx.storage.get_transaction(parent_hash)
             if parent.is_block != tx.is_block:
                 continue
-            self.update_tx(parent)
+            self.update_tx(parent, relax_assert=relax_assert)
 
-    def update_tx(self, tx: BaseTransaction) -> None:
+    def update_tx(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
         """ Update a tx according to its children.
         """
         assert tx.storage is not None
@@ -168,7 +171,8 @@ class TipsIndex:
 
         meta = tx.get_metadata()
         if meta.voided_by:
-            assert tx.hash not in self.tx_last_interval
+            if not relax_assert:
+                assert tx.hash not in self.tx_last_interval
             return
 
         pi = self.tx_last_interval[tx.hash]

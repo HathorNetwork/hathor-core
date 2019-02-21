@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod, abstractproperty
 from collections import deque
-from itertools import chain
 from typing import Any, Dict, Generator, Iterator, List, Optional, Set, Tuple
 from weakref import WeakValueDictionary
 
@@ -327,29 +326,11 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def iter_bfs_children(self, root) -> Iterator[BaseTransaction]:
-        """Run a BFS starting from the given transaction to the tips (left-to-right)
-
-        :param root: Starting point of the BFS, either a block or a transaction.
-        :return: An iterable with the transactions (without the root)
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def iter_bfs_spent_by(self, root: Transaction) -> Iterator[BaseTransaction]:
-        """Run a BFS starting from the given transaction (left-to-right)
-
-        :param root: Starting point of the BFS, either a block or a transaction.
-        :return: An iterable with the transactions (without the root)
-        """
-        raise NotImplementedError
-
-    @abstractmethod
     def _add_to_cache(self, tx):
         raise NotImplementedError
 
     @abstractmethod
-    def _del_from_cache(self, tx):
+    def _del_from_cache(self, tx, *, relax_assert: bool = False):
         raise NotImplementedError
 
     @abstractmethod
@@ -376,17 +357,6 @@ class TransactionStorage(ABC):
         :param hash_bytes: Starting point of the BFS, either a block or a transaction.
         :param num_blocks: Number of blocks to be return.
         :return: List of transactions
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def iter_bfs_ascendent_blocks(self, root: Block, max_depth: int) -> Iterator[Block]:
-        """Iterate through all ascendents in a BFS algorithm, starting from `root` until reach `max_depth`.
-
-        Only blocks are yielded.
-
-        :param root: Start point of the BSF
-        :return: An iterable of transactions
         """
         raise NotImplementedError
 
@@ -585,54 +555,6 @@ class BaseTransactionStorage(TransactionStorage):
                     parent = self.get_transaction(parent_hash)
                     stack.append(parent)
 
-    # XXX: NOT IN USE:
-    def iter_bfs(self, root):  # pragma: no cover
-        """Run a BFS starting from the given transaction to genesis (right_to_left)
-
-        :param root: Starting point of the BFS, either a block or a transaction.
-        :return: An iterable with the transactions (with the root)
-        """
-        to_visit = deque([root.hash])  # List[bytes]
-        seen = set(to_visit)  # Set[bytes]
-
-        while to_visit:
-            tx_hash = to_visit.popleft()
-            tx = self.get_transaction(tx_hash)
-            yield tx
-            seen.add(tx_hash)
-            for parent_hash in tx.parents:
-                if parent_hash not in seen:
-                    to_visit.append(parent_hash)
-                    seen.add(parent_hash)
-
-    def iter_bfs_children(self, root: Transaction) -> Iterator[BaseTransaction]:
-        to_visit = deque(root.get_metadata().children)  # List[bytes(hash)]
-        seen = set(to_visit)  # Set[bytes]
-
-        while to_visit:
-            tx_hash = to_visit.popleft()
-            tx = self.get_transaction(tx_hash)
-            yield tx
-            seen.add(tx_hash)
-            for children_hash in tx.get_metadata().children:
-                if children_hash not in seen:
-                    to_visit.append(children_hash)
-                    seen.add(children_hash)
-
-    def iter_bfs_spent_by(self, root: Transaction) -> Iterator[BaseTransaction]:
-        to_visit = deque(chain(*root.get_metadata().spent_outputs.values()))  # Deque[bytes(hash)]
-        seen = set(to_visit)  # Set[bytes]
-
-        while to_visit:
-            tx_hash = to_visit.popleft()
-            tx = self.get_transaction(tx_hash)
-            yield tx
-            seen.add(tx_hash)
-            for spent_hash in chain(*tx.get_metadata().spent_outputs.values()):
-                if spent_hash not in seen:
-                    to_visit.append(spent_hash)
-                    seen.add(spent_hash)
-
     def _add_to_cache(self, tx: BaseTransaction) -> None:
         if not self.with_index:
             raise NotImplementedError
@@ -647,15 +569,15 @@ class BaseTransactionStorage(TransactionStorage):
             self._cache_tx_count += 1
             self.tx_index.add_tx(tx)
 
-    def _del_from_cache(self, tx: Transaction) -> None:
+    def _del_from_cache(self, tx: Transaction, *, relax_assert: bool = False) -> None:
         if not self.with_index:
             raise NotImplementedError
         if tx.is_block:
             self._cache_block_count -= 1
-            self.block_index.del_tx(tx)
+            self.block_index.del_tx(tx, relax_assert=relax_assert)
         else:
             self._cache_tx_count -= 1
-            self.tx_index.del_tx(tx)
+            self.tx_index.del_tx(tx, relax_assert=relax_assert)
 
     def get_block_count(self) -> int:
         if not self.with_index:
@@ -693,23 +615,6 @@ class BaseTransactionStorage(TransactionStorage):
         result = [x for x in self._topological_sort_dfs(ref_tx, visited) if not x.is_block]
         result = result[-num_blocks:]
         return result
-
-    def iter_bfs_ascendent_blocks(self, root: Block, max_depth: int) -> Iterator[Block]:
-        pending_visits = deque([(1, parent_hash) for parent_hash in root.parents])
-        used = set(root.parents)
-        while pending_visits:
-            depth, tx_hash = pending_visits.popleft()
-            tx = self.get_transaction(tx_hash)
-            if not tx.is_block:
-                continue
-            assert isinstance(tx, Block)
-            yield tx
-            if depth >= max_depth:
-                continue
-            for parent_hash in tx.parents:
-                if parent_hash not in used:
-                    used.add(parent_hash)
-                    pending_visits.append((depth + 1, parent_hash))
 
     def get_blocks_before(self, hash_bytes: bytes, num_blocks: int = 100) -> List[Block]:
         ref_tx = self.get_transaction(hash_bytes)

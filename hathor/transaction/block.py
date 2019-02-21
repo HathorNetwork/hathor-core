@@ -82,6 +82,17 @@ class Block(BaseTransaction):
 
         return blc
 
+    def get_block_parent_hash(self) -> bytes:
+        """Return the hash of the parent block.
+        """
+        return self.parents[0]
+
+    def get_block_parent(self) -> 'Block':
+        """Return the parent block.
+        """
+        assert self.storage is not None
+        return self.storage.get_transaction(self.get_block_parent_hash())
+
     def get_struct_without_nonce(self) -> bytes:
         struct_bytes_without_data = super().get_struct_without_nonce()
         # TODO: should we validate data length here?
@@ -331,7 +342,7 @@ class Block(BaseTransaction):
         assert self.storage is not None
         assert self.hash is not None
 
-        parent = self.storage.get_transaction(self.parents[0])
+        parent = self.get_block_parent()
         parent_meta = parent.get_metadata()
         assert self.hash in parent_meta.children
 
@@ -401,7 +412,7 @@ class Block(BaseTransaction):
                             block.mark_as_voided()
                         # We have to go through the chain until the first parent in the best
                         # chain because the head may be voided with part of the tail non-voided.
-                        block = self.storage.get_transaction(block.parents[0])
+                        block = block.get_block_parent()
 
                 if score >= best_score + eps:
                     # We have a new winner.
@@ -480,7 +491,7 @@ class Block(BaseTransaction):
             success = block.remove_voided_by()
             if not success:
                 break
-            block = self.storage.get_transaction(block.parents[0])
+            block = block.get_block_parent()
 
     def _find_first_parent_in_best_chain(self) -> BaseTransaction:
         """ Find the first block in the side chain that is not voided, i.e., the block where the fork started.
@@ -494,12 +505,12 @@ class Block(BaseTransaction):
         """
         assert self.storage is not None
         assert len(self.parents) > 0, 'This should never happen because the genesis is always in the best chain'
-        parent_hash = self.parents[0]
+        parent_hash = self.get_block_parent_hash()
         while True:
             parent = self.storage.get_transaction(parent_hash)
             parent_meta = parent.get_metadata()
             if not parent_meta.voided_by:
                 break
             assert len(parent.parents) > 0, 'This should never happen because the genesis is always in the best chain'
-            parent_hash = parent.parents[0]
+            parent_hash = parent.get_block_parent_hash()
         return parent
