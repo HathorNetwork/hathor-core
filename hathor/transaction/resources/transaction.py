@@ -1,11 +1,9 @@
 import json
-import re
 
 from twisted.web import resource
 
-from hathor.api_util import set_cors
+from hathor.api_util import set_cors, validate_tx_hash
 from hathor.cli.openapi_files.register import register_resource
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
 
 @register_resource
@@ -49,29 +47,31 @@ class TransactionResource(resource.Resource):
         """ Get 'id' (hash) from request.args
             Returns the tx with this hash or {'success': False} if hash is invalid or tx does not exist
         """
-        try:
-            requested_hash = request.args[b'id'][0].decode('utf-8')
-            pattern = r'[a-fA-F\d]{64}'
-            # Check if parameter is a valid hex hash
-            if re.match(pattern, requested_hash):
-                hash_bytes = bytes.fromhex(requested_hash)
-                tx = self.manager.tx_storage.get_transaction(hash_bytes)
-                serialized = tx.to_json(decode_script=True)
-                serialized['raw'] = tx.get_struct().hex()
-                meta = tx.update_accumulated_weight()
-                serialized['accumulated_weight'] = meta.accumulated_weight
-                if meta.conflict_with:
-                    serialized['conflict_with'] = [h.hex() for h in meta.conflict_with]
-                if meta.voided_by:
-                    serialized['voided_by'] = [h.hex() for h in meta.voided_by]
-                if meta.twins:
-                    serialized['twins'] = [h.hex() for h in meta.twins]
+        requested_hash = request.args[b'id'][0].decode('utf-8')
+        success, message = validate_tx_hash(requested_hash, self.manager.tx_storage)
+        if not success:
+            data = {'success': False, 'message': message}
+        else:
+            hash_bytes = bytes.fromhex(requested_hash)
+            tx = self.manager.tx_storage.get_transaction(hash_bytes)
+            serialized = tx.to_json(decode_script=True)
+            serialized['raw'] = tx.get_struct().hex()
+            meta = tx.get_metadata(force_reload=True)
+            # To get the updated accumulated weight just need to call the
+            # TransactionAccumulatedWeightResource (/transaction_acc_weight)
 
-                data = {'success': True, 'tx': serialized}
-            else:
-                data = {'success': False, 'message': 'Transaction not found'}
-        except TransactionDoesNotExist:
-            data = {'success': False, 'message': 'Transaction not found'}
+            # In the metadata we have the spent_outputs, that are the txs that spent the outputs for each index
+            # However we need to send also which one of them is not voided
+            spent_outputs = {}
+            for index, spent_set in meta.spent_outputs.items():
+                for spent in spent_set:
+                    spent_tx = self.manager.tx_storage.get_transaction(spent)
+                    spent_meta = spent_tx.get_metadata()
+                    if not spent_meta.voided_by:
+                        spent_outputs[index] = spent_tx.hash_hex
+                        break
+
+            data = {'success': True, 'tx': serialized, 'meta': meta.to_json(), 'spent_outputs': spent_outputs}
 
         return data
 
@@ -195,8 +195,31 @@ TransactionResource.openapi = {
                                             'parents': [],
                                             'inputs': [],
                                             'outputs': [],
-                                            'tokens': [],
-                                            'accumulated_weight': 14
+                                            'tokens': []
+                                        },
+                                        'meta': {
+                                            'hash': '00002b3be4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22f',
+                                            'spent_outputs': [
+                                                ['0', [
+                                                    '00002b3be4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22e'
+                                                ]],
+                                                ['1', [
+                                                    '00002b3ce4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22e'
+                                                ]]
+                                            ],
+                                            'received_by': [],
+                                            'children': [
+                                                '00002b3ee4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22d'
+                                            ],
+                                            'conflict_with': [],
+                                            'voided_by': [],
+                                            'twins': [],
+                                            'accumulated_weight': 10,
+                                            'score': 12,
+                                            'first_block': None
+                                        },
+                                        'spent_outputs': {
+                                            0: '00002b3ce4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22e'
                                         },
                                         'success': True
                                     }

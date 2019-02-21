@@ -36,6 +36,7 @@ def main():
         PushTxResource,
         TipsHistogramResource,
         TipsResource,
+        TransactionAccWeightResource,
         TransactionResource,
     )
     from hathor.p2p.utils import discover_hostname
@@ -242,6 +243,7 @@ def main():
             (b'tips-histogram', TipsHistogramResource(manager), root),
             (b'tips', TipsResource(manager), root),
             (b'transaction', TransactionResource(manager), root),
+            (b'transaction_acc_weight', TransactionAccWeightResource(manager), root),
             (b'dashboard_tx', DashboardTransactionResource(manager), root),
             (b'profiler', ProfilerResource(manager), root),
             # /wallet

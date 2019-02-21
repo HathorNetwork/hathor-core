@@ -21,7 +21,6 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         self.assertTrue(data_success['success'])
         dict_test = genesis_tx.to_json(decode_script=True)
         dict_test['raw'] = genesis_tx.get_struct().hex()
-        dict_test['accumulated_weight'] = genesis_tx.get_metadata().accumulated_weight
         self.assertEqual(data_success['tx'], dict_test)
 
         # Test sending hash that does not exist
