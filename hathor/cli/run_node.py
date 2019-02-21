@@ -2,6 +2,7 @@ import getpass
 import json
 import os
 import sys
+from threading import current_thread
 
 from autobahn.twisted.resource import WebSocketResource
 from twisted.internet import reactor
@@ -18,6 +19,11 @@ from twisted.web.resource import Resource
 
 
 def formatLogEvent(event):
+    namespace = u'{namespace}#{thread_name}'.format(
+        namespace=event.get('log_namespace', u'-'),
+        thread_name=current_thread().name,
+    )
+    event['log_namespace'] = namespace
     return formatEventAsClassicLogText(event)
 
 
