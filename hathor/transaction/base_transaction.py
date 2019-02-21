@@ -3,6 +3,7 @@
 import base64
 import datetime
 import hashlib
+import random
 import time
 import weakref
 from _hashlib import HASH
@@ -666,6 +667,22 @@ class BaseTransaction(ABC):
             return metadata
 
         accumulated_weight = self.weight
+
+        # Optimization to avoid running the BFS.
+        if stop_value < inf and metadata.first_block:
+            first_block = self.storage.get_transaction(metadata.first_block)
+            first_block_meta = first_block.get_metadata()
+
+            # It is safe to use any of blocks competing for the best blockchain?
+            # It seems it is, because `first_block != None` means that it is in the
+            # intersections of the competing blocks.
+            head_blocks_hashes = self.storage.get_best_block_tips()
+            head_block = self.storage.get_transaction(random.choice(head_blocks_hashes))
+            head_block_meta = head_block.get_metadata()
+
+            dscore = head_block_meta.score - first_block_meta.score
+            if dscore > stop_value:
+                return metadata
 
         # TODO We can walk by the blocks first, because they have higher weight and this may
         # reduce the number of visits in the BFS. One possibility is to use the tx's weight as the weight
