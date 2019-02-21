@@ -2,7 +2,7 @@
     "title": "CPU Busy",
     "type": "percent",
     "params": {
-        "query": "(((count(count(node_cpu_seconds_total{{instance='{0}:{1}',job='{2}'}}) by (cpu))) - avg(sum by (mode)(irate(node_cpu_seconds_total{{mode='idle',instance='{0}:{1}',job='{2}'}}[5m])))) * 100) / count(count(node_cpu_seconds_total{{instance='{0}:{1}',job='{2}'}}) by (cpu))",
+        "query": "(((count(count(node_cpu_seconds_total{{instance='{0}',job='{1}'}}) by (cpu))) - avg(sum by (mode)(irate(node_cpu_seconds_total{{mode='idle',instance='{0}',job='{1}'}}[5m])))) * 100) / count(count(node_cpu_seconds_total{{instance='{0}',job='{1}'}}) by (cpu))",
         "description": "Busy state of all CPU cores together"
     },
     "height": 3

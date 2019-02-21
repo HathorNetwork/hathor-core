@@ -481,7 +481,7 @@ class HathorManager:
                 # We've reached genesis.
                 assert current.is_genesis
                 break
-            current = self.tx_storage.get_transaction(current.get_block_parent_hash())
+            current = current.get_block_parent()
 
         if len(blocks) == 0:
             return self.min_block_weight

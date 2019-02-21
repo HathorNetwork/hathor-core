@@ -118,7 +118,6 @@ def get_grafana_dashboard_json(title: str, data_source: str = DATA_SOURCE) -> st
             # For each node I get the specific parameters and call the method for this chart
             kwargs = chart['params']
             kwargs['node'] = node['host']
-            kwargs['port'] = node['port']
             kwargs['job'] = node['job']
 
             w = get_width(index + 1 <= extra_width)
@@ -178,7 +177,7 @@ def get_default_panel(title: str, data_source: str) -> Dict[str, str]:
     return data_panel
 
 
-def get_percent_data(pos: Dict[str, int], query: str, node: str, port: str, job: str,
+def get_percent_data(pos: Dict[str, int], query: str, node: str, job: str,
                      description: str) -> Dict[str, Any]:
     """ Gets data from percent chart
 
@@ -191,9 +190,6 @@ def get_percent_data(pos: Dict[str, int], query: str, node: str, port: str, job:
         :param node: Url of node
         :type node: str
 
-        :param port: Port of node from where we get the data
-        :type port: str
-
         :param job: Job in prometheus that generates this data
         :type job: str
 
@@ -204,7 +200,7 @@ def get_percent_data(pos: Dict[str, int], query: str, node: str, port: str, job:
         :rtype: Dict
     """
     # Format query string
-    full_query = query.format(node, port, job)
+    full_query = query.format(node, job)
     # Load data from file and update data with particular parameters
     data = load_json(PERCENT_FILE)
     data['description'] = description
@@ -213,7 +209,7 @@ def get_percent_data(pos: Dict[str, int], query: str, node: str, port: str, job:
     return data
 
 
-def get_graph_data(pos: Dict[str, int], targets: List[Dict[str, Any]], node: str, port: str, job: str,
+def get_graph_data(pos: Dict[str, int], targets: List[Dict[str, Any]], node: str, job: str,
                    stack: bool = False, y_format: str = 'short', y_min: Optional[Any] = None,
                    y_max: Optional[Any] = None) -> Dict[str, Any]:
     """ Gets data from graph chart
@@ -226,9 +222,6 @@ def get_graph_data(pos: Dict[str, int], targets: List[Dict[str, Any]], node: str
 
         :param node: Url of node
         :type node: str
-
-        :param port: Port of node from where we get the data
-        :type port: str
 
         :param job: Job in prometheus that generates this data
         :type job: str
@@ -253,7 +246,7 @@ def get_graph_data(pos: Dict[str, int], targets: List[Dict[str, Any]], node: str
         # Format the expr string with parameters
         # Have to use copy of the dict, so I update only for this node
         t = target.copy()
-        t['expr'] = t['expr'].format(node, port, job)
+        t['expr'] = t['expr'].format(node, job)
         graph_targets.append(t)
 
     # Load data from file and update data with particular parameters

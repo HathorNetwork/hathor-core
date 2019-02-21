@@ -4,7 +4,7 @@
     "params": {
         "targets": [
             {
-                "expr": "sum(node_load1{{instance='{0}:{1}'}})",
+                "expr": "sum(node_load1{{instance='{0}'}})",
                 "format": "time_series",
                 "interval": "",
                 "intervalFactor": 2,
@@ -15,7 +15,7 @@
                 "target": ""
             },
             {
-                "expr": "sum(node_load5{{instance='{0}:{1}'}})",
+                "expr": "sum(node_load5{{instance='{0}'}})",
                 "format": "time_series",
                 "interval": "",
                 "intervalFactor": 2,
@@ -26,7 +26,7 @@
                 "target": ""
             },
             {
-                "expr": "sum(node_load15{{instance='{0}:{1}'}})",
+                "expr": "sum(node_load15{{instance='{0}'}})",
                 "format": "time_series",
                 "interval": "",
                 "intervalFactor": 2,

@@ -31,7 +31,7 @@ class ConnectionsTest(unittest.TestCase):
         manager = HathorManager(clock, tx_storage=tx_storage, wallet=wallet)
 
         endpoint = 'tcp:127.0.0.1:8005'
-        manager.connections.connect_to(endpoint, ssl=True)
+        manager.connections.connect_to(endpoint, use_ssl=True)
 
         self.assertFalse(endpoint in manager.connections.connecting_peers)
         self.assertFalse(endpoint in manager.connections.handshaking_peers)

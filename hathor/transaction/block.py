@@ -87,6 +87,17 @@ class Block(BaseTransaction):
 
         return blc
 
+    def get_block_parent_hash(self) -> bytes:
+        """Return the hash of the parent block.
+        """
+        return self.parents[0]
+
+    def get_block_parent(self) -> 'Block':
+        """Return the parent block.
+        """
+        assert self.storage is not None
+        return self.storage.get_transaction(self.get_block_parent_hash())
+
     def get_struct_without_nonce(self) -> bytes:
         struct_bytes_without_data = super().get_struct_without_nonce()
         # TODO: should we validate data length here?
@@ -336,7 +347,7 @@ class Block(BaseTransaction):
         assert self.storage is not None
         assert self.hash is not None
 
-        parent = self.storage.get_transaction(self.get_block_parent_hash())
+        parent = self.get_block_parent()
         parent_meta = parent.get_metadata()
         assert self.hash in parent_meta.children
 
@@ -406,7 +417,7 @@ class Block(BaseTransaction):
                             block.mark_as_voided()
                         # We have to go through the chain until the first parent in the best
                         # chain because the head may be voided with part of the tail non-voided.
-                        block = self.storage.get_transaction(block.get_block_parent_hash())
+                        block = block.get_block_parent()
 
                 if score >= best_score + eps:
                     # We have a new winner.
@@ -485,7 +496,7 @@ class Block(BaseTransaction):
             success = block.remove_voided_by()
             if not success:
                 break
-            block = self.storage.get_transaction(block.get_block_parent_hash())
+            block = block.get_block_parent()
 
     def _find_first_parent_in_best_chain(self) -> BaseTransaction:
         """ Find the first block in the side chain that is not voided, i.e., the block where the fork started.

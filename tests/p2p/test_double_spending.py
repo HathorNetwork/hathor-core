@@ -121,8 +121,16 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # tx2 spends one tx1's input
         # tx3 verifies tx1, but does not spend any of tx1's inputs
         # tx5 spends one tx4's input
-        # tx6 is a twin of t3, but verifying t4 and t5
+        # tx6 is a twin of tx3, but verifying tx4 and tx5
         # tx7 verifies tx4, but does not spend any of tx4's inputs
+        # ---
+        # tx1.weight = 5
+        # tx2.weight = 5
+        # tx3.weight = 5
+        # tx4.weight = 5
+        # tx5.weight = 5
+        # tx6.weight = 1
+        # tx7.weight = 10
         # ---
 
         address = self.manager1.wallet.get_unused_address_bytes()

@@ -126,6 +126,23 @@ class PeerIdTest(unittest.TestCase):
         # Removing tmpdir
         shutil.rmtree(tmpdir)
 
+    def test_retry_connection(self):
+        p = PeerId()
+        interval = p.retry_interval
+        p.update_retry_timestamp(0)
+        self.assertEqual(2*interval, p.retry_interval)
+        self.assertEqual(p.retry_interval, p.retry_timestamp)
+
+        # when retry_interval is already 180
+        p.retry_interval = 190
+        p.update_retry_timestamp(0)
+        self.assertEqual(180, p.retry_interval)
+
+        # reset
+        p.reset_retry_timestamp()
+        self.assertEqual(p.retry_interval, 5)
+        self.assertEqual(p.retry_timestamp, 0)
+
 
 if __name__ == '__main__':
     unittest.main()
