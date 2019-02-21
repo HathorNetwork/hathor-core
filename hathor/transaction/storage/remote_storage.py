@@ -470,32 +470,19 @@ class TransactionRemoteStorage(TransactionStorage):
     def _topological_sort(self):
         yield from self._call_list_request_generators({'order_by': protos.TOPOLOGICAL_ORDER})
 
-    @convert_grpc_exceptions_generator
-    def iter_bfs_children(self, root):
-        yield from self._call_list_request_generators({
-            'order_by': protos.LEFT_RIGHT_ORDER_CHILDREN,
-            'tx': root.to_proto()
-        })
-
-    @convert_grpc_exceptions
-    def iter_bfs_spent_by(self, root):
-        yield from self._call_list_request_generators({
-            'order_by': protos.LEFT_RIGHT_ORDER_SPENT,
-            'tx': root.to_proto()
-        })
-
     @convert_grpc_exceptions
     def _add_to_cache(self, tx):
         self._check_connection()
         tx_proto = tx.to_proto()
-        request = protos.MarkAsRequest(transaction=tx_proto, mark_type=protos.FOR_CACHING)
+        request = protos.MarkAsRequest(transaction=tx_proto, mark_type=protos.FOR_CACHING, relax_assert=False)
         result = self._stub.MarkAs(request)  # noqa: F841
 
     @convert_grpc_exceptions
-    def _del_from_cache(self, tx):
+    def _del_from_cache(self, tx, *, relax_assert: bool = False):
         self._check_connection()
         tx_proto = tx.to_proto()
-        request = protos.MarkAsRequest(transaction=tx_proto, mark_type=protos.FOR_CACHING, remove_mark=True)
+        request = protos.MarkAsRequest(transaction=tx_proto, mark_type=protos.FOR_CACHING, remove_mark=True,
+                                       relax_assert=relax_assert)
         result = self._stub.MarkAs(request)  # noqa: F841
 
     # @deprecated('Use get_block_count_deferred instead')
@@ -542,15 +529,6 @@ class TransactionRemoteStorage(TransactionStorage):
             tx_proto = list_item.transaction
             tx_list.append(tx_or_block_from_proto(tx_proto, storage=self))
         return tx_list
-
-    @convert_grpc_exceptions_generator
-    def iter_bfs_ascendent_blocks(self, root, max_depth):
-        yield from self._call_list_request_generators({
-            'order_by': protos.ASC_ORDER,
-            'tx_type': protos.BLOCK_TYPE,
-            'tx': root.to_proto(),
-            'max_count': max_depth
-        })
 
     @convert_grpc_exceptions
     def get_blocks_before(self, hash_bytes, num_blocks=100):
@@ -644,7 +622,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
 
         if request.mark_type == protos.FOR_CACHING:
             if request.remove_mark:
-                self.storage._del_from_cache(tx)
+                self.storage._del_from_cache(tx, relax_assert=request.relax_assert)
             else:
                 self.storage._add_to_cache(tx)
         else:
@@ -655,8 +633,6 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
 
     @convert_hathor_exceptions_generator
     def List(self, request: protos.ListRequest, context: _Context) -> Iterator[protos.ListItemResponse]:
-        from hathor.transaction import tx_or_block_from_proto
-
         exclude_metadata = request.exclude_metadata
         has_more = None
 
@@ -697,18 +673,6 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
                 tx_iter = skip_warning(self.storage.get_all_transactions)()
             elif request.order_by is protos.TOPOLOGICAL_ORDER:
                 tx_iter = self.storage._topological_sort()
-            elif request.order_by is protos.ASC_ORDER:
-                if request.tx_type is not protos.BLOCK_TYPE:
-                    raise NotImplementedError
-                root = tx_or_block_from_proto(request.tx, storage=self.storage)
-                max_depth = request.max_count
-                tx_iter = self.storage.iter_bfs_ascendent_blocks(root, max_depth)
-            elif request.order_by is protos.LEFT_RIGHT_ORDER_CHILDREN:
-                root = tx_or_block_from_proto(request.tx, storage=self.storage)
-                tx_iter = self.storage.iter_bfs_children(root)
-            elif request.order_by is protos.LEFT_RIGHT_ORDER_SPENT:
-                root = tx_or_block_from_proto(request.tx, storage=self.storage)
-                tx_iter = self.storage.iter_bfs_spent_by(root)
             else:
                 raise ValueError('invalid order_by')
         else:

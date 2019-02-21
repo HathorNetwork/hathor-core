@@ -79,6 +79,7 @@ message MarkAsRequest {
   BaseTransaction transaction = 1;
   MarkType mark_type = 2;
   bool remove_mark = 3;
+  bool relax_assert = 4;
 }
 
 message MarkAsResponse {

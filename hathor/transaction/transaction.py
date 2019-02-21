@@ -1,13 +1,12 @@
 import hashlib
 from collections import namedtuple
-from itertools import chain
 from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Set, Tuple
 
 from twisted.logger import Logger
 
 from hathor import protos
 from hathor.constants import HATHOR_TOKEN_UID
-from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, BaseTransaction, TxInput, TxOutput
+from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, BaseTransaction, TxInput, TxOutput, sum_weights
 from hathor.transaction.exceptions import (
     ConflictingInputs,
     InexistentInput,
@@ -307,39 +306,56 @@ class Transaction(BaseTransaction):
         return spent_tx
 
     def update_voided_info(self) -> None:
-        """ Transaction's voided_by must equal the union of the voided_by of both its parents and its inputs.
+        """ This method should be called only once when the transactions is added to the DAG.
         """
         assert self.hash is not None
         assert self.storage is not None
 
         voided_by = set()
 
+        # Union of voided_by of parents
         for parent in self.get_parents():
             parent_meta = parent.get_metadata()
             voided_by.update(parent_meta.voided_by)
 
+        # Union of voided_by of inputs
         for txin in self.inputs:
             spent_tx = self.storage.get_transaction(txin.tx_id)
             spent_meta = spent_tx.get_metadata()
             voided_by.update(spent_meta.voided_by)
 
+        # Update accumulated weight of the transactions voiding us.
+        assert self.hash not in voided_by
+        for h in voided_by:
+            tx = self.storage.get_transaction(h)
+            tx_meta = tx.get_metadata()
+            tx_meta.accumulated_weight = sum_weights(tx_meta.accumulated_weight, self.weight)
+            tx.storage.save_transaction(tx, only_metadata=True)
+
+        # Then, we add ourselves.
         meta = self.get_metadata()
-        if self.hash in meta.voided_by:
+        assert len(meta.voided_by) == 0
+        assert meta.accumulated_weight == self.weight
+        if meta.conflict_with:
             voided_by.add(self.hash)
 
         if voided_by:
-            self.storage._del_from_cache(self)  # XXX: accessing private method
-
-        if meta.voided_by != voided_by:
             meta.voided_by = voided_by.copy()
             self.storage.save_transaction(self, only_metadata=True)
+            self.storage._del_from_cache(self)  # XXX: accessing private method
 
+        # Check conflicts of the transactions voiding us.
         for h in voided_by:
             if h == self.hash:
                 continue
             tx = self.storage.get_transaction(h)
             if not tx.is_block:
                 tx.check_conflicts()
+
+        # Finally, check our conflicts.
+        meta = self.get_metadata()
+        if meta.voided_by == {self.hash}:
+            self.check_conflicts()
 
     def mark_as_voided(self) -> None:
         """ Mark a transaction as voided when it has a conflict and its aggregated weight
@@ -349,6 +365,9 @@ class Transaction(BaseTransaction):
         self.log.debug('tx.mark_as_voided {}'.format(self.hash.hex()))
         meta = self.get_metadata()
         assert (len(meta.conflict_with) > 0)
+        if meta.voided_by:
+            assert self.hash in meta.voided_by
+            return
         self.add_voided_by(self.hash)
 
     def add_voided_by(self, voided_hash: bytes) -> bool:
@@ -364,25 +383,24 @@ class Transaction(BaseTransaction):
 
         self.log.debug('add_voided_by tx={} voided_hash={}'.format(self.hash.hex(), voided_hash.hex()))
 
-        check_conflicts = False
-        if meta.conflict_with and not meta.voided_by:
-            check_conflicts = True
+        from hathor.transaction.storage.traversal import BFSWalk
+        bfs = BFSWalk(self.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
+        check_list: List[Transaction] = []
+        for tx in bfs.run(self, skip_root=False):
+            meta = tx.get_metadata()
+            assert voided_hash not in meta.voided_by
+            if tx.hash != self.hash and meta.conflict_with and not meta.voided_by:
+                check_list.extend(tx.storage.get_transaction(h) for h in meta.conflict_with)
+            meta.voided_by.add(voided_hash)
+            if meta.conflict_with:
+                meta.voided_by.add(tx.hash)
+                # All voided transactions with conflicts must have their accumulated weight calculated.
+                tx.update_accumulated_weight(save_file=False)
+            tx.storage.save_transaction(tx, only_metadata=True)
+            tx.storage._del_from_cache(tx, relax_assert=True)  # XXX: accessing private method
 
-        it = chain(
-            meta.children,
-            chain(*meta.spent_outputs.values()),
-        )
-        for tx_hash in it:
-            tx = self.storage.get_transaction(tx_hash)
-            tx.add_voided_by(voided_hash)
-
-        meta.voided_by.add(voided_hash)
-        self.storage.save_transaction(self, only_metadata=True)
-        self.storage._del_from_cache(self)  # XXX: accessing private method
-
-        if check_conflicts:
-            self.check_conflicts()
-
+        for tx in check_list:
+            tx.check_conflicts()
         return True
 
     def mark_as_winner(self) -> None:
@@ -408,20 +426,23 @@ class Transaction(BaseTransaction):
 
         self.log.debug('remove_voided_by tx={} voided_hash={}'.format(self.hash.hex(), voided_hash.hex()))
 
-        meta.voided_by.discard(voided_hash)
-        self.storage.save_transaction(self, only_metadata=True)
+        from hathor.transaction.storage.traversal import BFSWalk
+        bfs = BFSWalk(self.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
+        check_list: List[Transaction] = []
+        for tx in bfs.run(self, skip_root=False):
+            meta = tx.get_metadata()
+            if voided_hash not in meta.voided_by:
+                bfs.skip_neighbors(tx)
+                continue
+            meta.voided_by.discard(voided_hash)
+            if meta.voided_by == {tx.hash}:
+                check_list.append(tx)
+            tx.storage.save_transaction(tx, only_metadata=True)
+            if not meta.voided_by:
+                self.storage._add_to_cache(tx)  # XXX: accessing private method
 
-        if not meta.voided_by:
-            self.storage._add_to_cache(self)
-
-        it = chain(
-            meta.children,
-            chain(*meta.spent_outputs.values()),
-        )
-        for tx_hash in it:
-            tx = self.storage.get_transaction(tx_hash)
-            tx.remove_voided_by(voided_hash)
-
+        for tx in check_list:
+            tx.check_conflicts()
         return True
 
     def mark_inputs_as_used(self) -> None:
@@ -457,9 +478,6 @@ class Transaction(BaseTransaction):
         spent_by.add(self.hash)
         self.storage.save_transaction(spent_tx, only_metadata=True)
 
-        # Finally, resolve the conflicts.
-        self.check_conflicts()
-
     def check_conflicts(self) -> None:
         """ Check which transaction is the winner of a conflict, the remaining are voided.
 
@@ -470,85 +488,55 @@ class Transaction(BaseTransaction):
         assert self.storage is not None
         self.log.debug('tx.check_conflicts {}'.format(self.hash.hex()))
 
-        meta = self.get_metadata(force_reload=True)
-        if not meta.conflict_with:
-            # No conflicts to be checked.
+        meta = self.get_metadata()
+        if meta.voided_by != {self.hash}:
             return
 
-        winners: Set[bytes] = set()
-        wins_all = True
-        for txin in self.inputs:
-            w = self.check_conflict_winner(txin)
-            if w != self.hash:
-                wins_all = False
-            if w is not None:
-                winners.add(w)
-
-        if wins_all:
-            self.mark_as_winner()
-        else:
-            self.mark_as_voided()
-            winners.discard(self.hash)
-
-        meta = self.get_metadata()
+        # Filter the possible candidates to compare to tx.
+        candidates: List[Transaction] = []
         for h in meta.conflict_with:
             tx = self.storage.get_transaction(h)
-            if tx.hash in winners:
-                tx.mark_as_winner()
-            else:
-                tx.mark_as_voided()
+            tx_meta = tx.get_metadata()
+            if tx_meta.voided_by in (set(), tx.hash):
+                candidates.append(tx)
 
-    def check_conflict_winner(self, txin: TxInput) -> Optional[bytes]:
-        """ Check which transaction is the winner of a conflict for the input `txin`.
-
-        :return: Returns the hash of the winner or None
-        """
-        assert self.hash is not None
-        assert self.storage is not None
-
-        meta = self.get_metadata(force_reload=True)
-        assert len(meta.conflict_with) > 0
-
-        meta = self.update_accumulated_weight()
-
-        # Conflicting transaction.
-        tx_list = [self]
-        winner_set = set()
-        max_acc_weight = 0.0
-
-        if len(meta.voided_by - set([self.hash])) == 0:
-            winner_set.add(self.hash)
-            max_acc_weight = meta.accumulated_weight
-
-        for h in meta.conflict_with:
-            # now we need to update accumulated weight and get new metadata info
-            tx = self.storage.get_transaction(h)
-
-            for txin2 in tx.inputs:
-                if (txin.tx_id, txin.index) == (txin2.tx_id, txin2.index):
+        # Check whether we have the highest accumulated weight.
+        # First with the voided transactions.
+        is_highest = True
+        for tx in candidates:
+            tx_meta = tx.get_metadata()
+            if tx_meta.voided_by:
+                if tx_meta.accumulated_weight > meta.accumulated_weight:
+                    is_highest = False
                     break
-            else:
-                continue
+        if not is_highest:
+            return
 
-            # TODO FIXME When using `stop_value`, we may have to go calculate the
-            # accumulated weight again if other get a higher value.
-            meta = tx.update_accumulated_weight()
-            assert tx.hash is not None
-            assert meta.hash is not None
-            tx_list.append(tx)
+        # Then, with the executed transactions.
+        tie_list = []
+        for tx in candidates:
+            tx_meta = tx.get_metadata()
+            if not tx_meta.voided_by:
+                tx.update_accumulated_weight(stop_value=meta.accumulated_weight)
+                tx_meta = tx.get_metadata()
+                d = tx_meta.accumulated_weight - meta.accumulated_weight
+                eps = 1e-10
+                if abs(d) < eps:
+                    tie_list.append(tx)
+                elif d > 0:
+                    is_highest = False
+                    break
+        if not is_highest:
+            return
 
-            if len(meta.voided_by - set([tx.hash])) > 0:
-                continue
+        # If we got here, either it was a tie or we won.
+        # So, let's void the candidates.
+        for tx in candidates:
+            tx.mark_as_voided()
 
-            if meta.accumulated_weight == max_acc_weight:
-                winner_set.add(meta.hash)
-            elif meta.accumulated_weight > max_acc_weight:
-                max_acc_weight = meta.accumulated_weight
-                winner_set = set([meta.hash])
-
-        if len(winner_set) == 1:
-            return winner_set.pop()
-        return None
+        if not tie_list:
+            # If it is not a tie, we won. \o/
+            self.mark_as_winner()
 
     def set_conflict_twins(self) -> None:
         """ Get all transactions that conflict with self

@@ -11,6 +11,8 @@ from twisted.internet.interfaces import IReactorCore
 from twisted.logger import Logger
 
 from hathor.constants import (
+    BLOCK_DIFFICULTY_MAX_DW,
+    BLOCK_DIFFICULTY_N_BLOCKS,
     DECIMAL_PLACES,
     MAX_DISTANCE_BETWEEN_BLOCKS,
     MIN_BLOCK_WEIGHT,
@@ -458,8 +460,15 @@ class HathorManager:
         if block.is_genesis:
             return self.min_block_weight
 
-        it = self.tx_storage.iter_bfs_ascendent_blocks(block, max_depth=10)
-        blocks = list(it)
+        blocks: List[Block] = []
+        root = block
+        while len(blocks) < BLOCK_DIFFICULTY_N_BLOCKS:
+            if not root.parents:
+                assert root.is_genesis
+                break
+            root = root.get_block_parent()
+            assert isinstance(root, Block)
+            blocks.append(root)
         blocks.sort(key=lambda tx: tx.timestamp)
 
         if blocks[-1].is_genesis:
@@ -474,13 +483,13 @@ class HathorManager:
 
         weight = logH - log(dt, 2) + log(self.avg_time_between_blocks, 2)
 
-        # Maximum change in difficulty is 1.
-        # This means that hashpower has doubled or halved since previous block.
+        # Apply a maximum change in difficulty.
+        max_dw = BLOCK_DIFFICULTY_MAX_DW
         dw = weight - blocks[-1].weight
-        if dw > 1:
-            weight = blocks[-1].weight + 1
-        elif dw < -1:
-            weight = blocks[-1].weight - 1
+        if dw > max_dw:
+            weight = blocks[-1].weight + max_dw
+        elif dw < -max_dw:
+            weight = blocks[-1].weight - max_dw
 
         if weight < self.min_block_weight:
             weight = self.min_block_weight

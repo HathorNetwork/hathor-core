@@ -26,7 +26,7 @@ def blockchain(tx_storage: TransactionStorage, format: str = 'pdf'):
         dot.node(name, **node_attrs)
 
         if len(tx.parents) > 0:
-            dot.edge(name, tx.parents[0].hex())
+            dot.edge(name, tx.get_block_parent_hash().hex())
 
     return dot
 
