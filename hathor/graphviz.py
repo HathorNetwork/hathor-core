@@ -31,10 +31,12 @@ def blockchain(tx_storage: TransactionStorage, format: str = 'pdf'):
     return dot
 
 
-def tx_neighborhood(tx: BaseTransaction, format: str = 'pdf', max_level: int = 2) -> Digraph:
+def tx_neighborhood(tx: BaseTransaction, format: str = 'pdf',
+                    max_level: int = 2, graph_type: str = 'verification') -> Digraph:
     """ Draw the blocks and transactions around `tx`.
 
     :params max_level: Maximum distance between `tx` and the others.
+    :params graph_type: Graph type to be generated. Possibilities are 'verification' and 'funds'
     """
     dot = Digraph(format=format)
     dot.attr(rankdir='RL')
@@ -60,16 +62,31 @@ def tx_neighborhood(tx: BaseTransaction, format: str = 'pdf', max_level: int = 2
 
         meta = tx.get_metadata()
 
-        if level <= max_level:
-            for h in chain(tx.parents, meta.children):
-                if h not in seen:
-                    seen.add(h)
-                    tx2 = tx.storage.get_transaction(h)
-                    to_visit.append((level + 1, tx2))
+        if graph_type == 'verification':
 
-        for h in tx.parents:
-            if h in seen:
-                dot.edge(name, h.hex())
+            if level <= max_level:
+                for h in chain(tx.parents, meta.children):
+                    if h not in seen:
+                        seen.add(h)
+                        tx2 = tx.storage.get_transaction(h)
+                        to_visit.append((level + 1, tx2))
+
+            for h in tx.parents:
+                if h in seen:
+                    dot.edge(name, h.hex())
+        elif graph_type == 'funds':
+            if level <= max_level:
+                spent_outputs_ids = chain.from_iterable(meta.spent_outputs.values())
+                tx_input_ids = [txin.tx_id for txin in tx.inputs]
+                for h in chain(tx_input_ids, spent_outputs_ids):
+                    if h not in seen:
+                        seen.add(h)
+                        tx2 = tx.storage.get_transaction(h)
+                        to_visit.append((level + 1, tx2))
+
+            for txin in tx.inputs:
+                if txin.tx_id in seen:
+                    dot.edge(name, txin.tx_id.hex())
 
     return dot
 

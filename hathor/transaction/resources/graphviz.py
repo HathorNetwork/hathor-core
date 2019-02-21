@@ -1,10 +1,13 @@
+import json
+
 from twisted.internet import threads
 from twisted.web import resource
 from twisted.web.http import Request
 
 from hathor import graphviz
-from hathor.api_util import set_cors
+from hathor.api_util import set_cors, validate_tx_hash
 from hathor.cli.openapi_files.register import register_resource
+from hathor.constants import MAX_GRAPH_LEVEL
 
 
 @register_resource
@@ -38,27 +41,45 @@ class GraphvizResource(resource.Resource):
         if b'format' in request.args:
             dotformat = request.args[b'format'][0].decode('utf-8')
 
-        weight = False
-        if b'weight' in request.args:
-            weight = self.parseBoolArg(request.args[b'weight'][0].decode('utf-8'))
-
-        acc_weight = False
-        if b'acc_weight' in request.args:
-            acc_weight = self.parseBoolArg(request.args[b'acc_weight'][0].decode('utf-8'))
-
-        funds = False
-        if b'funds' in request.args:
-            funds = self.parseBoolArg(request.args[b'funds'][0].decode('utf-8'))
-
         tx_storage = self.manager.tx_storage
-        if not funds:
-            dot = graphviz.verifications(tx_storage, format=dotformat, weight=weight, acc_weight=acc_weight)
-        else:
-            dot = graphviz.funds(tx_storage, format=dotformat, weight=weight, acc_weight=acc_weight)
 
-        if dotformat == 'dot':
-            request.setHeader(b'content-type', contenttype[dotformat])
-            return str(dot).encode('utf-8')
+        if b'tx' in request.args:
+            # Getting tx neightborhood
+            tx_hex = request.args[b'tx'][0].decode('utf-8')
+            success, message = validate_tx_hash(tx_hex, tx_storage)
+            if not success:
+                return json.dumps({'success': False, 'message': message}, indent=4).encode('utf-8')
+            else:
+                graph_type = request.args[b'graph_type'][0].decode('utf-8')
+                max_level = int(request.args[b'max_level'][0])
+                if max_level > MAX_GRAPH_LEVEL:
+                    return json.dumps({
+                        'success': False,
+                        'message': 'Graph max level is {}'.format(MAX_GRAPH_LEVEL)
+                    }, indent=4).encode('utf-8')
+                tx = tx_storage.get_transaction(bytes.fromhex(tx_hex))
+                dot = graphviz.tx_neighborhood(tx, format=dotformat, max_level=max_level, graph_type=graph_type)
+        else:
+            weight = False
+            if b'weight' in request.args:
+                weight = self.parseBoolArg(request.args[b'weight'][0].decode('utf-8'))
+
+            acc_weight = False
+            if b'acc_weight' in request.args:
+                acc_weight = self.parseBoolArg(request.args[b'acc_weight'][0].decode('utf-8'))
+
+            funds = False
+            if b'funds' in request.args:
+                funds = self.parseBoolArg(request.args[b'funds'][0].decode('utf-8'))
+
+            if not funds:
+                dot = graphviz.verifications(tx_storage, format=dotformat, weight=weight, acc_weight=acc_weight)
+            else:
+                dot = graphviz.funds(tx_storage, format=dotformat, weight=weight, acc_weight=acc_weight)
+
+            if dotformat == 'dot':
+                request.setHeader(b'content-type', contenttype[dotformat])
+                return str(dot).encode('utf-8')
 
         request.setHeader(b'content-type', contenttype[dotformat])
         return dot.pipe()
@@ -101,7 +122,8 @@ GraphvizResource.openapi = {
             'tags': ['transaction'],
             'operationId': 'graphviz',
             'summary': 'Dashboard of transactions',
-            'description': 'Returns the generated file with the graph in the format requested',
+            'description': ('Returns the generated file with the graph in the format requested.'
+                            'Can be the full graph of the neighborhood graph of a transaction.'),
             'parameters': [
                 {
                     'name': 'format',
@@ -138,11 +160,57 @@ GraphvizResource.openapi = {
                     'schema': {
                         'type': 'boolean'
                     }
-                }
+                },
+                {
+                    'name': 'tx',
+                    'in': 'query',
+                    'description': 'Id of the transaction or block to generate the neighborhood graph',
+                    'required': False,
+                    'schema': {
+                        'type': 'string'
+                    }
+                },
+                {
+                    'name': 'graph_type',
+                    'in': 'query',
+                    'description': ('Type of the graph in case of a neighborhood graph.'
+                                    'Can be either "verification" or "funds"'),
+                    'required': False,
+                    'schema': {
+                        'type': 'string'
+                    }
+                },
+                {
+                    'name': 'max_level',
+                    'in': 'query',
+                    'description': ('How many levels the neighbor can appear in the graph.'
+                                    'Max level is {}'.format(MAX_GRAPH_LEVEL)),
+                    'required': False,
+                    'schema': {
+                        'type': 'int'
+                    }
+                },
             ],
             'responses': {
                 '200': {
-                    'description': 'Success'
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success',
+                                    'value': {}
+                                },
+                                'error': {
+                                    'summary': 'Error',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Graph max level is 10'
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
