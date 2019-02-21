@@ -127,8 +127,12 @@ class BasicTransaction(unittest.TestCase):
         del self.cache_storage.cache[next(iter(self.cache_storage.dirty_txs))]
         self.cache_storage._flush_to_storage(self.cache_storage.dirty_txs.copy())
 
-    @inlineCallbacks
     def test_deferred_methods(self):
+        for _ in self._test_deferred_methods():
+            pass
+
+    @inlineCallbacks
+    def _test_deferred_methods(self):
         # Testing without cloning
         self.cache_storage._clone_if_needed = False
 

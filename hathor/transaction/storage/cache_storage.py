@@ -180,9 +180,13 @@ class TransactionCacheStorage(BaseTransactionStorage):
     def get_all_transactions_deferred(self):
         # TODO: yield self._flush_to_storage_deferred(self.dirty_txs.copy())
         self._flush_to_storage(self.dirty_txs.copy())
-        for tx in self.store.get_all_transactions_deferred():
-            tx.storage = self
-            yield tx
+        all_transactions = yield self.store.get_all_transactions_deferred()
+
+        def _mygenerator():
+            for tx in all_transactions:
+                tx.storage = self
+                yield tx
+        return _mygenerator()
 
     @inlineCallbacks
     def get_count_tx_blocks_deferred(self):
