@@ -30,14 +30,13 @@ class TransactionMemoryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
     @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
+        self._save_transaction(tx, only_metadata=only_metadata)
+
+    def _save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         assert tx.hash is not None
         if not only_metadata:
             if not tx.is_genesis:
                 self.transactions[tx.hash] = self._clone(tx)
-        self._save_metadata(tx)
-
-    def _save_metadata(self, tx: BaseTransaction) -> None:
-        assert tx.hash is not None
         meta = getattr(tx, '_metadata', None)
         if meta:
             self.metadata[tx.hash] = self._clone(meta)
