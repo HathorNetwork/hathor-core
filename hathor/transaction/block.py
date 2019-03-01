@@ -1,13 +1,11 @@
 import base64
-import hashlib
 from itertools import chain
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set
 
-from _hashlib import HASH
 from twisted.logger import Logger
 
 from hathor import protos
-from hathor.constants import BLOCK_DATA_MAX_SIZE, BLOCK_NONCE_BYTES as NONCE_BYTES
+from hathor.constants import BLOCK_DATA_MAX_SIZE
 from hathor.transaction.base_transaction import BaseTransaction, TxOutput, sum_weights
 from hathor.transaction.exceptions import BlockDataError, BlockWithInputs, BlockWithTokensError
 from hathor.transaction.util import int_to_bytes, unpack, unpack_len
@@ -18,6 +16,8 @@ if TYPE_CHECKING:
 
 class Block(BaseTransaction):
     log = Logger()
+
+    NONCE_SIZE = 16
 
     def __init__(self, nonce: int = 0, timestamp: Optional[int] = None, version: int = 1, weight: float = 0,
                  outputs: Optional[List[TxOutput]] = None, parents: Optional[List[bytes]] = None,
@@ -70,11 +70,8 @@ class Block(BaseTransaction):
         blc = cls()
         buf = blc.get_fields_from_struct(struct_bytes)
 
-        [data_bytes, ], buf = unpack('B', buf)
-        blc.data, buf = unpack_len(data_bytes, buf)
-
         blc.nonce = int.from_bytes(buf, byteorder='big')
-        if len(buf) != NONCE_BYTES:
+        if len(buf) != cls.NONCE_SIZE:
             raise ValueError('Invalid sequence of bytes')
 
         blc.hash = blc.calculate_hash()
@@ -93,24 +90,31 @@ class Block(BaseTransaction):
         assert self.storage is not None
         return self.storage.get_transaction(self.get_block_parent_hash())
 
-    def get_struct_without_nonce(self) -> bytes:
-        struct_bytes_without_data = super().get_struct_without_nonce()
-        # TODO: should we validate data length here?
-        data_bytes = int_to_bytes(len(self.data), 1)
-        return struct_bytes_without_data + data_bytes + self.data
+    def get_graph_fields_from_struct(self, buf: bytes) -> bytes:
+        """ Gets graph fields for a block from a buffer.
 
-    def get_struct(self) -> bytes:
-        """Return the complete serialization of the transaction
+        :param buf: Bytes of a serialized transaction
+        :type buf: bytes
 
+        :return: A buffer containing the remaining struct bytes
+        :rtype: bytes
+
+        :raises ValueError: when the sequence of bytes is incorect
+        """
+        buf = super().get_graph_fields_from_struct(buf)
+        (data_bytes,), buf = unpack('!B', buf)
+        self.data, buf = unpack_len(data_bytes, buf)
+        return buf
+
+    def get_graph_struct(self) -> bytes:
+        """Return the graph data serialization of the block, without including the nonce field
+
+        :return: graph data serialization of the transaction
         :rtype: bytes
         """
-        struct_bytes = self.get_struct_without_nonce()
-        struct_bytes += int_to_bytes(self.nonce, NONCE_BYTES)
-        return struct_bytes
-
-    def calculate_hash2(self, part1: HASH) -> bytes:
-        part1.update(int_to_bytes(self.nonce, NONCE_BYTES))
-        return hashlib.sha256(part1.digest()).digest()
+        struct_bytes_without_data = super().get_graph_struct()
+        data_bytes = int_to_bytes(len(self.data), 1)
+        return struct_bytes_without_data + data_bytes + self.data
 
     # TODO: maybe introduce convention on serialization methods names (e.g. to_json vs get_struct)
     def to_json(self, decode_script: bool = False) -> Dict[str, Any]:

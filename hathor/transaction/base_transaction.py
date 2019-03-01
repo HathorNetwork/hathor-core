@@ -8,12 +8,12 @@ from abc import ABC, abstractclassmethod, abstractmethod
 from enum import Enum
 from math import inf, log
 from struct import pack
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterator, List, Optional, Tuple
 
 from _hashlib import HASH
 
 from hathor import protos
-from hathor.constants import HATHOR_TOKEN_UID, MAX_DISTANCE_BETWEEN_BLOCKS, TX_NONCE_BYTES as NONCE_BYTES
+from hathor.constants import HATHOR_TOKEN_UID, MAX_DISTANCE_BETWEEN_BLOCKS
 from hathor.transaction.exceptions import (
     DuplicatedParents,
     IncorrectParents,
@@ -36,11 +36,14 @@ _MAX_OUTPUT_VALUE_32 = 2**31 - 1  # max value (inclusive) before having to use 8
 
 _INPUT_SIZE_BYTES = 32  # 256 bits
 
-# Version (H), weight (d), timestamp (I), inputs len (B), outputs len (B) and
-# parents len (B), token uids len (B).
 # H = unsigned short (2 bytes), d = double(8), f = float(4), I = unsigned int (4),
 # Q = unsigned long long int (64), B = unsigned char (1 byte)
-_TRANSACTION_FORMAT_STRING = '!HdIBBBB'  # Update code below if this changes.
+
+# Version (H), token uids len (B) and inputs len (B), outputs len (B).
+_FUNDS_FORMAT_STRING = '!HBBB'  # Update code below if this changes.
+
+# Weight (d), timestamp (I), and parents len (B)
+_GRAPH_FORMAT_STRING = '!dIB'  # Update code below if this changes.
 
 # Version (H), inputs len (B), and outputs len (B), token uids len (B).
 # H = unsigned short (2 bytes)
@@ -77,6 +80,8 @@ def aux_calc_weight(w1: float, w2: float, multiplier: int) -> float:
 
 class BaseTransaction(ABC):
     """Hathor base transaction"""
+
+    NONCE_SIZE: ClassVar[int]
 
     class GenesisDagConnectivity(Enum):
         UNKNOWN = -1
@@ -130,36 +135,12 @@ class BaseTransaction(ABC):
         :type struct_bytes: bytes
 
         :return: A buffer containing the remaining struct bytes
+        :rtype: bytes
 
         :raises ValueError: when the sequence of bytes is incorect
         """
-        buf = struct_bytes
-
-        (self.version, self.weight, self.timestamp, inputs_len, outputs_len, parents_len,
-         tokens_len), buf = (unpack(_TRANSACTION_FORMAT_STRING, buf))
-
-        for _ in range(parents_len):
-            parent, buf = unpack_len(32, buf)  # 256bits
-            self.parents.append(parent)
-
-        for _ in range(tokens_len):
-            token_uid, buf = unpack_len(32, buf)  # 256bits
-            self.tokens.append(token_uid)
-
-        for _ in range(inputs_len):
-            input_tx_id, buf = unpack_len(_INPUT_SIZE_BYTES, buf)  # 256bits
-            (input_index, data_len), buf = unpack('!BH', buf)
-            input_data, buf = unpack_len(data_len, buf)
-            txin = TxInput(input_tx_id, input_index, input_data)
-            self.inputs.append(txin)
-
-        for _ in range(outputs_len):
-            value, buf = bytes_to_output_value(buf)
-            (token_data, script_len), buf = unpack('!BH', buf)
-            script, buf = unpack_len(script_len, buf)
-            txout = TxOutput(value, script, token_data)
-            self.outputs.append(txout)
-
+        buf = self.get_funds_fields_from_struct(struct_bytes)
+        buf = self.get_graph_fields_from_struct(buf)
         return buf
 
     @classmethod
@@ -311,18 +292,65 @@ class BaseTransaction(ABC):
 
         return struct_bytes
 
-    def get_struct_without_nonce(self) -> bytes:
-        """Return a partial serialization of the transaction, without including the nonce field
+    def get_funds_fields_from_struct(self, buf: bytes) -> bytes:
+        """ Gets all common funds fields for a Transaction and a Block from a buffer.
 
-        :return: Partial serialization of the transaction
+        :param buf: Bytes of a serialized transaction
+        :type buf: bytes
+
+        :return: A buffer containing the remaining struct bytes
+        :rtype: bytes
+
+        :raises ValueError: when the sequence of bytes is incorect
+        """
+        (self.version, tokens_len, inputs_len, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
+
+        for _ in range(tokens_len):
+            token_uid, buf = unpack_len(32, buf)  # 256bits
+            self.tokens.append(token_uid)
+
+        for _ in range(inputs_len):
+            input_tx_id, buf = unpack_len(_INPUT_SIZE_BYTES, buf)  # 256bits
+            (input_index, data_len), buf = unpack('!BH', buf)
+            input_data, buf = unpack_len(data_len, buf)
+            txin = TxInput(input_tx_id, input_index, input_data)
+            self.inputs.append(txin)
+
+        for _ in range(outputs_len):
+            value, buf = bytes_to_output_value(buf)
+            (token_data, script_len), buf = unpack('!BH', buf)
+            script, buf = unpack_len(script_len, buf)
+            txout = TxOutput(value, script, token_data)
+            self.outputs.append(txout)
+
+        return buf
+
+    def get_graph_fields_from_struct(self, buf: bytes) -> bytes:
+        """ Gets all common graph fields for a Transaction and a Block from a buffer.
+
+        :param buf: Bytes of a serialized transaction
+        :type buf: bytes
+
+        :return: A buffer containing the remaining struct bytes
+        :rtype: bytes
+
+        :raises ValueError: when the sequence of bytes is incorect
+        """
+        (self.weight, self.timestamp, parents_len), buf = unpack(_GRAPH_FORMAT_STRING, buf)
+
+        for _ in range(parents_len):
+            parent, buf = unpack_len(32, buf)  # 256bits
+            self.parents.append(parent)
+
+        return buf
+
+    def get_funds_struct(self) -> bytes:
+        """Return the funds data serialization of the transaction, without including the nonce field
+
+        :return: funds data serialization of the transaction
         :rtype: bytes
         """
-        struct_bytes = pack(_TRANSACTION_FORMAT_STRING, self.version, self.weight, self.timestamp,
-                            len(self.inputs), len(self.outputs), len(self.parents), len(self.tokens))
-
-        for parent in self.parents:
-            struct_bytes += parent
-
+        struct_bytes = pack(_FUNDS_FORMAT_STRING, self.version, len(self.tokens), len(self.inputs), len(self.outputs))
         for token_uid in self.tokens:
             struct_bytes += token_uid
 
@@ -346,13 +374,35 @@ class BaseTransaction(ABC):
 
         return struct_bytes
 
+    def get_graph_struct(self) -> bytes:
+        """Return the graph data serialization of the transaction, without including the nonce field
+
+        :return: graph data serialization of the transaction
+        :rtype: bytes
+        """
+        struct_bytes = pack(_GRAPH_FORMAT_STRING, self.weight, self.timestamp, len(self.parents))
+        for parent in self.parents:
+            struct_bytes += parent
+        return struct_bytes
+
+    def get_struct_without_nonce(self) -> bytes:
+        """Return a partial serialization of the transaction, without including the nonce field
+
+        :return: Partial serialization of the transaction
+        :rtype: bytes
+        """
+        struct_bytes = self.get_funds_struct()
+        struct_bytes += self.get_graph_struct()
+        return struct_bytes
+
     def get_struct(self) -> bytes:
         """Return the complete serialization of the transaction
 
         :rtype: bytes
         """
         struct_bytes = self.get_struct_without_nonce()
-        struct_bytes += int_to_bytes(self.nonce, NONCE_BYTES)
+        assert self.NONCE_SIZE is not None
+        struct_bytes += int_to_bytes(self.nonce, self.NONCE_SIZE)
         return struct_bytes
 
     def verify(self):
@@ -461,6 +511,34 @@ class BaseTransaction(ABC):
         else:
             return False
 
+    def get_funds_hash(self) -> bytes:
+        """Return the sha256 of the funds part of the transaction
+
+        :return: the hash of the funds data
+        :rtype: bytes
+        """
+        funds_hash = hashlib.sha256()
+        funds_hash.update(self.get_funds_struct())
+        return funds_hash.digest()
+
+    def get_graph_hash(self) -> bytes:
+        """Return the sha256 of the graph part of the transaction
+
+        :return: the hash of the funds data
+        :rtype: bytes
+        """
+        graph_hash = hashlib.sha256()
+        graph_hash.update(self.get_graph_struct())
+        return graph_hash.digest()
+
+    def get_header_without_nonce(self) -> bytes:
+        """Return the transaction header without the nonce
+
+        :return: transaction header without the nonce
+        :rtype: bytes
+        """
+        return self.get_funds_hash() + self.get_graph_hash()
+
     def calculate_hash1(self) -> HASH:
         """Return the sha256 of the transaction without including the `nonce`
 
@@ -468,7 +546,7 @@ class BaseTransaction(ABC):
         :rtype: :py:class:`_hashlib.HASH`
         """
         calculate_hash1 = hashlib.sha256()
-        calculate_hash1.update(self.get_struct_without_nonce())
+        calculate_hash1.update(self.get_header_without_nonce())
         return calculate_hash1
 
     def calculate_hash2(self, part1: HASH) -> bytes:
@@ -482,8 +560,10 @@ class BaseTransaction(ABC):
         :return: The transaction hash
         :rtype: bytes
         """
-        part1.update(self.nonce.to_bytes(NONCE_BYTES, byteorder='big', signed=False))
-        return hashlib.sha256(part1.digest()).digest()
+        assert self.NONCE_SIZE is not None
+        part1.update(self.nonce.to_bytes(self.NONCE_SIZE, byteorder='big', signed=False))
+        # SHA256D gets the hash in little-endian format. Reverse the bytes to get the big-endian representation.
+        return hashlib.sha256(part1.digest()).digest()[::-1]
 
     def calculate_hash(self) -> bytes:
         """Return the full hash of the transaction

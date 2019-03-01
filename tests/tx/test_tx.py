@@ -4,7 +4,7 @@ import time
 
 from twisted.internet.task import Clock
 
-from hathor.constants import MAX_DISTANCE_BETWEEN_BLOCKS, TX_NONCE_BYTES as NONCE_BYTES
+from hathor.constants import MAX_DISTANCE_BETWEEN_BLOCKS
 from hathor.crypto.util import get_address_from_public_key, get_private_key_from_bytes
 from hathor.manager import TestMode
 from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput
@@ -521,15 +521,16 @@ class BasicTransaction(unittest.TestCase):
         outputs = [TxOutput(1, b'')]
         tx = Transaction(outputs=outputs)
         original_struct = tx.get_struct()
-        struct_bytes = tx.get_struct_without_nonce()
+        struct_bytes = tx.get_funds_struct()
 
         # we'll get the struct without the last output bytes and add it ourselves
         struct_bytes = struct_bytes[:-7]
-        # add small value using 8 bytes
+        # add small value using 8 bytes and expect failure when trying to deserialize
         struct_bytes += (-1).to_bytes(8, byteorder='big', signed=True)
         struct_bytes += int_to_bytes(0, 1)
         struct_bytes += int_to_bytes(0, 2)
-        struct_bytes += int_to_bytes(0, NONCE_BYTES)
+        struct_bytes += tx.get_graph_struct()
+        struct_bytes += int_to_bytes(tx.nonce, tx.NONCE_SIZE)
 
         len_difference = len(struct_bytes) - len(original_struct)
         assert len_difference == 4, 'new struct is incorrect, len difference={}'.format(len_difference)

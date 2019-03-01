@@ -16,7 +16,7 @@ from twisted.logger import Logger
 from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
-from hathor.constants import BLOCK_DATA_MAX_SIZE as DATA_SIZE, BLOCK_NONCE_BYTES as NONCE_SIZE
+from hathor.constants import BLOCK_DATA_MAX_SIZE as DATA_SIZE
 from hathor.exception import InvalidNewTransaction
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.transaction import Block
@@ -123,6 +123,8 @@ class JSONRPC(LineReceiver, ABC):
     """
 
     log = Logger()
+
+    delimiter = b'\n'
 
     def lineReceived(self, line: bytes) -> None:
         """Receives a line and parses it, checking if it is a valid JSON-RPC 2.0 message.
@@ -384,14 +386,18 @@ class StratumProtocol(JSONRPC):
             })
 
         block = job.block
-        block.nonce = params["nonce"]
+        # Stratum sends the nonce as a big-endian hexadecimal string.
+        block.nonce = int(params["nonce"], 16)
         block.update_hash()
         assert block.hash is not None
 
         try:
             block.verify_pow()
         except PowError:
-            return self.send_error(INVALID_SOLUTION, id, {"hash": block.hash.hex(), "target": block.get_target()})
+            return self.send_error(INVALID_SOLUTION, id, {
+                "hash": block.hash.hex(),
+                "target": int(block.get_target()).to_bytes(32, 'big').hex()
+            })
 
         try:
             self.manager.propagate_tx(block, fails_silently=False)
@@ -415,9 +421,9 @@ class StratumProtocol(JSONRPC):
             self.jobs.pop(job_id)
 
         self.send_request("job", {
-            "data": job.block.get_struct_without_nonce().hex(),
+            "data": job.block.get_header_without_nonce().hex(),
             "job_id": job.id.hex,
-            "nonce_size": NONCE_SIZE,
+            "nonce_size": Block.NONCE_SIZE,
             "weight": job.block.weight,
         })
 
@@ -623,8 +629,8 @@ def miner_job(index: int, process_num: int, job_data: MinerJob, signal: Value, q
         while signal.value == StratumClient.WORK and current_job == job_data.job_id[:]:
             hash = base.copy()
             hash.update(nonce.to_bytes(nonce_size, "big"))
-            if int(sha256(hash.digest()).hexdigest(), 16) < target:
-                queue.put(MinerSubmit(job_id=bytes(current_job).hex(), nonce=nonce))
+            if int(sha256(hash.digest()).digest()[::-1].hex(), 16) < target:
+                queue.put(MinerSubmit(job_id=bytes(current_job).hex(), nonce=hex(nonce)))
             nonce += 1
 
 
