@@ -5,7 +5,6 @@ from twisted.web import resource
 import hathor
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.constants import MIN_TX_WEIGHT
 
 
 @register_resource
@@ -30,8 +29,11 @@ class VersionResource(resource.Resource):
 
         data = {
             'version': hathor.__version__,
-            'min_weight': MIN_TX_WEIGHT,
-            'min_tx_weight_coefficient': self.manager.min_tx_weight_coefficient
+            'network': self.manager.network,
+            'min_weight': self.manager.min_tx_weight,  # DEPRECATED
+            'min_tx_weight': self.manager.min_tx_weight,
+            'min_tx_weight_coefficient': self.manager.min_tx_weight_coefficient,
+            'min_tx_weight_k': self.manager.min_tx_weight_k,
         }
         return json.dumps(data, indent=4).encode('utf-8')
 
@@ -50,7 +52,12 @@ VersionResource.openapi = {
                                 'success': {
                                     'summary': 'Success',
                                     'value': {
-                                        'version': '0.16.0-beta'
+                                        'version': '0.16.0-beta',
+                                        'network': 'testnet',
+                                        'min_weight': 14,
+                                        'min_tx_weight': 14,
+                                        'min_tx_weight_coefficient': 1.6,
+                                        'min_tx_weight_k': 100,
                                     }
                                 }
                             }

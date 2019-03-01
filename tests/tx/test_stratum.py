@@ -6,12 +6,12 @@ from uuid import UUID
 
 from twisted.test.proto_helpers import MemoryReactor, StringTransportWithDisconnection
 
-from hathor.constants import BLOCK_NONCE_BYTES
 from hathor.stratum import (
     INVALID_PARAMS,
     INVALID_REQUEST,
     INVALID_SOLUTION,
     JOB_NOT_FOUND,
+    JSONRPC,
     METHOD_NOT_FOUND,
     PARSE_ERROR,
     PROPAGATION_FAILED,
@@ -19,6 +19,7 @@ from hathor.stratum import (
     StratumClient,
     StratumFactory,
 )
+from hathor.transaction.block import Block
 from hathor.transaction.genesis import genesis_transactions
 from tests import unittest
 
@@ -88,7 +89,7 @@ class TestStratum(StratumTestBase):
 
     def test_invalid_method(self):
         self.protocol.lineReceived(b'{"jsonrpc": "2.0", "method": "test.invalid_method_x"}')
-        data = self.transport.value().split(b'\r\n')[-2]
+        data = self.transport.value().split(JSONRPC.delimiter)[-2]
 
         response = json_loads(data)
         assert response['error'] == METHOD_NOT_FOUND
@@ -96,7 +97,7 @@ class TestStratum(StratumTestBase):
     def test_subscribe(self):
         id = "52dce7e1c7b34143bdd80ead4814ef07"
         self.protocol.lineReceived('{{"jsonrpc": "2.0", "id": "{}", "method": "subscribe"}}'.format(id).encode())
-        data = self.transport.value().split(b'\r\n')
+        data = self.transport.value().split(JSONRPC.delimiter)
         assert len(data) == 3
 
         response = json_loads(data[0])
@@ -109,7 +110,7 @@ class TestStratum(StratumTestBase):
 
 class TestStratumJob(StratumTestBase):
     def _get_latest_message(self):
-        data = self.transport.value().split(b'\r\n')[-2]
+        data = self.transport.value().split(JSONRPC.delimiter)[-2]
         return json_loads(data)
 
     def _get_nonce(self, valid=True):
@@ -118,9 +119,9 @@ class TestStratumJob(StratumTestBase):
         nonce = 0
         while True:
             hash = base.copy()
-            hash.update(nonce.to_bytes(BLOCK_NONCE_BYTES, 'big'))
-            if (int(sha256(hash.digest()).hexdigest(), 16) < target) == valid:
-                return nonce
+            hash.update(nonce.to_bytes(Block.NONCE_SIZE, 'big'))
+            if (int(sha256(hash.digest()).digest()[::-1].hex(), 16) < target) == valid:
+                return hex(nonce)
             nonce += 1
 
     def _submit(self, job_id: Optional[str], nonce: Optional[int]):
@@ -189,9 +190,9 @@ class StratumClientTest(unittest.TestCase):
         self.protocol = StratumClient()
         self.protocol.makeConnection(self.transport)
         self.job_request_params = {
-            'data': self.block.get_struct_without_nonce().hex(),
+            'data': self.block.get_header_without_nonce().hex(),
             'job_id': 'a734d03fe4b64739be2894742f3de20f',
-            'nonce_size': BLOCK_NONCE_BYTES,
+            'nonce_size': Block.NONCE_SIZE,
             'weight': self.block.weight,
         }
 
@@ -204,11 +205,11 @@ class StratumClientTest(unittest.TestCase):
         self.protocol.handle_request('job', self.job_request_params, None)
 
         # Ignore subscribe request and empty line after line break
-        requests = self.transport.value().split(b'\r\n')[1:-1]
+        requests = self.transport.value().split(JSONRPC.delimiter)[1:-1]
         while len(requests) < 1:
             sleep(1)
             self.clock.advance(1)
-            requests = self.transport.value().split(b'\r\n')[1:-1]
+            requests = self.transport.value().split(JSONRPC.delimiter)[1:-1]
 
         submits = [json_loads(request) for request in requests]
         submits_params = [submit['params'] for submit in submits]
@@ -220,6 +221,6 @@ class StratumClientTest(unittest.TestCase):
         assert all(method == 'submit' for method in methods)
         assert all(job_id == self.job_request_params['job_id'] for job_id in jobs_id)
         for nonce in nonces:
-            self.block.nonce = nonce
+            self.block.nonce = int(nonce, 16)
             self.block.update_hash()
             self.block.verify_pow()

@@ -29,6 +29,8 @@ TokenInfo = namedtuple('TokenInfo', 'amount can_mint can_melt')
 class Transaction(BaseTransaction):
     log = Logger()
 
+    NONCE_SIZE = 4
+
     def __init__(self, nonce: int = 0, timestamp: Optional[int] = None, version: int = 1, weight: float = 0,
                  inputs: Optional[List[TxInput]] = None, outputs: Optional[List[TxOutput]] = None,
                  parents: Optional[List[bytes]] = None, tokens: Optional[List[bytes]] = None,
@@ -86,9 +88,10 @@ class Transaction(BaseTransaction):
         tx = cls()
         buf = tx.get_fields_from_struct(struct_bytes)
 
-        [tx.nonce, ], buf = unpack('!I', buf)
-        if len(buf) != 0:
+        if len(buf) != cls.NONCE_SIZE:
             raise ValueError('Invalid sequence of bytes')
+
+        [tx.nonce, ], buf = unpack('!I', buf)
 
         tx.hash = tx.calculate_hash()
         tx.storage = storage

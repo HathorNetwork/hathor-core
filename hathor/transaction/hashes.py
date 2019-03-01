@@ -68,7 +68,8 @@ class SHA256dHash(BaseHashAlgorithm):
         self.hash.update(data)
 
     def digest(self) -> bytes:
-        return sha256(self.hash.digest()).digest()
+        # SHA256D gets the hash in little-endian format. Reverse the bytes to get the big-endian representation.
+        return sha256(self.hash.digest()).digest()[::-1]
 
     def hexdigest(self) -> str:
         return self.digest().hex()
