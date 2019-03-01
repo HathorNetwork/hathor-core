@@ -23,7 +23,7 @@ def worker(q_in, q_out):
     signal.signal(signal.SIGINT, signal_handler)
     block, start, end, sleep_seconds = q_in.get()
     block.start_mining(start, end, sleep_seconds=sleep_seconds)
-    q_out.put(block.nonce)
+    q_out.put(block)
 
 
 def create_parser() -> ArgumentParser:
@@ -62,6 +62,9 @@ def execute(args: Namespace) -> None:
 
     total = 0
     conn_retries = 0
+    q_in: Queue[Tuple[Block, int, int, int]]
+    q_out: Queue[Block]
+    q_in, q_out = Queue(), Queue()
     while True:
         print('Requesting mining information...')
         try:
@@ -94,16 +97,14 @@ def execute(args: Namespace) -> None:
         assert isinstance(block, Block)
         print('Mining block with weight {}'.format(block.weight))
 
-        q_in: Queue[Tuple[Block, int, int, int]]
-        q_out: Queue[int]
-        q_in, q_out = Queue(), Queue()
         p = Process(target=worker, args=(q_in, q_out))
         p.start()
         q_in.put((block, 0, 2**32, sleep_seconds))
         p.join()
 
-        block.nonce = q_out.get()
+        block = q_out.get()
         block.update_hash()
+        assert block.hash is not None
         print('[{}] New block found: {} (nonce={}, weight={})'.format(datetime.datetime.now(), block.hash.hex(),
                                                                       block.nonce, block.weight))
 

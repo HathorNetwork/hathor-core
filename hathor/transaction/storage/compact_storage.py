@@ -43,12 +43,12 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
     @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx, *, only_metadata=False):
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
+        self._save_transaction(tx, only_metadata=only_metadata)
+
+    def _save_transaction(self, tx, *, only_metadata=False):
         # genesis txs and metadata are kept in memory
         if tx.is_genesis:
             return
-        self._save_transaction(tx)
-
-    def _save_transaction(self, tx):
         data = {}
         data['tx'] = tx.to_json()
         meta = getattr(tx, '_metadata', None)

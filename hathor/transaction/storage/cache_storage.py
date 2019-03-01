@@ -79,7 +79,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
             # in the dirty set when the flush thread began is not in cache anymore, hence this `if` check
             if tx_hash in self.cache:
                 tx = self._clone(self.cache[tx_hash])
-                skip_warning(self.store.save_transaction)(tx)
+                skip_warning(self.store._save_transaction)(tx)
                 self.dirty_txs.discard(tx_hash)
 
     @deprecated('Use save_transaction_deferred instead')

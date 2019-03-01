@@ -27,6 +27,7 @@ from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.stratum import StratumFactory
 from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput, sum_weights
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
@@ -57,7 +58,8 @@ class HathorManager:
     def __init__(self, reactor: IReactorCore, peer_id: Optional[PeerId] = None, network: Optional[str] = None,
                  hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
-                 peer_storage: Optional[Any] = None, default_port: int = 40403, wallet_index: bool = False) -> None:
+                 peer_storage: Optional[Any] = None, default_port: int = 40403, wallet_index: bool = False,
+                 stratum_port: Optional[int] = None) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node. If not given, a new one is created.
@@ -81,6 +83,9 @@ class HathorManager:
 
         :param wallet_index: If should add a wallet index in the storage
         :type wallet_index: bool
+
+        :param stratum_port: Stratum server port. Stratum server will only be created if it is not None.
+        :type stratum_port: Optional[int]
         """
         from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
         from hathor.p2p.manager import ConnectionsManager
@@ -142,6 +147,8 @@ class HathorManager:
         # Multiplier coefficient to adjust the minimum weight of a normal tx to 18
         self.min_tx_weight_coefficient = 1.6
 
+        self.stratum_factory = StratumFactory(manager=self, port=stratum_port) if stratum_port else None
+
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
         """
@@ -163,6 +170,9 @@ class HathorManager:
 
         if self.wallet:
             self.wallet.start()
+
+        if self.stratum_factory:
+            self.stratum_factory.start()
 
     def stop(self) -> None:
         self.log.info('Stopping HathorManager...')
@@ -367,7 +377,7 @@ class HathorManager:
 
         return True
 
-    def propagate_tx(self, tx: BaseTransaction) -> bool:
+    def propagate_tx(self, tx: BaseTransaction, fails_silently=True) -> bool:
         """Push a new transaction to the network. It is used by both the wallet and the mining modules.
 
         :return: True if the transaction was accepted
@@ -377,13 +387,13 @@ class HathorManager:
             assert tx.storage == self.tx_storage, 'Invalid tx storage'
         else:
             tx.storage = self.tx_storage
-        return self.on_new_tx(tx)
+        return self.on_new_tx(tx, fails_silently=fails_silently)
 
     def on_new_tx(self, tx: BaseTransaction, *, conn: Optional[HathorProtocol] = None,
                   quiet: bool = False, fails_silently=True) -> bool:
         """This method is called when any transaction arrive.
 
-        If `fails_silently` is True, it may raise either InvalidNewTransaction or TxValidationError.
+        If `fails_silently` is False, it may raise either InvalidNewTransaction or TxValidationError.
 
         :return: True if the transaction was accepted
         :rtype: bool

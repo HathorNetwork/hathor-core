@@ -14,6 +14,7 @@ class CliManager:
         self.longest_cmd: int = 0
 
         from . import mining
+        from . import stratum_mining
         from . import peer_id
         from . import run_node
         from . import tx_generator
@@ -31,6 +32,7 @@ class CliManager:
         from . import openapi_json
 
         self.add_cmd('mining', 'run_miner', mining, 'Run a mining process (running node required)')
+        self.add_cmd('mining', 'run_stratum_miner', stratum_mining, 'Run a mining process (running node required)')
         self.add_cmd('hathor', 'run_node', run_node, 'Run a node')
         self.add_cmd('hathor', 'gen_peer_id', peer_id, 'Generate a new random peer-id')
         self.add_cmd('docs', 'generate_openapi_json', openapi_json, 'Generate openapi json for api docs')
