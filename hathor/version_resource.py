@@ -5,7 +5,6 @@ from twisted.web import resource
 import hathor
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.constants import MIN_TX_WEIGHT
 
 
 @register_resource

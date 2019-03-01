@@ -44,10 +44,6 @@ BLOCK_DIFFICULTY_N_BLOCKS = 20
 # Maybe 0.50 or 1.0 are good values as well.
 BLOCK_DIFFICULTY_MAX_DW = 0.25
 
-# Number of bytes that each transaction type nonce have
-BLOCK_NONCE_BYTES = 16
-TX_NONCE_BYTES = 4
-
 # Size limit in bytes for Block data field
 BLOCK_DATA_MAX_SIZE = 100
 
