@@ -377,7 +377,7 @@ class HathorManager:
 
         return True
 
-    def propagate_tx(self, tx: BaseTransaction, fails_silently=True) -> bool:
+    def propagate_tx(self, tx: BaseTransaction, fails_silently: bool = True) -> bool:
         """Push a new transaction to the network. It is used by both the wallet and the mining modules.
 
         :return: True if the transaction was accepted
@@ -390,7 +390,7 @@ class HathorManager:
         return self.on_new_tx(tx, fails_silently=fails_silently)
 
     def on_new_tx(self, tx: BaseTransaction, *, conn: Optional[HathorProtocol] = None,
-                  quiet: bool = False, fails_silently=True) -> bool:
+                  quiet: bool = False, fails_silently: bool = True) -> bool:
         """This method is called when any transaction arrive.
 
         If `fails_silently` is False, it may raise either InvalidNewTransaction or TxValidationError.
