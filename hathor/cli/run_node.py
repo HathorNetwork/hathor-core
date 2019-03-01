@@ -61,7 +61,7 @@ def main():
     )
     from hathor.wallet.resources.thin_wallet import (
         AddressHistoryResource,
-        SendTokensResource as SendTokensThinResource,
+        SendTokensResource as SendTokensThinResource
     )
     from hathor.wallet.resources.nano_contracts import (
         NanoContractDecodeResource,
@@ -83,6 +83,7 @@ def main():
     parser.add_argument('--ssl', action='store_true', help='Listen to ssl connection')
     parser.add_argument('--bootstrap', action='append', help='Address to connect to (eg: tcp:127.0.0.1:8000')
     parser.add_argument('--status', type=int, help='Port to run status server')
+    parser.add_argument('--stratum', type=int, help='Port to run stratum server')
     parser.add_argument('--data', help='Data directory')
     parser.add_argument('--wallet', help='Set wallet type. Options are hd (Hierarchical Deterministic) or keypair',
                         default='hd')
@@ -191,7 +192,7 @@ def main():
 
     network = 'testnet'
     manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname, tx_storage=tx_storage,
-                            wallet=wallet, wallet_index=args.wallet_index)
+                            wallet=wallet, wallet_index=args.wallet_index, stratum_port=args.stratum)
 
     dns_hosts = []
     if args.testnet:
