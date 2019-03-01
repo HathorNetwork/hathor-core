@@ -1,6 +1,5 @@
 import json
-from threading import Lock
-from typing import Optional
+from typing import Optional, Union
 
 from twisted.internet import threads
 from twisted.web import resource
@@ -9,7 +8,9 @@ from twisted.web.http import Request
 from hathor.api_util import render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
+from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction
+from hathor.transaction.exceptions import TxValidationError
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, InvalidAddress, PrivateKeyNotFound
 
@@ -25,9 +26,8 @@ class SendTokensResource(resource.Resource):
     def __init__(self, manager):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
-        self.lock = Lock()
 
-    def _render_POST_thread(self, request: Request) -> bytes:
+    def render_POST(self, request):
         """ POST request for /wallet/send_tokens/
             We expect 'data' as request args
             'data': stringified json with an array of inputs and array of outputs
@@ -36,92 +36,97 @@ class SendTokensResource(resource.Resource):
 
             :rtype: string (json)
         """
-        with self.lock:
-            request.setHeader(b'content-type', b'application/json; charset=utf-8')
-            set_cors(request, 'POST')
+        request.setHeader(b'content-type', b'application/json; charset=utf-8')
+        set_cors(request, 'POST')
 
-            post_data = json.loads(request.content.read().decode('utf-8'))
-            data = post_data['data']
+        post_data = json.loads(request.content.read().decode('utf-8'))
+        data = post_data['data']
 
-            outputs = []
-            for output in data['outputs']:
-                try:
-                    address = decode_address(output['address'])  # bytes
-                except InvalidAddress:
-                    return self.return_POST(False, 'The address {} is invalid'.format(output['address']))
+        outputs = []
+        for output in data['outputs']:
+            try:
+                address = decode_address(output['address'])  # bytes
+            except InvalidAddress:
+                return self.return_POST(False, 'The address {} is invalid'.format(output['address']))
 
-                value = int(output['value'])
-                timelock = output.get('timelock')
-                outputs.append(WalletOutputInfo(address=address, value=value, timelock=timelock))
+            value = int(output['value'])
+            timelock = output.get('timelock')
+            outputs.append(WalletOutputInfo(address=address, value=value, timelock=timelock))
 
-            timestamp = None
-            if 'timestamp' in data:
-                if data['timestamp'] > 0:
-                    timestamp = data['timestamp']
-                else:
-                    timestamp = int(self.manager.reactor.seconds())
-
-            if len(data['inputs']) == 0:
-                try:
-                    tx = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, timestamp)
-                except InsufficientFunds as e:
-                    return self.return_POST(False, 'Insufficient funds, {}'.format(str(e)))
+        timestamp = None
+        if 'timestamp' in data:
+            if data['timestamp'] > 0:
+                timestamp = data['timestamp']
             else:
-                inputs = []
-                for input_tx in data['inputs']:
-                    input_tx['private_key'] = None
-                    input_tx['index'] = int(input_tx['index'])
-                    input_tx['tx_id'] = bytes.fromhex(input_tx['tx_id'])
-                    inputs.append(WalletInputInfo(**input_tx))
-                try:
-                    tx = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
-                                                                                   self.manager.tx_storage, timestamp)
-                except (PrivateKeyNotFound, InputDuplicated):
-                    return self.return_POST(False, 'Invalid input to create transaction')
+                timestamp = int(self.manager.reactor.seconds())
 
-            tx.storage = self.manager.tx_storage
-            # TODO Send tx to be mined
+        if len(data['inputs']) == 0:
+            try:
+                tx = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, timestamp)
+            except InsufficientFunds as e:
+                return self.return_POST(False, 'Insufficient funds, {}'.format(str(e)))
+        else:
+            inputs = []
+            for input_tx in data['inputs']:
+                input_tx['private_key'] = None
+                input_tx['index'] = int(input_tx['index'])
+                input_tx['tx_id'] = bytes.fromhex(input_tx['tx_id'])
+                inputs.append(WalletInputInfo(**input_tx))
+            try:
+                tx = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
+                                                                               self.manager.tx_storage, timestamp)
+            except (PrivateKeyNotFound, InputDuplicated):
+                return self.return_POST(False, 'Invalid input to create transaction')
 
-            if timestamp is None:
-                max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
-                tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
-            tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
+        tx.storage = self.manager.tx_storage
 
-            # Calculating weight
-            weight = data.get('weight')
-            if weight is None:
-                weight = self.manager.minimum_tx_weight(tx)
-            tx.weight = weight
+        if timestamp is None:
+            max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
+            tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
+        tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
 
-        # There is no need to synchonize this slow part.
-        tx.resolve()
+        # Calculating weight
+        weight = data.get('weight')
+        if weight is None:
+            weight = self.manager.minimum_tx_weight(tx)
+        tx.weight = weight
 
-        # Then, we synchonize again.
-        with self.lock:
-            success, message = tx.validate_tx_error()
-            if success:
-                success = self.manager.propagate_tx(tx)
-
-        return self.return_POST(success, message, tx=tx)
-
-    def render_POST(self, request):
-        deferred = threads.deferToThread(self._render_POST_thread, request)
+        deferred = threads.deferToThread(self._render_POST_thread, tx, request)
         deferred.addCallback(self._cb_tx_resolve, request)
         deferred.addErrback(self._err_tx_resolve, request)
 
         from twisted.web.server import NOT_DONE_YET
         return NOT_DONE_YET
 
-    def _cb_tx_resolve(self, result, request):
+    def _render_POST_thread(self, tx: Transaction, request: Request) -> Union[bytes, Transaction]:
+        tx.resolve()
+        tx.verify()
+        return tx
+
+    def _cb_tx_resolve(self, tx, request):
         """ Called when `_render_POST_thread` finishes
         """
+        message = ''
+        try:
+            success = self.manager.propagate_tx(tx, fails_silently=False)
+        except (InvalidNewTransaction, TxValidationError) as e:
+            success = False
+            message = str(e)
+
+        result = self.return_POST(success, message, tx=tx)
+
         request.write(result)
         request.finish()
 
     def _err_tx_resolve(self, reason, request):
         """ Called when an error occur in `_render_POST_thread`
         """
-        request.processingFailed(reason)
+        message = ''
+        if hasattr(reason, 'value'):
+            message = str(reason.value)
+        result = self.return_POST(False, message)
+        request.write(result)
+        request.finish()
 
     def return_POST(self, success: bool, message: str, tx: Optional[Transaction] = None) -> bytes:
         """ Auxiliar method to return result of POST method

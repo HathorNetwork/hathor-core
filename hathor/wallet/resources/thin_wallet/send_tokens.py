@@ -8,7 +8,9 @@ from twisted.web.http import Request
 
 from hathor.api_util import render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction
+from hathor.transaction.exceptions import TxValidationError
 
 
 @register_resource
@@ -24,7 +26,7 @@ class SendTokensResource(resource.Resource):
         self.manager = manager
         self.lock = Lock()
 
-    def _render_POST_thread(self, request: Request) -> bytes:
+    def render_POST(self, request: Request):
         """ POST request for /thin_wallet/send_tokens/
             We expect 'tx_hex' as request args
             'tx_hex': serialized tx in hexadecimal
@@ -32,54 +34,60 @@ class SendTokensResource(resource.Resource):
 
             :rtype: string (json)
         """
-        with self.lock:
-            request.setHeader(b'content-type', b'application/json; charset=utf-8')
-            set_cors(request, 'POST')
+        request.setHeader(b'content-type', b'application/json; charset=utf-8')
+        set_cors(request, 'POST')
 
-            post_data = json.loads(request.content.read().decode('utf-8'))
-            tx_hex = post_data['tx_hex']
+        post_data = json.loads(request.content.read().decode('utf-8'))
+        tx_hex = post_data['tx_hex']
 
-            tx = Transaction.create_from_struct(bytes.fromhex(tx_hex))
-            assert isinstance(tx, Transaction)
-            # Set tx storage
-            tx.storage = self.manager.tx_storage
+        tx = Transaction.create_from_struct(bytes.fromhex(tx_hex))
+        assert isinstance(tx, Transaction)
+        # Set tx storage
+        tx.storage = self.manager.tx_storage
 
-            max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
-            # Set tx timestamp as max between tx and inputs
-            tx.timestamp = max(max_ts_spent_tx + 1, tx.timestamp)
-            # Set parents
-            tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
+        max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
+        # Set tx timestamp as max between tx and inputs
+        tx.timestamp = max(max_ts_spent_tx + 1, tx.timestamp)
+        # Set parents
+        tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
 
-        # There is no need to synchonize this slow part.
-        # TODO Tx should be resolved in the frontend
-        tx.resolve()
-
-        # Then, we synchonize again.
-        with self.lock:
-            success, message = tx.validate_tx_error()
-            if success:
-                success = self.manager.propagate_tx(tx)
-
-        return self.return_POST(success, message, tx=tx)
-
-    def render_POST(self, request: Request):
-        deferred = threads.deferToThread(self._render_POST_thread, request)
+        deferred = threads.deferToThread(self._render_POST_thread, tx, request)
         deferred.addCallback(self._cb_tx_resolve, request)
         deferred.addErrback(self._err_tx_resolve, request)
 
         from twisted.web.server import NOT_DONE_YET
         return NOT_DONE_YET
 
-    def _cb_tx_resolve(self, result, request):
+    def _render_POST_thread(self, tx: Transaction, request: Request) -> Transaction:
+        # TODO Tx should be resolved in the frontend
+        tx.resolve()
+        tx.verify()
+        return tx
+
+    def _cb_tx_resolve(self, tx, request):
         """ Called when `_render_POST_thread` finishes
         """
+        message = ''
+        try:
+            success = self.manager.propagate_tx(tx, fails_silently=False)
+        except (InvalidNewTransaction, TxValidationError) as e:
+            success = False
+            message = str(e)
+
+        result = self.return_POST(success, message, tx=tx)
+
         request.write(result)
         request.finish()
 
     def _err_tx_resolve(self, reason, request):
         """ Called when an error occur in `_render_POST_thread`
         """
-        request.processingFailed(reason)
+        message = ''
+        if hasattr(reason, 'value'):
+            message = str(reason.value)
+        result = self.return_POST(False, message)
+        request.write(result)
+        request.finish()
 
     def return_POST(self, success: bool, message: str, tx: Optional[Transaction] = None) -> bytes:
         """ Auxiliar method to return result of POST method

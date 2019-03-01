@@ -487,7 +487,7 @@ class BaseTransaction(ABC):
                 my_parents_txs, parents_txs))
 
     def verify_pow(self) -> None:
-        """Verify proof-of-work and that the weight is correct
+        """Verify proof-of-work
 
         :raises PowError: when the hash is equal or greater than the target
         """
