@@ -53,7 +53,15 @@ class TestCase(unittest.TestCase):
         manager.avg_time_between_blocks = 0.0001
         manager.test_mode = TestMode.TEST_ALL_WEIGHT
         manager.start()
+        self.run_to_completion()
         return manager
+
+    def run_to_completion(self):
+        """ This will advance the test's clock until all calls scheduled are done.
+        """
+        for call in self.clock.getDelayedCalls():
+            amount = call.getTime() - self.clock.seconds()
+            self.clock.advance(amount)
 
     def set_random_seed(self, seed=None):
         if seed is None:

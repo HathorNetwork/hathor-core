@@ -1,7 +1,3 @@
-import time
-
-from twisted.internet.task import Clock
-
 from hathor.constants import HATHOR_TOKEN_UID
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction, TxInput, TxOutput
@@ -16,8 +12,6 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
-        self.clock = Clock()
-        self.clock.advance(time.time())
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, unlock_wallet=True)
 
@@ -36,6 +30,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.tx1.timestamp = int(self.clock.seconds())
         self.tx1.resolve()
         self.manager.propagate_tx(self.tx1)
+        self.run_to_completion()
 
     def test_balance_update1(self):
         # Tx2 is twin with tx1 but less acc weight, so it will get voided
@@ -52,6 +47,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # Propagate a conflicting twin transaction
         self.manager.propagate_tx(tx2)
+        self.run_to_completion()
 
         meta1 = self.tx1.get_metadata(force_reload=True)
         self.assertEqual(meta1.twins, {tx2.hash})
@@ -94,6 +90,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # Propagate a conflicting twin transaction
         self.manager.propagate_tx(tx2)
+        self.run_to_completion()
 
         meta1 = self.tx1.get_metadata(force_reload=True)
         self.assertEqual(meta1.twins, {tx2.hash})
@@ -120,6 +117,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # Propagate a conflicting twin transaction
         self.manager.propagate_tx(tx2)
+        self.run_to_completion()
 
         meta1 = self.tx1.get_metadata(force_reload=True)
         self.assertEqual(meta1.twins, {tx2.hash})
@@ -135,7 +133,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # Tx2 spends Tx1 output
         # Tx3 is twin of Tx2 with same acc weight, so both will get voided
 
-        self.clock.advance(1)
+        self.manager.reactor.advance(1)
 
         # Start balance
         self.assertEqual(self.manager.wallet.balance[HATHOR_TOKEN_UID], WalletBalance(0, 5900))
@@ -151,6 +149,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx2.timestamp = int(self.clock.seconds())
         tx2.resolve()
         self.manager.propagate_tx(tx2)
+        self.run_to_completion()
 
         # Test create same tx with allow double spending
         with self.assertRaises(PrivateKeyNotFound):
@@ -171,6 +170,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # Propagate a conflicting twin transaction
         self.manager.propagate_tx(tx3)
+        self.run_to_completion()
 
         meta2 = tx2.get_metadata(force_reload=True)
         self.assertEqual(meta2.twins, {tx3.hash})
@@ -211,6 +211,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # Propagate a conflicting twin transaction
         self.manager.propagate_tx(tx2)
         self.manager.propagate_tx(tx3)
+        self.run_to_completion()
 
         meta2 = tx2.get_metadata()
         self.assertEqual(meta2.twins, set())
@@ -227,7 +228,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # Tx2 is twin of tx1, so both voided
         # Tx3 has tx1 as parent, so increases tx1 acc weight, then tx1 is winner against tx2
 
-        self.clock.advance(1)
+        self.manager.reactor.advance(1)
 
         # Start balance
         self.assertEqual(self.manager.wallet.balance[HATHOR_TOKEN_UID], WalletBalance(0, 5900))
@@ -253,6 +254,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # Propagate a conflicting twin transaction
         self.manager.propagate_tx(tx2)
         self.manager.propagate_tx(tx3)
+        self.run_to_completion()
 
         # Balance is the same
         self.assertEqual(self.manager.wallet.balance[HATHOR_TOKEN_UID], WalletBalance(0, 5800))
@@ -261,7 +263,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # Tx2 spends Tx1 output
         # Tx3 is twin of Tx1 with higher acc weight, so tx1 and tx2 are voided and tx3 is the winner
 
-        self.clock.advance(1)
+        self.manager.reactor.advance(1)
 
         # Start balance
         self.assertEqual(self.manager.wallet.balance[HATHOR_TOKEN_UID], WalletBalance(0, 5900))
@@ -286,6 +288,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # Propagate a conflicting twin transaction
         self.manager.propagate_tx(tx2)
         self.manager.propagate_tx(tx3)
+        self.run_to_completion()
 
         meta2 = tx2.get_metadata(force_reload=True)
         self.assertEqual(meta2.twins, set())
@@ -314,8 +317,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx2.timestamp = int(self.clock.seconds())
         tx2.resolve()
         self.manager.propagate_tx(tx2)
-
-        self.clock.advance(1)
+        self.run_to_completion()
 
         outputs3 = [
             WalletOutputInfo(address=decode_address(wallet_address), value=2000, timelock=None)
@@ -326,6 +328,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx3.timestamp = int(self.clock.seconds())
         tx3.resolve()
         self.manager.propagate_tx(tx3)
+        self.run_to_completion()
 
         self.clock.advance(1)
         new_address = self.manager.wallet.get_unused_address_bytes()
@@ -338,7 +341,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx4.timestamp = int(self.clock.seconds())
         tx4.resolve()
         self.manager.propagate_tx(tx4)
-        self.clock.advance(1)
+        self.run_to_completion()
 
         # Change of parents only, so it's a twin.
         tx5 = Transaction.create_from_struct(tx4.get_struct())
@@ -348,6 +351,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # Propagate a conflicting twin transaction
         self.manager.propagate_tx(tx5)
+        self.run_to_completion()
 
         meta4 = tx4.get_metadata(force_reload=True)
         self.assertEqual(meta4.twins, {tx5.hash})
@@ -397,7 +401,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx2.resolve()
         tx2.verify()
         self.manager.propagate_tx(tx2)
-        self.manager.reactor.advance(8)
+        self.run_to_completion()
         # verify balance
         self.assertEqual(self.manager.wallet.balance[token_id], WalletBalance(0, amount - 30))
         # hathor balance remains the same
