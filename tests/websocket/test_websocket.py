@@ -44,6 +44,7 @@ class TestWebsocket(unittest.TestCase):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
         self.manager.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=genesis_transactions(None)[1])
+        self.run_to_completion()
         value = self._decode_value(self.transport.value())
         self.assertEqual(value['hash'], genesis_transactions(None)[1].hash.hex())
         self.assertEqual(value['type'], 'network:new_tx_accepted')
@@ -66,6 +67,7 @@ class TestWebsocket(unittest.TestCase):
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
         self.manager.pubsub.publish(HathorEvents.WALLET_BALANCE_UPDATED,
                                     balance={HATHOR_TOKEN_UID: WalletBalance(10, 20)})
+        self.run_to_completion()
         value = self._decode_value(self.transport.value())
         self.assertEqual(value['balance']['locked'], 10)
         self.assertEqual(value['balance']['available'], 20)
@@ -75,6 +77,7 @@ class TestWebsocket(unittest.TestCase):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
         self.manager.pubsub.publish(HathorEvents.WALLET_GAP_LIMIT, limit=10)
+        self.run_to_completion()
         value = self._decode_value(self.transport.value())
         self.assertEqual(value['limit'], 10)
         self.assertEqual(value['type'], 'wallet:gap_limit')
@@ -85,6 +88,7 @@ class TestWebsocket(unittest.TestCase):
         gen_tx = genesis_transactions(None)[0]
         output = UnspentTx(gen_tx.hash, 0, 10, gen_tx.timestamp, '', gen_tx.outputs[0].token_data)
         self.manager.pubsub.publish(HathorEvents.WALLET_OUTPUT_RECEIVED, total=10, output=output)
+        self.run_to_completion()
         value = self._decode_value(self.transport.value())
         self.assertEqual(value['total'], 10)
         self.assertEqual(value['type'], 'wallet:output_received')
@@ -97,6 +101,7 @@ class TestWebsocket(unittest.TestCase):
         gen_tx2 = genesis_transactions(None)[1]
         spent = SpentTx(gen_tx2.hash, gen_tx.hash, 0, 10, gen_tx.timestamp + 1)
         self.manager.pubsub.publish(HathorEvents.WALLET_INPUT_SPENT, output_spent=spent)
+        self.run_to_completion()
         value = self._decode_value(self.transport.value())
         self.assertEqual(value['type'], 'wallet:output_spent')
         self.assertEqual(value['output_spent']['tx_id'], gen_tx2.hash.hex())
@@ -106,6 +111,7 @@ class TestWebsocket(unittest.TestCase):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
         self.manager.pubsub.publish(HathorEvents.NETWORK_PEER_CONNECTED)
+        self.run_to_completion()
         value = self._decode_value(self.transport.value())
         self.assertIsNone(value)
 
@@ -134,6 +140,7 @@ class TestWebsocket(unittest.TestCase):
 
         # Test publish tx voided
         self.manager.pubsub.publish(HathorEvents.STORAGE_TX_VOIDED, tx=block_genesis)
+        self.run_to_completion()
         value = self._decode_value(self.transport.value())
         self.assertEqual(value['type'], 'storage:tx_voided')
         self.assertEqual(value['address'], address)
@@ -147,6 +154,7 @@ class TestWebsocket(unittest.TestCase):
             break
         # Test publish address history
         self.manager.pubsub.publish(HathorEvents.WALLET_ADDRESS_HISTORY, address=address, history=element)
+        self.run_to_completion()
         value = self._decode_value(self.transport.value())
         self.assertEqual(value['type'], 'wallet:address_history')
         self.assertEqual(value['address'], address)

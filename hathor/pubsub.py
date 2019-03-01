@@ -1,6 +1,11 @@
 from collections import defaultdict
 from enum import Enum
-from typing import Any, Callable, Dict, List
+from typing import TYPE_CHECKING, Any, Callable, Dict, List
+
+from hathor.util import ReactorThread
+
+if TYPE_CHECKING:
+    from twisted.internet.interfaces import IReactorCore    # noqa: F401
 
 
 class HathorEvents(Enum):
@@ -95,8 +100,9 @@ class PubSubManager:
 
     _subscribers: Dict[HathorEvents, List[Callable]]
 
-    def __init__(self) -> None:
+    def __init__(self, reactor: 'IReactorCore') -> None:
         self._subscribers = defaultdict(list)
+        self.reactor = reactor
 
     def subscribe(self, key: HathorEvents, fn: Callable) -> None:
         """Subscribe to a specific event.
@@ -125,6 +131,15 @@ class PubSubManager:
         :param **kwargs: Named arguments to be given to the functions that will be called with this event.
         :type **kwargs: dict
         """
+        reactor_thread = ReactorThread.get_current_thread(self.reactor)
+
         args = EventArguments(**kwargs)
         for fn in self._subscribers[key]:
-            fn(key, args)
+            if reactor_thread == ReactorThread.NOT_RUNNING:
+                fn(key, args)
+            elif reactor_thread == ReactorThread.MAIN_THREAD:
+                self.reactor.callLater(0, fn, key, args)
+            elif reactor_thread == ReactorThread.NOT_MAIN_THREAD:
+                # We're taking a conservative approach, since not all functions might need to run
+                # on the main thread [yan 2019-02-20]
+                self.reactor.callFromThread(fn, key, args)

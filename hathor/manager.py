@@ -107,7 +107,7 @@ class HathorManager:
         self.network = network or 'testnet'
 
         # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
-        self.pubsub = pubsub or PubSubManager()
+        self.pubsub = pubsub or PubSubManager(self.reactor)
         self.tx_storage = tx_storage or TransactionMemoryStorage()
         self.tx_storage.pubsub = self.pubsub
         if wallet_index and self.tx_storage.with_index:

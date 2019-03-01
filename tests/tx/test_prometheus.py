@@ -1,9 +1,6 @@
 import os
 import shutil
 import tempfile
-import time
-
-from twisted.internet.task import Clock
 
 from hathor.prometheus import PrometheusMetricsExporter
 from tests import unittest
@@ -14,8 +11,6 @@ class PrometheusTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
-        self.clock = Clock()
-        self.clock.advance(time.time())
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, unlock_wallet=True)
 
@@ -41,6 +36,7 @@ class PrometheusTest(unittest.TestCase):
             self.assertEqual(text[5], 'blocks 1.0')
             self.assertEqual(text[2], 'transactions 2.0')
 
+        self.run_to_completion()
         prometheus.set_new_metrics()
         with open(full_path, 'r') as f:
             text = f.read().split('\n')
