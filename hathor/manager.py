@@ -144,6 +144,8 @@ class HathorManager:
 
         # Multiplier coefficient to adjust the minimum weight of a normal tx to 18
         self.min_tx_weight_coefficient = 1.6
+        # Amount in which tx min weight reaches the middle point between the minimum and maximum weight.
+        self.min_tx_weight_k = 100
 
         self.stratum_factory = StratumFactory(manager=self, port=stratum_port) if stratum_port else None
 
@@ -510,7 +512,9 @@ class HathorManager:
         """ Returns the minimum weight for the param tx
             The minimum is calculated by the following function:
 
-            w = log(size, 2) + log(amount, 2) + 0.5
+            w = alpha * log(size, 2) +       4.0         + 4.0
+                                       ----------------
+                                        1 + k / amount
 
             :param tx: tx to calculate the minimum weight
             :type tx: :py:class:`hathor.transaction.transaction.Transaction`
@@ -528,10 +532,13 @@ class HathorManager:
 
         tx_size = len(tx.get_struct())
 
-        # We need to remove the decimal places because it is in the amount
-        # If you want to transfer 20 hathors, the amount will be 2000, that's why we reduce the log of decimal places
-        weight = (self.min_tx_weight_coefficient * log(tx_size, 2) + log(tx.sum_outputs, 2) - log(
-            10**DECIMAL_PLACES, 2) + 0.5)
+        # We need to take into consideration the decimal places because it is inside the amount.
+        # For instance, if one wants to transfer 20 HTRs, the amount will be 2000.
+        amount = tx.sum_outputs / (10 ** DECIMAL_PLACES)
+        weight = (
+            + self.min_tx_weight_coefficient * log(tx_size, 2)
+            + 4 / (1 + self.min_tx_weight_k / amount) + 4
+        )
 
         # Make sure the calculated weight is at least the minimum
         weight = max(weight, self.min_tx_weight)
