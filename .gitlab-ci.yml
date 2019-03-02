@@ -12,7 +12,12 @@ check:
     - dev
     - web
   before_script:
-    - pip install flake8 isort mypy
+    # install pipenv and generate dev-requirements.txt (stdout) from Pipfile.lock on the fly
+    - pip install pipenv
+    - pip install -r <(pipenv lock -rd)
+    # dev requirements installed directly by pip, do not prefix with `pipenv run`
+    # protobuf files should be generated because they improve mypy checks
+    - make protos
   script:
     - make check
 
