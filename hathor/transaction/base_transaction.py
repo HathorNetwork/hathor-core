@@ -4,13 +4,12 @@ import base64
 import datetime
 import hashlib
 import time
+from _hashlib import HASH
 from abc import ABC, abstractclassmethod, abstractmethod
 from enum import Enum
 from math import inf, log
 from struct import pack
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterator, List, Optional, Tuple
-
-from _hashlib import HASH
 
 from hathor import protos
 from hathor.constants import HATHOR_TOKEN_UID, MAX_DISTANCE_BETWEEN_BLOCKS
