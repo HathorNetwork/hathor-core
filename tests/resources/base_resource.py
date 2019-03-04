@@ -1,8 +1,6 @@
 import json
-import time
 
 from twisted.internet.defer import succeed
-from twisted.internet.task import Clock
 from twisted.web import server
 from twisted.web.test.requesthelper import DummyRequest
 
@@ -20,8 +18,7 @@ class _BaseResourceTest:
 
             peer_id = PeerId()
             wallet = self._create_test_wallet()
-            self.reactor = Clock()
-            self.reactor.advance(time.time())
+            self.reactor = self.clock
             network = 'testnet'
             self.manager = HathorManager(
                 self.reactor,

@@ -1,13 +1,11 @@
 import hashlib
 import shutil
 import tempfile
-import time
 from contextlib import redirect_stdout
 from io import StringIO
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
-from twisted.internet.task import Clock
 
 from hathor.cli.multisig_signature import create_parser, execute
 from hathor.wallet import Wallet
@@ -19,8 +17,6 @@ class SignatureTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
-        self.clock = Clock()
-        self.clock.advance(time.time())
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, unlock_wallet=True)
 
@@ -29,6 +25,7 @@ class SignatureTest(unittest.TestCase):
         self.wallet.unlock(b'123')
 
     def tearDown(self):
+        super().tearDown()
         shutil.rmtree(self.tmpdir)
 
     def test_generate_signature(self):

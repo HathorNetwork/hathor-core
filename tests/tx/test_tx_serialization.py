@@ -1,7 +1,3 @@
-import time
-
-from twisted.internet.task import Clock
-
 import hathor.protos.transaction_pb2_grpc  # noqa this file has nothing to test, only import
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction
@@ -15,8 +11,6 @@ class _Base:
         def setUp(self):
             super().setUp()
 
-            self.clock = Clock()
-            self.clock.advance(time.time())
             self.network = 'testnet'
             self.manager = self.create_peer(self.network, unlock_wallet=True)
             self.tx_storage = self.manager.tx_storage

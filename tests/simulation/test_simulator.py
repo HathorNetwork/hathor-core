@@ -39,6 +39,7 @@ class HathorSimulatorTestCase(unittest.TestCase):
 
     def tearDown(self):
         BaseTransaction.verify_pow = self.old_verify_pow
+        super().tearDown()
 
     def create_peer(self, network):
         wallet = HDWallet(gap_limit=2)

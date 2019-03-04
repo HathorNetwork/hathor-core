@@ -1,8 +1,5 @@
 import shutil
 import tempfile
-import time
-
-from twisted.internet.task import Clock
 
 from hathor.manager import HathorManager
 from hathor.transaction.storage import TransactionMemoryStorage
@@ -22,13 +19,11 @@ class ConnectionsTest(unittest.TestCase):
         process3.terminate()
 
     def test_manager_connections(self):
-        clock = Clock()
-        clock.advance(time.time())
         tx_storage = TransactionMemoryStorage()
         tmpdir = tempfile.mkdtemp(dir='/tmp/')
         wallet = Wallet(directory=tmpdir)
         wallet.unlock(b'teste')
-        manager = HathorManager(clock, tx_storage=tx_storage, wallet=wallet)
+        manager = HathorManager(self.clock, tx_storage=tx_storage, wallet=wallet)
 
         endpoint = 'tcp:127.0.0.1:8005'
         manager.connections.connect_to(endpoint, use_ssl=True)
