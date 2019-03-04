@@ -1,7 +1,4 @@
 import random
-import time
-
-from twisted.internet.task import Clock
 
 from hathor.crypto.util import decode_address
 from tests import unittest
@@ -12,8 +9,6 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
-        self.clock = Clock()
-        self.clock.advance(time.time())
         self.network = 'testnet'
         self.manager1 = self.create_peer(self.network, unlock_wallet=True)
 
@@ -311,3 +306,4 @@ class RemoteStorageSyncTest(HathorSyncMethodsTestCase):
 
     def tearDown(self):
         self._server.stop(0).wait()
+        super().tearDown()

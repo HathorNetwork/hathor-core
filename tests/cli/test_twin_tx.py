@@ -1,10 +1,7 @@
 import json
-import time
 import urllib.parse
 from contextlib import redirect_stdout
 from io import StringIO
-
-from twisted.internet.task import Clock
 
 from hathor.cli.mining import create_parser as create_parser_mining, execute as execute_mining
 from hathor.cli.twin_tx import create_parser, execute
@@ -33,8 +30,6 @@ class TwinTxTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
-        self.clock = Clock()
-        self.clock.advance(time.time())
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, unlock_wallet=True)
 

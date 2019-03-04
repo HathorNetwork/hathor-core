@@ -1,8 +1,5 @@
-import time
-
 from twisted.internet import endpoints
 from twisted.internet.defer import inlineCallbacks
-from twisted.internet.task import Clock
 
 import hathor
 from hathor.p2p.resources import StatusResource
@@ -13,8 +10,6 @@ from tests.utils import FakeConnection
 class StatusTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
-        self.clock = Clock()
-        self.clock.advance(time.time())
         self.web = StubSite(StatusResource(self.manager))
 
         self.manager2 = self.create_peer('testnet')

@@ -1,7 +1,3 @@
-import time
-
-from twisted.internet.task import Clock
-
 from hathor.constants import GENESIS_TOKENS
 from hathor.manager import TestMode
 from hathor.transaction.genesis import genesis_transactions, get_genesis_output
@@ -39,8 +35,6 @@ class GenesisTest(unittest.TestCase):
         genesis_txs = [tx for tx in genesis_transactions(None) if not tx.is_block]
         genesis_tx = genesis_txs[0]
 
-        clock = Clock()
-        clock.advance(time.time())
         network = 'testnet'
         manager = self.create_peer(network, unlock_wallet=True)
 

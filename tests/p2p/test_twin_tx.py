@@ -1,7 +1,3 @@
-import time
-
-from twisted.internet.task import Clock
-
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletOutputInfo
@@ -12,9 +8,6 @@ from tests.utils import add_new_blocks
 class TwinTransactionTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
-
-        self.clock = Clock()
-        self.clock.advance(time.time())
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, unlock_wallet=True)
 
