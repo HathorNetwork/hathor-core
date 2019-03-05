@@ -467,18 +467,18 @@ class Transaction(BaseTransaction):
 
         # Update our meta.conflict_with.
         meta = self.get_metadata()
-        meta.conflict_with.update(spent_by)
+        meta.conflict_with.extend(spent_by)
         self.storage.save_transaction(self, only_metadata=True)
 
         for h in spent_by:
             # Update meta.conflict_with of our conflict transactions.
             tx = self.storage.get_transaction(h)
             tx_meta = tx.get_metadata()
-            tx_meta.conflict_with.add(self.hash)
+            tx_meta.conflict_with.append(self.hash)
             tx.storage.save_transaction(tx, only_metadata=True)
 
         # Add ourselves to meta.spent_by of our input.
-        spent_by.add(self.hash)
+        spent_by.append(self.hash)
         self.storage.save_transaction(spent_tx, only_metadata=True)
 
     def check_conflicts(self) -> None:
@@ -597,9 +597,9 @@ class Transaction(BaseTransaction):
 
             # If everything is equal we add in both metadatas
             if equal:
-                meta.twins.add(tx.hash)
+                meta.twins.append(tx.hash)
                 tx_meta = tx.get_metadata()
-                tx_meta.twins.add(self.hash)
+                tx_meta.twins.append(self.hash)
                 self.storage.save_transaction(tx, only_metadata=True)
 
         self.storage.save_transaction(self, only_metadata=True)

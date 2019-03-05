@@ -70,7 +70,7 @@ class TwinTxTest(unittest.TestCase):
 
         # Validate they are twins
         meta = self.tx.get_metadata(force_reload=True)
-        self.assertEqual(meta.twins, set([twin_tx.hash]))
+        self.assertEqual(meta.twins, [twin_tx.hash])
 
         meta2 = twin_tx.get_metadata()
         self.assertFalse(meta == meta2)

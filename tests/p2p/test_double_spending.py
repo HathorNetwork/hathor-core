@@ -59,24 +59,24 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         self.manager1.propagate_tx(tx1)
         meta1 = tx1.get_metadata()
-        self.assertEqual(meta1.conflict_with, set())
+        self.assertEqual(meta1.conflict_with, [])
         self.assertEqual(meta1.voided_by, set())
 
         # Propagate a conflicting transaction.
         self.manager1.propagate_tx(tx2)
 
         meta1 = tx1.get_metadata(force_reload=True)
-        self.assertEqual(meta1.conflict_with, {tx2.hash})
+        self.assertEqual(meta1.conflict_with, [tx2.hash])
         self.assertEqual(meta1.voided_by, {tx1.hash})
 
         meta2 = tx2.get_metadata()
-        self.assertEqual(meta2.conflict_with, {tx1.hash})
+        self.assertEqual(meta2.conflict_with, [tx1.hash])
         self.assertEqual(meta2.voided_by, {tx2.hash})
 
         for txin in tx1.inputs:
             spent_tx = self.manager1.tx_storage.get_transaction(txin.tx_id)
             spent_meta = spent_tx.get_metadata()
-            self.assertEqual({tx1.hash, tx2.hash}, spent_meta.spent_outputs[txin.index])
+            self.assertEqual([tx1.hash, tx2.hash], spent_meta.spent_outputs[txin.index])
 
         self.assertNotIn(tx1.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
         self.assertNotIn(tx2.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
@@ -85,21 +85,21 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.manager1.propagate_tx(tx3)
 
         meta1 = tx1.get_metadata(force_reload=True)
-        self.assertEqual(meta1.conflict_with, {tx2.hash, tx3.hash})
+        self.assertEqual(meta1.conflict_with, [tx2.hash, tx3.hash])
         self.assertEqual(meta1.voided_by, {tx1.hash})
 
         meta2 = tx2.get_metadata(force_reload=True)
-        self.assertEqual(meta2.conflict_with, {tx1.hash, tx3.hash})
+        self.assertEqual(meta2.conflict_with, [tx1.hash, tx3.hash])
         self.assertEqual(meta2.voided_by, {tx2.hash})
 
         meta3 = tx3.get_metadata()
-        self.assertEqual(meta3.conflict_with, {tx1.hash, tx2.hash})
+        self.assertEqual(meta3.conflict_with, [tx1.hash, tx2.hash])
         self.assertEqual(meta3.voided_by, set())
 
         for txin in tx1.inputs:
             spent_tx = self.manager1.tx_storage.get_transaction(txin.tx_id)
             spent_meta = spent_tx.get_metadata()
-            self.assertEqual({tx1.hash, tx2.hash, tx3.hash}, spent_meta.spent_outputs[txin.index])
+            self.assertEqual([tx1.hash, tx2.hash, tx3.hash], spent_meta.spent_outputs[txin.index])
 
         self.assertNotIn(tx1.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
         self.assertNotIn(tx2.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
@@ -205,10 +205,10 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         meta1 = tx1.get_metadata(force_reload=True)
         meta4 = tx4.get_metadata(force_reload=True)
-        self.assertEqual(meta1.conflict_with, set([tx4.hash]))
+        self.assertEqual(meta1.conflict_with, [tx4.hash])
         self.assertEqual(meta1.voided_by, set())
-        self.assertEqual(meta4.conflict_with, set([tx1.hash]))
-        self.assertEqual(meta4.voided_by, set([tx4.hash]))
+        self.assertEqual(meta4.conflict_with, [tx1.hash])
+        self.assertEqual(meta4.voided_by, {tx4.hash})
 
         # ---
 
@@ -229,8 +229,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.clock.advance(15)
 
         meta5 = tx5.get_metadata()
-        self.assertEqual(meta5.conflict_with, set())
-        self.assertEqual(meta5.voided_by, set([tx4.hash]))
+        self.assertEqual(meta5.conflict_with, [])
+        self.assertEqual(meta5.voided_by, {tx4.hash})
 
         # ---
 
@@ -246,8 +246,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.clock.advance(15)
 
         meta6 = tx6.get_metadata()
-        self.assertEqual(meta6.conflict_with, set([tx3.hash]))
-        self.assertEqual(meta6.voided_by, set([tx4.hash, tx6.hash]))
+        self.assertEqual(meta6.conflict_with, [tx3.hash])
+        self.assertEqual(meta6.voided_by, {tx4.hash, tx6.hash})
 
         # ---
 
@@ -270,9 +270,9 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         meta1 = tx1.get_metadata(force_reload=True)
         meta2 = tx2.get_metadata(force_reload=True)
         meta3 = tx3.get_metadata(force_reload=True)
-        self.assertEqual(meta1.voided_by, set([tx1.hash]))
-        self.assertEqual(meta2.voided_by, set([tx1.hash]))
-        self.assertEqual(meta3.voided_by, set([tx1.hash, tx3.hash]))
+        self.assertEqual(meta1.voided_by, {tx1.hash})
+        self.assertEqual(meta2.voided_by, {tx1.hash})
+        self.assertEqual(meta3.voided_by, {tx1.hash, tx3.hash})
 
         meta4 = tx4.get_metadata(force_reload=True)
         meta5 = tx5.get_metadata(force_reload=True)
