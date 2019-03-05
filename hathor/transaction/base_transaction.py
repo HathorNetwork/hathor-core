@@ -698,7 +698,7 @@ class BaseTransaction(ABC):
 
         for parent in self.get_parents():
             metadata = parent.get_metadata()
-            metadata.children.add(self.hash)
+            metadata.children.append(self.hash)
             self.storage.save_transaction(parent, only_metadata=True)
 
     def update_timestamp(self, now):

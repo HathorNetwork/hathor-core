@@ -1,22 +1,22 @@
 from collections import defaultdict
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 from hathor import protos
 
 
 class TransactionMetadata:
     hash: Optional[bytes]
-    spent_outputs: Dict[int, Set[bytes]]
-    conflict_with: Set[bytes]
+    spent_outputs: Dict[int, List[bytes]]
+    conflict_with: List[bytes]
     voided_by: Set[bytes]
-    received_by: Set[int]
-    children: Set[bytes]
-    twins: Set[bytes]
+    received_by: List[int]
+    children: List[bytes]
+    twins: List[bytes]
     accumulated_weight: float
     score: float
     first_block: Optional[bytes]
 
-    def __init__(self, spent_outputs: Optional[Dict[int, Set[bytes]]] = None, hash: Optional[bytes] = None,
+    def __init__(self, spent_outputs: Optional[Dict[int, List[bytes]]] = None, hash: Optional[bytes] = None,
                  accumulated_weight: float = 0, score: float = 0) -> None:
 
         # Hash of the transaction.
@@ -24,11 +24,11 @@ class TransactionMetadata:
 
         # Tx outputs that have been spent.
         # The key is the output index, while the value is a set of the transactions which spend the output.
-        self.spent_outputs = spent_outputs or defaultdict(set)
+        self.spent_outputs = spent_outputs or defaultdict(list)
 
         # FIXME: conflict_with -> conflicts_with (as in "this transaction conflicts with these ones")
         # Hash of the transactions that conflicts with this transaction.
-        self.conflict_with = set()
+        self.conflict_with = []
 
         # Hash of the transactions that void this transaction.
         #
@@ -40,15 +40,15 @@ class TransactionMetadata:
 
         # List of peers which have sent this transaction.
         # Store only the peers' id.
-        self.received_by = set()
+        self.received_by = []
 
         # List of transactions which have this transaction as parent.
         # Store only the transactions' hash.
-        self.children = set()
+        self.children = []
 
         # Hash of the transactions that are twin to this transaction.
         # Twin transactions have the same inputs and outputs
-        self.twins = set()
+        self.twins = []
 
         # Accumulated weight
         self.accumulated_weight = accumulated_weight
@@ -94,14 +94,14 @@ class TransactionMetadata:
         meta.hash = bytes.fromhex(data['hash'])
         for idx, hashes in data['spent_outputs']:
             for h_hex in hashes:
-                meta.spent_outputs[idx].add(bytes.fromhex(h_hex))
-        meta.received_by = set(data['received_by'])
-        meta.children = set(bytes.fromhex(h) for h in data['children'])
+                meta.spent_outputs[idx].append(bytes.fromhex(h_hex))
+        meta.received_by = list(data['received_by'])
+        meta.children = [bytes.fromhex(h) for h in data['children']]
 
         if 'conflict_with' in data:
-            meta.conflict_with = set(bytes.fromhex(h) for h in data['conflict_with'])
+            meta.conflict_with = [bytes.fromhex(h) for h in data['conflict_with']]
         else:
-            meta.conflict_with = set()
+            meta.conflict_with = []
 
         if 'voided_by' in data:
             meta.voided_by = set(bytes.fromhex(h) for h in data['voided_by'])
@@ -109,9 +109,9 @@ class TransactionMetadata:
             meta.voided_by = set()
 
         if 'twins' in data:
-            meta.twins = set(bytes.fromhex(h) for h in data['twins'])
+            meta.twins = [bytes.fromhex(h) for h in data['twins']]
         else:
-            meta.twins = set()
+            meta.twins = []
 
         meta.accumulated_weight = data['accumulated_weight']
         meta.score = data.get('score', 0)
@@ -138,12 +138,12 @@ class TransactionMetadata:
         """
         metadata = cls(hash=hash_bytes)
         for i, hashes in metadata_proto.spent_outputs.items():
-            metadata.spent_outputs[i] = set(hashes.hashes)
-        metadata.conflict_with = set(metadata_proto.conflicts_with.hashes)
+            metadata.spent_outputs[i] = list(hashes.hashes)
+        metadata.conflict_with = list(metadata_proto.conflicts_with.hashes)
         metadata.voided_by = set(metadata_proto.voided_by.hashes)
-        metadata.twins = set(metadata_proto.twins.hashes)
-        metadata.received_by = set(metadata_proto.received_by)
-        metadata.children = set(metadata_proto.children.hashes)
+        metadata.twins = list(metadata_proto.twins.hashes)
+        metadata.received_by = list(metadata_proto.received_by)
+        metadata.children = list(metadata_proto.children.hashes)
         metadata.accumulated_weight = metadata_proto.accumulated_weight
         metadata.score = metadata_proto.score
         metadata.first_block = metadata_proto.first_block or None

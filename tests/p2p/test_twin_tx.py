@@ -51,28 +51,28 @@ class TwinTransactionTestCase(unittest.TestCase):
 
         self.manager.propagate_tx(tx1)
         meta1 = tx1.get_metadata()
-        self.assertEqual(meta1.conflict_with, set())
+        self.assertEqual(meta1.conflict_with, [])
         self.assertEqual(meta1.voided_by, set())
-        self.assertEqual(meta1.twins, set())
+        self.assertEqual(meta1.twins, [])
 
         # Propagate a conflicting twin transaction
         self.manager.propagate_tx(tx2)
 
         meta1 = tx1.get_metadata(force_reload=True)
-        self.assertEqual(meta1.conflict_with, {tx2.hash})
+        self.assertEqual(meta1.conflict_with, [tx2.hash])
         self.assertEqual(meta1.voided_by, {tx1.hash})
-        self.assertEqual(meta1.twins, {tx2.hash})
+        self.assertEqual(meta1.twins, [tx2.hash])
 
         meta2 = tx2.get_metadata()
-        self.assertEqual(meta2.conflict_with, {tx1.hash})
+        self.assertEqual(meta2.conflict_with, [tx1.hash])
         self.assertEqual(meta2.voided_by, {tx2.hash})
-        self.assertEqual(meta2.twins, {tx1.hash})
+        self.assertEqual(meta2.twins, [tx1.hash])
 
         # Propagate another conflicting transaction but it's not a twin
         self.manager.propagate_tx(tx3)
 
         meta1 = tx1.get_metadata()
-        self.assertEqual(meta1.twins, {tx2.hash})
+        self.assertEqual(meta1.twins, [tx2.hash])
 
         meta3 = tx3.get_metadata()
-        self.assertEqual(meta3.twins, set())
+        self.assertEqual(meta3.twins, [])

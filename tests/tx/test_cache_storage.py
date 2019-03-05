@@ -1,14 +1,10 @@
 import collections
-import shutil
-import tempfile
-import time
 
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.manager import HathorManager, TestMode
+from hathor.manager import TestMode
 from hathor.transaction import Block, Transaction, TransactionMetadata, TxOutput
 from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
-from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import add_new_blocks, add_new_transactions
 
@@ -31,7 +27,7 @@ class BasicTransaction(unittest.TestCase):
         # Save genesis metadata
         self.cache_storage.save_transaction_deferred(self.genesis_txs[0], only_metadata=True)
 
-        #self.manager = HathorManager(self.reactor, tx_storage=self.cache_storage, wallet=wallet)
+        # self.manager = HathorManager(self.reactor, tx_storage=self.cache_storage, wallet=wallet)
         self.manager = self.create_peer('testnet', tx_storage=self.cache_storage, unlock_wallet=True)
 
     def tearDown(self):
