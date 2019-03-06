@@ -221,6 +221,7 @@ class _BaseTransactionStorageTest:
 
         def _add_new_block(self, parents=None):
             block = self.manager.generate_mining_block()
+            block.data = b'Testing, testing, 1, 2, 3... testing, testing...'
             if parents is not None:
                 block.parents = parents
             block.weight = 10
