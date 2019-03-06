@@ -385,7 +385,7 @@ class StratumProtocol(JSONRPC):
                 "job_id": job_id.hex
             })
 
-        block = job.block
+        block = job.block.clone()
         # Stratum sends the nonce as a big-endian hexadecimal string.
         block.nonce = int(params["nonce"], 16)
         block.update_hash()
