@@ -126,6 +126,7 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
         }
 
         if len(inputs) == 0:
+            kwargs['data'] = base64.b64decode(data['data'])
             tx = Block(**kwargs)
         else:
             kwargs['inputs'] = inputs
