@@ -27,7 +27,6 @@ class BasicTransaction(unittest.TestCase):
         # Save genesis metadata
         self.cache_storage.save_transaction_deferred(self.genesis_txs[0], only_metadata=True)
 
-        # self.manager = HathorManager(self.reactor, tx_storage=self.cache_storage, wallet=wallet)
         self.manager = self.create_peer('testnet', tx_storage=self.cache_storage, unlock_wallet=True)
 
     def tearDown(self):
@@ -83,6 +82,34 @@ class BasicTransaction(unittest.TestCase):
 
         # now it should be in cache
         self.assertIn(txs[0].hash, self.cache_storage.cache)
+
+    def test_read_moves_to_end(self):
+        # when we read a tx from cache, it should be moved to the end of cache so it's evicted later
+        txs = [self._get_new_tx(nonce) for nonce in range(2 * CACHE_SIZE)]
+        for i in range(CACHE_SIZE):
+            self.cache_storage.save_transaction(txs[i])
+
+        # first tx added would be the first to leave cache if we add one more tx
+        # let's read it from cache so it goes to the end
+        self.cache_storage.get_transaction(txs[0].hash)
+
+        # add a new tx to cache, so it will evict a tx
+        self.cache_storage.save_transaction(txs[-1])
+
+        # first tx should be in cache
+        self.assertIn(txs[0].hash, self.cache_storage.cache)
+
+    def test_cache_eviction(self):
+        # tests we're evicting the oldest tx from cache
+        txs = [self._get_new_tx(nonce) for nonce in range(2 * CACHE_SIZE)]
+        for i in range(CACHE_SIZE):
+            self.cache_storage.save_transaction(txs[i])
+
+        # next save should evict first tx
+        self.cache_storage.save_transaction(txs[CACHE_SIZE])
+        self.assertNotIn(txs[0].hash, self.cache_storage.cache)
+        self.assertIn(txs[CACHE_SIZE].hash, self.cache_storage.cache)
+        self.assertEqual(CACHE_SIZE, len(self.cache_storage.cache))
 
     def test_flush_thread(self):
         txs = [self._get_new_tx(nonce) for nonce in range(CACHE_SIZE)]

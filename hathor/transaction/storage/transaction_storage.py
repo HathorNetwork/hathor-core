@@ -37,7 +37,7 @@ class TransactionStorage(ABC):
         if tx2 is None:
             self._tx_weakref[tx.hash] = tx
         else:
-            assert tx is tx2, 'There are two instance of the same transaction in memory'
+            assert tx is tx2, 'There are two instance of the same transaction in memory ({})'.format(tx.hash_hex)
 
     def get_transaction_from_weakref(self, hash_bytes: bytes) -> Optional[BaseTransaction]:
         """ Get a transaction from weakref if it exists. Otherwise, returns None.

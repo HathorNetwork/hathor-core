@@ -20,7 +20,10 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
     @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx, *, only_metadata=False):
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
+        if tx.is_genesis:
+            return
         self._save_transaction(tx, only_metadata=only_metadata)
+        self._save_to_weakref(tx)
 
     def _save_transaction(self, tx, *, only_metadata=False):
         if tx.is_genesis:
@@ -28,7 +31,6 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         if not only_metadata:
             self._save_tx_to_disk(tx)
         self._save_metadata(tx)
-        self._save_to_weakref(tx)
 
     def _save_tx_to_disk(self, tx):
         tx_bytes = tx.get_struct()
