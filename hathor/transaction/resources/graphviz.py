@@ -4,10 +4,10 @@ from twisted.internet import threads
 from twisted.web import resource
 from twisted.web.http import Request
 
-from hathor import graphviz
 from hathor.api_util import set_cors, validate_tx_hash
 from hathor.cli.openapi_files.register import register_resource
 from hathor.constants import MAX_GRAPH_LEVEL
+from hathor.graphviz import GraphvizVisualizer
 
 
 @register_resource
@@ -58,7 +58,10 @@ class GraphvizResource(resource.Resource):
                         'message': 'Graph max level is {}'.format(MAX_GRAPH_LEVEL)
                     }, indent=4).encode('utf-8')
                 tx = tx_storage.get_transaction(bytes.fromhex(tx_hex))
+
+                graphviz = GraphvizVisualizer(tx_storage)
                 dot = graphviz.tx_neighborhood(tx, format=dotformat, max_level=max_level, graph_type=graph_type)
+
         else:
             weight = False
             if b'weight' in request.args:
@@ -68,14 +71,25 @@ class GraphvizResource(resource.Resource):
             if b'acc_weight' in request.args:
                 acc_weight = self.parseBoolArg(request.args[b'acc_weight'][0].decode('utf-8'))
 
-            funds = False
-            if b'funds' in request.args:
-                funds = self.parseBoolArg(request.args[b'funds'][0].decode('utf-8'))
+            include_verifications = True
+            if b'verifications' in request.args:
+                include_verifications = self.parseBoolArg(request.args[b'verifications'][0].decode('utf-8'))
 
-            if not funds:
-                dot = graphviz.verifications(tx_storage, format=dotformat, weight=weight, acc_weight=acc_weight)
-            else:
-                dot = graphviz.funds(tx_storage, format=dotformat, weight=weight, acc_weight=acc_weight)
+            include_funds = False
+            if b'funds' in request.args:
+                include_funds = self.parseBoolArg(request.args[b'funds'][0].decode('utf-8'))
+
+            only_blocks = False
+            if b'only_blocks' in request.args:
+                only_blocks = self.parseBoolArg(request.args[b'only_blocks'][0].decode('utf-8'))
+
+            graphviz = GraphvizVisualizer(tx_storage)
+            graphviz.include_verifications = include_verifications
+            graphviz.include_funds = include_funds
+            graphviz.only_blocks = only_blocks
+            graphviz.show_weight = weight
+            graphviz.show_acc_weight = acc_weight
+            dot = graphviz.dot(format=dotformat)
 
             if dotformat == 'dot':
                 request.setHeader(b'content-type', contenttype[dotformat])
