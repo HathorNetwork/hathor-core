@@ -27,6 +27,7 @@ class _BaseResourceTest:
                 wallet=wallet,
                 tx_storage=tx_storage
             )
+            self.manager.allow_mining_without_peers()
             self.manager.test_mode = TestMode.TEST_ALL_WEIGHT
             self.manager.start()
 
