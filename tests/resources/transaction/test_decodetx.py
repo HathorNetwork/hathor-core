@@ -1,6 +1,6 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.transaction.genesis import genesis_transactions
+from hathor.transaction.genesis import get_genesis_transactions
 from hathor.transaction.resources import DecodeTxResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
@@ -12,7 +12,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_get(self):
-        genesis_tx = genesis_transactions(self.manager.tx_storage)[1]
+        genesis_tx = get_genesis_transactions(self.manager.tx_storage)[1]
         response_success = yield self.web.get("decode_tx", {b'hex_tx': bytes(genesis_tx.get_struct().hex(), 'utf-8')})
         data_success = response_success.json_value()
 

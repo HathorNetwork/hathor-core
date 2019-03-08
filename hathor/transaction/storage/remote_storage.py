@@ -100,9 +100,9 @@ class TransactionRemoteStorage(TransactionStorage):
         self.with_index = with_index
 
     def _create_genesis_cache(self):
-        from hathor.transaction.genesis import genesis_transactions
+        from hathor.transaction.genesis import get_genesis_transactions
         self._genesis_cache = {}
-        for genesis in genesis_transactions(self):
+        for genesis in get_genesis_transactions(self):
             self._genesis_cache[genesis.hash] = genesis
 
     def connect_to(self, port):

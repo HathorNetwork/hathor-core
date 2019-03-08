@@ -3,7 +3,7 @@ import base64
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.p2p.resources import MiningResource
-from hathor.transaction.genesis import genesis_transactions
+from hathor.transaction.genesis import get_genesis_transactions
 from hathor.transaction.resources import PushTxResource
 from hathor.wallet.resources import BalanceResource, HistoryResource, SendTokensResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
@@ -45,7 +45,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         self.assertTrue(data_success['success'])
 
         # Invalid tx (don't have inputs)
-        genesis_tx = genesis_transactions(self.manager.tx_storage)[1]
+        genesis_tx = get_genesis_transactions(self.manager.tx_storage)[1]
         response_genesis = yield self.web.get('push_tx', {b'hex_tx': bytes(genesis_tx.get_struct().hex(), 'utf-8')})
         data_genesis = response_genesis.json_value()
         self.assertFalse(data_genesis['success'])

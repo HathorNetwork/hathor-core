@@ -2,9 +2,19 @@ TOKENS_PER_BLOCK = 20
 
 DECIMAL_PLACES = 2
 
+# Genesis pre-mined tokens
 GENESIS_TOKEN_UNITS = 2 * (10**9)  # 2B
-
 GENESIS_TOKENS = GENESIS_TOKEN_UNITS * (10**DECIMAL_PLACES)  # 200B
+
+# Genesis pre-mined outputs
+# P2PKH 1G6BbS46VmAjoXvzZ4Ndkt4kmW4qDeQLEq
+#
+# To generate a new P2PKH script, run:
+# >>> from hathor.transaction.scripts import P2PKH
+# >>> import base58
+# >>> address = base58.b58decode('1G6BbS46VmAjoXvzZ4Ndkt4kmW4qDeQLEq')
+# >>> P2PKH.create_output_script(address=address).hex()
+GENESIS_OUTPUT_SCRIPT = bytes.fromhex('76a914a584cf48b161e4a49223ed220df30037ab740e0088ac')
 
 # Version byte of the address in P2PKH
 P2PKH_VERSION_BYTE = b'\x00'

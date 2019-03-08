@@ -6,7 +6,6 @@ import hashlib
 import time
 from _hashlib import HASH
 from abc import ABC, abstractclassmethod, abstractmethod
-from enum import Enum
 from math import inf, log
 from struct import pack
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterator, List, Optional, Tuple
@@ -82,11 +81,6 @@ class BaseTransaction(ABC):
 
     NONCE_SIZE: ClassVar[int]
 
-    class GenesisDagConnectivity(Enum):
-        UNKNOWN = -1
-        DISCONNECTED = 0
-        CONNECTED = 1
-
     def __init__(self, nonce: int = 0, timestamp: Optional[int] = None, version: int = 1, weight: float = 0,
                  inputs: Optional[List['TxInput']] = None, outputs: Optional[List['TxOutput']] = None,
                  parents: List[bytes] = None, tokens: Optional[List[bytes]] = None, hash: Optional[bytes] = None,
@@ -111,9 +105,6 @@ class BaseTransaction(ABC):
         self.storage = storage
         self.hash = hash  # Stored as bytes.
         self.is_block = is_block
-
-        # Locally we keep track of whether this tx is connected back to a genesis tx.
-        self.genesis_dag_connectivity = self.GenesisDagConnectivity.UNKNOWN
 
     def __repr__(self):
         class_name = type(self).__name__
@@ -242,8 +233,8 @@ class BaseTransaction(ABC):
             else:
                 return False
         else:
-            from hathor.transaction.genesis import genesis_transactions
-            for genesis in genesis_transactions(self.storage):
+            from hathor.transaction.genesis import get_genesis_transactions
+            for genesis in get_genesis_transactions(self.storage):
                 if self == genesis:
                     return True
             return False

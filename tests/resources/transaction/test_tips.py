@@ -1,6 +1,6 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.transaction.genesis import genesis_transactions
+from hathor.transaction.genesis import get_genesis_transactions
 from hathor.transaction.resources import TipsResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_new_blocks, add_new_transactions
@@ -13,7 +13,7 @@ class TipsTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_get_tips(self):
-        genesis_txs = [tx for tx in genesis_transactions(self.manager.tx_storage) if not tx.is_block]
+        genesis_txs = [tx for tx in get_genesis_transactions(self.manager.tx_storage) if not tx.is_block]
 
         # Tips are only the genesis
         response1 = yield self.web.get("tips")
