@@ -32,7 +32,7 @@ def main():
     from hathor.manager import HathorManager, TestMode
     from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
     from hathor.p2p.peer_id import PeerId
-    from hathor.p2p.resources import MiningResource, StatusResource
+    from hathor.p2p.resources import AddPeersResource, MiningResource, StatusResource
     from hathor.prometheus import PrometheusMetricsExporter
     from hathor.resources import ProfilerResource
     from hathor.transaction.resources import (
@@ -239,6 +239,8 @@ def main():
         root.putChild(b'thin_wallet', thin_wallet_resource)
         contracts_resource = Resource()
         wallet_resource.putChild(b'nano-contract', contracts_resource)
+        p2p_resource = Resource()
+        root.putChild(b'p2p', p2p_resource)
 
         resources = (
             (b'status', StatusResource(manager), root),
@@ -269,6 +271,8 @@ def main():
             (b'match-value', NanoContractMatchValueResource(manager), contracts_resource),
             (b'decode', NanoContractDecodeResource(manager), contracts_resource),
             (b'execute', NanoContractExecuteResource(manager), contracts_resource),
+            # /p2p
+            (b'peers', AddPeersResource(manager), p2p_resource),
         )
         for url_path, resource, parent in resources:
             parent.putChild(url_path, resource)
