@@ -74,6 +74,9 @@ class ReadyState(BaseState):
     def send_tx_to_peer(self, tx: BaseTransaction) -> None:
         self.plugins[self.SYNC_PLUGIN_NAME].send_tx_to_peer_if_possible(tx)
 
+    def is_synced(self) -> bool:
+        return self.plugins[self.SYNC_PLUGIN_NAME].is_synced()
+
     def send_get_peers(self) -> None:
         """ Send a GET-PEERS command, requesting a list of nodes.
         """

@@ -21,3 +21,7 @@ class Plugin(ABC):
     @abstractmethod
     def send_tx_to_peer_if_possible(self, tx: BaseTransaction) -> None:
         raise NotImplementedError
+
+    @abstractmethod
+    def is_synced(self) -> bool:
+        raise NotImplementedError
