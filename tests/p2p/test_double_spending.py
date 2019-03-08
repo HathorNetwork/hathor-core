@@ -59,8 +59,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         self.manager1.propagate_tx(tx1)
         meta1 = tx1.get_metadata()
-        self.assertEqual(meta1.conflict_with, [])
-        self.assertEqual(meta1.voided_by, set())
+        self.assertEqual(meta1.conflict_with, None)
+        self.assertEqual(meta1.voided_by, None)
 
         # Propagate a conflicting transaction.
         self.manager1.propagate_tx(tx2)
@@ -94,7 +94,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         meta3 = tx3.get_metadata()
         self.assertEqual(meta3.conflict_with, [tx1.hash, tx2.hash])
-        self.assertEqual(meta3.voided_by, set())
+        self.assertEqual(meta3.voided_by, None)
 
         for txin in tx1.inputs:
             spent_tx = self.manager1.tx_storage.get_transaction(txin.tx_id)
@@ -206,7 +206,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         meta1 = tx1.get_metadata(force_reload=True)
         meta4 = tx4.get_metadata(force_reload=True)
         self.assertEqual(meta1.conflict_with, [tx4.hash])
-        self.assertEqual(meta1.voided_by, set())
+        self.assertEqual(meta1.voided_by, None)
         self.assertEqual(meta4.conflict_with, [tx1.hash])
         self.assertEqual(meta4.voided_by, {tx4.hash})
 
@@ -229,7 +229,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.clock.advance(15)
 
         meta5 = tx5.get_metadata()
-        self.assertEqual(meta5.conflict_with, [])
+        self.assertEqual(meta5.conflict_with, None)
         self.assertEqual(meta5.voided_by, {tx4.hash})
 
         # ---
@@ -278,10 +278,10 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         meta5 = tx5.get_metadata(force_reload=True)
         meta6 = tx6.get_metadata(force_reload=True)
         meta7 = tx7.get_metadata(force_reload=True)
-        self.assertEqual(meta4.voided_by, set())
-        self.assertEqual(meta5.voided_by, set())
-        self.assertEqual(meta6.voided_by, set())
-        self.assertEqual(meta7.voided_by, set())
+        self.assertEqual(meta4.voided_by, None)
+        self.assertEqual(meta5.voided_by, None)
+        self.assertEqual(meta6.voided_by, None)
+        self.assertEqual(meta7.voided_by, None)
 
         blocks = add_new_blocks(self.manager1, 1, advance_clock=15)
         self._add_new_transactions(self.manager1, 10)

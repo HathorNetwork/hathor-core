@@ -285,7 +285,7 @@ class WalletIndex:
         """ Add tx inputs and outputs to the wallet index (indexed by address)
         """
         meta = tx.get_metadata()
-        voided = len(meta.voided_by) != 0
+        voided = bool(meta.voided_by)
         for element in WalletIndex.tx_to_elements(tx, voided):
             address = element.address
             wallet_element = element.element

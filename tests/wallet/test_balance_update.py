@@ -124,7 +124,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(meta1.voided_by, {self.tx1.hash})
 
         meta2 = tx2.get_metadata()
-        self.assertEqual(meta2.voided_by, set())
+        self.assertEqual(meta2.voided_by, None)
 
         # Balance is the same
         self.assertEqual(self.manager.wallet.balance[HATHOR_TOKEN_UID], WalletBalance(0, 5900))
@@ -215,7 +215,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         meta2 = tx2.get_metadata()
         self.assertEqual(meta2.twins, [])
-        self.assertEqual(meta2.voided_by, set())
+        self.assertEqual(meta2.voided_by, None)
 
         meta3 = tx3.get_metadata()
         self.assertEqual(meta3.voided_by, {tx3.hash})
@@ -295,7 +295,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(meta2.voided_by, {self.tx1.hash})
 
         meta3 = tx3.get_metadata(force_reload=True)
-        self.assertEqual(meta3.voided_by, set())
+        self.assertEqual(meta3.voided_by, None)
         self.assertEqual(meta3.twins, [self.tx1.hash])
 
         # Balance is the same

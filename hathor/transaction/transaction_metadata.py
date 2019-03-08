@@ -7,8 +7,9 @@ from hathor import protos
 class TransactionMetadata:
     hash: Optional[bytes]
     spent_outputs: Dict[int, List[bytes]]
-    conflict_with: List[bytes]
-    voided_by: Set[bytes]
+    # XXX: the following Optional[] types use None to replace empty set/list to reduce memory use
+    conflict_with: Optional[List[bytes]]
+    voided_by: Optional[Set[bytes]]
     received_by: List[int]
     children: List[bytes]
     twins: List[bytes]
@@ -28,7 +29,7 @@ class TransactionMetadata:
 
         # FIXME: conflict_with -> conflicts_with (as in "this transaction conflicts with these ones")
         # Hash of the transactions that conflicts with this transaction.
-        self.conflict_with = []
+        self.conflict_with = None
 
         # Hash of the transactions that void this transaction.
         #
@@ -36,7 +37,7 @@ class TransactionMetadata:
         # voided_by. The logic is that the transaction is voiding itself.
         #
         # When a block is voided, its own hash is added to voided_by.
-        self.voided_by = set()
+        self.voided_by = None
 
         # List of peers which have sent this transaction.
         # Store only the peers' id.
@@ -65,7 +66,7 @@ class TransactionMetadata:
         for field in ['hash', 'spent_outputs', 'conflict_with', 'voided_by',
                       'received_by', 'children', 'accumulated_weight', 'twins',
                       'score', 'first_block']:
-            if getattr(self, field) != getattr(other, field):
+            if (getattr(self, field) or None) != (getattr(other, field) or None):
                 return False
         return True
 
@@ -77,8 +78,8 @@ class TransactionMetadata:
             data['spent_outputs'].append([idx, [h_bytes.hex() for h_bytes in hashes]])
         data['received_by'] = list(self.received_by)
         data['children'] = [x.hex() for x in self.children]
-        data['conflict_with'] = [x.hex() for x in self.conflict_with]
-        data['voided_by'] = [x.hex() for x in self.voided_by]
+        data['conflict_with'] = [x.hex() for x in self.conflict_with] if self.conflict_with else None
+        data['voided_by'] = [x.hex() for x in self.voided_by] if self.voided_by else None
         data['twins'] = [x.hex() for x in self.twins]
         data['accumulated_weight'] = self.accumulated_weight
         data['score'] = self.score
@@ -99,14 +100,14 @@ class TransactionMetadata:
         meta.children = [bytes.fromhex(h) for h in data['children']]
 
         if 'conflict_with' in data:
-            meta.conflict_with = [bytes.fromhex(h) for h in data['conflict_with']]
+            meta.conflict_with = [bytes.fromhex(h) for h in data['conflict_with']] if data['conflict_with'] else None
         else:
-            meta.conflict_with = []
+            meta.conflict_with = None
 
         if 'voided_by' in data:
-            meta.voided_by = set(bytes.fromhex(h) for h in data['voided_by'])
+            meta.voided_by = set(bytes.fromhex(h) for h in data['voided_by']) if data['voided_by'] else None
         else:
-            meta.voided_by = set()
+            meta.voided_by = None
 
         if 'twins' in data:
             meta.twins = [bytes.fromhex(h) for h in data['twins']]
@@ -139,8 +140,8 @@ class TransactionMetadata:
         metadata = cls(hash=hash_bytes)
         for i, hashes in metadata_proto.spent_outputs.items():
             metadata.spent_outputs[i] = list(hashes.hashes)
-        metadata.conflict_with = list(metadata_proto.conflicts_with.hashes)
-        metadata.voided_by = set(metadata_proto.voided_by.hashes)
+        metadata.conflict_with = list(metadata_proto.conflicts_with.hashes) or None
+        metadata.voided_by = set(metadata_proto.voided_by.hashes) or None
         metadata.twins = list(metadata_proto.twins.hashes)
         metadata.received_by = list(metadata_proto.received_by)
         metadata.children = list(metadata_proto.children.hashes)
