@@ -100,6 +100,7 @@ def main():
     parser.add_argument('--cache-size', type=int, help='Number of txs to keep on cache')
     parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
     parser.add_argument('--recursion-limit', type=int, help='Set python recursion limit')
+    parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
     args = parser.parse_args()
 
     loglevel_filter = LogLevelFilterPredicate(LogLevel.info)
@@ -193,6 +194,8 @@ def main():
     network = 'testnet'
     manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname, tx_storage=tx_storage,
                             wallet=wallet, wallet_index=args.wallet_index, stratum_port=args.stratum)
+    if args.allow_mining_without_peers:
+        manager.allow_mining_without_peers()
 
     dns_hosts = []
     if args.testnet:
