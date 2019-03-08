@@ -121,7 +121,7 @@ class BlockchainTestCase(unittest.TestCase):
         # This block belongs to case (ii).
         self.assertTrue(manager.propagate_tx(fork_block1))
         fork_meta1 = fork_block1.get_metadata()
-        self.assertEqual(fork_meta1.voided_by, set([fork_block1.hash]))
+        self.assertEqual(fork_meta1.voided_by, {fork_block1.hash})
 
         # Add some transactions between blocks
         txs = add_new_transactions(manager, 5, advance_clock=15)
@@ -146,7 +146,7 @@ class BlockchainTestCase(unittest.TestCase):
         sidechain1 = add_new_blocks(manager, 3, parent_block_hash=fork_block1.hash)
         for block in sidechain1:
             meta = block.get_metadata(force_reload=True)
-            self.assertEqual(meta.voided_by, set([block.hash]))
+            self.assertEqual(meta.voided_by, {block.hash})
 
         # Add some transactions between blocks
         txs = add_new_transactions(manager, 2, advance_clock=15)
@@ -160,7 +160,7 @@ class BlockchainTestCase(unittest.TestCase):
         fork_block3.verify()
         self.assertTrue(manager.propagate_tx(fork_block3))
         fork_meta3 = fork_block3.get_metadata()
-        self.assertEqual(fork_meta3.voided_by, set([fork_block3.hash]))
+        self.assertEqual(fork_meta3.voided_by, {fork_block3.hash})
 
         # dot = manager.tx_storage.graphviz(format='pdf')
         # dot.render('test_fork')
@@ -219,11 +219,11 @@ class BlockchainTestCase(unittest.TestCase):
 
         for block in blocks:
             meta = block.get_metadata(force_reload=True)
-            self.assertEqual(meta.voided_by, set([]))
+            self.assertEqual(meta.voided_by, None)
 
         for block in sidechain:
             meta = block.get_metadata(force_reload=True)
-            self.assertEqual(meta.voided_by, set([block.hash]))
+            self.assertEqual(meta.voided_by, {block.hash})
 
         # Propagate a block connected to the voided chain, case (iii).
         fork_block2 = manager.generate_mining_block(parent_block_hash=sidechain[-1].hash)
@@ -235,11 +235,11 @@ class BlockchainTestCase(unittest.TestCase):
         # Now, both chains have the same score.
         for block in blocks:
             meta = block.get_metadata(force_reload=True)
-            self.assertEqual(meta.voided_by, set([block.hash]))
+            self.assertEqual(meta.voided_by, {block.hash})
 
         for block in sidechain:
             meta = block.get_metadata(force_reload=True)
-            self.assertEqual(meta.voided_by, set([block.hash]))
+            self.assertEqual(meta.voided_by, {block.hash})
 
         for tx in txs1:
             meta = tx.get_metadata(force_reload=True)
@@ -255,7 +255,7 @@ class BlockchainTestCase(unittest.TestCase):
 
         for block in sidechain2:
             meta = block.get_metadata(force_reload=True)
-            self.assertEqual(meta.voided_by, set([block.hash]))
+            self.assertEqual(meta.voided_by, {block.hash})
 
         # Mine 2 more blocks in the new fork.
         # These blocks belong to case (vii).
@@ -263,7 +263,7 @@ class BlockchainTestCase(unittest.TestCase):
 
         for block in sidechain2:
             meta = block.get_metadata(force_reload=True)
-            self.assertEqual(meta.voided_by, set([block.hash]))
+            self.assertEqual(meta.voided_by, {block.hash})
 
         # Mine 1 block, starting another fork from sidechain2.
         # This block belongs to case (viii).
@@ -271,7 +271,7 @@ class BlockchainTestCase(unittest.TestCase):
 
         for block in sidechain3:
             meta = block.get_metadata(force_reload=True)
-            self.assertEqual(meta.voided_by, set([block.hash]))
+            self.assertEqual(meta.voided_by, {block.hash})
 
         # Propagate a block connected to the side chain, case (v).
         fork_block3 = manager.generate_mining_block(parent_block_hash=fork_block2.hash)
@@ -283,11 +283,11 @@ class BlockchainTestCase(unittest.TestCase):
         # The side chains have exceeded the score (after it has the same score)
         for block in blocks:
             meta = block.get_metadata(force_reload=True)
-            self.assertEqual(meta.voided_by, set([block.hash]))
+            self.assertEqual(meta.voided_by, {block.hash})
 
         for block in sidechain:
             meta = block.get_metadata(force_reload=True)
-            self.assertEqual(meta.voided_by, set([]))
+            self.assertEqual(meta.voided_by, None)
 
         for tx in txs2:
             meta = tx.get_metadata(force_reload=True)
@@ -304,19 +304,19 @@ class BlockchainTestCase(unittest.TestCase):
 
         for block in blocks:
             meta = block.get_metadata(force_reload=True)
-            self.assertEqual(meta.voided_by, set([block.hash]))
+            self.assertEqual(meta.voided_by, {block.hash})
 
         for block in sidechain[1:]:
             meta = block.get_metadata(force_reload=True)
-            self.assertEqual(meta.voided_by, set([block.hash]))
+            self.assertEqual(meta.voided_by, {block.hash})
 
         for block in sidechain2[-1:]:
             meta = block.get_metadata(force_reload=True)
-            self.assertEqual(meta.voided_by, set([block.hash]))
+            self.assertEqual(meta.voided_by, {block.hash})
 
         for block in chain(sidechain[:1], sidechain2[:-1], sidechain3):
             meta = block.get_metadata(force_reload=True)
-            self.assertEqual(meta.voided_by, set([]))
+            self.assertEqual(meta.voided_by, None)
 
         for tx in txs2:
             meta = tx.get_metadata(force_reload=True)

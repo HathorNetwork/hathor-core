@@ -220,7 +220,7 @@ def get_node_attrs(tx: BaseTransaction):
         attrs_node.update(dict(fillcolor='#87D37C', style='filled'))
 
     meta = tx.get_metadata()
-    if len(meta.voided_by) > 0:
+    if meta.voided_by:
         attrs_node.update(voided_attrs)
         if tx.hash in meta.voided_by:
             attrs_node.update(conflict_attrs)
