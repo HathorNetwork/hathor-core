@@ -138,16 +138,6 @@ class TestWebsocket(unittest.TestCase):
 
         block_genesis = [tx for tx in get_genesis_transactions(self.manager.tx_storage) if tx.is_block][0]
 
-        # Test publish tx voided
-        self.manager.pubsub.publish(HathorEvents.STORAGE_TX_VOIDED, tx=block_genesis)
-        self.run_to_completion()
-        value = self._decode_value(self.transport.value())
-        self.assertEqual(value['type'], 'storage:tx_voided')
-        self.assertEqual(value['address'], address)
-        self.assertEqual(value['element']['tx_id'], block_genesis.hash_hex)
-        self.assertEqual(value['element']['timestamp'], block_genesis.timestamp)
-        self.assertTrue(value['element']['is_output'])
-
         element = None
         for el in WalletIndex.tx_to_elements(block_genesis, False):
             element = el.element
@@ -161,6 +151,16 @@ class TestWebsocket(unittest.TestCase):
         self.assertEqual(value['history']['tx_id'], block_genesis.hash_hex)
         self.assertEqual(value['history']['timestamp'], block_genesis.timestamp)
         self.assertTrue(value['history']['is_output'])
+
+        # Test publish element voided
+        self.manager.pubsub.publish(HathorEvents.WALLET_ELEMENT_VOIDED, address=address, element=element)
+        self.run_to_completion()
+        value = self._decode_value(self.transport.value())
+        self.assertEqual(value['type'], 'wallet:element_voided')
+        self.assertEqual(value['address'], address)
+        self.assertEqual(value['element']['tx_id'], block_genesis.hash_hex)
+        self.assertEqual(value['element']['timestamp'], block_genesis.timestamp)
+        self.assertTrue(value['element']['is_output'])
 
     def test_connections(self):
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN

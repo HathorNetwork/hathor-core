@@ -6,7 +6,6 @@ from autobahn.twisted.websocket import WebSocketServerFactory
 from twisted.internet import reactor
 
 from hathor.constants import HATHOR_TOKEN_UID
-from hathor.indexes import WalletIndex
 from hathor.metrics import Metrics
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.pubsub import HathorEvents
@@ -44,6 +43,13 @@ CONTROLLED_TYPES = {
         'hits_window_seconds': 1,
     }
 }
+
+# these events should only be sent to websockets subscribed to a specific address, not broadcast
+ADDRESS_EVENTS = [
+    HathorEvents.WALLET_ADDRESS_HISTORY.value,
+    HathorEvents.WALLET_ELEMENT_WINNER.value,
+    HathorEvents.WALLET_ELEMENT_VOIDED.value
+]
 
 
 class HathorAdminWebsocketFactory(WebSocketServerFactory):
@@ -120,8 +126,6 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         """
         events = [
             HathorEvents.NETWORK_NEW_TX_ACCEPTED,
-            HathorEvents.STORAGE_TX_VOIDED,
-            HathorEvents.STORAGE_TX_WINNER,
             HathorEvents.WALLET_OUTPUT_RECEIVED,
             HathorEvents.WALLET_INPUT_SPENT,
             HathorEvents.WALLET_BALANCE_UPDATED,
@@ -129,6 +133,8 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             HathorEvents.WALLET_GAP_LIMIT,
             HathorEvents.WALLET_HISTORY_UPDATED,
             HathorEvents.WALLET_ADDRESS_HISTORY,
+            HathorEvents.WALLET_ELEMENT_WINNER,
+            HathorEvents.WALLET_ELEMENT_VOIDED,
         ]
 
         for event in events:
@@ -158,6 +164,10 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         elif event == HathorEvents.WALLET_ADDRESS_HISTORY:
             data['history'] = data['history'].__dict__
             return data
+        elif (event == HathorEvents.WALLET_ELEMENT_WINNER or
+                event == HathorEvents.WALLET_ELEMENT_VOIDED):
+            data['element'] = data['element'].__dict__
+            return data
         elif event == HathorEvents.WALLET_OUTPUT_RECEIVED:
             data['output'] = data['output'].to_dict()
             return data
@@ -171,13 +181,6 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             return data
         elif event == HathorEvents.WALLET_BALANCE_UPDATED:
             data['balance'] = data['balance'][HATHOR_TOKEN_UID]._asdict()
-            return data
-        elif event == HathorEvents.STORAGE_TX_VOIDED or event == HathorEvents.STORAGE_TX_WINNER:
-            tx = data['tx']
-            voided = event == HathorEvents.STORAGE_TX_VOIDED
-            data['history'] = []
-            for el in WalletIndex.tx_to_elements(tx, voided):
-                data['history'].append({'address': el.address, 'element': el.element.__dict__})
             return data
         else:
             raise ValueError('Should never have entered here! We dont know this event')
@@ -197,13 +200,8 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
     def send_message(self, data: Dict[str, Any]) -> None:
         """ Check if should broadcast the message to all connections or send directly to some connections only
         """
-        if data['type'] == HathorEvents.WALLET_ADDRESS_HISTORY.value:
+        if data['type'] in ADDRESS_EVENTS:
             self.execute_send(data, self.address_connections[data['address']])
-        elif (data['type'] == HathorEvents.STORAGE_TX_VOIDED.value or
-              data['type'] == HathorEvents.STORAGE_TX_WINNER.value):
-            for history in data['history']:
-                history['type'] = data['type']
-                self.execute_send(history, self.address_connections[history['address']])
         else:
             self.broadcast_message(data)
 
