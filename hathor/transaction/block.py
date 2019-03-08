@@ -448,6 +448,8 @@ class Block(BaseTransaction):
         assert voided_hash is not None
 
         meta = self.get_metadata()
+        if not meta.voided_by:
+            meta.voided_by = set()
         if voided_hash in meta.voided_by:
             return False
 
@@ -474,12 +476,16 @@ class Block(BaseTransaction):
             voided_hash = self.hash
 
         meta = self.get_metadata()
+        if not meta.voided_by:
+            return False
         if voided_hash not in meta.voided_by:
             return False
 
         self.log.debug('remove_voided_by block={} voided_hash={}'.format(self.hash.hex(), voided_hash.hex()))
 
         meta.voided_by.remove(voided_hash)
+        if not meta.voided_by:
+            meta.voided_by = None
         self.storage.save_transaction(self, only_metadata=True)
 
         spent_by: Iterable[bytes] = chain(*meta.spent_outputs.values())

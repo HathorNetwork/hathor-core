@@ -44,6 +44,10 @@ class MiningResource(resource.Resource):
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
 
+        if not self.manager.can_start_mining():
+            request.setResponseCode(503)
+            return json.dumps({'reason': 'Node still syncing'}).encode('utf-8')
+
         block = self.manager.generate_mining_block()
         block_bytes = block.get_struct()
 
@@ -63,6 +67,21 @@ MiningResource.openapi = {
             'description': ('Returns the base64 of the block to be mined in'
                             'bytes and an array of the hash of parents in hex'),
             'responses': {
+                '503': {
+                    'description': 'Node still syncing',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'error': {
+                                    'summary': 'Node still syncing',
+                                    'value': {
+                                        'reason': 'Node still syncing'
+                                    }
+                                }
+                            }
+                        },
+                    }
+                },
                 '200': {
                     'description': 'Success',
                     'content': {

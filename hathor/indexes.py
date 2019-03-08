@@ -285,7 +285,7 @@ class WalletIndex:
         """ Add tx inputs and outputs to the wallet index (indexed by address)
         """
         meta = tx.get_metadata()
-        voided = len(meta.voided_by) != 0
+        voided = bool(meta.voided_by)
         for element in WalletIndex.tx_to_elements(tx, voided):
             address = element.address
             wallet_element = element.element
@@ -309,6 +309,7 @@ class WalletIndex:
                     timestamp=tx.timestamp,
                     token_uid=token_uid.hex(),
                     voided=voided,
+                    token_data=output.token_data,
                     timelock=script_type_out.timelock
                 )
                 yield WalletIndexElementAddress(address=address, element=wallet_output)
@@ -349,6 +350,7 @@ class WalletIndex:
                             wallet_output.is_output):
                         assert wallet_output.token_uid == token_uid
                         wallet_output.voided = voided
+                        self.publish_update(address, wallet_output, voided)
 
         for _input in tx.inputs:
             assert tx.storage is not None
@@ -366,12 +368,17 @@ class WalletIndex:
                                 wallet_input.from_tx_id == _input.tx_id.hex()):
                             assert wallet_input.token_uid == token_uid
                             wallet_input.voided = voided
+                            self.publish_update(address, wallet_input, voided)
 
-    def publish_update(self, address: str, element: 'WalletIndexElement') -> None:
+    def publish_update(self, address: str, element: 'WalletIndexElement', voided: Optional[bool] = None) -> None:
         """ Publish the new wallet element in the index to pubsub
         """
         if self.pubsub:
-            self.pubsub.publish(HathorEvents.WALLET_ADDRESS_HISTORY, address=address, history=element)
+            if voided is None:
+                self.pubsub.publish(HathorEvents.WALLET_ADDRESS_HISTORY, address=address, history=element)
+            else:
+                event = HathorEvents.WALLET_ELEMENT_VOIDED if voided else HathorEvents.WALLET_ELEMENT_WINNER
+                self.pubsub.publish(event, address=address, element=element)
 
     def get_from_address(self, address: str) -> List['WalletIndexElement']:
         """ Get inputs/outputs history from address
@@ -410,7 +417,7 @@ class WalletIndexElement(ABC):
 
 class WalletIndexOutput(WalletIndexElement):
     def __init__(self, tx_id: str, value: int, timestamp: int, index: int, token_uid: str,
-                 timelock: Optional[int], voided: bool) -> None:
+                 timelock: Optional[int], voided: bool, token_data: int) -> None:
         super().__init__(
             tx_id=tx_id,
             value=value,
@@ -421,6 +428,7 @@ class WalletIndexOutput(WalletIndexElement):
             voided=voided,
             is_output=True
         )
+        self.token_data = token_data
 
 
 class WalletIndexInput(WalletIndexElement):

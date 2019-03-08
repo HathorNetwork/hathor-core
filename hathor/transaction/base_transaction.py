@@ -108,16 +108,6 @@ class BaseTransaction(ABC):
         self.is_block = is_block
         self.update_hash_algorithm()
 
-    def update_hash_algorithm(self) -> None:
-        """ Update `self.hash_algorithm` according to our version.
-        """
-        if self.version == 1:
-            self.hash_algorithm_class = hashes.SHA256dHash
-        elif self.version == 2:
-            self.hash_algorithm_class = hashes.ScryptHash
-        else:
-            raise ValueError('Invalid version')
-
     def __repr__(self):
         class_name = type(self).__name__
         return ('%s(nonce=%d, timestamp=%s, version=%s, weight=%f, inputs=%s, outputs=%s, parents=%s, '
@@ -129,6 +119,16 @@ class BaseTransaction(ABC):
         class_name = 'Block' if self.is_block else 'Transaction'
         return ('%s(nonce=%d, timestamp=%s, version=%s, weight=%f, hash=%s)' % (class_name, self.nonce, self.timestamp,
                 self.version, self.weight, self.hash_hex))
+
+    def update_hash_algorithm(self) -> None:
+        """ Update `self.hash_algorithm` according to our version.
+        """
+        if self.version == 1:
+            self.hash_algorithm_class = hashes.SHA256dHash
+        elif self.version == 2:
+            self.hash_algorithm_class = hashes.ScryptHash
+        else:
+            raise ValueError('Invalid version')
 
     def get_fields_from_struct(self, struct_bytes: bytes) -> bytes:
         """ Gets all common fields for a Transaction and a Block from a buffer.
@@ -245,8 +245,8 @@ class BaseTransaction(ABC):
             else:
                 return False
         else:
-            from hathor.transaction.genesis import genesis_transactions
-            for genesis in genesis_transactions(self.storage):
+            from hathor.transaction.genesis import get_genesis_transactions
+            for genesis in get_genesis_transactions(self.storage):
                 if self == genesis:
                     return True
             return False

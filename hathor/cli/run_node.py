@@ -32,7 +32,7 @@ def main():
     from hathor.manager import HathorManager, TestMode
     from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
     from hathor.p2p.peer_id import PeerId
-    from hathor.p2p.resources import MiningResource, StatusResource
+    from hathor.p2p.resources import AddPeersResource, MiningResource, StatusResource
     from hathor.prometheus import PrometheusMetricsExporter
     from hathor.resources import ProfilerResource
     from hathor.transaction.resources import (
@@ -100,6 +100,7 @@ def main():
     parser.add_argument('--cache-size', type=int, help='Number of txs to keep on cache')
     parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
     parser.add_argument('--recursion-limit', type=int, help='Set python recursion limit')
+    parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
     args = parser.parse_args()
 
     loglevel_filter = LogLevelFilterPredicate(LogLevel.info)
@@ -193,6 +194,8 @@ def main():
     network = 'testnet'
     manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname, tx_storage=tx_storage,
                             wallet=wallet, wallet_index=args.wallet_index, stratum_port=args.stratum)
+    if args.allow_mining_without_peers:
+        manager.allow_mining_without_peers()
 
     dns_hosts = []
     if args.testnet:
@@ -239,6 +242,8 @@ def main():
         root.putChild(b'thin_wallet', thin_wallet_resource)
         contracts_resource = Resource()
         wallet_resource.putChild(b'nano-contract', contracts_resource)
+        p2p_resource = Resource()
+        root.putChild(b'p2p', p2p_resource)
 
         resources = (
             (b'status', StatusResource(manager), root),
@@ -269,6 +274,8 @@ def main():
             (b'match-value', NanoContractMatchValueResource(manager), contracts_resource),
             (b'decode', NanoContractDecodeResource(manager), contracts_resource),
             (b'execute', NanoContractExecuteResource(manager), contracts_resource),
+            # /p2p
+            (b'peers', AddPeersResource(manager), p2p_resource),
         )
         for url_path, resource, parent in resources:
             parent.putChild(url_path, resource)

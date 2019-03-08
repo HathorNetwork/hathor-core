@@ -51,6 +51,12 @@ class HathorEvents(Enum):
 
         WALLET_ADDRESS_HISTORY:
             Triggered when the we receive any transaction and send input/output by each address
+
+        WALLET_ELEMENT_WINNER:
+            Triggered when a wallet element is marked as winner
+
+        WALLET_ELEMENT_VOIDED:
+            Triggered when a wallet element is marked as voided
     """
     MANAGER_ON_START = 'manager:on_start'
     MANAGER_ON_STOP = 'manager:on_stop'
@@ -78,6 +84,10 @@ class HathorEvents(Enum):
     WALLET_HISTORY_UPDATED = 'wallet:history_updated'
 
     WALLET_ADDRESS_HISTORY = 'wallet:address_history'
+
+    WALLET_ELEMENT_WINNER = 'wallet:element_winner'
+
+    WALLET_ELEMENT_VOIDED = 'wallet:element_voided'
 
 
 class EventArguments:

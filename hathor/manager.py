@@ -151,6 +151,8 @@ class HathorManager:
 
         self.stratum_factory = StratumFactory(manager=self, port=stratum_port) if stratum_port else None
 
+        self._allow_mining_without_peers = False
+
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
         """
@@ -276,6 +278,19 @@ class HathorManager:
         assert len(ret) == 2, 'timestamp={} tips={}'.format(
             timestamp, [x.hex() for x in self.tx_storage.get_tx_tips(timestamp - 1)])
         return [x.data for x in ret]
+
+    def allow_mining_without_peers(self) -> None:
+        """Allow mining without being synced to at least one peer.
+        It should be used only for debugging purposes.
+        """
+        self._allow_mining_without_peers = True
+
+    def can_start_mining(self) -> bool:
+        """ Return whether we can start mining.
+        """
+        if self._allow_mining_without_peers:
+            return True
+        return self.connections.has_synced_peer()
 
     def generate_mining_block(self, timestamp: Optional[float] = None,
                               parent_block_hash: Optional[bytes] = None, version: int = 1,

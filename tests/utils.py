@@ -1,6 +1,4 @@
 import base64
-import json
-import os
 import random
 import subprocess
 import time
@@ -394,6 +392,10 @@ def run_server(hostname='localhost', listen=8005, listen_ssl=False, status=8085,
         :rtype: :py:class:`subprocess.Popen`
     """
     command = 'python -m hathor run_node --hostname {} --listen tcp:{} --status {}'.format(hostname, listen, status)
+
+    # We must allow mining without peers, otherwise some tests won't be able to mine.
+    command = '{} --allow-mining-without-peers'.format(command)
+
     if listen_ssl:
         command = '{} --ssl'.format(command)
 
@@ -466,13 +468,10 @@ def get_tokens_from_mining(blocks_mined):
 
 
 def get_genesis_key():
-    # read genesis keys
-    filepath = os.path.join(os.getcwd(), 'hathor/wallet/genesis_keys.json')
-    dict_data = None
-    with open(filepath, 'r') as json_file:
-        dict_data = json.loads(json_file.read())
-    b64_private_key = dict_data['private_key']
-    private_key_bytes = base64.b64decode(b64_private_key)
+    private_key_bytes = base64.b64decode(
+        'MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQgOCgCddzDZsfKgiMJLOt97eov9RLwHeePyBIK2WPF8MChRA'
+        'NCAAQ/XSOK+qniIY0F3X+lDrb55VQx5jWeBLhhzZnH6IzGVTtlAj9Ki73DVBm5+VXK400Idd6ddzS7FahBYYC7IaTl'
+    )
     return get_private_key_from_bytes(private_key_bytes)
 
 

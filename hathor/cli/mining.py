@@ -83,6 +83,12 @@ def execute(args: Namespace) -> None:
                 continue
         else:
             conn_retries = 0
+
+        if response.status_code == 503:
+            print('Node still syncing. Waiting {} seconds to try again...'.format(_SLEEP_ON_ERROR_SECONDS))
+            time.sleep(_SLEEP_ON_ERROR_SECONDS)
+            continue
+
         try:
             data = response.json()
         except JSONDecodeError as e:

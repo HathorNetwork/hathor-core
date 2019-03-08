@@ -18,6 +18,17 @@ class TestCase(unittest.TestCase):
         self.tmpdirs = []
         self.clock = Clock()
         self.clock.advance(time.time())
+        self._patch_genesis_block()
+
+    def _patch_genesis_block(self):
+        import hathor.transaction.genesis
+        from hathor.transaction import Block
+        block = hathor.transaction.genesis.GENESIS[0]
+        assert isinstance(block, Block)
+        block.outputs[0].script = bytes.fromhex('76a914fd05059b6006249543b82f36876a17c73fd2267b88ac')
+        block.nonce = 60315
+        block.update_hash()
+        assert block.hash.hex() == '000164e1e7ec7700a18750f9f50a1a9b63f6c7268637c072ae9ee181e58eb01b'
 
     def tearDown(self):
         self.clean_tmpdirs()

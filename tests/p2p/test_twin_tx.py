@@ -51,8 +51,8 @@ class TwinTransactionTestCase(unittest.TestCase):
 
         self.manager.propagate_tx(tx1)
         meta1 = tx1.get_metadata()
-        self.assertEqual(meta1.conflict_with, [])
-        self.assertEqual(meta1.voided_by, set())
+        self.assertEqual(meta1.conflict_with, None)
+        self.assertEqual(meta1.voided_by, None)
         self.assertEqual(meta1.twins, [])
 
         # Propagate a conflicting twin transaction
