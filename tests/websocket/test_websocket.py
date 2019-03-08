@@ -7,7 +7,7 @@ from hathor.constants import HATHOR_TOKEN_UID
 from hathor.indexes import WalletIndex
 from hathor.metrics import Metrics
 from hathor.pubsub import EventArguments, HathorEvents
-from hathor.transaction.genesis import genesis_transactions
+from hathor.transaction.genesis import get_genesis_transactions
 from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance
 from hathor.websocket.factory import HathorAdminWebsocketFactory, HathorAdminWebsocketProtocol
 from tests import unittest
@@ -43,10 +43,10 @@ class TestWebsocket(unittest.TestCase):
     def test_new_tx(self):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
-        self.manager.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=genesis_transactions(None)[1])
+        self.manager.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=get_genesis_transactions(None)[1])
         self.run_to_completion()
         value = self._decode_value(self.transport.value())
-        self.assertEqual(value['hash'], genesis_transactions(None)[1].hash.hex())
+        self.assertEqual(value['hash'], get_genesis_transactions(None)[1].hash.hex())
         self.assertEqual(value['type'], 'network:new_tx_accepted')
 
     def test_metric(self):
@@ -85,7 +85,7 @@ class TestWebsocket(unittest.TestCase):
     def test_output_received(self):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
-        gen_tx = genesis_transactions(None)[0]
+        gen_tx = get_genesis_transactions(None)[0]
         output = UnspentTx(gen_tx.hash, 0, 10, gen_tx.timestamp, '', gen_tx.outputs[0].token_data)
         self.manager.pubsub.publish(HathorEvents.WALLET_OUTPUT_RECEIVED, total=10, output=output)
         self.run_to_completion()
@@ -97,8 +97,8 @@ class TestWebsocket(unittest.TestCase):
     def test_input_spent_received(self):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
-        gen_tx = genesis_transactions(None)[0]
-        gen_tx2 = genesis_transactions(None)[1]
+        gen_tx = get_genesis_transactions(None)[0]
+        gen_tx2 = get_genesis_transactions(None)[1]
         spent = SpentTx(gen_tx2.hash, gen_tx.hash, 0, 10, gen_tx.timestamp + 1)
         self.manager.pubsub.publish(HathorEvents.WALLET_INPUT_SPENT, output_spent=spent)
         self.run_to_completion()
@@ -136,7 +136,7 @@ class TestWebsocket(unittest.TestCase):
         self.protocol.onMessage(payload, False)
         self.assertEqual(len(self.factory.address_connections), 1)
 
-        block_genesis = [tx for tx in genesis_transactions(self.manager.tx_storage) if tx.is_block][0]
+        block_genesis = [tx for tx in get_genesis_transactions(self.manager.tx_storage) if tx.is_block][0]
 
         # Test publish tx voided
         self.manager.pubsub.publish(HathorEvents.STORAGE_TX_VOIDED, tx=block_genesis)

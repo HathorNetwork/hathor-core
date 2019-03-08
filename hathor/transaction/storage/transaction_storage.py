@@ -423,8 +423,8 @@ class BaseTransactionStorage(TransactionStorage):
         self.wallet_index = None
 
         self._latest_timestamp = 0
-        from hathor.transaction.genesis import genesis_transactions
-        self._first_timestamp = min(x.timestamp for x in genesis_transactions(self))
+        from hathor.transaction.genesis import get_genesis_transactions
+        self._first_timestamp = min(x.timestamp for x in get_genesis_transactions(self))
 
     def remove_cache(self):
         """Remove all caches in case we don't need it."""
@@ -602,10 +602,10 @@ class BaseTransactionStorage(TransactionStorage):
         return set(self._genesis_cache.values())
 
     def _create_genesis_cache(self) -> None:
-        from hathor.transaction.genesis import genesis_transactions
+        from hathor.transaction.genesis import get_genesis_transactions
         self._genesis_cache = {}
         assert self._genesis_cache is not None
-        for genesis in genesis_transactions(self):
+        for genesis in get_genesis_transactions(self):
             assert genesis.hash is not None
             self._genesis_cache[genesis.hash] = genesis
 

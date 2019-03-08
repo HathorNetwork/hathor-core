@@ -15,6 +15,7 @@ from hathor.transaction.exceptions import (
     TimeLocked,
     VerifyFailed,
 )
+from hathor.transaction.genesis import get_genesis_transactions
 from hathor.transaction.scripts import (
     P2PKH,
     HathorScript,
@@ -46,9 +47,8 @@ from tests.utils import get_genesis_key
 class BasicTransaction(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        from hathor.transaction.genesis import genesis_transactions
-        self.genesis_blocks = [tx for tx in genesis_transactions(None) if tx.is_block]
-        self.genesis_txs = [tx for tx in genesis_transactions(None) if not tx.is_block]
+        self.genesis_blocks = [tx for tx in get_genesis_transactions(None) if tx.is_block]
+        self.genesis_txs = [tx for tx in get_genesis_transactions(None) if not tx.is_block]
 
         # read genesis keys
         self.genesis_private_key = get_genesis_key()
@@ -366,8 +366,7 @@ class BasicTransaction(unittest.TestCase):
         with self.assertRaises(MissingStackItems):
             op_checkmultisig([], log=[], extras=None)
 
-        from hathor.transaction.genesis import genesis_transactions
-        block = [x for x in genesis_transactions(None) if x.is_block][0]
+        block = [x for x in get_genesis_transactions(None) if x.is_block][0]
 
         from hathor.transaction import Transaction, TxInput, TxOutput
         txin = TxInput(tx_id=block.hash, index=0, data=b'')
