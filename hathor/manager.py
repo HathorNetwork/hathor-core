@@ -390,7 +390,7 @@ class HathorManager:
         return self.on_new_tx(tx, fails_silently=fails_silently)
 
     def on_new_tx(self, tx: BaseTransaction, *, conn: Optional[HathorProtocol] = None,
-                  quiet: bool = False, fails_silently: bool = True) -> bool:
+                  quiet: bool = False, fails_silently: bool = True, propagate_to_peers: bool = True) -> bool:
         """This method is called when any transaction arrive.
 
         If `fails_silently` is False, it may raise either InvalidNewTransaction or TxValidationError.
@@ -448,8 +448,9 @@ class HathorManager:
             tx.update_voided_info()
             tx.set_conflict_twins()
 
-        # Propagate to our peers.
-        self.connections.send_tx_to_peers(tx)
+        if propagate_to_peers:
+            # Propagate to our peers.
+            self.connections.send_tx_to_peers(tx)
 
         # Publish to pubsub manager the new tx accepted
         self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)

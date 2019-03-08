@@ -69,6 +69,17 @@ class ConnectionsManager:
         if self.lc_reconnect.running:
             self.lc_reconnect.stop()
 
+    def has_synced_peer(self) -> bool:
+        """ Return whether we are synced to at least one peer.
+        """
+        connections = list(self.get_ready_connections())
+        for conn in connections:
+            assert conn.state is not None
+            assert isinstance(conn.state, ReadyState)
+            if conn.state.is_synced():
+                return True
+        return False
+
     def send_tx_to_peers(self, tx: BaseTransaction) -> None:
         """ Send `tx` to all ready peers.
 
