@@ -1,7 +1,3 @@
-import time
-
-from twisted.internet.task import Clock
-
 from hathor.crypto.util import decode_address
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import BlockWithTokensError, InputOutputMismatch, InvalidToken
@@ -14,9 +10,6 @@ class TokenTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.manager = self.create_peer('testnet', unlock_wallet=True)
-        self.clock = Clock()
-        self.clock.advance(time.time())
-        self.manager.reactor = self.clock
 
         self.genesis = self.manager.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]

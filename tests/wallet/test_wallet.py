@@ -32,6 +32,7 @@ class BasicWallet(unittest.TestCase):
         self.genesis_public_key = self.genesis_private_key.public_key()
 
     def tearDown(self):
+        super().tearDown()
         shutil.rmtree(self.directory)
 
     def test_wallet_keys_storage(self):

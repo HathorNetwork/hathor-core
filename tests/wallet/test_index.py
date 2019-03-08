@@ -1,7 +1,3 @@
-import time
-
-from twisted.internet.task import Clock
-
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletOutputInfo
@@ -13,8 +9,6 @@ class TwinTransactionTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
-        self.clock = Clock()
-        self.clock.advance(time.time())
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, unlock_wallet=True, wallet_index=True)
 
@@ -43,6 +37,7 @@ class TwinTransactionTestCase(unittest.TestCase):
         self.assertNotEqual(tx1.hash, tx2.hash)
 
         self.manager.propagate_tx(tx1)
+        self.run_to_completion()
 
         wallet_data = self.manager.tx_storage.wallet_index.get_from_address(address)
         self.assertEqual(len(wallet_data), 2)
@@ -64,6 +59,7 @@ class TwinTransactionTestCase(unittest.TestCase):
 
         # Propagate a conflicting twin transaction
         self.manager.propagate_tx(tx2)
+        self.run_to_completion()
 
         wallet_data = self.manager.tx_storage.wallet_index.get_from_address(address)
         self.assertEqual(len(wallet_data), 4)

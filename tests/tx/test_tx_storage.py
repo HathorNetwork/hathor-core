@@ -170,9 +170,9 @@ class _BaseTransactionStorageTest:
             self.tx_storage.save_transaction(tx)
 
             metadata = tx.get_metadata()
-            metadata.spent_outputs[1].add(self.genesis_blocks[0].hash)
+            metadata.spent_outputs[1].append(self.genesis_blocks[0].hash)
             random_tx = bytes.fromhex('0000222e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0f2222')
-            metadata.children.add(random_tx)
+            metadata.children.append(random_tx)
 
             self.tx_storage.save_transaction(tx, only_metadata=True)
             tx2 = self.tx_storage.get_transaction(tx.hash)
@@ -221,6 +221,7 @@ class _BaseTransactionStorageTest:
 
         def _add_new_block(self, parents=None):
             block = self.manager.generate_mining_block()
+            block.data = b'Testing, testing, 1, 2, 3... testing, testing...'
             if parents is not None:
                 block.parents = parents
             block.weight = 10

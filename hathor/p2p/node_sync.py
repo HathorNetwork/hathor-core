@@ -11,6 +11,7 @@ from twisted.internet.task import Clock
 from twisted.logger import Logger
 from zope.interface import implementer
 
+from hathor.constants import P2P_SYNC_THRESHOLD
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
 from hathor.p2p.plugin import Plugin
 from hathor.transaction import BaseTransaction, Block, Transaction
@@ -187,6 +188,11 @@ class NodeSyncTimestamp(Plugin):
         # This number may decrease if a new transaction/block arrives in a timestamp smaller than it.
         self.synced_timestamp: int = 0
 
+        # Maximum difference between our latest timestamp and synced timestamp to consider
+        # that the peer is synced (in seconds).
+        self.sync_threshold: int = P2P_SYNC_THRESHOLD
+
+        # Indicate whether the synchronization is running.
         self.is_running: bool = False
 
     def get_status(self):
@@ -225,16 +231,26 @@ class NodeSyncTimestamp(Plugin):
         if self.call_later_id and self.call_later_id.active():
             self.call_later_id.cancel()
 
+    def is_synced(self) -> bool:
+        """ Return True if we are synced.
+        """
+        return self.manager.tx_storage.latest_timestamp - self.synced_timestamp <= self.sync_threshold
+
     def send_tx_to_peer_if_possible(self, tx: BaseTransaction) -> None:
         if self.peer_timestamp is None:
             return
         if self.synced_timestamp is None:
             return
-        # for parent_hash in tx.parents:
-        #     parent = self.protocol.node.tx_storage.get_transaction(parent_hash)
-        #     if parent.timestamp > self.synced_timestamp:
-        #         # print('send_tx_to_peer_if_possible(): discarded')
-        #         return
+
+        if not self.is_synced():
+            # When a peer has not synced yet, we just propagate the transactions whose
+            # parents' timestamps are below synced_timestamp, i.e., we know that the peer
+            # has all the parents.
+            for parent_hash in tx.parents:
+                parent = self.protocol.node.tx_storage.get_transaction(parent_hash)
+                if parent.timestamp > self.synced_timestamp:
+                    return
+
         if self.send_data_queue:
             self.send_data_queue.add(tx)
         else:
@@ -684,8 +700,19 @@ class NodeSyncTimestamp(Plugin):
             # Will it reduce peer reputation score?
             return
         tx.storage = self.protocol.node.tx_storage
+        assert tx.hash is not None
 
-        result = self.manager.on_new_tx(tx, conn=self.protocol)
+        key = 'get-data-{}'.format(tx.hash.hex())
+        deferred = self.deferred_by_key.pop(key, None)
+        if deferred:
+            # If we have requested the data, we do not propagate to our peers.
+            propagate_to_peers = False
+        else:
+            # If we have not requested the data, it is a new transaction being propagated
+            # in the network, thus, we propagate it as well.
+            propagate_to_peers = True
+
+        result = self.manager.on_new_tx(tx, conn=self.protocol, propagate_to_peers=propagate_to_peers)
 
         # Update statistics.
         if result:
@@ -699,9 +726,6 @@ class NodeSyncTimestamp(Plugin):
             else:
                 self.protocol.metrics.discarded_txs += 1
 
-        assert tx.hash is not None
-        key = 'get-data-{}'.format(tx.hash.hex())
-        deferred = self.deferred_by_key.pop(key, None)
         if deferred:
             assert tx.timestamp is not None
             if tx.timestamp - 1 > self.synced_timestamp:

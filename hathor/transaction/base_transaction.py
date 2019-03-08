@@ -4,11 +4,10 @@ import base64
 import datetime
 import struct
 import time
+from _hashlib import HASH
 from abc import ABC, abstractclassmethod, abstractmethod
 from math import inf, log
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterator, List, Optional, Tuple, Type
-
-from _hashlib import HASH
 
 from hathor import protos
 from hathor.constants import HATHOR_TOKEN_UID, MAX_DISTANCE_BETWEEN_BLOCKS, TX_NONCE_BYTES as NONCE_BYTES
@@ -492,7 +491,7 @@ class BaseTransaction(ABC):
                 my_parents_txs, parents_txs))
 
     def verify_pow(self) -> None:
-        """Verify proof-of-work and that the weight is correct
+        """Verify proof-of-work
 
         :raises PowError: when the hash is equal or greater than the target
         """
@@ -702,7 +701,7 @@ class BaseTransaction(ABC):
 
         for parent in self.get_parents():
             metadata = parent.get_metadata()
-            metadata.children.add(self.hash)
+            metadata.children.append(self.hash)
             self.storage.save_transaction(parent, only_metadata=True)
 
     def update_timestamp(self, now):

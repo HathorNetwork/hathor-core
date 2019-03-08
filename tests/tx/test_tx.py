@@ -1,8 +1,5 @@
 import base64
 import hashlib
-import time
-
-from twisted.internet.task import Clock
 
 from hathor.constants import MAX_DISTANCE_BETWEEN_BLOCKS
 from hathor.crypto.util import get_address_from_public_key, get_private_key_from_bytes
@@ -378,8 +375,6 @@ class BasicTransaction(unittest.TestCase):
         self.assertEquals(tx.timestamp, ts)
 
     def test_propagation_error(self):
-        clock = Clock()
-        clock.advance(time.time())
         network = 'testnet'
         manager = self.create_peer(network, unlock_wallet=True)
         manager.test_mode = TestMode.DISABLED
@@ -404,13 +399,11 @@ class BasicTransaction(unittest.TestCase):
 
         # 4. propagate block from the future
         block = manager.generate_mining_block()
-        block.timestamp = int(clock.seconds()) + manager.max_future_timestamp_allowed + 100
+        block.timestamp = int(self.clock.seconds()) + manager.max_future_timestamp_allowed + 100
         block.resolve()
         self.assertFalse(manager.propagate_tx(block))
 
     def test_tx_methods(self):
-        clock = Clock()
-        clock.advance(time.time())
         network = 'testnet'
         manager = self.create_peer(network, unlock_wallet=True)
 

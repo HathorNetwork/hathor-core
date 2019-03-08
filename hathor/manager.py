@@ -109,7 +109,7 @@ class HathorManager:
         self.network = network or 'testnet'
 
         # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
-        self.pubsub = pubsub or PubSubManager()
+        self.pubsub = pubsub or PubSubManager(self.reactor)
         self.tx_storage = tx_storage or TransactionMemoryStorage()
         self.tx_storage.pubsub = self.pubsub
         if wallet_index and self.tx_storage.with_index:
@@ -379,7 +379,7 @@ class HathorManager:
 
         return True
 
-    def propagate_tx(self, tx: BaseTransaction, fails_silently=True) -> bool:
+    def propagate_tx(self, tx: BaseTransaction, fails_silently: bool = True) -> bool:
         """Push a new transaction to the network. It is used by both the wallet and the mining modules.
 
         :return: True if the transaction was accepted
@@ -392,7 +392,7 @@ class HathorManager:
         return self.on_new_tx(tx, fails_silently=fails_silently)
 
     def on_new_tx(self, tx: BaseTransaction, *, conn: Optional[HathorProtocol] = None,
-                  quiet: bool = False, fails_silently=True) -> bool:
+                  quiet: bool = False, fails_silently: bool = True, propagate_to_peers: bool = True) -> bool:
         """This method is called when any transaction arrive.
 
         If `fails_silently` is False, it may raise either InvalidNewTransaction or TxValidationError.
@@ -450,8 +450,9 @@ class HathorManager:
             tx.update_voided_info()
             tx.set_conflict_twins()
 
-        # Propagate to our peers.
-        self.connections.send_tx_to_peers(tx)
+        if propagate_to_peers:
+            # Propagate to our peers.
+            self.connections.send_tx_to_peers(tx)
 
         # Publish to pubsub manager the new tx accepted
         self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)

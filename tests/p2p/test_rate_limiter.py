@@ -1,7 +1,3 @@
-import time
-
-from twisted.internet.task import Clock
-
 from hathor.p2p.rate_limiter import RateLimiter
 from tests import unittest
 
@@ -9,10 +5,6 @@ from tests import unittest
 class RateLimiterTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
-
-        self.clock = Clock()
-        self.clock.advance(time.time())
-
         self.rate_limiter = RateLimiter(reactor=self.clock)
 
     def test_limiter(self):

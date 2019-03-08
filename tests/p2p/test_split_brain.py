@@ -1,7 +1,6 @@
 import random
 
 from mnemonic import Mnemonic
-from twisted.internet.task import Clock
 
 from hathor.manager import TestMode
 from hathor.transaction.genesis import genesis_transactions
@@ -20,7 +19,6 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # self.set_random_seed(0)
 
-        self.clock = Clock()
         first_timestamp = min(tx.timestamp for tx in genesis_transactions(None))
         self.clock.advance(first_timestamp + random.randint(3600, 120*24*3600))
 
@@ -31,7 +29,6 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         wallet._manually_initialize()
 
         manager = super().create_peer(network, wallet=wallet)
-        manager.reactor = self.clock
         manager.test_mode = TestMode.TEST_ALL_WEIGHT
         manager.avg_time_between_blocks = 64
 

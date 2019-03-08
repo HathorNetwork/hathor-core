@@ -177,6 +177,7 @@ class TestStratumJob(StratumTestBase):
     def test_stale_solution(self):
         nonce = self._get_nonce()
         self._submit(self.job['job_id'], nonce)
+        self.run_to_completion()
         self._submit(self.job['job_id'], nonce)
         assert self._get_latest_message()['error'] == STALE_JOB
 

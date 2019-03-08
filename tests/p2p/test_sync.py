@@ -1,7 +1,4 @@
 import random
-import time
-
-from twisted.internet.task import Clock
 
 from hathor.crypto.util import decode_address
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
@@ -18,12 +15,9 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # from twisted.python import log
         # log.startLogging(sys.stdout)
 
-        self.clock = Clock()
-        self.clock.advance(time.time())
         self.network = 'testnet'
         self.manager1 = self.create_peer(self.network, unlock_wallet=True)
         self.manager1.avg_time_between_blocks = 4
-        self.manager1.reactor = self.clock
 
         self.genesis = self.manager1.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
@@ -233,3 +227,4 @@ class RemoteStorageSyncTest(HathorSyncMethodsTestCase):
 
     def tearDown(self):
         self._server.stop(0).wait()
+        super().tearDown()

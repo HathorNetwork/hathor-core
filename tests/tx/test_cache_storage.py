@@ -1,16 +1,11 @@
 import collections
-import shutil
-import tempfile
-import time
-import unittest
 
 from twisted.internet.defer import inlineCallbacks
-from twisted.internet.task import Clock
 
-from hathor.manager import HathorManager, TestMode
+from hathor.manager import TestMode
 from hathor.transaction import Block, Transaction, TransactionMetadata, TxOutput
 from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
-from hathor.wallet import Wallet
+from tests import unittest
 from tests.utils import add_new_blocks, add_new_transactions
 
 CACHE_SIZE = 5
@@ -18,10 +13,10 @@ CACHE_SIZE = 5
 
 class BasicTransaction(unittest.TestCase):
     def setUp(self):
+        super().setUp()
+
         store = TransactionMemoryStorage()
-        self.reactor = Clock()
-        self.reactor.advance(time.time())
-        self.cache_storage = TransactionCacheStorage(store, self.reactor, capacity=5)
+        self.cache_storage = TransactionCacheStorage(store, self.clock, capacity=5)
         self.cache_storage._manually_initialize()
         self.cache_storage.start()
 
@@ -32,14 +27,10 @@ class BasicTransaction(unittest.TestCase):
         # Save genesis metadata
         self.cache_storage.save_transaction_deferred(self.genesis_txs[0], only_metadata=True)
 
-        self.tmpdir = tempfile.mkdtemp(dir='/tmp/')
-        wallet = Wallet(directory=self.tmpdir)
-        wallet.unlock(b'teste')
-        self.manager = HathorManager(self.reactor, tx_storage=self.cache_storage, wallet=wallet)
+        self.manager = self.create_peer('testnet', tx_storage=self.cache_storage, unlock_wallet=True)
 
     def tearDown(self):
         super().tearDown()
-        shutil.rmtree(self.tmpdir)
 
     def _get_new_tx(self, nonce):
         tx = Transaction(nonce=nonce, storage=self.cache_storage)
@@ -92,6 +83,34 @@ class BasicTransaction(unittest.TestCase):
         # now it should be in cache
         self.assertIn(txs[0].hash, self.cache_storage.cache)
 
+    def test_read_moves_to_end(self):
+        # when we read a tx from cache, it should be moved to the end of cache so it's evicted later
+        txs = [self._get_new_tx(nonce) for nonce in range(2 * CACHE_SIZE)]
+        for i in range(CACHE_SIZE):
+            self.cache_storage.save_transaction(txs[i])
+
+        # first tx added would be the first to leave cache if we add one more tx
+        # let's read it from cache so it goes to the end
+        self.cache_storage.get_transaction(txs[0].hash)
+
+        # add a new tx to cache, so it will evict a tx
+        self.cache_storage.save_transaction(txs[-1])
+
+        # first tx should be in cache
+        self.assertIn(txs[0].hash, self.cache_storage.cache)
+
+    def test_cache_eviction(self):
+        # tests we're evicting the oldest tx from cache
+        txs = [self._get_new_tx(nonce) for nonce in range(2 * CACHE_SIZE)]
+        for i in range(CACHE_SIZE):
+            self.cache_storage.save_transaction(txs[i])
+
+        # next save should evict first tx
+        self.cache_storage.save_transaction(txs[CACHE_SIZE])
+        self.assertNotIn(txs[0].hash, self.cache_storage.cache)
+        self.assertIn(txs[CACHE_SIZE].hash, self.cache_storage.cache)
+        self.assertEqual(CACHE_SIZE, len(self.cache_storage.cache))
+
     def test_flush_thread(self):
         txs = [self._get_new_tx(nonce) for nonce in range(CACHE_SIZE)]
         for tx in txs:
@@ -100,10 +119,6 @@ class BasicTransaction(unittest.TestCase):
         for tx in txs:
             self.assertIn(tx.hash, self.cache_storage.dirty_txs)
 
-        self.assertIsNone(self.cache_storage.flush_deferred)
-
-        # Starts flush thread
-        self.reactor.advance(10)
         # Flush deferred is not None
         self.assertIsNotNone(self.cache_storage.flush_deferred)
         last_flush_deferred = self.cache_storage.flush_deferred
@@ -114,13 +129,13 @@ class BasicTransaction(unittest.TestCase):
         self.cache_storage._cb_flush_thread(self.cache_storage.dirty_txs.copy())
         self.assertIsNone(self.cache_storage.flush_deferred)
         # After the interval it becomes not None again
-        self.reactor.advance(10)
+        self.clock.advance(10)
         self.assertIsNotNone(self.cache_storage.flush_deferred)
 
         # If an err occurs, it will become None again and then not None after the interval
         self.cache_storage._err_flush_thread('')
         self.assertIsNone(self.cache_storage.flush_deferred)
-        self.reactor.advance(5)
+        self.clock.advance(5)
         self.assertIsNotNone(self.cache_storage.flush_deferred)
 
         # Remove element from cache to test a part of the code

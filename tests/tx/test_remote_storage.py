@@ -1,7 +1,4 @@
 import datetime
-import time
-
-from twisted.internet.task import Clock
 
 from hathor.transaction import Block, Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_proto
@@ -15,8 +12,6 @@ class RemoteStorageTest(unittest.TestCase):
         super().setUp()
         tx_storage, self._server = start_remote_storage()
 
-        self.clock = Clock()
-        self.clock.advance(time.time())
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, unlock_wallet=True)
         self.manager.tx_storage = tx_storage
@@ -27,6 +22,7 @@ class RemoteStorageTest(unittest.TestCase):
 
     def tearDown(self):
         self._server.stop(0).wait()
+        super().tearDown()
 
     def test_exceptions(self):
         self._server.stop(0).wait()

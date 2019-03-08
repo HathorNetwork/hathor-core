@@ -79,12 +79,13 @@ class TransactionCacheStorage(BaseTransactionStorage):
             # in the dirty set when the flush thread began is not in cache anymore, hence this `if` check
             if tx_hash in self.cache:
                 tx = self._clone(self.cache[tx_hash])
-                skip_warning(self.store._save_transaction)(tx)
                 self.dirty_txs.discard(tx_hash)
+                skip_warning(self.store._save_transaction)(tx)
 
     @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         self._save_transaction(tx)
+        self._save_to_weakref(tx)
 
         # call super which adds to index if needed
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
@@ -106,13 +107,13 @@ class TransactionCacheStorage(BaseTransactionStorage):
                 (_, removed_tx) = self.cache.popitem(last=False)
                 if removed_tx.hash in self.dirty_txs:
                     # write to disk so we don't lose the last update
+                    self.dirty_txs.discard(removed_tx.hash)
                     skip_warning(self.store.save_transaction)(removed_tx)
-                    self.dirty_txs.remove(removed_tx.hash)
             self.cache[tx.hash] = self._clone(tx)
         else:
             # Tx might have been updated
             self.cache[tx.hash] = self._clone(tx)
-            self.cache.move_to_end(tx.hash, last=False)
+            self.cache.move_to_end(tx.hash, last=True)
 
     @deprecated('Use transaction_exists_deferred instead')
     def transaction_exists(self, hash_bytes: bytes) -> bool:
@@ -124,7 +125,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
     def get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
         if hash_bytes in self.cache:
             tx = self._clone(self.cache[hash_bytes])
-            self.cache.move_to_end(hash_bytes, last=False)
+            self.cache.move_to_end(hash_bytes, last=True)
             self.stats['hit'] += 1
             return tx
         else:
@@ -166,7 +167,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
     def get_transaction_deferred(self, hash_bytes):
         if hash_bytes in self.cache:
             tx = self._clone(self.cache[hash_bytes])
-            self.cache.move_to_end(hash_bytes, last=False)
+            self.cache.move_to_end(hash_bytes, last=True)
             self.stats['hit'] += 1
             return tx
         else:
