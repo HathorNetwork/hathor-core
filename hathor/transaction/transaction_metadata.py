@@ -78,8 +78,8 @@ class TransactionMetadata:
             data['spent_outputs'].append([idx, [h_bytes.hex() for h_bytes in hashes]])
         data['received_by'] = list(self.received_by)
         data['children'] = [x.hex() for x in self.children]
-        data['conflict_with'] = [x.hex() for x in self.conflict_with] if self.conflict_with else None
-        data['voided_by'] = [x.hex() for x in self.voided_by] if self.voided_by else None
+        data['conflict_with'] = [x.hex() for x in self.conflict_with] if self.conflict_with else []
+        data['voided_by'] = [x.hex() for x in self.voided_by] if self.voided_by else []
         data['twins'] = [x.hex() for x in self.twins]
         data['accumulated_weight'] = self.accumulated_weight
         data['score'] = self.score
