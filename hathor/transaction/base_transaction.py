@@ -735,6 +735,7 @@ class BaseTransaction(ABC):
         for output in self.outputs:
             data_output: Dict[str, Any] = {}
             data_output['value'] = output.value
+            data_output['token_data'] = output.token_data
             data_output['script'] = base64.b64encode(output.script).decode('utf-8')
             if decode_script:
                 data_output['decoded'] = output.to_human_readable()
