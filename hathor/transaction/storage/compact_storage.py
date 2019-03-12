@@ -114,7 +114,8 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
         for output in data['outputs']:
             value = output['value']
             script = base64.b64decode(output['script'])
-            outputs.append(TxOutput(value, script))
+            token_data = output['token_data']
+            outputs.append(TxOutput(value, script, token_data))
 
         tokens = [bytes.fromhex(uid) for uid in data['tokens']]
 

@@ -43,8 +43,9 @@ class _BaseTransactionStorageTest:
 
             block_parents = [tx.hash for tx in self.genesis]
             output = TxOutput(200, bytes.fromhex('1e393a5ce2ff1c98d4ff6892f2175100f2dad049'))
-            self.block = Block(timestamp=1539271491, weight=12, outputs=[output], parents=block_parents, nonce=100781,
-                               storage=tx_storage)
+            output2 = TxOutput(2, bytes.fromhex('1e393a5ce2ff1c98d4ff6892f2175100f2dad049'), 1)
+            self.block = Block(timestamp=1539271491, weight=12, outputs=[output, output2], parents=block_parents,
+                               nonce=100781, storage=tx_storage)
             self.block.resolve()
 
             tx_parents = [tx.hash for tx in self.genesis_txs]
@@ -100,6 +101,8 @@ class _BaseTransactionStorageTest:
             self.assertTrue(self.tx_storage.transaction_exists(obj.hash))
 
             self.assertEqual(obj, loaded_obj1)
+            self.assertEqual(bytes(obj), bytes(loaded_obj1))
+            self.assertEqual(obj.to_json(), loaded_obj1.to_json())
             self.assertEqual(obj.is_block, loaded_obj1.is_block)
 
             # Testing add and remove from cache
