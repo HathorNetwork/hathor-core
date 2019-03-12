@@ -86,7 +86,7 @@ def main():
     parser.add_argument('--stratum', type=int, help='Port to run stratum server')
     parser.add_argument('--data', help='Data directory')
     parser.add_argument('--wallet', help='Set wallet type. Options are hd (Hierarchical Deterministic) or keypair',
-                        default='hd')
+                        default=None)
     parser.add_argument('--words', help='Words used to generate the seed for HD Wallet')
     parser.add_argument('--passphrase', action='store_true', help='Passphrase used to generate the seed for HD Wallet')
     parser.add_argument('--unlock-wallet', action='store_true', help='Ask for password to unlock wallet')
@@ -174,7 +174,10 @@ def main():
         tx_storage = TransactionMemoryStorage()
         print('Using TransactionMemoryStorage')
 
-    wallet = create_wallet()
+    if args.wallet:
+        wallet = create_wallet()
+    else:
+        wallet = None
 
     if args.hostname and args.auto_hostname:
         print('You cannot use --hostname and --auto-hostname together.')
@@ -258,15 +261,6 @@ def main():
             (b'transaction_acc_weight', TransactionAccWeightResource(manager), root),
             (b'dashboard_tx', DashboardTransactionResource(manager), root),
             (b'profiler', ProfilerResource(manager), root),
-            # /wallet
-            (b'balance', BalanceResource(manager), wallet_resource),
-            (b'history', HistoryResource(manager), wallet_resource),
-            (b'address', AddressResource(manager), wallet_resource),
-            (b'send_tokens', SendTokensResource(manager), wallet_resource),
-            (b'sign_tx', SignTxResource(manager), wallet_resource),
-            (b'unlock', UnlockWalletResource(manager), wallet_resource),
-            (b'lock', LockWalletResource(manager), wallet_resource),
-            (b'state', StateWalletResource(manager), wallet_resource),
             # /thin_wallet
             (b'address_history', AddressHistoryResource(manager), thin_wallet_resource),
             (b'send_tokens', SendTokensThinResource(manager), thin_wallet_resource),
@@ -279,6 +273,21 @@ def main():
         )
         for url_path, resource, parent in resources:
             parent.putChild(url_path, resource)
+
+        if wallet:
+            wallet_resources = (
+                # /wallet
+                (b'balance', BalanceResource(manager), wallet_resource),
+                (b'history', HistoryResource(manager), wallet_resource),
+                (b'address', AddressResource(manager), wallet_resource),
+                (b'send_tokens', SendTokensResource(manager), wallet_resource),
+                (b'sign_tx', SignTxResource(manager), wallet_resource),
+                (b'unlock', UnlockWalletResource(manager), wallet_resource),
+                (b'lock', LockWalletResource(manager), wallet_resource),
+                (b'state', StateWalletResource(manager), wallet_resource),
+            )
+            for url_path, resource, parent in wallet_resources:
+                parent.putChild(url_path, resource)
 
         # Websocket resource
         ws_factory = HathorAdminWebsocketFactory(metrics=manager.metrics)
