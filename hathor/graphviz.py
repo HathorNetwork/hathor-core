@@ -180,11 +180,13 @@ class GraphvizVisualizer:
             if tx.hash == root.hash:
                 node_attrs.update(dict(style='filled', penwidth='5.0'))
 
-            dot.node(name, **node_attrs)
-
             meta = tx.get_metadata()
 
             if graph_type == 'verification':
+                if tx.is_block:
+                    continue
+
+                dot.node(name, **node_attrs)
 
                 if level <= max_level:
                     for h in chain(tx.parents, meta.children):
@@ -196,7 +198,10 @@ class GraphvizVisualizer:
                 for h in tx.parents:
                     if h in seen:
                         dot.edge(name, h.hex())
+
             elif graph_type == 'funds':
+                dot.node(name, **node_attrs)
+
                 if level <= max_level:
                     spent_outputs_ids = chain.from_iterable(meta.spent_outputs.values())
                     tx_input_ids = [txin.tx_id for txin in tx.inputs]
