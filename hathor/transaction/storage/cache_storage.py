@@ -45,6 +45,8 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self.dirty_txs = set()  # Set[bytes(hash)]
         self.stats = dict(hit=0, miss=0)
         super().__init__()
+        # we need to use only one weakref dict
+        self._tx_weakref = store._tx_weakref
 
     def _clone(self, x: BaseTransaction) -> BaseTransaction:
         if self._clone_if_needed:
