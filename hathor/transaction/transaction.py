@@ -299,14 +299,8 @@ class Transaction(BaseTransaction):
             raise InvalidInputData(e) from e
 
     def get_spent_tx(self, input_tx: TxInput) -> BaseTransaction:
-        # TODO Maybe we could use a TransactionCacheStorage in the future to reduce storage hit
-        try:
-            spent_tx = input_tx._tx
-        except AttributeError:
-            assert self.storage is not None
-            spent_tx = self.storage.get_transaction(input_tx.tx_id)
-            input_tx._tx = spent_tx
-        return spent_tx
+        assert self.storage is not None
+        return self.storage.get_transaction(input_tx.tx_id)
 
     def update_voided_info(self) -> None:
         """ This method should be called only once when the transactions is added to the DAG.
