@@ -215,6 +215,7 @@ def main():
 
     if args.test_mode_tx_weight:
         manager.test_mode = TestMode.TEST_TX_WEIGHT
+        wallet.test_mode = True
 
     manager.start()
 
