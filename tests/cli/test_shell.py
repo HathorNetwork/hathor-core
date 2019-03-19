@@ -1,10 +1,9 @@
-from hathor.cli.shell import create_parser, prepare
+from hathor.cli.shell import Shell
 from tests import unittest
 
 
 class ShellTest(unittest.TestCase):
     def test_shell_execution(self):
         # In this case we just want to go through the code to see if it's okay
-        parser = create_parser()
-        args = parser.parse_args([])
-        prepare(args)
+        shell = Shell(argv=[])
+        self.assertTrue(shell is not None)
