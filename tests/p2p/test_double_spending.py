@@ -58,12 +58,14 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.assertNotEqual(tx2.hash, tx3.hash)
 
         self.manager1.propagate_tx(tx1)
+        self.run_to_completion()
         meta1 = tx1.get_metadata()
         self.assertEqual(meta1.conflict_with, None)
         self.assertEqual(meta1.voided_by, None)
 
         # Propagate a conflicting transaction.
         self.manager1.propagate_tx(tx2)
+        self.run_to_completion()
 
         meta1 = tx1.get_metadata(force_reload=True)
         self.assertEqual(meta1.conflict_with, [tx2.hash])
@@ -83,6 +85,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # Propagate another conflicting transaction, but with higher weight.
         self.manager1.propagate_tx(tx3)
+        self.run_to_completion()
 
         meta1 = tx1.get_metadata(force_reload=True)
         self.assertEqual(meta1.conflict_with, [tx2.hash, tx3.hash])
@@ -140,9 +143,12 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager1.wallet.get_unused_address_bytes()
         value = 1000
-        outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
+        outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None),
+                   WalletOutputInfo(address=address, value=1000, timelock=None)]
         self.clock.advance(1)
-        tx4 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+        inputs = [WalletInputInfo(i.tx_id, i.index, b'') for i in tx1.inputs]
+        tx4 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs,
+                                                                         outputs, self.manager1.tx_storage)
         tx4.weight = 5
         tx4.parents = self.manager1.get_new_tx_parents()
         tx4.timestamp = int(self.clock.seconds())
@@ -199,10 +205,11 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # ---
 
         self.clock.advance(15)
-        self.manager1.propagate_tx(tx4)
+        self.assertTrue(self.manager1.propagate_tx(tx4))
         print('tx4', tx4.hash.hex())
         self.clock.advance(15)
 
+        self.run_to_completion()
         meta1 = tx1.get_metadata(force_reload=True)
         meta4 = tx4.get_metadata(force_reload=True)
         self.assertEqual(meta1.conflict_with, [tx4.hash])

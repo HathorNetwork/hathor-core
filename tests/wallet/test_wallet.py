@@ -228,3 +228,17 @@ class BasicWallet(unittest.TestCase):
         out = WalletOutputInfo(decode_address(new_address), 1, timelock=None)
         with self.assertRaises(InsufficientFunds):
             w.prepare_transaction_compute_inputs(Transaction, outputs=[out], timestamp=block.timestamp)
+
+    def test_maybe_spent_txs(self):
+        add_new_block(self.manager, advance_clock=15)
+        w = self.manager.wallet
+        new_address = w.get_unused_address()
+        out = WalletOutputInfo(decode_address(new_address), 1, timelock=None)
+        tx1 = w.prepare_transaction_compute_inputs(Transaction, outputs=[out])
+        self.assertEqual(len(tx1.inputs), 1)
+        _input = tx1.inputs[0]
+        key = (_input.tx_id, _input.index)
+        self.assertNotIn(key, w.unspent_txs[HATHOR_TOKEN_UID])
+        self.assertIn(key, w.maybe_spent_txs[HATHOR_TOKEN_UID])
+        self.run_to_completion()
+        self.assertIn(key, w.unspent_txs[HATHOR_TOKEN_UID])

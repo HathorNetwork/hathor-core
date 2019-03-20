@@ -391,10 +391,15 @@ def run_server(hostname='localhost', listen=8005, listen_ssl=False, status=8085,
         :return: Subprocess created
         :rtype: :py:class:`subprocess.Popen`
     """
-    command = 'python -m hathor run_node --hostname {} --listen tcp:{} --status {}'.format(hostname, listen, status)
-
-    # We must allow mining without peers, otherwise some tests won't be able to mine.
-    command = '{} --allow-mining-without-peers'.format(command)
+    command = ' '.join([
+        'python -m hathor run_node',
+        '--wallet hd',
+        '--hostname {}'.format(hostname),
+        '--listen tcp:{}'.format(listen),
+        '--status {}'.format(status),
+        # We must allow mining without peers, otherwise some tests won't be able to mine.
+        '--allow-mining-without-peers',
+    ])
 
     if listen_ssl:
         command = '{} --ssl'.format(command)

@@ -17,6 +17,9 @@ class TransactionMetadata:
     score: float
     first_block: Optional[bytes]
 
+    # Used to detect changes in voided_by.
+    _last_voided_by_hash: Optional[int]
+
     def __init__(self, spent_outputs: Optional[Dict[int, List[bytes]]] = None, hash: Optional[bytes] = None,
                  accumulated_weight: float = 0, score: float = 0) -> None:
 
@@ -38,6 +41,7 @@ class TransactionMetadata:
         #
         # When a block is voided, its own hash is added to voided_by.
         self.voided_by = None
+        self._last_voided_by_hash = None
 
         # List of peers which have sent this transaction.
         # Store only the peers' id.
@@ -60,6 +64,20 @@ class TransactionMetadata:
         # First valid block that verifies this transaction
         # If two blocks verify the same parent block and have the same score, both are valid.
         self.first_block = None
+
+    def has_voided_by_changed_since_last_call(self) -> bool:
+        """Check whether `self.voided_by` has been changed since the last call to this same method.
+        Notice that it will always return True when the transaction is first loaded into memory.
+
+        >>> b1 = meta.has_voided_by_changed_since_last_call()
+        >>> b2 = meta.has_voided_by_changed_since_last_call()
+        >>> assert b1 != b2
+        """
+        cur_hash = hash(frozenset(self.voided_by)) if self.voided_by else None
+        if self._last_voided_by_hash != cur_hash:
+            self._last_voided_by_hash = cur_hash
+            return True
+        return False
 
     def __eq__(self, other):
         """Override the default Equals behavior"""

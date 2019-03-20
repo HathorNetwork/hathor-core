@@ -2,7 +2,9 @@ import getpass
 import json
 import os
 import sys
+from argparse import ArgumentParser, Namespace
 from threading import current_thread
+from typing import Any, Dict
 
 from autobahn.twisted.resource import WebSocketResource
 from twisted.internet import reactor
@@ -27,268 +29,309 @@ def formatLogEvent(event):
     return formatEventAsClassicLogText(event)
 
 
-def main():
-    import hathor
-    from hathor.manager import HathorManager, TestMode
-    from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
-    from hathor.p2p.peer_id import PeerId
-    from hathor.p2p.resources import AddPeersResource, MiningResource, StatusResource
-    from hathor.prometheus import PrometheusMetricsExporter
-    from hathor.resources import ProfilerResource
-    from hathor.transaction.resources import (
-        DashboardTransactionResource,
-        DecodeTxResource,
-        GraphvizResource,
-        PushTxResource,
-        TipsHistogramResource,
-        TipsResource,
-        TransactionAccWeightResource,
-        TransactionResource,
-    )
-    from hathor.p2p.utils import discover_hostname
-    from hathor.transaction.storage import TransactionCacheStorage, TransactionCompactStorage, TransactionMemoryStorage
-    from hathor.version_resource import VersionResource
-    from hathor.wallet import HDWallet, Wallet
-    from hathor.wallet.resources import (
-        AddressResource,
-        BalanceResource,
-        HistoryResource,
-        LockWalletResource,
-        SendTokensResource,
-        SignTxResource,
-        StateWalletResource,
-        UnlockWalletResource,
-    )
-    from hathor.wallet.resources.thin_wallet import (
-        AddressHistoryResource,
-        SendTokensResource as SendTokensThinResource
-    )
-    from hathor.wallet.resources.nano_contracts import (
-        NanoContractDecodeResource,
-        NanoContractExecuteResource,
-        NanoContractMatchValueResource,
-    )
-    from hathor.websocket import HathorAdminWebsocketFactory
-    from hathor.cli.util import create_parser
+class RunNode:
+    def create_parser(self) -> ArgumentParser:
+        from hathor.cli.util import create_parser
+        parser = create_parser()
 
-    parser = create_parser()
-    parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
-    parser.add_argument('--auto-hostname', action='store_true', help='Try to discover the hostname automatically')
-    parser.add_argument('--testnet', action='store_true', help='Connect to Hathor testnet')
-    parser.add_argument('--test-mode-tx-weight', action='store_true',
-                        help='Reduces tx weight to 1 for testing purposes')
-    parser.add_argument('--dns', action='append', help='Seed DNS')
-    parser.add_argument('--peer', help='json file with peer info')
-    parser.add_argument('--listen', action='append', help='Address to listen for new connections (eg: tcp:8000)')
-    parser.add_argument('--ssl', action='store_true', help='Listen to ssl connection')
-    parser.add_argument('--bootstrap', action='append', help='Address to connect to (eg: tcp:127.0.0.1:8000')
-    parser.add_argument('--status', type=int, help='Port to run status server')
-    parser.add_argument('--stratum', type=int, help='Port to run stratum server')
-    parser.add_argument('--data', help='Data directory')
-    parser.add_argument('--wallet', help='Set wallet type. Options are hd (Hierarchical Deterministic) or keypair',
-                        default='hd')
-    parser.add_argument('--words', help='Words used to generate the seed for HD Wallet')
-    parser.add_argument('--passphrase', action='store_true', help='Passphrase used to generate the seed for HD Wallet')
-    parser.add_argument('--unlock-wallet', action='store_true', help='Ask for password to unlock wallet')
-    parser.add_argument(
-        '--wallet-index',
-        action='store_true',
-        help='Create an index of transactions by address and allow searching queries'
-    )
-    parser.add_argument('--prometheus', action='store_true', help='Send metric data to Prometheus')
-    parser.add_argument('--cache', action='store_true', help='Use cache for tx storage')
-    parser.add_argument('--cache-size', type=int, help='Number of txs to keep on cache')
-    parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
-    parser.add_argument('--recursion-limit', type=int, help='Set python recursion limit')
-    parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
-    args = parser.parse_args()
+        parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
+        parser.add_argument('--auto-hostname', action='store_true', help='Try to discover the hostname automatically')
+        parser.add_argument('--testnet', action='store_true', help='Connect to Hathor testnet')
+        parser.add_argument('--test-mode-tx-weight', action='store_true',
+                            help='Reduces tx weight to 1 for testing purposes')
+        parser.add_argument('--dns', action='append', help='Seed DNS')
+        parser.add_argument('--peer', help='json file with peer info')
+        parser.add_argument('--listen', action='append', help='Address to listen for new connections (eg: tcp:8000)')
+        parser.add_argument('--ssl', action='store_true', help='Listen to ssl connection')
+        parser.add_argument('--bootstrap', action='append', help='Address to connect to (eg: tcp:127.0.0.1:8000')
+        parser.add_argument('--status', type=int, help='Port to run status server')
+        parser.add_argument('--stratum', type=int, help='Port to run stratum server')
+        parser.add_argument('--data', help='Data directory')
+        parser.add_argument('--wallet', help='Set wallet type. Options are hd (Hierarchical Deterministic) or keypair',
+                            default=None)
+        parser.add_argument('--words', help='Words used to generate the seed for HD Wallet')
+        parser.add_argument('--passphrase', action='store_true',
+                            help='Passphrase used to generate the seed for HD Wallet')
+        parser.add_argument('--unlock-wallet', action='store_true', help='Ask for password to unlock wallet')
+        parser.add_argument('--wallet-index', action='store_true',
+                            help='Create an index of transactions by address and allow searching queries')
+        parser.add_argument('--prometheus', action='store_true', help='Send metric data to Prometheus')
+        parser.add_argument('--cache', action='store_true', help='Use cache for tx storage')
+        parser.add_argument('--cache-size', type=int, help='Number of txs to keep on cache')
+        parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
+        parser.add_argument('--recursion-limit', type=int, help='Set python recursion limit')
+        parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
+        return parser
 
-    loglevel_filter = LogLevelFilterPredicate(LogLevel.info)
-    loglevel_filter.setLogLevelForNamespace('hathor.websocket.protocol.HathorAdminWebsocketProtocol', LogLevel.warn)
-    loglevel_filter.setLogLevelForNamespace('twisted.python.log', LogLevel.warn)
-    observer = FilteringLogObserver(
-        FileLogObserver(sys.stdout, formatLogEvent),
-        [loglevel_filter],
-    )
-    globalLogPublisher.addObserver(observer)
-
-    if args.recursion_limit:
-        sys.setrecursionlimit(args.recursion_limit)
-
-    if not args.peer:
-        peer_id = PeerId()
-    else:
-        data = json.load(open(args.peer, 'r'))
-        peer_id = PeerId.create_from_json(data)
-
-    print('Hathor v{}'.format(hathor.__version__))
-    print('My peer id is', peer_id.id)
-
-    def create_wallet():
-        if args.wallet == 'hd':
-            kwargs = {
-                'words': args.words,
-            }
-
-            if args.passphrase:
-                wallet_passphrase = getpass.getpass(prompt='HD Wallet passphrase:')
-                kwargs['passphrase'] = wallet_passphrase.encode()
-
-            if args.data:
-                kwargs['directory'] = args.data
-
-            return HDWallet(**kwargs)
-        elif args.wallet == 'keypair':
-            if args.data:
-                wallet = Wallet(directory=args.data)
-            else:
-                wallet = Wallet()
-
-            wallet.flush_to_disk_interval = 5  # seconds
-
-            if args.unlock_wallet:
-                wallet_passwd = getpass.getpass(prompt='Wallet password:')
-                wallet.unlock(wallet_passwd.encode())
-
-            return wallet
-        else:
-            raise ValueError('Invalid type for wallet')
-
-    if args.data:
-        tx_dir = os.path.join(args.data, 'tx')
-        wallet_dir = args.data
-        print('Using Wallet at {}'.format(wallet_dir))
-        print('Using TransactionCompactStorage at {}'.format(tx_dir))
-        tx_storage = TransactionCompactStorage(path=tx_dir, with_index=(not args.cache))
-        if args.cache:
-            tx_storage = TransactionCacheStorage(tx_storage, reactor)
-            if args.cache_size:
-                tx_storage.capacity = args.cache_size
-            if args.cache_interval:
-                tx_storage.interval = args.cache_interval
-            print('Using TransactionCacheStorage, capacity {}, interval {}s'.format(
-                tx_storage.capacity, tx_storage.interval))
-            tx_storage.start()
-    else:
-        # if using MemoryStorage, no need to have cache
-        tx_storage = TransactionMemoryStorage()
-        print('Using TransactionMemoryStorage')
-
-    wallet = create_wallet()
-
-    if args.hostname and args.auto_hostname:
-        print('You cannot use --hostname and --auto-hostname together.')
-        sys.exit(-1)
-
-    if not args.auto_hostname:
-        hostname = args.hostname
-    else:
-        print('Trying to discover your hostname...')
-        hostname = discover_hostname()
-        if not hostname:
-            print('Aborting because we could not discover your hostname.')
-            print('Try again or run without --auto-hostname.')
-            sys.exit(-1)
-        print('Hostname discovered and set to {}'.format(hostname))
-
-    network = 'testnet'
-    manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname, tx_storage=tx_storage,
-                            wallet=wallet, wallet_index=args.wallet_index, stratum_port=args.stratum)
-    if args.allow_mining_without_peers:
-        manager.allow_mining_without_peers()
-
-    dns_hosts = []
-    if args.testnet:
-        dns_hosts.append('testnet.hathor.network')
-
-    if args.dns:
-        dns_hosts.extend(dns_hosts)
-
-    if dns_hosts:
-        manager.add_peer_discovery(DNSPeerDiscovery(dns_hosts))
-
-    if args.bootstrap:
-        manager.add_peer_discovery(BootstrapPeerDiscovery(args.bootstrap))
-
-    if args.test_mode_tx_weight:
-        manager.test_mode = TestMode.TEST_TX_WEIGHT
-
-    manager.start()
-
-    if args.listen:
-        for description in args.listen:
-            ssl = False
-            if args.ssl:
-                ssl = True
-            manager.listen(description, ssl=ssl)
-
-    if args.prometheus:
-        kwargs = {'metrics': manager.metrics}
-
-        if args.data:
-            kwargs['path'] = os.path.join(args.data, 'prometheus')
-        else:
-            raise ValueError('To run prometheus exporter you must have a data path')
-
-        prometheus = PrometheusMetricsExporter(**kwargs)
-        prometheus.start()
-
-    if args.status:
-        # TODO get this from a file. How should we do with the factory?
-        root = Resource()
-        wallet_resource = Resource()
-        root.putChild(b'wallet', wallet_resource)
-        thin_wallet_resource = Resource()
-        root.putChild(b'thin_wallet', thin_wallet_resource)
-        contracts_resource = Resource()
-        wallet_resource.putChild(b'nano-contract', contracts_resource)
-        p2p_resource = Resource()
-        root.putChild(b'p2p', p2p_resource)
-
-        resources = (
-            (b'status', StatusResource(manager), root),
-            (b'version', VersionResource(manager), root),
-            (b'mining', MiningResource(manager), root),
-            (b'decode_tx', DecodeTxResource(manager), root),
-            (b'push_tx', PushTxResource(manager), root),
-            (b'graphviz', GraphvizResource(manager), root),
-            (b'tips-histogram', TipsHistogramResource(manager), root),
-            (b'tips', TipsResource(manager), root),
-            (b'transaction', TransactionResource(manager), root),
-            (b'transaction_acc_weight', TransactionAccWeightResource(manager), root),
-            (b'dashboard_tx', DashboardTransactionResource(manager), root),
-            (b'profiler', ProfilerResource(manager), root),
-            # /wallet
-            (b'balance', BalanceResource(manager), wallet_resource),
-            (b'history', HistoryResource(manager), wallet_resource),
-            (b'address', AddressResource(manager), wallet_resource),
-            (b'send_tokens', SendTokensResource(manager), wallet_resource),
-            (b'sign_tx', SignTxResource(manager), wallet_resource),
-            (b'unlock', UnlockWalletResource(manager), wallet_resource),
-            (b'lock', LockWalletResource(manager), wallet_resource),
-            (b'state', StateWalletResource(manager), wallet_resource),
-            # /thin_wallet
-            (b'address_history', AddressHistoryResource(manager), thin_wallet_resource),
-            (b'send_tokens', SendTokensThinResource(manager), thin_wallet_resource),
-            # /wallet/nano-contract
-            (b'match-value', NanoContractMatchValueResource(manager), contracts_resource),
-            (b'decode', NanoContractDecodeResource(manager), contracts_resource),
-            (b'execute', NanoContractExecuteResource(manager), contracts_resource),
-            # /p2p
-            (b'peers', AddPeersResource(manager), p2p_resource),
+    def prepare(self, args: Namespace) -> None:
+        import hathor
+        from hathor.manager import HathorManager, TestMode
+        from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
+        from hathor.p2p.peer_id import PeerId
+        from hathor.p2p.utils import discover_hostname
+        from hathor.transaction.storage import (
+            TransactionStorage,
+            TransactionCacheStorage,
+            TransactionCompactStorage,
+            TransactionMemoryStorage,
         )
-        for url_path, resource, parent in resources:
-            parent.putChild(url_path, resource)
+        from hathor.wallet import HDWallet, Wallet
 
-        # Websocket resource
-        ws_factory = HathorAdminWebsocketFactory(metrics=manager.metrics)
-        ws_factory.start()
-        resource = WebSocketResource(ws_factory)
-        root.putChild(b"ws", resource)
+        loglevel_filter = LogLevelFilterPredicate(LogLevel.info)
+        loglevel_filter.setLogLevelForNamespace('hathor.websocket.protocol.HathorAdminWebsocketProtocol',
+                                                LogLevel.warn)
+        loglevel_filter.setLogLevelForNamespace('twisted.python.log', LogLevel.warn)
+        observer = FilteringLogObserver(
+            FileLogObserver(sys.stdout, formatLogEvent),
+            [loglevel_filter],
+        )
+        globalLogPublisher.addObserver(observer)
 
-        ws_factory.subscribe(manager.pubsub)
+        if args.recursion_limit:
+            sys.setrecursionlimit(args.recursion_limit)
 
-        status_server = server.Site(root)
-        reactor.listenTCP(args.status, status_server)
+        if not args.peer:
+            peer_id = PeerId()
+        else:
+            data = json.load(open(args.peer, 'r'))
+            peer_id = PeerId.create_from_json(data)
 
-    reactor.run()
+        print('Hathor v{}'.format(hathor.__version__))
+        print('My peer id is', peer_id.id)
+
+        def create_wallet():
+            if args.wallet == 'hd':
+                kwargs = {
+                    'words': args.words,
+                }
+
+                if args.passphrase:
+                    wallet_passphrase = getpass.getpass(prompt='HD Wallet passphrase:')
+                    kwargs['passphrase'] = wallet_passphrase.encode()
+
+                if args.data:
+                    kwargs['directory'] = args.data
+
+                return HDWallet(**kwargs)
+            elif args.wallet == 'keypair':
+                if args.data:
+                    wallet = Wallet(directory=args.data)
+                else:
+                    wallet = Wallet()
+
+                wallet.flush_to_disk_interval = 5  # seconds
+
+                if args.unlock_wallet:
+                    wallet_passwd = getpass.getpass(prompt='Wallet password:')
+                    wallet.unlock(wallet_passwd.encode())
+
+                return wallet
+            else:
+                raise ValueError('Invalid type for wallet')
+
+        tx_storage: TransactionStorage
+        if args.data:
+            tx_dir = os.path.join(args.data, 'tx')
+            wallet_dir = args.data
+            print('Using Wallet at {}'.format(wallet_dir))
+            print('Using TransactionCompactStorage at {}'.format(tx_dir))
+            tx_storage = TransactionCompactStorage(path=tx_dir, with_index=(not args.cache))
+            if args.cache:
+                tx_storage = TransactionCacheStorage(tx_storage, reactor)
+                if args.cache_size:
+                    tx_storage.capacity = args.cache_size
+                if args.cache_interval:
+                    tx_storage.interval = args.cache_interval
+                print('Using TransactionCacheStorage, capacity {}, interval {}s'.format(
+                    tx_storage.capacity, tx_storage.interval))
+                tx_storage.start()
+        else:
+            # if using MemoryStorage, no need to have cache
+            tx_storage = TransactionMemoryStorage()
+            print('Using TransactionMemoryStorage')
+        self.tx_storage = tx_storage
+
+        if args.wallet:
+            self.wallet = create_wallet()
+        else:
+            self.wallet = None
+
+        if args.hostname and args.auto_hostname:
+            print('You cannot use --hostname and --auto-hostname together.')
+            sys.exit(-1)
+
+        if not args.auto_hostname:
+            hostname = args.hostname
+        else:
+            print('Trying to discover your hostname...')
+            hostname = discover_hostname()
+            if not hostname:
+                print('Aborting because we could not discover your hostname.')
+                print('Try again or run without --auto-hostname.')
+                sys.exit(-1)
+            print('Hostname discovered and set to {}'.format(hostname))
+
+        network = 'testnet'
+        self.manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname,
+                                     tx_storage=self.tx_storage, wallet=self.wallet, wallet_index=args.wallet_index,
+                                     stratum_port=args.stratum)
+        if args.allow_mining_without_peers:
+            self.manager.allow_mining_without_peers()
+
+        dns_hosts = []
+        if args.testnet:
+            dns_hosts.append('testnet.hathor.network')
+
+        if args.dns:
+            dns_hosts.extend(dns_hosts)
+
+        if dns_hosts:
+            self.manager.add_peer_discovery(DNSPeerDiscovery(dns_hosts))
+
+        if args.bootstrap:
+            self.manager.add_peer_discovery(BootstrapPeerDiscovery(args.bootstrap))
+
+        if args.test_mode_tx_weight:
+            self.manager.test_mode = TestMode.TEST_TX_WEIGHT
+            if self.wallet:
+                self.wallet.test_mode = True
+
+        self.start_manager()
+        self.register_resources(args)
+
+    def start_manager(self) -> None:
+        self.manager.start()
+
+    def register_resources(self, args: Namespace) -> None:
+        from hathor.p2p.resources import AddPeersResource, MiningResource, StatusResource
+        from hathor.prometheus import PrometheusMetricsExporter
+        from hathor.resources import ProfilerResource
+        from hathor.transaction.resources import (
+            DashboardTransactionResource,
+            DecodeTxResource,
+            GraphvizResource,
+            PushTxResource,
+            TipsHistogramResource,
+            TipsResource,
+            TransactionAccWeightResource,
+            TransactionResource,
+        )
+        from hathor.version_resource import VersionResource
+        from hathor.wallet.resources import (
+            AddressResource,
+            BalanceResource,
+            HistoryResource,
+            LockWalletResource,
+            SendTokensResource,
+            SignTxResource,
+            StateWalletResource,
+            UnlockWalletResource,
+        )
+        from hathor.wallet.resources.thin_wallet import (AddressHistoryResource, SendTokensResource as
+                                                         SendTokensThinResource)
+        from hathor.wallet.resources.nano_contracts import (
+            NanoContractDecodeResource,
+            NanoContractExecuteResource,
+            NanoContractMatchValueResource,
+        )
+        from hathor.websocket import HathorAdminWebsocketFactory
+
+        if args.listen:
+            for description in args.listen:
+                ssl = False
+                if args.ssl:
+                    ssl = True
+                self.manager.listen(description, ssl=ssl)
+
+        if args.prometheus:
+            kwargs: Dict[str, Any] = {'metrics': self.manager.metrics}
+
+            if args.data:
+                kwargs['path'] = os.path.join(args.data, 'prometheus')
+            else:
+                raise ValueError('To run prometheus exporter you must have a data path')
+
+            prometheus = PrometheusMetricsExporter(**kwargs)
+            prometheus.start()
+
+        if args.status:
+            # TODO get this from a file. How should we do with the factory?
+            root = Resource()
+            wallet_resource = Resource()
+            root.putChild(b'wallet', wallet_resource)
+            thin_wallet_resource = Resource()
+            root.putChild(b'thin_wallet', thin_wallet_resource)
+            contracts_resource = Resource()
+            wallet_resource.putChild(b'nano-contract', contracts_resource)
+            p2p_resource = Resource()
+            root.putChild(b'p2p', p2p_resource)
+
+            resources = (
+                (b'status', StatusResource(self.manager), root),
+                (b'version', VersionResource(self.manager), root),
+                (b'mining', MiningResource(self.manager), root),
+                (b'decode_tx', DecodeTxResource(self.manager), root),
+                (b'push_tx', PushTxResource(self.manager), root),
+                (b'graphviz', GraphvizResource(self.manager), root),
+                (b'tips-histogram', TipsHistogramResource(self.manager), root),
+                (b'tips', TipsResource(self.manager), root),
+                (b'transaction', TransactionResource(self.manager), root),
+                (b'transaction_acc_weight', TransactionAccWeightResource(self.manager), root),
+                (b'dashboard_tx', DashboardTransactionResource(self.manager), root),
+                (b'profiler', ProfilerResource(self.manager), root),
+                # /thin_wallet
+                (b'address_history', AddressHistoryResource(self.manager), thin_wallet_resource),
+                (b'send_tokens', SendTokensThinResource(self.manager), thin_wallet_resource),
+                # /wallet/nano-contract
+                (b'match-value', NanoContractMatchValueResource(self.manager), contracts_resource),
+                (b'decode', NanoContractDecodeResource(self.manager), contracts_resource),
+                (b'execute', NanoContractExecuteResource(self.manager), contracts_resource),
+                # /p2p
+                (b'peers', AddPeersResource(self.manager), p2p_resource),
+            )
+            for url_path, resource, parent in resources:
+                parent.putChild(url_path, resource)
+
+            if self.wallet:
+                wallet_resources = (
+                    # /wallet
+                    (b'balance', BalanceResource(self.manager), wallet_resource),
+                    (b'history', HistoryResource(self.manager), wallet_resource),
+                    (b'address', AddressResource(self.manager), wallet_resource),
+                    (b'send_tokens', SendTokensResource(self.manager), wallet_resource),
+                    (b'sign_tx', SignTxResource(self.manager), wallet_resource),
+                    (b'unlock', UnlockWalletResource(self.manager), wallet_resource),
+                    (b'lock', LockWalletResource(self.manager), wallet_resource),
+                    (b'state', StateWalletResource(self.manager), wallet_resource),
+                )
+                for url_path, resource, parent in wallet_resources:
+                    parent.putChild(url_path, resource)
+
+            # Websocket resource
+            ws_factory = HathorAdminWebsocketFactory(metrics=self.manager.metrics)
+            ws_factory.start()
+            resource = WebSocketResource(ws_factory)
+            root.putChild(b"ws", resource)
+
+            ws_factory.subscribe(self.manager.pubsub)
+
+            status_server = server.Site(root)
+            reactor.listenTCP(args.status, status_server)
+
+    def __init__(self, *, argv=None):
+        if argv is None:
+            import sys
+            argv = sys.argv[1:]
+        self.parser = self.create_parser()
+        args = self.parse_args(argv)
+        self.prepare(args)
+
+    def parse_args(self, argv) -> Namespace:
+        return self.parser.parse_args(argv)
+
+    def run(self) -> None:
+        reactor.run()
+
+
+def main():
+    RunNode().run()

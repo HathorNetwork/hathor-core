@@ -18,6 +18,11 @@ from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.transaction import Transaction
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
 
+# check interval for maybe_spent_txs
+UTXO_CHECK_INTERVAL = 10
+# how long a utxo might be in an intermediate state, being considered spent before we receive the tx that spends it
+UTXO_SPENT_INTERVAL = 5
+
 
 class WalletInputInfo(NamedTuple):
     tx_id: bytes
@@ -74,6 +79,9 @@ class BaseWallet:
         # Dict[token_id, Dict[Tuple[tx_id, index], UnspentTx]]
         self.unspent_txs: DefaultDict[bytes, Dict[Tuple[bytes, int], UnspentTx]] = defaultdict(dict)
 
+        # Dict[token_id, Dict[Tuple[tx_id, index], UnspentTx]]
+        self.maybe_spent_txs: DefaultDict[bytes, Dict[Tuple[bytes, int], UnspentTx]] = defaultdict(dict)
+
         # Dict[Tuple(tx_id, index), List[SpentTx]]
         # We have for each output, which txs spent it
         self.spent_txs: Dict[Tuple[bytes, int], List[SpentTx]] = defaultdict(list)
@@ -91,6 +99,9 @@ class BaseWallet:
         self.balance_update: Optional[WalletBalanceUpdate] = None
 
         self.pubsub: Optional[PubSubManager] = pubsub
+
+        # in test mode, we assume a lot of txs will be generated and prevent creating twin txs
+        self.test_mode: bool = False
 
         self.pubsub_events = [
             HathorEvents.STORAGE_TX_VOIDED,
@@ -112,12 +123,28 @@ class BaseWallet:
             for event in self.pubsub_events:
                 self.pubsub.subscribe(event, self.handle_publish)
 
+        self.reactor.callLater(UTXO_CHECK_INTERVAL, self._check_utxos)
+
     def stop(self):
         """ Stop the pubsub subscription if wallet has a pubsub
         """
         if self.pubsub:
             for event in self.pubsub_events:
                 self.pubsub.unsubscribe(event, self.handle_publish)
+
+    def _check_utxos(self):
+        """ Go through all elements in maybe_spent_txs and check if any of them should be
+        moved back to unspent_txs
+        """
+        now = int(self.reactor.seconds())
+        for token_id, utxos in self.maybe_spent_txs.items():
+            for key in list(utxos):
+                utxo = utxos[key]
+                if utxo.maybe_spent_ts + UTXO_SPENT_INTERVAL < now:
+                    utxos.pop(key)
+                    utxo.maybe_spent_ts = inf
+                    self.unspent_txs[token_id][key] = utxo
+        self.reactor.callLater(UTXO_CHECK_INTERVAL, self._check_utxos)
 
     def handle_publish(self, key: HathorEvents, args: EventArguments) -> None:
         data = args.__dict__
@@ -240,9 +267,15 @@ class BaseWallet:
             output_tx = tx_storage.get_transaction(_input.tx_id)
             output = output_tx.outputs[_input.index]
             token_id = output_tx.get_token_uid(output.get_token_index())
-            utxo = self.unspent_txs[token_id].get((_input.tx_id, _input.index))
+            key = (_input.tx_id, _input.index)
+            # we'll remove this utxo so it can't be selected again shortly
+            utxo = self.unspent_txs[token_id].pop(key, None)
+            if utxo is None:
+                utxo = self.maybe_spent_txs[token_id].pop(key, None)
             if utxo:
                 new_input = WalletInputInfo(_input.tx_id, _input.index, self.get_private_key(utxo.address))
+                utxo.maybe_spent_ts = int(self.reactor.seconds())
+                self.maybe_spent_txs[token_id][key] = utxo
             elif force:
                 script_type = parse_address_script(output.script)
 
@@ -381,7 +414,7 @@ class BaseWallet:
 
         utxos = self.unspent_txs[token_uid]
         for utxo in utxos.values():
-            if max_ts is not None and utxo.timestamp > max_ts:
+            if (max_ts is not None and utxo.timestamp > max_ts) or utxo.test_used:
                 continue
             if not utxo.is_locked(self.reactor) and not utxo.is_token_authority():
                 # I can only use the outputs that are not locked and are not an authority utxo
@@ -396,6 +429,11 @@ class BaseWallet:
 
         if total_inputs_amount < amount:
             raise InsufficientFunds('Requested amount: {} / Available: {}'.format(amount, total_inputs_amount))
+
+        for _input in inputs_tx:
+            utxo = self.unspent_txs[token_uid].pop((_input.tx_id, _input.index))
+            utxo.maybe_spent_ts = int(self.reactor.seconds())
+            self.maybe_spent_txs[token_uid][(_input.tx_id, _input.index)] = utxo
 
         return inputs_tx, total_inputs_amount
 
@@ -442,6 +480,8 @@ class BaseWallet:
                     # remove from unspent_txs
                     key = (_input.tx_id, _input.index)
                     old_utxo = self.unspent_txs[token_id].pop(key, None)
+                    if old_utxo is None:
+                        old_utxo = self.maybe_spent_txs[token_id].pop(key, None)
                     if old_utxo:
                         # add to spent_txs
                         spent = SpentTx(tx.hash, _input.tx_id, _input.index, old_utxo.value, tx.timestamp)
@@ -498,6 +538,8 @@ class BaseWallet:
                     # Remove this output from unspent_tx, if still there
                     key = (tx.hash, index)
                     utxo = self.unspent_txs[token_id].pop(key, None)
+                    if utxo is None:
+                        utxo = self.maybe_spent_txs[token_id].pop(key, None)
                     if utxo:
                         # Output found: update balance
                         should_update = True
@@ -613,6 +655,8 @@ class BaseWallet:
                     # Find output
                     key = (tx.hash, index)
                     utxo = self.unspent_txs[token_id].get(key)
+                    if utxo is None:
+                        utxo = self.maybe_spent_txs[token_id].get(key)
                     if not utxo:
                         # Not found in unspent
                         # Try to find in spent tx
@@ -654,6 +698,8 @@ class BaseWallet:
 
                     # Remove from unspent_txs, if it's there
                     old_utxo = self.unspent_txs[token_id].pop(key, None)
+                    if old_utxo is None:
+                        old_utxo = self.maybe_spent_txs[token_id].pop(key, None)
                     if old_utxo:
                         # add to spent_txs
                         spent = SpentTx(tx.hash, _input.tx_id, _input.index, old_utxo.value, tx.timestamp)
@@ -701,6 +747,9 @@ class BaseWallet:
         for obj in self.unspent_txs.values():
             history += obj.values()
 
+        for obj in self.maybe_spent_txs.values():
+            history += obj.values()
+
         for obj in self.spent_txs.values():
             history += obj
 
@@ -723,7 +772,8 @@ class BaseWallet:
         :rtype: int
         """
         total_unspent = sum([len(utxo_dict) for utxo_dict in self.unspent_txs.values()])
-        return total_unspent + len(self.spent_txs)
+        total_maybe_spent = sum([len(utxo_dict) for utxo_dict in self.maybe_spent_txs.values()])
+        return total_unspent + total_maybe_spent + len(self.spent_txs)
 
     def publish_update(self, event: HathorEvents, **kwargs: Any) -> None:
         """ Executes pubsub publish if pubsub is defined in the Wallet
@@ -737,7 +787,7 @@ class BaseWallet:
         smallest_timestamp = inf
         for token_id, utxos in self.unspent_txs.items():
             balance = {'locked': 0, 'available': 0}
-            for utxo in utxos.values():
+            for utxo in list(utxos.values()) + list(self.maybe_spent_txs[token_id].values()):
                 if utxo.is_token_authority():
                     # authority utxos don't transfer value
                     continue
@@ -790,6 +840,8 @@ class BaseWallet:
             output = output_tx.outputs[_input.index]
             token_id = output_tx.get_token_uid(output.get_token_index())
             utxo = self.unspent_txs[token_id].get((_input.tx_id, _input.index))
+            if utxo is None:
+                utxo = self.maybe_spent_txs[token_id].get((_input.tx_id, _input.index))
             # is it in our wallet?
             if utxo:
                 yield _input, utxo.address
@@ -809,6 +861,8 @@ class UnspentTx:
         self.token_data = token_data
         self.voided = voided
         self.timelock = timelock
+        self.test_used = False      # flag to prevent twin txs being created (for tests only!!)
+        self.maybe_spent_ts = inf
 
     def to_dict(self):
         data = {}
