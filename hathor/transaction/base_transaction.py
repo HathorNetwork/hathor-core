@@ -712,6 +712,7 @@ class BaseTransaction(ABC):
         data['timestamp'] = self.timestamp
         data['version'] = self.version
         data['weight'] = self.weight
+        data['tokens'] = [h.hex() for h in self.tokens]
 
         data['parents'] = []
         for parent in self.parents:
@@ -733,13 +734,7 @@ class BaseTransaction(ABC):
 
         data['outputs'] = []
         for output in self.outputs:
-            data_output: Dict[str, Any] = {}
-            data_output['value'] = output.value
-            data_output['token_data'] = output.token_data
-            data_output['script'] = base64.b64encode(output.script).decode('utf-8')
-            if decode_script:
-                data_output['decoded'] = output.to_human_readable()
-            data['outputs'].append(data_output)
+            data['outputs'].append(output.to_json(decode_script=decode_script))
 
         data['tokens'] = [uid.hex() for uid in self.tokens]
 
@@ -947,6 +942,15 @@ class TxOutput:
             script=self.script,
             token_data=self.token_data,
         )
+
+    def to_json(self, *, decode_script: bool = False) -> dict:
+        data: Dict[str, Any] = {}
+        data['value'] = self.value
+        data['token_data'] = self.token_data
+        data['script'] = base64.b64encode(self.script).decode('utf-8')
+        if decode_script:
+            data['decoded'] = self.to_human_readable()
+        return data
 
 
 def bytes_to_output_value(buf: bytes) -> Tuple[int, bytes]:

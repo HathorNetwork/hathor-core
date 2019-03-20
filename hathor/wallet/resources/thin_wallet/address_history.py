@@ -1,4 +1,5 @@
 import json
+from typing import Set
 
 from twisted.web import resource
 from twisted.web.http import Request
@@ -30,18 +31,23 @@ class AddressHistoryResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        if not self.manager.tx_storage.wallet_index:
+        wallet_index = self.manager.tx_storage.wallet_index
+
+        if not wallet_index:
             request.setResponseCode(503)
             return json.dumps({'success': False}, indent=4).encode('utf-8')
 
         addresses = request.args[b'addresses[]']
 
         history = []
-
+        seen: Set[bytes] = set()
         for address_to_decode in addresses:
             address = address_to_decode.decode('utf-8')
-            history_data = [data.__dict__ for data in self.manager.tx_storage.wallet_index.get_from_address(address)]
-            history.append({'address': address, 'history': history_data})
+            for tx_hash in wallet_index.get_from_address(address):
+                tx = self.manager.tx_storage.get_transaction(tx_hash)
+                if tx_hash not in seen:
+                    seen.add(tx_hash)
+                    history.append(wallet_index.serialize_tx(tx))
 
         data = {'history': history}
         return json.dumps(data, indent=4).encode('utf-8')
@@ -75,34 +81,48 @@ AddressHistoryResource.openapi = {
                                     'value': {
                                         'history': [
                                             {
-                                                'address': '1DSTD8ZUxthNb92Jv1RdfGucpYRusgKLD8',
-                                                'history': [
+                                                "hash": "00000299670db5814f69cede8b347f83"
+                                                        "0f73985eaa4cd1ce87c9a7c793771336",
+                                                "timestamp": 1552422415,
+                                                "is_voided": False,
+                                                "inputs": [
                                                     {
-                                                        'from_tx_id': ('0000717da0cc0c039924618739dc9db1'
-                                                                       '084d8e3d7a1fef633312d7dd7ef6cc7f'),
-                                                        'index': 1,
-                                                        'is_output': False,
-                                                        'timelock': None,
-                                                        'timestamp': 1548730067,
-                                                        'token_uid': '00',
-                                                        'tx_id': ('0000227b84363e7b1f0f41dbd968ef3e'
-                                                                  '2b941fdf23342fd80d78cf98685b0265'),
-                                                        'value': 500,
-                                                        'voided': False
-                                                    },
+                                                        "value": 42500000044,
+                                                        "script": "dqkURJPA8tDMJHU8tqv3SiO18ZCLEPaIrA==",
+                                                        "decoded": {
+                                                            "type": "P2PKH",
+                                                            "address": "17Fbx9ouRUD1sd32bp4ptGkmgNzg7p2Krj",
+                                                            "timelock": None
+                                                            },
+                                                        "token": "00",
+                                                        "tx": "000002d28696f94f89d639022ae81a1d"
+                                                              "870d55d189c27b7161d9cb214ad1c90c",
+                                                        "index": 0
+                                                        }
+                                                    ],
+                                                "outputs": [
                                                     {
-                                                        'index': 1,
-                                                        'is_output': True,
-                                                        'timelock': None,
-                                                        'timestamp': 1548730067,
-                                                        'token_uid': '00',
-                                                        'tx_id': ('0000227b84363e7b1f0f41dbd968ef3e'
-                                                                  '2b941fdf23342fd80d78cf98685b0265'),
-                                                        'value': 200,
-                                                        'voided': False
-                                                    }
-                                                ]
-                                            }
+                                                        "value": 42499999255,
+                                                        "script": "dqkU/B6Jbf5OnslsQrvHXQ4WKDTSEGKIrA==",
+                                                        "decoded": {
+                                                            "type": "P2PKH",
+                                                            "address": "1Pz5s5WVL52MK4EwBy9XVQUzWjF2LWWKiS",
+                                                            "timelock": None
+                                                            },
+                                                        "token": "00"
+                                                        },
+                                                    {
+                                                        "value": 789,
+                                                        "script": "dqkUrWoWhiP+qPeI/qwfwb5fgnmtd4CIrA==",
+                                                        "decoded": {
+                                                            "type": "P2PKH",
+                                                            "address": "1GovzJvbzLw6x4H2a1hHb529cpEWzh3YRd",
+                                                            "timelock": None
+                                                            },
+                                                        "token": "00"
+                                                        }
+                                                    ]
+                                                }
                                         ]
                                     }
                                 },
