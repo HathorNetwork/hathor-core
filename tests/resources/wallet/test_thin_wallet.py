@@ -102,11 +102,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         )
 
         response_data = response_history.json_value()['history']
-        self.assertEqual(len(response_data), 1)
-        self.assertEqual(response_data[0]['address'], address)
-        self.assertEqual(len(response_data[0]['history']), 2)
-        self.assertTrue(response_data[0]['history'][0]['is_output'])
-        self.assertFalse(response_data[0]['history'][1]['is_output'])
+        self.assertIn(data['tx']['hash'], [x['tx_id'] for x in response_data])
 
     def test_error_request(self):
         resource = SendTokensResource(self.manager)
