@@ -1,7 +1,6 @@
-from abc import ABC
 from collections import defaultdict
 from math import inf
-from typing import TYPE_CHECKING, DefaultDict, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple
+from typing import TYPE_CHECKING, DefaultDict, Dict, List, NamedTuple, Optional, Set, Tuple
 
 from intervaltree import Interval, IntervalTree
 from sortedcontainers import SortedKeyList
@@ -274,116 +273,10 @@ class WalletIndex:
     """ Index of inputs/outputs by address
     """
     def __init__(self, pubsub: Optional['PubSubManager'] = None) -> None:
-        self.index: DefaultDict[str, List['WalletIndexElement']] = defaultdict(list)
-
-        # Pubsub to send events
+        self.index: DefaultDict[str, List[bytes]] = defaultdict(list)
         self.pubsub = pubsub
         if self.pubsub:
             self.subscribe_pubsub_events()
-
-    def add_tx(self, tx: BaseTransaction) -> None:
-        """ Add tx inputs and outputs to the wallet index (indexed by address)
-        """
-        meta = tx.get_metadata()
-        voided = bool(meta.voided_by)
-        for element in WalletIndex.tx_to_elements(tx, voided):
-            address = element.address
-            wallet_element = element.element
-            self.index[address].append(wallet_element)
-            self.publish_update(address, wallet_element)
-
-    @classmethod
-    def tx_to_elements(cls, tx: BaseTransaction, voided: bool) -> Iterator['WalletIndexElementAddress']:
-        """ Transform tx in wallet elements
-        """
-        for index, output in enumerate(tx.outputs):
-            script_type_out = parse_address_script(output.script)
-            if script_type_out:
-                address = script_type_out.address
-                token_index = output.get_token_index()
-                token_uid = tx.get_token_uid(token_index)
-                wallet_output = WalletIndexOutput(
-                    tx_id=tx.hash_hex,
-                    index=index,
-                    value=output.value,
-                    timestamp=tx.timestamp,
-                    token_uid=token_uid.hex(),
-                    voided=voided,
-                    token_data=output.token_data,
-                    timelock=script_type_out.timelock
-                )
-                yield WalletIndexElementAddress(address=address, element=wallet_output)
-
-        for _input in tx.inputs:
-            assert tx.storage is not None
-            output_tx = tx.storage.get_transaction(_input.tx_id)
-            output = output_tx.outputs[_input.index]
-            token_index = output.get_token_index()
-            token_uid = output_tx.get_token_uid(token_index)
-
-            script_type_out = parse_address_script(output.script)
-            if script_type_out:
-                address = script_type_out.address
-                wallet_input = WalletIndexInput(
-                    tx_id=tx.hash_hex,
-                    index=_input.index,
-                    value=output.value,
-                    timestamp=tx.timestamp,
-                    token_uid=token_uid.hex(),
-                    timelock=script_type_out.timelock,
-                    voided=voided,
-                    from_tx_id=_input.tx_id.hex()
-                )
-                yield WalletIndexElementAddress(address=address, element=wallet_input)
-
-    def update_voided_data(self, tx: BaseTransaction, voided: bool) -> None:
-        """ Set wallet index elements as voided/not voided for the tx in the parameter
-        """
-        for index, output in enumerate(tx.outputs):
-            script_type_out = parse_address_script(output.script)
-            if script_type_out:
-                address = script_type_out.address
-                token_index = output.get_token_index()
-                token_uid = tx.get_token_uid(token_index).hex()
-                for wallet_output in self.index[address]:
-                    if (wallet_output.tx_id == tx.hash_hex and wallet_output.index == index and
-                            wallet_output.is_output):
-                        assert wallet_output.token_uid == token_uid
-                        wallet_output.voided = voided
-                        self.publish_update(address, wallet_output, voided)
-
-        for _input in tx.inputs:
-            assert tx.storage is not None
-            output_tx = tx.storage.get_transaction(_input.tx_id)
-            output = output_tx.outputs[_input.index]
-            token_index = output.get_token_index()
-            token_uid = output_tx.get_token_uid(token_index).hex()
-
-            script_type_out = parse_address_script(output.script)
-            if script_type_out:
-                address = script_type_out.address
-                for wallet_input in self.index[address]:
-                    if (isinstance(wallet_input, WalletIndexInput)):
-                        if (wallet_input.tx_id == tx.hash_hex and wallet_input.index == _input.index and
-                                wallet_input.from_tx_id == _input.tx_id.hex()):
-                            assert wallet_input.token_uid == token_uid
-                            wallet_input.voided = voided
-                            self.publish_update(address, wallet_input, voided)
-
-    def publish_update(self, address: str, element: 'WalletIndexElement', voided: Optional[bool] = None) -> None:
-        """ Publish the new wallet element in the index to pubsub
-        """
-        if self.pubsub:
-            if voided is None:
-                self.pubsub.publish(HathorEvents.WALLET_ADDRESS_HISTORY, address=address, history=element)
-            else:
-                event = HathorEvents.WALLET_ELEMENT_VOIDED if voided else HathorEvents.WALLET_ELEMENT_WINNER
-                self.pubsub.publish(event, address=address, element=element)
-
-    def get_from_address(self, address: str) -> List['WalletIndexElement']:
-        """ Get inputs/outputs history from address
-        """
-        return self.index[address]
 
     def subscribe_pubsub_events(self):
         """ Subscribe wallet index to receive voided/winner tx pubsub events
@@ -393,60 +286,100 @@ class WalletIndex:
         for event in events:
             self.pubsub.subscribe(event, self.handle_tx_event)
 
+    def _get_addresses(self, tx: BaseTransaction) -> Set[str]:
+        """ Return a set of addresses collected from tx's inputs and outputs.
+        """
+        assert tx.storage is not None
+        addresses: Set[str] = set()
+        for txin in tx.inputs:
+            tx2 = tx.storage.get_transaction(txin.tx_id)
+            for txout in tx2.outputs:
+                script_type_out = parse_address_script(txout.script)
+                if script_type_out:
+                    assert tx.hash is not None
+                    address = script_type_out.address
+                    addresses.add(address)
+
+        for txout in tx.outputs:
+            script_type_out = parse_address_script(txout.script)
+            if script_type_out:
+                assert tx.hash is not None
+                address = script_type_out.address
+                addresses.add(address)
+        return addresses
+
+    def add_tx(self, tx: BaseTransaction) -> None:
+        """ Add tx inputs and outputs to the wallet index (indexed by address)
+        """
+        assert tx.hash is not None
+
+        addresses = self._get_addresses(tx)
+        for address in addresses:
+            # It should be called only once, so there must be no repeated hashes
+            # in self.index[address]. One can check it uncommenting the following
+            # line:
+            # assert address not in self.index[address]
+            self.index[address].append(tx.hash)
+
+        if self.pubsub:
+            data = self.serialize_tx(tx)
+            for address in addresses:
+                self.pubsub.publish(HathorEvents.WALLET_ADDRESS_HISTORY, address=address, history=data)
+
     def handle_tx_event(self, key: HathorEvents, args: 'EventArguments'):
         """ This method is called when pubsub publishes an event that we subscribed
         """
         data = args.__dict__
         tx = data['tx']
-        voided = key == HathorEvents.STORAGE_TX_VOIDED
-        self.update_voided_data(tx, voided)
+        meta = tx.get_metadata()
+        if self.pubsub and meta.has_voided_by_changed_since_last_call():
+            data = self.serialize_tx(tx)
+            addresses = self._get_addresses(tx)
+            for address in addresses:
+                self.pubsub.publish(HathorEvents.WALLET_ADDRESS_HISTORY, address=address, history=data)
 
+    def get_from_address(self, address: str) -> List[bytes]:
+        """ Get inputs/outputs history from address
+        """
+        return self.index[address]
 
-class WalletIndexElement(ABC):
-    def __init__(self, tx_id: str, value: int, timestamp: int, index: int, token_uid: str,
-                 voided: bool, timelock: Optional[int] = None, is_output: bool = True) -> None:
-        self.tx_id = tx_id
-        self.value = value
-        self.timestamp = timestamp
-        self.index = index
-        self.token_uid = token_uid
-        self.is_output = is_output
-        self.voided = voided
-        self.timelock = timelock
+    def serialize_tx(self, tx) -> dict:
+        meta = tx.get_metadata()
 
+        ret = {
+            'tx_id': tx.hash.hex(),
+            'timestamp': tx.timestamp,
+            'is_voided': bool(meta.voided_by),
+            'inputs': [],
+            'outputs': [],
+        }
 
-class WalletIndexOutput(WalletIndexElement):
-    def __init__(self, tx_id: str, value: int, timestamp: int, index: int, token_uid: str,
-                 timelock: Optional[int], voided: bool, token_data: int) -> None:
-        super().__init__(
-            tx_id=tx_id,
-            value=value,
-            timestamp=timestamp,
-            index=index,
-            token_uid=token_uid,
-            timelock=timelock,
-            voided=voided,
-            is_output=True
-        )
-        self.token_data = token_data
+        for index, tx_in in enumerate(tx.inputs):
+            tx2 = tx.storage.get_transaction(tx_in.tx_id)
+            tx2_out = tx2.outputs[tx_in.index]
+            output = self.serialize_output(tx2, tx2_out)
+            output['tx_id'] = tx2.hash.hex()
+            output['index'] = tx_in.index
+            ret['inputs'].append(output)
 
+        for index, tx_out in enumerate(tx.outputs):
+            spent_set = meta.spent_outputs[index]
+            spent_by = None
+            for h in spent_set:
+                tx2 = tx.storage.get_transaction(h)
+                tx2_meta = tx2.get_metadata()
+                if not bool(tx2_meta.voided_by):
+                    assert spent_by is None
+                    spent_by = tx2.hash
+            output = self.serialize_output(tx, tx_out)
+            output['spent_by'] = spent_by.hex() if spent_by else None
+            ret['outputs'].append(output)
 
-class WalletIndexInput(WalletIndexElement):
-    def __init__(self, tx_id: str, value: int, timestamp: int, index: int, token_uid: str,
-                 timelock: Optional[int], voided: bool, from_tx_id: str) -> None:
-        super().__init__(
-            tx_id=tx_id,
-            value=value,
-            timestamp=timestamp,
-            index=index,
-            token_uid=token_uid,
-            timelock=timelock,
-            voided=voided,
-            is_output=False
-        )
-        self.from_tx_id = from_tx_id
+        return ret
 
-
-class WalletIndexElementAddress(NamedTuple):
-    address: str
-    element: 'WalletIndexElement'
+    def serialize_output(self, tx, tx_out) -> dict:
+        data = tx_out.to_json(decode_script=True)
+        data['token'] = tx.get_token_uid(tx_out.get_token_index()).hex()
+        data['decoded'].pop('token_data')
+        data['decoded'].pop('value')
+        return data

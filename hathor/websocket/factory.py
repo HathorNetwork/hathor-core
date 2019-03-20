@@ -157,16 +157,10 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             HathorEvents.WALLET_KEYS_GENERATED,
             HathorEvents.WALLET_GAP_LIMIT,
             HathorEvents.WALLET_HISTORY_UPDATED,
+            HathorEvents.WALLET_ADDRESS_HISTORY,
         ]
         data = args.__dict__
         if event in ready_events:
-            return data
-        elif event == HathorEvents.WALLET_ADDRESS_HISTORY:
-            data['history'] = data['history'].__dict__
-            return data
-        elif (event == HathorEvents.WALLET_ELEMENT_WINNER or
-                event == HathorEvents.WALLET_ELEMENT_VOIDED):
-            data['element'] = data['element'].__dict__
             return data
         elif event == HathorEvents.WALLET_OUTPUT_RECEIVED:
             data['output'] = data['output'].to_dict()
