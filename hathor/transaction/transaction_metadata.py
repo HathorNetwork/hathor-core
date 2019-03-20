@@ -1,11 +1,11 @@
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
-from weakref import ReferenceType
 
 from hathor import protos
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction  # noqa: F401
+    from weakref import ReferenceType  # noqa: F401
 
 
 class TransactionMetadata:
