@@ -4,6 +4,7 @@ import base64
 import datetime
 import hashlib
 import time
+import weakref
 from _hashlib import HASH
 from abc import ABC, abstractclassmethod, abstractmethod
 from math import inf, log
@@ -623,6 +624,7 @@ class BaseTransaction(ABC):
         if not metadata:
             metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight)
             self._metadata = metadata
+        metadata._tx_ref = weakref.ref(self)
         return metadata
 
     def reset_metadata(self) -> None:
@@ -631,6 +633,7 @@ class BaseTransaction(ABC):
         """
         assert self.storage is not None
         self._metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight)
+        self._metadata._tx_ref = weakref.ref(self)
         self.storage.save_transaction(self, only_metadata=True)
 
     def update_accumulated_weight(self, *, stop_value: float = inf, save_file: bool = True) -> TransactionMetadata:

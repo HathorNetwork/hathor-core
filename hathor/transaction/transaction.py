@@ -333,7 +333,7 @@ class Transaction(BaseTransaction):
 
         # Then, we add ourselves.
         meta = self.get_metadata()
-        assert not meta.voided_by
+        assert not meta.voided_by or meta.voided_by == {self.hash}
         assert meta.accumulated_weight == self.weight
         if meta.conflict_with:
             voided_by.add(self.hash)
@@ -472,6 +472,11 @@ class Transaction(BaseTransaction):
         # Update our meta.conflict_with.
         meta = self.get_metadata()
         if spent_by:
+            # We initially void ourselves. This conflict will be resolved later.
+            if not meta.voided_by:
+                meta.voided_by = {self.hash}
+            else:
+                meta.voided_by.add(self.hash)
             if meta.conflict_with:
                 meta.conflict_with.extend(spent_by)
             else:

@@ -1,7 +1,11 @@
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
+from weakref import ReferenceType
 
 from hathor import protos
+
+if TYPE_CHECKING:
+    from hathor.transaction import BaseTransaction  # noqa: F401
 
 
 class TransactionMetadata:
@@ -17,18 +21,24 @@ class TransactionMetadata:
     score: float
     first_block: Optional[bytes]
 
+    # It must be a weakref.
+    _tx_ref: Optional['ReferenceType[BaseTransaction]']
+
     # Used to detect changes in voided_by.
     _last_voided_by_hash: Optional[int]
+    _last_spent_by_hash: Optional[int]
 
     def __init__(self, spent_outputs: Optional[Dict[int, List[bytes]]] = None, hash: Optional[bytes] = None,
                  accumulated_weight: float = 0, score: float = 0) -> None:
 
         # Hash of the transaction.
         self.hash = hash
+        self._tx_ref = None
 
         # Tx outputs that have been spent.
         # The key is the output index, while the value is a set of the transactions which spend the output.
         self.spent_outputs = spent_outputs or defaultdict(list)
+        self._last_spent_by_hash = None
 
         # FIXME: conflict_with -> conflicts_with (as in "this transaction conflicts with these ones")
         # Hash of the transactions that conflicts with this transaction.
@@ -64,6 +74,40 @@ class TransactionMetadata:
         # First valid block that verifies this transaction
         # If two blocks verify the same parent block and have the same score, both are valid.
         self.first_block = None
+
+    def get_tx(self) -> 'BaseTransaction':
+        assert self._tx_ref is not None
+        tx = self._tx_ref()
+        assert tx is not None
+        return tx
+
+    def get_output_spent_by(self, index: int) -> Optional[bytes]:
+        tx = self.get_tx()
+        assert tx.storage is not None
+        spent_set = self.spent_outputs[index]
+        spent_by = None
+        for h in spent_set:
+            tx2 = tx.storage.get_transaction(h)
+            tx2_meta = tx2.get_metadata()
+            if not bool(tx2_meta.voided_by):
+                # There may be only one spent_by.
+                assert spent_by is None
+                spent_by = tx2.hash
+        return spent_by
+
+    def has_spent_by_changed_since_last_call(self) -> bool:
+        """Check whether `self.get_output_spent_by(...)` has been changed since the last call to this same method.
+        Notice that it will always return True when the transaction is first loaded into memory.
+
+        >>> b1 = meta.has_spent_by_changed_since_last_call()
+        >>> b2 = meta.has_spent_by_changed_since_last_call()
+        >>> assert b1 != b2
+        """
+        cur_hash = hash(tuple((index, self.get_output_spent_by(index)) for index in self.spent_outputs.keys()))
+        if self._last_spent_by_hash != cur_hash:
+            self._last_spent_by_hash = cur_hash
+            return True
+        return False
 
     def has_voided_by_changed_since_last_call(self) -> bool:
         """Check whether `self.voided_by` has been changed since the last call to this same method.

@@ -1,13 +1,13 @@
 from collections import defaultdict
 from math import inf
-from typing import TYPE_CHECKING, DefaultDict, Dict, List, NamedTuple, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, DefaultDict, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
 
 from intervaltree import Interval, IntervalTree
 from sortedcontainers import SortedKeyList
 from twisted.logger import Logger
 
 from hathor.pubsub import HathorEvents
-from hathor.transaction import BaseTransaction
+from hathor.transaction import BaseTransaction, TxOutput
 from hathor.transaction.scripts import parse_address_script
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -278,9 +278,10 @@ class WalletIndex:
         if self.pubsub:
             self.subscribe_pubsub_events()
 
-    def subscribe_pubsub_events(self):
+    def subscribe_pubsub_events(self) -> None:
         """ Subscribe wallet index to receive voided/winner tx pubsub events
         """
+        assert self.pubsub is not None
         # Subscribe to voided/winner events
         events = [HathorEvents.STORAGE_TX_VOIDED, HathorEvents.STORAGE_TX_WINNER]
         for event in events:
@@ -308,8 +309,19 @@ class WalletIndex:
                 addresses.add(address)
         return addresses
 
+    def publish_tx(self, tx: BaseTransaction, *, addresses: Optional[Iterable[str]] = None) -> None:
+        """ Publish WALLET_ADDRESS_HISTORY for all addresses of a transaction.
+        """
+        if not self.pubsub:
+            return
+        if addresses is None:
+            addresses = self._get_addresses(tx)
+        data = self.serialize_tx(tx)
+        for address in addresses:
+            self.pubsub.publish(HathorEvents.WALLET_ADDRESS_HISTORY, address=address, history=data)
+
     def add_tx(self, tx: BaseTransaction) -> None:
-        """ Add tx inputs and outputs to the wallet index (indexed by address)
+        """ Add tx inputs and outputs to the wallet index (indexed by its addresses).
         """
         assert tx.hash is not None
 
@@ -321,31 +333,27 @@ class WalletIndex:
             # assert address not in self.index[address]
             self.index[address].append(tx.hash)
 
-        if self.pubsub:
-            data = self.serialize_tx(tx)
-            for address in addresses:
-                self.pubsub.publish(HathorEvents.WALLET_ADDRESS_HISTORY, address=address, history=data)
+        self.publish_tx(tx, addresses=addresses)
 
-    def handle_tx_event(self, key: HathorEvents, args: 'EventArguments'):
+    def handle_tx_event(self, key: HathorEvents, args: 'EventArguments') -> None:
         """ This method is called when pubsub publishes an event that we subscribed
         """
         data = args.__dict__
         tx = data['tx']
         meta = tx.get_metadata()
-        if self.pubsub and meta.has_voided_by_changed_since_last_call():
-            data = self.serialize_tx(tx)
-            addresses = self._get_addresses(tx)
-            for address in addresses:
-                self.pubsub.publish(HathorEvents.WALLET_ADDRESS_HISTORY, address=address, history=data)
+        if meta.has_voided_by_changed_since_last_call() or meta.has_spent_by_changed_since_last_call():
+            self.publish_tx(tx)
 
     def get_from_address(self, address: str) -> List[bytes]:
         """ Get inputs/outputs history from address
         """
         return self.index[address]
 
-    def serialize_tx(self, tx) -> dict:
-        meta = tx.get_metadata()
+    def serialize_tx(self, tx: BaseTransaction) -> Dict[str, Any]:
+        assert tx.hash is not None
+        assert tx.storage is not None
 
+        meta = tx.get_metadata()
         ret = {
             'tx_id': tx.hash.hex(),
             'timestamp': tx.timestamp,
@@ -353,6 +361,8 @@ class WalletIndex:
             'inputs': [],
             'outputs': [],
         }
+        assert isinstance(ret['inputs'], list)
+        assert isinstance(ret['outputs'], list)
 
         for index, tx_in in enumerate(tx.inputs):
             tx2 = tx.storage.get_transaction(tx_in.tx_id)
@@ -363,21 +373,14 @@ class WalletIndex:
             ret['inputs'].append(output)
 
         for index, tx_out in enumerate(tx.outputs):
-            spent_set = meta.spent_outputs[index]
-            spent_by = None
-            for h in spent_set:
-                tx2 = tx.storage.get_transaction(h)
-                tx2_meta = tx2.get_metadata()
-                if not bool(tx2_meta.voided_by):
-                    assert spent_by is None
-                    spent_by = tx2.hash
+            spent_by = meta.get_output_spent_by(index)
             output = self.serialize_output(tx, tx_out)
             output['spent_by'] = spent_by.hex() if spent_by else None
             ret['outputs'].append(output)
 
         return ret
 
-    def serialize_output(self, tx, tx_out) -> dict:
+    def serialize_output(self, tx: BaseTransaction, tx_out: TxOutput) -> Dict[str, Any]:
         data = tx_out.to_json(decode_script=True)
         data['token'] = tx.get_token_uid(tx_out.get_token_index()).hex()
         data['decoded'].pop('token_data')
