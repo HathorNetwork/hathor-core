@@ -29,18 +29,21 @@ class BaseState:
     def handle_error(self, payload: str) -> None:
         self.protocol.handle_error(payload)
 
-    def handle_throttle(self, payload: str):
+    def handle_throttle(self, payload: str) -> None:
         self.log.info('Got throttled: {payload}', payload=payload)
 
     def send_message(self, cmd: ProtocolMessages, payload: Optional[str] = None) -> None:
         self.protocol.send_message(cmd, payload)
 
-    def send_throttle(self, key):
-        max_hits, window_seconds = self.protocol.ratelimit.get_limit(key)
+    def send_throttle(self, key: str) -> None:
+        limit = self.protocol.ratelimit.get_limit(key)
+        if limit is None:
+            return
+        max_hits, window_seconds = limit
         payload = '{} At most {} hits every {} seconds'.format(key, max_hits, window_seconds)
         self.protocol.send_message(ProtocolMessages.THROTTLE, payload)
 
-    def on_enter(self):
+    def on_enter(self) -> None:
         raise NotImplementedError
 
     def on_exit(self) -> None:

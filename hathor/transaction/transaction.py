@@ -298,10 +298,6 @@ class Transaction(BaseTransaction):
         except ScriptError as e:
             raise InvalidInputData(e) from e
 
-    def get_spent_tx(self, input_tx: TxInput) -> BaseTransaction:
-        assert self.storage is not None
-        return self.storage.get_transaction(input_tx.tx_id)
-
     def update_voided_info(self) -> None:
         """ This method should be called only once when the transactions is added to the DAG.
         """

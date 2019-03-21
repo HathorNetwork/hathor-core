@@ -1,7 +1,8 @@
 import os
 
 from hathor.graphviz import GraphvizVisualizer
-from hathor.manager import HathorEvents, HathorManager
+from hathor.manager import HathorManager
+from hathor.pubsub import EventArguments, HathorEvents
 
 
 class GraphvizLogAnimation:
@@ -30,7 +31,7 @@ class GraphvizLogAnimation:
         self.manager.pubsub.unsubscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, self.on_new_tx)
         self.is_running = False
 
-    def on_new_tx(self) -> None:
+    def on_new_tx(self, key: HathorEvents, args: EventArguments) -> None:
         """ This method is called every change in the DAG. It saves a new snapshot in disk.
         """
         if not self.is_running:

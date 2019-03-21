@@ -3,7 +3,7 @@ from typing import Dict, Optional, Set
 from twisted.internet import endpoints
 from twisted.internet.base import ReactorBase
 from twisted.internet.defer import Deferred
-from twisted.internet.interfaces import IStreamClientEndpoint
+from twisted.internet.interfaces import IStreamClientEndpoint, IStreamServerEndpoint
 from twisted.logger import Logger
 
 from hathor.crypto.util import generate_privkey_crt_pem
@@ -65,7 +65,7 @@ class ConnectionsManager:
     def start(self) -> None:
         self.lc_reconnect.start(5)
 
-    def stop(self):
+    def stop(self) -> None:
         if self.lc_reconnect.running:
             self.lc_reconnect.stop()
 
@@ -99,7 +99,7 @@ class ConnectionsManager:
             assert isinstance(conn.state, ReadyState)
             conn.state.send_tx_to_peer(tx)
 
-    def on_connection_failure(self, failure: str, peer: Optional[PeerId], endpoint: IStreamClientEndpoint):
+    def on_connection_failure(self, failure: str, peer: Optional[PeerId], endpoint: IStreamClientEndpoint) -> None:
         self.log.info(
             'Connection failure: address={endpoint._host}:{endpoint._port} message={failure}',
             endpoint=endpoint,
@@ -186,12 +186,13 @@ class ConnectionsManager:
         if now >= peer.retry_timestamp:
             self.connect_to(random.choice(peer.entrypoints), peer)
 
-    def _connect_to_callback(self, protocol: HathorProtocol, peer: Optional[PeerId], endpoint: IStreamClientEndpoint):
+    def _connect_to_callback(self, protocol: HathorProtocol, peer: Optional[PeerId],
+                             endpoint: IStreamClientEndpoint) -> None:
         self.connecting_peers.pop(endpoint)
         if peer is not None:
             peer.reset_retry_timestamp()
 
-    def connect_to(self, description, peer: Optional[PeerId] = None, use_ssl=False):
+    def connect_to(self, description: str, peer: Optional[PeerId] = None, use_ssl: bool = False) -> None:
         """ Attempt to connect to a peer, even if a connection already exists.
         Usually you should call `connect_to_if_not_connected`.
 
@@ -214,7 +215,7 @@ class ConnectionsManager:
         deferred.addErrback(self.on_connection_failure, peer, endpoint)
         self.log.info('Connecting to: {description}...', description=description)
 
-    def listen(self, description, ssl=False):
+    def listen(self, description: str, ssl: bool = False) -> IStreamServerEndpoint:
         """ Start to listen to new connection according to the description.
 
         If `ssl` is True, then the connection will be wraped by a TLS.

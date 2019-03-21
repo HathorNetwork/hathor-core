@@ -1,30 +1,31 @@
 import warnings
 from enum import Enum
 from functools import partial, wraps
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
+from twisted.internet.interfaces import IReactorCore
 from twisted.python.threadable import isInIOThread
 
 
-def deprecated(msg):
+def deprecated(msg: str) -> Callable[..., Any]:
     """Use to indicate that a function or method has been deprecated."""
     warnings.simplefilter('default', DeprecationWarning)
 
-    def decorator(func):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             # warnings.warn('{} is deprecated. {}'.format(func.__name__, msg),
             #               category=DeprecationWarning, stacklevel=2)
             return func(*args, **kwargs)
 
-        wrapper.__deprecated = func
+        wrapper.__deprecated = func  # type: ignore
         return wrapper
 
     return decorator
 
 
-def skip_warning(func: Callable) -> Callable:
-    f = getattr(func, '__deprecated', func)
+def skip_warning(func: Callable[..., Any]) -> Callable[..., Any]:
+    f = cast(Callable[..., Any], getattr(func, '__deprecated', func))
     if hasattr(func, '__self__') and not hasattr(f, '__self__'):
         return partial(f, getattr(func, '__self__'))
     else:
@@ -37,7 +38,7 @@ class ReactorThread(Enum):
     NOT_RUNNING = 'NOT_RUNNING'
 
     @classmethod
-    def get_current_thread(cls, reactor) -> 'ReactorThread':
+    def get_current_thread(cls, reactor: IReactorCore) -> 'ReactorThread':
         """ Returns if the code is being run on the reactor thread, if it's running already.
         """
         if hasattr(reactor, 'running'):

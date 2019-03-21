@@ -123,7 +123,7 @@ class TransactionMetadata:
             return True
         return False
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         """Override the default Equals behavior"""
         for field in ['hash', 'spent_outputs', 'conflict_with', 'voided_by',
                       'received_by', 'children', 'accumulated_weight', 'twins',

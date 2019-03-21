@@ -51,8 +51,6 @@ class Metrics:
         :param tx_storage: Transaction storage
         :param reactor: Twisted reactor that handles the time and callLater
         """
-        from collections import deque
-
         # Transactions count in the network
         self.transactions = 0
 
@@ -133,7 +131,7 @@ class Metrics:
         self.set_current_tx_hash_rate()
         self.set_current_block_hash_rate()
 
-    def stop(self):
+    def stop(self) -> None:
         self.is_running = False
 
     def subscribe(self) -> None:
@@ -191,7 +189,8 @@ class Metrics:
                                                self.set_current_block_hash_rate, self.block_hash_store_interval)
         self.block_hash_rate = self.get_exponential_hash_rate(hash_rate, self.block_hash_rate)
 
-    def get_current_hash_rate(self, deque: deque, total_weight: float, fn: Callable, interval: int) -> float:
+    def get_current_hash_rate(self, deque: Deque[WeightValue], total_weight: float, fn: Callable[[], None],
+                              interval: int) -> float:
         """ Calculate new hash rate and schedule next call
 
             :param deque: deque to get first and last hash rate values
@@ -214,7 +213,7 @@ class Metrics:
         last = deque[-1]
         first = deque[0]
         if first.time == last.time:
-            hash_rate = 0
+            hash_rate = 0.0
         else:
             hash_rate = (2**sub_weights(last.value, first.value)) / (last.time - first.time)
 
