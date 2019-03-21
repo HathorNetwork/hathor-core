@@ -4,6 +4,7 @@ import base64
 import datetime
 import struct
 import time
+import weakref
 from _hashlib import HASH
 from abc import ABC, abstractclassmethod, abstractmethod
 from math import inf, log
@@ -84,8 +85,9 @@ class BaseTransaction(ABC):
 
     def __init__(self, nonce: int = 0, timestamp: Optional[int] = None, version: int = 1, weight: float = 0,
                  inputs: Optional[List['TxInput']] = None, outputs: Optional[List['TxOutput']] = None,
-                 parents: List[bytes] = None, tokens: Optional[List[bytes]] = None, hash: Optional[bytes] = None,
-                 storage: Optional['TransactionStorage'] = None, is_block: bool = True) -> None:
+                 parents: Optional[List[bytes]] = None, tokens: Optional[List[bytes]] = None,
+                 hash: Optional[bytes] = None, storage: Optional['TransactionStorage'] = None,
+                 is_block: bool = True) -> None:
         """
             Nonce: nonce used for the proof-of-work
             Timestamp: moment of creation
@@ -108,14 +110,14 @@ class BaseTransaction(ABC):
         self.is_block = is_block
         self.update_hash_algorithm()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         class_name = type(self).__name__
         return ('%s(nonce=%d, timestamp=%s, version=%s, weight=%f, inputs=%s, outputs=%s, parents=%s, '
                 'hash=%s, storage=%s)' %
                 (class_name, self.nonce, self.timestamp, self.version, self.weight,
                  repr(self.inputs), repr(self.outputs), repr(self.parents), self.hash_hex, repr(self.storage)))
 
-    def __str__(self):
+    def __str__(self) -> str:
         class_name = 'Block' if self.is_block else 'Transaction'
         return ('%s(nonce=%d, timestamp=%s, version=%s, weight=%f, hash=%s)' % (class_name, self.nonce, self.timestamp,
                 self.version, self.weight, self.hash_hex))
@@ -161,7 +163,8 @@ class BaseTransaction(ABC):
         raise NotImplementedError
 
     @abstractclassmethod
-    def create_from_proto(cls, tx_proto: protos.BaseTransaction, storage=None):
+    def create_from_proto(cls, tx_proto: protos.BaseTransaction,
+                          storage: Optional['TransactionStorage'] = None) -> 'BaseTransaction':
         """ Create a Transaction from a protobuf Transaction object.
 
         :param transaction_proto: Protobuf transaction object
@@ -172,23 +175,25 @@ class BaseTransaction(ABC):
         """
         raise NotImplementedError
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         """Two transactions are equal when their hash matches
 
         :raises NotImplement: when one of the transactions do not have a calculated hash
         """
+        if not isinstance(other, BaseTransaction):
+            return NotImplemented
         if self.hash and other.hash:
             return self.hash == other.hash
         return False
 
-    def __bytes__(self):
+    def __bytes__(self) -> bytes:
         """Returns a byte representation of the transaction
 
         :rtype: bytes
         """
         return self.get_struct()
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         assert self.hash is not None
         return hash(self.hash)
 
@@ -238,6 +243,8 @@ class BaseTransaction(ABC):
 
         :rtype: bool
         """
+        if self.hash is None:
+            return False
         if self.storage:
             genesis = self.storage.get_genesis(self.hash)
             if genesis:
@@ -409,7 +416,7 @@ class BaseTransaction(ABC):
         struct_bytes += int_to_bytes(self.nonce, self.NONCE_SIZE)
         return struct_bytes
 
-    def verify(self):
+    def verify(self) -> None:
         raise NotImplementedError
 
     def verify_parents(self) -> None:
@@ -635,6 +642,7 @@ class BaseTransaction(ABC):
         if not metadata:
             metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight)
             self._metadata = metadata
+        metadata._tx_ref = weakref.ref(self)
         return metadata
 
     def reset_metadata(self) -> None:
@@ -643,6 +651,7 @@ class BaseTransaction(ABC):
         """
         assert self.storage is not None
         self._metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight)
+        self._metadata._tx_ref = weakref.ref(self)
         self.storage.save_transaction(self, only_metadata=True)
 
     def update_accumulated_weight(self, *, stop_value: float = inf, save_file: bool = True) -> TransactionMetadata:
@@ -704,7 +713,7 @@ class BaseTransaction(ABC):
             metadata.children.append(self.hash)
             self.storage.save_transaction(parent, only_metadata=True)
 
-    def update_timestamp(self, now):
+    def update_timestamp(self, now: int) -> None:
         """Update this tx's timestamp
 
         :param now: the current timestamp, in seconds
@@ -716,6 +725,10 @@ class BaseTransaction(ABC):
         max_ts_spent_tx = max(self.get_spent_tx(txin).timestamp for txin in self.inputs)
         max_ts_parent = max(parent.timestamp for parent in self.get_parents())
         self.timestamp = max(max_ts_spent_tx + 1, max_ts_parent + 1, now)
+
+    def get_spent_tx(self, input_tx: 'TxInput') -> 'BaseTransaction':
+        assert self.storage is not None
+        return self.storage.get_transaction(input_tx.tx_id)
 
     def to_json(self, decode_script: bool = False) -> Dict[str, Any]:
         data: Dict[str, Any] = {}
@@ -824,7 +837,7 @@ class TxInput:
         self.index = index  # int
         self.data = data  # bytes
 
-    def to_human_readable(self):
+    def to_human_readable(self) -> Dict[str, Any]:
         """Returns dict of Input information, ready to be serialized
 
         :rtype: Dict
@@ -910,7 +923,7 @@ class TxOutput:
         """Whether this utxo can melt tokens"""
         return self.is_token_authority() and ((self.value & self.TOKEN_MELT_MASK) > 0)
 
-    def to_human_readable(self):
+    def to_human_readable(self) -> Dict[str, Any]:
         """Checks what kind of script this is and returns it in human readable form
         """
         from hathor.transaction.scripts import parse_address_script, NanoContractMatchValues

@@ -4,13 +4,13 @@ from typing import Any, Dict, Generator, Iterator, List, Optional, Set, Tuple
 from weakref import WeakValueDictionary
 
 from intervaltree.interval import Interval
-from twisted.internet.defer import inlineCallbacks, succeed
+from twisted.internet.defer import Deferred, inlineCallbacks, succeed
 
 from hathor.indexes import IndexesManager, TipsIndex, WalletIndex
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction.block import Block
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
-from hathor.transaction.transaction import BaseTransaction, Transaction
+from hathor.transaction.transaction import BaseTransaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.util import deprecated, skip_warning
 
@@ -308,7 +308,7 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _manually_initialize(self):
+    def _manually_initialize(self) -> None:
         # XXX: maybe refactor, this is actually part of the public interface
         """Caches must be initialized. This function should not be called, because
         usually the HathorManager will handle all this initialization.
@@ -326,28 +326,28 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _add_to_cache(self, tx):
+    def _add_to_cache(self, tx: BaseTransaction) -> None:
         raise NotImplementedError
 
     @abstractmethod
-    def _del_from_cache(self, tx, *, relax_assert: bool = False):
+    def _del_from_cache(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
         raise NotImplementedError
 
     @abstractmethod
-    def get_block_count(self):
+    def get_block_count(self) -> int:
         raise NotImplementedError
 
     @abstractmethod
-    def get_tx_count(self):
+    def get_tx_count(self) -> int:
         raise NotImplementedError
 
     @abstractmethod
-    def get_genesis(self, hash_bytes):
+    def get_genesis(self, hash_bytes: bytes) -> Optional[BaseTransaction]:
         """Returning hardcoded genesis block and transactions."""
         raise NotImplementedError
 
     @abstractmethod
-    def get_all_genesis(self):
+    def get_all_genesis(self) -> Set[BaseTransaction]:
         raise NotImplementedError
 
     @abstractmethod
@@ -374,19 +374,19 @@ class TransactionStorage(ABC):
 class TransactionStorageAsyncFromSync(TransactionStorage):
     """Implement async interface from sync interface, for legacy implementations."""
 
-    def save_transaction_deferred(self, tx, *, only_metadata=False):
+    def save_transaction_deferred(self, tx: BaseTransaction, *, only_metadata: bool = False) -> Deferred:
         return succeed(skip_warning(self.save_transaction)(tx, only_metadata=only_metadata))
 
-    def transaction_exists_deferred(self, hash_bytes):
+    def transaction_exists_deferred(self, hash_bytes: bytes) -> Deferred:
         return succeed(skip_warning(self.transaction_exists)(hash_bytes))
 
-    def get_transaction_deferred(self, hash_bytes):
+    def get_transaction_deferred(self, hash_bytes: bytes) -> Deferred:
         return succeed(skip_warning(self.get_transaction)(hash_bytes))
 
-    def get_all_transactions_deferred(self):
+    def get_all_transactions_deferred(self) -> Deferred:
         return succeed(skip_warning(self.get_all_transactions)())
 
-    def get_count_tx_blocks_deferred(self):
+    def get_count_tx_blocks_deferred(self) -> Deferred:
         return succeed(skip_warning(self.get_count_tx_blocks)())
 
 
@@ -486,28 +486,28 @@ class BaseTransactionStorage(TransactionStorage):
         blocks = [self.get_transaction(block_hash) for block_hash in block_hashes]
         return blocks, has_more
 
-    def get_newer_blocks_after(self, timestamp, hash_bytes, count):
+    def get_newer_blocks_after(self, timestamp: int, hash_bytes: bytes, count: int):
         if not self.with_index:
             raise NotImplementedError
         block_hashes, has_more = self.block_index.get_newer(timestamp, hash_bytes, count)
         blocks = [self.get_transaction(block_hash) for block_hash in block_hashes]
         return blocks, has_more
 
-    def get_older_txs_after(self, timestamp, hash_bytes, count):
+    def get_older_txs_after(self, timestamp: int, hash_bytes: bytes, count: int):
         if not self.with_index:
             raise NotImplementedError
         tx_hashes, has_more = self.tx_index.get_older(timestamp, hash_bytes, count)
         txs = [self.get_transaction(tx_hash) for tx_hash in tx_hashes]
         return txs, has_more
 
-    def get_newer_txs_after(self, timestamp, hash_bytes, count):
+    def get_newer_txs_after(self, timestamp: int, hash_bytes: bytes, count: int):
         if not self.with_index:
             raise NotImplementedError
         tx_hashes, has_more = self.tx_index.get_newer(timestamp, hash_bytes, count)
         txs = [self.get_transaction(tx_hash) for tx_hash in tx_hashes]
         return txs, has_more
 
-    def _manually_initialize(self):
+    def _manually_initialize(self) -> None:
         self._reset_cache()
 
         # We need to construct a topological sort, then iterate from
@@ -569,7 +569,7 @@ class BaseTransactionStorage(TransactionStorage):
             self._cache_tx_count += 1
             self.tx_index.add_tx(tx)
 
-    def _del_from_cache(self, tx: Transaction, *, relax_assert: bool = False) -> None:
+    def _del_from_cache(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
         if not self.with_index:
             raise NotImplementedError
         if tx.is_block:

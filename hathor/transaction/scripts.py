@@ -187,7 +187,7 @@ class P2PKH:
     re_match = re_compile('^(?:(DATA_4) OP_GREATERTHAN_TIMESTAMP)? '
                           'OP_DUP OP_HASH160 (DATA_20) OP_EQUALVERIFY OP_CHECKSIG$')
 
-    def __init__(self, address: str, timelock: Optional[Any] = None) -> None:
+    def __init__(self, address: str, timelock: Optional[int] = None) -> None:
         """This class represents the pay to public hash key script. It enables the person
         who has the corresponding private key of the address to spend the tokens.
 
@@ -208,8 +208,8 @@ class P2PKH:
         self.address = address
         self.timelock = timelock
 
-    def to_human_readable(self):
-        ret = {}
+    def to_human_readable(self) -> Dict[str, Any]:
+        ret: Dict[str, Any] = {}
         ret['type'] = 'P2PKH'
         ret['address'] = self.address
         ret['timelock'] = self.timelock

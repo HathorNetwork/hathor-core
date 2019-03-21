@@ -695,6 +695,7 @@ class NodeSyncTimestamp(Plugin):
         else:
             raise ValueError('Unknown payload load')
 
+        assert tx.hash is not None
         if self.protocol.node.tx_storage.get_genesis(tx.hash):
             # We just got the data of a genesis tx/block. What should we do?
             # Will it reduce peer reputation score?

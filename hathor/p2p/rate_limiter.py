@@ -26,7 +26,7 @@ class RateLimiter:
             reactor = twisted_reactor
         self.reactor = reactor
 
-    def set_limit(self, key: str, max_hits: int, window_seconds: int):
+    def set_limit(self, key: str, max_hits: int, window_seconds: int) -> None:
         """ Set a limit to a given key, e.g., `max_hits = 10` and
         `window_seconds = 60` means at most 10 hits per minute.
 
@@ -37,18 +37,18 @@ class RateLimiter:
         assert (window_seconds > 0)
         self.keys[key] = RateLimiterLimit(max_hits, window_seconds)
 
-    def get_limit(self, key: str):
+    def get_limit(self, key: str) -> Optional[RateLimiterLimit]:
         """ Get a limit to a given key.
         """
         return self.keys.get(key, None)
 
-    def unset_limit(self, key: str):
+    def unset_limit(self, key: str) -> None:
         """ Unset a limit to a given key. Next calls to `add_hit` with that key will be ignored.
         """
         self.reset(key)
         self.keys.pop(key, None)
 
-    def add_hit(self, key: str, weight: int = 1):
+    def add_hit(self, key: str, weight: int = 1) -> bool:
         """ Add a hit to a given key. You can use `weight` to add more than one hit.
         Return `True` if threshold has not been reached, or `False` otherwise.
 
@@ -90,7 +90,7 @@ class RateLimiter:
         self.hits[key] = RateLimiterLimit(new_hits, new_time)
         return allowance
 
-    def reset(self, key: str):
+    def reset(self, key: str) -> None:
         """ Reset the hits of a given key.
         """
         self.hits.pop(key, None)

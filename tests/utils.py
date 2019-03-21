@@ -394,6 +394,7 @@ def run_server(hostname='localhost', listen=8005, listen_ssl=False, status=8085,
     command = ' '.join([
         'python -m hathor run_node',
         '--wallet hd',
+        '--wallet-enable-api',
         '--hostname {}'.format(hostname),
         '--listen tcp:{}'.format(listen),
         '--status {}'.format(status),

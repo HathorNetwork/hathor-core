@@ -4,7 +4,6 @@ from unittest.mock import Mock
 from twisted.test import proto_helpers
 
 from hathor.constants import HATHOR_TOKEN_UID
-from hathor.indexes import WalletIndex
 from hathor.metrics import Metrics
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.transaction.genesis import get_genesis_transactions
@@ -138,11 +137,8 @@ class TestWebsocket(unittest.TestCase):
 
         block_genesis = [tx for tx in get_genesis_transactions(self.manager.tx_storage) if tx.is_block][0]
 
-        element = None
-        for el in WalletIndex.tx_to_elements(block_genesis, False):
-            element = el.element
-            break
         # Test publish address history
+        element = self.manager.tx_storage.wallet_index.serialize_tx(block_genesis)
         self.manager.pubsub.publish(HathorEvents.WALLET_ADDRESS_HISTORY, address=address, history=element)
         self.run_to_completion()
         value = self._decode_value(self.transport.value())
@@ -150,17 +146,6 @@ class TestWebsocket(unittest.TestCase):
         self.assertEqual(value['address'], address)
         self.assertEqual(value['history']['tx_id'], block_genesis.hash_hex)
         self.assertEqual(value['history']['timestamp'], block_genesis.timestamp)
-        self.assertTrue(value['history']['is_output'])
-
-        # Test publish element voided
-        self.manager.pubsub.publish(HathorEvents.WALLET_ELEMENT_VOIDED, address=address, element=element)
-        self.run_to_completion()
-        value = self._decode_value(self.transport.value())
-        self.assertEqual(value['type'], 'wallet:element_voided')
-        self.assertEqual(value['address'], address)
-        self.assertEqual(value['element']['tx_id'], block_genesis.hash_hex)
-        self.assertEqual(value['element']['timestamp'], block_genesis.timestamp)
-        self.assertTrue(value['element']['is_output'])
 
     def test_connections(self):
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN

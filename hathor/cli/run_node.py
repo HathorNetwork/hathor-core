@@ -49,6 +49,8 @@ class RunNode:
         parser.add_argument('--data', help='Data directory')
         parser.add_argument('--wallet', help='Set wallet type. Options are hd (Hierarchical Deterministic) or keypair',
                             default=None)
+        parser.add_argument('--wallet-enable-api', action='store_true',
+                            help='Enable wallet API. Must be used with --wallet.'),
         parser.add_argument('--words', help='Words used to generate the seed for HD Wallet')
         parser.add_argument('--passphrase', action='store_true',
                             help='Passphrase used to generate the seed for HD Wallet')
@@ -101,6 +103,7 @@ class RunNode:
 
         def create_wallet():
             if args.wallet == 'hd':
+                print('Using HDWallet')
                 kwargs = {
                     'words': args.words,
                 }
@@ -114,6 +117,7 @@ class RunNode:
 
                 return HDWallet(**kwargs)
             elif args.wallet == 'keypair':
+                print('Using KeyPairWallet')
                 if args.data:
                     wallet = Wallet(directory=args.data)
                 else:
@@ -292,7 +296,7 @@ class RunNode:
             for url_path, resource, parent in resources:
                 parent.putChild(url_path, resource)
 
-            if self.wallet:
+            if self.wallet and args.wallet_enable_api:
                 wallet_resources = (
                     # /wallet
                     (b'balance', BalanceResource(self.manager), wallet_resource),
