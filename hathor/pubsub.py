@@ -98,8 +98,11 @@ class EventArguments:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-    def __contains__(self, key):
+    def __contains__(self, key: HathorEvents) -> bool:
         return key in self.__dict__
+
+
+PubSubCallable = Callable[[HathorEvents, EventArguments], None]
 
 
 class PubSubManager:
@@ -108,13 +111,13 @@ class PubSubManager:
     It is used to let independent objects respond to events.
     """
 
-    _subscribers: Dict[HathorEvents, List[Callable]]
+    _subscribers: Dict[HathorEvents, List[PubSubCallable]]
 
     def __init__(self, reactor: 'IReactorCore') -> None:
         self._subscribers = defaultdict(list)
         self.reactor = reactor
 
-    def subscribe(self, key: HathorEvents, fn: Callable) -> None:
+    def subscribe(self, key: HathorEvents, fn: PubSubCallable) -> None:
         """Subscribe to a specific event.
 
         :param key: Name of the key to which to subscribe.
@@ -126,7 +129,7 @@ class PubSubManager:
         if fn not in self._subscribers[key]:
             self._subscribers[key].append(fn)
 
-    def unsubscribe(self, key, fn):
+    def unsubscribe(self, key: HathorEvents, fn: PubSubCallable) -> None:
         """Unsubscribe from a specific event.
         """
         if fn in self._subscribers[key]:

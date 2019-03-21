@@ -26,8 +26,10 @@ class KeyPair:
         self.used = used
         self._cache_priv_key_unlock = None
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         """Override the default Equals behavior"""
+        if not isinstance(other, KeyPair):
+            return NotImplemented
         return self.address == other.address
 
     def get_private_key_b64(self) -> str:
@@ -72,7 +74,7 @@ class KeyPair:
         }
 
     @classmethod
-    def from_json(cls, json_data):
+    def from_json(cls, json_data: Dict[str, Any]) -> 'KeyPair':
         priv_key_bytes = base64.b64decode(json_data['privKey'])
         address = json_data['address']
         used = json_data['used']

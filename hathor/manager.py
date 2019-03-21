@@ -187,7 +187,7 @@ class HathorManager:
         if self.wallet:
             self.wallet.stop()
 
-    def start_profiler(self):
+    def start_profiler(self) -> None:
         """
         Start profiler. It can be activated from a web resource, as well.
         """
@@ -196,13 +196,14 @@ class HathorManager:
             self.profiler = cProfile.Profile()
         self.profiler.enable()
 
-    def stop_profiler(self, save_to=None):
+    def stop_profiler(self, save_to=None) -> None:
         """
         Stop the profile and optionally save the results for future analysis.
 
         :param save_to: path where the results will be saved
         :type save_to: str
         """
+        assert self.profiler is not None
         self.profiler.disable()
         if save_to:
             self.profiler.dump_stats(save_to)
@@ -256,7 +257,7 @@ class HathorManager:
             dt=t2 - t0,
         )
 
-    def add_peer_discovery(self, peer_discovery: PeerDiscovery):
+    def add_peer_discovery(self, peer_discovery: PeerDiscovery) -> None:
         self.peer_discoveries.append(peer_discovery)
 
     def get_new_tx_parents(self, timestamp: Optional[float] = None) -> List[bytes]:
@@ -561,7 +562,7 @@ class HathorManager:
 
         return weight
 
-    def listen(self, description, ssl=False):
+    def listen(self, description: str, ssl: bool = False) -> None:
         endpoint = self.connections.listen(description, ssl)
 
         if self.hostname:

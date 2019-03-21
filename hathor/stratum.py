@@ -241,7 +241,7 @@ class JSONRPC(LineReceiver, ABC):
         self.log.debug("SENDING REPONSE WITH DATA {data}", data=data)
         return self.send_json(data)
 
-    def send_error(self, error: Dict, id: Optional[UUID] = None, data: Any = None):
+    def send_error(self, error: Dict, id: Optional[UUID] = None, data: Any = None) -> None:
         """ Sends a JSON-RPC 2.0 error.
 
         :param error: JSON-RPC 2.0 error message
@@ -301,12 +301,12 @@ class StratumProtocol(JSONRPC):
         self.miner_id = None
         self.job_queue = Queue()
 
-    def connectionMade(self):
+    def connectionMade(self) -> None:
         self.miner_id = uuid4()
         self.log.info("New miner with ID {} from address {}".format(self.miner_id, self.address))
         self.factory.miner_protocols[self.miner_id] = self
 
-    def connectionLost(self, reason: Failure = None):
+    def connectionLost(self, reason: Failure = None) -> None:
         self.log.info("Miner with ID {} exited".format(self.miner_id))
         assert self.miner_id is not None
         self.factory.miner_protocols.pop(self.miner_id)
@@ -492,7 +492,7 @@ class StratumFactory(Factory):
         """
         Starts the Hathor Stratum server and subscribes for new blocks on the network in order to update miner jobs.
         """
-        def on_new_block(event: HathorEvents, args: EventArguments):
+        def on_new_block(event: HathorEvents, args: EventArguments) -> None:
             tx = args.__dict__["tx"]
             if isinstance(tx, Block):
                 self.update_jobs()
@@ -549,7 +549,7 @@ class StratumClient(JSONRPC):
         for miner in self.miners:
             miner.start()
 
-    def stop(self):
+    def stop(self) -> None:
         """
         Stops the client, interrupting mining processes, stoping supervisor loop , and sending finished jobs
         """
@@ -561,7 +561,7 @@ class StratumClient(JSONRPC):
         for miner in self.miners:
             miner.join()
 
-    def connectionMade(self):
+    def connectionMade(self) -> None:
         self.send_request("subscribe", None, uuid4())
 
     def handle_request(self, method: str, params: Optional[Union[List, Dict]], id: Optional[UUID]) -> None:
@@ -634,7 +634,7 @@ def miner_job(index: int, process_num: int, job_data: MinerJob, signal: Value, q
             nonce += 1
 
 
-def supervisor_job(client: StratumClient):
+def supervisor_job(client: StratumClient) -> None:
     """
     Job to be executed periodically to submit complete mining jobs.
 

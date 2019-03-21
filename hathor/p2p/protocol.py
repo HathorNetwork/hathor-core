@@ -53,7 +53,7 @@ class HathorProtocol:
             self.received_blocks: int = 0
             self.discarded_blocks: int = 0
 
-        def format_bytes(self, value: int):
+        def format_bytes(self, value: int) -> str:
             """ Format bytes in MB and kB.
             """
             if value > 1024*1024:
@@ -63,7 +63,7 @@ class HathorProtocol:
             else:
                 return '{} B'.format(value)
 
-        def print_stats(self, prefix=''):
+        def print_stats(self, prefix: str = '') -> None:
             """ Print a status of the metrics in stdout.
             """
             print('----')
@@ -216,7 +216,7 @@ class HathorProtocol:
         self.send_error(msg)
         self.transport.loseConnection()
 
-    def handle_error(self, payload):
+    def handle_error(self, payload) -> None:
         """ Executed when an ERROR command is received.
         """
         self.log.warn('ERROR {payload}', payload=payload)
@@ -237,7 +237,7 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
         super(HathorLineReceiver, self).connectionLost()
         self.on_disconnect(reason)
 
-    def lineLengthExceeded(self, line):
+    def lineLengthExceeded(self, line: str) -> None:
         self.log.warn('lineLengthExceeded {line_len} > {log_source.MAX_LENGTH}: {line}', line=line, line_len=len(line))
         super(HathorLineReceiver, self).lineLengthExceeded(line)
 

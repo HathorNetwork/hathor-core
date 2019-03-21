@@ -1,5 +1,5 @@
 from math import inf
-from typing import Any, Iterator, Tuple
+from typing import TYPE_CHECKING, Any, Generator, Iterator, List, Optional, Set, Tuple
 
 import grpc
 from grpc._server import _Context
@@ -9,9 +9,13 @@ from twisted.logger import Logger
 
 from hathor import protos
 from hathor.exception import HathorError
+from hathor.transaction import Block
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.util import deprecated, skip_warning
+
+if TYPE_CHECKING:
+    from hathor.transaction import BaseTransaction  # noqa: F401
 
 
 class RemoteCommunicationError(HathorError):
@@ -105,13 +109,13 @@ class TransactionRemoteStorage(TransactionStorage):
         for genesis in get_genesis_transactions(self):
             self._genesis_cache[genesis.hash] = genesis
 
-    def connect_to(self, port):
+    def connect_to(self, port: int) -> None:
         if self._channel:
             self._channel.close()
         self._channel = grpc.insecure_channel('127.0.0.1:{}'.format(port))
         self._stub = protos.TransactionStorageStub(self._channel)
 
-    def _check_connection(self):
+    def _check_connection(self) -> None:
         """raise error if not connected"""
         from .subprocess_storage import SubprocessNotAliveError
         if not self._channel:
@@ -121,7 +125,7 @@ class TransactionRemoteStorage(TransactionStorage):
 
     @deprecated('Use save_transaction_deferred instead')
     @convert_grpc_exceptions
-    def save_transaction(self, tx, *, only_metadata=False):
+    def save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
         self._check_connection()
 
         # genesis txs and metadata are kept in memory
@@ -136,7 +140,7 @@ class TransactionRemoteStorage(TransactionStorage):
 
     @deprecated('Use transaction_exists_deferred instead')
     @convert_grpc_exceptions
-    def transaction_exists(self, hash_bytes):
+    def transaction_exists(self, hash_bytes: bytes) -> bool:
         self._check_connection()
         request = protos.ExistsRequest(hash=hash_bytes)
         result = self._stub.Exists(request)
@@ -144,7 +148,7 @@ class TransactionRemoteStorage(TransactionStorage):
 
     @deprecated('Use get_transaction_deferred instead')
     @convert_grpc_exceptions
-    def get_transaction(self, hash_bytes):
+    def get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
         tx = self.get_transaction_from_weakref(hash_bytes)
         if tx is not None:
             return tx
@@ -159,7 +163,7 @@ class TransactionRemoteStorage(TransactionStorage):
 
     @deprecated('Use get_all_transactions_deferred instead')
     @convert_grpc_exceptions_generator
-    def get_all_transactions(self):
+    def get_all_transactions(self) -> Iterator['BaseTransaction']:
         from hathor.transaction import tx_or_block_from_proto
         self._check_connection()
         request = protos.ListRequest()
@@ -169,6 +173,7 @@ class TransactionRemoteStorage(TransactionStorage):
                 break
             tx_proto = list_item.transaction
             tx = tx_or_block_from_proto(tx_proto, storage=self)
+            assert tx.hash is not None
             tx2 = self.get_transaction_from_weakref(tx.hash)
             if tx2:
                 yield tx2
@@ -178,7 +183,7 @@ class TransactionRemoteStorage(TransactionStorage):
 
     @deprecated('Use get_count_tx_blocks_deferred instead')
     @convert_grpc_exceptions
-    def get_count_tx_blocks(self):
+    def get_count_tx_blocks(self) -> int:
         self._check_connection()
         request = protos.CountRequest(tx_type=protos.ANY_TYPE)
         result = self._stub.Count(request)
@@ -187,48 +192,48 @@ class TransactionRemoteStorage(TransactionStorage):
     # TransactionStorageAsync interface implementation:
 
     @convert_grpc_exceptions
-    def save_transaction_deferred(self, tx, *, only_metadata=False):
+    def save_transaction_deferred(self, tx: 'BaseTransaction', *, only_metadata=False) -> None:
         # self._check_connection()
         raise NotImplementedError
 
     @inlineCallbacks
     @convert_grpc_exceptions_generator
-    def transaction_exists_deferred(self, hash_bytes):
+    def transaction_exists_deferred(self, hash_bytes: bytes) -> Generator:
         self._check_connection()
         request = protos.ExistsRequest(hash=hash_bytes)
         result = yield Deferred.fromFuture(self._stub.Exists.future(request))
         return result.exists
 
     @convert_grpc_exceptions
-    def get_transaction_deferred(self, hash_bytes):
+    def get_transaction_deferred(self, hash_bytes: bytes) -> Deferred:
         # self._check_connection()
         raise NotImplementedError
 
     @convert_grpc_exceptions
-    def get_all_transactions_deferred(self):
+    def get_all_transactions_deferred(self) -> Deferred:
         # self._check_connection()
         raise NotImplementedError
 
     @convert_grpc_exceptions
-    def get_count_tx_blocks_deferred(self):
+    def get_count_tx_blocks_deferred(self) -> Deferred:
         # self._check_connection()
         raise NotImplementedError
 
     # TransactionStorage interface implementation:
 
     @property
-    def latest_timestamp(self):
+    def latest_timestamp(self) -> int:
         return self._latest_timestamp()
 
     @convert_grpc_exceptions
-    def _latest_timestamp(self):
+    def _latest_timestamp(self) -> int:
         self._check_connection()
         request = protos.LatestTimestampRequest()
         result = self._stub.LatestTimestamp(request)
         return result.timestamp
 
     @property
-    def first_timestamp(self):
+    def first_timestamp(self) -> int:
         if not hasattr(self, '_cached_first_timestamp'):
             timestamp = self._first_timestamp()
             if timestamp:
@@ -236,13 +241,13 @@ class TransactionRemoteStorage(TransactionStorage):
         return getattr(self, '_cached_first_timestamp', None)
 
     @convert_grpc_exceptions
-    def _first_timestamp(self):
+    def _first_timestamp(self) -> int:
         self._check_connection()
         request = protos.FirstTimestampRequest()
         result = self._stub.FirstTimestamp(request)
         return result.timestamp
 
-    def get_best_block_tips(self, timestamp=None):
+    def get_best_block_tips(self, timestamp: Optional[float] = None) -> List[bytes]:
         return super().get_best_block_tips(timestamp)
 
     @convert_grpc_exceptions
@@ -259,7 +264,7 @@ class TransactionRemoteStorage(TransactionStorage):
         return tips
 
     @convert_grpc_exceptions
-    def get_block_tips(self, timestamp=None):
+    def get_block_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         self._check_connection()
         if isinstance(timestamp, float) and timestamp != inf:
             self.log.warn('timestamp given in float will be truncated, use int instead')
@@ -272,7 +277,7 @@ class TransactionRemoteStorage(TransactionStorage):
         return tips
 
     @convert_grpc_exceptions
-    def get_tx_tips(self, timestamp=None):
+    def get_tx_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         self._check_connection()
         if isinstance(timestamp, float) and timestamp != inf:
             self.log.warn('timestamp given in float will be truncated, use int instead')
@@ -285,28 +290,30 @@ class TransactionRemoteStorage(TransactionStorage):
         return tips
 
     @convert_grpc_exceptions
-    def get_newest_blocks(self, count):
+    def get_newest_blocks(self, count: int) -> Tuple[List['Block'], bool]:
         from hathor.transaction import tx_or_block_from_proto
         self._check_connection()
         request = protos.ListNewestRequest(tx_type=protos.BLOCK_TYPE, count=count)
         result = self._stub.ListNewest(request)
-        tx_list = []
+        tx_list: List['Block'] = []
         has_more = None
         for list_item in result:
             if list_item.HasField('transaction'):
                 tx_proto = list_item.transaction
-                tx_list.append(tx_or_block_from_proto(tx_proto, storage=self))
+                blk = tx_or_block_from_proto(tx_proto, storage=self)
+                assert isinstance(blk, Block)
+                tx_list.append(blk)
             elif list_item.HasField('has_more'):
                 has_more = list_item.has_more
                 # assuming there are no more items after `has_more`, break soon
                 break
             else:
                 raise ValueError('unexpected list_item_oneof')
-        assert has_more is not None
+        assert isinstance(has_more, bool)
         return tx_list, has_more
 
     @convert_grpc_exceptions
-    def get_newest_txs(self, count):
+    def get_newest_txs(self, count: int) -> Tuple[List['BaseTransaction'], bool]:
         from hathor.transaction import tx_or_block_from_proto
         self._check_connection()
         request = protos.ListNewestRequest(tx_type=protos.TRANSACTION_TYPE, count=count)
@@ -327,7 +334,8 @@ class TransactionRemoteStorage(TransactionStorage):
         return tx_list, has_more
 
     @convert_grpc_exceptions
-    def get_older_blocks_after(self, timestamp, hash_bytes, count):
+    def get_older_blocks_after(self, timestamp: int, hash_bytes: bytes,
+                               count: int) -> Tuple[List['BaseTransaction'], bool]:
         from hathor.transaction import tx_or_block_from_proto
         self._check_connection()
         if isinstance(timestamp, float):
@@ -357,7 +365,8 @@ class TransactionRemoteStorage(TransactionStorage):
         return tx_list, has_more
 
     @convert_grpc_exceptions
-    def get_newer_blocks_after(self, timestamp, hash_bytes, count):
+    def get_newer_blocks_after(self, timestamp: int, hash_bytes: bytes,
+                               count: int) -> Tuple[List['BaseTransaction'], bool]:
         from hathor.transaction import tx_or_block_from_proto
         self._check_connection()
         if isinstance(timestamp, float):
@@ -387,7 +396,7 @@ class TransactionRemoteStorage(TransactionStorage):
         return tx_list, has_more
 
     @convert_grpc_exceptions
-    def get_older_txs_after(self, timestamp, hash_bytes, count):
+    def get_older_txs_after(self, timestamp: int, hash_bytes: bytes, count: int):
         from hathor.transaction import tx_or_block_from_proto
         self._check_connection()
         if isinstance(timestamp, float):
@@ -417,7 +426,7 @@ class TransactionRemoteStorage(TransactionStorage):
         return tx_list, has_more
 
     @convert_grpc_exceptions
-    def get_newer_txs_after(self, timestamp, hash_bytes, count):
+    def get_newer_txs_after(self, timestamp: int, hash_bytes: bytes, count: int):
         from hathor.transaction import tx_or_block_from_proto
         self._check_connection()
         if isinstance(timestamp, float):
@@ -446,7 +455,7 @@ class TransactionRemoteStorage(TransactionStorage):
         assert has_more is not None
         return tx_list, has_more
 
-    def _manually_initialize(self):
+    def _manually_initialize(self) -> None:
         pass
 
     @convert_grpc_exceptions_generator

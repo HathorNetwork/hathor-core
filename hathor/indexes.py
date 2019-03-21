@@ -209,9 +209,10 @@ class TransactionsIndex:
         assert tx.hash is not None
         # It is safe to use the in operator because it is O(log(n)).
         # http://www.grantjenks.com/docs/sortedcontainers/sortedlist.html#sortedcontainers.SortedList.__contains__
-        if tx in self.transactions:
+        element = TransactionIndexElement(tx.timestamp, tx.hash)
+        if element in self.transactions:
             return
-        self.transactions.add(TransactionIndexElement(tx.timestamp, tx.hash))
+        self.transactions.add(element)
 
     def del_tx(self, tx: BaseTransaction) -> None:
         """ Delete a transaction from the index

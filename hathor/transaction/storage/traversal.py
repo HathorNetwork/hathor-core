@@ -19,10 +19,10 @@ class HeapItem:
         else:
             self.key = -tx.timestamp
 
-    def __lt__(self, other: 'HeapItem'):
+    def __lt__(self, other: 'HeapItem') -> bool:
         return self.key < other.key
 
-    def __le__(self, other: 'HeapItem'):
+    def __le__(self, other: 'HeapItem') -> bool:
         return self.key <= other.key
 
 
@@ -65,7 +65,7 @@ class GenericWalk(ABC):
         """
         raise NotImplementedError
 
-    def add_neighbors(self, tx) -> None:
+    def add_neighbors(self, tx: 'BaseTransaction') -> None:
         """ Add neighbors of `tx` to be visited later according to the configuration.
         """
         meta = None
@@ -91,7 +91,7 @@ class GenericWalk(ABC):
                 neighbor = self.storage.get_transaction(_hash)
                 self._push_visit(neighbor)
 
-    def skip_neighbors(self, tx: 'BaseTransaction'):
+    def skip_neighbors(self, tx: 'BaseTransaction') -> None:
         """ Mark `tx` to have its neighbors skipped, i.e., they will not be added to be
         visited later. `tx` must be equal to the current yielded transaction.
         """
