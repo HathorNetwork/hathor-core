@@ -481,7 +481,7 @@ class NodeSyncTimestamp(Plugin):
         hashes = []
 
         next_timestamp = timestamp
-        next_offset = 0
+        next_offset = offset
         while True:
             partial = self.manager.tx_storage.get_all_tips(next_timestamp)
 
@@ -490,36 +490,33 @@ class NodeSyncTimestamp(Plugin):
 
             partial_hashes = [x.data for x in partial]
             partial_hashes.sort()
-            if offset > 0:
-                partial_hashes = partial_hashes[offset:]
-                offset = 0
+            if next_offset > 0:
+                partial_hashes = partial_hashes[next_offset:]
             for idx, h in enumerate(partial_hashes):
                 if h not in ignore_hashes:
                     ignore_hashes.add(h)
                     hashes.append(h)
                     assert len(hashes) <= self.MAX_HASHES
                     if len(hashes) == self.MAX_HASHES:
-                        next_offset = idx
+                        next_offset += idx
                         break
+            else:
+                # Next timestamp in which tips have changed
+                min_end = min(x.end for x in partial)
 
-            # Next timestamp in which tips have changed
-            min_end = min(x.end for x in partial)
+                # Look for transactions confirming already confirmed transactions
+                while min_end != inf:
+                    tmp = self.manager.tx_storage.get_all_tips(min_end - 1)
+                    tmp.difference_update(partial)
+                    if not tmp:
+                        break
+                    min_end = min(x.begin for x in tmp)
 
-            # Look for transactions confirming already confirmed transactions
-            while min_end != inf:
-                tmp = self.manager.tx_storage.get_all_tips(min_end - 1)
-                tmp.difference_update(partial)
-                if not tmp:
-                    break
-                min_end = min(x.begin for x in tmp)
+                next_timestamp = min_end
+                next_offset = 0
 
             if len(hashes) == self.MAX_HASHES:
-                if next_offset == len(partial_hashes):
-                    next_timestamp = min_end
-                    next_offset = 0
                 break
-
-            next_timestamp = min_end
 
         data = {
             'timestamp': timestamp,
