@@ -66,3 +66,6 @@ MAX_GRAPH_LEVEL = 3
 # Maximum difference between our latest timestamp and a peer's synced timestamp to consider
 # that the peer is synced (in seconds).
 P2P_SYNC_THRESHOLD = 60
+
+# Maximum number of opened threads that are solving POW for send tokens
+MAX_POW_THREADS = 5

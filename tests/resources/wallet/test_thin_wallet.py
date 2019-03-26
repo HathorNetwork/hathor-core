@@ -1,6 +1,6 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.constants import DECIMAL_PLACES, HATHOR_TOKEN_UID, TOKENS_PER_BLOCK
+from hathor.constants import DECIMAL_PLACES, HATHOR_TOKEN_UID, MAX_POW_THREADS, TOKENS_PER_BLOCK
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
@@ -103,6 +103,35 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         response_data = response_history.json_value()['history']
         self.assertIn(data['tx']['hash'], [x['tx_id'] for x in response_data])
+
+        def get_new_tx_struct():
+            tx = Transaction(inputs=[i], outputs=[o])
+            tx.inputs = tx3.inputs
+            self.clock.advance(5)
+            tx.timestamp = int(self.clock.seconds())
+            tx.weight = self.manager.minimum_tx_weight(tx)
+            return tx.get_struct().hex()
+
+        # Making pow threads full
+        for x in range(MAX_POW_THREADS):
+            ret = self.web.post('thin_wallet/send_tokens', {'tx_hex': get_new_tx_struct()})
+            if x == 0:
+                deferred = ret
+
+        # All threads are in use
+        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': get_new_tx_struct()})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # Releasing one
+        response = yield deferred
+        data = response.json_value()
+        self.assertTrue(data['success'])
+
+        # Now you can send
+        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': get_new_tx_struct()})
+        data = response.json_value()
+        self.assertTrue(data['success'])
 
     def test_error_request(self):
         resource = SendTokensResource(self.manager)
