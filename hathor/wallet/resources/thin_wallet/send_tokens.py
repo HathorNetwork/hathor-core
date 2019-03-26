@@ -1,5 +1,4 @@
 import json
-from threading import Lock
 from typing import Optional
 
 from twisted.internet import threads
@@ -8,6 +7,7 @@ from twisted.web.http import Request
 
 from hathor.api_util import render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.constants import MAX_POW_THREADS
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TxValidationError
@@ -24,7 +24,6 @@ class SendTokensResource(resource.Resource):
     def __init__(self, manager):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
-        self.lock = Lock()
 
     def render_POST(self, request: Request):
         """ POST request for /thin_wallet/send_tokens/
@@ -36,6 +35,13 @@ class SendTokensResource(resource.Resource):
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
+
+        # Validating if we still have unused threads to solve the pow
+        if len(self.manager.pow_thread_pool.working) == MAX_POW_THREADS:
+            return self.return_POST(
+                False,
+                'The server is currently fully loaded to send tokens. Wait a moment and try again, please.'
+            )
 
         post_data = json.loads(request.content.read().decode('utf-8'))
         tx_hex = post_data['tx_hex']
@@ -51,7 +57,14 @@ class SendTokensResource(resource.Resource):
         # Set parents
         tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
 
-        deferred = threads.deferToThread(self._render_POST_thread, tx, request)
+        from twisted.internet import reactor
+        deferred = threads.deferToThreadPool(
+            reactor,
+            self.manager.pow_thread_pool,
+            self._render_POST_thread,
+            tx,
+            request
+        )
         deferred.addCallback(self._cb_tx_resolve, request)
         deferred.addErrback(self._err_tx_resolve, request)
 
