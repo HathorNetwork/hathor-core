@@ -9,6 +9,7 @@ from typing import Any, List, Optional, cast
 
 from twisted.internet.interfaces import IReactorCore
 from twisted.logger import Logger
+from twisted.python.threadpool import ThreadPool
 
 from hathor.constants import (
     AVG_TIME_BETWEEN_BLOCKS,
@@ -17,6 +18,7 @@ from hathor.constants import (
     BLOCK_DIFFICULTY_N_BLOCKS,
     DECIMAL_PLACES,
     MAX_DISTANCE_BETWEEN_BLOCKS,
+    MAX_POW_THREADS,
     MIN_BLOCK_WEIGHT,
     MIN_TX_WEIGHT,
     TOKENS_PER_BLOCK,
@@ -153,6 +155,9 @@ class HathorManager:
 
         self._allow_mining_without_peers = False
 
+        # Thread pool used to resolve pow when sending tokens
+        self.pow_thread_pool = ThreadPool(minthreads=0, maxthreads=MAX_POW_THREADS, name='Pow thread pool')
+
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
         """
@@ -160,6 +165,7 @@ class HathorManager:
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
         self.connections.start()
+        self.pow_thread_pool.start()
 
         # Initialize manager's components.
         self._initialize_components()
@@ -182,6 +188,8 @@ class HathorManager:
         self.log.info('Stopping HathorManager...')
         self.connections.stop()
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
+        if self.pow_thread_pool.started:
+            self.pow_thread_pool.stop()
 
         # Metric stops to capture data
         self.metrics.stop()

@@ -31,6 +31,9 @@ class _BaseResourceTest:
             self.manager.test_mode = TestMode.TEST_ALL_WEIGHT
             self.manager.start()
 
+        def tearDown(self):
+            self.manager.stop()
+
 
 class RequestBody(object):
     """
