@@ -34,7 +34,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         # Options
         yield self.web.options("wallet/send_tokens")
 
-        data_json = {"outputs": [{"address": "15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH", "value": 505}], "inputs": []}
+        data_json = {"outputs": [{"address": self.get_address(0), "value": 505}], "inputs": []}
         response = yield self.web.post("wallet/send_tokens", {'data': data_json})
         data = response.json_value()
         self.assertTrue(data['success'])
@@ -53,7 +53,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         # Sending token to random address with input wrong amount
         data_json = {
             "outputs": [{
-                "address": "15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH",
+                "address": self.get_address(0),
                 "value": 500
             }],
             "inputs": [{
@@ -69,7 +69,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         # Sending duplicate input
         data_json_duplicate = {
             "outputs": [{
-                "address": "15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH",
+                "address": self.get_address(0),
                 "value": 19000
             }],
             "inputs": [{
@@ -87,7 +87,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         # Sending token to random address with input right amount
         data_json2 = {
             "outputs": [{
-                "address": "15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH",
+                "address": self.get_address(0),
                 "value": 1495
             }],
             "inputs": [{
@@ -100,7 +100,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertTrue(data3['success'])
 
         # Sending token to invalid addresses
-        data_json3 = {"outputs": [{"address": "2jGdawyCaFf1Zsw6bjHxPUiyMZil", "value": 500}], "inputs": []}
+        data_json3 = {"outputs": [{"address": self.get_address(1), "value": 500}], "inputs": []}
         response_error1 = yield self.web.post("wallet/send_tokens", {'data': data_json3})
         data_error1 = response_error1.json_value()
         self.assertFalse(data_error1['success'])
@@ -111,7 +111,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data_error2['success'])
 
         # Error insuficient funds
-        data_json5 = {"outputs": [{"address": "15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH", "value": 5000000}], "inputs": []}
+        data_json5 = {"outputs": [{"address": self.get_address(0), "value": 5000000}], "inputs": []}
         response_error3 = yield self.web.post("wallet/send_tokens", {'data': data_json5})
         data_error3 = response_error3.json_value()
         self.assertFalse(data_error3['success'])
@@ -121,7 +121,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         # Sending token with timelock
         data_timelock = {
             "outputs": [{
-                "address": "15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH",
+                "address": self.get_address(0),
                 "value": 505,
                 "timelock": 1542995660
             }],
@@ -135,7 +135,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         # Sending token with timestamp
         data_timestamp = {
             "outputs": [{
-                "address": "15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH",
+                "address": self.get_address(0),
                 "value": 5
             }],
             "inputs": [],
@@ -149,7 +149,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         # Sending token with timestamp=0
         data_timestamp = {
             "outputs": [{
-                "address": "15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH",
+                "address": self.get_address(0),
                 "value": 5
             }],
             "inputs": [],
@@ -170,7 +170,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         data_json = {
             "outputs": [{
-                "address": "15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH",
+                "address": self.get_address(0),
                 "value": 505
             }],
             "inputs": [],

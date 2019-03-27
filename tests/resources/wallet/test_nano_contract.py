@@ -33,13 +33,13 @@ class NanoContractsTest(_BaseResourceTest._ResourceTest):
         # Options
         yield match_value_resource.options("wallet/nano_contracts/match_values")
 
-        address1 = '1Pa4MMsr5DMRAeU1PzthFXyEJeVNXsMHoz'
+        address1 = self.get_address(0)
         data_post = {
             'oracle_data_id': 'some_id',
             'total_value': 2000,
             'input_value': 2000,
             'min_timestamp': 1,
-            'fallback_address': '1CBxvu6tFPTU8ygSPj9vyEadf9DsqTwy3D',
+            'fallback_address': self.get_address(1),
             'values': [{
                 'address': address1,
                 'value': 300
@@ -91,7 +91,7 @@ class NanoContractsTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(len(data['outputs']), 1)
         self.assertEqual(data['outputs'][0], genesis_output.to_human_readable())
 
-        address2 = '1CBxvu6tFPTU8ygSPj9vyEadf9DsqTwy3D'
+        address2 = self.get_address(2)
         data_put = {'new_values': [{'address': address2, 'value': 500}], 'input_value': 2000}
         # Error missing parameter
         response_error = yield match_value_resource.put("wallet/nano_contracts/match_value", data_put)
@@ -159,7 +159,7 @@ class NanoContractsTest(_BaseResourceTest._ResourceTest):
         response = yield decodetx_resource.get("decode_tx", {b'hex_tx': bytes(nano_contract_hex, 'utf-8')})
         data = response.json_value()
         self.assertTrue(data['success'])
-        hash_hex = data['transaction']['hash']
+        hash_hex = data['tx']['hash']
 
         # Options
         yield execute_resource.options("wallet/nano_contracts/execute")

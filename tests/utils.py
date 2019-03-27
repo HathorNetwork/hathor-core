@@ -12,7 +12,7 @@ import requests
 from twisted.internet.task import Clock
 from twisted.test import proto_helpers
 
-from hathor.constants import DECIMAL_PLACES, HATHOR_TOKEN_UID, TOKENS_PER_BLOCK
+from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_private_key_from_bytes
 from hathor.manager import HathorEvents, HathorManager
 from hathor.transaction import Transaction, TxInput, TxOutput
@@ -22,6 +22,8 @@ from hathor.transaction.storage import (
     TransactionRemoteStorage,
     create_transaction_storage_server,
 )
+
+settings = HathorSettings()
 
 
 def resolve_block_bytes(block_bytes):
@@ -94,7 +96,7 @@ def add_new_transactions(manager, num_txs, advance_clock=None):
     """
     txs = []
     for _ in range(num_txs):
-        address = '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'
+        address = 'HGov979VaeyMQ92ubYcnVooP6qPzUJU8Ro'
         value = random.choice([5, 10, 15, 20])
         tx = add_new_tx(manager, address, value, advance_clock)
         txs.append(tx)
@@ -343,7 +345,7 @@ class RandomTransactionGenerator:
     def new_tx_step1(self):
         """ Generate a new transaction and schedule the mining part of the transaction.
         """
-        balance = self.manager.wallet.balance[HATHOR_TOKEN_UID]
+        balance = self.manager.wallet.balance[settings.HATHOR_TOKEN_UID]
         if balance.available == 0 and self.ignore_no_funds:
             self.delayedcall = self.clock.callLater(0, self.schedule_next_transaction)
             return
@@ -469,7 +471,7 @@ def get_tokens_from_mining(blocks_mined):
         :return: Available tokens after blocks were mined
         :rtype: int
     """
-    tokens_issued_per_block = TOKENS_PER_BLOCK * (10**DECIMAL_PLACES)
+    tokens_issued_per_block = settings.TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES)
     return tokens_issued_per_block * blocks_mined
 
 

@@ -6,8 +6,10 @@ from twisted.web.http import Request
 
 from hathor.api_util import set_cors, validate_tx_hash
 from hathor.cli.openapi_files.register import register_resource
-from hathor.constants import MAX_GRAPH_LEVEL
+from hathor.conf import HathorSettings
 from hathor.graphviz import GraphvizVisualizer
+
+settings = HathorSettings()
 
 
 @register_resource
@@ -52,10 +54,10 @@ class GraphvizResource(resource.Resource):
             else:
                 graph_type = request.args[b'graph_type'][0].decode('utf-8')
                 max_level = int(request.args[b'max_level'][0])
-                if max_level > MAX_GRAPH_LEVEL:
+                if max_level > settings.MAX_GRAPH_LEVEL:
                     return json.dumps({
                         'success': False,
-                        'message': 'Graph max level is {}'.format(MAX_GRAPH_LEVEL)
+                        'message': 'Graph max level is {}'.format(settings.MAX_GRAPH_LEVEL)
                     }, indent=4).encode('utf-8')
                 tx = tx_storage.get_transaction(bytes.fromhex(tx_hex))
 
@@ -198,7 +200,7 @@ GraphvizResource.openapi = {
                     'name': 'max_level',
                     'in': 'query',
                     'description': ('How many levels the neighbor can appear in the graph.'
-                                    'Max level is {}'.format(MAX_GRAPH_LEVEL)),
+                                    'Max level is {}'.format(settings.MAX_GRAPH_LEVEL)),
                     'required': False,
                     'schema': {
                         'type': 'int'

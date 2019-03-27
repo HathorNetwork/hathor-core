@@ -95,7 +95,7 @@ class GenerateTxTest(unittest.TestCase):
         value = 100
         # Now we will generate txs to outside the wallet
         args = self.parser_tx.parse_args([
-            self.host, '--address', '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH', '--value', '{}'.format(value), '--count', '1'
+            self.host, '--address', self.get_address(0), '--value', '{}'.format(value), '--count', '1'
         ])
         execute_tx(args)
 

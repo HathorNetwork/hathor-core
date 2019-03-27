@@ -16,7 +16,7 @@ from twisted.logger import Logger
 from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
-from hathor.constants import BLOCK_DATA_MAX_SIZE as DATA_SIZE
+from hathor.conf import HathorSettings
 from hathor.exception import InvalidNewTransaction
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.transaction import Block
@@ -24,6 +24,8 @@ from hathor.transaction.exceptions import PowError, TxValidationError
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
+
+settings = HathorSettings()
 
 
 def valid_uuid(uuid: Any) -> bool:
@@ -476,7 +478,7 @@ class StratumFactory(Factory):
         assert isinstance(block, Block)
 
         data = "Node {} - Miner {}".format(self.manager.my_peer, miner)
-        block.data = data.encode()[:DATA_SIZE]
+        block.data = data.encode()[:settings.BLOCK_DATA_MAX_SIZE]
         return ServerJob(id, miner, block)
 
     def update_jobs(self) -> None:

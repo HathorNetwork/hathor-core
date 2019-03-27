@@ -43,7 +43,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
     def _add_new_transactions(self, num_txs):
         txs = []
         for _ in range(num_txs):
-            address = '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'
+            address = self.get_address(0)
             value = random.choice([5, 10, 50, 100, 120])
             tx = self._add_new_tx(address, value)
             txs.append(tx)

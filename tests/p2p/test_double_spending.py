@@ -18,7 +18,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
     def _add_new_transactions(self, manager, num_txs):
         txs = []
         for _ in range(num_txs):
-            address = '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'
+            address = self.get_address(0)
             value = random.choice([5, 10, 15, 20])
             tx = add_new_tx(manager, address, value)
             txs.append(tx)
@@ -30,7 +30,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         from hathor.transaction import Transaction
         from hathor.wallet.base_wallet import WalletOutputInfo
 
-        address = '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'
+        address = self.get_address(0)
         value = 1000
 
         outputs = []

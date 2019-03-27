@@ -5,13 +5,15 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set
 from twisted.logger import Logger
 
 from hathor import protos
-from hathor.constants import BLOCK_DATA_MAX_SIZE
+from hathor.conf import HathorSettings
 from hathor.transaction.base_transaction import BaseTransaction, TxOutput, sum_weights
 from hathor.transaction.exceptions import BlockDataError, BlockWithInputs, BlockWithTokensError
 from hathor.transaction.util import int_to_bytes, unpack, unpack_len
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
+
+settings = HathorSettings()
 
 
 class Block(BaseTransaction):
@@ -143,7 +145,7 @@ class Block(BaseTransaction):
                 raise BlockWithTokensError('in output: {}'.format(output.to_human_readable()))
 
     def verify_data(self) -> None:
-        if len(self.data) > BLOCK_DATA_MAX_SIZE:
+        if len(self.data) > settings.BLOCK_DATA_MAX_SIZE:
             raise BlockDataError('block data has {} bytes'.format(len(self.data)))
 
     def verify_without_storage(self) -> None:
@@ -172,41 +174,14 @@ class Block(BaseTransaction):
         # (1) and (4)
         self.verify_parents()
 
-    def _score_tx_dfs(self, tx: BaseTransaction, used: Set[bytes],
-                      mark_as_best_chain: bool, newest_timestamp: int) -> float:
-        """ Internal method to run a DFS. It is used by `calculate_score()`.
-        """
-        assert self.storage is not None
-
-        assert tx.hash is not None
-        assert not tx.is_block
-        if tx.hash in used:
-            return 0
-        used.add(tx.hash)
-
-        meta = tx.get_metadata()
-        if meta.first_block:
-            block = self.storage.get_transaction(meta.first_block)
-            if block.timestamp <= newest_timestamp:
-                return 0
-
-        if mark_as_best_chain:
-            assert meta.first_block is None
-            meta.first_block = self.hash
-            self.storage.save_transaction(tx, only_metadata=True)
-
-        score = tx.weight
-        for parent in tx.get_parents():
-            score = sum_weights(score, self._score_tx_dfs(parent, used, mark_as_best_chain, newest_timestamp))
-        return score
-
     def _score_block_dfs(self, block: BaseTransaction, used: Set[bytes],
                          mark_as_best_chain: bool, newest_timestamp: int) -> float:
         """ Internal method to run a DFS. It is used by `calculate_score()`.
         """
         assert self.storage is not None
-
+        assert block.hash is not None
         assert block.is_block
+
         score = block.weight
         for parent in block.get_parents():
             if parent.is_block:
@@ -217,8 +192,30 @@ class Block(BaseTransaction):
                 else:
                     x = parent._score_block_dfs(parent, used, mark_as_best_chain, newest_timestamp)
                 score = sum_weights(score, x)
+
             else:
-                score = sum_weights(score, self._score_tx_dfs(parent, used, mark_as_best_chain, newest_timestamp))
+                from hathor.transaction.storage.traversal import BFSWalk
+                bfs = BFSWalk(self.storage, is_dag_verifications=True, is_left_to_right=False)
+                for tx in bfs.run(parent, skip_root=False):
+                    assert not tx.is_block
+                    if tx.hash in used:
+                        bfs.skip_neighbors(tx)
+                        continue
+                    used.add(tx.hash)
+
+                    meta = tx.get_metadata()
+                    if meta.first_block:
+                        first_block = self.storage.get_transaction(meta.first_block)
+                        if first_block.timestamp <= newest_timestamp:
+                            bfs.skip_neighbors(tx)
+                            continue
+
+                    if mark_as_best_chain:
+                        assert meta.first_block is None
+                        meta.first_block = self.hash
+                        self.storage.save_transaction(tx, only_metadata=True)
+
+                    score = sum_weights(score, tx.weight)
 
         # Always save the score when it is calculated.
         meta = block.get_metadata()
@@ -230,7 +227,8 @@ class Block(BaseTransaction):
             # Thus, if we have already calculated it, we just check the consistency of the calculation.
             # Unfortunately we may have to calculate it more than once when a new block arrives in a side
             # side because the `first_block` points only to the best chain.
-            assert abs(meta.score - score) < 1e-10
+            assert abs(meta.score - score) < 1e-10, \
+                   'hash={} meta.score={} score={}'.format(block.hash.hex(), meta.score, score)
 
         return score
 
@@ -254,36 +252,24 @@ class Block(BaseTransaction):
         used: Set[bytes] = set()
         return self._score_block_dfs(self, used, mark_as_best_chain, newest_timestamp)
 
-    def _remove_first_block_markers_dfs(self, tx: BaseTransaction, used: Set[bytes]) -> None:
-        """ Run a DFS removing the `meta.first_block` pointing to this block. The DFS stops when it finds
-        a transaction pointing to another block.
-        """
-        assert tx.hash is not None
-        assert self.storage is not None
-
-        if tx.hash in used:
-            return
-        used.add(tx.hash)
-        assert not tx.is_block
-
-        meta = tx.get_metadata()
-        if meta.first_block != self.hash:
-            return
-
-        meta.first_block = None
-        self.storage.save_transaction(tx, only_metadata=True)
-
-        for parent in tx.get_parents():
-            if not parent.is_block:
-                self._remove_first_block_markers_dfs(parent, used)
-
     def remove_first_block_markers(self) -> None:
         """ Remove all `meta.first_block` pointing to this block.
         """
-        used: Set[bytes] = set()
-        for parent in self.get_parents():
-            if not parent.is_block:
-                self._remove_first_block_markers_dfs(parent, used)
+        assert self.storage is not None
+        from hathor.transaction.storage.traversal import BFSWalk
+        bfs = BFSWalk(self.storage, is_dag_verifications=True, is_left_to_right=False)
+        for tx in bfs.run(self, skip_root=True):
+            if tx.is_block:
+                bfs.skip_neighbors(tx)
+                continue
+
+            meta = tx.get_metadata()
+            if meta.first_block != self.hash:
+                bfs.skip_neighbors(tx)
+                continue
+
+            meta.first_block = None
+            self.storage.save_transaction(tx, only_metadata=True)
 
     def update_score_and_mark_as_the_best_chain(self) -> None:
         """ Update score and mark the chain as the best chain.

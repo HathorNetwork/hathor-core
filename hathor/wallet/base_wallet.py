@@ -8,7 +8,7 @@ from twisted.internet.interfaces import IDelayedCall, IReactorCore
 from twisted.internet.task import Clock
 from twisted.logger import Logger
 
-from hathor.constants import HATHOR_TOKEN_UID
+from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction, TxInput, TxOutput
@@ -17,6 +17,8 @@ from hathor.transaction.scripts import P2PKH, create_output_script, parse_addres
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.transaction import Transaction
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
+
+settings = HathorSettings()
 
 # check interval for maybe_spent_txs
 UTXO_CHECK_INTERVAL = 10
@@ -34,7 +36,7 @@ class WalletOutputInfo(NamedTuple):
     address: bytes
     value: int
     timelock: Optional[int]
-    token_uid: str = HATHOR_TOKEN_UID.hex()
+    token_uid: str = settings.HATHOR_TOKEN_UID.hex()
 
 
 class WalletBalance(NamedTuple):
@@ -197,7 +199,7 @@ class BaseWallet:
         tokens = []         # List[bytes] = List[token_uid]
         for txout in outputs:
             token_uid = bytes.fromhex(txout.token_uid)
-            if token_uid == HATHOR_TOKEN_UID:
+            if token_uid == settings.HATHOR_TOKEN_UID:
                 token_index = 0
             elif token_uid in token_dict:
                 token_index = token_dict[token_uid]
@@ -367,7 +369,7 @@ class BaseWallet:
                 _input.data = P2PKH.create_input_data(public_key_bytes, signature)
 
     def handle_change_tx(self, sum_inputs: int, sum_outputs: int,
-                         token_uid: bytes = HATHOR_TOKEN_UID) -> Optional[WalletOutputInfo]:
+                         token_uid: bytes = settings.HATHOR_TOKEN_UID) -> Optional[WalletOutputInfo]:
         """Creates an output transaction with the change value
 
         :param sum_inputs: Sum of the input amounts
@@ -391,7 +393,7 @@ class BaseWallet:
             return new_output
         return None
 
-    def get_inputs_from_amount(self, amount: int, token_uid: bytes = HATHOR_TOKEN_UID,
+    def get_inputs_from_amount(self, amount: int, token_uid: bytes = settings.HATHOR_TOKEN_UID,
                                max_ts: Optional[int] = None) -> Tuple[List[WalletInputInfo], int]:
         """Creates inputs from our pool of unspent tx given a value
 

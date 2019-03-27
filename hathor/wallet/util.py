@@ -5,10 +5,12 @@ import base58
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from hathor.constants import MULTISIG_VERSION_BYTE
+from hathor.conf import HathorSettings
 from hathor.crypto.util import get_hash160, get_private_key_from_bytes
 from hathor.transaction.scripts import HathorScript, Opcode
 from hathor.transaction.transaction import Transaction
+
+settings = HathorSettings()
 
 
 def generate_multisig_redeem_script(signatures_required: int, public_key_bytes: List[bytes]) -> bytes:
@@ -34,7 +36,7 @@ def generate_multisig_redeem_script(signatures_required: int, public_key_bytes: 
     return redeem_script.data
 
 
-def generate_multisig_address(redeem_script: bytes, version_byte: bytes = MULTISIG_VERSION_BYTE) -> str:
+def generate_multisig_address(redeem_script: bytes, version_byte: bytes = settings.MULTISIG_VERSION_BYTE) -> str:
     """ Generate a multisig address for the multisig wallet
 
         <version_byte> <redeem_script_hash> <checksum>

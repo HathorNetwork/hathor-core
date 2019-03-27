@@ -11,11 +11,13 @@ from twisted.internet.task import Clock
 from twisted.logger import Logger
 from zope.interface import implementer
 
-from hathor.constants import P2P_SYNC_THRESHOLD
+from hathor.conf import HathorSettings
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
 from hathor.p2p.plugin import Plugin
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+
+settings = HathorSettings()
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
@@ -190,7 +192,7 @@ class NodeSyncTimestamp(Plugin):
 
         # Maximum difference between our latest timestamp and synced timestamp to consider
         # that the peer is synced (in seconds).
-        self.sync_threshold: int = P2P_SYNC_THRESHOLD
+        self.sync_threshold: int = settings.P2P_SYNC_THRESHOLD
 
         # Indicate whether the synchronization is running.
         self.is_running: bool = False

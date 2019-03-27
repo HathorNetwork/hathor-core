@@ -18,7 +18,7 @@ class _Base:
             data = b'This is a test block.'
             self.blocks = add_new_blocks(self.manager, 3, advance_clock=15, block_data=data)
 
-            address = '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'
+            address = self.get_address(0)
             value = 100
 
             outputs = [
