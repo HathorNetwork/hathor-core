@@ -11,16 +11,7 @@ from twisted.internet.interfaces import IReactorCore
 from twisted.logger import Logger
 from twisted.python.threadpool import ThreadPool
 
-from hathor.constants import (
-    BLOCK_DIFFICULTY_MAX_DW,
-    BLOCK_DIFFICULTY_N_BLOCKS,
-    DECIMAL_PLACES,
-    MAX_DISTANCE_BETWEEN_BLOCKS,
-    MAX_POW_THREADS,
-    MIN_BLOCK_WEIGHT,
-    MIN_TX_WEIGHT,
-    TOKENS_PER_BLOCK,
-)
+from hathor.conf import HathorSettings
 from hathor.exception import InvalidNewTransaction
 from hathor.indexes import WalletIndex
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -32,6 +23,8 @@ from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput, su
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.wallet import BaseWallet
+
+settings = HathorSettings()
 
 
 class TestMode(IntFlag):
@@ -116,9 +109,9 @@ class HathorManager:
             self.tx_storage.wallet_index = WalletIndex(self.pubsub)
 
         self.avg_time_between_blocks = 64  # in seconds
-        self.min_block_weight = MIN_BLOCK_WEIGHT
-        self.min_tx_weight = MIN_TX_WEIGHT
-        self.tokens_issued_per_block = TOKENS_PER_BLOCK * (10**DECIMAL_PLACES)
+        self.min_block_weight = settings.MIN_BLOCK_WEIGHT
+        self.min_tx_weight = settings.MIN_TX_WEIGHT
+        self.tokens_issued_per_block = settings.TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES)
 
         self.max_future_timestamp_allowed = 3600  # in seconds
 
@@ -154,7 +147,7 @@ class HathorManager:
         self._allow_mining_without_peers = False
 
         # Thread pool used to resolve pow when sending tokens
-        self.pow_thread_pool = ThreadPool(minthreads=0, maxthreads=MAX_POW_THREADS, name='Pow thread pool')
+        self.pow_thread_pool = ThreadPool(minthreads=0, maxthreads=settings.MAX_POW_THREADS, name='Pow thread pool')
 
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
@@ -325,8 +318,8 @@ class HathorManager:
             tip_blocks = [parent_block_hash]
 
         parent_block = self.tx_storage.get_transaction(random.choice(tip_blocks))
-        if not parent_block.is_genesis and timestamp - parent_block.timestamp > MAX_DISTANCE_BETWEEN_BLOCKS:
-            timestamp = parent_block.timestamp + MAX_DISTANCE_BETWEEN_BLOCKS
+        if not parent_block.is_genesis and timestamp - parent_block.timestamp > settings.MAX_DISTANCE_BETWEEN_BLOCKS:
+            timestamp = parent_block.timestamp + settings.MAX_DISTANCE_BETWEEN_BLOCKS
 
         assert timestamp is not None
         tip_txs = self.get_new_tx_parents(timestamp - 1)
@@ -499,7 +492,7 @@ class HathorManager:
 
         blocks: List[Block] = []
         root = block
-        while len(blocks) < BLOCK_DIFFICULTY_N_BLOCKS:
+        while len(blocks) < settings.BLOCK_DIFFICULTY_N_BLOCKS:
             if not root.parents:
                 assert root.is_genesis
                 break
@@ -521,7 +514,7 @@ class HathorManager:
         weight = logH - log(dt, 2) + log(self.avg_time_between_blocks, 2)
 
         # Apply a maximum change in difficulty.
-        max_dw = BLOCK_DIFFICULTY_MAX_DW
+        max_dw = settings.BLOCK_DIFFICULTY_MAX_DW
         dw = weight - blocks[-1].weight
         if dw > max_dw:
             weight = blocks[-1].weight + max_dw
@@ -559,7 +552,7 @@ class HathorManager:
 
         # We need to take into consideration the decimal places because it is inside the amount.
         # For instance, if one wants to transfer 20 HTRs, the amount will be 2000.
-        amount = tx.sum_outputs / (10 ** DECIMAL_PLACES)
+        amount = tx.sum_outputs / (10 ** settings.DECIMAL_PLACES)
         weight = (
             + self.min_tx_weight_coefficient * log(tx_size, 2)
             + 4 / (1 + self.min_tx_weight_k / amount) + 4

@@ -12,7 +12,7 @@ from struct import pack
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterator, List, Optional, Tuple
 
 from hathor import protos
-from hathor.constants import HATHOR_TOKEN_UID, MAX_DISTANCE_BETWEEN_BLOCKS
+from hathor.conf import HathorSettings
 from hathor.transaction.exceptions import (
     DuplicatedParents,
     IncorrectParents,
@@ -26,6 +26,8 @@ from hathor.transaction.util import int_to_bytes, unpack, unpack_len
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
+
+settings = HathorSettings()
 
 MAX_NONCE = 2**32
 MAX_NUM_INPUTS = MAX_NUM_OUTPUTS = 256
@@ -443,7 +445,7 @@ class BaseTransaction(ABC):
 
                 if parent.is_block:
                     if self.is_block and not parent.is_genesis:
-                        if self.timestamp - parent.timestamp > MAX_DISTANCE_BETWEEN_BLOCKS:
+                        if self.timestamp - parent.timestamp > settings.MAX_DISTANCE_BETWEEN_BLOCKS:
                             raise TimestampError('Distance between blocks is too big'
                                                  ' ({} seconds)'.format(self.timestamp - parent.timestamp))
                     if my_parents_txs > 0:
@@ -804,7 +806,7 @@ class BaseTransaction(ABC):
         :rtype: bytes
         """
         if index == 0:
-            return HATHOR_TOKEN_UID
+            return settings.HATHOR_TOKEN_UID
         return self.tokens[index - 1]
 
 

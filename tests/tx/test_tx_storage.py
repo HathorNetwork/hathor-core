@@ -6,7 +6,7 @@ import unittest
 
 from twisted.internet.task import Clock
 
-from hathor.constants import STORAGE_SUBFOLDERS
+from hathor.conf import HathorSettings
 from hathor.manager import TestMode
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.storage import (
@@ -19,6 +19,8 @@ from hathor.transaction.storage import (
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.wallet import Wallet
 from tests.utils import add_new_blocks, add_new_transactions, start_remote_storage
+
+settings = HathorSettings()
 
 
 class _BaseTransactionStorageTest:
@@ -284,7 +286,7 @@ class TransactionCompactStorageTest(_BaseTransactionStorageTest._TransactionStor
     def test_subfolders(self):
         # test we have the subfolders under the main tx folder
         subfolders = os.listdir(self.directory)
-        self.assertEqual(STORAGE_SUBFOLDERS, len(subfolders))
+        self.assertEqual(settings.STORAGE_SUBFOLDERS, len(subfolders))
 
     def tearDown(self):
         shutil.rmtree(self.directory)

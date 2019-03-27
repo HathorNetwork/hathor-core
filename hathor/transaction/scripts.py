@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from twisted.logger import Logger
 
-from hathor.constants import MULTISIG_VERSION_BYTE, P2PKH_VERSION_BYTE
+from hathor.conf import HathorSettings
 from hathor.crypto.util import (
     get_address_b58_from_bytes,
     get_address_b58_from_public_key_hash,
@@ -32,6 +32,8 @@ from hathor.transaction.exceptions import (
     TimeLocked,
     VerifyFailed,
 )
+
+settings = HathorSettings()
 
 # XXX: Because the Stack is a heterogeneous list of bytes and int, and some OPs only work for when the stack has some
 #      or the other type, there are many places that require an assert to prevent the wrong type from being used,
@@ -591,9 +593,9 @@ def create_output_script(address: bytes, timelock: Optional[Any] = None) -> byte
 
         :rtype: bytes
     """
-    if address[0] == binary_to_int(P2PKH_VERSION_BYTE):
+    if address[0] == binary_to_int(settings.P2PKH_VERSION_BYTE):
         return P2PKH.create_output_script(address, timelock)
-    elif address[0] == binary_to_int(MULTISIG_VERSION_BYTE):
+    elif address[0] == binary_to_int(settings.MULTISIG_VERSION_BYTE):
         return MultiSig.create_output_script(address, timelock)
     else:
         raise ScriptError('The address is not valid')

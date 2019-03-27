@@ -3,13 +3,15 @@ from unittest.mock import Mock
 
 from twisted.test import proto_helpers
 
-from hathor.constants import HATHOR_TOKEN_UID
+from hathor.conf import HathorSettings
 from hathor.metrics import Metrics
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.transaction.genesis import get_genesis_transactions
 from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance
 from hathor.websocket.factory import HathorAdminWebsocketFactory, HathorAdminWebsocketProtocol
 from tests import unittest
+
+settings = HathorSettings()
 
 
 class TestWebsocket(unittest.TestCase):
@@ -65,7 +67,7 @@ class TestWebsocket(unittest.TestCase):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
         self.manager.pubsub.publish(HathorEvents.WALLET_BALANCE_UPDATED,
-                                    balance={HATHOR_TOKEN_UID: WalletBalance(10, 20)})
+                                    balance={settings.HATHOR_TOKEN_UID: WalletBalance(10, 20)})
         self.run_to_completion()
         value = self._decode_value(self.transport.value())
         self.assertEqual(value['balance']['locked'], 10)

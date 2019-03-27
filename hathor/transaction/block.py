@@ -5,13 +5,15 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set
 from twisted.logger import Logger
 
 from hathor import protos
-from hathor.constants import BLOCK_DATA_MAX_SIZE
+from hathor.conf import HathorSettings
 from hathor.transaction.base_transaction import BaseTransaction, TxOutput, sum_weights
 from hathor.transaction.exceptions import BlockDataError, BlockWithInputs, BlockWithTokensError
 from hathor.transaction.util import int_to_bytes, unpack, unpack_len
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
+
+settings = HathorSettings()
 
 
 class Block(BaseTransaction):
@@ -138,7 +140,7 @@ class Block(BaseTransaction):
                 raise BlockWithTokensError('in output: {}'.format(output.to_human_readable()))
 
     def verify_data(self) -> None:
-        if len(self.data) > BLOCK_DATA_MAX_SIZE:
+        if len(self.data) > settings.BLOCK_DATA_MAX_SIZE:
             raise BlockDataError('block data has {} bytes'.format(len(self.data)))
 
     def verify_without_storage(self) -> None:

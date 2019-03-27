@@ -31,7 +31,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         self.manager.wallet.unlock(b'MYPASS')
 
         # Sending token to random address without input
-        data_json = {'outputs': [{'address': '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH', 'value': 5}], 'inputs': []}
+        data_json = {'outputs': [{'address': self.get_address(0), 'value': 5}], 'inputs': []}
         yield self.web_tokens.post('wallet/send_tokens', {'data': data_json})
 
         # Valid

@@ -4,7 +4,7 @@ from collections import defaultdict
 
 from cryptography.hazmat.primitives import serialization
 
-from hathor.constants import HATHOR_TOKEN_UID
+from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key, get_private_key_bytes
 from hathor.transaction import Transaction, TxInput
 from hathor.transaction.genesis import get_genesis_transactions
@@ -15,6 +15,8 @@ from hathor.wallet.exceptions import InsufficientFunds, InvalidAddress, OutOfUnu
 from hathor.wallet.keypair import KeyPair
 from tests import unittest
 from tests.utils import add_new_block, create_tokens, get_genesis_key
+
+settings = HathorSettings()
 
 BLOCK_REWARD = 300
 
@@ -71,9 +73,9 @@ class BasicWallet(unittest.TestCase):
         # wallet will receive genesis block and store in unspent_tx
         w.on_new_tx(genesis_block)
         for index in range(len(genesis_block.outputs)):
-            utxo = w.unspent_txs[HATHOR_TOKEN_UID].get((genesis_block.hash, index))
+            utxo = w.unspent_txs[settings.HATHOR_TOKEN_UID].get((genesis_block.hash, index))
             self.assertIsNotNone(utxo)
-        self.assertEqual(w.balance[HATHOR_TOKEN_UID], WalletBalance(0, genesis_value))
+        self.assertEqual(w.balance[settings.HATHOR_TOKEN_UID], WalletBalance(0, genesis_value))
 
         # create transaction spending this value, but sending to same wallet
         new_address = w.get_unused_address()
@@ -84,7 +86,7 @@ class BasicWallet(unittest.TestCase):
         self.storage.save_transaction(tx1)
         w.on_new_tx(tx1)
         self.assertEqual(len(w.spent_txs), 1)
-        self.assertEqual(w.balance[HATHOR_TOKEN_UID], WalletBalance(0, genesis_value))
+        self.assertEqual(w.balance[settings.HATHOR_TOKEN_UID], WalletBalance(0, genesis_value))
 
         # pass inputs and outputs to prepare_transaction, but not the input keys
         # spend output last transaction
@@ -99,7 +101,7 @@ class BasicWallet(unittest.TestCase):
         self.storage.save_transaction(tx2)
         w.on_new_tx(tx2)
         self.assertEqual(len(w.spent_txs), 2)
-        self.assertEqual(w.balance[HATHOR_TOKEN_UID], WalletBalance(0, genesis_value))
+        self.assertEqual(w.balance[settings.HATHOR_TOKEN_UID], WalletBalance(0, genesis_value))
 
         # test keypair exception
         with self.assertRaises(WalletLocked):
@@ -115,9 +117,9 @@ class BasicWallet(unittest.TestCase):
         tx = w.prepare_transaction(Transaction, inputs=[], outputs=[out])
         tx.update_hash()
         w.on_new_tx(tx)
-        utxo = w.unspent_txs[HATHOR_TOKEN_UID].get((tx.hash, 0))
+        utxo = w.unspent_txs[settings.HATHOR_TOKEN_UID].get((tx.hash, 0))
         self.assertIsNotNone(utxo)
-        self.assertEqual(w.balance[HATHOR_TOKEN_UID], WalletBalance(0, BLOCK_REWARD))
+        self.assertEqual(w.balance[settings.HATHOR_TOKEN_UID], WalletBalance(0, BLOCK_REWARD))
 
     def test_locked(self):
         # generate a new block and check if we increase balance
@@ -187,7 +189,7 @@ class BasicWallet(unittest.TestCase):
         address_b58 = self.manager.wallet.get_unused_address()
         address = decode_address(address_b58)
 
-        _, hathor_balance = self.manager.wallet.balance[HATHOR_TOKEN_UID]
+        _, hathor_balance = self.manager.wallet.balance[settings.HATHOR_TOKEN_UID]
         # prepare tx with hathors and another token
         # hathor tx
         hathor_out = WalletOutputInfo(address, hathor_balance, None)
@@ -212,7 +214,7 @@ class BasicWallet(unittest.TestCase):
         # make sure balance is the same and we've checked both balances
         did_enter = 0
         for token_uid, value in token_dict.items():
-            if token_uid == HATHOR_TOKEN_UID:
+            if token_uid == settings.HATHOR_TOKEN_UID:
                 self.assertEqual(value, hathor_balance)
                 did_enter += 1
             elif token_uid == token_uid:
@@ -238,7 +240,7 @@ class BasicWallet(unittest.TestCase):
         self.assertEqual(len(tx1.inputs), 1)
         _input = tx1.inputs[0]
         key = (_input.tx_id, _input.index)
-        self.assertNotIn(key, w.unspent_txs[HATHOR_TOKEN_UID])
-        self.assertIn(key, w.maybe_spent_txs[HATHOR_TOKEN_UID])
+        self.assertNotIn(key, w.unspent_txs[settings.HATHOR_TOKEN_UID])
+        self.assertIn(key, w.maybe_spent_txs[settings.HATHOR_TOKEN_UID])
         self.run_to_completion()
-        self.assertIn(key, w.unspent_txs[HATHOR_TOKEN_UID])
+        self.assertIn(key, w.unspent_txs[settings.HATHOR_TOKEN_UID])

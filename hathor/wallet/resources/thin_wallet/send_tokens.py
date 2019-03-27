@@ -7,10 +7,12 @@ from twisted.web.http import Request
 
 from hathor.api_util import render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.constants import MAX_POW_THREADS
+from hathor.conf import HathorSettings
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TxValidationError
+
+settings = HathorSettings()
 
 
 @register_resource
@@ -37,7 +39,7 @@ class SendTokensResource(resource.Resource):
         set_cors(request, 'POST')
 
         # Validating if we still have unused threads to solve the pow
-        if len(self.manager.pow_thread_pool.working) == MAX_POW_THREADS:
+        if len(self.manager.pow_thread_pool.working) == settings.MAX_POW_THREADS:
             return self.return_POST(
                 False,
                 'The server is currently fully loaded to send tokens. Wait a moment and try again, please.'
