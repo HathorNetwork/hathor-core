@@ -7,6 +7,7 @@ from twisted.web import resource
 from hathor.api_util import get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.transaction import Transaction
+from hathor.transaction.resources.transaction import get_tx_extra_data
 
 
 @register_resource
@@ -42,10 +43,8 @@ class DecodeTxResource(resource.Resource):
 
             try:
                 tx = Transaction.create_from_struct(tx_bytes)
-                tx_data = tx.to_json(decode_script=True)
                 tx.storage = self.manager.tx_storage
-                tx_data['accumulated_weight'] = tx.get_metadata().accumulated_weight
-                data = {'transaction': tx_data, 'success': True}
+                data = get_tx_extra_data(tx)
             except struct.error:
                 data = {'success': False}
 
@@ -80,7 +79,7 @@ DecodeTxResource.openapi = {
                                 'success': {
                                     'summary': 'Transaction decoded',
                                     'value': {
-                                        'transaction': {
+                                        'tx': {
                                             'hash': '00002b3be4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22f',
                                             'nonce': 17076,
                                             'timestamp': 1539271482,
@@ -89,8 +88,31 @@ DecodeTxResource.openapi = {
                                             'parents': [],
                                             'inputs': [],
                                             'outputs': [],
-                                            'tokens': [],
-                                            'accumulated_weight': 14
+                                            'tokens': []
+                                        },
+                                        'meta': {
+                                            'hash': '00002b3be4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22f',
+                                            'spent_outputs': [
+                                                ['0', [
+                                                    '00002b3be4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22e'
+                                                ]],
+                                                ['1', [
+                                                    '00002b3ce4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22e'
+                                                ]]
+                                            ],
+                                            'received_by': [],
+                                            'children': [
+                                                '00002b3ee4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22d'
+                                            ],
+                                            'conflict_with': [],
+                                            'voided_by': [],
+                                            'twins': [],
+                                            'accumulated_weight': 10,
+                                            'score': 12,
+                                            'first_block': None
+                                        },
+                                        'spent_outputs': {
+                                            0: '00002b3ce4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22e'
                                         },
                                         'success': True
                                     }

@@ -1,9 +1,36 @@
 import json
+from typing import Any, Dict
 
 from twisted.web import resource
 
 from hathor.api_util import set_cors, validate_tx_hash
 from hathor.cli.openapi_files.register import register_resource
+from hathor.transaction.base_transaction import BaseTransaction
+
+
+def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
+    """ Get the data of a tx to be returned to the frontend
+        Returns success, tx serializes, metadata and spent outputs
+    """
+    serialized = tx.to_json(decode_script=True)
+    serialized['raw'] = tx.get_struct().hex()
+    meta = tx.get_metadata(force_reload=True)
+    # To get the updated accumulated weight just need to call the
+    # TransactionAccumulatedWeightResource (/transaction_acc_weight)
+
+    # In the metadata we have the spent_outputs, that are the txs that spent the outputs for each index
+    # However we need to send also which one of them is not voided
+    spent_outputs = {}
+    for index, spent_set in meta.spent_outputs.items():
+        for spent in spent_set:
+            if tx.storage:
+                spent_tx = tx.storage.get_transaction(spent)
+                spent_meta = spent_tx.get_metadata()
+                if not spent_meta.voided_by:
+                    spent_outputs[index] = spent_tx.hash_hex
+                    break
+
+    return {'success': True, 'tx': serialized, 'meta': meta.to_json(), 'spent_outputs': spent_outputs}
 
 
 @register_resource
@@ -54,24 +81,8 @@ class TransactionResource(resource.Resource):
         else:
             hash_bytes = bytes.fromhex(requested_hash)
             tx = self.manager.tx_storage.get_transaction(hash_bytes)
-            serialized = tx.to_json(decode_script=True)
-            serialized['raw'] = tx.get_struct().hex()
-            meta = tx.get_metadata(force_reload=True)
-            # To get the updated accumulated weight just need to call the
-            # TransactionAccumulatedWeightResource (/transaction_acc_weight)
-
-            # In the metadata we have the spent_outputs, that are the txs that spent the outputs for each index
-            # However we need to send also which one of them is not voided
-            spent_outputs = {}
-            for index, spent_set in meta.spent_outputs.items():
-                for spent in spent_set:
-                    spent_tx = self.manager.tx_storage.get_transaction(spent)
-                    spent_meta = spent_tx.get_metadata()
-                    if not spent_meta.voided_by:
-                        spent_outputs[index] = spent_tx.hash_hex
-                        break
-
-            data = {'success': True, 'tx': serialized, 'meta': meta.to_json(), 'spent_outputs': spent_outputs}
+            tx.storage = self.manager.tx_storage
+            data = get_tx_extra_data(tx)
 
         return data
 

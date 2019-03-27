@@ -159,7 +159,7 @@ class NanoContractsTest(_BaseResourceTest._ResourceTest):
         response = yield decodetx_resource.get("decode_tx", {b'hex_tx': bytes(nano_contract_hex, 'utf-8')})
         data = response.json_value()
         self.assertTrue(data['success'])
-        hash_hex = data['transaction']['hash']
+        hash_hex = data['tx']['hash']
 
         # Options
         yield execute_resource.options("wallet/nano_contracts/execute")
