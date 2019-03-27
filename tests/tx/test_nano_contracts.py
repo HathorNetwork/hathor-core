@@ -1,17 +1,14 @@
 import base64
 import json
-import unittest
 
 import base58
 
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, NanoContractMatchValues, script_eval
+from tests import unittest
 
 
 class NanoContracts(unittest.TestCase):
-    def setUp(self):
-        pass
-
     def test_match_values(self):
         pubkey_hash = '6o6ul2c+sqAariBVW+CwNaSJb9w='
         pubkey = 'Awmloohhey8WhajdDURgvbk1z3JHX2vxDSBjz9uG9wEp'
@@ -20,7 +17,7 @@ class NanoContracts(unittest.TestCase):
         oracle_signature = 'MEYCIQC5cyg1tOY4oyPZ5KY7ugWJGRShrsSPxr8AxxyuvO5PYwIhAOxHBDMid7aRXe' \
                            '+85rIaDPI2ussIcw54avaFWfT9svSp'
 
-        address = base58.b58decode('1Pa4MMsr5DMRAeU1PzthFXyEJeVNXsMHoz')
+        address = base58.b58decode(self.get_address(0))
 
         # they should be the same
         nc = NanoContractMatchValues(
@@ -42,7 +39,3 @@ class NanoContracts(unittest.TestCase):
         spent_tx = Transaction(outputs=[TxOutput(20, script)])
         tx = Transaction(outputs=[TxOutput(20, P2PKH.create_output_script(address))])
         script_eval(tx, txin, spent_tx)
-
-
-if __name__ == '__main__':
-    unittest.main()

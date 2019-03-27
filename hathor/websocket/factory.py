@@ -5,11 +5,13 @@ from typing import Any, DefaultDict, Dict, Set
 from autobahn.twisted.websocket import WebSocketServerFactory
 from twisted.internet import reactor
 
-from hathor.constants import HATHOR_TOKEN_UID
+from hathor.conf import HathorSettings
 from hathor.metrics import Metrics
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.pubsub import HathorEvents
 from hathor.websocket.protocol import HathorAdminWebsocketProtocol
+
+settings = HathorSettings()
 
 # CONTROLLED_TYPES define each Rate Limit parameter for each message type that should be limited
 # buffer_size (int): size of the deque that will hold the messages that will be processed in the future
@@ -174,7 +176,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             data['is_block'] = tx.is_block
             return data
         elif event == HathorEvents.WALLET_BALANCE_UPDATED:
-            data['balance'] = data['balance'][HATHOR_TOKEN_UID]._asdict()
+            data['balance'] = data['balance'][settings.HATHOR_TOKEN_UID]._asdict()
             return data
         else:
             raise ValueError('Should never have entered here! We dont know this event')

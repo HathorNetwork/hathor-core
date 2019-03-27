@@ -4,11 +4,13 @@ import json
 import os
 import re
 
-from hathor.constants import STORAGE_SUBFOLDERS
+from hathor.conf import HathorSettings
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.util import deprecated, skip_warning
+
+settings = HathorSettings()
 
 
 class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
@@ -24,7 +26,7 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
 
         filename_pattern = r'^tx_([\dabcdef]{64})\.json$'
         self.re_pattern = re.compile(filename_pattern)
-        self.create_subfolders(self.path, STORAGE_SUBFOLDERS)
+        self.create_subfolders(self.path, settings.STORAGE_SUBFOLDERS)
 
     def create_subfolders(self, path: str, num_subfolders: int):
         """ Create subfolders in the main tx storage folder.

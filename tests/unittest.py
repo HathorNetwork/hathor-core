@@ -133,3 +133,18 @@ class TestCase(unittest.TestCase):
                 print('WEIRDNESS! pending timed call not active!')
         if required_to_quiesce and active:
             self.fail('Reactor was still active when it was required to be quiescent.')
+
+    def get_address(self, index: int) -> str:
+        """ Generate a fixed HD Wallet and return an address
+        """
+        from hathor.wallet import HDWallet
+        words = ('bind daring above film health blush during tiny neck slight clown salmon '
+                 'wine brown good setup later omit jaguar tourist rescue flip pet salute')
+
+        hd = HDWallet(words=words)
+        hd._manually_initialize()
+
+        if index >= hd.gap_limit:
+            return None
+
+        return list(hd.keys.keys())[index]

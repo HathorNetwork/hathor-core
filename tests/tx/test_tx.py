@@ -1,7 +1,7 @@
 import base64
 import hashlib
 
-from hathor.constants import MAX_DISTANCE_BETWEEN_BLOCKS
+from hathor.conf import HathorSettings
 from hathor.crypto.util import get_address_from_public_key, get_private_key_from_bytes
 from hathor.manager import TestMode
 from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput
@@ -26,6 +26,8 @@ from hathor.transaction.util import int_to_bytes
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import add_new_blocks, add_new_transactions, get_genesis_key
+
+settings = HathorSettings()
 
 
 class BasicTransaction(unittest.TestCase):
@@ -457,7 +459,7 @@ class BasicTransaction(unittest.TestCase):
         # Validate maximum distance between blocks
         block = blocks[0]
         block2 = blocks[1]
-        block2.timestamp = block.timestamp + MAX_DISTANCE_BETWEEN_BLOCKS
+        block2.timestamp = block.timestamp + settings.MAX_DISTANCE_BETWEEN_BLOCKS
         block2.verify_parents()
         block2.timestamp += 1
         with self.assertRaises(TimestampError):

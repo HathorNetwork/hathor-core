@@ -1,12 +1,14 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.constants import DECIMAL_PLACES, HATHOR_TOKEN_UID, MAX_POW_THREADS, TOKENS_PER_BLOCK
+from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.wallet.resources.thin_wallet import AddressHistoryResource, SendTokensResource
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
 from tests.utils import add_new_blocks
+
+settings = HathorSettings()
 
 
 class SendTokensTest(_BaseResourceTest._ResourceTest):
@@ -24,12 +26,12 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         # Unlocking wallet
         self.manager.wallet.unlock(b'MYPASS')
 
-        per_block = TOKENS_PER_BLOCK * (10**DECIMAL_PLACES)
+        per_block = settings.TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES)
         quantity = 3
 
         blocks = add_new_blocks(self.manager, quantity)
 
-        self.assertEqual(self.manager.wallet.balance[HATHOR_TOKEN_UID].available, quantity*per_block)
+        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID].available, quantity*per_block)
 
         # Options
         yield self.web.options('thin_wallet/send_tokens')
@@ -40,7 +42,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         address = script_type_out.address
         private_key = self.manager.wallet.get_private_key(address)
 
-        output_address = decode_address('15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH')
+        output_address = decode_address(self.get_address(0))
         value = per_block
         o = TxOutput(value, create_output_script(output_address, None))
         o_invalid_amount = TxOutput(value-1, create_output_script(output_address, None))
@@ -93,7 +95,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertTrue(data['success'])
 
         # Check if tokens were really sent
-        self.assertEqual(self.manager.wallet.balance[HATHOR_TOKEN_UID].available, (quantity-1)*per_block)
+        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID].available, (quantity-1)*per_block)
 
         response_history = yield self.web_address_history.get(
             'thin_wallet/address_history', {
@@ -113,7 +115,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
             return tx.get_struct().hex()
 
         # Making pow threads full
-        for x in range(MAX_POW_THREADS):
+        for x in range(settings.MAX_POW_THREADS):
             ret = self.web.post('thin_wallet/send_tokens', {'tx_hex': get_new_tx_struct()})
             if x == 0:
                 deferred = ret

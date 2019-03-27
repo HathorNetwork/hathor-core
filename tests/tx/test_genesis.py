@@ -1,8 +1,10 @@
-from hathor.constants import GENESIS_TOKENS
+from hathor.conf import HathorSettings
 from hathor.manager import TestMode
 from hathor.transaction.genesis import get_genesis_transactions
 from tests import unittest
 from tests.utils import get_genesis_key
+
+settings = HathorSettings()
 
 
 def get_genesis_output():
@@ -39,7 +41,7 @@ class GenesisTest(unittest.TestCase):
         genesis_blocks = [tx for tx in get_genesis_transactions(None) if tx.is_block]
         genesis_block = genesis_blocks[0]
 
-        self.assertEqual(GENESIS_TOKENS, sum([output.value for output in genesis_block.outputs]))
+        self.assertEqual(settings.GENESIS_TOKENS, sum([output.value for output in genesis_block.outputs]))
 
     def test_genesis_weight(self):
         genesis_blocks = [tx for tx in get_genesis_transactions(None) if tx.is_block]

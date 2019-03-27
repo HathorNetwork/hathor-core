@@ -13,7 +13,9 @@ from cryptography.hazmat.primitives.serialization import (
     load_der_public_key,
 )
 
-from hathor.constants import MULTISIG_VERSION_BYTE, P2PKH_VERSION_BYTE
+from hathor.conf import HathorSettings
+
+settings = HathorSettings()
 
 _BACKEND = default_backend()
 
@@ -97,7 +99,8 @@ def get_address_b58_from_public_key_hash(public_key_hash: bytes) -> str:
     return base58.b58encode(address).decode('utf-8')
 
 
-def get_address_from_public_key_hash(public_key_hash: bytes, version_byte: bytes = P2PKH_VERSION_BYTE) -> bytes:
+def get_address_from_public_key_hash(public_key_hash: bytes,
+                                     version_byte: bytes = settings.P2PKH_VERSION_BYTE) -> bytes:
     """Gets the address in bytes from the public key hash
 
         :param public_key_hash: hash of public key (sha256 and ripemd160)
@@ -225,7 +228,7 @@ def get_public_key_from_bytes_compressed(public_key_bytes: bytes) -> ec.Elliptic
 
 
 def get_address_b58_from_redeem_script_hash(redeem_script_hash: bytes,
-                                            version_byte: bytes = MULTISIG_VERSION_BYTE) -> str:
+                                            version_byte: bytes = settings.MULTISIG_VERSION_BYTE) -> str:
     """Gets the b58 address from the hash of the redeem script in multisig.
 
         :param redeem_script_hash: hash of the redeem script (sha256 and ripemd160)
@@ -239,7 +242,7 @@ def get_address_b58_from_redeem_script_hash(redeem_script_hash: bytes,
 
 
 def get_address_from_redeem_script_hash(redeem_script_hash: bytes,
-                                        version_byte: bytes = MULTISIG_VERSION_BYTE) -> bytes:
+                                        version_byte: bytes = settings.MULTISIG_VERSION_BYTE) -> bytes:
     """Gets the address in bytes from the redeem script hash
 
         :param redeem_script_hash: hash of redeem script (sha256 and ripemd160)

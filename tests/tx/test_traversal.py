@@ -23,7 +23,7 @@ class _BaseTraversalTestCase:
             for tx in self.txs_before:
                 self.hashes_before.add(tx.hash)
 
-            address = '15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH'
+            address = self.get_address(0)
             self.root_tx = add_new_tx(self.manager, address=address, value=100)
 
             self.blocks_after = add_new_blocks(self.manager, 3)

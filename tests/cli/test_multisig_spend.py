@@ -2,7 +2,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 
 from hathor.cli.multisig_spend import create_parser, execute
-from hathor.constants import HATHOR_TOKEN_UID
+from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import create_output_script
@@ -10,6 +10,8 @@ from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
 from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from tests import unittest
 from tests.utils import add_new_blocks, get_tokens_from_mining
+
+settings = HathorSettings()
 
 
 class MultiSigSpendTest(unittest.TestCase):
@@ -48,13 +50,13 @@ class MultiSigSpendTest(unittest.TestCase):
         self.multisig_address_b58 = generate_multisig_address(self.redeem_script)
         self.multisig_address = decode_address(self.multisig_address_b58)
         self.address = decode_address(self.manager.wallet.get_unused_address())
-        self.outside_address = decode_address('15d14K5jMqsN2uwUEFqiPG5SoD7Vr1BfnH')
+        self.outside_address = decode_address(self.get_address(0))
 
     def test_spend_multisig(self):
         # Adding funds to the wallet
         add_new_blocks(self.manager, 2, advance_clock=15)
         available_tokens = get_tokens_from_mining(2)
-        self.assertEqual(self.manager.wallet.balance[HATHOR_TOKEN_UID], WalletBalance(0, available_tokens))
+        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID], WalletBalance(0, available_tokens))
 
         # First we send tokens to a multisig address
         outputs = [WalletOutputInfo(address=self.multisig_address, value=2000, timelock=None)]
@@ -67,7 +69,8 @@ class MultiSigSpendTest(unittest.TestCase):
         self.manager.propagate_tx(tx1)
         self.clock.advance(10)
 
-        self.assertEqual(self.manager.wallet.balance[HATHOR_TOKEN_UID], WalletBalance(0, available_tokens - 2000))
+        wallet_balance = WalletBalance(0, available_tokens - 2000)
+        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID], wallet_balance)
 
         # Then we create a new tx that spends this tokens from multisig wallet
         tx = Transaction.create_from_struct(tx1.get_struct())
