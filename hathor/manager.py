@@ -14,10 +14,10 @@ from twisted.python.threadpool import ThreadPool
 from hathor.conf import HathorSettings
 from hathor.exception import InvalidNewTransaction
 from hathor.indexes import WalletIndex
+from hathor.logging import LogRateLimiter
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
-from hathor.p2p.rate_limiter import RateLimiter
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.stratum import StratumFactory
 from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput, sum_weights
@@ -26,56 +26,6 @@ from hathor.transaction.storage import TransactionStorage
 from hathor.wallet import BaseWallet
 
 settings = HathorSettings()
-
-
-class LogRateLimiter(RateLimiter):
-    def __init__(self, manager):
-        self.manager = manager
-
-        self.rate_limiter = RateLimiter()
-        self.suppression_message: Dict[str, str] = {}
-
-        self.counters: Dict[str, int] = defaultdict(int)
-        self.latest_log: Dict[str, int] = defaultdict(int)
-
-        # Delay between message suppression logs.
-        self.suppression_log_delay: int = 5
-
-        # Last delayed call.
-        self.delayed_call = None
-
-    def set_limit(self, key: str, max_hits: int, window_seconds: int, suppression_message: str) -> None:
-        self.rate_limiter.set_limit(key, max_hits, window_seconds)
-        self.suppression_message[key] = suppresion_message
-
-    def info(self, key: str, *args, **kwargs):
-        if self.rate_limiter.add_hit(key):
-            if self.counters[key] > 0:
-                self.do_suppression_log()
-            self.manager.log.info(*args, **kwargs)
-        else:
-            if self.counters[key] == 0:
-                self.schedule_suppression_log()
-            self.counters[key] += 1
-
-    def schedule_suppression_log(self):
-        if self.delayed_call and self.delayed_call.active:
-            return
-        self.delayed_call = self.manager.reactor.callLater(self.suppression_log_delay, self.do_suppression_log)
-
-    def get_seconds(self):
-        return self.manager.reactor.seconds()
-
-    def do_suppression_log(self, key: str):
-        counter = self.counters[key]
-        msg = self.suppression_message[key]
-        now = self.get_seconds()
-        dt = now - self.latest_log[key]
-
-        self.log.info(msg, counter=counter, dt=dt)
-
-        self.counters[key] = 0
-        self.latest_log[key] = now
 
 
 class TestMode(IntFlag):
@@ -166,7 +116,7 @@ class HathorManager:
 
         self.max_future_timestamp_allowed = 3600  # in seconds
 
-        self.log_rate_limiter = LogRateLimiter()
+        self.log_rate_limiter = LogRateLimiter(self)
         self.log_rate_limiter.set_limit(
             'on_new_tx:tx', 30, 5,
             '{counter} transactions found in the previous {dt} seconds. Detailed log was suppressed.'
