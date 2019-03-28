@@ -9,7 +9,7 @@ from _hashlib import HASH
 from abc import ABC, abstractclassmethod, abstractmethod
 from math import inf, log
 from struct import pack
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Iterator, List, Optional, Tuple
 
 from hathor import protos
 from hathor.conf import HathorSettings
@@ -580,7 +580,8 @@ class BaseTransaction(ABC):
         """
         self.hash = self.calculate_hash()
 
-    def start_mining(self, start: int = 0, end: int = MAX_NONCE, sleep_seconds: float = 0.0) -> Optional[bytes]:
+    def start_mining(self, start: int = 0, end: int = MAX_NONCE, sleep_seconds: float = 0.0,
+                     *, should_stop: Callable[[], bool] = lambda: False) -> Optional[bytes]:
         """Starts mining until it solves the problem, i.e., finds the nonce that satisfies the conditions
 
         :param start: beginning of the search interval
@@ -595,6 +596,8 @@ class BaseTransaction(ABC):
         while self.nonce < end:
             now = time.time()
             if now - last_time > 2:
+                if should_stop():
+                    return None
                 self.timestamp = int(now)
                 pow_part1 = self.calculate_hash1()
                 last_time = now

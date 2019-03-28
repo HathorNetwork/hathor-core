@@ -2,6 +2,7 @@ import json
 from typing import Optional
 
 from twisted.internet import threads
+from twisted.internet.defer import CancelledError
 from twisted.web import resource
 from twisted.web.http import Request
 
@@ -59,6 +60,8 @@ class SendTokensResource(resource.Resource):
         # Set parents
         tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
 
+        request.should_stop_mining_thread = False
+
         from twisted.internet import reactor
         deferred = threads.deferToThreadPool(
             reactor,
@@ -69,13 +72,24 @@ class SendTokensResource(resource.Resource):
         )
         deferred.addCallback(self._cb_tx_resolve, request)
         deferred.addErrback(self._err_tx_resolve, request)
+        request.thread_deferred = deferred
+
+        request.notifyFinish().addErrback(self._responseFailed, request)
 
         from twisted.web.server import NOT_DONE_YET
         return NOT_DONE_YET
 
+    def _responseFailed(self, err, request):
+        request.should_stop_mining_thread = True
+
     def _render_POST_thread(self, tx: Transaction, request: Request) -> Transaction:
         # TODO Tx should be resolved in the frontend
-        tx.resolve()
+        def _should_stop():
+            return request.should_stop_mining_thread
+        hash_bytes = tx.start_mining(should_stop=_should_stop)
+        if request.should_stop_mining_thread:
+            raise CancelledError()
+        tx.hash = hash_bytes
         tx.verify()
         return tx
 
