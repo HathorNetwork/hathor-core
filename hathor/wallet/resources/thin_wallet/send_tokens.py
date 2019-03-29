@@ -27,6 +27,7 @@ class SendTokensResource(resource.Resource):
     def __init__(self, manager):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
+        self.sleep_seconds = 0
 
     def render_POST(self, request: Request):
         """ POST request for /thin_wallet/send_tokens/
@@ -86,7 +87,7 @@ class SendTokensResource(resource.Resource):
         # TODO Tx should be resolved in the frontend
         def _should_stop():
             return request.should_stop_mining_thread
-        hash_bytes = tx.start_mining(should_stop=_should_stop)
+        hash_bytes = tx.start_mining(sleep_seconds=self.sleep_seconds, should_stop=_should_stop)
         if request.should_stop_mining_thread:
             raise CancelledError()
         tx.hash = hash_bytes

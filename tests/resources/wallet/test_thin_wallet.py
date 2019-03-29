@@ -19,7 +19,10 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, unlock_wallet=True, wallet_index=True)
 
-        self.web = StubSite(SendTokensResource(self.manager))
+        sendtokens_resource = SendTokensResource(self.manager)
+        sendtokens_resource.sleep_seconds = 0.1
+
+        self.web = StubSite(sendtokens_resource)
         self.web_address_history = StubSite(AddressHistoryResource(self.manager))
 
     @inlineCallbacks

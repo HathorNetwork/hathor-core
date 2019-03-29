@@ -609,6 +609,8 @@ class BaseTransaction(ABC):
             self.nonce += 1
             if sleep_seconds > 0:
                 time.sleep(sleep_seconds)
+                if should_stop():
+                    return None
         return None
 
     def get_metadata(self, *, force_reload: bool = False, use_storage: bool = True) -> TransactionMetadata:
