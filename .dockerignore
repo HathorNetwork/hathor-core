@@ -3,7 +3,7 @@
 **/__pycache__
 cover/
 coverage*/
-data/
+data*/
 docs/
 *.egg-info
 .git

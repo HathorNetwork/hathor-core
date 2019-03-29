@@ -99,6 +99,8 @@ class StubSite(server.Site):
             if request.finished:
                 return succeed(request)
             else:
-                return request.notifyFinish().addCallback(lambda _: request)
+                deferred = request.notifyFinish().addCallback(lambda _: request)
+                deferred.request = request
+                return deferred
         else:
             raise ValueError('Unexpected return value: %r' % (result,))
