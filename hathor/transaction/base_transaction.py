@@ -670,22 +670,35 @@ class BaseTransaction(ABC):
 
         accumulated_weight = self.weight
 
-        # TODO We can walk by the blocks first, because they have higher weight and this may
-        # reduce the number of visits in the BFS. One possibility is to use the tx's weight as the weight
-        # of the edge and run a Djikstra.
-
         # TODO Another optimization is that, when we calculate the acc weight of a transaction, we
         # also partially calculate the acc weight of its descendants. If it were a DFS, when returning
         # to a vertex, the acc weight calculated would be <= the real acc weight. So, we might store it
         # as a pre-calculated value. Then, during the next DFS, if `cur + tx.acc_weight > stop_value`,
         # we might stop and avoid some visits. Question: how would we do it in the BFS?
 
+        # We can walk by the blocks first, because they have higher weight and this may
+        # reduce the number of visits in the BFS.
         from hathor.transaction.storage.traversal import BFSWalk
         bfs_walk = BFSWalk(self.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
         for tx in bfs_walk.run(self, skip_root=True):
+            if not tx.is_block:
+                bfs_walk.skip_neighbors(tx)
+                continue
             accumulated_weight = sum_weights(accumulated_weight, tx.weight)
             if accumulated_weight > stop_value:
                 break
+
+        eps = 1e-10
+        if accumulated_weight <= stop_value + eps:
+            # If we are still below stop_value, then we go through the transactions.
+            bfs_walk = BFSWalk(self.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
+            for tx in bfs_walk.run(self, skip_root=True):
+                if tx.is_block:
+                    bfs_walk.skip_neighbors(tx)
+                    continue
+                accumulated_weight = sum_weights(accumulated_weight, tx.weight)
+                if accumulated_weight > stop_value:
+                    break
 
         metadata.accumulated_weight = accumulated_weight
         if save_file:
