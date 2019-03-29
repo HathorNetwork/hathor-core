@@ -143,7 +143,7 @@ class TransactionResource(resource.Resource):
             else:
                 elements, has_more = self.manager.tx_storage.get_newest_txs(count=count)
 
-        serialized = [element.to_json() for element in elements]
+        serialized = [element.to_json_extended() for element in elements]
 
         data = {'transactions': serialized, 'has_more': has_more}
         return data
@@ -279,8 +279,8 @@ TransactionResource.openapi = {
                                     'value': {
                                         'transactions': [
                                             {
-                                                'hash': ('00000257054251161adff5899a451ae9'
-                                                         '74ac62ca44a7a31179eec5750b0ea406'),
+                                                'tx_id': ('00000257054251161adff5899a451ae9'
+                                                          '74ac62ca44a7a31179eec5750b0ea406'),
                                                 'nonce': 99579,
                                                 'timestamp': 1547163030,
                                                 'version': 1,
@@ -320,8 +320,8 @@ TransactionResource.openapi = {
                                                 'tokens': []
                                             },
                                             {
-                                                'hash': ('00000b8792cb13e8adb51cc7d866541f'
-                                                         'c29b532e8dec95ae4661cf3da4d42cb4'),
+                                                'tx_id': ('00000b8792cb13e8adb51cc7d866541f'
+                                                          'c29b532e8dec95ae4661cf3da4d42cb4'),
                                                 'nonce': 119816,
                                                 'timestamp': 1547163025,
                                                 'version': 1,

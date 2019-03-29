@@ -1,13 +1,13 @@
 from collections import defaultdict
 from math import inf
-from typing import TYPE_CHECKING, Any, DefaultDict, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
+from typing import TYPE_CHECKING, DefaultDict, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
 
 from intervaltree import Interval, IntervalTree
 from sortedcontainers import SortedKeyList
 from twisted.logger import Logger
 
 from hathor.pubsub import HathorEvents
-from hathor.transaction import BaseTransaction, TxOutput
+from hathor.transaction import BaseTransaction
 from hathor.transaction.scripts import parse_address_script
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -317,7 +317,7 @@ class WalletIndex:
             return
         if addresses is None:
             addresses = self._get_addresses(tx)
-        data = self.serialize_tx(tx)
+        data = tx.to_json_extended()
         for address in addresses:
             self.pubsub.publish(HathorEvents.WALLET_ADDRESS_HISTORY, address=address, history=data)
 
@@ -349,41 +349,3 @@ class WalletIndex:
         """ Get inputs/outputs history from address
         """
         return self.index[address]
-
-    def serialize_tx(self, tx: BaseTransaction) -> Dict[str, Any]:
-        assert tx.hash is not None
-        assert tx.storage is not None
-
-        meta = tx.get_metadata()
-        ret = {
-            'tx_id': tx.hash.hex(),
-            'timestamp': tx.timestamp,
-            'is_voided': bool(meta.voided_by),
-            'inputs': [],
-            'outputs': [],
-        }
-        assert isinstance(ret['inputs'], list)
-        assert isinstance(ret['outputs'], list)
-
-        for index, tx_in in enumerate(tx.inputs):
-            tx2 = tx.storage.get_transaction(tx_in.tx_id)
-            tx2_out = tx2.outputs[tx_in.index]
-            output = self.serialize_output(tx2, tx2_out)
-            output['tx_id'] = tx2.hash.hex()
-            output['index'] = tx_in.index
-            ret['inputs'].append(output)
-
-        for index, tx_out in enumerate(tx.outputs):
-            spent_by = meta.get_output_spent_by(index)
-            output = self.serialize_output(tx, tx_out)
-            output['spent_by'] = spent_by.hex() if spent_by else None
-            ret['outputs'].append(output)
-
-        return ret
-
-    def serialize_output(self, tx: BaseTransaction, tx_out: TxOutput) -> Dict[str, Any]:
-        data = tx_out.to_json(decode_script=True)
-        data['token'] = tx.get_token_uid(tx_out.get_token_index()).hex()
-        data['decoded'].pop('token_data')
-        data['decoded'].pop('value')
-        return data

@@ -85,6 +85,9 @@ class TwinTxTest(unittest.TestCase):
         response = request_server('transaction', 'GET', data={b'count': 4, b'type': 'tx'})
         tx = response['transactions'][-1]
 
+        response = request_server('transaction', 'GET', data={b'id': tx['tx_id']})
+        tx = response['tx']
+
         # Twin different weight and parents
         params = ['--url', host, '--hash', tx['hash'], '--parents', '--weight', '14']
         args = self.parser.parse_args(params)
