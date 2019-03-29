@@ -6,6 +6,11 @@ from hathor.transaction.storage.remote_storage import TransactionRemoteStorage, 
 from hathor.transaction.storage.subprocess_storage import TransactionSubprocessStorage
 from hathor.transaction.storage.transaction_storage import TransactionStorage
 
+try:
+    from hathor.transaction.storage.rocksdb_storage import TransactionRocksDBStorage
+except ImportError:
+    pass
+
 __all__ = [
     'TransactionStorage',
     'TransactionMemoryStorage',
@@ -14,5 +19,6 @@ __all__ = [
     'TransactionBinaryStorage',
     'TransactionSubprocessStorage',
     'TransactionRemoteStorage',
+    'TransactionRocksDBStorage',
     'create_transaction_storage_server',
 ]
