@@ -30,7 +30,25 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
                     spent_outputs[index] = spent_tx.hash_hex
                     break
 
-    return {'success': True, 'tx': serialized, 'meta': meta.to_json(), 'spent_outputs': spent_outputs}
+    # Sending also output information for each input
+    inputs = []
+    for index, tx_in in enumerate(tx.inputs):
+        if tx.storage:
+            tx2 = tx.storage.get_transaction(tx_in.tx_id)
+            tx2_out = tx2.outputs[tx_in.index]
+            output = tx2_out.to_json(decode_script=True)
+            output['tx_id'] = tx2.hash.hex()
+            output['index'] = tx_in.index
+            inputs.append(output)
+
+    serialized['inputs'] = inputs
+
+    return {
+        'success': True,
+        'tx': serialized,
+        'meta': meta.to_json(),
+        'spent_outputs': spent_outputs,
+    }
 
 
 @register_resource
@@ -204,7 +222,21 @@ TransactionResource.openapi = {
                                             'version': 1,
                                             'weight': 14.0,
                                             'parents': [],
-                                            'inputs': [],
+                                            "inputs": [
+                                                {
+                                                    "value": 42500000044,
+                                                    "script": "dqkURJPA8tDMJHU8tqv3SiO18ZCLEPaIrA==",
+                                                    "decoded": {
+                                                        "type": "P2PKH",
+                                                        "address": "17Fbx9ouRUD1sd32bp4ptGkmgNzg7p2Krj",
+                                                        "timelock": None
+                                                        },
+                                                    "token": "00",
+                                                    "tx": "000002d28696f94f89d639022ae81a1d"
+                                                          "870d55d189c27b7161d9cb214ad1c90c",
+                                                    "index": 0
+                                                }
+                                            ],
                                             'outputs': [],
                                             'tokens': []
                                         },
