@@ -65,7 +65,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
         for expected, result in zip(expected1, data1['transactions']):
             self.assertEqual(expected.timestamp, result['timestamp'])
-            self.assertEqual(expected.hash.hex(), result['hash'])
+            self.assertEqual(expected.hash.hex(), result['tx_id'])
 
         self.assertTrue(data1['has_more'])
 
@@ -78,7 +78,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
         for expected, result in zip(expected2, data2['transactions']):
             self.assertEqual(expected.timestamp, result['timestamp'])
-            self.assertEqual(expected.hash.hex(), result['hash'])
+            self.assertEqual(expected.hash.hex(), result['tx_id'])
 
         self.assertTrue(data2['has_more'])
 
@@ -98,7 +98,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
         for expected, result in zip(expected3, data3['transactions']):
             self.assertEqual(expected.timestamp, result['timestamp'])
-            self.assertEqual(expected.hash.hex(), result['hash'])
+            self.assertEqual(expected.hash.hex(), result['tx_id'])
 
         self.assertFalse(data3['has_more'])
 
@@ -115,7 +115,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
         for expected, result in zip(expected2, data4['transactions']):
             self.assertEqual(expected.timestamp, result['timestamp'])
-            self.assertEqual(expected.hash.hex(), result['hash'])
+            self.assertEqual(expected.hash.hex(), result['tx_id'])
 
         self.assertFalse(data4['has_more'])
 
@@ -135,7 +135,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
         for expected, result in zip(expected5, data5['transactions']):
             self.assertEqual(expected.timestamp, result['timestamp'])
-            self.assertEqual(expected.hash.hex(), result['hash'])
+            self.assertEqual(expected.hash.hex(), result['tx_id'])
 
         self.assertFalse(data5['has_more'])
 
@@ -155,7 +155,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
         for expected, result in zip(expected6, data6['transactions']):
             self.assertEqual(expected.timestamp, result['timestamp'])
-            self.assertEqual(expected.hash.hex(), result['hash'])
+            self.assertEqual(expected.hash.hex(), result['tx_id'])
 
         self.assertTrue(data6['has_more'])
 
@@ -163,6 +163,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 class RemoteStorageTransactionTest(TransactionTest):
     def setUp(self):
         self.tx_storage, self._server = start_remote_storage()
+        self.tx_storage.with_index = True
         super().setUp()
 
     def tearDown(self):

@@ -401,6 +401,7 @@ def run_server(hostname='localhost', listen=8005, listen_ssl=False, status=8085,
         '--status {}'.format(status),
         # We must allow mining without peers, otherwise some tests won't be able to mine.
         '--allow-mining-without-peers',
+        '--wallet-index'
     ])
 
     if listen_ssl:

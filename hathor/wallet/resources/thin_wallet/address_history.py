@@ -47,7 +47,7 @@ class AddressHistoryResource(resource.Resource):
                 tx = self.manager.tx_storage.get_transaction(tx_hash)
                 if tx_hash not in seen:
                     seen.add(tx_hash)
-                    history.append(wallet_index.serialize_tx(tx))
+                    history.append(tx.to_json_extended())
 
         data = {'history': history}
         return json.dumps(data, indent=4).encode('utf-8')

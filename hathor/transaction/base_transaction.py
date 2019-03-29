@@ -773,6 +773,44 @@ class BaseTransaction(ABC):
 
         return data
 
+    def to_json_extended(self) -> Dict[str, Any]:
+        assert self.hash is not None
+        assert self.storage is not None
+
+        def serialize_output(tx: BaseTransaction, tx_out: TxOutput) -> Dict[str, Any]:
+            data = tx_out.to_json(decode_script=True)
+            data['token'] = tx.get_token_uid(tx_out.get_token_index()).hex()
+            data['decoded'].pop('token_data', None)
+            data['decoded'].pop('value', None)
+            return data
+
+        meta = self.get_metadata()
+        ret = {
+            'tx_id': self.hash.hex(),
+            'timestamp': self.timestamp,
+            'is_voided': bool(meta.voided_by),
+            'inputs': [],
+            'outputs': [],
+        }
+        assert isinstance(ret['inputs'], list)
+        assert isinstance(ret['outputs'], list)
+
+        for index, tx_in in enumerate(self.inputs):
+            tx2 = self.storage.get_transaction(tx_in.tx_id)
+            tx2_out = tx2.outputs[tx_in.index]
+            output = serialize_output(tx2, tx2_out)
+            output['tx_id'] = tx2.hash.hex()
+            output['index'] = tx_in.index
+            ret['inputs'].append(output)
+
+        for index, tx_out in enumerate(self.outputs):
+            spent_by = meta.get_output_spent_by(index)
+            output = serialize_output(self, tx_out)
+            output['spent_by'] = spent_by.hex() if spent_by else None
+            ret['outputs'].append(output)
+
+        return ret
+
     @abstractmethod
     def to_proto(self, include_metadata: bool = True) -> protos.BaseTransaction:
         """ Creates a Protobuf object from self

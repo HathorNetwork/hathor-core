@@ -140,7 +140,7 @@ class TestWebsocket(unittest.TestCase):
         block_genesis = [tx for tx in get_genesis_transactions(self.manager.tx_storage) if tx.is_block][0]
 
         # Test publish address history
-        element = self.manager.tx_storage.wallet_index.serialize_tx(block_genesis)
+        element = block_genesis.to_json_extended()
         self.manager.pubsub.publish(HathorEvents.WALLET_ADDRESS_HISTORY, address=address, history=element)
         self.run_to_completion()
         value = self._decode_value(self.transport.value())
