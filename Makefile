@@ -94,11 +94,11 @@ docker_tag := $(shell git describe)
 
 .PHONY: docker
 docker: $(docker_dir)/Dockerfile $(proto_outputs)
-	docker build -t hathor-full-node:$(docker_tag) $(docker_dir)
+	docker build -t fullnode:$(docker_tag) $(docker_dir)
 
 .PHONY: docker-push
 docker-push: docker
-	docker tag hathor-full-node:$(docker_tag) 769498303037.dkr.ecr.us-east-1.amazonaws.com/hathor-full-node:$(docker_tag)
-	docker push 769498303037.dkr.ecr.us-east-1.amazonaws.com/hathor-full-node:$(docker_tag)
-	docker tag hathor-full-node:$(docker_tag) 769498303037.dkr.ecr.us-east-1.amazonaws.com/hathor-full-node:latest
-	docker push 769498303037.dkr.ecr.us-east-1.amazonaws.com/hathor-full-node:latest
+	docker tag fullnode:$(docker_tag) 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_tag)
+	docker push 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_tag)
+	docker tag fullnode:$(docker_tag) 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:latest
+	docker push 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:latest
