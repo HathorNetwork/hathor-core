@@ -8,13 +8,13 @@ from math import log
 from typing import Any, List, Optional, cast
 
 from twisted.internet.interfaces import IReactorCore
-from twisted.logger import Logger
+from twisted.logger import Logger, LogLevel
 from twisted.python.threadpool import ThreadPool
 
 from hathor.conf import HathorSettings
 from hathor.exception import InvalidNewTransaction
 from hathor.indexes import WalletIndex
-from hathor.logging import LogRateLimiter
+from hathor.logging import RateLimitedLogger
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
@@ -40,7 +40,13 @@ class HathorManager:
 
     Its primary objective is to handle DAG-related matters, ensuring that the DAG is always valid and connected.
     """
-    log = Logger()
+    log = RateLimitedLogger()
+    log.set_limit(
+        (LogLevel.info, 'New transaction tag=new_tx hash={tx.hash_hex} timestamp={tx.timestamp} datetime={ts_date} from_now={time_from_now}'),
+        20, 5,
+        '{counter} transactions found in the previous {dt} seconds. Detailed log was suppressed.'
+    )
+
 
     class NodeState(Enum):
         # This node is still initializing
@@ -115,12 +121,6 @@ class HathorManager:
         self.tokens_issued_per_block = settings.TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES)
 
         self.max_future_timestamp_allowed = 3600  # in seconds
-
-        self.log_rate_limiter = LogRateLimiter(self)
-        self.log_rate_limiter.set_limit(
-            'on_new_tx:tx', 30, 5,
-            '{counter} transactions found in the previous {dt} seconds. Detailed log was suppressed.'
-        )
 
         self.metrics = Metrics(
             pubsub=self.pubsub,
