@@ -477,7 +477,11 @@ class StratumFactory(Factory):
         block = self.current_block.clone()
         assert isinstance(block, Block)
 
-        data = "Node {} - Miner {}".format(self.manager.my_peer, miner)
+        peer_id = self.manager.my_peer.id
+        assert peer_id is not None
+
+        # Only get first 32 bytes of peer_id because block data is limited to 100 bytes
+        data = "{}-{}-{}".format(peer_id[:32], miner.hex, id.hex)
         block.data = data.encode()[:settings.BLOCK_DATA_MAX_SIZE]
         return ServerJob(id, miner, block)
 
