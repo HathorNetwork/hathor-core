@@ -23,7 +23,7 @@ class RemoteCommunicationError(HathorError):
 
 
 def convert_grpc_exceptions(func):
-    """Decorator to catch and conver grpc excpetions for hathor expections.
+    """Decorator to catch and conver grpc exceptions for hathor expections.
     """
     from functools import wraps
 

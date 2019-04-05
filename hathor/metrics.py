@@ -24,6 +24,7 @@ class Metrics:
     peers: int
     tx_hash_rate: float
     block_hash_rate: float
+    best_block_weight: float
     weight_tx_deque_len: int
     weight_block_deque_len: int
     weight_tx_deque: Deque[WeightValue]
@@ -108,6 +109,9 @@ class Metrics:
         self.tx_hash_store_interval = 1
         self.block_hash_store_interval = 1
 
+        # weight of the head of the best blockchain
+        self.best_block_weight = 0
+
         self._initial_setup()
 
     def _initial_setup(self) -> None:
@@ -157,6 +161,7 @@ class Metrics:
                 self.blocks += 1
                 self.total_block_weight = sum_weights(data['tx'].weight, self.total_block_weight)
                 self.hash_rate = self.calculate_new_hashrate(data['tx'])
+                self.best_block_weight = self.tx_storage.get_weight_best_block()
             else:
                 self.transactions += 1
                 self.total_tx_weight = sum_weights(data['tx'].weight, self.total_tx_weight)

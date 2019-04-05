@@ -247,6 +247,11 @@ class _BaseTransactionStorageTest:
                 total += 1
             self.assertEqual(total, 5)
 
+        def test_get_best_block_weight(self):
+            block = self._add_new_block()
+            weight = self.tx_storage.get_weight_best_block()
+            self.assertEqual(block.weight, weight)
+
     class _RemoteStorageTest(_TransactionStorageTest):
         def setUp(self, tx_storage, reactor=None):
             tx_storage, self._server = start_remote_storage(tx_storage=tx_storage)

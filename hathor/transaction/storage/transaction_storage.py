@@ -231,6 +231,15 @@ class TransactionStorage(ABC):
                 best_tip_blocks = [block_hash]
         return best_tip_blocks
 
+    def get_weight_best_block(self) -> float:
+        heads = [self.get_transaction(h) for h in self.get_best_block_tips()]
+        highest_weight = 0
+        for head in heads:
+            if head.weight > highest_weight:
+                highest_weight = head.weight
+
+        return highest_weight
+
     @abstractmethod
     def get_block_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         raise NotImplementedError
@@ -435,6 +444,9 @@ class BaseTransactionStorage(TransactionStorage):
 
     def get_best_block_tips(self, timestamp: Optional[float] = None) -> List[bytes]:
         return super().get_best_block_tips(timestamp)
+
+    def get_weight_best_block(self) -> float:
+        return super().get_weight_best_block()
 
     def get_block_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         if not self.with_index:
