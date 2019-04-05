@@ -64,6 +64,7 @@ class RunNode:
         parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
         parser.add_argument('--recursion-limit', type=int, help='Set python recursion limit')
         parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
+        parser.add_argument('--min-block-weight', type=int, help='Minimum weight for blocks')
         return parser
 
     def prepare(self, args: Namespace) -> None:
@@ -185,7 +186,7 @@ class RunNode:
         network = 'testnet'
         self.manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname,
                                      tx_storage=self.tx_storage, wallet=self.wallet, wallet_index=args.wallet_index,
-                                     stratum_port=args.stratum)
+                                     stratum_port=args.stratum, min_block_weight=args.min_block_weight)
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
 

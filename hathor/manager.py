@@ -52,7 +52,7 @@ class HathorManager:
                  hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
                  peer_storage: Optional[Any] = None, default_port: int = 40403, wallet_index: bool = False,
-                 stratum_port: Optional[int] = None) -> None:
+                 stratum_port: Optional[int] = None, min_block_weight: Optional[int] = None) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node. If not given, a new one is created.
@@ -79,6 +79,9 @@ class HathorManager:
 
         :param stratum_port: Stratum server port. Stratum server will only be created if it is not None.
         :type stratum_port: Optional[int]
+
+        :param min_block_weight: Minimum weight for blocks.
+        :type min_block_weight: Optional[int]
         """
         from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
         from hathor.p2p.manager import ConnectionsManager
@@ -109,7 +112,7 @@ class HathorManager:
             self.tx_storage.wallet_index = WalletIndex(self.pubsub)
 
         self.avg_time_between_blocks = 64  # in seconds
-        self.min_block_weight = settings.MIN_BLOCK_WEIGHT
+        self.min_block_weight = min_block_weight or settings.MIN_BLOCK_WEIGHT
         self.min_tx_weight = settings.MIN_TX_WEIGHT
         self.tokens_issued_per_block = settings.TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES)
 

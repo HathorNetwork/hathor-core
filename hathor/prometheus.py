@@ -10,7 +10,8 @@ METRIC_INFO = {
     'hash_rate': 'Hash rate of blocks with old calculus',
     'peers': 'Peers connected in the network',
     'block_hash_rate': 'Hash rate of blocks',
-    'tx_hash_rate': 'Hash rate of tx'
+    'tx_hash_rate': 'Hash rate of tx',
+    'best_block_weight': 'Weight of blocks'
 }
 
 
