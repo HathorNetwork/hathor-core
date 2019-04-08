@@ -97,6 +97,13 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         data = response.json_value()
         self.assertTrue(data['success'])
 
+        # Trying to send a double spending will not have success
+        self.clock.advance(5)
+        tx3.timestamp = int(self.clock.seconds())
+        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx3.get_struct().hex()})
+        data_error = response.json_value()
+        self.assertFalse(data_error['success'])
+
         # Check if tokens were really sent
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID].available, (quantity-1)*per_block)
 

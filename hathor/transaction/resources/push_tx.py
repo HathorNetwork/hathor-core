@@ -38,6 +38,13 @@ class PushTxResource(resource.Resource):
 
             try:
                 tx = Transaction.create_from_struct(tx_bytes)
+            except struct.error:
+                data = {
+                    'success': False,
+                    'message': 'This transaction is invalid. Try to decode it first to validate it.',
+                    'can_force': False
+                }
+            else:
                 if len(tx.inputs) == 0:
                     # It's a block and we can't push blocks
                     data = {
@@ -47,20 +54,23 @@ class PushTxResource(resource.Resource):
                     }
                 else:
                     tx.storage = self.manager.tx_storage
-                    success, message = tx.validate_tx_error()
-
-                    force = b'force' in request.args and request.args[b'force'][0].decode('utf-8') == 'true'
-                    if success or force:
-                        success = self.manager.propagate_tx(tx)
-                        data = {'success': success}
+                    # If this tx is a double spending, don't even try to propagate in the network
+                    is_double_spending = tx.is_double_spending()
+                    if is_double_spending:
+                        data = {
+                            'success': False,
+                            'message': 'Invalid transaction. At least one of your inputs has already been spent.',
+                            'can_force': False
+                        }
                     else:
-                        data = {'success': success, 'message': message, 'can_force': True}
-            except struct.error:
-                data = {
-                    'success': False,
-                    'message': 'This transaction is invalid. Try to decode it first to validate it.',
-                    'can_force': False
-                }
+                        success, message = tx.validate_tx_error()
+
+                        force = b'force' in request.args and request.args[b'force'][0].decode('utf-8') == 'true'
+                        if success or force:
+                            success = self.manager.propagate_tx(tx)
+                            data = {'success': success}
+                        else:
+                            data = {'success': success, 'message': message, 'can_force': True}
         else:
             data = {
                 'success': False,
@@ -115,7 +125,15 @@ PushTxResource.openapi = {
                                         'message': 'Error message',
                                         'can_force': True
                                     }
-                                }
+                                },
+                                'error3': {
+                                    'summary': 'Double spending error',
+                                    'value': {
+                                        'success': False,
+                                        'message': ('Invalid transaction. At least one of your inputs has'
+                                                    'already been spent.')
+                                    }
+                                },
                             }
                         }
                     }

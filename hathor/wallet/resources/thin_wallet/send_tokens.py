@@ -55,6 +55,15 @@ class SendTokensResource(resource.Resource):
         # Set tx storage
         tx.storage = self.manager.tx_storage
 
+        # If this tx is a double spending, don't even try to propagate in the network
+        is_double_spending = tx.is_double_spending()
+        if is_double_spending:
+            data = {
+                'success': False,
+                'message': 'Invalid transaction. At least one of your inputs has already been spent.'
+            }
+            return json.dumps(data, indent=4).encode('utf-8')
+
         max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
         # Set tx timestamp as max between tx and inputs
         tx.timestamp = max(max_ts_spent_tx + 1, tx.timestamp)
@@ -253,7 +262,15 @@ SendTokensResource.openapi = {
                                             'accumulated_weight': 14
                                         }
                                     }
-                                }
+                                },
+                                'error5': {
+                                    'summary': 'Double spending error',
+                                    'value': {
+                                        'success': False,
+                                        'message': ('Invalid transaction. At least one of your inputs has'
+                                                    'already been spent.')
+                                    }
+                                },
                             }
                         }
                     }
