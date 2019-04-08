@@ -617,3 +617,20 @@ class Transaction(BaseTransaction):
                 self.storage.save_transaction(tx, only_metadata=True)
 
         self.storage.save_transaction(self, only_metadata=True)
+
+    def is_double_spending(self) -> bool:
+        """ Iterate through inputs to check if they were already spent
+            Used to prevent users from sending double spending transactions to the network
+            Possible cases:
+            - if spent_by is empty, which means self has not been added to the DAG yet, and it is not a double spending
+            - elif spent_by == {self.hash}, which means self has been added to the DAG, and it is not a double spending
+            - else, which means self has been added to the DAG, and it is a double spending.
+        """
+        assert self.storage is not None
+        for tx_in in self.inputs:
+            tx = self.storage.get_transaction(tx_in.tx_id)
+            meta = tx.get_metadata()
+            spent_by = meta.get_output_spent_by(tx_in.index)
+            if spent_by and spent_by != self.hash:
+                return True
+        return False
