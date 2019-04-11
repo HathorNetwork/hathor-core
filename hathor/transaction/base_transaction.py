@@ -5,11 +5,12 @@ import datetime
 import hashlib
 import time
 import weakref
-from _hashlib import HASH
 from abc import ABC, abstractclassmethod, abstractmethod
 from math import inf, log
 from struct import pack
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Iterator, List, Optional, Tuple
+
+from _hashlib import HASH
 
 from hathor import protos
 from hathor.conf import HathorSettings
