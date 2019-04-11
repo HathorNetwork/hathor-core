@@ -62,16 +62,23 @@ METHOD_NOT_FOUND = {"code": -32601, "message": "Method not found"}
 INVALID_REQUEST = {"code": -32600, "message": "Invalid Request"}
 
 INVALID_SOLUTION = {"code": 30, "message": "Invalid solution"}
-STALE_JOB = {"code": 31, "message": "Stale job submited"}
+STALE_JOB = {"code": 31, "message": "Stale job submitted"}
 JOB_NOT_FOUND = {"code": 32, "message": "Job not found"}
 PROPAGATION_FAILED = {"code": 33, "message": "Solution propagation failed"}
 
 
-class ServerJob(NamedTuple):
+class ServerJob:
     """ Data class used to store job info on Stratum servers """
     id: UUID
+    submitted: bool
     miner: UUID
     block: Block
+
+    def __init__(self, id: UUID, miner: UUID, block: Block):
+        self.id = id
+        self.miner = miner
+        self.block = block
+        self.submitted = False
 
 
 class MinerJob(NamedTuple):
@@ -258,7 +265,7 @@ class JSONRPC(LineReceiver, ABC):
             "error": error,
             "data": data,
         }
-        self.log.info("SENDING ERROR {error} WITH  DATA {data}", error=error, data=data)
+        # self.log.info("SENDING ERROR {error} WITH  DATA {data}", error=error, data=data)
         self.send_json(message)
 
         # Lose connection in case of any native JSON RPC error
@@ -381,7 +388,9 @@ class StratumProtocol(JSONRPC):
                 "job_id": job_id.hex
             })
 
-        if job is not self.current_job:
+        # It may take a while for pubsub to get a new job.
+        # To avoid propdagating the same block multiple times, we check if it has been already submitted.
+        if job is not self.current_job or job.submitted:
             return self.send_error(STALE_JOB, id, {
                 "current_job": self.current_job and self.current_job.id.hex,
                 "job_id": job_id.hex
@@ -406,6 +415,8 @@ class StratumProtocol(JSONRPC):
         except (InvalidNewTransaction, TxValidationError) as e:
             return self.send_error(PROPAGATION_FAILED, id, {"exception": str(e)})
 
+        print('BLOCK PARENT', block.parents[0].hex())
+        job.submitted = True
         self.send_result("ok", id)
 
     def job_request(self, job: ServerJob) -> None:
