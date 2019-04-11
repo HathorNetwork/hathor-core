@@ -6,7 +6,9 @@ from twisted.web import resource
 
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction
+from hathor.transaction.exceptions import TxValidationError
 
 
 @register_resource
@@ -67,8 +69,13 @@ class PushTxResource(resource.Resource):
 
                         force = b'force' in request.args and request.args[b'force'][0].decode('utf-8') == 'true'
                         if success or force:
-                            success = self.manager.propagate_tx(tx)
-                            data = {'success': success}
+                            message = ''
+                            try:
+                                success = self.manager.propagate_tx(tx, fails_silently=False)
+                            except (InvalidNewTransaction, TxValidationError) as e:
+                                success = False
+                                message = str(e)
+                            data = {'success': success, 'message': message}
                         else:
                             data = {'success': success, 'message': message, 'can_force': True}
         else:

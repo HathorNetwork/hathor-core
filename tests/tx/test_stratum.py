@@ -14,7 +14,6 @@ from hathor.stratum import (
     JSONRPC,
     METHOD_NOT_FOUND,
     PARSE_ERROR,
-    PROPAGATION_FAILED,
     STALE_JOB,
     StratumClient,
     StratumFactory,
