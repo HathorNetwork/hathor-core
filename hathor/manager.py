@@ -297,7 +297,8 @@ class HathorManager:
 
     def generate_mining_block(self, timestamp: Optional[float] = None,
                               parent_block_hash: Optional[bytes] = None,
-                              data: bytes = b'') -> Block:
+                              data: bytes = b'',
+                              address: Optional[bytes] = None) -> Block:
         """ Generates a block ready to be mined. The block includes new issued tokens,
         parents, and the weight.
 
@@ -307,7 +308,8 @@ class HathorManager:
         from hathor.transaction.scripts import create_output_script
 
         assert self.wallet is not None
-        address = self.wallet.get_unused_address_bytes(mark_as_used=False)
+        if address is None:
+            address = self.wallet.get_unused_address_bytes(mark_as_used=False)
         amount = self.tokens_issued_per_block
         output_script = create_output_script(address)
         tx_outputs = [TxOutput(amount, output_script)]
