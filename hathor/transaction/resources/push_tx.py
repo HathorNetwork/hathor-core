@@ -90,6 +90,19 @@ class PushTxResource(resource.Resource):
 
 PushTxResource.openapi = {
     '/push_tx': {
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '100r/s'
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '1r/s'
+                }
+            ]
+        },
         'get': {
             'tags': ['transaction'],
             'operationId': 'push_tx',

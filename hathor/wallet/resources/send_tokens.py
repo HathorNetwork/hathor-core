@@ -162,6 +162,7 @@ class SendTokensResource(resource.Resource):
 
 SendTokensResource.openapi = {
     '/wallet/send_tokens': {
+        'x-visibility': 'private',
         'post': {
             'tags': ['wallet'],
             'operationId': 'wallet_send_tokens',

@@ -55,6 +55,23 @@ class DecodeTxResource(resource.Resource):
 
 DecodeTxResource.openapi = {
     '/decode_tx': {
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '1000r/s',
+                    'burst': 1000,
+                    'delay': 500
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '1r/s',
+                    'burst': 3,
+                    'delay': 0
+                }
+            ]
+        },
         'get': {
             'tags': ['transaction'],
             'operationId': 'decode_tx',

@@ -153,6 +153,19 @@ class SendTokensResource(resource.Resource):
 
 SendTokensResource.openapi = {
     '/thin_wallet/send_tokens': {
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '100r/s'
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '1r/s'
+                }
+            ]
+        },
         'post': {
             'tags': ['thin_wallet'],
             'operationId': 'thin_wallet_send_tokens',

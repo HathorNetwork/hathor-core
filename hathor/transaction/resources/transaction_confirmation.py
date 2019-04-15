@@ -63,6 +63,21 @@ class TransactionAccWeightResource(resource.Resource):
 
 TransactionAccWeightResource.openapi = {
     '/transaction_acc_weight/': {
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '1000r/s',
+                    'burst': 1000,
+                    'delay': 500
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '1r/s'
+                }
+            ]
+        },
         'get': {
             'tags': ['transaction'],
             'operationId': 'transaction_acc_weight',

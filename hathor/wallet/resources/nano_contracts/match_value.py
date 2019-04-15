@@ -143,6 +143,7 @@ class NanoContractMatchValueResource(resource.Resource):
 
 NanoContractMatchValueResource.openapi = {
     '/wallet/nano-contract/match-value': {
+        'x-visibility': 'private',
         'post': {
             'tags': ['nano-contract'],
             'operationId': 'nano_contract_match_value_post',
