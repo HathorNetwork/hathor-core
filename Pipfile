@@ -6,7 +6,7 @@ verify_ssl = true
 [dev-packages]
 grpcio-tools = "==1.16.0"
 numpy = "==1.16.0"
-hathor = {editable = true,path = "."}
+hathor = {path = ".",editable = true}
 flake8 = "*"
 isort = "*"
 yapf = "*"
@@ -24,17 +24,17 @@ ConfigArgParse = "==0.14.0"
 cryptography = "==2.5"
 graphviz = "==0.9"
 grpcio = "==1.16.0"
-intervaltree = "==2.1.0"
 ipython = "==7.1.1"
 mnemonic = "==0.18"
 prometheus_client = "==0.4.2"
 protobuf = "==3.6.1"
 pyOpenSSL = "==18.0.0"
-pycoin = {git = "https://github.com/richardkiss/pycoin.git",version = ">=0.90a0"}
+pycoin = {git = "https://github.com/richardkiss/pycoin.git",ref = "f81609d"}
 pywin32 = {version = "*",os_name = "== 'nt'"}
 requests = "==2.21.0"
 service_identity = "==18.1.0"
 pexpect = "==4.6.0"
+intervaltree = "==3.0.2"
 
 [requires]
 python_version = "3.6"
