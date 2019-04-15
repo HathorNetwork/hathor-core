@@ -98,7 +98,7 @@ class SendDataPush:
         deps = list(self._get_deps(tx))
         for h in deps:
             if h in self.queue:
-                tx2, deps = self.queue.pop(h)
+                tx2, _ = self.queue.pop(h)
                 self.add_to_priority(tx2)
         self.priority_queue[tx.hash] = (tx, deps)
         self.schedule_if_needed()
@@ -344,7 +344,7 @@ class NodeSyncTimestamp(Plugin):
                 if not self.manager.tx_storage.transaction_exists(h):
                     pending.append(self.get_data(h))
                     count += 1
-            if count == 0:
+            if next_timestamp != payload.next_timestamp and count == 0:
                 break
             next_timestamp = payload.next_timestamp
             next_offset = payload.next_offset
