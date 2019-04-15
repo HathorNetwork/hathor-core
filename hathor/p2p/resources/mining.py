@@ -60,6 +60,23 @@ class MiningResource(resource.Resource):
 
 MiningResource.openapi = {
     '/mining': {
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '200r/s',
+                    'burst': 200,
+                    'delay': 0
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '1r/s',
+                    'burst': 3,
+                    'delay': 0
+                }
+            ]
+        },
         'get': {
             'tags': ['p2p'],
             'operationId': 'mining_get',

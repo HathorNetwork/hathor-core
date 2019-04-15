@@ -51,6 +51,21 @@ class DashboardTransactionResource(resource.Resource):
 
 DashboardTransactionResource.openapi = {
     '/dashboard_tx': {
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '1000r/s',
+                    'burst': 1000,
+                    'delay': 500
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '5r/s'
+                }
+            ]
+        },
         'get': {
             'tags': ['transaction'],
             'operationId': 'dashboard_tx',

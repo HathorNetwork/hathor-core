@@ -40,6 +40,23 @@ class VersionResource(resource.Resource):
 
 VersionResource.openapi = {
     '/version': {
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '1000r/s',
+                    'burst': 1000,
+                    'delay': 500
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '10r/s',
+                    'burst': 10,
+                    'delay': 5
+                }
+            ]
+        },
         'get': {
             'operationId': 'version',
             'summary': 'Hathor version',

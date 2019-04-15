@@ -36,6 +36,7 @@ class BalanceResource(resource.Resource):
 
 BalanceResource.openapi = {
     '/wallet/balance': {
+        'x-visibility': 'private',
         'get': {
             'tags': ['wallet'],
             'operationId': 'wallet_address',

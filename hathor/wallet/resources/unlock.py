@@ -79,6 +79,7 @@ class UnlockWalletResource(resource.Resource):
 
 UnlockWalletResource.openapi = {
     '/wallet/unlock': {
+        'x-visibility': 'private',
         'post': {
             'tags': ['wallet'],
             'operationId': 'wallet_unlock',

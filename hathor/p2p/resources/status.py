@@ -90,6 +90,21 @@ class StatusResource(resource.Resource):
 
 StatusResource.openapi = {
     '/status': {
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '1000r/s',
+                    'burst': 1000,
+                    'delay': 500
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '5r/s'
+                }
+            ]
+        },
         'get': {
             'tags': ['p2p'],
             'operationId': 'status',
