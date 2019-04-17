@@ -198,9 +198,9 @@ class BaseTransaction(ABC):
         """Sum of the value of the outputs"""
         return sum([output.value for output in self.outputs])
 
-    def get_target(self) -> float:
+    def get_target(self, override_weight: Optional[float] = None) -> float:
         """Target to be achieved in the mining process"""
-        return 2**(256 - self.weight) - 1
+        return 2**(256 - (override_weight or self.weight)) - 1
 
     def get_time_from_now(self, now: Optional[Any] = None) -> str:
         """ Return a the time difference between now and the tx's timestamp
@@ -485,13 +485,13 @@ class BaseTransaction(ABC):
             raise IncorrectParents('wrong number of parents (tx type): {}, expecting {}'.format(
                 my_parents_txs, parents_txs))
 
-    def verify_pow(self) -> None:
+    def verify_pow(self, override_weight: Optional[float] = None) -> None:
         """Verify proof-of-work
 
         :raises PowError: when the hash is equal or greater than the target
         """
         assert self.hash is not None
-        if int(self.hash.hex(), 16) >= self.get_target():
+        if int(self.hash.hex(), 16) >= self.get_target(override_weight):
             raise PowError('Transaction has invalid data')
 
     def resolve(self) -> bool:
