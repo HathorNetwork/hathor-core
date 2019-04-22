@@ -79,3 +79,22 @@ class HathorSettings(NamedTuple):
 
     # Maximum number of opened threads that are solving POW for send tokens
     MAX_POW_THREADS: int = 5
+
+    # The error tolerance, to allow small rounding errors in Python, when comparing weights,
+    # accumulated weights, and scores
+    # How to use:
+    # if abs(w1 - w2) < WEIGHT_TOL:
+    #     print('w1 and w2 are equal')
+
+    # if w1 < w2 - WEIGHT_TOL:
+    #     print('w1 is smaller than w2')
+
+    # if w1 <= w2 + WEIGHT_TOL:
+    #     print('w1 is smaller than or equal to w2')
+
+    # if w1 > w2 + WEIGHT_TOL:
+    #     print('w1 is greater than w2')
+
+    # if w1 >= w2 - WEIGHT_TOL:
+    #     print('w1 is greater than or equal to w2')
+    WEIGHT_TOL: int = 1e-10

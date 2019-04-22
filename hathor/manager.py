@@ -371,7 +371,7 @@ class HathorManager:
 
             # Validate minimum block difficulty
             block_weight = self.calculate_block_difficulty(tx)
-            if tx.weight < block_weight:
+            if tx.weight < block_weight - settings.WEIGHT_TOL:
                 raise InvalidNewTransaction(
                     'Invalid new block {}: weight ({}) is smaller than the minimum weight ({})'.format(
                         tx.hash.hex(), tx.weight, block_weight
@@ -390,7 +390,7 @@ class HathorManager:
 
             # Validate minimum tx difficulty
             min_tx_weight = self.minimum_tx_weight(tx)
-            if tx.weight < min_tx_weight:
+            if tx.weight < min_tx_weight - settings.WEIGHT_TOL:
                 raise InvalidNewTransaction(
                     'Invalid new tx {}: weight ({}) is smaller than the minimum weight ({})'.format(
                         tx.hash.hex(), tx.weight, min_tx_weight

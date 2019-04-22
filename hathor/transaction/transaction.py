@@ -537,8 +537,7 @@ class Transaction(BaseTransaction):
                 tx.update_accumulated_weight(stop_value=meta.accumulated_weight)
                 tx_meta = tx.get_metadata()
                 d = tx_meta.accumulated_weight - meta.accumulated_weight
-                eps = 1e-10
-                if abs(d) < eps:
+                if abs(d) < settings.WEIGHT_TOL:
                     tie_list.append(tx)
                 elif d > 0:
                     is_highest = False
