@@ -690,8 +690,7 @@ class BaseTransaction(ABC):
             if accumulated_weight > stop_value:
                 break
 
-        eps = 1e-10
-        if accumulated_weight <= stop_value + eps:
+        if accumulated_weight <= stop_value + settings.WEIGHT_TOL:
             # If we are still below stop_value, then we go through the transactions.
             bfs_walk = BFSWalk(self.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
             for tx in bfs_walk.run(self, skip_root=True):
