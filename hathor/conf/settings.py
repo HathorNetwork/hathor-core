@@ -97,4 +97,4 @@ class HathorSettings(NamedTuple):
 
     # if w1 >= w2 - WEIGHT_TOL:
     #     print('w1 is greater than or equal to w2')
-    WEIGHT_TOL: int = 1e-10
+    WEIGHT_TOL: float = 1e-10
