@@ -21,7 +21,7 @@ from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.transaction import Block, sum_weights
-from hathor.transaction.exceptions import PowError, TxValidationError
+from hathor.transaction.exceptions import PowError, ScriptError, TxValidationError
 from hathor.wallet.exceptions import InvalidAddress
 
 if TYPE_CHECKING:
@@ -320,7 +320,7 @@ class StratumProtocol(JSONRPC):
 
     def connectionMade(self) -> None:
         self.miner_id = uuid4()
-        self.log.info("New miner with ID {} from address {}".format(self.miner_id, self.address))
+        self.log.info("New miner with ID {} from {}".format(self.miner_id, self.address))
         self.factory.miner_protocols[self.miner_id] = self
 
     def connectionLost(self, reason: Failure = None) -> None:
@@ -369,6 +369,7 @@ class StratumProtocol(JSONRPC):
         if params and "address" in params and params["address"] is not None:
             try:
                 self.miner_address = decode_address(params["address"])
+                self.log.info("Miner with ID {} using address {}".format(self.miner_id, self.miner_address))
             except InvalidAddress:
                 self.send_error(INVALID_ADDRESS, id)
                 self.transport.loseConnection()
@@ -451,13 +452,21 @@ class StratumProtocol(JSONRPC):
         :param job: data representing the mining job
         :type job: ServerJob
         """
-        job = self.create_job()
-        self.send_request("job", {
-            "data": job.block.get_header_without_nonce().hex(),
-            "job_id": job.id.hex,
-            "nonce_size": Block.NONCE_SIZE,
-            "weight": float(job.weight),
-        })
+        try:
+            job = self.create_job()
+        except (ValueError, ScriptError) as e:
+            # ScriptError might happen if try to use a mainnet address in the testnet or vice versa
+            # ValueError happens if address is not a valid base58 address
+            self.send_error(INVALID_PARAMS, data={
+                "message": str(e)
+            })
+        else:
+            self.send_request("job", {
+                "data": job.block.get_header_without_nonce().hex(),
+                "job_id": job.id.hex,
+                "nonce_size": Block.NONCE_SIZE,
+                "weight": float(job.weight),
+            })
 
     def create_job(self) -> ServerJob:
         """
