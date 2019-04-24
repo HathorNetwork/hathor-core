@@ -172,7 +172,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             return data
         elif event == HathorEvents.NETWORK_NEW_TX_ACCEPTED:
             tx = data['tx']
-            data = tx.to_json()
+            data = tx.to_json_extended()
             data['is_block'] = tx.is_block
             return data
         elif event == HathorEvents.WALLET_BALANCE_UPDATED:
