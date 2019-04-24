@@ -16,7 +16,7 @@ docker-push: docker
 
 .PHONY: run
 run: docker
-	docker run --link=hathor-node -p 8000:80 -it hathor-nginx
+	docker run --link=fullnode -p 8000:80 -it hathor-nginx
 
 nginx.conf:
 	hathor-cli generate_nginx_config nginx.conf
