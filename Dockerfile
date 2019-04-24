@@ -37,7 +37,7 @@ RUN pipenv run pip install python-rocksdb==0.7.0
 FROM python:3.6-alpine
 
 # required runtime deps
-RUN apk --no-cache add openssl libffi libstdc++
+RUN apk --no-cache add openssl libffi libstdc++ graphviz
 COPY --from=builder /usr/src/app/.venv/lib/python3.6/site-packages /usr/local/lib/python3.6/site-packages
 COPY --from=rocksdb_builder /usr/lib64/librocksdb* /usr/lib/
 
