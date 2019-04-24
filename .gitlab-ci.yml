@@ -8,9 +8,6 @@ check:
   stage: linters
   image: python:3.6
   allow_failure: yes
-  only:
-    - dev
-    - web
   before_script:
     # install pipenv and generate dev-requirements.txt (stdout) from Pipfile.lock on the fly
     - pip install pipenv
@@ -24,9 +21,6 @@ check:
 unit-tests:
   stage: unit-tests
   image: python:3.6
-  only:
-    - dev
-    - web
   before_script:
     - echo "deb http://deb.debian.org/debian stretch-backports main" > /etc/apt/sources.list.d/backports.list
     - apt update
