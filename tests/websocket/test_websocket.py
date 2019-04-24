@@ -44,7 +44,8 @@ class TestWebsocket(unittest.TestCase):
     def test_new_tx(self):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
-        self.manager.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=get_genesis_transactions(self.manager.tx_storage)[1])
+        self.manager.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED,
+                                    tx=get_genesis_transactions(self.manager.tx_storage)[1])
         self.run_to_completion()
         value = self._decode_value(self.transport.value())
         self.assertEqual(value['tx_id'], get_genesis_transactions(None)[1].hash.hex())
