@@ -5,7 +5,10 @@ from twisted.web import resource
 
 from hathor.api_util import set_cors, validate_tx_hash
 from hathor.cli.openapi_files.register import register_resource
+from hathor.conf import HathorSettings
 from hathor.transaction.base_transaction import BaseTransaction
+
+settings = HathorSettings()
 
 
 def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
@@ -113,7 +116,7 @@ class TransactionResource(resource.Resource):
             'timestamp': int, the timestamp reference we are in the pagination
             'page': 'previous' or 'next', to indicate if the user wants after or before the hash reference
         """
-        count = int(request.args[b'count'][0])
+        count = min(int(request.args[b'count'][0]), settings.MAX_TX_COUNT)
         type_tx = request.args[b'type'][0].decode('utf-8')
         ref_hash = None
         page = ''

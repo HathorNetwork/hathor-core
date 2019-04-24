@@ -4,6 +4,9 @@ from twisted.web import resource
 
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.conf import HathorSettings
+
+settings = HathorSettings()
 
 
 @register_resource
@@ -34,6 +37,10 @@ class DashboardTransactionResource(resource.Resource):
         # Get quantity for each
         block_count = int(request.args[b'block'][0])
         tx_count = int(request.args[b'tx'][0])
+
+        # Restrict counts
+        block_count = min(block_count, settings.MAX_DASHBOARD_COUNT)
+        tx_count = min(tx_count, settings.MAX_DASHBOARD_COUNT)
 
         transactions, _ = self.manager.tx_storage.get_newest_txs(count=tx_count)
         serialized_tx = [tx.to_json_extended() for tx in transactions]
