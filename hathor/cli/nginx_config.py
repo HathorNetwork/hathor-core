@@ -157,7 +157,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_pass http://fullnode:8080;
     }
-    location = /ws {
+    location ~ /ws/? {
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -184,8 +184,9 @@ server {
     out_file.write(server_open)
     # server level settings
     for location_path, location_params in locations.items():
+        location_path = location_path.strip('/')
         location_open = f'''
-    location = {location_path} {{
+    location ~ ^/{location_path}/? {{
 '''
         location_close = '''\
         try_files $uri @status_api;
