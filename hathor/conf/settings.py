@@ -98,3 +98,9 @@ class HathorSettings(NamedTuple):
     # if w1 >= w2 - WEIGHT_TOL:
     #     print('w1 is greater than or equal to w2')
     WEIGHT_TOL: float = 1e-10
+
+    # Maximum number of txs or blocks (each, not combined) to show on the dashboard
+    MAX_DASHBOARD_COUNT: int = 15
+
+    # Maximum number of txs or blocks returned by the '/transaction' endpoint
+    MAX_TX_COUNT: int = 15
