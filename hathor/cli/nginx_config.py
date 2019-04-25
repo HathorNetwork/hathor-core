@@ -105,13 +105,14 @@ def generate_nginx_config(openapi, *, out_file, rate_k: float = 1.0,
 
         location_params: Dict[str, Any] = {
             'rate_limits': [],
+            'path_vars_re': params.get('x-path-params-regex', {}),
         }
 
         rate_limits = params.get('x-rate-limit')
         if not rate_limits:
             continue
 
-        path_key = path.lower().replace('/', '__')
+        path_key = path.lower().replace('/', '__').replace('.', '__').replace('{', '').replace('}', '')
 
         global_rate_limits = rate_limits.get('global', [])
         for i, rate_limit in enumerate(global_rate_limits):
@@ -157,7 +158,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_pass http://fullnode:8080;
     }
-    location ~ /ws/? {
+    location ~ ^/ws/?$ {
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -184,9 +185,9 @@ server {
     out_file.write(server_open)
     # server level settings
     for location_path, location_params in locations.items():
-        location_path = location_path.strip('/')
+        location_path = location_path.replace('.', r'\.').strip('/').format(**location_params['path_vars_re'])
         location_open = f'''
-    location ~ ^/{location_path}/? {{
+    location ~ ^/{location_path}/?$ {{
 '''
         location_close = '''\
         try_files $uri @status_api;
