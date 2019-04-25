@@ -221,7 +221,9 @@ class RunNode:
         from hathor.transaction.resources import (
             DashboardTransactionResource,
             DecodeTxResource,
-            GraphvizResource,
+            GraphvizLegacyResource,
+            GraphvizFullResource,
+            GraphvizNeighboursResource,
             PushTxResource,
             TipsHistogramResource,
             TipsResource,
@@ -277,6 +279,11 @@ class RunNode:
             wallet_resource.putChild(b'nano-contract', contracts_resource)
             p2p_resource = Resource()
             root.putChild(b'p2p', p2p_resource)
+            graphviz = GraphvizLegacyResource(self.manager)
+            for fmt in ['dot', 'pdf', 'png', 'jpg']:
+                bfmt = fmt.encode('ascii')
+                graphviz.putChild(b'full.' + bfmt, GraphvizFullResource(self.manager, format=fmt))
+                graphviz.putChild(b'neighbours.' + bfmt, GraphvizNeighboursResource(self.manager, format=fmt))
 
             resources = (
                 (b'status', StatusResource(self.manager), root),
@@ -284,7 +291,7 @@ class RunNode:
                 (b'mining', MiningResource(self.manager), root),
                 (b'decode_tx', DecodeTxResource(self.manager), root),
                 (b'push_tx', PushTxResource(self.manager), root),
-                (b'graphviz', GraphvizResource(self.manager), root),
+                (b'graphviz', graphviz, root),
                 (b'tips-histogram', TipsHistogramResource(self.manager), root),
                 (b'tips', TipsResource(self.manager), root),
                 (b'transaction', TransactionResource(self.manager), root),
