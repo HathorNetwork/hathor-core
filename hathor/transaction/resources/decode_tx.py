@@ -59,16 +59,16 @@ DecodeTxResource.openapi = {
         'x-rate-limit': {
             'global': [
                 {
-                    'rate': '1000r/s',
-                    'burst': 1000,
-                    'delay': 500
+                    'rate': '200r/s',
+                    'burst': 200,
+                    'delay': 100
                 }
             ],
             'per-ip': [
                 {
-                    'rate': '1r/s',
-                    'burst': 3,
-                    'delay': 0
+                    'rate': '3r/s',
+                    'burst': 10,
+                    'delay': 3
                 }
             ]
         },

@@ -67,14 +67,16 @@ TransactionAccWeightResource.openapi = {
         'x-rate-limit': {
             'global': [
                 {
-                    'rate': '1000r/s',
-                    'burst': 1000,
-                    'delay': 500
+                    'rate': '10r/s',
+                    'burst': 20,
+                    'delay': 10
                 }
             ],
             'per-ip': [
                 {
-                    'rate': '1r/s'
+                    'rate': '3r/s',
+                    'burst': 10,
+                    'delay': 3
                 }
             ]
         },

@@ -241,12 +241,16 @@ GraphvizNeighboursResource.openapi = {
         'x-rate-limit': {
             'global': [
                 {
-                    'rate': '100r/s'
+                    'rate': '20r/s',
+                    'burst': 20,
+                    'delay': 10
                 }
             ],
             'per-ip': [
                 {
-                    'rate': '1r/s'
+                    'rate': '3r/s',
+                    'burst': 10,
+                    'delay': 3
                 }
             ]
         },

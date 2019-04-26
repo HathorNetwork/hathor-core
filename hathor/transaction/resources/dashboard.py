@@ -62,14 +62,16 @@ DashboardTransactionResource.openapi = {
         'x-rate-limit': {
             'global': [
                 {
-                    'rate': '1000r/s',
-                    'burst': 1000,
-                    'delay': 500
+                    'rate': '50r/s',
+                    'burst': 100,
+                    'delay': 50
                 }
             ],
             'per-ip': [
                 {
-                    'rate': '5r/s'
+                    'rate': '3r/s',
+                    'burst': 10,
+                    'delay': 3
                 }
             ]
         },
