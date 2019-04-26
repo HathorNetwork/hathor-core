@@ -99,7 +99,9 @@ PushTxResource.openapi = {
             ],
             'per-ip': [
                 {
-                    'rate': '1r/s'
+                    'rate': '3r/s',
+                    'burst': 10,
+                    'delay': 3
                 }
             ]
         },

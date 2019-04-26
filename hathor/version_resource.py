@@ -44,16 +44,16 @@ VersionResource.openapi = {
         'x-rate-limit': {
             'global': [
                 {
-                    'rate': '1000r/s',
-                    'burst': 1000,
-                    'delay': 500
+                    'rate': '360r/s',
+                    'burst': 360,
+                    'delay': 180
                 }
             ],
             'per-ip': [
                 {
-                    'rate': '10r/s',
+                    'rate': '3r/s',
                     'burst': 10,
-                    'delay': 5
+                    'delay': 3
                 }
             ]
         },

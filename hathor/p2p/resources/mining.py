@@ -66,14 +66,14 @@ MiningResource.openapi = {
                 {
                     'rate': '200r/s',
                     'burst': 200,
-                    'delay': 0
+                    'delay': 100
                 }
             ],
             'per-ip': [
                 {
-                    'rate': '1r/s',
-                    'burst': 3,
-                    'delay': 0
+                    'rate': '3r/s',
+                    'burst': 10,
+                    'delay': 3
                 }
             ]
         },
