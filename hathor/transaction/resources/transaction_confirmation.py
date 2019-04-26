@@ -62,7 +62,7 @@ class TransactionAccWeightResource(resource.Resource):
 
 
 TransactionAccWeightResource.openapi = {
-    '/transaction_acc_weight/': {
+    '/transaction_acc_weight': {
         'x-visibility': 'public',
         'x-rate-limit': {
             'global': [
