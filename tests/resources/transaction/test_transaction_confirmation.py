@@ -14,7 +14,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_get_data(self):
-        genesis_tx = get_genesis_transactions(self.manager.tx_storage)[0]
+        genesis_tx = get_genesis_transactions(self.manager.tx_storage)[1]
         response_success = yield self.web.get(
             "transaction_acc_weight",
             {b'id': bytes(genesis_tx.hash.hex(), 'utf-8')}
@@ -47,3 +47,13 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
             "transaction_acc_weight", {b'id': b'000000831cff82fa730cbdf8640fae6c130aab1681336e2f8574e314a553384'})
         data_error2 = response_error2.json_value()
         self.assertFalse(data_error2['success'])
+
+    @inlineCallbacks
+    def test_blocks_are_blocked(self):
+        genesis_tx = get_genesis_transactions(self.manager.tx_storage)[0]
+        response_success = yield self.web.get(
+            "transaction_acc_weight",
+            {b'id': bytes(genesis_tx.hash.hex(), 'utf-8')}
+        )
+        data_success = response_success.json_value()
+        self.assertFalse(data_success['success'])

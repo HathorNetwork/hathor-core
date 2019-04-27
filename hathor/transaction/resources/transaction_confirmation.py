@@ -19,6 +19,35 @@ class TransactionAccWeightResource(resource.Resource):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
+    def _render_GET_data(self, requested_hash):
+        success, message = validate_tx_hash(requested_hash, self.manager.tx_storage)
+        if not success:
+            return {'success': False, 'message': message}
+
+        hash_bytes = bytes.fromhex(requested_hash)
+        tx = self.manager.tx_storage.get_transaction(hash_bytes)
+
+        if tx.is_block:
+            return {'success': False, 'message': 'not allowed on blocks'}
+
+        meta = tx.get_metadata()
+        data = {'success': True}
+
+        if meta.first_block:
+            block = self.manager.tx_storage.get_transaction(meta.first_block)
+            stop_value = block.weight + log(6, 2)
+            meta = tx.update_accumulated_weight(stop_value=stop_value)
+            data['accumulated_weight'] = meta.accumulated_weight
+            data['accumulated_bigger'] = meta.accumulated_weight > stop_value
+            data['stop_value'] = stop_value
+            data['confirmation_level'] = min(meta.accumulated_weight / stop_value, 1)
+        else:
+            meta = tx.update_accumulated_weight()
+            data['accumulated_weight'] = meta.accumulated_weight
+            data['accumulated_bigger'] = False
+            data['confirmation_level'] = 0
+        return data
+
     def render_GET(self, request):
         """ Get request /transaction_acc_weight/ that returns the acc_weight data of a tx
 
@@ -29,34 +58,11 @@ class TransactionAccWeightResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        if b'id' in request.args:
-            requested_hash = request.args[b'id'][0].decode('utf-8')
-        else:
+        if b'id' not in request.args:
             return get_missing_params_msg('id')
 
-        success, message = validate_tx_hash(requested_hash, self.manager.tx_storage)
-        if not success:
-            data = {'success': False, 'message': message}
-        else:
-            hash_bytes = bytes.fromhex(requested_hash)
-            tx = self.manager.tx_storage.get_transaction(hash_bytes)
-            meta = tx.get_metadata()
-
-            data = {'success': True}
-
-            if meta.first_block:
-                block = self.manager.tx_storage.get_transaction(meta.first_block)
-                stop_value = block.weight + log(6, 2)
-                meta = tx.update_accumulated_weight(stop_value=stop_value)
-                data['accumulated_weight'] = meta.accumulated_weight
-                data['accumulated_bigger'] = meta.accumulated_weight > stop_value
-                data['stop_value'] = stop_value
-                data['confirmation_level'] = min(meta.accumulated_weight / stop_value, 1)
-            else:
-                meta = tx.update_accumulated_weight()
-                data['accumulated_weight'] = meta.accumulated_weight
-                data['accumulated_bigger'] = False
-                data['confirmation_level'] = 0
+        requested_hash = request.args[b'id'][0].decode('utf-8')
+        data = self._render_GET_data(requested_hash)
 
         return json.dumps(data, indent=4).encode('utf-8')
 
