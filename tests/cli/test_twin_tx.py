@@ -1,29 +1,21 @@
 import json
-import urllib.parse
 from contextlib import redirect_stdout
 from io import StringIO
 
-from hathor.cli.mining import create_parser as create_parser_mining, execute as execute_mining
 from hathor.cli.twin_tx import create_parser, execute
-from hathor.cli.tx_generator import create_parser as create_parser_tx, execute as execute_tx
+from hathor.conf import HathorSettings
 from hathor.transaction import Transaction, TransactionMetadata
 from tests import unittest
-from tests.utils import add_new_blocks, add_new_transactions, request_server, run_server
+from tests.utils import (
+    add_new_blocks,
+    add_new_transactions,
+    execute_mining,
+    execute_tx_gen,
+    request_server,
+    run_server,
+)
 
-
-def prepare_transactions(host):
-    # Unlock wallet to start mining
-    request_server('wallet/unlock', 'POST', data={'passphrase': '123'})
-
-    # Mining
-    parser_mining = create_parser_mining()
-    args = parser_mining.parse_args([urllib.parse.urljoin(host, 'mining'), '--count', '2'])
-    execute_mining(args)
-
-    # Generating txs
-    parser_tx = create_parser_tx()
-    args = parser_tx.parse_args([host, '--count', '4'])
-    execute_tx(args)
+settings = HathorSettings()
 
 
 class TwinTxTest(unittest.TestCase):
@@ -79,8 +71,14 @@ class TwinTxTest(unittest.TestCase):
         # Running with ssl just to test listening tcp with TLS factory
         server = run_server(listen_ssl=True)
 
-        host = 'http://localhost:8085'
-        prepare_transactions(host)
+        # Unlock wallet to start mining
+        request_server('wallet/unlock', 'POST', data={'passphrase': '123'})
+
+        # Mining
+        execute_mining(count=2)
+
+        # Generating txs
+        execute_tx_gen(count=4)
 
         response = request_server('transaction', 'GET', data={b'count': 4, b'type': 'tx'})
         tx = response['transactions'][-1]
@@ -89,6 +87,7 @@ class TwinTxTest(unittest.TestCase):
         tx = response['tx']
 
         # Twin different weight and parents
+        host = 'http://localhost:8085/{}/'.format(settings.API_VERSION_PREFIX)
         params = ['--url', host, '--hash', tx['hash'], '--parents', '--weight', '14']
         args = self.parser.parse_args(params)
 

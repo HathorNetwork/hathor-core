@@ -33,7 +33,7 @@ def execute(args):
 
     from requests.exceptions import ConnectionError
 
-    send_tokens_url = urllib.parse.urljoin(args.url, '/wallet/send_tokens/')
+    send_tokens_url = urllib.parse.urljoin(args.url, 'wallet/send_tokens/')
 
     print('Hathor TX Sender v1.0.0')
     print('URL: {}'.format(args.url))
@@ -52,7 +52,7 @@ def execute(args):
     if args.address:
         addresses = args.address
     else:
-        address_url = urllib.parse.urljoin(args.url, '/wallet/address') + '?new=false'
+        address_url = urllib.parse.urljoin(args.url, 'wallet/address') + '?new=false'
         while True:
             try:
                 response = requests.get(address_url)
@@ -84,7 +84,7 @@ def execute(args):
     signal.signal(signal.SIGINT, signal_handler)
 
     if args.profiler:
-        profiler_url = urllib.parse.urljoin(args.url, '/profiler/')
+        profiler_url = urllib.parse.urljoin(args.url, 'profiler/')
         response = requests.post(profiler_url, json={'start': True})
         print(response.text)
 
