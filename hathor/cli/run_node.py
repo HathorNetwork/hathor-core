@@ -215,6 +215,7 @@ class RunNode:
         self.manager.start()
 
     def register_resources(self, args: Namespace) -> None:
+        from hathor.conf import HathorSettings
         from hathor.p2p.resources import AddPeersResource, MiningResource, StatusResource
         from hathor.prometheus import PrometheusMetricsExporter
         from hathor.resources import ProfilerResource
@@ -249,6 +250,8 @@ class RunNode:
             NanoContractMatchValueResource,
         )
         from hathor.websocket import HathorAdminWebsocketFactory
+
+        settings = HathorSettings()
 
         if args.listen:
             for description in args.listen:
@@ -336,7 +339,9 @@ class RunNode:
 
             ws_factory.subscribe(self.manager.pubsub)
 
-            status_server = server.Site(root)
+            real_root = Resource()
+            real_root.putChild(settings.API_VERSION_PREFIX.encode('ascii'), root)
+            status_server = server.Site(real_root)
             reactor.listenTCP(args.status, status_server)
 
     def __init__(self, *, argv=None):

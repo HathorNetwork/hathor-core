@@ -99,6 +99,10 @@ def generate_nginx_config(openapi, *, out_file, rate_k: float = 1.0,
     """ Entry point of the functionality provided by the cli
     """
     from datetime import datetime
+    from hathor.conf import HathorSettings
+
+    settings = HathorSettings()
+    api_prefix = settings.API_VERSION_PREFIX
 
     locations: Dict[str, Dict[str, Any]] = {}
     limit_rate_zones: List[RateLimitZone] = []
@@ -171,40 +175,43 @@ server_tokens off;
 
 '''
 
-    server_open = '''
-upstream backend {
+    server_open = f'''
+upstream backend {{
     server fullnode:8080;
-}
+}}
 
-server {
+server {{
     listen 80;
     server_name localhost;
 
     set $perip $remote_addr;  # binary_remote_addr won't help much anyway
-    if ($http_x_forwarded_for) {
+    if ($http_x_forwarded_for) {{
         set $perip $http_x_forwarded_for;
-    }
+    }}
 
     limit_req_status 429;
     error_page 429 @429;
-    location @429 {
+    location @429 {{
         include cors_params;
         try_files /path/doesnt/matter =429;
-    }
-    location ~ ^/ws/?$ {
+    }}
+    location ~ ^/{api_prefix}/ws/?$ {{
         include cors_params;
         include proxy_params;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_pass http://backend;
-    }'''
+    }}'''
     # TODO: maybe return 403 instead?
-    server_close = '''
-    location / {
+    server_close = f'''
+    location /{api_prefix} {{
         return 403;
-    }
-}
+    }}
+    location / {{
+        return 404;
+    }}
+}}
 '''
 
     out_file.write(header)
@@ -218,7 +225,7 @@ server {
     for location_path, location_params in locations.items():
         location_path = location_path.replace('.', r'\.').strip('/').format(**location_params['path_vars_re'])
         location_open = f'''
-    location ~ ^/{location_path}/?$ {{
+    location ~ ^/{api_prefix}/{location_path}/?$ {{
         include cors_params;
         include proxy_params;
 '''
