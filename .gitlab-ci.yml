@@ -51,5 +51,6 @@ docker:
     - pip install awscli
   script:
     - $(aws ecr get-login --no-include-email --region us-east-1)
+    - docker pull $DOCKER_REPO:latest
     - docker build -t $DOCKER_REPO:$(git describe) .
     - docker push $DOCKER_REPO:$(git describe)
