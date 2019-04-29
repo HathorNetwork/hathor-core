@@ -5,35 +5,35 @@ stages:
   - unit-tests
   - images
 
-check:
-  stage: linters
-  image: python:3.6
-  allow_failure: yes
-  before_script:
-    # install pipenv and generate dev-requirements.txt (stdout) from Pipfile.lock on the fly
-    - pip install pipenv
-    - pip install -r <(pipenv lock -rd)
-    # dev requirements installed directly by pip, do not prefix with `pipenv run`
-    # protobuf files should be generated because they improve mypy checks
-    - make protos
-  script:
-    - make check
-
-unit-tests:
-  stage: unit-tests
-  image: python:3.6
-  before_script:
-    - echo "deb http://deb.debian.org/debian stretch-backports main" > /etc/apt/sources.list.d/backports.list
-    - apt update
-    - apt install -y graphviz
-    - apt install -y -t stretch-backports librocksdb-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev
-    - pip install pipenv
-    - pipenv sync -d
-    - pipenv run pip install python-rocksdb==0.7.0
-    - pipenv run make protos
-  script:
-    - pipenv run make tests
-  coverage: '/^TOTAL.*\s+(\d+\%)$/'
+#check:
+#  stage: linters
+#  image: python:3.6
+#  allow_failure: yes
+#  before_script:
+#    # install pipenv and generate dev-requirements.txt (stdout) from Pipfile.lock on the fly
+#    - pip install pipenv
+#    - pip install -r <(pipenv lock -rd)
+#    # dev requirements installed directly by pip, do not prefix with `pipenv run`
+#    # protobuf files should be generated because they improve mypy checks
+#    - make protos
+#  script:
+#    - make check
+#
+#unit-tests:
+#  stage: unit-tests
+#  image: python:3.6
+#  before_script:
+#    - echo "deb http://deb.debian.org/debian stretch-backports main" > /etc/apt/sources.list.d/backports.list
+#    - apt update
+#    - apt install -y graphviz
+#    - apt install -y -t stretch-backports librocksdb-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev
+#    - pip install pipenv
+#    - pipenv sync -d
+#    - pipenv run pip install python-rocksdb==0.7.0
+#    - pipenv run make protos
+#  script:
+#    - pipenv run make tests
+#  coverage: '/^TOTAL.*\s+(\d+\%)$/'
 
 docker:
   stage: images
@@ -44,6 +44,8 @@ docker:
       - experiment/docker-build
   variables:
     DOCKER_REPO: 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode
+  before_script:
+    - apk add git
   script:
     - docker build -t $DOCKER_REPO:$(git describe) .
     - $(aws ecr get-login --no-include-email --region us-east-1)
