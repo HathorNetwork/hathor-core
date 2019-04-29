@@ -47,8 +47,9 @@ docker:
   services:
     - docker:dind
   before_script:
-    - apk add git
+    - apk add --no-cache git
+    - apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing aws-cli
   script:
-    - docker build -t $DOCKER_REPO:$(git describe) .
     - $(aws ecr get-login --no-include-email --region us-east-1)
+    - docker build -t $DOCKER_REPO:$(git describe) .
     - docker push $DOCKER_REPO:$(git describe)
