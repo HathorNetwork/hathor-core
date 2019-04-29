@@ -29,7 +29,8 @@ ENV PIPENV_COLORBLIND=1 \
     PIPENV_DONT_USE_PYENV=1 \
     PIPENV_HIDE_EMOJIS=1 \
     PIPENV_MAX_RETRIES=1 \
-    PIPENV_VENV_IN_PROJECT=1
+    PIPENV_VENV_IN_PROJECT=1 \
+    PIPENV_QUIET=1
 RUN pipenv --bare install --ignore-pipfile --deploy
 RUN pipenv run pip install python-rocksdb==0.7.0
 
