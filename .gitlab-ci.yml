@@ -46,7 +46,6 @@ docker:
     REPO: 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode
   services:
     - docker:dind
-  timeout: 90 # in minutes
   before_script:
     - apk add --no-cache curl jq python py-pip git
     - pip install awscli
