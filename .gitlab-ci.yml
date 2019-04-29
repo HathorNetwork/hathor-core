@@ -3,6 +3,7 @@
 stages:
   - linters
   - unit-tests
+  - images
 
 check:
   stage: linters
@@ -33,3 +34,17 @@ unit-tests:
   script:
     - pipenv run make tests
   coverage: '/^TOTAL.*\s+(\d+\%)$/'
+
+docker:
+  stage: images
+  image: docker:stable
+  only:
+    refs:
+      - dev
+      - experiment/docker-build
+  variables:
+    DOCKER_REPO: 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode
+  script:
+    - docker build -t $DOCKER_REPO .
+    - $(aws ecr get-login --no-include-email --region us-east-1)
+    - docker push $DOCKER_REPO
