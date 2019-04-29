@@ -44,6 +44,8 @@ docker:
       - experiment/docker-build
   variables:
     DOCKER_REPO: 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode
+  services:
+    - docker:dind
   before_script:
     - apk add git
   script:
