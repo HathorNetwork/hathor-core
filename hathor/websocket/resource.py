@@ -2,7 +2,6 @@ import json
 
 from twisted.web import resource
 
-import hathor
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
 

@@ -9,8 +9,8 @@ from hathor.metrics import Metrics
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.transaction.genesis import get_genesis_transactions
 from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance
-from hathor.websocket.factory import HathorAdminWebsocketFactory, HathorAdminWebsocketProtocol
 from hathor.websocket import WebsocketStatsResource
+from hathor.websocket.factory import HathorAdminWebsocketFactory, HathorAdminWebsocketProtocol
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 settings = HathorSettings()
