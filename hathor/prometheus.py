@@ -51,6 +51,9 @@ class PrometheusMetricsExporter:
         # If exporter is running
         self.running = False
 
+        # Websocket factory, in order to set connections data to prometheus
+        self.ws_factory = None
+
     def _initial_setup(self):
         """ Start a collector registry to send data to node exporter
             and create one object to hold each metric data
@@ -59,6 +62,18 @@ class PrometheusMetricsExporter:
 
         for name, comment in METRIC_INFO.items():
             self.metric_gauges[name] = Gauge(name, comment, registry=self.registry)
+
+        # Websocket info
+        self.metric_gauges['connections'] = Gauge(
+            'connections',
+            'Number of connections in websocket',
+            registry=self.registry
+        )
+        self.metric_gauges['addresses'] = Gauge(
+            'addresses',
+            'Number of addresses subscribed in websocket',
+            registry=self.registry
+        )
 
     def start(self):
         """ Starts exporter
@@ -71,6 +86,10 @@ class PrometheusMetricsExporter:
         """
         for metric_name in METRIC_INFO.keys():
             self.metric_gauges[metric_name].set(getattr(self.metrics, metric_name))
+
+        if self.ws_factory:
+            self.metric_gauges['connections'].set(len(self.ws_factory.connections))
+            self.metric_gauges['addresses'].set(len(self.ws_factory.address_connections))
 
         write_to_textfile(self.filepath, self.registry)
 
