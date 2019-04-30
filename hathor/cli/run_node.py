@@ -249,7 +249,7 @@ class RunNode:
             NanoContractExecuteResource,
             NanoContractMatchValueResource,
         )
-        from hathor.websocket import HathorAdminWebsocketFactory
+        from hathor.websocket import HathorAdminWebsocketFactory, WebsocketStatsResource
 
         settings = HathorSettings()
 
@@ -338,6 +338,9 @@ class RunNode:
             root.putChild(b"ws", resource)
 
             ws_factory.subscribe(self.manager.pubsub)
+
+            # Websocket stats resource
+            root.putChild(b'websocket_stats', WebsocketStatsResource(ws_factory))
 
             real_root = Resource()
             real_root.putChild(settings.API_VERSION_PREFIX.encode('ascii'), root)
