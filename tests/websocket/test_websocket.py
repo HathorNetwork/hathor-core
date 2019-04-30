@@ -1,6 +1,7 @@
 import json
 from unittest.mock import Mock
 
+from twisted.internet.defer import inlineCallbacks
 from twisted.test import proto_helpers
 
 from hathor.conf import HathorSettings
@@ -9,12 +10,13 @@ from hathor.pubsub import EventArguments, HathorEvents
 from hathor.transaction.genesis import get_genesis_transactions
 from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance
 from hathor.websocket.factory import HathorAdminWebsocketFactory, HathorAdminWebsocketProtocol
-from tests import unittest
+from hathor.websocket import WebsocketStatsResource
+from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 settings = HathorSettings()
 
 
-class TestWebsocket(unittest.TestCase):
+class TestWebsocket(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
 
@@ -29,6 +31,8 @@ class TestWebsocket(unittest.TestCase):
 
         self.transport = proto_helpers.StringTransport()
         self.protocol.makeConnection(self.transport)
+
+        self.web = StubSite(WebsocketStatsResource(self.factory))
 
     def _decode_value(self, value):
         ret = None
@@ -179,3 +183,34 @@ class TestWebsocket(unittest.TestCase):
                                                   metrics.block_hash_store_interval)
 
         self.assertEqual(hash_rate, 0)
+
+    @inlineCallbacks
+    def test_get_stats(self):
+        response = yield self.web.get('websocket_stats')
+        data = response.json_value()
+        self.assertEqual(data['connections'], 0)
+        self.assertEqual(data['addresses'], 0)
+
+        # Add one connection
+        self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
+        request_mock = Mock(peer=None)
+        self.protocol.onConnect(request_mock)
+        self.protocol.onOpen()
+
+        # Add two addresses
+        self.assertEqual(len(self.factory.address_connections), 0)
+        self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
+        # Subscribe to address
+        address1 = '1Q4qyTjhpUXUZXzwKs6Yvh2RNnF5J1XN9a'
+        payload = json.dumps({'type': 'subscribe_address', 'address': address1}).encode('utf-8')
+        self.protocol.onMessage(payload, False)
+
+        address2 = '1Q4qyTjhpUXUZXzwKs6Yvh2RNnF5J1XN9b'
+        payload = json.dumps({'type': 'subscribe_address', 'address': address2}).encode('utf-8')
+        self.protocol.onMessage(payload, False)
+
+        # Test get again
+        response = yield self.web.get('websocket_stats')
+        data = response.json_value()
+        self.assertEqual(data['connections'], 1)
+        self.assertEqual(data['addresses'], 2)
