@@ -10,7 +10,8 @@ from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 
 if TYPE_CHECKING:
-    from hathor.websocket.factory import HathorAdminWebsocketFactory
+    from hathor.websocket.factory import HathorAdminWebsocketFactory  # noqa: F401
+
 
 class WeightValue(NamedTuple):
     time: int
