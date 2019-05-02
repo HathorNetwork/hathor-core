@@ -347,9 +347,8 @@ class RunNode:
             status_server = server.Site(real_root)
             reactor.listenTCP(args.status, status_server)
 
-            if args.prometheus:
-                # Set websocket factory
-                prometheus.ws_factory = ws_factory
+            # Set websocket factory in metrics
+            self.manager.metrics.websocket_factory = ws_factory
 
     def __init__(self, *, argv=None):
         if argv is None:
