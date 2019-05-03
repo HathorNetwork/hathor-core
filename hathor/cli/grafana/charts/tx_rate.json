@@ -4,7 +4,7 @@
     "params": {
         "targets": [
             {
-                "expr": "irate(transactions{{instance='{0}',job='{1}'}}[30s])",
+                "expr": "rate(transactions{{instance='{0}',job='{1}'}}[$__interval])",
                 "format": "time_series",
                 "intervalFactor": 1,
                 "refId": "A"
