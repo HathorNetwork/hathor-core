@@ -9,6 +9,7 @@ from twisted.logger import Logger
 
 from hathor import protos
 from hathor.exception import HathorError
+from hathor.indexes import TransactionIndexElement, TransactionsIndex
 from hathor.transaction import Block
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import TransactionStorage
@@ -558,6 +559,23 @@ class TransactionRemoteStorage(TransactionStorage):
             tx_list.append(tx_or_block_from_proto(tx_proto, storage=self))
         return tx_list
 
+    @convert_grpc_exceptions
+    def get_sorted_txs(self, timestamp: int, count: int, offset: int) -> TransactionsIndex:
+        self._check_connection()
+        request = protos.SortedTxsRequest(
+            timestamp=timestamp,
+            count=count,
+            offset=offset
+        )
+        result = self._stub.SortedTxs(request)
+        tx_list = []
+        for tx_proto in result:
+            tx_list.append(TransactionIndexElement(tx_proto.timestamp, tx_proto.hash))
+
+        all_sorted = TransactionsIndex()
+        all_sorted.update(tx_list)
+        return all_sorted
+
 
 class TransactionStorageServicer(protos.TransactionStorageServicer):
     log = Logger()
@@ -730,6 +748,16 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         for tx in tx_list:
             yield protos.ListItemResponse(transaction=tx.to_proto())
         yield protos.ListItemResponse(has_more=has_more)
+
+    @convert_hathor_exceptions_generator
+    def SortedTxs(self, request: protos.SortedTxsRequest, context: _Context) -> Iterator[protos.Transaction]:
+        timestamp = request.timestamp
+        offset = request.offset
+        count = request.count
+
+        txs_index = self.storage.get_sorted_txs(timestamp, count, offset)
+        for tx_element in txs_index[:]:
+            yield protos.Transaction(timestamp=tx_element.timestamp, hash=tx_element.hash)
 
 
 def create_transaction_storage_server(server: grpc.Server, tx_storage: TransactionStorage,
