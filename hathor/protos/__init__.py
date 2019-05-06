@@ -31,6 +31,7 @@ from hathor.protos.transaction_storage_pb2 import (
     MarkAsResponse,
     SaveRequest,
     SaveResponse,
+    SortedTxsRequest,
 )
 from hathor.protos.transaction_storage_pb2_grpc import (
     TransactionStorageServicer,
@@ -64,6 +65,7 @@ __all__ = [
     'ListNewestRequest',
     'ListItemResponse',
     'Interval',
+    'SortedTxsRequest',
     'TransactionStorageStub',
     'TransactionStorageServicer',
     'ANY_TYPE',

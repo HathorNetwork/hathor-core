@@ -201,6 +201,20 @@ class TransactionsIndex:
     def __init__(self) -> None:
         self.transactions = SortedKeyList(key=lambda x: (x.timestamp, x.hash))
 
+    def __getitem__(self, index: slice) -> List[TransactionIndexElement]:
+        """ Get items from SortedKeyList given a slice
+
+        :param index: list index slice, for eg [1:6]
+        """
+        return self.transactions[index]
+
+    def update(self, values: List[TransactionIndexElement]) -> None:
+        """ Update sorted list by adding all values from iterable
+
+        :param values: new values to add to SortedKeyList
+        """
+        self.transactions.update(values)
+
     def add_tx(self, tx: BaseTransaction) -> None:
         """ Add a transaction to the index
 
@@ -268,6 +282,20 @@ class TransactionsIndex:
         # Reverse because we want the newest first
         txs.reverse()
         return [tx_index.hash for tx_index in txs], last_idx < len(self.transactions)
+
+    def find_first_at_timestamp(self, timestamp: int) -> int:
+        """ Get index of first element at the given timestamp, or where it would be inserted if
+        the timestamp is not in the list.
+
+        Eg: SortedKeyList = [(3,hash1), (3, hash2), (7, hash3), (8, hash4)]
+        find_first_at_timestamp(7) = 2, which is the index of (7, hash3)
+        find_first_at_timestamp(4) = 2, which is the index of (7, hash3)
+
+        :param timestamp: timestamp we're interested in
+        :return: the index of the element, or None if timestamp is greater than all in the list
+        """
+        idx = self.transactions.bisect_key_left((timestamp, b''))
+        return idx
 
 
 class WalletIndex:
