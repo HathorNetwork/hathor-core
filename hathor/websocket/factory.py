@@ -267,7 +267,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             payload = json.dumps({'type': 'subscribe_address', 'success': True}).encode('utf-8')
             connection.sendMessage(payload, False)
         elif message['type'] == 'unsubscribe_address':
-            if connection in self.address_connections[message['address']]:
+            if message['address'] in self.address_connections and connection in self.address_connections[message['address']]:
                 self.address_connections[message['address']].remove(connection)
                 # If this was the last connection for this address, we delete it from the dict
                 if len(self.address_connections[message['address']]) == 0:
