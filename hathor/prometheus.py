@@ -12,8 +12,8 @@ METRIC_INFO = {
     'block_hash_rate': 'Hash rate of blocks',
     'tx_hash_rate': 'Hash rate of tx',
     'best_block_weight': 'Weight of blocks',
-    'websocket_connections': 'Number of connections in the websocket',
-    'websocket_addresses': 'Number of addresses subscribed in the websocket',
+    'connections': 'Number of connections in the websocket',
+    'subscribed_addresses': 'Number of subscribed addresses in the websocket',
 }
 
 

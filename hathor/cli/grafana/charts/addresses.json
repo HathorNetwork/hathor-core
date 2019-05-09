@@ -1,10 +1,10 @@
 {
-    "title": "Addresses Subscribed",
+    "title": "Subscribed Addresses on Websocket",
     "type": "graph",
     "params": {
         "targets": [
             {
-                "expr": "addresses{{instance='{0}',job='{1}'}}",
+                "expr": "subscribed_addresses{{instance='{0}',job='{1}'}}",
                 "format": "time_series",
                 "intervalFactor": 1,
                 "refId": "A"

@@ -28,26 +28,14 @@ class WebsocketStatsResource(resource.Resource):
 
         data = {
             'connections': len(self.websocket_factory.connections),
-            'addresses': len(self.websocket_factory.address_connections),
+            'subscribed_addresses': len(self.websocket_factory.address_connections),
         }
         return json.dumps(data, indent=4).encode('utf-8')
 
 
 WebsocketStatsResource.openapi = {
     '/websocket_stats': {
-        'x-visibility': 'public',
-        'x-rate-limit': {
-            'global': [
-                {
-                    'rate': '30r/s',
-                }
-            ],
-            'per-ip': [
-                {
-                    'rate': '1r/s',
-                }
-            ]
-        },
+        'x-visibility': 'private',
         'get': {
             'operationId': 'websocket_stats',
             'summary': 'Websocket stats',
