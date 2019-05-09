@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Callable, Deque, NamedTuple, Optional
+from typing import TYPE_CHECKING, Callable, Deque, NamedTuple, Optional
 
 from twisted.internet.interfaces import IReactorCore
 
@@ -8,6 +8,9 @@ from hathor.transaction.base_transaction import sub_weights, sum_weights
 from hathor.transaction.block import Block
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
+
+if TYPE_CHECKING:
+    from hathor.websocket.factory import HathorAdminWebsocketFactory  # noqa: F401
 
 
 class WeightValue(NamedTuple):
@@ -37,6 +40,10 @@ class Metrics:
     exponential_alfa: float  # XXX: "alpha"?
     tx_hash_store_interval: int
     block_hash_store_interval: int
+    collect_data_interval: int
+    websocket_connections: int
+    subscribed_addresses: int
+    websocket_factory: Optional['HathorAdminWebsocketFactory']
 
     def __init__(
             self,
@@ -109,6 +116,16 @@ class Metrics:
         self.tx_hash_store_interval = 1
         self.block_hash_store_interval = 1
 
+        # Time between method call to collect data
+        self.collect_data_interval = 5
+
+        # Websocket data stored
+        self.websocket_connections = 0
+        self.subscribed_addresses = 0
+
+        # Websocket factory
+        self.websocket_factory = None
+
         # weight of the head of the best blockchain
         self.best_block_weight = 0
 
@@ -134,6 +151,7 @@ class Metrics:
         self.is_running = True
         self.set_current_tx_hash_rate()
         self.set_current_block_hash_rate()
+        self.collect_data()
 
     def stop(self) -> None:
         self.is_running = False
@@ -241,3 +259,19 @@ class Metrics:
             :rtype: float
         """
         return new_value * self.exponential_alfa + (1 - self.exponential_alfa) * last_value
+
+    def set_websocket_data(self) -> None:
+        """ Set websocket metrics data. Connections and addresses subscribed.
+        """
+        if self.websocket_factory:
+            self.websocket_connections = len(self.websocket_factory.connections)
+            self.subscribed_addresses = len(self.websocket_factory.address_connections)
+
+    def collect_data(self) -> None:
+        """ Call methods that collect data to metrics
+            If it's still running, we schedule another call
+        """
+        self.set_websocket_data()
+
+        if self.is_running:
+            self.reactor.callLater(self.collect_data_interval, self.collect_data)

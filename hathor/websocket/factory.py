@@ -196,7 +196,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
     def send_message(self, data: Dict[str, Any]) -> None:
         """ Check if should broadcast the message to all connections or send directly to some connections only
         """
-        if data['type'] in ADDRESS_EVENTS:
+        if data['type'] in ADDRESS_EVENTS and data['address'] in self.address_connections:
             self.execute_send(data, self.address_connections[data['address']])
         else:
             self.broadcast_message(data)
@@ -267,7 +267,12 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             payload = json.dumps({'type': 'subscribe_address', 'success': True}).encode('utf-8')
             connection.sendMessage(payload, False)
         elif message['type'] == 'unsubscribe_address':
-            if connection in self.address_connections[message['address']]:
+            if (message['address'] in self.address_connections and
+                    connection in self.address_connections[message['address']]):
                 self.address_connections[message['address']].remove(connection)
+                # If this was the last connection for this address, we delete it from the dict
+                if len(self.address_connections[message['address']]) == 0:
+                    del self.address_connections[message['address']]
+                # Reply back to the client
                 payload = json.dumps({'type': 'unsubscribe_address', 'success': True}).encode('utf-8')
                 connection.sendMessage(payload, False)
