@@ -1,5 +1,5 @@
 {
-    "title": "Connections",
+    "title": "Websocket Connections",
     "type": "graph",
     "params": {
         "targets": [
