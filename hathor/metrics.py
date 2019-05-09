@@ -42,7 +42,7 @@ class Metrics:
     block_hash_store_interval: int
     websocket_store_interval: int
     websocket_connections: int
-    websocket_addresses: int
+    subscribed_addresses: int
     websocket_factory: Optional['HathorAdminWebsocketFactory']
 
     def __init__(
@@ -121,7 +121,7 @@ class Metrics:
 
         # Websocket data stored
         self.websocket_connections = 0
-        self.websocket_addresses = 0
+        self.subscribed_addresses = 0
 
         # Websocket factory
         self.websocket_factory = None
@@ -266,7 +266,7 @@ class Metrics:
         """
         if self.websocket_factory:
             self.websocket_connections = len(self.websocket_factory.connections)
-            self.websocket_addresses = len(self.websocket_factory.address_connections)
+            self.subscribed_addresses = len(self.websocket_factory.address_connections)
 
         if self.is_running:
             self.reactor.callLater(self.websocket_store_interval, self.set_websocket_data)

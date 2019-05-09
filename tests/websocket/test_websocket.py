@@ -189,7 +189,7 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
         response = yield self.web.get('websocket_stats')
         data = response.json_value()
         self.assertEqual(data['connections'], 0)
-        self.assertEqual(data['addresses'], 0)
+        self.assertEqual(data['subscribed_addresses'], 0)
 
         # Add one connection
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
@@ -213,4 +213,4 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
         response = yield self.web.get('websocket_stats')
         data = response.json_value()
         self.assertEqual(data['connections'], 1)
-        self.assertEqual(data['addresses'], 2)
+        self.assertEqual(data['subscribed_addresses'], 2)
