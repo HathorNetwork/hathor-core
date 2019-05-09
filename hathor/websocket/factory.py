@@ -196,7 +196,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
     def send_message(self, data: Dict[str, Any]) -> None:
         """ Check if should broadcast the message to all connections or send directly to some connections only
         """
-        if data['type'] in ADDRESS_EVENTS:
+        if data['type'] in ADDRESS_EVENTS and data['address'] in self.address_connections:
             self.execute_send(data, self.address_connections[data['address']])
         else:
             self.broadcast_message(data)
