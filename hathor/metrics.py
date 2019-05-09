@@ -40,7 +40,7 @@ class Metrics:
     exponential_alfa: float  # XXX: "alpha"?
     tx_hash_store_interval: int
     block_hash_store_interval: int
-    websocket_store_interval: int
+    collect_data_interval: int
     websocket_connections: int
     subscribed_addresses: int
     websocket_factory: Optional['HathorAdminWebsocketFactory']
@@ -116,8 +116,8 @@ class Metrics:
         self.tx_hash_store_interval = 1
         self.block_hash_store_interval = 1
 
-        # Time between method call to store websocket data
-        self.websocket_store_interval = 5
+        # Time between method call to collect data
+        self.collect_data_interval = 5
 
         # Websocket data stored
         self.websocket_connections = 0
@@ -151,7 +151,7 @@ class Metrics:
         self.is_running = True
         self.set_current_tx_hash_rate()
         self.set_current_block_hash_rate()
-        self.set_websocket_data()
+        self.collect_data()
 
     def stop(self) -> None:
         self.is_running = False
@@ -262,11 +262,16 @@ class Metrics:
 
     def set_websocket_data(self) -> None:
         """ Set websocket metrics data. Connections and addresses subscribed.
-            Call later this same method, so it can update this data.
         """
         if self.websocket_factory:
             self.websocket_connections = len(self.websocket_factory.connections)
             self.subscribed_addresses = len(self.websocket_factory.address_connections)
 
+    def collect_data(self) -> None:
+        """ Call methods that collect data to metrics
+            If it's still running, we schedule another call
+        """
+        self.set_websocket_data()
+
         if self.is_running:
-            self.reactor.callLater(self.websocket_store_interval, self.set_websocket_data)
+            self.reactor.callLater(self.collect_data_interval, self.collect_data)
