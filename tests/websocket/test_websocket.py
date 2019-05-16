@@ -129,6 +129,13 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
     def test_ping(self):
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
         payload = json.dumps({'type': 'ping'}).encode('utf-8')
+        self.protocol.onMessage(payload, True)
+        value = self._decode_value(self.transport.value())
+        self.assertEqual(value['type'], 'pong')
+
+    def test_ping_str(self):
+        self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
+        payload = json.dumps({'type': 'ping'})
         self.protocol.onMessage(payload, False)
         value = self._decode_value(self.transport.value())
         self.assertEqual(value['type'], 'pong')
@@ -139,7 +146,7 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
         # Subscribe to address
         address = '1Q4qyTjhpUXUZXzwKs6Yvh2RNnF5J1XN9a'
         payload = json.dumps({'type': 'subscribe_address', 'address': address}).encode('utf-8')
-        self.protocol.onMessage(payload, False)
+        self.protocol.onMessage(payload, True)
         self.assertEqual(len(self.factory.address_connections), 1)
 
         block_genesis = [tx for tx in get_genesis_transactions(self.manager.tx_storage) if tx.is_block][0]
@@ -203,11 +210,11 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
         # Subscribe to address
         address1 = '1Q4qyTjhpUXUZXzwKs6Yvh2RNnF5J1XN9a'
         payload = json.dumps({'type': 'subscribe_address', 'address': address1}).encode('utf-8')
-        self.protocol.onMessage(payload, False)
+        self.protocol.onMessage(payload, True)
 
         address2 = '1Q4qyTjhpUXUZXzwKs6Yvh2RNnF5J1XN9b'
         payload = json.dumps({'type': 'subscribe_address', 'address': address2}).encode('utf-8')
-        self.protocol.onMessage(payload, False)
+        self.protocol.onMessage(payload, True)
 
         # Test get again
         response = yield self.web.get('websocket_stats')

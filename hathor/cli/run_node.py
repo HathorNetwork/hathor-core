@@ -332,7 +332,8 @@ class RunNode:
                     parent.putChild(url_path, resource)
 
             # Websocket resource
-            ws_factory = HathorAdminWebsocketFactory(metrics=self.manager.metrics)
+            ws_factory = HathorAdminWebsocketFactory(metrics=self.manager.metrics,
+                                                     wallet_index=self.manager.tx_storage.wallet_index)
             ws_factory.start()
             resource = WebSocketResource(ws_factory)
             root.putChild(b"ws", resource)
