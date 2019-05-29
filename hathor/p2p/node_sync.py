@@ -3,8 +3,9 @@ import hashlib
 import json
 from collections import OrderedDict
 from math import inf
-from typing import TYPE_CHECKING, Callable, Dict, Iterator, List, Optional, Tuple, Union, cast
+from typing import TYPE_CHECKING, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union, cast
 
+from intervaltree.interval import Interval
 from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.internet.interfaces import IDelayedCall, IProtocol, IPushProducer, IReactorCore
 from twisted.internet.task import Clock
@@ -98,7 +99,7 @@ class SendDataPush:
         deps = list(self._get_deps(tx))
         for h in deps:
             if h in self.queue:
-                tx2, deps = self.queue.pop(h)
+                tx2, _ = self.queue.pop(h)
                 self.add_to_priority(tx2)
         self.priority_queue[tx.hash] = (tx, deps)
         self.schedule_if_needed()
@@ -205,6 +206,14 @@ class NodeSyncTimestamp(Plugin):
             'synced_timestamp': self.synced_timestamp,
         }
 
+    @property
+    def short_peer_id(self) -> str:
+        """ Returns the id of the peer (only 7 first chars)
+        """
+        assert self.protocol.peer is not None
+        assert self.protocol.peer.id is not None
+        return self.protocol.peer.id[:7]
+
     def get_cmd_dict(self) -> Dict[ProtocolMessages, Callable]:
         """ Return a dict of messages of the plugin.
         """
@@ -264,7 +273,13 @@ class NodeSyncTimestamp(Plugin):
         :rtype: Tuple[bytes(hash), List[bytes(hash)]]
         """
         intervals = self.manager.tx_storage.get_all_tips(timestamp)
+        return self.calculate_merkle_tree(intervals)
 
+    def calculate_merkle_tree(self, intervals: Set[Interval]) -> Tuple[bytes, List[bytes]]:
+        """ Generate a hash of the transactions at the intervals
+
+        :rtype: Tuple[bytes(hash), List[bytes(hash)]]
+        """
         hashes = [x.data for x in intervals]
         hashes.sort()
 
@@ -333,18 +348,24 @@ class NodeSyncTimestamp(Plugin):
 
         :param next_timestamp: Timestamp to start the sync
         """
-        self.log.debug('Sync starting at {next_timestamp}', next_timestamp=next_timestamp)
+        self.log.debug('sync-{p} Sync starting at {next_timestamp}', p=self.short_peer_id,
+                       next_timestamp=next_timestamp)
         assert next_timestamp < inf
         pending = []
         next_offset = 0
         while True:
             payload = cast(NextPayload, (yield self.get_peer_next(next_timestamp, offset=next_offset)))
+            self.log.debug('sync-{p} NextPayload ts={ts} next_ts={nts} next_offset={noff} hashes={hs}',
+                           p=self.short_peer_id, ts=payload.timestamp, nts=payload.next_timestamp,
+                           noff=payload.next_offset, hs=len(payload.hashes))
             count = 0
             for h in payload.hashes:
                 if not self.manager.tx_storage.transaction_exists(h):
                     pending.append(self.get_data(h))
                     count += 1
-            if count == 0:
+            self.log.debug('sync-{p} next_ts={ts} count={c} pending={pen}', p=self.short_peer_id,
+                           ts=next_timestamp, c=count, pen=len(pending))
+            if next_timestamp != payload.next_timestamp and count == 0:
                 break
             next_timestamp = payload.next_timestamp
             next_offset = payload.next_offset
@@ -381,8 +402,7 @@ class NodeSyncTimestamp(Plugin):
             if cur <= self.manager.tx_storage.first_timestamp:
                 raise Exception('We cannot go before genesis. Is it an attacker?!')
             prev_cur = cur
-            cur = min(cur - step, tips.prev_timestamp)
-            cur = max(cur, self.manager.tx_storage.first_timestamp)
+            cur = max(cur - step, self.manager.tx_storage.first_timestamp)
             tips = cast(TipsPayload, (yield self.get_peer_tips(cur)))
             local_merkle_tree, _ = self.get_merkle_tree(cur)
             step *= 2
@@ -415,7 +435,8 @@ class NodeSyncTimestamp(Plugin):
             return None
 
         assert low + 1 == high
-        self.log.debug('Synced at {log_source.synced_timestamp} (latest timestamp {log_source.peer_timestamp})')
+        self.log.debug('sync-{log_source.short_peer_id} Synced at {log_source.synced_timestamp} \
+                       (latest timestamp {log_source.peer_timestamp})')
         return self.synced_timestamp + 1
 
     @inlineCallbacks
@@ -423,6 +444,7 @@ class NodeSyncTimestamp(Plugin):
         """ Run the next step to keep nodes synced.
         """
         next_timestamp = yield self.find_synced_timestamp()
+        self.log.debug('sync-{p} _next_step next_timestamp={ts}', p=self.short_peer_id, ts=next_timestamp)
         if next_timestamp is None:
             return
 
@@ -476,55 +498,28 @@ class NodeSyncTimestamp(Plugin):
     def send_next(self, timestamp: int, offset: int = 0) -> None:
         """ Send a NEXT message.
         """
-        # Tips that won't be sent.
-        ignore_intervals = self.manager.tx_storage.get_all_tips(timestamp - 1)
-        ignore_hashes = set(x.data for x in ignore_intervals)
+        count = self.MAX_HASHES
 
-        hashes = []
+        all_sorted = self.manager.tx_storage.get_sorted_txs(timestamp, count, offset)
+        ret_txs = all_sorted[offset:offset+count]
+        hashes = [tx.hash.hex() for tx in ret_txs]
 
-        next_timestamp = timestamp
-        next_offset = offset
-        while True:
-            partial = self.manager.tx_storage.get_all_tips(next_timestamp)
-
-            if len(partial) == 0:
-                break
-
-            partial_hashes = [x.data for x in partial]
-            partial_hashes.sort()
-            if next_offset > 0:
-                partial_hashes = partial_hashes[next_offset:]
-            for idx, h in enumerate(partial_hashes):
-                if h not in ignore_hashes:
-                    ignore_hashes.add(h)
-                    hashes.append(h)
-                    assert len(hashes) <= self.MAX_HASHES
-                    if len(hashes) == self.MAX_HASHES:
-                        next_offset += idx
-                        break
-            else:
-                # Next timestamp in which tips have changed
-                min_end = min(x.end for x in partial)
-
-                # Look for transactions confirming already confirmed transactions
-                while min_end != inf:
-                    tmp = self.manager.tx_storage.get_all_tips(min_end - 1)
-                    tmp.difference_update(partial)
-                    if not tmp:
-                        break
-                    min_end = min(x.begin for x in tmp)
-
-                next_timestamp = min_end
-                next_offset = 0
-
-            if len(hashes) == self.MAX_HASHES:
-                break
+        if len(ret_txs) < count:
+            # this means we've reached the end and there's nothing else to sync
+            next_offset = 0
+            next_timestamp = inf
+        else:
+            next_offset = offset + count
+            next_timestamp = ret_txs[-1].timestamp
+            if next_timestamp != timestamp:
+                next_idx = all_sorted.find_first_at_timestamp(next_timestamp)
+                next_offset -= next_idx
 
         data = {
             'timestamp': timestamp,
             'next_timestamp': next_timestamp,
             'next_offset': next_offset,
-            'hashes': [h.hex() for h in hashes],
+            'hashes': hashes,
         }
         self.send_message(ProtocolMessages.NEXT, json.dumps(data))
 
@@ -575,22 +570,8 @@ class NodeSyncTimestamp(Plugin):
         if len(intervals) == 0:
             raise Exception('No tips for timestamp {}'.format(timestamp))
 
-        # Previous timestamp in which tips have changed
-        max_begin = max(x.begin for x in intervals)
-
-        # Next timestamp in which tips have changed
-        min_end = min(x.end for x in intervals)
-
-        # Look for transactions confirming already confirmed transactions
-        while min_end != inf:
-            tmp = self.manager.tx_storage.get_all_tips(min_end - 1)
-            tmp.difference_update(intervals)
-            if not tmp:
-                break
-            min_end = min(x.begin for x in tmp)
-
         # Calculate list of hashes to be sent
-        merkle_tree, hashes = self.get_merkle_tree(timestamp)
+        merkle_tree, hashes = self.calculate_merkle_tree(intervals)
         has_more = False
 
         if not include_hashes:
@@ -604,8 +585,6 @@ class NodeSyncTimestamp(Plugin):
         data = {
             'length': len(intervals),
             'timestamp': timestamp,
-            'prev_timestamp': max_begin - 1,
-            'next_timestamp': min_end,
             'merkle_tree': merkle_tree.hex(),
             'hashes': [h.hex() for h in hashes],
             'has_more': has_more,

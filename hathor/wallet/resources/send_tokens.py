@@ -1,5 +1,5 @@
 import json
-from typing import Optional, Union
+from typing import Any, Dict, Optional, Union
 
 from twisted.internet import threads
 from twisted.web import resource
@@ -62,7 +62,7 @@ class SendTokensResource(resource.Resource):
 
         if len(data['inputs']) == 0:
             try:
-                tx = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, timestamp)
+                inputs, outputs = self.manager.wallet.prepare_compute_inputs(outputs, timestamp)
             except InsufficientFunds as e:
                 return self.return_POST(False, 'Insufficient funds, {}'.format(str(e)))
         else:
@@ -73,32 +73,41 @@ class SendTokensResource(resource.Resource):
                 input_tx['tx_id'] = bytes.fromhex(input_tx['tx_id'])
                 inputs.append(WalletInputInfo(**input_tx))
             try:
-                tx = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
-                                                                               self.manager.tx_storage, timestamp)
+                inputs = self.manager.wallet.prepare_incomplete_inputs(inputs, self.manager.tx_storage)
             except (PrivateKeyNotFound, InputDuplicated):
                 return self.return_POST(False, 'Invalid input to create transaction')
 
-        tx.storage = self.manager.tx_storage
-
+        storage = self.manager.tx_storage
         if timestamp is None:
-            max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
-            tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
-        tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
+            max_ts_spent_tx = max(storage.get_transaction(txin.tx_id).timestamp for txin in inputs)
+            timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
+        parents = self.manager.get_new_tx_parents(timestamp)
 
-        # Calculating weight
-        weight = data.get('weight')
-        if weight is None:
-            weight = self.manager.minimum_tx_weight(tx)
-        tx.weight = weight
+        values = {
+            'inputs': inputs,
+            'outputs': outputs,
+            'storage': storage,
+            'weight': data.get('weight'),
+            'parents': parents,
+            'timestamp': timestamp,
+        }
 
-        deferred = threads.deferToThread(self._render_POST_thread, tx, request)
+        deferred = threads.deferToThread(self._render_POST_thread, values, request)
         deferred.addCallback(self._cb_tx_resolve, request)
         deferred.addErrback(self._err_tx_resolve, request)
 
         from twisted.web.server import NOT_DONE_YET
         return NOT_DONE_YET
 
-    def _render_POST_thread(self, tx: Transaction, request: Request) -> Union[bytes, Transaction]:
+    def _render_POST_thread(self, values: Dict[str, Any], request: Request) -> Union[bytes, Transaction]:
+        tx = self.manager.wallet.prepare_transaction(Transaction, values['inputs'],
+                                                     values['outputs'], values['timestamp'])
+        tx.storage = values['storage']
+        tx.parents = values['parents']
+        weight = values['weight']
+        if weight is None:
+            weight = self.manager.minimum_tx_weight(tx)
+        tx.weight = weight
         tx.resolve()
         tx.verify()
         return tx
@@ -153,6 +162,7 @@ class SendTokensResource(resource.Resource):
 
 SendTokensResource.openapi = {
     '/wallet/send_tokens': {
+        'x-visibility': 'private',
         'post': {
             'tags': ['wallet'],
             'operationId': 'wallet_send_tokens',

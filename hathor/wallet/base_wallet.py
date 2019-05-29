@@ -260,6 +260,26 @@ class BaseWallet:
         :raises PrivateKeyNotFound: when trying to spend output and we don't have the corresponding
             key in our wallet
         """
+        new_inputs = self.prepare_incomplete_inputs(inputs, tx_storage, force)
+        return self.prepare_transaction(cls, new_inputs, outputs, timestamp)
+
+    def prepare_incomplete_inputs(self, inputs: List[WalletInputInfo], tx_storage: TransactionStorage,
+                                  force: bool = False) -> List[WalletInputInfo]:
+        """Adds the keys to the inputs
+
+        :param inputs: list of inputs of the tx
+        :type inputs: List[WalletInputInfo]
+
+        :param force: if True we will search the private key not only in the unspent txs
+            this parameter, when set to True, can be used to allow a double spending
+        :type force: bool
+
+        :param tx_storage: storage to search for output tx
+        :type tx_storage: TransactionStorage
+
+        :raises PrivateKeyNotFound: when trying to spend output and we don't have the corresponding
+            key in our wallet
+        """
         if len(inputs) != len(set(inputs)):
             # Same input is used more than once
             raise InputDuplicated
@@ -291,14 +311,29 @@ class BaseWallet:
             else:
                 raise PrivateKeyNotFound
 
-        return self.prepare_transaction(cls, new_inputs, outputs, timestamp)
+        return new_inputs
 
     def prepare_transaction_compute_inputs(self, cls: ABCMeta, outputs: List[WalletOutputInfo],
                                            timestamp: Optional[int] = None) -> Transaction:
-        """Calculates de inputs given the outputs. Handles change.
+        """Calculates the inputs given the outputs and uses prepare_transaction() to prepare
+        transaction. Handles change.
 
         :param cls: defines if we're creating a Transaction or Block
         :type cls: :py:class:`hathor.transaction.Block` or :py:class:`hathor.transaction.Transaction`
+
+        :param outputs: the tx outputs
+        :type outputs: List[WalletOutputInfo]
+
+        :param timestamp: the tx timestamp
+        :type timestamp: int
+        """
+        inputs, outputs = self.prepare_compute_inputs(outputs, timestamp)
+        return self.prepare_transaction(cls, inputs, outputs, timestamp)
+
+    def prepare_compute_inputs(
+        self, outputs: List[WalletOutputInfo], timestamp: Optional[int] = None
+    ) -> Tuple[List[WalletInputInfo], List[WalletOutputInfo]]:
+        """Calculates the inputs given the outputs. Handles change.
 
         :param outputs: the tx outputs
         :type outputs: List[WalletOutputInfo]
@@ -322,7 +357,7 @@ class BaseWallet:
                 # change is usually the first output
                 outputs.insert(0, change_tx)
             tx_inputs.extend(inputs)
-        return self.prepare_transaction(cls, tx_inputs, outputs, timestamp)
+        return tx_inputs, outputs
 
     def separate_inputs(self, inputs, tx_storage):
         """Separates the inputs from a tx into 2 groups: the ones that belong to this wallet and the ones that don't

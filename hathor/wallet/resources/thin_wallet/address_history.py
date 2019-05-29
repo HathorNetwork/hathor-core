@@ -47,7 +47,7 @@ class AddressHistoryResource(resource.Resource):
                 tx = self.manager.tx_storage.get_transaction(tx_hash)
                 if tx_hash not in seen:
                     seen.add(tx_hash)
-                    history.append(wallet_index.serialize_tx(tx))
+                    history.append(tx.to_json_extended())
 
         data = {'history': history}
         return json.dumps(data, indent=4).encode('utf-8')
@@ -55,6 +55,23 @@ class AddressHistoryResource(resource.Resource):
 
 AddressHistoryResource.openapi = {
     '/thin_wallet/address_history': {
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '100r/s',
+                    'burst': 100,
+                    'delay': 50
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '3r/s',
+                    'burst': 10,
+                    'delay': 3
+                }
+            ]
+        },
         'get': {
             'tags': ['thin_wallet'],
             'operationId': 'address_history',

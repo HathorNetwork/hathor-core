@@ -45,6 +45,7 @@ class AddPeersResource(resource.Resource):
 
 AddPeersResource.openapi = {
     '/p2p/peers': {
+        'x-visibility': 'private',
         'post': {
             'tags': ['p2p'],
             'operationId': 'p2p_peers',

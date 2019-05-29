@@ -14,7 +14,6 @@ from hathor.stratum import (
     JSONRPC,
     METHOD_NOT_FOUND,
     PARSE_ERROR,
-    PROPAGATION_FAILED,
     STALE_JOB,
     StratumClient,
     StratumFactory,
@@ -172,7 +171,7 @@ class TestStratumJob(StratumTestBase):
         self._submit(self.job['job_id'], nonce)
         self.protocol.current_job = current_job
         self._submit(self.job['job_id'], nonce)
-        assert self._get_latest_message()['error'] == PROPAGATION_FAILED
+        assert self._get_latest_message()['error'] == STALE_JOB
 
     def test_stale_solution(self):
         nonce = self._get_nonce()

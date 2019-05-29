@@ -14,6 +14,7 @@ from hathor.transaction.storage import (
     TransactionCacheStorage,
     TransactionCompactStorage,
     TransactionMemoryStorage,
+    TransactionRocksDBStorage,
     TransactionSubprocessStorage,
 )
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
@@ -246,6 +247,11 @@ class _BaseTransactionStorageTest:
                 total += 1
             self.assertEqual(total, 5)
 
+        def test_get_best_block_weight(self):
+            block = self._add_new_block()
+            weight = self.tx_storage.get_weight_best_block()
+            self.assertEqual(block.weight, weight)
+
     class _RemoteStorageTest(_TransactionStorageTest):
         def setUp(self, tx_storage, reactor=None):
             tx_storage, self._server = start_remote_storage(tx_storage=tx_storage)
@@ -268,7 +274,7 @@ class _BaseTransactionStorageTest:
 
 class TransactionBinaryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
     def setUp(self):
-        self.directory = tempfile.mkdtemp(dir='/tmp/')
+        self.directory = tempfile.mkdtemp()
         super().setUp(TransactionBinaryStorage(self.directory))
 
     def tearDown(self):
@@ -278,7 +284,7 @@ class TransactionBinaryStorageTest(_BaseTransactionStorageTest._TransactionStora
 
 class TransactionCompactStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
     def setUp(self):
-        self.directory = tempfile.mkdtemp(dir='/tmp/')
+        self.directory = tempfile.mkdtemp()
         # Creating random file just to test specific part of code
         tempfile.NamedTemporaryFile(dir=self.directory, delete=True)
         super().setUp(TransactionCompactStorage(self.directory))
@@ -295,7 +301,7 @@ class TransactionCompactStorageTest(_BaseTransactionStorageTest._TransactionStor
 
 class CacheBinaryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
     def setUp(self):
-        self.directory = tempfile.mkdtemp(dir='/tmp/')
+        self.directory = tempfile.mkdtemp()
         store = TransactionBinaryStorage(self.directory)
         reactor = Clock()
         super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
@@ -307,7 +313,7 @@ class CacheBinaryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest
 
 class CacheCompactStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
     def setUp(self):
-        self.directory = tempfile.mkdtemp(dir='/tmp/')
+        self.directory = tempfile.mkdtemp()
         # Creating random file just to test specific part of code
         tempfile.NamedTemporaryFile(dir=self.directory, delete=True)
         store = TransactionCompactStorage(self.directory)
@@ -354,6 +360,16 @@ class RemoteCacheMemoryStorageTest(_BaseTransactionStorageTest._RemoteStorageTes
         store = TransactionMemoryStorage()
         reactor = Clock()
         super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
+
+
+class TransactionRocksDBStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
+    def setUp(self):
+        self.directory = tempfile.mkdtemp()
+        super().setUp(TransactionRocksDBStorage(self.directory))
+
+    def tearDown(self):
+        shutil.rmtree(self.directory)
+        super().tearDown()
 
 
 if __name__ == '__main__':

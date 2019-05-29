@@ -15,6 +15,7 @@ service TransactionStorage {
   rpc List(ListRequest) returns (stream ListItemResponse) {}
   rpc ListTips(ListTipsRequest) returns (stream Interval) {}
   rpc ListNewest(ListNewestRequest) returns (stream ListItemResponse) {}
+  rpc SortedTxs(SortedTxsRequest) returns (stream Transaction) {}
 }
 
 message ExistsRequest {
@@ -138,4 +139,10 @@ message ListItemResponse {
     BaseTransaction transaction = 1;
     bool has_more = 2;
   }
+}
+
+message SortedTxsRequest {
+  uint32 timestamp = 1;
+  uint32 count = 2;
+  uint32 offset = 3;
 }

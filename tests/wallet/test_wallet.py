@@ -244,3 +244,15 @@ class BasicWallet(unittest.TestCase):
         self.assertIn(key, w.maybe_spent_txs[settings.HATHOR_TOKEN_UID])
         self.run_to_completion()
         self.assertIn(key, w.unspent_txs[settings.HATHOR_TOKEN_UID])
+        self.assertEqual(0, len(w.maybe_spent_txs[settings.HATHOR_TOKEN_UID]))
+
+        # when we receive the new tx it will remove from maybe_spent
+        tx2 = w.prepare_transaction_compute_inputs(Transaction, outputs=[out])
+        tx2.storage = self.manager.tx_storage
+        tx2.timestamp = max(tx2.get_spent_tx(txin).timestamp for txin in tx2.inputs) + 1
+        tx2.parents = self.manager.get_new_tx_parents(tx2.timestamp)
+        tx2.weight = 1
+        tx2.resolve()
+        self.assertTrue(self.manager.on_new_tx(tx2, fails_silently=False))
+        self.clock.advance(2)
+        self.assertEqual(0, len(w.maybe_spent_txs[settings.HATHOR_TOKEN_UID]))

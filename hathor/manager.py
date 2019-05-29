@@ -52,7 +52,7 @@ class HathorManager:
                  hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
                  peer_storage: Optional[Any] = None, default_port: int = 40403, wallet_index: bool = False,
-                 stratum_port: Optional[int] = None) -> None:
+                 stratum_port: Optional[int] = None, min_block_weight: Optional[int] = None) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node. If not given, a new one is created.
@@ -79,6 +79,9 @@ class HathorManager:
 
         :param stratum_port: Stratum server port. Stratum server will only be created if it is not None.
         :type stratum_port: Optional[int]
+
+        :param min_block_weight: Minimum weight for blocks.
+        :type min_block_weight: Optional[int]
         """
         from hathor.p2p.factory import HathorServerFactory, HathorClientFactory
         from hathor.p2p.manager import ConnectionsManager
@@ -109,7 +112,7 @@ class HathorManager:
             self.tx_storage.wallet_index = WalletIndex(self.pubsub)
 
         self.avg_time_between_blocks = 64  # in seconds
-        self.min_block_weight = settings.MIN_BLOCK_WEIGHT
+        self.min_block_weight = min_block_weight or settings.MIN_BLOCK_WEIGHT
         self.min_tx_weight = settings.MIN_TX_WEIGHT
         self.tokens_issued_per_block = settings.TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES)
 
@@ -294,7 +297,7 @@ class HathorManager:
 
     def generate_mining_block(self, timestamp: Optional[float] = None,
                               parent_block_hash: Optional[bytes] = None,
-                              data: bytes = b'') -> Block:
+                              data: bytes = b'', address: Optional[bytes] = None) -> Block:
         """ Generates a block ready to be mined. The block includes new issued tokens,
         parents, and the weight.
 
@@ -303,8 +306,10 @@ class HathorManager:
         """
         from hathor.transaction.scripts import create_output_script
 
-        assert self.wallet is not None
-        address = self.wallet.get_unused_address_bytes(mark_as_used=False)
+        if address is None:
+            if self.wallet is None:
+                raise ValueError('No wallet available and no mining address given')
+            address = self.wallet.get_unused_address_bytes(mark_as_used=False)
         amount = self.tokens_issued_per_block
         output_script = create_output_script(address)
         tx_outputs = [TxOutput(amount, output_script)]
@@ -366,7 +371,7 @@ class HathorManager:
 
             # Validate minimum block difficulty
             block_weight = self.calculate_block_difficulty(tx)
-            if tx.weight < block_weight:
+            if tx.weight < block_weight - settings.WEIGHT_TOL:
                 raise InvalidNewTransaction(
                     'Invalid new block {}: weight ({}) is smaller than the minimum weight ({})'.format(
                         tx.hash.hex(), tx.weight, block_weight
@@ -385,7 +390,7 @@ class HathorManager:
 
             # Validate minimum tx difficulty
             min_tx_weight = self.minimum_tx_weight(tx)
-            if tx.weight < min_tx_weight:
+            if tx.weight < min_tx_weight - settings.WEIGHT_TOL:
                 raise InvalidNewTransaction(
                     'Invalid new tx {}: weight ({}) is smaller than the minimum weight ({})'.format(
                         tx.hash.hex(), tx.weight, min_tx_weight

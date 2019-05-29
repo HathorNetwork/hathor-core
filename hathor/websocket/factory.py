@@ -6,6 +6,7 @@ from autobahn.twisted.websocket import WebSocketServerFactory
 from twisted.internet import reactor
 
 from hathor.conf import HathorSettings
+from hathor.indexes import WalletIndex
 from hathor.metrics import Metrics
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.pubsub import HathorEvents
@@ -63,7 +64,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
     def buildProtocol(self, addr):
         return self.protocol(self)
 
-    def __init__(self, metrics=None):
+    def __init__(self, metrics=None, wallet_index=None):
         """
         :param metrics: If not given, a new one is created.
         :type metrics: :py:class:`hathor.metrics.Metrics`
@@ -81,6 +82,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         self.buffer_deques = {}
 
         self.metrics = metrics or Metrics()
+        self.wallet_index = wallet_index
 
         self.is_running = False
 
@@ -172,7 +174,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             return data
         elif event == HathorEvents.NETWORK_NEW_TX_ACCEPTED:
             tx = data['tx']
-            data = tx.to_json()
+            data = tx.to_json_extended()
             data['is_block'] = tx.is_block
             return data
         elif event == HathorEvents.WALLET_BALANCE_UPDATED:
@@ -196,7 +198,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
     def send_message(self, data: Dict[str, Any]) -> None:
         """ Check if should broadcast the message to all connections or send directly to some connections only
         """
-        if data['type'] in ADDRESS_EVENTS:
+        if data['type'] in ADDRESS_EVENTS and data['address'] in self.address_connections:
             self.execute_send(data, self.address_connections[data['address']])
         else:
             self.broadcast_message(data)
@@ -256,18 +258,54 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
                                   data_type=data_type)
                 break
 
-    def handle_message(self, connection, data):
-        message = json.loads(data.decode('utf-8'))
+    def handle_message(self, connection: HathorAdminWebsocketProtocol, data: bytes) -> None:
+        """ General message handler, detects type and deletages to specific handler."""
+        message = json.loads(data)
         # we only handle ping messages for now
         if message['type'] == 'ping':
-            payload = json.dumps({'type': 'pong'}).encode('utf-8')
-            connection.sendMessage(payload, False)
+            self._handle_ping(connection, message)
         elif message['type'] == 'subscribe_address':
-            self.address_connections[message['address']].add(connection)
-            payload = json.dumps({'type': 'subscribe_address', 'success': True}).encode('utf-8')
-            connection.sendMessage(payload, False)
+            self._handle_subscribe_address(connection, message)
         elif message['type'] == 'unsubscribe_address':
-            if connection in self.address_connections[message['address']]:
-                self.address_connections[message['address']].remove(connection)
-                payload = json.dumps({'type': 'unsubscribe_address', 'success': True}).encode('utf-8')
-                connection.sendMessage(payload, False)
+            self._handle_unsubscribe_address(connection, message)
+
+    def _handle_ping(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
+        """ Handler for ping message, should respond with a simple {"type": "pong"}"""
+        payload = json.dumps({'type': 'pong'}).encode('utf-8')
+        connection.sendMessage(payload, False)
+
+    def _handle_subscribe_address(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
+        """ Handler for subscription to an address, consideirs subscription limits."""
+        addr: str = message['address']
+        subs: Set[str] = connection.subscribed_to
+        if len(subs) >= settings.WS_MAX_SUBS_ADDRS_CONN:
+            payload = json.dumps({'message': 'Reached maximum number of subscribed '
+                                             f'addresses ({settings.WS_MAX_SUBS_ADDRS_CONN}).',
+                                  'type': 'subscribe_address', 'success': False}).encode('utf-8')
+        elif self.wallet_index and _count_empty(subs, self.wallet_index) >= settings.WS_MAX_SUBS_ADDRS_EMPTY:
+            payload = json.dumps({'message': 'Reached maximum number of subscribed '
+                                             f'addresses without output ({settings.WS_MAX_SUBS_ADDRS_EMPTY}).',
+                                  'type': 'subscribe_address', 'success': False}).encode('utf-8')
+        else:
+            self.address_connections[addr].add(connection)
+            connection.subscribed_to.add(addr)
+            payload = json.dumps({'type': 'subscribe_address', 'success': True}).encode('utf-8')
+        connection.sendMessage(payload, False)
+
+    def _handle_unsubscribe_address(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
+        """ Handler for unsubscribing from an address, also removes address connection set if it ends up empty."""
+        addr = message['address']
+        if addr in self.address_connections and connection in self.address_connections[addr]:
+            connection.subscribed_to.remove(addr)
+            self.address_connections[addr].remove(connection)
+            # If this was the last connection for this address, we delete it from the dict
+            if len(self.address_connections[addr]) == 0:
+                del self.address_connections[addr]
+            # Reply back to the client
+            payload = json.dumps({'type': 'unsubscribe_address', 'success': True}).encode('utf-8')
+            connection.sendMessage(payload, False)
+
+
+def _count_empty(addresses: Set[str], wallet_index: WalletIndex) -> int:
+    """ Count how many of the addresses given are empty (have no outputs)."""
+    return sum(1 for addr in addresses if not wallet_index.get_from_address(addr))

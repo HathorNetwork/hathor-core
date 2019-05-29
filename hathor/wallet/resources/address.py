@@ -49,6 +49,7 @@ class AddressResource(resource.Resource):
 
 AddressResource.openapi = {
     '/wallet/address': {
+        'x-visibility': 'private',
         'get': {
             'tags': ['wallet'],
             'operationId': 'wallet_address',

@@ -1,0 +1,15 @@
+{
+    "title": "Blocks weight",
+    "type": "graph",
+    "params": {
+        "targets": [
+            {
+                "expr": "best_block_weight{{instance='{0}',job='{1}'}}",
+                "format": "time_series",
+                "intervalFactor": 1,
+                "refId": "A"
+            }
+        ]
+    },
+    "height": 4
+}

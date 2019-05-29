@@ -47,6 +47,7 @@ class RunNode:
         parser.add_argument('--status', type=int, help='Port to run status server')
         parser.add_argument('--stratum', type=int, help='Port to run stratum server')
         parser.add_argument('--data', help='Data directory')
+        parser.add_argument('--rocksdb-storage', action='store_true', help='Use RocksDB storage backend')
         parser.add_argument('--wallet', help='Set wallet type. Options are hd (Hierarchical Deterministic) or keypair',
                             default=None)
         parser.add_argument('--wallet-enable-api', action='store_true',
@@ -63,6 +64,7 @@ class RunNode:
         parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
         parser.add_argument('--recursion-limit', type=int, help='Set python recursion limit')
         parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
+        parser.add_argument('--min-block-weight', type=int, help='Minimum weight for blocks')
         return parser
 
     def prepare(self, args: Namespace) -> None:
@@ -135,11 +137,17 @@ class RunNode:
 
         tx_storage: TransactionStorage
         if args.data:
-            tx_dir = os.path.join(args.data, 'tx')
             wallet_dir = args.data
             print('Using Wallet at {}'.format(wallet_dir))
-            print('Using TransactionCompactStorage at {}'.format(tx_dir))
-            tx_storage = TransactionCompactStorage(path=tx_dir, with_index=(not args.cache))
+            if args.rocksdb_storage:
+                from hathor.transaction.storage import TransactionRocksDBStorage
+                tx_dir = os.path.join(args.data, 'tx.db')
+                tx_storage = TransactionRocksDBStorage(path=tx_dir, with_index=(not args.cache))
+                print('Using TransactionRocksDBStorage at {}'.format(tx_dir))
+            else:
+                tx_dir = os.path.join(args.data, 'tx')
+                tx_storage = TransactionCompactStorage(path=tx_dir, with_index=(not args.cache))
+                print('Using TransactionCompactStorage at {}'.format(tx_dir))
             if args.cache:
                 tx_storage = TransactionCacheStorage(tx_storage, reactor)
                 if args.cache_size:
@@ -178,7 +186,7 @@ class RunNode:
         network = 'testnet'
         self.manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname,
                                      tx_storage=self.tx_storage, wallet=self.wallet, wallet_index=args.wallet_index,
-                                     stratum_port=args.stratum)
+                                     stratum_port=args.stratum, min_block_weight=args.min_block_weight)
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
 
@@ -207,13 +215,16 @@ class RunNode:
         self.manager.start()
 
     def register_resources(self, args: Namespace) -> None:
+        from hathor.conf import HathorSettings
         from hathor.p2p.resources import AddPeersResource, MiningResource, StatusResource
         from hathor.prometheus import PrometheusMetricsExporter
         from hathor.resources import ProfilerResource
         from hathor.transaction.resources import (
             DashboardTransactionResource,
             DecodeTxResource,
-            GraphvizResource,
+            GraphvizLegacyResource,
+            GraphvizFullResource,
+            GraphvizNeighboursResource,
             PushTxResource,
             TipsHistogramResource,
             TipsResource,
@@ -238,7 +249,9 @@ class RunNode:
             NanoContractExecuteResource,
             NanoContractMatchValueResource,
         )
-        from hathor.websocket import HathorAdminWebsocketFactory
+        from hathor.websocket import HathorAdminWebsocketFactory, WebsocketStatsResource
+
+        settings = HathorSettings()
 
         if args.listen:
             for description in args.listen:
@@ -269,6 +282,13 @@ class RunNode:
             wallet_resource.putChild(b'nano-contract', contracts_resource)
             p2p_resource = Resource()
             root.putChild(b'p2p', p2p_resource)
+            graphviz = GraphvizLegacyResource(self.manager)
+            # XXX: reach the resource through /graphviz/ too, previously it was a leaf so this wasn't a problem
+            graphviz.putChild(b'', graphviz)
+            for fmt in ['dot', 'pdf', 'png', 'jpg']:
+                bfmt = fmt.encode('ascii')
+                graphviz.putChild(b'full.' + bfmt, GraphvizFullResource(self.manager, format=fmt))
+                graphviz.putChild(b'neighbours.' + bfmt, GraphvizNeighboursResource(self.manager, format=fmt))
 
             resources = (
                 (b'status', StatusResource(self.manager), root),
@@ -276,7 +296,7 @@ class RunNode:
                 (b'mining', MiningResource(self.manager), root),
                 (b'decode_tx', DecodeTxResource(self.manager), root),
                 (b'push_tx', PushTxResource(self.manager), root),
-                (b'graphviz', GraphvizResource(self.manager), root),
+                (b'graphviz', graphviz, root),
                 (b'tips-histogram', TipsHistogramResource(self.manager), root),
                 (b'tips', TipsResource(self.manager), root),
                 (b'transaction', TransactionResource(self.manager), root),
@@ -312,15 +332,24 @@ class RunNode:
                     parent.putChild(url_path, resource)
 
             # Websocket resource
-            ws_factory = HathorAdminWebsocketFactory(metrics=self.manager.metrics)
+            ws_factory = HathorAdminWebsocketFactory(metrics=self.manager.metrics,
+                                                     wallet_index=self.manager.tx_storage.wallet_index)
             ws_factory.start()
             resource = WebSocketResource(ws_factory)
             root.putChild(b"ws", resource)
 
             ws_factory.subscribe(self.manager.pubsub)
 
-            status_server = server.Site(root)
+            # Websocket stats resource
+            root.putChild(b'websocket_stats', WebsocketStatsResource(ws_factory))
+
+            real_root = Resource()
+            real_root.putChild(settings.API_VERSION_PREFIX.encode('ascii'), root)
+            status_server = server.Site(real_root)
             reactor.listenTCP(args.status, status_server)
+
+            # Set websocket factory in metrics
+            self.manager.metrics.websocket_factory = ws_factory
 
     def __init__(self, *, argv=None):
         if argv is None:

@@ -36,6 +36,7 @@ class StateWalletResource(resource.Resource):
 
 StateWalletResource.openapi = {
     '/wallet/state': {
+        'x-visibility': 'private',
         'get': {
             'tags': ['wallet'],
             'operationId': 'wallet_state',

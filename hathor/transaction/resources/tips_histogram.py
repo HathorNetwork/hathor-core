@@ -44,6 +44,7 @@ class TipsHistogramResource(resource.Resource):
 
 TipsHistogramResource.openapi = {
     '/tips-histogram': {
+        'x-visibility': 'private',
         'get': {
             'tags': ['transaction'],
             'operationId': 'tips_histogram',

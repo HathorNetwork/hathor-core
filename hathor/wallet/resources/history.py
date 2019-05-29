@@ -50,6 +50,7 @@ class HistoryResource(resource.Resource):
 
 HistoryResource.openapi = {
     '/wallet/history': {
+        'x-visibility': 'private',
         'get': {
             'tags': ['wallet'],
             'operationId': 'wallet_history',
