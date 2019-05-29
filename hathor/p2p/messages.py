@@ -23,8 +23,6 @@ class GetTipsPayload(NamedTuple):
 class TipsPayload(NamedTuple):
     length: int
     timestamp: int
-    prev_timestamp: int
-    next_timestamp: int
     merkle_tree: str
     hashes: List[str]
     has_more: bool

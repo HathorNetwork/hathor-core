@@ -210,9 +210,9 @@ class BaseTransaction(ABC):
         """Sum of the value of the outputs"""
         return sum([output.value for output in self.outputs])
 
-    def get_target(self) -> float:
+    def get_target(self, override_weight: Optional[float] = None) -> float:
         """Target to be achieved in the mining process"""
-        return 2**(256 - self.weight) - 1
+        return 2**(256 - (override_weight or self.weight)) - 1
 
     def get_time_from_now(self, now: Optional[Any] = None) -> str:
         """ Return a the time difference between now and the tx's timestamp
@@ -499,13 +499,13 @@ class BaseTransaction(ABC):
             raise IncorrectParents('wrong number of parents (tx type): {}, expecting {}'.format(
                 my_parents_txs, parents_txs))
 
-    def verify_pow(self) -> None:
+    def verify_pow(self, override_weight: Optional[float] = None) -> None:
         """Verify proof-of-work
 
         :raises PowError: when the hash is equal or greater than the target
         """
         assert self.hash is not None
-        if int(self.hash.hex(), 16) >= self.get_target():
+        if int(self.hash.hex(), 16) >= self.get_target(override_weight):
             raise PowError('Transaction has invalid data')
 
     def resolve(self) -> bool:
@@ -621,6 +621,8 @@ class BaseTransaction(ABC):
             self.nonce += 1
             if sleep_seconds > 0:
                 time.sleep(sleep_seconds)
+                if should_stop():
+                    return None
         return None
 
     def get_metadata(self, *, force_reload: bool = False, use_storage: bool = True) -> TransactionMetadata:
@@ -700,8 +702,7 @@ class BaseTransaction(ABC):
             if accumulated_weight > stop_value:
                 break
 
-        eps = 1e-10
-        if accumulated_weight <= stop_value + eps:
+        if accumulated_weight <= stop_value + settings.WEIGHT_TOL:
             # If we are still below stop_value, then we go through the transactions.
             bfs_walk = BFSWalk(self.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
             for tx in bfs_walk.run(self, skip_root=True):
@@ -782,6 +783,44 @@ class BaseTransaction(ABC):
         data['tokens'] = [uid.hex() for uid in self.tokens]
 
         return data
+
+    def to_json_extended(self) -> Dict[str, Any]:
+        assert self.hash is not None
+        assert self.storage is not None
+
+        def serialize_output(tx: BaseTransaction, tx_out: TxOutput) -> Dict[str, Any]:
+            data = tx_out.to_json(decode_script=True)
+            data['token'] = tx.get_token_uid(tx_out.get_token_index()).hex()
+            data['decoded'].pop('token_data', None)
+            data['decoded'].pop('value', None)
+            return data
+
+        meta = self.get_metadata()
+        ret = {
+            'tx_id': self.hash.hex(),
+            'timestamp': self.timestamp,
+            'is_voided': bool(meta.voided_by),
+            'inputs': [],
+            'outputs': [],
+        }
+        assert isinstance(ret['inputs'], list)
+        assert isinstance(ret['outputs'], list)
+
+        for index, tx_in in enumerate(self.inputs):
+            tx2 = self.storage.get_transaction(tx_in.tx_id)
+            tx2_out = tx2.outputs[tx_in.index]
+            output = serialize_output(tx2, tx2_out)
+            output['tx_id'] = tx2.hash.hex()
+            output['index'] = tx_in.index
+            ret['inputs'].append(output)
+
+        for index, tx_out in enumerate(self.outputs):
+            spent_by = meta.get_output_spent_by(index)
+            output = serialize_output(self, tx_out)
+            output['spent_by'] = spent_by.hex() if spent_by else None
+            ret['outputs'].append(output)
+
+        return ret
 
     @abstractmethod
     def to_proto(self, include_metadata: bool = True) -> protos.BaseTransaction:

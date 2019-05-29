@@ -38,6 +38,7 @@ class LockWalletResource(resource.Resource):
 
 LockWalletResource.openapi = {
     '/wallet/lock': {
+        'x-visibility': 'private',
         'post': {
             'tags': ['wallet'],
             'operationId': 'wallet_lock',

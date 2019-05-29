@@ -68,6 +68,7 @@ class ProfilerResource(resource.Resource):
 
 ProfilerResource.openapi = {
     '/profiler': {
+        'x-visibility': 'private',
         'post': {
             'operationId': 'profiler',
             'summary': 'Run full node profiler',

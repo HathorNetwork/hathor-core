@@ -93,3 +93,37 @@ class HathorSettings(NamedTuple):
 
     # Maximum number of opened threads that are solving POW for send tokens
     MAX_POW_THREADS: int = 5
+
+    # The error tolerance, to allow small rounding errors in Python, when comparing weights,
+    # accumulated weights, and scores
+    # How to use:
+    # if abs(w1 - w2) < WEIGHT_TOL:
+    #     print('w1 and w2 are equal')
+
+    # if w1 < w2 - WEIGHT_TOL:
+    #     print('w1 is smaller than w2')
+
+    # if w1 <= w2 + WEIGHT_TOL:
+    #     print('w1 is smaller than or equal to w2')
+
+    # if w1 > w2 + WEIGHT_TOL:
+    #     print('w1 is greater than w2')
+
+    # if w1 >= w2 - WEIGHT_TOL:
+    #     print('w1 is greater than or equal to w2')
+    WEIGHT_TOL: float = 1e-10
+
+    # Maximum number of txs or blocks (each, not combined) to show on the dashboard
+    MAX_DASHBOARD_COUNT: int = 15
+
+    # Maximum number of txs or blocks returned by the '/transaction' endpoint
+    MAX_TX_COUNT: int = 15
+
+    # URL prefix where API is served, for instance: /v1a/status
+    API_VERSION_PREFIX: str = 'v1a'
+
+    # Maximum number of subscribed addresses per websocket connection
+    WS_MAX_SUBS_ADDRS_CONN: int = 200000
+
+    # Maximum number of subscribed addresses that do not have any outputs (also per websocket connection)
+    WS_MAX_SUBS_ADDRS_EMPTY: int = 40

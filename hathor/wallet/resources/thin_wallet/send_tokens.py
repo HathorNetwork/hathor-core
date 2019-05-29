@@ -27,6 +27,7 @@ class SendTokensResource(resource.Resource):
     def __init__(self, manager):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
+        self.sleep_seconds = 0
 
     def render_POST(self, request: Request):
         """ POST request for /thin_wallet/send_tokens/
@@ -53,6 +54,15 @@ class SendTokensResource(resource.Resource):
         assert isinstance(tx, Transaction)
         # Set tx storage
         tx.storage = self.manager.tx_storage
+
+        # If this tx is a double spending, don't even try to propagate in the network
+        is_double_spending = tx.is_double_spending()
+        if is_double_spending:
+            data = {
+                'success': False,
+                'message': 'Invalid transaction. At least one of your inputs has already been spent.'
+            }
+            return json.dumps(data, indent=4).encode('utf-8')
 
         max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
         # Set tx timestamp as max between tx and inputs
@@ -86,7 +96,7 @@ class SendTokensResource(resource.Resource):
         # TODO Tx should be resolved in the frontend
         def _should_stop():
             return request.should_stop_mining_thread
-        hash_bytes = tx.start_mining(should_stop=_should_stop)
+        hash_bytes = tx.start_mining(sleep_seconds=self.sleep_seconds, should_stop=_should_stop)
         if request.should_stop_mining_thread:
             raise CancelledError()
         tx.hash = hash_bytes
@@ -143,6 +153,21 @@ class SendTokensResource(resource.Resource):
 
 SendTokensResource.openapi = {
     '/thin_wallet/send_tokens': {
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '100r/s'
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '3r/s',
+                    'burst': 10,
+                    'delay': 3
+                }
+            ]
+        },
         'post': {
             'tags': ['thin_wallet'],
             'operationId': 'thin_wallet_send_tokens',
@@ -252,7 +277,15 @@ SendTokensResource.openapi = {
                                             'accumulated_weight': 14
                                         }
                                     }
-                                }
+                                },
+                                'error5': {
+                                    'summary': 'Double spending error',
+                                    'value': {
+                                        'success': False,
+                                        'message': ('Invalid transaction. At least one of your inputs has'
+                                                    'already been spent.')
+                                    }
+                                },
                             }
                         }
                     }

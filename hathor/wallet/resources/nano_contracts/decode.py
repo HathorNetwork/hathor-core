@@ -76,6 +76,7 @@ class NanoContractDecodeResource(resource.Resource):
 
 NanoContractDecodeResource.openapi = {
     '/wallet/nano-contract/decode': {
+        'x-visibility': 'private',
         'get': {
             'tags': ['nano-contract'],
             'operationId': 'nano_contract_decode',

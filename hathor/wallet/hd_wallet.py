@@ -13,6 +13,25 @@ from hathor.wallet.exceptions import InvalidWords
 WORD_COUNT_CHOICES = [12, 15, 18, 21, 24]
 
 
+_registered_pycoin = False
+
+
+def _register_pycoin_networks() -> None:
+    """ Register HTR (mainnet) and XHTR (testnet) in pycoin networks
+    """
+    import os
+
+    global _registered_pycoin
+    if _registered_pycoin:
+        return
+    _registered_pycoin = True
+
+    paths = os.environ.get('PYCOIN_NETWORK_PATHS', '').split()
+    if 'hathor.pycoin' not in paths:
+        paths.append('hathor.pycoin')
+    os.environ['PYCOIN_NETWORK_PATHS'] = ' '.join(paths)
+
+
 class HDWallet(BaseWallet):
     """ Hierarchical Deterministic Wallet based in BIP32 (https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki)
     """
@@ -98,7 +117,7 @@ class HDWallet(BaseWallet):
 
         # Master node
         from pycoin.networks.registry import network_for_netcode
-        self._register_pycoin_networks()
+        _register_pycoin_networks()
         network = network_for_netcode('htr')
         key = network.extras.BIP32Node.from_master_secret(seed)
 
@@ -112,15 +131,6 @@ class HDWallet(BaseWallet):
 
         for key in self.chain_key.children(self.initial_key_generation, 0, False):
             self._key_generated(key, key.child_index())
-
-    def _register_pycoin_networks(self) -> None:
-        """ Register HTR (mainnet) and XHTR (testnet) in pycoin networks
-        """
-        import os
-        paths = os.environ.get('PYCOIN_NETWORK_PATHS', '').split()
-        if 'hathor.pycoin' not in paths:
-            paths.append('hathor.pycoin')
-        os.environ['PYCOIN_NETWORK_PATHS'] = ' '.join(paths)
 
     def get_private_key(self, address58):
         """ We get the private key bytes and generate the cryptography object

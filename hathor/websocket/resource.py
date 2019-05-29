@@ -4,44 +4,41 @@ from twisted.web import resource
 
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
-
-settings = HathorSettings()
 
 
 @register_resource
-class BalanceResource(resource.Resource):
-    """ Implements a web server API to return the balance of the wallet.
+class WebsocketStatsResource(resource.Resource):
+    """ Implements a web server API to return stats from Websocket
 
     You must run with option `--status <PORT>`.
     """
     isLeaf = True
 
-    def __init__(self, manager):
-        # Important to have the manager so we can know the tx_storage
-        self.manager = manager
+    def __init__(self, websocket_factory):
+        # Important to have the websocket_factory, so we can have the connections
+        self.websocket_factory = websocket_factory
 
     def render_GET(self, request):
-        """ GET request for /wallet/balance/
-            Returns the int balance of the wallet
+        """ GET request for /websocket_stats/ that returns the stats from Websocket
 
             :rtype: string (json)
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        data = {'balance': self.manager.wallet.balance[settings.HATHOR_TOKEN_UID]._asdict()}
+        data = {
+            'connections': len(self.websocket_factory.connections),
+            'subscribed_addresses': len(self.websocket_factory.address_connections),
+        }
         return json.dumps(data, indent=4).encode('utf-8')
 
 
-BalanceResource.openapi = {
-    '/wallet/balance': {
+WebsocketStatsResource.openapi = {
+    '/websocket_stats': {
         'x-visibility': 'private',
         'get': {
-            'tags': ['wallet'],
-            'operationId': 'wallet_address',
-            'summary': 'Balance',
-            'description': 'Returns the current balance of the wallet (available and locked tokens)',
+            'operationId': 'websocket_stats',
+            'summary': 'Websocket stats',
             'responses': {
                 '200': {
                     'description': 'Success',
@@ -51,10 +48,8 @@ BalanceResource.openapi = {
                                 'success': {
                                     'summary': 'Success',
                                     'value': {
-                                        'balance': {
-                                            'available': 5000,
-                                            'locked': 1000
-                                        }
+                                        'connections': 4,
+                                        'addresses': 6,
                                     }
                                 }
                             }

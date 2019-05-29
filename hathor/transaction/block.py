@@ -373,8 +373,7 @@ class Block(BaseTransaction):
             score = self.calculate_score()
 
             # Finally, check who the winner is.
-            eps = 1e-10
-            if score <= best_score - eps:
+            if score <= best_score - settings.WEIGHT_TOL:
                 # Nothing to do.
                 pass
 
@@ -409,7 +408,7 @@ class Block(BaseTransaction):
                         # chain because the head may be voided with part of the tail non-voided.
                         block = block.get_block_parent()
 
-                if score >= best_score + eps:
+                if score >= best_score + settings.WEIGHT_TOL:
                     # We have a new winner.
                     self.update_score_and_mark_as_the_best_chain()
                     self.remove_voided_by_from_chain()

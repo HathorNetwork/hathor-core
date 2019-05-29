@@ -2,12 +2,15 @@ import base64
 
 from twisted.internet.defer import inlineCallbacks
 
+from hathor.crypto.util import decode_address
 from hathor.p2p.resources import MiningResource
+from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.genesis import get_genesis_transactions
 from hathor.transaction.resources import PushTxResource
+from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.wallet.resources import BalanceResource, HistoryResource, SendTokensResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import resolve_block_bytes
+from tests.utils import add_new_blocks, resolve_block_bytes
 
 
 class DecodeTxTest(_BaseResourceTest._ResourceTest):
@@ -30,19 +33,43 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         # Unlocking wallet
         self.manager.wallet.unlock(b'MYPASS')
 
+        # Creating a valid transaction to be pushed to the network
+        blocks = add_new_blocks(self.manager, 3, advance_clock=2)
+        tx_id = blocks[0].hash
+        output = blocks[0].outputs[0]
+        script_type_out = parse_address_script(output.script)
+        address = script_type_out.address
+        private_key = self.manager.wallet.get_private_key(address)
+
+        output_address = decode_address(self.get_address(0))
+        value = 2000
+        o = TxOutput(value, create_output_script(output_address, None))
+        i = TxInput(tx_id, 0, b'')
+        tx = Transaction(inputs=[i], outputs=[o])
+
+        data_to_sign = tx.get_sighash_all()
+        public_key_bytes, signature_bytes = self.manager.wallet.get_input_aux_data(data_to_sign, private_key)
+        i.data = P2PKH.create_input_data(public_key_bytes, signature_bytes)
+        tx.inputs = [i]
+        tx.timestamp = int(self.clock.seconds())
+        tx.weight = self.manager.minimum_tx_weight(tx)
+        tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
+        tx.resolve()
+
+        response = yield self.web.get('push_tx', {b'hex_tx': bytes(tx.get_struct().hex(), 'utf-8')})
+        data = response.json_value()
+        self.assertTrue(data['success'])
+
         # Sending token to random address without input
         data_json = {'outputs': [{'address': self.get_address(0), 'value': 5}], 'inputs': []}
         yield self.web_tokens.post('wallet/send_tokens', {'data': data_json})
 
-        # Valid
-        (valid_tx, _) = self.manager.tx_storage.get_newest_txs(count=1)
-        valid_tx = valid_tx[0]
-        # modify tx so pushing it again will succeed
-        valid_tx.weight += 0.1
-        valid_tx.resolve()
-        response_success = yield self.web.get('push_tx', {b'hex_tx': bytes(valid_tx.get_struct().hex(), 'utf-8')})
+        # modify tx so it will be a double spending, then rejected
+        tx.weight += 0.1
+        tx.resolve()
+        response_success = yield self.web.get('push_tx', {b'hex_tx': bytes(tx.get_struct().hex(), 'utf-8')})
         data_success = response_success.json_value()
-        self.assertTrue(data_success['success'])
+        self.assertFalse(data_success['success'])
 
         # Invalid tx (don't have inputs)
         genesis_tx = get_genesis_transactions(self.manager.tx_storage)[1]
@@ -61,10 +88,3 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         data_error2 = response_error2.json_value()
 
         self.assertFalse(data_error2['success'])
-
-        # Invalid will ask to force
-        valid_tx.outputs[0].value += 1
-        response_invalid = yield self.web.get('push_tx', {b'hex_tx': bytes(valid_tx.get_struct().hex(), 'utf-8')})
-        data_invalid = response_invalid.json_value()
-        self.assertFalse(data_invalid['success'])
-        self.assertTrue(data_invalid['can_force'])

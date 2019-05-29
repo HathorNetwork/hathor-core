@@ -5,7 +5,10 @@ from twisted.web import resource
 
 from hathor.api_util import set_cors, validate_tx_hash
 from hathor.cli.openapi_files.register import register_resource
+from hathor.conf import HathorSettings
 from hathor.transaction.base_transaction import BaseTransaction
+
+settings = HathorSettings()
 
 
 def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
@@ -30,7 +33,25 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
                     spent_outputs[index] = spent_tx.hash_hex
                     break
 
-    return {'success': True, 'tx': serialized, 'meta': meta.to_json(), 'spent_outputs': spent_outputs}
+    # Sending also output information for each input
+    inputs = []
+    for index, tx_in in enumerate(tx.inputs):
+        if tx.storage:
+            tx2 = tx.storage.get_transaction(tx_in.tx_id)
+            tx2_out = tx2.outputs[tx_in.index]
+            output = tx2_out.to_json(decode_script=True)
+            output['tx_id'] = tx2.hash.hex()
+            output['index'] = tx_in.index
+            inputs.append(output)
+
+    serialized['inputs'] = inputs
+
+    return {
+        'success': True,
+        'tx': serialized,
+        'meta': meta.to_json(),
+        'spent_outputs': spent_outputs,
+    }
 
 
 @register_resource
@@ -95,7 +116,7 @@ class TransactionResource(resource.Resource):
             'timestamp': int, the timestamp reference we are in the pagination
             'page': 'previous' or 'next', to indicate if the user wants after or before the hash reference
         """
-        count = int(request.args[b'count'][0])
+        count = min(int(request.args[b'count'][0]), settings.MAX_TX_COUNT)
         type_tx = request.args[b'type'][0].decode('utf-8')
         ref_hash = None
         page = ''
@@ -125,7 +146,7 @@ class TransactionResource(resource.Resource):
             else:
                 elements, has_more = self.manager.tx_storage.get_newest_txs(count=count)
 
-        serialized = [element.to_json() for element in elements]
+        serialized = [element.to_json_extended() for element in elements]
 
         data = {'transactions': serialized, 'has_more': has_more}
         return data
@@ -133,6 +154,23 @@ class TransactionResource(resource.Resource):
 
 TransactionResource.openapi = {
     '/transaction': {
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '50r/s',
+                    'burst': 100,
+                    'delay': 50
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '3r/s',
+                    'burst': 10,
+                    'delay': 3
+                }
+            ]
+        },
         'get': {
             'tags': ['transaction'],
             'operationId': 'transaction',
@@ -204,7 +242,21 @@ TransactionResource.openapi = {
                                             'version': 1,
                                             'weight': 14.0,
                                             'parents': [],
-                                            'inputs': [],
+                                            "inputs": [
+                                                {
+                                                    "value": 42500000044,
+                                                    "script": "dqkURJPA8tDMJHU8tqv3SiO18ZCLEPaIrA==",
+                                                    "decoded": {
+                                                        "type": "P2PKH",
+                                                        "address": "17Fbx9ouRUD1sd32bp4ptGkmgNzg7p2Krj",
+                                                        "timelock": None
+                                                        },
+                                                    "token": "00",
+                                                    "tx": "000002d28696f94f89d639022ae81a1d"
+                                                          "870d55d189c27b7161d9cb214ad1c90c",
+                                                    "index": 0
+                                                }
+                                            ],
                                             'outputs': [],
                                             'tokens': []
                                         },
@@ -247,8 +299,8 @@ TransactionResource.openapi = {
                                     'value': {
                                         'transactions': [
                                             {
-                                                'hash': ('00000257054251161adff5899a451ae9'
-                                                         '74ac62ca44a7a31179eec5750b0ea406'),
+                                                'tx_id': ('00000257054251161adff5899a451ae9'
+                                                          '74ac62ca44a7a31179eec5750b0ea406'),
                                                 'nonce': 99579,
                                                 'timestamp': 1547163030,
                                                 'version': 1,
@@ -288,8 +340,8 @@ TransactionResource.openapi = {
                                                 'tokens': []
                                             },
                                             {
-                                                'hash': ('00000b8792cb13e8adb51cc7d866541f'
-                                                         'c29b532e8dec95ae4661cf3da4d42cb4'),
+                                                'tx_id': ('00000b8792cb13e8adb51cc7d866541f'
+                                                          'c29b532e8dec95ae4661cf3da4d42cb4'),
                                                 'nonce': 119816,
                                                 'timestamp': 1547163025,
                                                 'version': 1,

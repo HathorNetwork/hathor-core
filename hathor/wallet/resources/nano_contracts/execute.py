@@ -84,6 +84,7 @@ class NanoContractExecuteResource(resource.Resource):
 
 NanoContractExecuteResource.openapi = {
     '/wallet/nano-contract/execute': {
+        'x-visibility': 'private',
         'post': {
             'tags': ['nano-contract'],
             'operationId': 'nano_contract_execute',

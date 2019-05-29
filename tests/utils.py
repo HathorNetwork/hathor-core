@@ -402,6 +402,7 @@ def run_server(hostname='localhost', listen=8005, listen_ssl=False, status=8085,
         '--status {}'.format(status),
         # We must allow mining without peers, otherwise some tests won't be able to mine.
         '--allow-mining-without-peers',
+        '--wallet-index'
     ])
 
     if listen_ssl:
@@ -427,7 +428,7 @@ def run_server(hostname='localhost', listen=8005, listen_ssl=False, status=8085,
     return process
 
 
-def request_server(path, method, host='http://localhost', port=8085, data=None):
+def request_server(path, method, host='http://localhost', port=8085, data=None, prefix=settings.API_VERSION_PREFIX):
     """ Execute a request for status server
 
         :param path: Url path of the request
@@ -448,7 +449,7 @@ def request_server(path, method, host='http://localhost', port=8085, data=None):
         :return: Response in json format
         :rtype: Dict (json)
     """
-    partial_url = '{}:{}'.format(host, port)
+    partial_url = '{}:{}/{}/'.format(host, port, prefix)
     url = urllib.parse.urljoin(partial_url, path)
     if method == 'GET':
         response = requests.get(url, params=data)
@@ -458,8 +459,35 @@ def request_server(path, method, host='http://localhost', port=8085, data=None):
         response = requests.put(url, json=data)
     else:
         raise ValueError('Unsuported method')
-
     return response.json()
+
+
+def execute_mining(path='mining', *, count, host='http://localhost', port=8085, data=None,
+                   prefix=settings.API_VERSION_PREFIX):
+    """Execute a mining on a given server"""
+    from hathor.cli.mining import create_parser, execute
+    partial_url = '{}:{}/{}/'.format(host, port, prefix)
+    url = urllib.parse.urljoin(partial_url, path)
+    parser = create_parser()
+    args = parser.parse_args([url, '--count', str(count)])
+    execute(args)
+
+
+def execute_tx_gen(*, count, address=None, value=None, timestamp=None, host='http://localhost', port=8085, data=None,
+                   prefix=settings.API_VERSION_PREFIX):
+    """Execute a tx generator on a given server"""
+    from hathor.cli.tx_generator import create_parser, execute
+    url = '{}:{}/{}/'.format(host, port, prefix)
+    parser = create_parser()
+    argv = [url, '--count', str(count)]
+    if address is not None:
+        argv.extend(['--address', address])
+    if value is not None:
+        argv.extend(['--value', str(value)])
+    if timestamp is not None:
+        argv.extend(['--timestamp', timestamp])
+    args = parser.parse_args(argv)
+    execute(args)
 
 
 def get_tokens_from_mining(blocks_mined):

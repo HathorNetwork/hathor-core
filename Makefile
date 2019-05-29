@@ -13,11 +13,11 @@ pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov=hathor
 
 .PHONY: tests-cli
 tests-cli:
-	pytest --durations=10 --cov=hathor/cli/ --cov-config=.coveragerc_full --cov-fail-under=67 -p no:warnings $(tests_cli)
+	pytest --durations=10 --cov=hathor/cli/ --cov-config=.coveragerc_full --cov-fail-under=62 -p no:warnings $(tests_cli)
 
 .PHONY: tests-lib
 tests-lib:
-	pytest --durations=10 $(pytest_flags) --cov-fail-under=93 $(tests_lib)
+	pytest --durations=10 $(pytest_flags) --cov-fail-under=92 $(tests_lib)
 
 .PHONY: tests-simulation
 tests-simulation:
@@ -94,11 +94,11 @@ docker_tag := $(shell git describe)
 
 .PHONY: docker
 docker: $(docker_dir)/Dockerfile $(proto_outputs)
-	docker build -t hathor-full-node:$(docker_tag) $(docker_dir)
+	docker build -t fullnode:$(docker_tag) $(docker_dir)
 
 .PHONY: docker-push
 docker-push: docker
-	docker tag hathor-full-node:$(docker_tag) 769498303037.dkr.ecr.us-east-1.amazonaws.com/hathor-full-node:$(docker_tag)
-	docker push 769498303037.dkr.ecr.us-east-1.amazonaws.com/hathor-full-node:$(docker_tag)
-	docker tag hathor-full-node:$(docker_tag) 769498303037.dkr.ecr.us-east-1.amazonaws.com/hathor-full-node:latest
-	docker push 769498303037.dkr.ecr.us-east-1.amazonaws.com/hathor-full-node:latest
+	docker tag fullnode:$(docker_tag) 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_tag)
+	docker push 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_tag)
+	docker tag fullnode:$(docker_tag) 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:latest
+	docker push 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:latest

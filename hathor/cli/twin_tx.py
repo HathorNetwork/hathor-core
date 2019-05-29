@@ -24,7 +24,7 @@ def execute(args: Namespace) -> None:
 
     # Get tx you want to create a twin
     if args.url and args.hash:
-        get_tx_url = urllib.parse.urljoin(args.url, '/transaction/')
+        get_tx_url = urllib.parse.urljoin(args.url, 'transaction/')
         response = requests.get(get_tx_url, {b'id': bytes(args.hash, 'utf-8')})
 
         try:
@@ -49,7 +49,7 @@ def execute(args: Namespace) -> None:
 
         if args.parents:
             # If we want new parents we get the tips and select new ones
-            get_tips_url = urllib.parse.urljoin(args.url, '/tips/')
+            get_tips_url = urllib.parse.urljoin(args.url, 'tips/')
 
             response = requests.get(get_tips_url)
 

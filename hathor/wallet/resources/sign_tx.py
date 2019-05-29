@@ -67,6 +67,7 @@ class SignTxResource(resource.Resource):
 
 SignTxResource.openapi = {
     '/wallet/sign_tx': {
+        'x-visibility': 'private',
         'get': {
             'tags': ['wallet'],
             'operationId': 'wallet_sign_tx',

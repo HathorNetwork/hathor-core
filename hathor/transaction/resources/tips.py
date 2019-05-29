@@ -39,6 +39,7 @@ class TipsResource(resource.Resource):
 
 TipsResource.openapi = {
     '/tips': {
+        'x-visibility': 'private',
         'get': {
             'tags': ['transaction'],
             'operationId': 'tips',

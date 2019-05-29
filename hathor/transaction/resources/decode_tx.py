@@ -55,6 +55,23 @@ class DecodeTxResource(resource.Resource):
 
 DecodeTxResource.openapi = {
     '/decode_tx': {
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '200r/s',
+                    'burst': 200,
+                    'delay': 100
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '3r/s',
+                    'burst': 10,
+                    'delay': 3
+                }
+            ]
+        },
         'get': {
             'tags': ['transaction'],
             'operationId': 'decode_tx',
@@ -86,7 +103,21 @@ DecodeTxResource.openapi = {
                                             'version': 1,
                                             'weight': 14.0,
                                             'parents': [],
-                                            'inputs': [],
+                                            "inputs": [
+                                                {
+                                                    "value": 42500000044,
+                                                    "script": "dqkURJPA8tDMJHU8tqv3SiO18ZCLEPaIrA==",
+                                                    "decoded": {
+                                                        "type": "P2PKH",
+                                                        "address": "17Fbx9ouRUD1sd32bp4ptGkmgNzg7p2Krj",
+                                                        "timelock": None
+                                                        },
+                                                    "token": "00",
+                                                    "tx": "000002d28696f94f89d639022ae81a1d"
+                                                          "870d55d189c27b7161d9cb214ad1c90c",
+                                                    "index": 0
+                                                }
+                                            ],
                                             'outputs': [],
                                             'tokens': []
                                         },
