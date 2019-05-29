@@ -1,7 +1,7 @@
 import base64
 import hashlib
 import json
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from math import inf
 from typing import TYPE_CHECKING, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union, cast
 
@@ -13,9 +13,11 @@ from twisted.logger import Logger
 from zope.interface import implementer
 
 from hathor.conf import HathorSettings
+from hathor.exception import InvalidNewTransaction
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
 from hathor.p2p.plugin import Plugin
 from hathor.transaction import BaseTransaction, Block, Transaction
+from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
 settings = HathorSettings()
@@ -351,7 +353,7 @@ class NodeSyncTimestamp(Plugin):
         self.log.debug('sync-{p} Sync starting at {next_timestamp}', p=self.short_peer_id,
                        next_timestamp=next_timestamp)
         assert next_timestamp < inf
-        pending = []
+        pending = deque()
         next_offset = 0
         while True:
             payload = cast(NextPayload, (yield self.get_peer_next(next_timestamp, offset=next_offset)))
@@ -373,6 +375,15 @@ class NodeSyncTimestamp(Plugin):
                 break
             if next_timestamp > self.peer_timestamp:
                 break
+
+            while len(pending) > 50:
+                self.log.debug('Pending list is too long. Waiting for some replies...')
+                deferred = pending.popleft()
+                (tx, result, exception) = yield deferred
+                if not result:
+                    self.log.debug('Sync error. tx={tx.hash_hex} exception={exception} json={json}', tx=tx, exception=exception, json=tx.to_json())
+                    return
+
         for deferred in pending:
             yield deferred
 
@@ -691,7 +702,13 @@ class NodeSyncTimestamp(Plugin):
             # in the network, thus, we propagate it as well.
             propagate_to_peers = True
 
-        result = self.manager.on_new_tx(tx, conn=self.protocol, propagate_to_peers=propagate_to_peers)
+        try:
+            result = self.manager.on_new_tx(tx, conn=self.protocol, propagate_to_peers=propagate_to_peers, fails_silently=False)
+        except (InvalidNewTransaction, TxValidationError) as e:
+            result = False
+            exception = e
+        else:
+            exception = None
 
         # Update statistics.
         if result:
@@ -709,4 +726,4 @@ class NodeSyncTimestamp(Plugin):
             assert tx.timestamp is not None
             if tx.timestamp - 1 > self.synced_timestamp:
                 self.synced_timestamp = tx.timestamp - 1
-            deferred.callback((tx, result))
+            deferred.callback((tx, result, exception))
