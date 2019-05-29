@@ -158,13 +158,10 @@ class JSONRPC(LineReceiver, ABC):
         except JSONDecodeError:
             return self.send_error(PARSE_ERROR, data={"message": line.decode()})
 
-        if "id" in data and not valid_uuid_or_none(data["id"]):
-            return self.send_error(INVALID_REQUEST, data["id"], {"id": data["id"], "message": "id is invalid uuid4"})
+        if "id" not in data:
+            return self.send_error(INVALID_REQUEST, data={"message": "id is missing"})
 
-        id = UUID(data["id"]) if "id" in data else None
-
-        if "jsonrpc" not in data or data["jsonrpc"] != "2.0":
-            return self.send_error(INVALID_REQUEST, id, data={"request": data, "required": {"jsonrpc": "2.0"}})
+        id = data["id"] if "id" in data else None
 
         if "method" in data:
             return self.handle_request(data["method"], data.get("params"), id)
@@ -340,12 +337,12 @@ class StratumProtocol(JSONRPC):
         :param id: JSON-RPC 2.0 message id
         :type id: Optional[UUID]
         """
-        self.log.debug("RECEIVED REQUEST {method} WITH PARAMS {params}", method=method, params=params)
+        self.log.debug("RECEIVED REQUEST {method} FROM {id} WITH PARAMS {params}", id=id, method=method, params=params)
 
-        if method == "subscribe":
+        if method in ["mining.subscribe", "subscribe"]:
             params = cast(Dict, params)
             return self.handle_subscribe(params, id)
-        if method == "submit":
+        if method in ["mining.submit", "submit"]:
             params = cast(Dict, params)
             return self.handle_submit(params, id)
 
@@ -442,6 +439,8 @@ class StratumProtocol(JSONRPC):
             job.submitted = True
             self.send_result("ok", id)
             return self.job_request()
+        else:
+            self.log.info('Stratum new block found: {block.hash_hex}', block=block)
 
         job.submitted = True
         self.send_result("block_found", id)

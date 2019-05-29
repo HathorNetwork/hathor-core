@@ -39,28 +39,30 @@ class TestStratum(StratumTestBase):
     def test_parse_error(self):
         self.protocol.lineReceived(b'{]')
         response = json_loads(self.transport.value())
-        assert response['error'] == PARSE_ERROR
+        self.assertEqual(response['error'], PARSE_ERROR)
 
     def test_invalid_json_rpc(self):
         self.protocol.lineReceived(b'{"jsonrpc": "x.y"}')
         response = json_loads(self.transport.value())
-        assert response['error'] == INVALID_REQUEST
+        self.assertEqual(response['error'], INVALID_REQUEST)
 
     def test_invalid_id_error(self):
         self.protocol.lineReceived(b'{"id": 123}')
         response = json_loads(self.transport.value())
-        assert response['error'] == INVALID_REQUEST
+        self.assertEqual(response['error'], INVALID_REQUEST)
 
     def test_send_rpc_error(self):
         miner_id = self.protocol.miner_id
-        assert miner_id is not None and miner_id in self.factory.miner_protocols
+        self.assertIsNotNone(miner_id)
+        self.assertIn(miner_id, self.factory.miner_protocols)
+
         self.protocol.send_error(INVALID_REQUEST)
-        assert miner_id not in self.factory.miner_protocols
+        self.assertNotIn(miner_id, self.factory.miner_protocols)
 
     def test_result_and_error(self):
         self.protocol.lineReceived(b'{"jsonrpc": "2.0", "result": "OK", "error": {"code": 0, "message": "Fake"}}')
         response = json_loads(self.transport.value())
-        assert response['error'] == INVALID_REQUEST
+        self.assertEqual(response['error'], INVALID_REQUEST)
 
     def test_json_rpc(self):
         # Test sending request
@@ -77,34 +79,34 @@ class TestStratum(StratumTestBase):
         transport = StringTransportWithDisconnection()
         protocol = self.factory.buildProtocol('127.0.0.1')
         protocol.makeConnection(transport)
-        assert len(self.factory.miner_protocols) == 2
+        self.assertEqual(len(self.factory.miner_protocols), 2)
         protocol.connectionLost()
-        assert len(self.factory.miner_protocols) == 1
+        self.assertEqual(len(self.factory.miner_protocols), 1)
 
     def test_not_request_or_response(self):
         self.protocol.lineReceived(b'{"jsonrpc": "2.0", "foo": "bar"}')
         response = json_loads(self.transport.value())
-        assert response['error'] == INVALID_REQUEST
+        self.assertEqual(response['error'], INVALID_REQUEST)
 
     def test_invalid_method(self):
-        self.protocol.lineReceived(b'{"jsonrpc": "2.0", "method": "test.invalid_method_x"}')
+        self.protocol.lineReceived(b'{"id": "123", "jsonrpc": "2.0", "method": "test.invalid_method_x"}')
         data = self.transport.value().split(JSONRPC.delimiter)[-2]
 
         response = json_loads(data)
-        assert response['error'] == METHOD_NOT_FOUND
+        self.assertEqual(response['error'], METHOD_NOT_FOUND)
 
     def test_subscribe(self):
         id = "52dce7e1c7b34143bdd80ead4814ef07"
         self.protocol.lineReceived('{{"jsonrpc": "2.0", "id": "{}", "method": "subscribe"}}'.format(id).encode())
         data = self.transport.value().split(JSONRPC.delimiter)
-        assert len(data) == 3
+        self.assertEqual(len(data), 3)
 
         response = json_loads(data[0])
-        assert response['id'] == id
-        assert response['result'] == "ok"
+        self.assertEqual(response['id'], id)
+        self.assertEqual(response['result'], "ok")
 
         job = json_loads(data[1])
-        assert job['method'] == 'job'
+        self.assertEqual(job['method'], 'job')
 
 
 class TestStratumJob(StratumTestBase):
@@ -144,26 +146,26 @@ class TestStratumJob(StratumTestBase):
     def test_job_not_found(self):
         # Certainly different from received job_id
         self._submit("41c49d8c977f4d65b8a3f568db7b4017", 0)
-        assert self._get_latest_message()['error'] == JOB_NOT_FOUND
+        self.assertEqual(self._get_latest_message()['error'], JOB_NOT_FOUND)
 
     def test_invalid_job(self):
         nonce = self._get_nonce(valid=False)
         self._submit(self.job['job_id'], nonce)
-        assert self._get_latest_message()['error'] == INVALID_SOLUTION
+        self.assertEqual(self._get_latest_message()['error'], INVALID_SOLUTION)
 
         self._submit(None, nonce)
-        assert self._get_latest_message()['error'] == INVALID_PARAMS
+        self.assertEqual(self._get_latest_message()['error'], INVALID_PARAMS)
 
         self._submit(self.job['job_id'], None)
-        assert self._get_latest_message()['error'] == INVALID_PARAMS
+        self.assertEqual(self._get_latest_message()['error'], INVALID_PARAMS)
 
         self._submit('23123nidsdni2', nonce)
-        assert self._get_latest_message()['error'] == INVALID_PARAMS
+        self.assertEqual(self._get_latest_message()['error'], INVALID_PARAMS)
 
     def test_valid_solution(self):
         nonce = self._get_nonce()
         self._submit(self.job['job_id'], nonce)
-        assert 'result' in self._get_latest_message()
+        self.assertIn('result', self._get_latest_message())
 
     def test_force_propagation_failure(self):
         nonce = self._get_nonce()
@@ -171,14 +173,14 @@ class TestStratumJob(StratumTestBase):
         self._submit(self.job['job_id'], nonce)
         self.protocol.current_job = current_job
         self._submit(self.job['job_id'], nonce)
-        assert self._get_latest_message()['error'] == STALE_JOB
+        self.assertEqual(self._get_latest_message()['error'], STALE_JOB)
 
     def test_stale_solution(self):
         nonce = self._get_nonce()
         self._submit(self.job['job_id'], nonce)
         self.run_to_completion()
         self._submit(self.job['job_id'], nonce)
-        assert self._get_latest_message()['error'] == STALE_JOB
+        self.assertEqual(self._get_latest_message()['error'], STALE_JOB)
 
 
 class StratumClientTest(unittest.TestCase):
@@ -218,8 +220,8 @@ class StratumClientTest(unittest.TestCase):
         jobs_id = [params['job_id'] for params in submits_params]
         nonces = [params['nonce'] for params in submits_params]
 
-        assert all(method == 'submit' for method in methods)
-        assert all(job_id == self.job_request_params['job_id'] for job_id in jobs_id)
+        self.assertTrue(all(method == 'submit' for method in methods))
+        self.assertTrue(all(job_id == self.job_request_params['job_id'] for job_id in jobs_id))
         for nonce in nonces:
             self.block.nonce = int(nonce, 16)
             self.block.update_hash()
