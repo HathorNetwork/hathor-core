@@ -89,16 +89,13 @@ clean: clean-pyc clean-protos
 
 # docker:
 
-docker_dir := .
-docker_tag := $(shell git describe)
+docker_remote_tag := dev-$(USER)
 
 .PHONY: docker
-docker: $(docker_dir)/Dockerfile $(proto_outputs)
-	docker build -t fullnode:$(docker_tag) $(docker_dir)
+docker:
+	docker build -t fullnode .
 
 .PHONY: docker-push
 docker-push: docker
-	docker tag fullnode:$(docker_tag) 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_tag)
-	docker push 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_tag)
-	docker tag fullnode:$(docker_tag) 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:latest
-	docker push 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:latest
+	docker tag fullnode 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_remote_tag)
+	docker push 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_remote_tag)
