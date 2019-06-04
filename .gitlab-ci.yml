@@ -53,5 +53,5 @@ docker:
   script:
     - $(aws ecr get-login --no-include-email --region us-east-1)
     - docker build -t fullnode -t $REPO:$(git describe) -t $REPO:nightly .
-    - if git name-rev --name-only --tags --no-undefined HEAD; docker tag fullnode $REPO:latest_test; fi
+    - if git name-rev --name-only --tags --no-undefined HEAD; then docker tag fullnode $REPO:latest_test; fi
     - docker push $REPO
