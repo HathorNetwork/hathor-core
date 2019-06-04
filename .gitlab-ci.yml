@@ -41,6 +41,7 @@ docker:
   only:
     refs:
       - dev
+      - tags
       - experiment/docker-build
   variables:
     REPO: 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode
