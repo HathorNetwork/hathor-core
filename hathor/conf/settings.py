@@ -107,3 +107,9 @@ class HathorSettings(NamedTuple):
 
     # URL prefix where API is served, for instance: /v1a/status
     API_VERSION_PREFIX: str = 'v1a'
+
+    # Maximum number of subscribed addresses per websocket connection
+    WS_MAX_SUBS_ADDRS_CONN: int = 200000
+
+    # Maximum number of subscribed addresses that do not have any outputs (also per websocket connection)
+    WS_MAX_SUBS_ADDRS_EMPTY: int = 40

@@ -249,7 +249,7 @@ class RunNode:
             NanoContractExecuteResource,
             NanoContractMatchValueResource,
         )
-        from hathor.websocket import HathorAdminWebsocketFactory
+        from hathor.websocket import HathorAdminWebsocketFactory, WebsocketStatsResource
 
         settings = HathorSettings()
 
@@ -332,17 +332,24 @@ class RunNode:
                     parent.putChild(url_path, resource)
 
             # Websocket resource
-            ws_factory = HathorAdminWebsocketFactory(metrics=self.manager.metrics)
+            ws_factory = HathorAdminWebsocketFactory(metrics=self.manager.metrics,
+                                                     wallet_index=self.manager.tx_storage.wallet_index)
             ws_factory.start()
             resource = WebSocketResource(ws_factory)
             root.putChild(b"ws", resource)
 
             ws_factory.subscribe(self.manager.pubsub)
 
+            # Websocket stats resource
+            root.putChild(b'websocket_stats', WebsocketStatsResource(ws_factory))
+
             real_root = Resource()
             real_root.putChild(settings.API_VERSION_PREFIX.encode('ascii'), root)
             status_server = server.Site(real_root)
             reactor.listenTCP(args.status, status_server)
+
+            # Set websocket factory in metrics
+            self.manager.metrics.websocket_factory = ws_factory
 
     def __init__(self, *, argv=None):
         if argv is None:
