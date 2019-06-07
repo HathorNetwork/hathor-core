@@ -297,13 +297,27 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         addr = message['address']
         if addr in self.address_connections and connection in self.address_connections[addr]:
             connection.subscribed_to.remove(addr)
-            self.address_connections[addr].remove(connection)
-            # If this was the last connection for this address, we delete it from the dict
-            if len(self.address_connections[addr]) == 0:
-                del self.address_connections[addr]
+            self._remove_connection_from_address_dict(connection, addr)
             # Reply back to the client
             payload = json.dumps({'type': 'unsubscribe_address', 'success': True}).encode('utf-8')
             connection.sendMessage(payload, False)
+
+    def _remove_connection_from_address_dict(self, connection: HathorAdminWebsocketProtocol, address: str) -> None:
+        """ Remove a connection from the address connections dict
+            If this was the last connection for this address, we remove the key
+        """
+        self.address_connections[address].remove(connection)
+        # If this was the last connection for this address, we delete it from the dict
+        if len(self.address_connections[address]) == 0:
+            del self.address_connections[address]
+
+    def connection_closed(self, connection: HathorAdminWebsocketProtocol) -> None:
+        """ Called when a ws connection is closed
+            We should remove it from self.connections and from self.address_connections set for each address
+        """
+        self.connections.remove(connection)
+        for address in connection.subscribed_to:
+            self._remove_connection_from_address_dict(connection, address)
 
 
 def _count_empty(addresses: Set[str], wallet_index: WalletIndex) -> int:
