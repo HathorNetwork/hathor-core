@@ -4,7 +4,7 @@ from time import sleep
 from typing import Optional
 from uuid import UUID
 
-from twisted.test.proto_helpers import MemoryReactor, StringTransportWithDisconnection
+from twisted.test.proto_helpers import MemoryReactorClock, StringTransportWithDisconnection
 
 from hathor.stratum import (
     INVALID_PARAMS,
@@ -27,7 +27,7 @@ class StratumTestBase(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.manager = self.create_peer('testnet')
-        self.factory = StratumFactory(self.manager, port=8123, reactor=MemoryReactor())
+        self.factory = StratumFactory(self.manager, port=8123, reactor=MemoryReactorClock())
         self.factory.start()
         self.protocol = self.factory.buildProtocol('127.0.0.1')
         self.transport = StringTransportWithDisconnection()
@@ -120,7 +120,7 @@ class TestStratumJob(StratumTestBase):
         nonce = 0
         while True:
             hash = base.copy()
-            hash.update(nonce.to_bytes(Block.NONCE_SIZE, 'big'))
+            hash.update(nonce.to_bytes(Block.SERIALIZATION_NONCE_SIZE, 'big'))
             if (int(sha256(hash.digest()).digest()[::-1].hex(), 16) < target) == valid:
                 return hex(nonce)
             nonce += 1
@@ -194,7 +194,7 @@ class StratumClientTest(unittest.TestCase):
         self.job_request_params = {
             'data': self.block.get_header_without_nonce().hex(),
             'job_id': 'a734d03fe4b64739be2894742f3de20f',
-            'nonce_size': Block.NONCE_SIZE,
+            'nonce_size': Block.SERIALIZATION_NONCE_SIZE,
             'weight': self.block.weight,
         }
 

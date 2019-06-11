@@ -33,7 +33,7 @@ class HathorSettings(NamedTuple):
     GENESIS_OUTPUT_SCRIPT: bytes = bytes.fromhex('76a914a584cf48b161e4a49223ed220df30037ab740e0088ac')
 
     # Weight of genesis and minimum weight of a tx/block
-    MIN_BLOCK_WEIGHT: int = 14
+    MIN_BLOCK_WEIGHT: int = 21
     MIN_TX_WEIGHT: int = 14
 
     HATHOR_TOKEN_UID: bytes = b'\x00'
@@ -108,8 +108,14 @@ class HathorSettings(NamedTuple):
     # URL prefix where API is served, for instance: /v1a/status
     API_VERSION_PREFIX: str = 'v1a'
 
+    # If should use stratum to resolve pow of transactions in send tokens resource
+    SEND_TOKENS_STRATUM: bool = True
+
     # Maximum number of subscribed addresses per websocket connection
     WS_MAX_SUBS_ADDRS_CONN: int = 200000
 
     # Maximum number of subscribed addresses that do not have any outputs (also per websocket connection)
     WS_MAX_SUBS_ADDRS_EMPTY: int = 40
+
+    # Whether miners are assumed to mine txs by default
+    STRATUM_MINE_TXS_DEFAULT: bool = False

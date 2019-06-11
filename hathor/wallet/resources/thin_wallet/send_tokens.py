@@ -1,8 +1,10 @@
 import json
+from functools import partial
 from typing import Optional
 
-from twisted.internet import threads
-from twisted.internet.defer import CancelledError
+from twisted.internet import reactor, threads
+from twisted.internet.defer import CancelledError, Deferred
+from twisted.python.failure import Failure
 from twisted.web import resource
 from twisted.web.http import Request
 
@@ -14,6 +16,9 @@ from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TxValidationError
 
 settings = HathorSettings()
+
+# Timeout for the pow resolution in stratum (in seconds)
+TIMEOUT_STRATUM_RESOLVE_POW = 20
 
 
 @register_resource
@@ -64,35 +69,89 @@ class SendTokensResource(resource.Resource):
             }
             return json.dumps(data, indent=4).encode('utf-8')
 
-        max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
-        # Set tx timestamp as max between tx and inputs
-        tx.timestamp = max(max_ts_spent_tx + 1, tx.timestamp)
-        # Set parents
-        tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
-
         request.should_stop_mining_thread = False
 
-        from twisted.internet import reactor
-        deferred = threads.deferToThreadPool(
-            reactor,
-            self.manager.pow_thread_pool,
-            self._render_POST_thread,
-            tx,
-            request
-        )
-        deferred.addCallback(self._cb_tx_resolve, request)
-        deferred.addErrback(self._err_tx_resolve, request)
-        request.thread_deferred = deferred
+        if settings.SEND_TOKENS_STRATUM and self.manager.stratum_factory:
+            self._render_POST_stratum(tx, request)
+        else:
+            self._render_POST(tx, request)
 
         request.notifyFinish().addErrback(self._responseFailed, request)
 
         from twisted.web.server import NOT_DONE_YET
         return NOT_DONE_YET
 
+    def _render_POST_stratum(self, tx: Transaction, request: Request) -> None:
+        """ Resolves the request using stratum
+            Create a deferred and send it and the tx to be mined to stratum
+            WHen the proof of work is completed in stratum, the callback is called
+        """
+        # When using stratum to solve pow, we already set timestamp and parents
+        stratum_deferred = Deferred()
+        stratum_deferred.addCallback(self._stratum_deferred_resolve, request)
+
+        fn_timeout = partial(self._stratum_timeout, request=request, tx=tx)
+        stratum_deferred.addTimeout(TIMEOUT_STRATUM_RESOLVE_POW, self.manager.reactor, onTimeoutCancel=fn_timeout)
+
+        self.manager.stratum_factory.mine_transaction(tx, stratum_deferred)
+
+    def _render_POST(self, tx: Transaction, request: Request) -> None:
+        """ Resolves the request without stratum
+            The transaction is completed and then sent to be mined in a thread
+        """
+        max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
+        # Set tx timestamp as max between tx and inputs
+        tx.timestamp = max(max_ts_spent_tx + 1, tx.timestamp)
+        # Set parents
+        tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
+
+        deferred = threads.deferToThreadPool(reactor, self.manager.pow_thread_pool,
+                                             self._render_POST_thread, tx, request)
+        deferred.addCallback(self._cb_tx_resolve, request)
+        deferred.addErrback(self._err_tx_resolve, request)
+
     def _responseFailed(self, err, request):
         request.should_stop_mining_thread = True
 
+    def _stratum_deferred_resolve(self, tx: Transaction, request: Request) -> None:
+        """ Method called after stratum resolves tx proof of work
+            We remove the mining data of this tx on stratum and start a new thread to verify the tx
+        """
+        funds_hash = tx.get_funds_hash()
+        tx = self.manager.stratum_factory.mined_txs[funds_hash]
+        # Delete it to avoid memory leak
+        del(self.manager.stratum_factory.mined_txs[funds_hash])
+
+        deferred = threads.deferToThreadPool(reactor, self.manager.pow_thread_pool, self._stratum_thread_verify, tx)
+        deferred.addCallback(self._cb_tx_resolve, request)
+        deferred.addErrback(self._err_tx_resolve, request)
+
+    def _stratum_thread_verify(self, tx: Transaction) -> Transaction:
+        """ Method to verify the transaction that runs in a separated thread
+        """
+        tx.verify()
+        return tx
+
+    def _stratum_timeout(self, result: Failure, timeout: int, **kwargs) -> None:
+        """ Method called when stratum timeouts when trying to solve tx pow
+            We remove mining data and deferred from stratum and send error as response
+        """
+        tx = kwargs['tx']
+        request = kwargs['request']
+        funds_hash = tx.get_funds_hash()
+        if funds_hash in self.manager.stratum_factory.mining_tx_pool:
+            del self.manager.stratum_factory.mining_tx_pool[funds_hash]
+
+        if funds_hash in self.manager.stratum_factory.deferreds_tx:
+            del self.manager.stratum_factory.deferreds_tx[funds_hash]
+
+        result.value = 'Timeout: error resolving transaction proof of work'
+
+        self._err_tx_resolve(result, request)
+
     def _render_POST_thread(self, tx: Transaction, request: Request) -> Transaction:
+        """ Method called in a thread to solve tx pow without stratum
+        """
         # TODO Tx should be resolved in the frontend
         def _should_stop():
             return request.should_stop_mining_thread
