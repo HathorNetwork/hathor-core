@@ -402,7 +402,7 @@ class BasicTransaction(unittest.TestCase):
         # 4. propagate block from the future
         block = manager.generate_mining_block()
         block.timestamp = int(self.clock.seconds()) + manager.max_future_timestamp_allowed + 100
-        block.resolve()
+        block.resolve(update_time=False)
         self.assertFalse(manager.propagate_tx(block))
 
     def test_tx_methods(self):
@@ -525,7 +525,7 @@ class BasicTransaction(unittest.TestCase):
         struct_bytes += int_to_bytes(0, 1)
         struct_bytes += int_to_bytes(0, 2)
         struct_bytes += tx.get_graph_struct()
-        struct_bytes += int_to_bytes(tx.nonce, tx.NONCE_SIZE)
+        struct_bytes += int_to_bytes(tx.nonce, tx.SERIALIZATION_NONCE_SIZE)
 
         len_difference = len(struct_bytes) - len(original_struct)
         assert len_difference == 4, 'new struct is incorrect, len difference={}'.format(len_difference)

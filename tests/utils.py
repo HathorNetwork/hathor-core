@@ -15,7 +15,7 @@ from twisted.test import proto_helpers
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_private_key_from_bytes
 from hathor.manager import HathorEvents, HathorManager
-from hathor.transaction import Transaction, TxInput, TxOutput
+from hathor.transaction import Transaction, TxInput, TxOutput, genesis
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import (
     TransactionMemoryStorage,
@@ -24,6 +24,8 @@ from hathor.transaction.storage import (
 )
 
 settings = HathorSettings()
+
+MIN_TIMESTAMP = genesis.GENESIS[-1].timestamp + 1
 
 
 def resolve_block_bytes(block_bytes):

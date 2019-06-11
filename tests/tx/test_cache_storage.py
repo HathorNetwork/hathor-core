@@ -6,7 +6,7 @@ from hathor.manager import TestMode
 from hathor.transaction import Block, Transaction, TransactionMetadata, TxOutput
 from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
 from tests import unittest
-from tests.utils import add_new_blocks, add_new_transactions
+from tests.utils import MIN_TIMESTAMP, add_new_blocks, add_new_transactions
 
 CACHE_SIZE = 5
 
@@ -153,7 +153,7 @@ class BasicTransaction(unittest.TestCase):
 
         block_parents = [tx.hash for tx in self.genesis]
         output = TxOutput(200, bytes.fromhex('1e393a5ce2ff1c98d4ff6892f2175100f2dad049'))
-        obj = Block(timestamp=1539271491, weight=12, outputs=[output], parents=block_parents, nonce=100781,
+        obj = Block(timestamp=MIN_TIMESTAMP, weight=12, outputs=[output], parents=block_parents, nonce=100781,
                     storage=self.cache_storage)
         obj.resolve()
 

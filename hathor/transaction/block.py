@@ -19,7 +19,7 @@ settings = HathorSettings()
 class Block(BaseTransaction):
     log = Logger()
 
-    NONCE_SIZE = 16
+    SERIALIZATION_NONCE_SIZE = 16
 
     def __init__(self, nonce: int = 0, timestamp: Optional[int] = None, version: int = 1, weight: float = 0,
                  outputs: Optional[List[TxOutput]] = None, parents: Optional[List[bytes]] = None,
@@ -73,7 +73,7 @@ class Block(BaseTransaction):
         buf = blc.get_fields_from_struct(struct_bytes)
 
         blc.nonce = int.from_bytes(buf, byteorder='big')
-        if len(buf) != cls.NONCE_SIZE:
+        if len(buf) != cls.SERIALIZATION_NONCE_SIZE:
             raise ValueError('Invalid sequence of bytes')
 
         blc.hash = blc.calculate_hash()

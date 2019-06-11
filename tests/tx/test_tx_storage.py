@@ -19,7 +19,7 @@ from hathor.transaction.storage import (
 )
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.wallet import Wallet
-from tests.utils import add_new_blocks, add_new_transactions, start_remote_storage
+from tests.utils import MIN_TIMESTAMP, add_new_blocks, add_new_transactions, start_remote_storage
 
 settings = HathorSettings()
 
@@ -47,7 +47,7 @@ class _BaseTransactionStorageTest:
             block_parents = [tx.hash for tx in self.genesis]
             output = TxOutput(200, bytes.fromhex('1e393a5ce2ff1c98d4ff6892f2175100f2dad049'))
             output2 = TxOutput(2, bytes.fromhex('1e393a5ce2ff1c98d4ff6892f2175100f2dad049'), 1)
-            self.block = Block(timestamp=1539271491, weight=12, outputs=[output, output2], parents=block_parents,
+            self.block = Block(timestamp=MIN_TIMESTAMP, weight=12, outputs=[output, output2], parents=block_parents,
                                nonce=100781, storage=tx_storage)
             self.block.resolve()
 
@@ -61,9 +61,9 @@ class _BaseTransactionStorageTest:
                                    '620e78362cf2d908e9057ac235a63'))
 
             self.tx = Transaction(
-                timestamp=1539271493, weight=10, nonce=932049, inputs=[tx_input], outputs=[output], parents=tx_parents,
+                timestamp=MIN_TIMESTAMP + 2, weight=10, nonce=932049, inputs=[tx_input], outputs=[output],
                 tokens=[bytes.fromhex('0023be91834c973d6a6ddd1a0ae411807b7c8ef2a015afb5177ee64b666ce602')],
-                storage=tx_storage)
+                parents=tx_parents, storage=tx_storage)
             self.tx.resolve()
 
             # Disable weakref to test the internal methods. Otherwise, most methods return objects from weakref.
