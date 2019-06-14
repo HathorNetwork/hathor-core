@@ -5,7 +5,7 @@ from twisted.internet.defer import inlineCallbacks
 from hathor.p2p.resources import MiningResource
 from hathor.wallet.resources import BalanceResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import resolve_block_bytes
+from tests.utils import get_tokens_from_mining, resolve_block_bytes
 
 
 class BalanceTest(_BaseResourceTest._ResourceTest):
@@ -29,4 +29,4 @@ class BalanceTest(_BaseResourceTest._ResourceTest):
         # Get new balance after block
         response2 = yield self.web.get("wallet/balance")
         data2 = response2.json_value()
-        self.assertEqual(data2['balance'], {'available': 2000, 'locked': 0})
+        self.assertEqual(data2['balance'], {'available': get_tokens_from_mining(1), 'locked': 0})
