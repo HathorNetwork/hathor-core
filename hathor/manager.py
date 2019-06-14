@@ -557,7 +557,8 @@ class HathorManager:
 
         # We need to take into consideration the decimal places because it is inside the amount.
         # For instance, if one wants to transfer 20 HTRs, the amount will be 2000.
-        amount = tx.sum_outputs / (10 ** settings.DECIMAL_PLACES)
+        # Max below is preventing division by 0 when handling authority methods that have no outputs
+        amount = max(1, tx.sum_outputs) / (10 ** settings.DECIMAL_PLACES)
         weight = (
             + self.min_tx_weight_coefficient * log(tx_size, 2)
             + 4 / (1 + self.min_tx_weight_k / amount) + 4
