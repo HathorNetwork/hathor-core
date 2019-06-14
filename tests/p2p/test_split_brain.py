@@ -2,11 +2,12 @@ import random
 
 from mnemonic import Mnemonic
 
+from hathor.graphviz import GraphvizVisualizer
 from hathor.manager import TestMode
 from hathor.transaction.genesis import get_genesis_transactions
 from hathor.wallet import HDWallet
 from tests import unittest
-from tests.utils import FakeConnection, add_new_block, add_new_transactions
+from tests.utils import FakeConnection, add_new_block, add_new_double_spending, add_new_transactions
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):
@@ -40,6 +41,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         return manager
 
     def test_split_brain(self):
+        debug_pdf = False
+
         manager1 = self.create_peer(self.network, unlock_wallet=True)
         manager1.avg_time_between_blocks = 3
 
@@ -53,9 +56,16 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
             for _ in range(random.randint(3, 10)):
                 add_new_transactions(manager1, random.randint(2, 4))
                 add_new_transactions(manager2, random.randint(3, 7))
+                add_new_double_spending(manager1)
+                add_new_double_spending(manager2)
                 self.clock.advance(10)
-
         self.clock.advance(20)
+
+        self.assertTipsNotEqual(manager1, manager2)
+
+        if debug_pdf:
+            dot1 = GraphvizVisualizer(manager1.tx_storage, include_verifications=True).dot()
+            dot1.render('dot1-pre')
 
         conn = FakeConnection(manager1, manager2)
 
@@ -74,11 +84,11 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
             conn.run_one_step()
             self.clock.advance(0.2)
 
-        # dot1 = manager1.tx_storage.graphviz(format='pdf')
-        # dot1.render('dot1')
-
-        # dot2 = manager2.tx_storage.graphviz(format='pdf')
-        # dot2.render('dot2')
+        if debug_pdf:
+            dot1 = GraphvizVisualizer(manager1.tx_storage, include_verifications=True).dot()
+            dot1.render('dot1-post')
+            dot2 = GraphvizVisualizer(manager2.tx_storage, include_verifications=True).dot()
+            dot2.render('dot2-post')
 
         node_sync = conn.proto1.state.get_sync_plugin()
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)

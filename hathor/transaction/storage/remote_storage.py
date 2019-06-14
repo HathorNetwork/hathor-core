@@ -560,7 +560,7 @@ class TransactionRemoteStorage(TransactionStorage):
         return tx_list
 
     @convert_grpc_exceptions
-    def get_sorted_txs(self, timestamp: int, count: int, offset: int) -> TransactionsIndex:
+    def get_all_sorted_txs(self, timestamp: int, count: int, offset: int) -> TransactionsIndex:
         self._check_connection()
         request = protos.SortedTxsRequest(
             timestamp=timestamp,
@@ -755,7 +755,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         offset = request.offset
         count = request.count
 
-        txs_index = self.storage.get_sorted_txs(timestamp, count, offset)
+        txs_index = self.storage.get_all_sorted_txs(timestamp, count, offset)
         for tx_element in txs_index[:]:
             yield protos.Transaction(timestamp=tx_element.timestamp, hash=tx_element.hash)
 

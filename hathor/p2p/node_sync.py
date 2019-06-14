@@ -500,7 +500,7 @@ class NodeSyncTimestamp(Plugin):
         """
         count = self.MAX_HASHES
 
-        all_sorted = self.manager.tx_storage.get_sorted_txs(timestamp, count, offset)
+        all_sorted = self.manager.tx_storage.get_all_sorted_txs(timestamp, count, offset)
         ret_txs = all_sorted[offset:offset+count]
         hashes = [tx.hash.hex() for tx in ret_txs]
 
