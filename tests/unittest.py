@@ -90,6 +90,11 @@ class TestCase(unittest.TestCase):
         s2 = set(manager2.tx_storage.get_tx_tips())
         self.assertEqual(s1, s2)
 
+    def assertTipsNotEqual(self, manager1, manager2):
+        s1 = set(manager1.tx_storage.get_all_tips())
+        s2 = set(manager2.tx_storage.get_all_tips())
+        self.assertNotEqual(s1, s2)
+
     def clean_tmpdirs(self):
         for tmpdir in self.tmpdirs:
             shutil.rmtree(tmpdir)
