@@ -4,7 +4,7 @@ from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InsufficientFunds
 from tests import unittest
-from tests.utils import add_new_blocks
+from tests.utils import add_new_blocks, get_tokens_from_mining
 
 settings = HathorSettings()
 
@@ -28,7 +28,9 @@ class TimelockTransactionTestCase(unittest.TestCase):
             WalletOutputInfo(
                 address=decode_address(address), value=700,
                 timelock=int(self.clock.seconds()) - 10),
-            WalletOutputInfo(address=decode_address(address), value=800, timelock=None)
+            WalletOutputInfo(
+                address=decode_address(address), value=get_tokens_from_mining(1) - 500 - 700,
+                timelock=None)
         ]
 
         tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
@@ -38,7 +40,8 @@ class TimelockTransactionTestCase(unittest.TestCase):
         tx1.resolve()
         self.manager.propagate_tx(tx1)
 
-        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID], WalletBalance(500, 9500))
+        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
+                         WalletBalance(500, get_tokens_from_mining(5) - 500))
 
         self.clock.advance(1)
 
@@ -56,7 +59,8 @@ class TimelockTransactionTestCase(unittest.TestCase):
         tx2.resolve()
         propagated = self.manager.propagate_tx(tx2)
 
-        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID], WalletBalance(500, 9500))
+        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
+                         WalletBalance(500, get_tokens_from_mining(5) - 500))
         self.assertFalse(propagated)
 
         self.clock.advance(1)
@@ -73,12 +77,16 @@ class TimelockTransactionTestCase(unittest.TestCase):
         tx3.parents = self.manager.get_new_tx_parents()
         tx3.timestamp = int(self.clock.seconds())
         tx3.resolve()
-        self.manager.propagate_tx(tx3)
-        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID], WalletBalance(500, 8800))
+        propagated = self.manager.propagate_tx(tx3, False)
+        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
+                         WalletBalance(500, get_tokens_from_mining(5) - 500 - 700))
+        self.assertTrue(propagated)
         self.clock.advance(1)
 
         outputs3 = [
-            WalletOutputInfo(address=decode_address(outside_address), value=800, timelock=None)
+            WalletOutputInfo(
+                address=decode_address(outside_address), value=get_tokens_from_mining(1) - 500 - 700,
+                timelock=None)
         ]
 
         inputs3 = [WalletInputInfo(tx_id=tx1.hash, index=2, private_key=None)]
@@ -89,14 +97,17 @@ class TimelockTransactionTestCase(unittest.TestCase):
         tx4.parents = self.manager.get_new_tx_parents()
         tx4.timestamp = int(self.clock.seconds())
         tx4.resolve()
-        self.manager.propagate_tx(tx4)
-        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID], WalletBalance(500, 8000))
+        propagated = self.manager.propagate_tx(tx4, False)
+        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
+                         WalletBalance(500, get_tokens_from_mining(4)))
+        self.assertTrue(propagated)
 
         self.clock.advance(8)
         tx2.timestamp = int(self.clock.seconds())
         tx2.resolve()
-        propagated = self.manager.propagate_tx(tx2)
-        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID], WalletBalance(0, 8000))
+        propagated = self.manager.propagate_tx(tx2, False)
+        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
+                         WalletBalance(0, get_tokens_from_mining(4)))
         self.assertTrue(propagated)
 
     def test_choose_inputs(self):
@@ -106,7 +117,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
 
         outputs = [
             WalletOutputInfo(
-                address=decode_address(address), value=2000,
+                address=decode_address(address), value=get_tokens_from_mining(1),
                 timelock=int(self.clock.seconds()) + 10)
         ]
 
@@ -118,9 +129,10 @@ class TimelockTransactionTestCase(unittest.TestCase):
         self.manager.propagate_tx(tx1)
         self.clock.advance(1)
 
-        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID], WalletBalance(2000, 0))
+        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
+                         WalletBalance(get_tokens_from_mining(1), 0))
 
-        outputs = [WalletOutputInfo(address=decode_address(address), value=2000, timelock=None)]
+        outputs = [WalletOutputInfo(address=decode_address(address), value=get_tokens_from_mining(1), timelock=None)]
 
         with self.assertRaises(InsufficientFunds):
             self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
@@ -134,4 +146,5 @@ class TimelockTransactionTestCase(unittest.TestCase):
         tx2.resolve()
         self.manager.propagate_tx(tx2)
 
-        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID], WalletBalance(0, 2000))
+        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
+                         WalletBalance(0, get_tokens_from_mining(1)))

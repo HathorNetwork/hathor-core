@@ -2,7 +2,7 @@ import random
 
 from hathor.crypto.util import decode_address
 from tests import unittest
-from tests.utils import add_new_blocks, add_new_tx, start_remote_storage
+from tests.utils import add_new_blocks, add_new_tx, get_tokens_from_mining, start_remote_storage
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):
@@ -31,11 +31,11 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         from hathor.wallet.base_wallet import WalletOutputInfo
 
         address = self.get_address(0)
-        value = 1000
+        value = 500
 
         outputs = []
         outputs.append(
-            WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None))
+            WalletOutputInfo(address=decode_address(address), value=value, timelock=None))
 
         tx1 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
         tx1.weight = 10
@@ -57,14 +57,14 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.assertNotEqual(tx1.hash, tx3.hash)
         self.assertNotEqual(tx2.hash, tx3.hash)
 
-        self.manager1.propagate_tx(tx1)
+        self.assertTrue(self.manager1.propagate_tx(tx1, False))
         self.run_to_completion()
         meta1 = tx1.get_metadata()
         self.assertEqual(meta1.conflict_with, None)
         self.assertEqual(meta1.voided_by, None)
 
         # Propagate a conflicting transaction.
-        self.manager1.propagate_tx(tx2)
+        self.assertTrue(self.manager1.propagate_tx(tx2, False))
         self.run_to_completion()
 
         meta1 = tx1.get_metadata(force_reload=True)
@@ -142,9 +142,9 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx1.resolve()
 
         address = self.manager1.wallet.get_unused_address_bytes()
-        value = 1000
-        outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None),
-                   WalletOutputInfo(address=address, value=1000, timelock=None)]
+        value = 500
+        outputs = [WalletOutputInfo(address=address, value=value, timelock=None),
+                   WalletOutputInfo(address=address, value=get_tokens_from_mining(1) - 500, timelock=None)]
         self.clock.advance(1)
         inputs = [WalletInputInfo(i.tx_id, i.index, b'') for i in tx1.inputs]
         tx4 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs,
@@ -205,7 +205,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # ---
 
         self.clock.advance(15)
-        self.assertTrue(self.manager1.propagate_tx(tx4))
+        self.assertTrue(self.manager1.propagate_tx(tx4, False))
         print('tx4', tx4.hash.hex())
         self.clock.advance(15)
 
@@ -220,7 +220,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # ---
 
         address = self.manager1.wallet.get_unused_address_bytes()
-        value = 1000
+        value = 500
         inputs = [WalletInputInfo(tx_id=tx4.hash, index=0, private_key=None)]
         outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         self.clock.advance(1)
@@ -259,9 +259,9 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # ---
 
         address = self.manager1.wallet.get_unused_address_bytes()
-        value = 2000
+        value = get_tokens_from_mining(1)
         inputs = [WalletInputInfo(tx_id=blocks[3].hash, index=0, private_key=None)]
-        outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
+        outputs = [WalletOutputInfo(address=address, value=value, timelock=None)]
         self.clock.advance(1)
         tx7 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
                                                                          self.manager1.tx_storage)
@@ -270,7 +270,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx7.timestamp = int(self.clock.seconds())
         tx7.resolve()
         self.clock.advance(15)
-        self.manager1.propagate_tx(tx7)
+        self.manager1.propagate_tx(tx7, False)
         print('tx7', tx7.hash.hex())
         self.clock.advance(15)
 

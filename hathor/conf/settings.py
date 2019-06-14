@@ -20,7 +20,9 @@ class HathorSettings(NamedTuple):
 
     GENESIS_TOKENS: int = GENESIS_TOKENS
 
-    TOKENS_PER_BLOCK: int = 20
+    TOKENS_PER_BLOCK: int = 8
+
+    AVG_TIME_BETWEEN_BLOCKS: int = 30  # in seconds
 
     # Genesis pre-mined outputs
     # P2PKH HMcJymyctyhnWsWTXqhP9txDwgNZaMWf42

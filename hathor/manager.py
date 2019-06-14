@@ -111,7 +111,7 @@ class HathorManager:
         if wallet_index and self.tx_storage.with_index:
             self.tx_storage.wallet_index = WalletIndex(self.pubsub)
 
-        self.avg_time_between_blocks = 64  # in seconds
+        self.avg_time_between_blocks = settings.AVG_TIME_BETWEEN_BLOCKS
         self.min_block_weight = min_block_weight or settings.MIN_BLOCK_WEIGHT
         self.min_tx_weight = settings.MIN_TX_WEIGHT
         self.tokens_issued_per_block = settings.TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES)
