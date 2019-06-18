@@ -1,5 +1,3 @@
-from unittest import skip
-
 from twisted.internet.address import IPv4Address
 from twisted.internet.defer import inlineCallbacks
 from twisted.test.proto_helpers import StringTransportWithDisconnection
@@ -19,14 +17,12 @@ class StratumResourceTest(_BaseResourceTest._ResourceTest):
         super().setUp()
         self.web = StubSite(MiningStatsResource(self.manager))
 
-    @skip('broken')
     @inlineCallbacks
     def test_get(self):
         response = yield self.web.get('miners')
         data = response.json_value()
         self.assertEqual(data, [])
 
-    @skip('broken')
     @inlineCallbacks
     def test_subscribe_and_mine(self):
         import json
@@ -56,17 +52,18 @@ class StratumResourceTest(_BaseResourceTest._ResourceTest):
         data = response.json_value()
         self.assertIsInstance(data, list)
         self.assertEqual(len(data), 1)
-        res = data[0]
-        del res['connection_start_time']
-        del res['miner_id']
+        r = data[0]
+        del r['connection_start_time']
+        del r['miner_id']
         self.assertEqual(
-            res,
+            r,
             {'address': '127.0.0.1:8123', 'blocks_found': 0, 'completed_jobs': 0, 'estimated_hash_rate': 0.0}
         )
 
         # mine a block
 
         # TODO: use predictable work instead of always repeating this work
+        print(res)
         job = json.loads(res[1])['params']
         job_id = job['job_id']
         job_hash1 = sha256(bytes.fromhex(job['data']))
@@ -88,7 +85,6 @@ class StratumResourceTest(_BaseResourceTest._ResourceTest):
         protocol.lineReceived(json.dumps(req).encode())
         res = transport.value().split(JSONRPC.delimiter)
         self.assertEqual(len(res), 4)
-        self.assertTrue(False)
 
         # check if our work has updated the stats
 
