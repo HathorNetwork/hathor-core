@@ -250,6 +250,7 @@ class RunNode:
             NanoContractMatchValueResource,
         )
         from hathor.websocket import HathorAdminWebsocketFactory, WebsocketStatsResource
+        from hathor.stratum.resources import MiningStatsResource
 
         settings = HathorSettings()
 
@@ -315,6 +316,9 @@ class RunNode:
             )
             for url_path, resource, parent in resources:
                 parent.putChild(url_path, resource)
+
+            if self.manager.stratum_factory is not None:
+                root.putChild(b'mining_stats', MiningStatsResource(self.manager))
 
             if self.wallet and args.wallet_enable_api:
                 wallet_resources = (

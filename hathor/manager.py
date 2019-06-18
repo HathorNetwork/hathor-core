@@ -7,6 +7,8 @@ from enum import Enum, IntFlag
 from math import log
 from typing import Any, List, Optional, cast
 
+from twisted.internet import defer
+from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IReactorCore
 from twisted.logger import Logger
 from twisted.python.threadpool import ThreadPool
@@ -178,7 +180,9 @@ class HathorManager:
         if self.stratum_factory:
             self.stratum_factory.start()
 
-    def stop(self) -> None:
+    def stop(self) -> Deferred:
+        waits = []
+
         self.log.info('Stopping HathorManager...')
         self.connections.stop()
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
@@ -190,6 +194,13 @@ class HathorManager:
 
         if self.wallet:
             self.wallet.stop()
+
+        if self.stratum_factory:
+            wait_stratum = self.stratum_factory.stop()
+            if wait_stratum:
+                waits.append(wait_stratum)
+
+        return defer.DeferredList(waits)
 
     def start_profiler(self) -> None:
         """

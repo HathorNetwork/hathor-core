@@ -135,6 +135,17 @@ class MinerSubmit(NamedTuple):
     nonce: str
 
 
+class MinerStatistics(NamedTuple):
+    """ Data class used to store data about a miner """
+    address: str
+    blocks_found: int
+    completed_jobs: int
+    connection_start_time: int
+    # Not acutally H/2, but really log_2(H/s)
+    estimated_hash_rate: float
+    miner_id: str
+
+
 class JSONRPC(LineReceiver, ABC):
     """
     JSONRPC implements basic functionality of JSON-RPC 2.0 Specification based on Twisted's LineReceiver.
@@ -304,6 +315,10 @@ class StratumProtocol(JSONRPC):
     manager: 'HathorManager'
     miner_id: Optional[UUID]
     miner_address: Optional[bytes]
+    estimated_hash_rate: float
+    completed_jobs: int
+    connection_start_time: int
+    blocks_found: int
 
     def __init__(self, factory: 'StratumFactory', manager: 'HathorManager', address: IAddress):
         self.factory = factory
@@ -316,11 +331,16 @@ class StratumProtocol(JSONRPC):
         self.miner_address = None
         self.job_ids = []
         self.mine_txs = settings.STRATUM_MINE_TXS_DEFAULT
+        self.estimated_hash_rate = 0.0
+        self.completed_jobs = 0
+        self.connection_start_time = 0
+        self.blocks_found = 0
 
     def connectionMade(self) -> None:
         self.miner_id = uuid4()
         self.log.info('New miner with ID {} from {}'.format(self.miner_id, self.address))
         self.factory.miner_protocols[self.miner_id] = self
+        self.connection_start_time = self.factory.get_current_timestamp()
 
     def connectionLost(self, reason: Failure = None) -> None:
         self.log.info('Miner with ID {} exited'.format(self.miner_id))
@@ -430,6 +450,7 @@ class StratumProtocol(JSONRPC):
             })
 
         job.submitted = self.factory.get_current_timestamp()
+        self.completed_jobs += 1
 
         try:
             tx.verify_pow()
@@ -438,6 +459,7 @@ class StratumProtocol(JSONRPC):
                 # For tx we need to propagate in the resource,
                 # so we can get the possible errors
                 self.manager.propagate_tx(tx, fails_silently=False)
+                self.blocks_found += 1
                 return self.send_result('block_found', msgid)
         except (InvalidNewTransaction, TxValidationError, PowError) as e:
             # Transaction propagation failed, but the share was succesfully submited
@@ -614,7 +636,21 @@ class StratumProtocol(JSONRPC):
             if job.submitted is not None:
                 acc_weight = sum_weights(acc_weight, job.weight)
 
-        return acc_weight - log(dt, 2) + log(self.AVERAGE_JOB_TIME, 2)
+        hash_rate = acc_weight - log(dt, 2)
+        self.estimated_hash_rate = hash_rate
+        return hash_rate + log(self.AVERAGE_JOB_TIME, 2)
+
+    def get_stats(self) -> MinerStatistics:
+        assert self.miner_id is not None
+
+        return MinerStatistics(
+            address='{}:{}'.format(self.address.host, self.address.port),
+            blocks_found=self.blocks_found,
+            completed_jobs=self.completed_jobs,
+            connection_start_time=self.connection_start_time,
+            estimated_hash_rate=self.estimated_hash_rate,
+            miner_id=self.miner_id.hex,
+        )
 
 
 class StratumFactory(Factory):
@@ -669,7 +705,10 @@ class StratumFactory(Factory):
                 self.update_jobs()
 
         self.manager.pubsub.subscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, on_new_block)
-        self.reactor.listenTCP(self.port, self)
+        self._listen = self.reactor.listenTCP(self.port, self)
+
+    def stop(self) -> Optional[Deferred]:
+        return self._listen.stopListening()
 
     def mine_transaction(self, tx: Transaction, deferred: Deferred) -> None:
         """
@@ -688,6 +727,12 @@ class StratumFactory(Factory):
         Gets the current time in seconds
         """
         return int(self.reactor.seconds())
+
+    def get_stats(self) -> List[MinerStatistics]:
+        return [protocol.get_stats() for protocol in self.miner_protocols.values()]
+
+    def get_stats_resource(self) -> List[Dict]:
+        return [stat._asdict() for stat in self.get_stats()]
 
 
 class StratumClient(JSONRPC):
