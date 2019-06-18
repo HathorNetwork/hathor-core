@@ -20,7 +20,7 @@ class MiningStatsResource(resource.Resource):
         self.manager = manager
 
     def render_GET(self, request):
-        """ GET request for /mining_stats/
+        """ GET request for /miners/
             Returns statistics about connected miners
 
             :rtype: string (json)
@@ -36,11 +36,11 @@ class MiningStatsResource(resource.Resource):
 
 
 MiningStatsResource.openapi = {
-    '/mining_stats': {
+    '/miners': {
         'x-visibility': 'private',
         'get': {
             'tags': ['wallet'],
-            'operationId': 'mining_stats',
+            'operationId': 'miners',
             'summary': 'Mining Statistics',
             'description': 'Returns information about each miner connected to the current node',
             'parameters': [],
