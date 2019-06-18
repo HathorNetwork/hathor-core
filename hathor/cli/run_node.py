@@ -73,6 +73,7 @@ class RunNode:
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
         from hathor.p2p.peer_id import PeerId
         from hathor.p2p.utils import discover_hostname
+        from hathor.transaction import genesis
         from hathor.transaction.storage import (
             TransactionStorage,
             TransactionCacheStorage,
@@ -100,7 +101,7 @@ class RunNode:
             data = json.load(open(args.peer, 'r'))
             peer_id = PeerId.create_from_json(data)
 
-        print('Hathor v{}'.format(hathor.__version__))
+        print('Hathor v{} (genesis {})'.format(hathor.__version__, genesis.GENESIS_HASH.hex()[:7]))
         print('My peer id is', peer_id.id)
 
         def create_wallet():
