@@ -148,6 +148,8 @@ class HathorManager:
         self.min_tx_weight_k = 100
 
         self.stratum_factory = StratumFactory(manager=self, port=stratum_port) if stratum_port else None
+        # Set stratum factory for metrics object
+        self.metrics.stratum_factory = self.stratum_factory
 
         self._allow_mining_without_peers = False
 

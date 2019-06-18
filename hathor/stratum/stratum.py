@@ -315,7 +315,7 @@ class StratumProtocol(JSONRPC):
     manager: 'HathorManager'
     miner_id: Optional[UUID]
     miner_address: Optional[bytes]
-    estimated_hash_rate: float
+    estimated_hash_rate: float  # log(H/s)
     completed_jobs: int
     connection_start_time: int
     blocks_found: int

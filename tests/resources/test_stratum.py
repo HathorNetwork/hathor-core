@@ -22,7 +22,7 @@ class StratumResourceTest(_BaseResourceTest._ResourceTest):
     @skip('broken')
     @inlineCallbacks
     def test_get(self):
-        response = yield self.web.get('mining_stats')
+        response = yield self.web.get('miners')
         data = response.json_value()
         self.assertEqual(data, [])
 
@@ -52,7 +52,7 @@ class StratumResourceTest(_BaseResourceTest._ResourceTest):
 
         # check if we have subscribed
 
-        response = yield self.web.get('mining_stats')
+        response = yield self.web.get('miners')
         data = response.json_value()
         self.assertIsInstance(data, list)
         self.assertEqual(len(data), 1)
@@ -92,7 +92,7 @@ class StratumResourceTest(_BaseResourceTest._ResourceTest):
 
         # check if our work has updated the stats
 
-        response = yield self.web.get('mining_stats')
+        response = yield self.web.get('miners')
         data = response.json_value()
         self.assertIsInstance(data, list)
         self.assertEqual(len(data), 1)

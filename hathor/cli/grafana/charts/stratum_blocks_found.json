@@ -1,0 +1,15 @@
+{
+    "title": "Blocks found on stratum",
+    "type": "graph",
+    "params": {
+        "targets": [
+            {
+                "expr": "blocks_found{{instance='{0}',job='{1}'}}",
+                "format": "time_series",
+                "intervalFactor": 1,
+                "refId": "A"
+            }
+        ]
+    },
+    "height": 4
+}
