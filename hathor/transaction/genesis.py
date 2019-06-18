@@ -34,6 +34,19 @@ BLOCK_GENESIS = Block(
 GENESIS = [BLOCK_GENESIS, TX_GENESIS1, TX_GENESIS2]
 
 
+def _get_genesis_hash() -> bytes:
+    import hashlib
+    h = hashlib.sha256()
+    for tx in GENESIS:
+        tx_hash = tx.hash
+        assert tx_hash is not None
+        h.update(tx_hash)
+    return h.digest()
+
+
+GENESIS_HASH = _get_genesis_hash()
+
+
 def get_genesis_transactions(tx_storage: Optional[TransactionStorage]) -> List[BaseTransaction]:
     genesis = []
     for tx in GENESIS:
