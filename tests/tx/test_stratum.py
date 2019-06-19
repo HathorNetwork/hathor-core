@@ -27,6 +27,7 @@ class StratumTestBase(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.manager = self.create_peer('testnet')
+        self.manager.allow_mining_without_peers()
         self.factory = StratumFactory(self.manager, port=8123, reactor=MemoryReactorClock())
         self.factory.start()
         self.protocol = self.factory.buildProtocol('127.0.0.1')
