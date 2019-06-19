@@ -70,7 +70,7 @@ VersionResource.openapi = {
                                     'summary': 'Success',
                                     'value': {
                                         'version': '0.16.0-beta',
-                                        'network': 'testnet',
+                                        'network': 'testnet-bravo',
                                         'min_weight': 14,
                                         'min_tx_weight': 14,
                                         'min_tx_weight_coefficient': 1.6,

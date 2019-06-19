@@ -1,4 +1,4 @@
-from typing import NamedTuple
+from typing import List, NamedTuple
 
 DECIMAL_PLACES = 2
 
@@ -12,6 +12,12 @@ class HathorSettings(NamedTuple):
 
     # Version byte of the address in MultiSig
     MULTISIG_VERSION_BYTE: bytes
+
+    # Name of the network: "mainnet", "testnet-alpha", "testnet-bravo", ...
+    NETWORK_NAME: str
+
+    # Initial bootstrap servers
+    BOOTSTRAP_DNS: List[str] = []
 
     DECIMAL_PLACES: int = DECIMAL_PLACES
 
