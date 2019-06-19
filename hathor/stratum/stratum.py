@@ -64,6 +64,7 @@ INVALID_PARAMS = {'code': -32602, 'message': 'Invalid params'}
 METHOD_NOT_FOUND = {'code': -32601, 'message': 'Method not found'}
 INVALID_REQUEST = {'code': -32600, 'message': 'Invalid Request'}
 
+NODE_SYNCING = {'code': 10, 'message': 'Node syncing'}
 INVALID_ADDRESS = {'code': 22, 'message': 'Address to send mined funds is invalid'}
 INVALID_SOLUTION = {'code': 30, 'message': 'Invalid solution'}
 STALE_JOB = {'code': 31, 'message': 'Stale job submitted'}
@@ -361,6 +362,10 @@ class StratumProtocol(JSONRPC):
         """
         self.log.debug('RECEIVED REQUEST {method} FROM {msgid} WITH PARAMS {params}', msgid=msgid, method=method,
                        params=params)
+
+        if method in ['mining.subscribe', 'subscribe', 'mining.submit', 'submit']:
+            if not self.manager.can_start_mining():
+                return self.send_error(NODE_SYNCING, msgid)
 
         if method in ['mining.subscribe', 'subscribe']:
             params = cast(Dict, params)
