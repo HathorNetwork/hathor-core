@@ -160,6 +160,7 @@ class HathorManager:
         """ A factory must be started only once. And it is usually automatically started.
         """
         self.log.info('Starting HathorManager...')
+        self.log.info('Network: {network}', network=self.network)
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
         self.connections.start()
