@@ -101,6 +101,7 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
             raise error
 
     def load(self, data):
+        from hathor.transaction.aux_pow import BitcoinAuxPow
         from hathor.transaction.base_transaction import TxOutput, TxInput, TxVersion
 
         hash_bytes = bytes.fromhex(data['hash'])
@@ -137,6 +138,9 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
             data['tokens'] = tokens
         else:
             del data['tokens']
+
+        if 'aux_pow' in data:
+            data['aux_pow'] = BitcoinAuxPow.from_bytes(bytes.fromhex(data['aux_pow']))
 
         data['storage'] = self
         cls = TxVersion(data['version']).get_cls()

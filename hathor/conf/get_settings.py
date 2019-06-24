@@ -6,7 +6,7 @@ from hathor.conf.settings import HathorSettings as Settings
 _config_file = None
 
 
-def HathorSettings(*, single_global_config_file=True) -> Settings:
+def HathorSettings() -> Settings:
     """ Return configuration file namedtuple
         Get the file from environment variable 'HATHOR_CONFIG_FILE'
         If not set we return the config file of the mainnet

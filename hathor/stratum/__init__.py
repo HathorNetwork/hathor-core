@@ -1,4 +1,5 @@
 from hathor.stratum.stratum import (
+    INVALID_ADDRESS,
     INVALID_PARAMS,
     INVALID_REQUEST,
     INVALID_SOLUTION,
@@ -12,6 +13,7 @@ from hathor.stratum.stratum import (
 )
 
 __all__ = [
+    'INVALID_ADDRESS',
     'INVALID_PARAMS',
     'INVALID_REQUEST',
     'INVALID_SOLUTION',

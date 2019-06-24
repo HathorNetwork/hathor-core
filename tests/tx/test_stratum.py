@@ -35,6 +35,10 @@ class StratumTestBase(unittest.TestCase):
         self.transport.protocol = self.protocol
         self.protocol.makeConnection(self.transport)
 
+    def tearDown(self):
+        super().tearDown()
+        self.factory.stop()
+
 
 class TestStratum(StratumTestBase):
     def test_parse_error(self):
@@ -199,7 +203,6 @@ class TestStratumJob(StratumTestBase):
 
 
 class StratumClientTest(unittest.TestCase):
-
     def setUp(self):
         super().setUp()
         self.block = get_genesis_transactions(None)[0]

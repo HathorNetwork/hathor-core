@@ -5,7 +5,7 @@ import sys
 import time
 from enum import Enum, IntFlag
 from math import log
-from typing import Any, List, Optional, cast
+from typing import Any, List, Optional, Type, Union, cast
 
 from structlog import get_logger
 from twisted.internet import defer
@@ -21,7 +21,7 @@ from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.stratum import StratumFactory
-from hathor.transaction import BaseTransaction, Block, TxOutput, sum_weights
+from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, TxOutput, sum_weights
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.wallet import BaseWallet
@@ -314,7 +314,8 @@ class HathorManager:
 
     def generate_mining_block(self, timestamp: Optional[float] = None,
                               parent_block_hash: Optional[bytes] = None,
-                              data: bytes = b'', address: Optional[bytes] = None) -> Block:
+                              data: bytes = b'', address: Optional[bytes] = None,
+                              merge_mined: bool = False) -> Union[Block, MergeMinedBlock]:
         """ Generates a block ready to be mined. The block includes new issued tokens,
         parents, and the weight.
 
@@ -356,7 +357,12 @@ class HathorManager:
         timestamp1 = int(timestamp)
         timestamp2 = max(x.timestamp for x in parents_tx) + 1
 
-        blk = Block(outputs=tx_outputs, parents=parents, storage=self.tx_storage, data=data)
+        cls: Union[Type['Block'], Type['MergeMinedBlock']]
+        if merge_mined:
+            cls = MergeMinedBlock
+        else:
+            cls = Block
+        blk = cls(outputs=tx_outputs, parents=parents, storage=self.tx_storage, data=data)
         blk.timestamp = max(timestamp1, timestamp2)
         blk.weight = self.calculate_block_difficulty(blk)
         return blk
@@ -449,7 +455,7 @@ class HathorManager:
             assert self.validate_new_tx(tx) is True
         except (InvalidNewTransaction, TxValidationError) as e:
             # Discard invalid Transaction/block.
-            self.log.debug('Transaction/Block discarded {tx.hash_hex}: {e}', tx=tx, e=e)
+            self.log.debug('Transaction/Block discarded', tx=tx, exc=e)
             if not fails_silently:
                 raise
             return False
@@ -473,15 +479,11 @@ class HathorManager:
         if not quiet:
             ts_date = datetime.datetime.fromtimestamp(tx.timestamp)
             if tx.is_block:
-                self.log.info(
-                    'New block found tag=new_block hash={tx.hash_hex}'
-                    ' weight={tx.weight} timestamp={tx.timestamp} datetime={ts_date} from_now={time_from_now}', tx=tx,
-                    ts_date=ts_date, time_from_now=tx.get_time_from_now())
+                self.log.info('New block found',
+                              tag='new_block', tx=tx, ts_date=ts_date, time_from_now=tx.get_time_from_now())
             else:
-                self.log.info(
-                    'New transaction tag=new_tx hash={tx.hash_hex}'
-                    ' timestamp={tx.timestamp} datetime={ts_date} from_now={time_from_now}', tx=tx, ts_date=ts_date,
-                    time_from_now=tx.get_time_from_now())
+                self.log.info('New transaction found',
+                              tag='new_tx', tx=tx, ts_date=ts_date, time_from_now=tx.get_time_from_now())
 
         if propagate_to_peers:
             # Propagate to our peers.

@@ -18,6 +18,7 @@ class CliManager:
         self.longest_cmd: int = 0
 
         from . import mining
+        from . import merged_mining
         from . import stratum_mining
         from . import peer_id
         from . import run_node
@@ -37,6 +38,8 @@ class CliManager:
         from . import openapi_json
 
         self.add_cmd('mining', 'run_miner', mining, 'Run a mining process (running node required)')
+        self.add_cmd('mining', 'run_merged_mining', merged_mining,
+                     'Run a merged mining coordinator (hathor and bitcoin nodes required)')
         self.add_cmd('mining', 'run_stratum_miner', stratum_mining, 'Run a mining process (running node required)')
         self.add_cmd('hathor', 'run_node', run_node, 'Run a node')
         self.add_cmd('hathor', 'gen_peer_id', peer_id, 'Generate a new random peer-id')
@@ -104,7 +107,11 @@ class CliManager:
         debug = '--debug' in sys.argv
         if debug:
             sys.argv.remove('--debug')
-        setup_logging(debug, getattr(module, 'LOGGING_CAPTURE_STDOUT', False))
+        if '--help' in sys.argv:
+            capture_stdout = False
+        else:
+            capture_stdout = getattr(module, 'LOGGING_CAPTURE_STDOUT', False)
+        setup_logging(debug, capture_stdout)
 
         module.main()
 

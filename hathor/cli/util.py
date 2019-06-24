@@ -37,6 +37,7 @@ def setup_logging(debug=False, capture_stdout=True, *, _test_logging=False) -> N
         'notset': colorama.Back.RED,
     }
 
+    # docs at http://www.structlog.org/en/stable/api.html#structlog.dev.ConsoleRenderer
     class ConsoleRenderer(structlog.dev.ConsoleRenderer):
         def __call__(self, _, __, event_dict):
             from io import StringIO
