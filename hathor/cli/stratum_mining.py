@@ -5,11 +5,6 @@ from twisted.internet import reactor
 from twisted.internet.endpoints import TCP4ClientEndpoint, connectProtocol
 from twisted.logger import FileLogObserver, FilteringLogObserver, LogLevel, LogLevelFilterPredicate, globalLogPublisher
 
-from hathor.cli.run_node import formatLogEvent
-from hathor.crypto.util import decode_address
-from hathor.stratum import StratumClient
-from hathor.wallet.exceptions import InvalidAddress
-
 
 def create_parser() -> ArgumentParser:
     from hathor.cli.util import create_parser
@@ -22,6 +17,10 @@ def create_parser() -> ArgumentParser:
 
 
 def execute(args: Namespace) -> None:
+    from hathor.crypto.util import decode_address
+    from hathor.stratum import StratumClient
+    from hathor.wallet.exceptions import InvalidAddress
+
     address = None
     if args.address is not None:
         try:
@@ -39,13 +38,12 @@ def execute(args: Namespace) -> None:
 
 
 def main():
+    from hathor.cli.run_node import formatLogEvent
+
     loglevel_filter = LogLevelFilterPredicate(LogLevel.info)
     loglevel_filter.setLogLevelForNamespace('hathor.stratum', LogLevel.debug)
     loglevel_filter.setLogLevelForNamespace('twisted.python.log', LogLevel.warn)
-    observer = FilteringLogObserver(
-        FileLogObserver(sys.stdout, formatLogEvent),
-        [loglevel_filter],
-    )
+    observer = FilteringLogObserver(FileLogObserver(sys.stdout, formatLogEvent), [loglevel_filter])
     globalLogPublisher.addObserver(observer)
 
     parser = create_parser()

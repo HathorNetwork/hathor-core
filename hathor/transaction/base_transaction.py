@@ -194,8 +194,10 @@ class BaseTransaction(ABC):
     @property
     def hash_hex(self) -> str:
         """Return the current stored hash in hex string format"""
-        assert self.hash is not None
-        return self.hash.hex()
+        if self.hash is not None:
+            return self.hash.hex()
+        else:
+            return ''
 
     @property
     def sum_outputs(self) -> int:

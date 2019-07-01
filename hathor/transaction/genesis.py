@@ -6,31 +6,33 @@ from hathor.transaction.storage import TransactionStorage
 
 settings = HathorSettings()
 
+GENESIS_OUTPUTS = [
+    TxOutput(settings.GENESIS_TOKENS, settings.GENESIS_OUTPUT_SCRIPT),
+]
+
+BLOCK_GENESIS = Block(
+    hash=bytes.fromhex('000007bd6da157b1b9fc119cc07c0a5248457acb6e5e0a4146ad86a2b2f5049f'),
+    data=b'',
+    nonce=1653984,
+    timestamp=1560920000,
+    weight=settings.MIN_BLOCK_WEIGHT,
+    outputs=GENESIS_OUTPUTS,
+)
+
 TX_GENESIS1 = Transaction(
-    hash=bytes.fromhex('0001d3c338d4f8f2e4f013840a728180f9a4f19e1d47acdf238e6e9525f2334e'),
-    nonce=728,
-    timestamp=1559900001,
+    hash=bytes.fromhex('000250e65d8cb4044a4f5659720179e5faeb13d01476a3fb283c7bb8e57e4d0f'),
+    nonce=596,
+    timestamp=1560920001,
     weight=settings.MIN_TX_WEIGHT,
 )
 
 TX_GENESIS2 = Transaction(
-    hash=bytes.fromhex('0001beaab8d90419b561d7df8e28ffd55a52829fd763ecf4b50b5ecc37fb6d90'),
-    nonce=16273,
-    timestamp=1559900002,
+    hash=bytes.fromhex('000039762550478005083fcab58a465b3d83148d067e4c827a96b5eec1635401'),
+    nonce=22773,
+    timestamp=1560920002,
     weight=settings.MIN_TX_WEIGHT,
 )
 
-GENESIS_OUTPUTS = [
-    TxOutput(settings.GENESIS_TOKENS, settings.GENESIS_OUTPUT_SCRIPT),
-]
-BLOCK_GENESIS = Block(
-    hash=bytes.fromhex('000003dccc6e4422a8f5fc721b42b4c26b157e1fb577da74350865d549c7f92c'),
-    data=b'',
-    nonce=1984075,
-    timestamp=1559900000,
-    weight=settings.MIN_BLOCK_WEIGHT,
-    outputs=GENESIS_OUTPUTS,
-)
 GENESIS = [BLOCK_GENESIS, TX_GENESIS1, TX_GENESIS2]
 
 
