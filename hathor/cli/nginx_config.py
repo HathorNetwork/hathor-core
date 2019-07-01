@@ -202,7 +202,9 @@ server {{
         set $perip $http_x_forwarded_for;
     }}
 
+    client_max_body_size 10M;
     limit_req_status 429;
+    limit_conn_status 429;
     error_page 429 @429;
     location @429 {{
         include cors_params;

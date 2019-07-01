@@ -4,11 +4,11 @@ import struct
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from hathor.crypto.util import get_private_key_from_bytes
-
 
 def main():
     from hathor.cli.util import create_parser
+    from hathor.crypto.util import get_private_key_from_bytes
+
     parser = create_parser()
 
     parser.add_argument('data', nargs='+', help='Encode data in oracle format.')

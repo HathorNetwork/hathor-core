@@ -1,0 +1,15 @@
+{
+    "title": "Average seconds per block",
+    "type": "graph",
+    "params": {
+        "targets": [
+            {
+                "expr": "1/rate(blocks{{instance='{0}',job='{1}'}}[1h])",
+                "format": "time_series",
+                "intervalFactor": 1,
+                "refId": "A"
+            }
+        ]
+    },
+    "height": 4
+}

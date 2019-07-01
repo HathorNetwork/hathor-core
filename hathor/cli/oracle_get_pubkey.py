@@ -1,10 +1,10 @@
 import base64
 
-from hathor.crypto.util import get_hash160, get_private_key_from_bytes, get_public_key_bytes_compressed
-
 
 def main():
     from hathor.cli.util import create_parser
+    from hathor.crypto.util import get_hash160, get_private_key_from_bytes, get_public_key_bytes_compressed
+
     parser = create_parser()
 
     parser.add_argument('filepath', help='Get public key hash given the private key file')
