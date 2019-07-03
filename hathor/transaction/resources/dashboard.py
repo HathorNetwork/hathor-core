@@ -116,7 +116,10 @@ DashboardTransactionResource.openapi = {
                                                 'timestamp': 1539271483,
                                                 'version': 1,
                                                 'weight': 14,
-                                                'parents': [],
+                                                'parents': [
+                                                    '00000b8792cb13e8adb51cc7d866541fc29b532e8dec95ae4661cf3da4d42cb4',
+                                                    '00001417652b9d7bd53eb14267834eab08f27e5cbfaca45a24370e79e0348bb9'
+                                                ],
                                                 'inputs': [],
                                                 'outputs': [],
                                                 'tokens': []
@@ -128,7 +131,10 @@ DashboardTransactionResource.openapi = {
                                                 'timestamp': 1539271482,
                                                 'version': 1,
                                                 'weight': 14,
-                                                'parents': [],
+                                                'parents': [
+                                                    '00000b8792cb13e8adb51cc7d866541fc29b532e8dec95ae4661cf3da4d42cb5',
+                                                    '00001417652b9d7bd53eb14267834eab08f27e5cbfaca45a24370e79e0348bb1'
+                                                ],
                                                 'inputs': [],
                                                 'outputs': [],
                                                 'tokens': []
