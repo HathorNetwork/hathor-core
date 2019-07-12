@@ -32,9 +32,10 @@ CHARTS_FOLDER = os.path.join(json_path, 'charts')
 
 # All charts json
 CHARTS_ARRAY = [
-    'transactions', 'blocks', 'tx_rate', 'hash_rate_stacked', 'blocks_weight', 'peers', 'cpu', 'cpu_load1m',
-    'cpu_load5m', 'ram_percent', 'ram_line', 'network', 'cpu_line', 'load', 'disk', 'websocket_connections',
-    'subscribed_addresses', 'stratum_completed_jobs', 'stratum_blocks_found', 'stratum_estimated_hash_rate'
+    'transactions', 'blocks', 'avg_seconds_per_block', 'tx_rate', 'hash_rate_stacked', 'blocks_weight', 'peers', 'cpu',
+    'cpu_load1m', 'cpu_load5m', 'ram_percent', 'ram_line', 'network', 'cpu_line', 'load', 'disk',
+    'websocket_connections', 'subscribed_addresses', 'stratum_completed_jobs', 'stratum_blocks_found',
+    'stratum_estimated_hash_rate'
 ]
 
 

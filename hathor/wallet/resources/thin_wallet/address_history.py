@@ -102,6 +102,10 @@ AddressHistoryResource.openapi = {
                                                         "0f73985eaa4cd1ce87c9a7c793771336",
                                                 "timestamp": 1552422415,
                                                 "is_voided": False,
+                                                'parents': [
+                                                    '00000b8792cb13e8adb51cc7d866541fc29b532e8dec95ae4661cf3da4d42cb5',
+                                                    '00001417652b9d7bd53eb14267834eab08f27e5cbfaca45a24370e79e0348bb1'
+                                                ],
                                                 "inputs": [
                                                     {
                                                         "value": 42500000044,

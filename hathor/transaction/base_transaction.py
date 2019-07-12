@@ -206,8 +206,10 @@ class BaseTransaction(ABC):
     @property
     def hash_hex(self) -> str:
         """Return the current stored hash in hex string format"""
-        assert self.hash is not None
-        return self.hash.hex()
+        if self.hash is not None:
+            return self.hash.hex()
+        else:
+            return ''
 
     @property
     def sum_outputs(self) -> int:
@@ -803,13 +805,18 @@ class BaseTransaction(ABC):
             return data
 
         meta = self.get_metadata()
-        ret = {
+        ret: Dict[str, Any] = {
             'tx_id': self.hash.hex(),
             'timestamp': self.timestamp,
             'is_voided': bool(meta.voided_by),
             'inputs': [],
             'outputs': [],
+            'parents': [],
         }
+
+        for parent in self.parents:
+            ret['parents'].append(parent.hex())
+
         assert isinstance(ret['inputs'], list)
         assert isinstance(ret['outputs'], list)
 

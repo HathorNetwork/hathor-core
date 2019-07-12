@@ -468,7 +468,10 @@ class StratumProtocol(JSONRPC):
                 return self.send_result('block_found', msgid)
         except (InvalidNewTransaction, TxValidationError, PowError) as e:
             # Transaction propagation failed, but the share was succesfully submited
-            self.log.debug('TX VERIFICATION/PROPAGATION FAILED WITH ERROR: {error}', error=e)
+            if tx.is_block:
+                self.log.debug('BLOCK VERIFICATION/PROPAGATION FAILED WITH ERROR: {error}', error=e)
+            else:
+                self.log.debug('TX VERIFICATION/PROPAGATION FAILED WITH ERROR: {error}', error=e)
             self.send_result('ok', msgid)
 
             # If we can't propagate the transaction then we should put it in tx queue again
@@ -572,6 +575,7 @@ class StratumProtocol(JSONRPC):
         if tx is not None:
             tx.timestamp = self.factory.get_current_timestamp()
             tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
+            self.log.debug('prepared tx for mining: {tx}', tx=tx)
             return tx
 
         peer_id = self.manager.my_peer.id
@@ -581,6 +585,7 @@ class StratumProtocol(JSONRPC):
         # Only get first 32 bytes of peer_id because block data is limited to 100 bytes
         data = '{}-{}-{}'.format(peer_id[:32], self.miner_id.hex, jobid.hex).encode()[:settings.BLOCK_DATA_MAX_SIZE]
         block = self.manager.generate_mining_block(data=data, address=self.miner_address)
+        self.log.debug('prepared block for mining: {block}', block=block)
         return block
 
     def should_mine_block(self) -> bool:
@@ -592,6 +597,7 @@ class StratumProtocol(JSONRPC):
         :rtype: bool
         """
         if len(self.factory.tx_queue) == 0:
+            self.log.debug('NO TX ON QUEUE')
             return True
 
         if not self.mine_txs:
@@ -719,8 +725,9 @@ class StratumFactory(Factory):
         """
         Puts the transaction in a queue of transactions to be mined via Stratum protocol.
         """
+        self.log.info('Mining transaction {tx}', tx=tx)
         tx_hash = tx.get_funds_hash()
-        if tx_hash in self.mininig_tx_pool:
+        if tx_hash in self.mining_tx_pool:
             self.log.warn('Tried to mine a transaction twice or a twin.')
             return
         self.mining_tx_pool[tx_hash] = tx

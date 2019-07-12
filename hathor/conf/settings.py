@@ -140,4 +140,4 @@ class HathorSettings(NamedTuple):
     WS_MAX_SUBS_ADDRS_EMPTY: int = 40
 
     # Whether miners are assumed to mine txs by default
-    STRATUM_MINE_TXS_DEFAULT: bool = False
+    STRATUM_MINE_TXS_DEFAULT: bool = True

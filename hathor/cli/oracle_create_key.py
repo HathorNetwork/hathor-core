@@ -3,11 +3,11 @@ import base64
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from hathor.crypto.util import get_hash160, get_private_key_bytes, get_public_key_bytes_compressed
-
 
 def main():
     from hathor.cli.util import create_parser
+    from hathor.crypto.util import get_hash160, get_private_key_bytes, get_public_key_bytes_compressed
+
     parser = create_parser()
 
     parser.add_argument('filepath', help='Create a new private key in the given file')
