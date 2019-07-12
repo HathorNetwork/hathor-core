@@ -83,7 +83,11 @@ class BaseTransaction(ABC):
     """Hathor base transaction"""
 
     hash_algorithm_class: Type[hashes.BaseHashAlgorithm]
-    NONCE_SIZE: ClassVar[int]
+    # Even though nonce is serialized with different sizes for tx and blocks
+    # the same size is used for hashes to enable mining algorithm compatibility
+    SERIALIZATION_NONCE_SIZE: ClassVar[int]
+    HASH_NONCE_SIZE = 16
+    HEX_BASE = 16
 
     def __init__(self, nonce: int = 0, timestamp: Optional[int] = None, version: int = 1, weight: float = 0,
                  inputs: Optional[List['TxInput']] = None, outputs: Optional[List['TxOutput']] = None,
@@ -414,8 +418,8 @@ class BaseTransaction(ABC):
         :rtype: bytes
         """
         struct_bytes = self.get_struct_without_nonce()
-        assert self.NONCE_SIZE is not None
-        struct_bytes += int_to_bytes(self.nonce, self.NONCE_SIZE)
+        assert self.SERIALIZATION_NONCE_SIZE is not None
+        struct_bytes += int_to_bytes(self.nonce, self.SERIALIZATION_NONCE_SIZE)
         return struct_bytes
 
     def verify(self) -> None:
@@ -505,18 +509,19 @@ class BaseTransaction(ABC):
         :raises PowError: when the hash is equal or greater than the target
         """
         assert self.hash is not None
-        if int(self.hash.hex(), 16) >= self.get_target(override_weight):
+        if int(self.hash.hex(), self.HEX_BASE) >= self.get_target(override_weight):
             raise PowError('Transaction has invalid data')
 
-    def resolve(self) -> bool:
+    def resolve(self, update_time: bool = True) -> bool:
         """Run a CPU mining looking for the nonce that solves the proof-of-work
 
         The `self.weight` must be set before calling this method.
 
+        :param update_time: update timestamp every 2 seconds
         :return: True if a solution was found
         :rtype: bool
         """
-        hash_bytes = self.start_mining()
+        hash_bytes = self.start_mining(update_time=update_time)
 
         if hash_bytes:
             self.hash = hash_bytes
@@ -573,7 +578,7 @@ class BaseTransaction(ABC):
         :return: The transaction hash
         :rtype: bytes
         """
-        part1.update(self.nonce.to_bytes(self.NONCE_SIZE, byteorder='big', signed=False))
+        part1.update(self.nonce.to_bytes(self.HASH_NONCE_SIZE, byteorder='big', signed=False))
         return part1.digest()
 
     def calculate_hash(self) -> bytes:
@@ -592,13 +597,14 @@ class BaseTransaction(ABC):
         """
         self.hash = self.calculate_hash()
 
-    def start_mining(self, start: int = 0, end: int = MAX_NONCE, sleep_seconds: float = 0.0,
+    def start_mining(self, start: int = 0, end: int = MAX_NONCE, sleep_seconds: float = 0.0, update_time: bool = True,
                      *, should_stop: Callable[[], bool] = lambda: False) -> Optional[bytes]:
         """Starts mining until it solves the problem, i.e., finds the nonce that satisfies the conditions
 
         :param start: beginning of the search interval
         :param end: end of the search interval
         :param sleep_seconds: the number of seconds it will sleep after each attempt
+        :param update_time: update timestamp every 2 seconds
         :return The hash of the solved PoW or None when it is not found
         """
         pow_part1 = self.calculate_hash1()
@@ -606,17 +612,18 @@ class BaseTransaction(ABC):
         self.nonce = start
         last_time = time.time()
         while self.nonce < end:
-            now = time.time()
-            if now - last_time > 2:
-                if should_stop():
-                    return None
-                self.timestamp = int(now)
-                pow_part1 = self.calculate_hash1()
-                last_time = now
-                self.nonce = start
+            if update_time:
+                now = time.time()
+                if now - last_time > 2:
+                    if should_stop():
+                        return None
+                    self.timestamp = int(now)
+                    pow_part1 = self.calculate_hash1()
+                    last_time = now
+                    self.nonce = start
 
             result = self.calculate_hash2(pow_part1.copy())
-            if int(result.hex(), 16) < target:
+            if int(result.hex(), self.HEX_BASE) < target:
                 return result
             self.nonce += 1
             if sleep_seconds > 0:

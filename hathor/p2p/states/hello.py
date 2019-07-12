@@ -17,6 +17,11 @@ class HelloState(BaseState):
             ProtocolMessages.HELLO: self.handle_hello,
         })
 
+    def _app(self) -> str:
+        from hathor.transaction.genesis import GENESIS_HASH
+        genesis_short_hash = GENESIS_HASH.hex()[:7]
+        return f'Hathor v{hathor.__version__} (genesis {genesis_short_hash})'
+
     def on_enter(self) -> None:
         # The nonce that was sent to the peer to check its identity.
         self.protocol.hello_nonce_sent = str(uuid.uuid4())
@@ -32,7 +37,7 @@ class HelloState(BaseState):
         protocol = self.protocol
         remote = protocol.transport.getPeer()
         data = {
-            'app': 'Hathor v{}'.format(hathor.__version__),
+            'app': self._app(),
             'network': protocol.network,
             'remote_address': '{}:{}'.format(remote.host, remote.port),
             'nonce': protocol.hello_nonce_sent,
@@ -54,8 +59,7 @@ class HelloState(BaseState):
             protocol.send_error_and_close_connection('Invalid payload.')
             return
 
-        app = 'Hathor v{}'.format(hathor.__version__)
-        if data['app'] != app:
+        if data['app'] != self._app():
             self.log.info('WARNING Different app versions: {data[app]}', data=data)
             protocol.send_error_and_close_connection('Different version.')
 

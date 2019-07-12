@@ -15,7 +15,7 @@ from twisted.test import proto_helpers
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_private_key_from_bytes
 from hathor.manager import HathorEvents, HathorManager
-from hathor.transaction import Transaction, TxInput, TxOutput
+from hathor.transaction import Transaction, TxInput, TxOutput, genesis
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import (
     TransactionMemoryStorage,
@@ -24,6 +24,8 @@ from hathor.transaction.storage import (
 )
 
 settings = HathorSettings()
+
+MIN_TIMESTAMP = genesis.GENESIS[-1].timestamp + 1
 
 
 def resolve_block_bytes(block_bytes):
@@ -37,6 +39,39 @@ def resolve_block_bytes(block_bytes):
     block = Block.create_from_struct(block_bytes)
     block.resolve()
     return block.get_struct()
+
+
+def gen_new_double_spending(manager: HathorManager):
+    tx_interval = random.choice(list(manager.tx_storage.get_tx_tips()))
+    tx = manager.tx_storage.get_transaction(tx_interval.data)
+    txin = random.choice(tx.inputs)
+
+    from hathor.transaction.scripts import P2PKH, parse_address_script
+    spent_tx = tx.get_spent_tx(txin)
+    spent_txout = spent_tx.outputs[txin.index]
+    p2pkh = parse_address_script(spent_txout.script)
+    assert isinstance(p2pkh, P2PKH)
+
+    from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
+    value = spent_txout.value
+    private_key = manager.wallet.get_private_key(p2pkh.address)
+    inputs = [WalletInputInfo(tx_id=txin.tx_id, index=txin.index, private_key=private_key)]
+
+    address = manager.wallet.get_unused_address(mark_as_used=True)
+    outputs = [WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None)]
+
+    tx2 = manager.wallet.prepare_transaction(Transaction, inputs, outputs, manager.tx_storage)
+    tx2.storage = manager.tx_storage
+    tx2.weight = 1
+    tx2.timestamp = max(tx.timestamp + 1, int(manager.reactor.seconds()))
+    tx2.parents = manager.get_new_tx_parents(tx2.timestamp)
+    tx2.resolve()
+    return tx2
+
+
+def add_new_double_spending(manager):
+    tx = gen_new_double_spending(manager)
+    manager.propagate_tx(tx, fails_silently=False)
 
 
 def gen_new_tx(manager, address, value, verify=True):
@@ -76,7 +111,7 @@ def add_new_tx(manager, address, value, advance_clock=None):
         :rtype: :py:class:`hathor.transaction.transaction.Transaction`
     """
     tx = gen_new_tx(manager, address, value)
-    manager.propagate_tx(tx)
+    manager.propagate_tx(tx, fails_silently=False)
     if advance_clock:
         manager.reactor.advance(advance_clock)
     return tx
@@ -115,7 +150,7 @@ def add_new_block(manager, advance_clock=None, *, parent_block_hash=None, data=b
     block = manager.generate_mining_block(parent_block_hash=parent_block_hash, data=data)
     block.resolve()
     block.verify()
-    manager.propagate_tx(block)
+    manager.propagate_tx(block, fails_silently=False)
     if advance_clock:
         manager.reactor.advance(advance_clock)
     return block
@@ -284,7 +319,7 @@ class MinerSimulator:
         if self.block:
             self.block.nonce = random.randrange(0, 2**32)
             self.block.update_hash()
-            assert self.manager.propagate_tx(self.block)
+            self.manager.propagate_tx(self.block, fails_silently=False)
             self.block = None
 
         block = self.manager.generate_mining_block(version=self.version)
@@ -336,7 +371,7 @@ class RandomTransactionGenerator:
         """ Schedule the generation of a new transaction.
         """
         if self.tx:
-            self.manager.propagate_tx(self.tx)
+            self.manager.propagate_tx(self.tx, fails_silently=False)
             self.tx = None
 
         dt = random.expovariate(self.rate)
@@ -571,7 +606,7 @@ def create_tokens(manager: 'HathorManager', address_b58: str = None, genesis_ind
     tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
     tx.resolve()
     tx.verify()
-    manager.propagate_tx(tx)
+    manager.propagate_tx(tx, fails_silently=False)
     manager.reactor.advance(8)
 
     # mint tokens
@@ -595,7 +630,7 @@ def create_tokens(manager: 'HathorManager', address_b58: str = None, genesis_ind
     tx2.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
     tx2.resolve()
     tx2.verify()
-    manager.propagate_tx(tx2)
+    manager.propagate_tx(tx2, fails_silently=False)
     manager.reactor.advance(8)
     return tx2
 

@@ -10,7 +10,7 @@ from hathor.transaction.resources import PushTxResource
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.wallet.resources import BalanceResource, HistoryResource, SendTokensResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_new_blocks, resolve_block_bytes
+from tests.utils import add_new_blocks, get_tokens_from_mining, resolve_block_bytes
 
 
 class DecodeTxTest(_BaseResourceTest._ResourceTest):
@@ -42,7 +42,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         private_key = self.manager.wallet.get_private_key(address)
 
         output_address = decode_address(self.get_address(0))
-        value = 2000
+        value = get_tokens_from_mining(1)
         o = TxOutput(value, create_output_script(output_address, None))
         i = TxInput(tx_id, 0, b'')
         tx = Transaction(inputs=[i], outputs=[o])

@@ -69,10 +69,12 @@ class RunNode:
 
     def prepare(self, args: Namespace) -> None:
         import hathor
+        from hathor.conf import HathorSettings
         from hathor.manager import HathorManager, TestMode
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
         from hathor.p2p.peer_id import PeerId
         from hathor.p2p.utils import discover_hostname
+        from hathor.transaction import genesis
         from hathor.transaction.storage import (
             TransactionStorage,
             TransactionCacheStorage,
@@ -80,6 +82,8 @@ class RunNode:
             TransactionMemoryStorage,
         )
         from hathor.wallet import HDWallet, Wallet
+
+        settings = HathorSettings()
 
         loglevel_filter = LogLevelFilterPredicate(LogLevel.info)
         loglevel_filter.setLogLevelForNamespace('hathor.websocket.protocol.HathorAdminWebsocketProtocol',
@@ -100,7 +104,7 @@ class RunNode:
             data = json.load(open(args.peer, 'r'))
             peer_id = PeerId.create_from_json(data)
 
-        print('Hathor v{}'.format(hathor.__version__))
+        print('Hathor v{} (genesis {})'.format(hathor.__version__, genesis.GENESIS_HASH.hex()[:7]))
         print('My peer id is', peer_id.id)
 
         def create_wallet():
@@ -183,7 +187,7 @@ class RunNode:
                 sys.exit(-1)
             print('Hostname discovered and set to {}'.format(hostname))
 
-        network = 'testnet'
+        network = settings.NETWORK_NAME
         self.manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname,
                                      tx_storage=self.tx_storage, wallet=self.wallet, wallet_index=args.wallet_index,
                                      stratum_port=args.stratum, min_block_weight=args.min_block_weight)
@@ -191,8 +195,8 @@ class RunNode:
             self.manager.allow_mining_without_peers()
 
         dns_hosts = []
-        if args.testnet:
-            dns_hosts.append('testnet.hathor.network')
+        if settings.BOOTSTRAP_DNS:
+            dns_hosts.extend(settings.BOOTSTRAP_DNS)
 
         if args.dns:
             dns_hosts.extend(dns_hosts)
@@ -250,6 +254,7 @@ class RunNode:
             NanoContractMatchValueResource,
         )
         from hathor.websocket import HathorAdminWebsocketFactory, WebsocketStatsResource
+        from hathor.stratum.resources import MiningStatsResource
 
         settings = HathorSettings()
 
@@ -316,6 +321,9 @@ class RunNode:
             for url_path, resource, parent in resources:
                 parent.putChild(url_path, resource)
 
+            if self.manager.stratum_factory is not None:
+                root.putChild(b'miners', MiningStatsResource(self.manager))
+
             if self.wallet and args.wallet_enable_api:
                 wallet_resources = (
                     # /wallet
@@ -357,6 +365,9 @@ class RunNode:
             argv = sys.argv[1:]
         self.parser = self.create_parser()
         args = self.parse_args(argv)
+        if args.testnet:
+            if not os.environ.get('HATHOR_CONFIG_FILE'):
+                os.environ['HATHOR_CONFIG_FILE'] = 'hathor.conf.testnet'
         self.prepare(args)
 
     def parse_args(self, argv) -> Namespace:

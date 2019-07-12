@@ -1,5 +1,5 @@
 from tests import unittest
-from tests.utils import execute_mining, execute_tx_gen, request_server, run_server
+from tests.utils import execute_mining, execute_tx_gen, get_tokens_from_mining, request_server, run_server
 
 
 class GenerateTxTest(unittest.TestCase):
@@ -71,9 +71,12 @@ class GenerateTxTest(unittest.TestCase):
         last_len_block = len(response['transactions'])
         self.assertEqual(last_len_block, 2)
 
+        # expected total token rewards
+        rewarded = get_tokens_from_mining(1)
+
         # Chech if balance is right
         mining_balance = request_server('wallet/balance/', 'GET')
-        self.assertEqual(mining_balance['balance']['available'], 2000)
+        self.assertEqual(mining_balance['balance']['available'], rewarded)
 
         # Now we will generate txs inside the wallet
         execute_tx_gen(count=1)
@@ -84,7 +87,7 @@ class GenerateTxTest(unittest.TestCase):
 
         # Balance must be equal because all txs were generated to inside the wallet
         tx_balance = request_server('wallet/balance/', 'GET')
-        self.assertEqual(tx_balance['balance']['available'], 2000)
+        self.assertEqual(tx_balance['balance']['available'], rewarded)
 
         value = 100
         # Now we will generate txs to outside the wallet
@@ -96,7 +99,7 @@ class GenerateTxTest(unittest.TestCase):
 
         tx_balance = request_server('wallet/balance/', 'GET')
         # Now we have lost some tokens because the tx have sent tokens outside the wallet
-        self.assertEqual(tx_balance['balance']['available'], 2000 - value)
+        self.assertEqual(tx_balance['balance']['available'], rewarded - value)
 
         # generate tx with timestamp set on client
         execute_tx_gen(count=1, timestamp='client')

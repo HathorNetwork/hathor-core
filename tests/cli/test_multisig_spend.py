@@ -54,12 +54,15 @@ class MultiSigSpendTest(unittest.TestCase):
 
     def test_spend_multisig(self):
         # Adding funds to the wallet
-        add_new_blocks(self.manager, 2, advance_clock=15)
-        available_tokens = get_tokens_from_mining(2)
+        # XXX: note further down the test, 20.00 HTR will be used, block_count must yield at least that amount
+        block_count = 3  # 3 * 8.00 -> 24.00 HTR is enough
+        add_new_blocks(self.manager, block_count, advance_clock=15)
+        available_tokens = get_tokens_from_mining(block_count)
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID], WalletBalance(0, available_tokens))
 
         # First we send tokens to a multisig address
-        outputs = [WalletOutputInfo(address=self.multisig_address, value=2000, timelock=None)]
+        block_reward = get_tokens_from_mining(1)
+        outputs = [WalletOutputInfo(address=self.multisig_address, value=block_reward, timelock=None)]
 
         tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
         tx1.weight = 10
@@ -69,7 +72,7 @@ class MultiSigSpendTest(unittest.TestCase):
         self.manager.propagate_tx(tx1)
         self.clock.advance(10)
 
-        wallet_balance = WalletBalance(0, available_tokens - 2000)
+        wallet_balance = WalletBalance(0, available_tokens - block_reward)
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID], wallet_balance)
 
         # Then we create a new tx that spends this tokens from multisig wallet
@@ -80,9 +83,9 @@ class MultiSigSpendTest(unittest.TestCase):
 
         multisig_script = create_output_script(self.multisig_address)
 
-        multisig_output = TxOutput(500, multisig_script)
-        wallet_output = TxOutput(800, create_output_script(self.address))
-        outside_output = TxOutput(700, create_output_script(self.outside_address))
+        multisig_output = TxOutput(200, multisig_script)
+        wallet_output = TxOutput(300, create_output_script(self.address))
+        outside_output = TxOutput(block_reward - 200 - 300, create_output_script(self.outside_address))
 
         tx.outputs = [multisig_output, wallet_output, outside_output]
 
@@ -111,4 +114,4 @@ class MultiSigSpendTest(unittest.TestCase):
         tx_raw = output[0].split(':')[1].strip()
 
         tx = Transaction.create_from_struct(bytes.fromhex(tx_raw))
-        self.assertTrue(self.manager.propagate_tx(tx))
+        self.assertTrue(self.manager.propagate_tx(tx, False))

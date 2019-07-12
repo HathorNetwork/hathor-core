@@ -11,6 +11,7 @@ from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 
 if TYPE_CHECKING:
     from hathor.websocket.factory import HathorAdminWebsocketFactory  # noqa: F401
+    from hathor.stratum import StratumFactory  # noqa: F401
 
 
 class WeightValue(NamedTuple):
@@ -44,6 +45,10 @@ class Metrics:
     websocket_connections: int
     subscribed_addresses: int
     websocket_factory: Optional['HathorAdminWebsocketFactory']
+    completed_jobs: int
+    blocks_found: int
+    estimated_hash_rate: float  # log(H/s)
+    stratum_factory: Optional['StratumFactory']
 
     def __init__(
             self,
@@ -128,6 +133,14 @@ class Metrics:
 
         # weight of the head of the best blockchain
         self.best_block_weight = 0
+
+        # Stratum data
+        self.completed_jobs = 0
+        self.blocks_found = 0
+        self.estimated_hash_rate = 0
+
+        # Stratum factory
+        self.stratum_factory = None
 
         self._initial_setup()
 
@@ -267,11 +280,31 @@ class Metrics:
             self.websocket_connections = len(self.websocket_factory.connections)
             self.subscribed_addresses = len(self.websocket_factory.address_connections)
 
+    def set_stratum_data(self) -> None:
+        """ Set stratum metrics data for the mining process
+        """
+        if not self.stratum_factory:
+            return
+
+        stratum_stats = self.stratum_factory.get_stats()
+        completed_jobs = 0
+        blocks_found = 0
+        estimated_hash_rate = 0.0
+        for stats in stratum_stats:
+            completed_jobs += stats.completed_jobs
+            blocks_found += stats.blocks_found
+            estimated_hash_rate = sum_weights(estimated_hash_rate, stats.estimated_hash_rate)
+
+        self.completed_jobs = completed_jobs
+        self.blocks_found = blocks_found
+        self.estimated_hash_rate = estimated_hash_rate
+
     def collect_data(self) -> None:
         """ Call methods that collect data to metrics
             If it's still running, we schedule another call
         """
         self.set_websocket_data()
+        self.set_stratum_data()
 
         if self.is_running:
             self.reactor.callLater(self.collect_data_interval, self.collect_data)

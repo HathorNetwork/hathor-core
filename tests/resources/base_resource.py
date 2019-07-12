@@ -11,29 +11,29 @@ from tests import unittest
 
 class _BaseResourceTest:
     class _ResourceTest(unittest.TestCase):
-        def setUp(self):
-            super().setUp()
-
-            tx_storage = getattr(self, 'tx_storage', None)
-
+        def _manager_kwargs(self):
             peer_id = PeerId()
-            wallet = self._create_test_wallet()
-            self.reactor = self.clock
             network = 'testnet'
-            self.manager = HathorManager(
-                self.reactor,
+            wallet = self._create_test_wallet()
+            tx_storage = getattr(self, 'tx_storage', None)
+            return dict(
                 peer_id=peer_id,
                 network=network,
                 wallet=wallet,
                 tx_storage=tx_storage,
                 wallet_index=True
             )
+
+        def setUp(self):
+            super().setUp()
+            self.reactor = self.clock
+            self.manager = HathorManager(self.reactor, **self._manager_kwargs())
             self.manager.allow_mining_without_peers()
             self.manager.test_mode = TestMode.TEST_ALL_WEIGHT
             self.manager.start()
 
         def tearDown(self):
-            self.manager.stop()
+            return self.manager.stop()
 
 
 class RequestBody(object):

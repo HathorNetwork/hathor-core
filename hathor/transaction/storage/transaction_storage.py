@@ -6,7 +6,7 @@ from weakref import WeakValueDictionary
 from intervaltree.interval import Interval
 from twisted.internet.defer import Deferred, inlineCallbacks, succeed
 
-from hathor.indexes import IndexesManager, TipsIndex, TransactionsIndex, WalletIndex
+from hathor.indexes import IndexesManager, TransactionsIndex, WalletIndex
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction.block import Block
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
@@ -380,7 +380,7 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_sorted_txs(self, timestamp: int, count: int, offset: int) -> TransactionsIndex:
+    def get_all_sorted_txs(self, timestamp: int, count: int, offset: int) -> TransactionsIndex:
         """ Returns ordered blocks and txs in a TransactionIndex
         """
         raise NotImplementedError
@@ -434,7 +434,7 @@ class BaseTransactionStorage(TransactionStorage):
 
         self.block_index = IndexesManager()
         self.tx_index = IndexesManager()
-        self.all_index = TipsIndex()
+        self.all_index = IndexesManager()
         self.wallet_index = None
 
         self._latest_timestamp = 0
@@ -480,7 +480,7 @@ class BaseTransactionStorage(TransactionStorage):
             raise NotImplementedError
         if timestamp is None:
             timestamp = self.latest_timestamp
-        tips = self.all_index[timestamp]
+        tips = self.all_index.tips_index[timestamp]
         return tips
 
     def get_newest_blocks(self, count: int) -> Tuple[List[Block], bool]:
@@ -656,17 +656,13 @@ class BaseTransactionStorage(TransactionStorage):
                     pending_visits.append(parent_hash)
         return result
 
-    def get_sorted_txs(self, timestamp: int, count: int, offset: int) -> TransactionsIndex:
+    def get_all_sorted_txs(self, timestamp: int, count: int, offset: int) -> TransactionsIndex:
         """ Returns ordered blocks and txs in a TransactionIndex
         """
-        idx = self.tx_index.txs_index.find_first_at_timestamp(timestamp)
-        txs = self.tx_index.txs_index[idx:idx+offset+count]
-
-        idx = self.block_index.txs_index.find_first_at_timestamp(timestamp)
-        blocks = self.block_index.txs_index[idx:idx+offset+count]
+        idx = self.all_index.txs_index.find_first_at_timestamp(timestamp)
+        txs = self.all_index.txs_index[idx:idx+offset+count]
 
         # merge sorted txs and blocks
         all_sorted = TransactionsIndex()
         all_sorted.update(txs)
-        all_sorted.update(blocks)
         return all_sorted

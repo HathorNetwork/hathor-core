@@ -26,9 +26,9 @@ class TestCase(unittest.TestCase):
         block = hathor.transaction.genesis.GENESIS[0]
         assert isinstance(block, Block)
         block.outputs[0].script = bytes.fromhex('76a914fd05059b6006249543b82f36876a17c73fd2267b88ac')
-        block.nonce = 60315
+        block.nonce = 370804
         block.update_hash()
-        assert block.hash.hex() == '000164e1e7ec7700a18750f9f50a1a9b63f6c7268637c072ae9ee181e58eb01b'
+        assert block.hash.hex() == '000002674a76ddf368a879e62623f517923dd12ef8abb9c885634ea8d9ceb4b5'
 
     def tearDown(self):
         self.clean_tmpdirs()
@@ -89,6 +89,11 @@ class TestCase(unittest.TestCase):
         s1 = set(manager1.tx_storage.get_tx_tips())
         s2 = set(manager2.tx_storage.get_tx_tips())
         self.assertEqual(s1, s2)
+
+    def assertTipsNotEqual(self, manager1, manager2):
+        s1 = set(manager1.tx_storage.get_all_tips())
+        s2 = set(manager2.tx_storage.get_all_tips())
+        self.assertNotEqual(s1, s2)
 
     def clean_tmpdirs(self):
         for tmpdir in self.tmpdirs:

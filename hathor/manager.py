@@ -7,6 +7,8 @@ from enum import Enum, IntFlag
 from math import log
 from typing import Any, List, Optional, cast
 
+from twisted.internet import defer
+from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IReactorCore
 from twisted.logger import Logger
 from twisted.python.threadpool import ThreadPool
@@ -146,6 +148,8 @@ class HathorManager:
         self.min_tx_weight_k = 100
 
         self.stratum_factory = StratumFactory(manager=self, port=stratum_port) if stratum_port else None
+        # Set stratum factory for metrics object
+        self.metrics.stratum_factory = self.stratum_factory
 
         self._allow_mining_without_peers = False
 
@@ -156,6 +160,7 @@ class HathorManager:
         """ A factory must be started only once. And it is usually automatically started.
         """
         self.log.info('Starting HathorManager...')
+        self.log.info('Network: {network}', network=self.network)
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
         self.connections.start()
@@ -178,7 +183,9 @@ class HathorManager:
         if self.stratum_factory:
             self.stratum_factory.start()
 
-    def stop(self) -> None:
+    def stop(self) -> Deferred:
+        waits = []
+
         self.log.info('Stopping HathorManager...')
         self.connections.stop()
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
@@ -190,6 +197,13 @@ class HathorManager:
 
         if self.wallet:
             self.wallet.stop()
+
+        if self.stratum_factory:
+            wait_stratum = self.stratum_factory.stop()
+            if wait_stratum:
+                waits.append(wait_stratum)
+
+        return defer.DeferredList(waits)
 
     def start_profiler(self) -> None:
         """
@@ -573,7 +587,8 @@ class HathorManager:
 
         # We need to take into consideration the decimal places because it is inside the amount.
         # For instance, if one wants to transfer 20 HTRs, the amount will be 2000.
-        amount = tx.sum_outputs / (10 ** settings.DECIMAL_PLACES)
+        # Max below is preventing division by 0 when handling authority methods that have no outputs
+        amount = max(1, tx.sum_outputs) / (10 ** settings.DECIMAL_PLACES)
         weight = (
             + self.min_tx_weight_coefficient * log(tx_size, 2)
             + 4 / (1 + self.min_tx_weight_k / amount) + 4
