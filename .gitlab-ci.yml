@@ -22,10 +22,9 @@ unit-tests:
   stage: unit-tests
   image: python:3.6
   before_script:
-    - echo "deb http://deb.debian.org/debian stretch-backports main" > /etc/apt/sources.list.d/backports.list
     - apt update
     - apt install -y graphviz
-    - apt install -y -t stretch-backports librocksdb-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev
+    - apt install -y librocksdb-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev
     - pip install pipenv
     - pipenv sync -d
     - pipenv run pip install python-rocksdb==0.7.0
