@@ -152,6 +152,8 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
         block_genesis = [tx for tx in get_genesis_transactions(self.manager.tx_storage) if tx.is_block][0]
 
         # Test publish address history
+        # First clean the transport to make sure the value comes from this execution
+        self.transport.clear()
         element = block_genesis.to_json_extended()
         self.manager.pubsub.publish(HathorEvents.WALLET_ADDRESS_HISTORY, address=address, history=element)
         self.run_to_completion()
@@ -160,6 +162,15 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
         self.assertEqual(value['address'], address)
         self.assertEqual(value['history']['tx_id'], block_genesis.hash_hex)
         self.assertEqual(value['history']['timestamp'], block_genesis.timestamp)
+
+        # Publishing with address that was not subscribed must not generate any value in the ws
+        # First clean the transport to make sure the value comes from this execution
+        self.transport.clear()
+        wrong_address = '1Q4qyTjhpUXUZXzwKs6Yvh2RNnF5J1XN9b'
+        self.manager.pubsub.publish(HathorEvents.WALLET_ADDRESS_HISTORY, address=wrong_address, history=element)
+        self.run_to_completion()
+        value = self._decode_value(self.transport.value())
+        self.assertIsNone(value)
 
     def test_connections(self):
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
