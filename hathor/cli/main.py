@@ -4,6 +4,10 @@ from collections import defaultdict
 from types import ModuleType
 from typing import Dict, List
 
+from structlog import get_logger
+
+logger = get_logger()
+
 
 class CliManager:
     def __init__(self) -> None:
@@ -78,6 +82,8 @@ class CliManager:
             print()
 
     def execute_from_command_line(self):
+        from hathor.cli.util import setup_logging
+
         if len(sys.argv) < 2:
             self.help()
             return 0
@@ -94,11 +100,24 @@ class CliManager:
 
         sys.argv[0] = '{} {}'.format(sys.argv[0], cmd)
         module = self.command_list[cmd]
+
+        debug = '--debug' in sys.argv
+        if debug:
+            sys.argv.remove('--debug')
+        setup_logging(debug, getattr(module, 'LOGGING_CAPTURE_STDOUT', False))
+
         module.main()
 
 
 def main():
-    sys.exit(CliManager().execute_from_command_line())
+    try:
+        sys.exit(CliManager().execute_from_command_line())
+    except KeyboardInterrupt:
+        logger.warn('Aborting and exiting...')
+        sys.exit(1)
+    except Exception:
+        logger.exception('Uncaught exception:')
+        sys.exit(2)
 
 
 if __name__ == '__main__':

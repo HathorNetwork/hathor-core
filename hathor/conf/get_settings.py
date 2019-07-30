@@ -3,7 +3,6 @@ import os
 
 from hathor.conf.settings import HathorSettings as Settings
 
-
 _config_file = None
 
 

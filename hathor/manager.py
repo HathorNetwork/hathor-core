@@ -7,10 +7,10 @@ from enum import Enum, IntFlag
 from math import log
 from typing import Any, List, Optional, cast
 
+from structlog import get_logger
 from twisted.internet import defer
 from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IReactorCore
-from twisted.logger import Logger
 from twisted.python.threadpool import ThreadPool
 
 from hathor.conf import HathorSettings
@@ -27,6 +27,7 @@ from hathor.transaction.storage import TransactionStorage
 from hathor.wallet import BaseWallet
 
 settings = HathorSettings()
+logger = get_logger()
 
 
 class TestMode(IntFlag):
@@ -41,7 +42,6 @@ class HathorManager:
 
     Its primary objective is to handle DAG-related matters, ensuring that the DAG is always valid and connected.
     """
-    log = Logger()
 
     class NodeState(Enum):
         # This node is still initializing
@@ -89,6 +89,8 @@ class HathorManager:
         from hathor.p2p.manager import ConnectionsManager
         from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
         from hathor.metrics import Metrics
+
+        self.log = logger.new()
 
         self.reactor = reactor
         if hasattr(self.reactor, 'addSystemEventTrigger'):
