@@ -1,4 +1,5 @@
 import json
+import struct
 from functools import partial
 from typing import Optional
 
@@ -55,7 +56,11 @@ class SendTokensResource(resource.Resource):
         post_data = json.loads(request.content.read().decode('utf-8'))
         tx_hex = post_data['tx_hex']
 
-        tx = Transaction.create_from_struct(bytes.fromhex(tx_hex))
+        try:
+            tx = Transaction.create_from_struct(bytes.fromhex(tx_hex))
+        except struct.error:
+            return self.return_POST(False, 'Error parsing hexdump to create the transaction')
+
         assert isinstance(tx, Transaction)
         # Set tx storage
         tx.storage = self.manager.tx_storage

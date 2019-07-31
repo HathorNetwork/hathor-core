@@ -29,7 +29,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
                 address=decode_address(address), value=700,
                 timelock=int(self.clock.seconds()) - 10),
             WalletOutputInfo(
-                address=decode_address(address), value=get_tokens_from_mining(1) - 500 - 700,
+                address=decode_address(address), value=get_tokens_from_mining(2) - 500 - 700,
                 timelock=None)
         ]
 
@@ -85,7 +85,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
 
         outputs3 = [
             WalletOutputInfo(
-                address=decode_address(outside_address), value=get_tokens_from_mining(1) - 500 - 700,
+                address=decode_address(outside_address), value=get_tokens_from_mining(2) - 500 - 700,
                 timelock=None)
         ]
 
@@ -99,7 +99,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
         tx4.resolve()
         propagated = self.manager.propagate_tx(tx4, False)
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
-                         WalletBalance(500, get_tokens_from_mining(4)))
+                         WalletBalance(500, get_tokens_from_mining(3)))
         self.assertTrue(propagated)
 
         self.clock.advance(8)
@@ -107,7 +107,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
         tx2.resolve()
         propagated = self.manager.propagate_tx(tx2, False)
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
-                         WalletBalance(0, get_tokens_from_mining(4)))
+                         WalletBalance(0, get_tokens_from_mining(3)))
         self.assertTrue(propagated)
 
     def test_choose_inputs(self):

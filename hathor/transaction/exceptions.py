@@ -48,6 +48,10 @@ class TooManyOutputs(TxValidationError):
     """More than 256 outputs"""
 
 
+class InvalidOutputValue(TxValidationError):
+    """Value of output is invalid"""
+
+
 class PowError(TxValidationError):
     """Proof-of-work is not correct"""
 

@@ -8,7 +8,7 @@ import weakref
 from _hashlib import HASH
 from abc import ABC, abstractclassmethod, abstractmethod
 from math import inf, log
-from struct import pack
+from struct import error as StructError, pack
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Iterator, List, Optional, Tuple
 
 from hathor import protos
@@ -16,6 +16,7 @@ from hathor.conf import HathorSettings
 from hathor.transaction.exceptions import (
     DuplicatedParents,
     IncorrectParents,
+    InvalidOutputValue,
     ParentDoesNotExist,
     PowError,
     TimestampError,
@@ -955,7 +956,7 @@ class TxOutput:
         assert isinstance(value, int), 'value is %s, type %s' % (str(value), type(value))
         assert isinstance(script, bytes), 'script is %s, type %s' % (str(script), type(script))
         assert isinstance(token_data, int), 'token_data is %s, type %s' % (str(token_data), type(token_data))
-        assert value <= MAX_OUTPUT_VALUE
+        assert value <= MAX_OUTPUT_VALUE and value > 0
 
         self.value = value  # int
         self.script = script  # bytes
@@ -1044,7 +1045,10 @@ def bytes_to_output_value(buf: bytes) -> Tuple[int, bytes]:
     else:
         output_struct = '!i'
         value_sign = 1
-    (signed_value,), buf = unpack(output_struct, buf)
+    try:
+        (signed_value,), buf = unpack(output_struct, buf)
+    except StructError as e:
+        raise InvalidOutputValue('Invalid byte struct for output') from e
     value = signed_value * value_sign
     assert value >= 0
     if value < _MAX_OUTPUT_VALUE_32 and value_high_byte < 0:
@@ -1053,6 +1057,9 @@ def bytes_to_output_value(buf: bytes) -> Tuple[int, bytes]:
 
 
 def output_value_to_bytes(number: int) -> bytes:
+    if number <= 0:
+        raise InvalidOutputValue('Invalid value for output')
+
     if number > _MAX_OUTPUT_VALUE_32:
         return (-number).to_bytes(8, byteorder='big', signed=True)
     else:
