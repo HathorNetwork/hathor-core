@@ -12,6 +12,7 @@ from hathor.transaction.exceptions import (
     InexistentInput,
     InputOutputMismatch,
     InvalidInputData,
+    InvalidOutputValue,
     InvalidToken,
     ScriptError,
     TimestampError,
@@ -210,6 +211,10 @@ class Transaction(BaseTransaction):
 
         # iterate over outputs and subtract spent values from token_map
         for index, tx_output in enumerate(self.outputs):
+            if tx_output.value <= 0:
+                raise InvalidOutputValue('Output value must be a positive integer. Value: {} and index: {}'.format(
+                    tx_output.value, index))
+
             token_uid = self.get_token_uid(tx_output.get_token_index())
             token_info = token_dict.get(token_uid)
             if token_info is None:

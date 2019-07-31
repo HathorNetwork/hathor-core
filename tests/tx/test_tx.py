@@ -2,7 +2,7 @@ import base64
 import hashlib
 
 from hathor.conf import HathorSettings
-from hathor.crypto.util import get_address_from_public_key, get_private_key_from_bytes
+from hathor.crypto.util import decode_address, get_address_from_public_key, get_private_key_from_bytes
 from hathor.manager import TestMode
 from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
@@ -14,6 +14,7 @@ from hathor.transaction.exceptions import (
     InexistentInput,
     InputOutputMismatch,
     InvalidInputData,
+    InvalidOutputValue,
     ParentDoesNotExist,
     PowError,
     TimestampError,
@@ -512,6 +513,7 @@ class BasicTransaction(unittest.TestCase):
         self.assertEqual(value, MAX_OUTPUT_VALUE)
 
     def test_output_value(self):
+        from hathor.transaction.base_transaction import bytes_to_output_value
         # first test using a small output value with 8 bytes. It should fail
         outputs = [TxOutput(1, b'')]
         tx = Transaction(outputs=outputs)
@@ -541,6 +543,30 @@ class BasicTransaction(unittest.TestCase):
         tx2 = Transaction.create_from_struct(original_struct)
         tx2.update_hash()
         assert tx == tx2
+
+        # Validating that all output values must be positive
+        value = 1
+        address = decode_address('WUDtnw3GYjvUnZmiHAmus6hhs9GoSUSJMG')
+        script = P2PKH.create_output_script(address)
+        output = TxOutput(value, script)
+        output.value = -1
+        tx = Transaction(inputs=[], outputs=[output], storage=self.tx_storage)
+        with self.assertRaises(InvalidOutputValue):
+            tx.resolve()
+
+        # 'Manually resolving', to validate verify method
+        tx.hash = bytes.fromhex('012cba011be3c29f1c406f9015e42698b97169dbc6652d1f5e4d5c5e83138858')
+        with self.assertRaises(InvalidOutputValue):
+            tx.verify()
+
+        # Invalid output value
+        invalid_output = bytes.fromhex('ffffffff')
+        with self.assertRaises(InvalidOutputValue):
+            bytes_to_output_value(invalid_output)
+
+        # Can't instantiate an output with negative value
+        with self.assertRaises(AssertionError):
+            TxOutput(-1, script)
 
 
 if __name__ == '__main__':
