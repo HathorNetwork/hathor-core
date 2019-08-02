@@ -19,7 +19,7 @@ from hathor.transaction.exceptions import (
     TooManyInputs,
     TooManyOutputs,
 )
-from hathor.transaction.util import unpack
+from hathor.transaction.util import get_deposit_amount, get_withdraw_amount, unpack
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -189,12 +189,20 @@ class Transaction(BaseTransaction):
         :raises InvalidToken: when there's an error in token operations
         :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
         """
-        # token dict sums up all tokens present in the tx and their properties (amount, mint, melt)
+        # token dict sums up all tokens present in the tx and their properties (amount, can_mint, can_melt)
+        # amount = outputs - inputs, thus:
+        # - amount < 0 when melting
+        # - amount > 0 when minting
         token_dict: Dict[bytes, TokenInfo] = {}
         # created tokens contains tokens being created in this tx and the corresponding output index
         created_tokens: List[Tuple[bytes, int]] = []  # List[(token_uid, index)]
 
         default_info: TokenInfo = TokenInfo(0, False, False)
+
+        # add HTR to token dict due to tx melting tokens: there's an HTR output without any
+        # input or authority. If we don't add it, an error will be raised when iterating through
+        # the outputs of such tx (error: 'no token creation and no inputs for token 00')
+        token_dict[settings.HATHOR_TOKEN_UID] = TokenInfo(0, False, False)
 
         for input_tx in self.inputs:
             spent_tx = self.get_spent_tx(input_tx)
@@ -206,7 +214,7 @@ class Transaction(BaseTransaction):
                 can_mint = can_mint or spent_output.can_mint_token()
                 can_melt = can_melt or spent_output.can_melt_token()
             else:
-                amount += spent_output.value
+                amount -= spent_output.value
             token_dict[token_uid] = TokenInfo(amount, can_mint, can_melt)
 
         # iterate over outputs and subtract spent values from token_map
@@ -234,27 +242,41 @@ class Transaction(BaseTransaction):
 
                 # for regular outputs, just subtract from the total amount
                 if not tx_output.is_token_authority():
-                    sum_tokens = token_info.amount - tx_output.value
+                    sum_tokens = token_info.amount + tx_output.value
                     token_dict[token_uid] = TokenInfo(sum_tokens, token_info.can_mint, token_info.can_melt)
 
         # if sum of inputs and outputs is not 0, make sure inputs have mint/melt authority
+        # also, calculates the required deposit and withdraw amounts of HTR
+        withdraw = 0
+        deposit = 0
         for token_uid, token_info in token_dict.items():
+            if token_uid == settings.HATHOR_TOKEN_UID:
+                continue
+
             if token_info.amount == 0:
                 # that's the usual behavior, nothing to do
                 pass
-            elif token_uid == settings.HATHOR_TOKEN_UID:
-                raise InputOutputMismatch('Sum of inputs is different than the sum of outputs (difference: {})'.format(
-                    token_info.amount))
-            elif token_info.amount > 0:
+            elif token_info.amount < 0:
                 # tokens have been melted
                 if not token_info.can_melt:
                     raise InputOutputMismatch('{} {} tokens melted, but there is no melt authority input'.format(
                         token_info.amount, token_uid.hex()))
+                withdraw += get_withdraw_amount(token_info.amount)
             else:
                 # tokens have been minted
                 if not token_info.can_mint:
                     raise InputOutputMismatch('{} {} tokens minted, but there is no mint authority input'.format(
                         (-1) * token_info.amount, token_uid.hex()))
+                deposit += get_deposit_amount(token_info.amount)
+
+        # check whether the deposit/withdraw amount is correct
+        htr_expected_amount = withdraw - deposit
+        htr_info = token_dict.get(settings.HATHOR_TOKEN_UID, default_info)
+        if htr_info.amount != htr_expected_amount:
+            raise InputOutputMismatch('HTR balance is different than expected. (amount={}, expected={})'.format(
+                htr_info.amount,
+                htr_expected_amount,
+            ))
 
         # make sure created tokens have correct hash
         for token_uid, index in created_tokens:

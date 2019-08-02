@@ -127,3 +127,8 @@ class HathorSettings(NamedTuple):
 
     # Whether miners are assumed to mine txs by default
     STRATUM_MINE_TXS_DEFAULT: bool = True
+
+    # Percentage used to calculate the number of HTR that must be deposited when minting new tokens
+    # The same percentage is used to calculate the number of HTR that must be withdraw when melting tokens
+    # See for further information, see [rfc 0011-token-deposit].
+    TOKEN_DEPOSIT_PERCENTAGE: float = 0.01

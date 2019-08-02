@@ -2,6 +2,7 @@ from hathor.crypto.util import decode_address
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import BlockWithTokensError, InputOutputMismatch, InvalidToken
 from hathor.transaction.scripts import P2PKH
+from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
 from tests import unittest
 from tests.utils import create_tokens, get_genesis_key
 
@@ -184,28 +185,89 @@ class TokenTest(unittest.TestCase):
         script = P2PKH.create_output_script(self.address)
 
         # mint tokens and transfer mint authority
+        mint_amount = 10000000
+        deposit_amount = get_deposit_amount(mint_amount)
         _input1 = TxInput(tx.hash, 1, b'')
-        token_output1 = TxOutput(10000000, script, 1)
+        _input2 = TxInput(tx.hash, 3, b'')
+        token_output1 = TxOutput(mint_amount, script, 1)
         token_output2 = TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001)
-        tx2 = Transaction(weight=1, inputs=[_input1], outputs=[token_output1, token_output2], parents=parents,
-                          tokens=[token_uid], storage=self.manager.tx_storage, timestamp=int(self.clock.seconds()))
+        deposit_output = TxOutput(tx.outputs[3].value - deposit_amount, script, 0)
+        tx2 = Transaction(
+            weight=1,
+            inputs=[_input1, _input2],
+            outputs=[token_output1, token_output2, deposit_output],
+            parents=parents,
+            tokens=[token_uid],
+            storage=self.manager.tx_storage,
+            timestamp=int(self.clock.seconds())
+        )
         data_to_sign = tx2.get_sighash_all(clear_input_data=True)
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
-        tx2.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
+        data = P2PKH.create_input_data(public_bytes, signature)
+        tx2.inputs[0].data = data
+        tx2.inputs[1].data = data
         tx2.resolve()
         tx2.verify()
+
+        # try to mint 1 token unit without deposit
+        mint_amount = 1
+        _input1 = TxInput(tx.hash, 1, b'')
+        token_output1 = TxOutput(mint_amount, script, 1)
+        token_output2 = TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001)
+        tx3 = Transaction(
+            weight=1,
+            inputs=[_input1],
+            outputs=[token_output1, token_output2],
+            parents=parents,
+            tokens=[token_uid],
+            storage=self.manager.tx_storage,
+            timestamp=int(self.clock.seconds())
+        )
+        data_to_sign = tx3.get_sighash_all(clear_input_data=True)
+        public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
+        data = P2PKH.create_input_data(public_bytes, signature)
+        tx3.inputs[0].data = data
+        tx3.resolve()
+        with self.assertRaises(InputOutputMismatch):
+            tx3.verify()
+
+        # try to mint and deposit less tokens than necessary
+        mint_amount = 10000000
+        deposit_amount = get_deposit_amount(mint_amount) - 1
+        _input1 = TxInput(tx.hash, 1, b'')
+        _input2 = TxInput(tx.hash, 3, b'')
+        token_output1 = TxOutput(mint_amount, script, 1)
+        token_output2 = TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001)
+        deposit_output = TxOutput(tx.outputs[3].value - deposit_amount, script, 0)
+        tx4 = Transaction(
+            weight=1,
+            inputs=[_input1, _input2],
+            outputs=[token_output1, token_output2, deposit_output],
+            parents=parents,
+            tokens=[token_uid],
+            storage=self.manager.tx_storage,
+            timestamp=int(self.clock.seconds())
+        )
+        data_to_sign = tx4.get_sighash_all(clear_input_data=True)
+        public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
+        data = P2PKH.create_input_data(public_bytes, signature)
+        tx4.inputs[0].data = data
+        tx4.inputs[1].data = data
+        tx4.resolve()
+        with self.assertRaises(InputOutputMismatch):
+            tx4.verify()
 
         # try to mint using melt authority UTXO
         _input1 = TxInput(tx.hash, 2, b'')
         token_output = TxOutput(10000000, script, 1)
-        tx3 = Transaction(weight=1, inputs=[_input1], outputs=[token_output], parents=parents, tokens=[token_uid],
+        tx5 = Transaction(weight=1, inputs=[_input1], outputs=[token_output], parents=parents, tokens=[token_uid],
                           storage=self.manager.tx_storage, timestamp=int(self.clock.seconds()))
-        data_to_sign = tx3.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx5.get_sighash_all(clear_input_data=True)
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
-        tx3.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
-        tx3.resolve()
+        tx5.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
+        tx5.resolve()
         with self.assertRaises(InputOutputMismatch):
-            tx3.verify()
+            tx5.verify()
 
     def test_token_melt(self):
         wallet = self.manager.wallet
@@ -215,12 +277,22 @@ class TokenTest(unittest.TestCase):
         script = P2PKH.create_output_script(self.address)
 
         # melt tokens and transfer melt authority
+        melt_amount = 100
+        withdraw_amount = get_withdraw_amount(melt_amount)
         _input1 = TxInput(tx.hash, 0, b'')
         _input2 = TxInput(tx.hash, 2, b'')
-        token_output1 = TxOutput(tx.outputs[0].value - 1, script, 1)
+        token_output1 = TxOutput(tx.outputs[0].value - melt_amount, script, 1)
         token_output2 = TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001)
-        tx2 = Transaction(weight=1, inputs=[_input1, _input2], outputs=[token_output1, token_output2], parents=parents,
-                          tokens=[token_uid], storage=self.manager.tx_storage, timestamp=int(self.clock.seconds()))
+        withdraw_output = TxOutput(withdraw_amount, script, 0)
+        tx2 = Transaction(
+            weight=1,
+            inputs=[_input1, _input2],
+            outputs=[token_output1, token_output2, withdraw_output],
+            parents=parents,
+            tokens=[token_uid],
+            storage=self.manager.tx_storage,
+            timestamp=int(self.clock.seconds())
+        )
         data_to_sign = tx2.get_sighash_all(clear_input_data=True)
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         data = P2PKH.create_input_data(public_bytes, signature)
@@ -229,12 +301,23 @@ class TokenTest(unittest.TestCase):
         tx2.resolve()
         tx2.verify()
 
-        # try to melt using mint authority UTXO
+        # melt tokens and withdraw more than what's allowed
+        melt_amount = 100
+        withdraw_amount = get_withdraw_amount(melt_amount)
         _input1 = TxInput(tx.hash, 0, b'')
-        _input2 = TxInput(tx.hash, 1, b'')
-        token_output = TxOutput(tx.outputs[0].value - 1, script, 1)
-        tx3 = Transaction(weight=1, inputs=[_input1, _input2], outputs=[token_output], parents=parents,
-                          tokens=[token_uid], storage=self.manager.tx_storage, timestamp=int(self.clock.seconds()))
+        _input2 = TxInput(tx.hash, 2, b'')
+        token_output1 = TxOutput(tx.outputs[0].value - melt_amount, script, 1)
+        token_output2 = TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001)
+        withdraw_output = TxOutput(withdraw_amount + 1, script, 0)
+        tx3 = Transaction(
+            weight=1,
+            inputs=[_input1, _input2],
+            outputs=[token_output1, token_output2, withdraw_output],
+            parents=parents,
+            tokens=[token_uid],
+            storage=self.manager.tx_storage,
+            timestamp=int(self.clock.seconds())
+        )
         data_to_sign = tx3.get_sighash_all(clear_input_data=True)
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         data = P2PKH.create_input_data(public_bytes, signature)
@@ -243,6 +326,21 @@ class TokenTest(unittest.TestCase):
         tx3.resolve()
         with self.assertRaises(InputOutputMismatch):
             tx3.verify()
+
+        # try to melt using mint authority UTXO
+        _input1 = TxInput(tx.hash, 0, b'')
+        _input2 = TxInput(tx.hash, 1, b'')
+        token_output = TxOutput(tx.outputs[0].value - 1, script, 1)
+        tx4 = Transaction(weight=1, inputs=[_input1, _input2], outputs=[token_output], parents=parents,
+                          tokens=[token_uid], storage=self.manager.tx_storage, timestamp=int(self.clock.seconds()))
+        data_to_sign = tx4.get_sighash_all(clear_input_data=True)
+        public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
+        data = P2PKH.create_input_data(public_bytes, signature)
+        tx4.inputs[0].data = data
+        tx4.inputs[1].data = data
+        tx4.resolve()
+        with self.assertRaises(InputOutputMismatch):
+            tx4.verify()
 
     def test_token_transfer_authority(self):
         wallet = self.manager.wallet
