@@ -22,6 +22,7 @@ from hathor.transaction.storage import (
     TransactionRemoteStorage,
     create_transaction_storage_server,
 )
+from hathor.transaction.util import get_deposit_amount
 
 settings = HathorSettings()
 
@@ -576,12 +577,6 @@ def create_tokens(manager: 'HathorManager', address_b58: str = None, genesis_ind
 
     _input1 = TxInput(genesis_block.hash, genesis_index, b'')
 
-    # we send genesis tokens to a random address so we don't add hathors to the user's wallet
-    rand_address = decode_address('1Pa4MMsr5DMRAeU1PzthFXyEJeVNXsMHoz')
-    rand_script = P2PKH.create_output_script(rand_address)
-    value = genesis_block.outputs[genesis_index].value
-    output = TxOutput(value, rand_script, 0)
-
     parents = [tx.hash for tx in genesis_txs]
     tx = Transaction(
         weight=1,
@@ -598,6 +593,10 @@ def create_tokens(manager: 'HathorManager', address_b58: str = None, genesis_ind
     script = P2PKH.create_output_script(address)
     token_output = TxOutput(token_masks, script, 0b10000001)
 
+    # transfer genesis funds to token creator so he can mint
+    value = genesis_block.outputs[genesis_index].value
+    output = TxOutput(value, script, 0)
+
     # finish and propagate tx
     tx.outputs = [token_output, output]
     data_to_sign = tx.get_sighash_all(clear_input_data=True)
@@ -609,24 +608,33 @@ def create_tokens(manager: 'HathorManager', address_b58: str = None, genesis_ind
     manager.reactor.advance(8)
 
     # mint tokens
+    mint_amount = 300
     parents = manager.get_new_tx_parents()
     _input1 = TxInput(tx.hash, 0, b'')
-    # mint 300 tokens
-    token_output1 = TxOutput(300, script, 0b00000001)
+    # mint output
+    token_output1 = TxOutput(mint_amount, script, 0b00000001)
     token_output2 = TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001)
     token_output3 = TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001)
+    # deposit input
+    deposit_amount = get_deposit_amount(mint_amount)
+    deposit_input = TxInput(tx.hash, 1, b'')
+    deposit_output = TxOutput(tx.outputs[1].value - deposit_amount, script, 0)
     tx2 = Transaction(
         weight=1,
-        inputs=[_input1],
-        outputs=[token_output1, token_output2, token_output3],
+        inputs=[_input1, deposit_input],
+        outputs=[token_output1, token_output2, token_output3, deposit_output],
         parents=parents,
         tokens=[new_token_uid],
         storage=manager.tx_storage,
         timestamp=int(manager.reactor.seconds())
     )
+    # signatures
     data_to_sign = tx2.get_sighash_all(clear_input_data=True)
     public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(address_b58))
-    tx2.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
+    data = P2PKH.create_input_data(public_bytes, signature)
+    tx2.inputs[0].data = data
+    tx2.inputs[1].data = data
+    # resolve and propagate
     tx2.resolve()
     tx2.verify()
     manager.propagate_tx(tx2, fails_silently=False)
