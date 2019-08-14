@@ -777,8 +777,6 @@ class BaseTransaction(ABC):
         for output in self.outputs:
             data['outputs'].append(output.to_json(decode_script=decode_script))
 
-        data['tokens'] = [uid.hex() for uid in self.tokens]
-
         return data
 
     def to_json_extended(self) -> Dict[str, Any]:
