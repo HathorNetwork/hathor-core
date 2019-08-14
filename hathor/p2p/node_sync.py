@@ -218,7 +218,6 @@ class NodeSyncTimestamp(Plugin):
         """ Return a dict of messages of the plugin.
         """
         return {
-            ProtocolMessages.NOTIFY_DATA: self.handle_notify_data,
             ProtocolMessages.GET_DATA: self.handle_get_data,
             ProtocolMessages.DATA: self.handle_data,
             ProtocolMessages.GET_TIPS: self.handle_get_tips,
@@ -604,35 +603,6 @@ class NodeSyncTimestamp(Plugin):
         deferred = self.deferred_by_key.pop(key, None)
         if deferred:
             deferred.callback(args)
-
-    def send_notify_data(self, tx):
-        """ Send a NOTIFY-DATA message, notifying a peer about a new hash.
-
-        TODO Send timestamp and parents.
-        """
-        payload = '{} {} {}'.format(
-            tx.timestamp,
-            tx.hash.hex(),
-            json.dumps([x.hex() for x in tx.parents]),
-        )
-        self.send_message(ProtocolMessages.NOTIFY_DATA, payload)
-
-    def handle_notify_data(self, payload):
-        """ Handle a NOTIFY-DATA message, downloading the new data when we don't have it.
-        """
-        timestamp, _, payload2 = payload.partition(' ')
-        hash_hex, _, parents_json = payload2.partition(' ')
-        parents = json.loads(parents_json)
-
-        if self.manager.tx_storage.transaction_exists(bytes.fromhex(hash_hex)):
-            return
-
-        for parent_hash in parents:
-            if not self.manager.tx_storage.transaction_exists(bytes.fromhex(parent_hash)):
-                # Are we out-of-sync with this peer?
-                return
-
-        self.send_get_data(hash_hex)
 
     def send_get_data(self, hash_hex: str) -> None:
         """ Send a GET-DATA message, requesting the data of a given hash.
