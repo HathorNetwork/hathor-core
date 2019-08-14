@@ -5,6 +5,9 @@ from twisted.web import resource
 import hathor
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.conf import HathorSettings
+
+settings = HathorSettings()
 
 
 @register_resource
@@ -34,6 +37,7 @@ class VersionResource(resource.Resource):
             'min_tx_weight': self.manager.min_tx_weight,
             'min_tx_weight_coefficient': self.manager.min_tx_weight_coefficient,
             'min_tx_weight_k': self.manager.min_tx_weight_k,
+            'token_deposit_percentage': settings.TOKEN_DEPOSIT_PERCENTAGE,
         }
         return json.dumps(data, indent=4).encode('utf-8')
 
@@ -75,6 +79,7 @@ VersionResource.openapi = {
                                         'min_tx_weight': 14,
                                         'min_tx_weight_coefficient': 1.6,
                                         'min_tx_weight_k': 100,
+                                        'token_deposit_percentage': 0.01,
                                     }
                                 }
                             }
