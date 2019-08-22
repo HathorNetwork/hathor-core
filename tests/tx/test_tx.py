@@ -1,5 +1,6 @@
 import base64
 import hashlib
+from math import isinf, isnan
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_from_public_key, get_private_key_from_bytes
@@ -20,6 +21,7 @@ from hathor.transaction.exceptions import (
     TimestampError,
     TooManyInputs,
     TooManyOutputs,
+    WeightError,
 )
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import TransactionMemoryStorage
@@ -331,6 +333,52 @@ class BasicTransaction(unittest.TestCase):
 
         tx.resolve()
         tx.verify()
+
+    def test_weight_nan(self):
+        # this should succeed
+        parents = [tx.hash for tx in self.genesis_txs]
+        genesis_block = self.genesis_blocks[0]
+
+        value = genesis_block.outputs[0].value
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+        output = TxOutput(value, script)
+
+        _input = TxInput(genesis_block.hash, 0, b'')
+        tx = Transaction(inputs=[_input], outputs=[output], parents=parents, storage=self.tx_storage)
+        tx.weight = float('NaN')
+
+        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        _input.data = P2PKH.create_input_data(public_bytes, signature)
+
+        tx.update_hash()
+        self.assertTrue(isnan(tx.weight))
+        with self.assertRaises(WeightError):
+            tx.verify()
+
+    def test_weight_inf(self):
+        # this should succeed
+        parents = [tx.hash for tx in self.genesis_txs]
+        genesis_block = self.genesis_blocks[0]
+
+        value = genesis_block.outputs[0].value
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+        output = TxOutput(value, script)
+
+        _input = TxInput(genesis_block.hash, 0, b'')
+        tx = Transaction(inputs=[_input], outputs=[output], parents=parents, storage=self.tx_storage)
+        tx.weight = float('inf')
+
+        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        _input.data = P2PKH.create_input_data(public_bytes, signature)
+
+        tx.update_hash()
+        self.assertTrue(isinf(tx.weight))
+        with self.assertRaises(WeightError):
+            tx.verify()
 
     def test_tx_duplicated_parents(self):
         # the new tx will confirm the same tx twice
