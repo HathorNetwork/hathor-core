@@ -7,7 +7,7 @@ import time
 import weakref
 from _hashlib import HASH
 from abc import ABC, abstractclassmethod, abstractmethod
-from math import inf, log
+from math import inf, isfinite, log
 from struct import error as StructError, pack
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Iterator, List, Optional, Tuple
 
@@ -21,6 +21,7 @@ from hathor.transaction.exceptions import (
     PowError,
     TimestampError,
     TxValidationError,
+    WeightError,
 )
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import int_to_bytes, unpack, unpack_len
@@ -207,6 +208,8 @@ class BaseTransaction(ABC):
 
     def get_target(self, override_weight: Optional[float] = None) -> float:
         """Target to be achieved in the mining process"""
+        if not isfinite(self.weight):
+            raise WeightError
         return 2**(256 - (override_weight or self.weight)) - 1
 
     def get_time_from_now(self, now: Optional[Any] = None) -> str:
