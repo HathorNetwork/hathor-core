@@ -377,3 +377,83 @@ class WalletIndex:
         """ Get inputs/outputs history from address
         """
         return self.index[address]
+
+
+class TokensIndex:
+    """ Index of tokens by token uid
+    """
+
+    class TokenStatus:
+        """ Class used to track token info
+
+        For both sets (mint and melt), the expected tuple is (tx_id, index).
+
+        'total' tracks the amount of tokens in circulation (mint - melt)
+        """
+        def __init__(self, total: int = 0, mint: Set[Tuple[bytes, int]] = set(),
+                     melt: Set[Tuple[bytes, int]] = set()) -> None:
+            self.total = total
+            self.mint = mint
+            self.melt = melt
+
+    def __init__(self) -> None:
+        self.tokens: Dict[bytes, TokensIndex.TokenStatus] = defaultdict(lambda: self.TokenStatus(0, set(), set()))
+
+    def _add_to_index(self, tx: BaseTransaction, index: int):
+        """ Add tx to mint/melt indexes and total amount
+        """
+        assert tx.hash is not None
+
+        tx_output = tx.outputs[index]
+        token_uid = tx.get_token_uid(tx_output.get_token_index())
+
+        if tx_output.is_token_authority():
+            if tx_output.can_mint_token():
+                # add to mint index
+                self.tokens[token_uid].mint.add((tx.hash, index))
+            if tx_output.can_melt_token():
+                # add to melt index
+                self.tokens[token_uid].melt.add((tx.hash, index))
+        else:
+            self.tokens[token_uid].total += tx_output.value
+
+    def _remove_from_index(self, tx: BaseTransaction, index: int):
+        """ Remove tx from mint/melt indexes and total amount
+        """
+        assert tx.hash is not None
+
+        tx_output = tx.outputs[index]
+        token_uid = tx.get_token_uid(tx_output.get_token_index())
+
+        if tx_output.is_token_authority():
+            if tx_output.can_mint_token():
+                # remove from mint index
+                self.tokens[token_uid].mint.discard((tx.hash, index))
+            if tx_output.can_melt_token():
+                # remove from melt index
+                self.tokens[token_uid].melt.discard((tx.hash, index))
+        else:
+            self.tokens[token_uid].total -= tx_output.value
+
+    def add_tx(self, tx: BaseTransaction) -> None:
+        """ Checks if this tx has mint or melt inputs/outputs and adds to tokens index
+        """
+        for tx_input in tx.inputs:
+            spent_tx = tx.get_spent_tx(tx_input)
+            self._remove_from_index(spent_tx, tx_input.index)
+
+        for index in range(len(tx.outputs)):
+            self._add_to_index(tx, index)
+
+    def del_tx(self, tx: BaseTransaction) -> None:
+        """ Tx has been voided, so remove from tokens index (if applicable)
+        """
+        for tx_input in tx.inputs:
+            spent_tx = tx.get_spent_tx(tx_input)
+            self._add_to_index(spent_tx, tx_input.index)
+
+        for index in range(len(tx.outputs)):
+            self._remove_from_index(tx, index)
+
+    def get_token_info(self, token_uid: bytes) -> 'TokensIndex.TokenStatus':
+        return self.tokens[token_uid]

@@ -546,7 +546,7 @@ def get_genesis_key():
     return get_private_key_from_bytes(private_key_bytes)
 
 
-def create_tokens(manager: 'HathorManager', address_b58: str = None, genesis_index: int = 0):
+def create_tokens(manager: 'HathorManager', address_b58: str = None, genesis_index: int = 0, mint_amount: int = 300):
     """Creates a new token and propagates a tx with the following UTXOs:
     1. some tokens (already mint some tokens so they can be transferred);
     2. mint authority;
@@ -561,12 +561,15 @@ def create_tokens(manager: 'HathorManager', address_b58: str = None, genesis_ind
     :param genesis_index: which genesis output to use for creating the token
     :type genesis_index: int
 
+    :param mint_amount: how many tokens to mint
+    :type mint_amount: int
+
     :return: the propagated transaction so others can spend their outputs
     """
     genesis = manager.tx_storage.get_all_genesis()
     genesis_blocks = [tx for tx in genesis if tx.is_block]
     genesis_txs = [tx for tx in genesis if not tx.is_block]
-    genesis_block = genesis_blocks[genesis_index]
+    genesis_block = genesis_blocks[0]
     genesis_private_key = get_genesis_key()
 
     wallet = manager.wallet
@@ -608,7 +611,6 @@ def create_tokens(manager: 'HathorManager', address_b58: str = None, genesis_ind
     manager.reactor.advance(8)
 
     # mint tokens
-    mint_amount = 300
     parents = manager.get_new_tx_parents()
     _input1 = TxInput(tx.hash, 0, b'')
     # mint output

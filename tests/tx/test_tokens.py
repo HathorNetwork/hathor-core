@@ -10,7 +10,7 @@ from tests.utils import create_tokens, get_genesis_key
 class TokenTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        self.manager = self.create_peer('testnet', unlock_wallet=True)
+        self.manager = self.create_peer('testnet', unlock_wallet=True, wallet_index=True)
 
         self.genesis = self.manager.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
@@ -179,7 +179,7 @@ class TokenTest(unittest.TestCase):
 
     def test_token_mint(self):
         wallet = self.manager.wallet
-        tx = create_tokens(self.manager, self.address_b58)
+        tx = create_tokens(self.manager, self.address_b58, mint_amount=500)
         token_uid = tx.tokens[0]
         parents = self.manager.get_new_tx_parents()
         script = P2PKH.create_output_script(self.address)
@@ -208,6 +208,18 @@ class TokenTest(unittest.TestCase):
         tx2.inputs[1].data = data
         tx2.resolve()
         tx2.verify()
+        self.manager.propagate_tx(tx2)
+        self.run_to_completion()
+
+        # check tokens index
+        tokens_index = self.manager.tx_storage.tokens_index.tokens[token_uid]
+        self.assertIn((tx2.hash, 1), tokens_index.mint)
+        self.assertIn((tx.hash, 2), tokens_index.melt)
+        # there should only be one element on the indexes for the token
+        self.assertEqual(1, len(tokens_index.mint))
+        self.assertEqual(1, len(tokens_index.melt))
+        # check total amount of tokens
+        self.assertEqual(500 + mint_amount, tokens_index.total)
 
         # try to mint 1 token unit without deposit
         mint_amount = 1
@@ -278,10 +290,11 @@ class TokenTest(unittest.TestCase):
 
         # melt tokens and transfer melt authority
         melt_amount = 100
+        new_amount = tx.outputs[0].value - melt_amount
         withdraw_amount = get_withdraw_amount(melt_amount)
         _input1 = TxInput(tx.hash, 0, b'')
         _input2 = TxInput(tx.hash, 2, b'')
-        token_output1 = TxOutput(tx.outputs[0].value - melt_amount, script, 1)
+        token_output1 = TxOutput(new_amount, script, 1)
         token_output2 = TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001)
         withdraw_output = TxOutput(withdraw_amount, script, 0)
         tx2 = Transaction(
@@ -300,6 +313,18 @@ class TokenTest(unittest.TestCase):
         tx2.inputs[1].data = data
         tx2.resolve()
         tx2.verify()
+        self.manager.propagate_tx(tx2)
+        self.run_to_completion()
+
+        # check tokens index
+        tokens_index = self.manager.tx_storage.tokens_index.tokens[token_uid]
+        self.assertIn((tx.hash, 1), tokens_index.mint)
+        self.assertIn((tx2.hash, 1), tokens_index.melt)
+        # there should only be one element on the indexes for the token
+        self.assertEqual(1, len(tokens_index.mint))
+        self.assertEqual(1, len(tokens_index.melt))
+        # check total amount of tokens
+        self.assertEqual(new_amount, tokens_index.total)
 
         # melt tokens and withdraw more than what's allowed
         melt_amount = 100
@@ -372,6 +397,43 @@ class TokenTest(unittest.TestCase):
         tx3.resolve()
         with self.assertRaises(InvalidToken):
             tx3.verify()
+
+    def test_token_index_with_conflict(self, mint_amount=0):
+        # create a new token and have a mint operation done. The tx that mints the
+        # tokens has the following outputs:
+        # 0. minted tokens
+        # 1. mint authority;
+        # 2. melt authority
+        tx = create_tokens(self.manager, self.address_b58, mint_amount=100)
+        token_uid = tx.tokens[0]
+        tokens_index = self.manager.tx_storage.tokens_index.tokens[token_uid]
+        self.assertIn((tx.hash, 1), tokens_index.mint)
+        self.assertIn((tx.hash, 2), tokens_index.melt)
+        # there should only be one element on the indexes for the token
+        self.assertEqual(1, len(tokens_index.mint))
+        self.assertEqual(1, len(tokens_index.melt))
+        # check total amount of tokens
+        self.assertEqual(100, tokens_index.total)
+
+        # create conflicting tx by changing parents
+        tx2 = Transaction.create_from_struct(tx.get_struct())
+        tx2.parents = [tx.parents[1], tx.parents[0]]
+        tx2.weight = 3
+        tx2.resolve()
+        self.assertNotEqual(tx.hash, tx2.hash)
+        self.assertTrue(tx2.weight > tx.weight)
+
+        self.manager.propagate_tx(tx2)
+        self.run_to_completion()
+
+        # new tx should be on tokens index. Old tx should not be present
+        self.assertIn((tx2.hash, 1), tokens_index.mint)
+        self.assertIn((tx2.hash, 2), tokens_index.melt)
+        # there should only be one element on the indexes for the token
+        self.assertEqual(1, len(tokens_index.mint))
+        self.assertEqual(1, len(tokens_index.melt))
+        # should have same number of tokens
+        self.assertEqual(100, tokens_index.total)
 
 
 if __name__ == '__main__':
