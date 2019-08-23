@@ -6,7 +6,7 @@ from weakref import WeakValueDictionary
 from intervaltree.interval import Interval
 from twisted.internet.defer import Deferred, inlineCallbacks, succeed
 
-from hathor.indexes import IndexesManager, TransactionsIndex, WalletIndex
+from hathor.indexes import IndexesManager, TokensIndex, TransactionsIndex, WalletIndex
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction.block import Block
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
@@ -21,6 +21,7 @@ class TransactionStorage(ABC):
     pubsub: Optional[PubSubManager]
     with_index: bool  # noqa: E701
     wallet_index: Optional[WalletIndex]
+    tokens_index: Optional[TokensIndex]
 
     def __init__(self):
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
@@ -436,6 +437,7 @@ class BaseTransactionStorage(TransactionStorage):
         self.tx_index = IndexesManager()
         self.all_index = IndexesManager()
         self.wallet_index = None
+        self.tokens_index = None
 
         self._latest_timestamp = 0
         from hathor.transaction.genesis import get_genesis_transactions
@@ -580,6 +582,8 @@ class BaseTransactionStorage(TransactionStorage):
         self.all_index.add_tx(tx)
         if self.wallet_index:
             self.wallet_index.add_tx(tx)
+        if self.tokens_index:
+            self.tokens_index.add_tx(tx)
         if tx.is_block:
             self._cache_block_count += 1
             self.block_index.add_tx(tx)
@@ -590,6 +594,8 @@ class BaseTransactionStorage(TransactionStorage):
     def _del_from_cache(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
         if not self.with_index:
             raise NotImplementedError
+        if self.tokens_index:
+            self.tokens_index.del_tx(tx)
         if tx.is_block:
             self._cache_block_count -= 1
             self.block_index.del_tx(tx, relax_assert=relax_assert)

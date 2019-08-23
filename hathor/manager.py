@@ -15,7 +15,7 @@ from twisted.python.threadpool import ThreadPool
 
 from hathor.conf import HathorSettings
 from hathor.exception import InvalidNewTransaction
-from hathor.indexes import WalletIndex
+from hathor.indexes import TokensIndex, WalletIndex
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
@@ -112,6 +112,7 @@ class HathorManager:
         self.tx_storage.pubsub = self.pubsub
         if wallet_index and self.tx_storage.with_index:
             self.tx_storage.wallet_index = WalletIndex(self.pubsub)
+            self.tx_storage.tokens_index = TokensIndex()
 
         self.avg_time_between_blocks = settings.AVG_TIME_BETWEEN_BLOCKS
         self.min_block_weight = min_block_weight or settings.MIN_BLOCK_WEIGHT
