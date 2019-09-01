@@ -171,10 +171,6 @@ class BasicTransaction(unittest.TestCase):
 
         block.inputs = tx_inputs
 
-        data_to_sign = block.get_sighash_all()
-        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
-        block.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
-
         block.resolve()
 
         with self.assertRaises(BlockWithInputs):
@@ -563,8 +559,9 @@ class BasicTransaction(unittest.TestCase):
     def test_output_value(self):
         from hathor.transaction.base_transaction import bytes_to_output_value
         # first test using a small output value with 8 bytes. It should fail
+        parents = [tx.hash for tx in self.genesis_txs]
         outputs = [TxOutput(1, b'')]
-        tx = Transaction(outputs=outputs)
+        tx = Transaction(outputs=outputs, parents=parents)
         original_struct = tx.get_struct()
         struct_bytes = tx.get_funds_struct()
 
@@ -585,7 +582,7 @@ class BasicTransaction(unittest.TestCase):
 
         # now use 8 bytes and make sure it's working
         outputs = [TxOutput(MAX_OUTPUT_VALUE, b'')]
-        tx = Transaction(outputs=outputs)
+        tx = Transaction(outputs=outputs, parents=parents)
         tx.update_hash()
         original_struct = tx.get_struct()
         tx2 = Transaction.create_from_struct(original_struct)
@@ -598,7 +595,7 @@ class BasicTransaction(unittest.TestCase):
         script = P2PKH.create_output_script(address)
         output = TxOutput(value, script)
         output.value = -1
-        tx = Transaction(inputs=[], outputs=[output], storage=self.tx_storage)
+        tx = Transaction(inputs=[], outputs=[output], parents=parents, storage=self.tx_storage)
         with self.assertRaises(InvalidOutputValue):
             tx.resolve()
 
@@ -615,6 +612,22 @@ class BasicTransaction(unittest.TestCase):
         # Can't instantiate an output with negative value
         with self.assertRaises(AssertionError):
             TxOutput(-1, script)
+
+    def test_tx_version(self):
+        from hathor.transaction.base_transaction import cls_from_version
+        # test the 1st byte of version field is ignored
+        version = 0xFF00
+        self.assertEqual(cls_from_version(version), Block)
+        version = 0xFF01
+        self.assertEqual(cls_from_version(version), Transaction)
+
+        # test serialization doesn't mess up with version
+        block = Block(
+            version=0xFF00,
+            nonce=100,
+            weight=1)
+        block2 = block.clone()
+        self.assertEqual(block.version, block2.version)
 
 
 if __name__ == '__main__':
