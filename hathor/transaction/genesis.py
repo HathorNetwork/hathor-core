@@ -11,9 +11,9 @@ GENESIS_OUTPUTS = [
 ]
 
 BLOCK_GENESIS = Block(
-    hash=bytes.fromhex('000007bd6da157b1b9fc119cc07c0a5248457acb6e5e0a4146ad86a2b2f5049f'),
+    hash=bytes.fromhex('000003cf0a47d38c0407c8ffe64d47ed67e18316e43beb07c2e513f6e0b3d936'),
     data=b'',
-    nonce=1653984,
+    nonce=338994,
     timestamp=1560920000,
     weight=settings.MIN_BLOCK_WEIGHT,
     outputs=GENESIS_OUTPUTS,

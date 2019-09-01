@@ -15,7 +15,8 @@ from zope.interface import implementer
 from hathor.conf import HathorSettings
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
 from hathor.p2p.plugin import Plugin
-from hathor.transaction import BaseTransaction, Block, Transaction
+from hathor.transaction import BaseTransaction
+from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
 settings = HathorSettings()
@@ -655,23 +656,16 @@ class NodeSyncTimestamp(Plugin):
         """ Send a DATA message.
         """
         # self.log.debug('Sending {tx.hash_hex}...', tx=tx)
-        payload_type = 'tx' if not tx.is_block else 'block'
         payload = base64.b64encode(tx.get_struct()).decode('ascii')
-        self.send_message(ProtocolMessages.DATA, '{}:{}'.format(payload_type, payload))
+        self.send_message(ProtocolMessages.DATA, payload)
 
     def handle_data(self, payload: str) -> None:
         """ Handle a received DATA message.
         """
         if not payload:
             return
-        payload_type, _, payload = payload.partition(':')
         data = base64.b64decode(payload)
-        if payload_type == 'tx':
-            tx: BaseTransaction = Transaction.create_from_struct(data)
-        elif payload_type == 'block':
-            tx = Block.create_from_struct(data)
-        else:
-            raise ValueError('Unknown payload load')
+        tx = tx_or_block_from_bytes(data)
 
         assert tx.hash is not None
         if self.protocol.node.tx_storage.get_genesis(tx.hash):
