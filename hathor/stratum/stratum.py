@@ -279,7 +279,7 @@ class JSONRPC(LineReceiver, ABC):
         }
         if msgid is not None:
             message['id'] = msgid
-        self.log.info('SENDING ERROR {error} WITH  DATA {data}', error=error, data=data)
+        self.log.debug('SENDING ERROR {error} WITH  DATA {data}', error=error, data=data)
         self.send_json(message)
 
         # Lose connection in case of any native JSON RPC error
@@ -306,7 +306,7 @@ class StratumProtocol(JSONRPC):
 
     JOBS_HISTORY = 100
     AVERAGE_JOB_TIME = 1
-    MAXIMUM_JOB_TIME = 3
+    MAXIMUM_JOB_TIME = 5
 
     address: IAddress
     current_job: Optional[ServerJob]
@@ -424,9 +424,11 @@ class StratumProtocol(JSONRPC):
             })
 
         job_id = UUID(params['job_id'])
+        self.log.info('JOB ID {a}', a=job_id.hex)
         job = self.jobs.get(job_id)
 
         if job is None:
+            self.log.info('JOB IS NONE {a}', a=job_id.hex)
             return self.send_error(JOB_NOT_FOUND, msgid, {
                 'current_job': self.current_job and self.current_job.id.hex,
                 'job_id': job_id.hex
@@ -434,13 +436,16 @@ class StratumProtocol(JSONRPC):
 
         # It may take a while for pubsub to get a new job.
         # To avoid propagating the same tx multiple times, we check if it has already been submitted.
-        if job is not self.current_job or job.submitted is not None:
+        if job.submitted is not None:
+            self.log.info('STALE JOB {a}', a=job_id.hex)
             return self.send_error(STALE_JOB, msgid, {
                 'current_job': self.current_job and self.current_job.id.hex,
                 'job_id': job_id.hex
             })
 
         tx = job.tx.clone()
+        funds_hash = tx.get_funds_hash()
+        self.log.info('HANDLE SUBMIT {a}', a=funds_hash.hex())
         # Stratum sends the nonce as a big-endian hexadecimal string.
         tx.nonce = int(params['nonce'], 16)
         tx.update_hash()
@@ -449,6 +454,7 @@ class StratumProtocol(JSONRPC):
         try:
             tx.verify_pow(job.weight)
         except PowError:
+            self.log.info('POW ERROR {a}', a=funds_hash.hex())
             return self.send_error(INVALID_SOLUTION, msgid, {
                 'hash': tx.hash.hex(),
                 'target': int(tx.get_target()).to_bytes(32, 'big').hex()
@@ -469,15 +475,17 @@ class StratumProtocol(JSONRPC):
         except (InvalidNewTransaction, TxValidationError, PowError) as e:
             # Transaction propagation failed, but the share was succesfully submited
             if tx.is_block:
-                self.log.debug('BLOCK VERIFICATION/PROPAGATION FAILED WITH ERROR: {error}', error=e)
+                self.log.info('BLOCK VERIFICATION/PROPAGATION FAILED WITH ERROR: {error}', error=e)
             else:
-                self.log.debug('TX VERIFICATION/PROPAGATION FAILED WITH ERROR: {error}', error=e)
+                self.log.info('TX VERIFICATION/PROPAGATION FAILED WITH ERROR: {error}', error=e)
             self.send_result('ok', msgid)
 
             # If we can't propagate the transaction then we should put it in tx queue again
             if isinstance(tx, Transaction):
+                self.log.info('EXCEPTION IS TX {a}', a=funds_hash.hex())
                 funds_hash = tx.get_funds_hash()
                 if funds_hash in self.factory.mining_tx_pool and funds_hash not in self.factory.tx_queue:
+                    self.log.info('EXCEPTION APPEND {a}', a=funds_hash.hex())
                     self.factory.tx_queue.append(funds_hash)
 
             return self.job_request()
@@ -532,6 +540,8 @@ class StratumProtocol(JSONRPC):
         jobid = uuid4()
 
         tx = self.create_job_tx(jobid)
+        funds_hash = tx.get_funds_hash().hex()
+        self.log.info('CREATE JOB funds={a} jobid={b}', a=funds_hash, b=jobid.hex)
         job = ServerJob(jobid, self.factory.get_current_timestamp(), self.miner_id, tx, 0.0)
 
         self.current_job = job
@@ -541,10 +551,13 @@ class StratumProtocol(JSONRPC):
         share_weight = self.calculate_share_weight()
         job.weight = min(share_weight, tx.weight)
 
-        def jobTimeout(job: ServerJob, protocol: StratumProtocol) -> None:
-            if job is protocol.current_job and job.submitted is None:
+        def jobTimeout(job: ServerJob, protocol: StratumProtocol, tx: BaseTransaction) -> None:
+            self.log.info('JOB TIMEOUT jobid={a} funds={b}', a=job.id.hex, b=tx.get_funds_hash().hex())
+            if job.submitted is None:
+                self.log.info('JOB TIMEOUT 1')
                 # If tx job times out, put tx back in queue
                 if isinstance(tx, Transaction):
+                    self.log.info('JOB TIMEOUT 2')
                     funds_hash = tx.get_funds_hash()
                     if funds_hash in self.factory.mining_tx_pool and funds_hash not in self.factory.tx_queue:
                         self.factory.tx_queue.append(funds_hash)
@@ -553,7 +566,7 @@ class StratumProtocol(JSONRPC):
                 if self.miner_id in self.factory.miner_protocols:
                     protocol.job_request()
 
-        job.timeoutTask = self.manager.reactor.callLater(self.MAXIMUM_JOB_TIME, jobTimeout, job, self)
+        job.timeoutTask = self.manager.reactor.callLater(self.MAXIMUM_JOB_TIME, jobTimeout, job, self, tx)
 
         if len(self.job_ids) > self.JOBS_HISTORY:
             del self.jobs[self.job_ids.pop(0)]
@@ -568,6 +581,7 @@ class StratumProtocol(JSONRPC):
         :rtype: BaseTransaction
         """
         tx = None
+        funds_hash = None
         while not self.should_mine_block() and tx is None:
             funds_hash = self.factory.tx_queue.pop(0)
             tx = self.factory.mining_tx_pool[funds_hash]
@@ -575,7 +589,7 @@ class StratumProtocol(JSONRPC):
         if tx is not None:
             tx.timestamp = self.factory.get_current_timestamp()
             tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
-            self.log.debug('prepared tx for mining: {tx}', tx=tx)
+            self.log.info('prepared tx for mining: {tx}', tx=funds_hash.hex())
             return tx
 
         peer_id = self.manager.my_peer.id
@@ -714,6 +728,8 @@ class StratumFactory(Factory):
             tx = args.__dict__['tx']
             if isinstance(tx, Block):
                 self.update_jobs()
+            else:
+                self.log.info('DID NOT UPDATE JOBS')
 
         self.manager.pubsub.subscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, on_new_block)
         self._listen = self.reactor.listenTCP(self.port, self)
@@ -728,8 +744,10 @@ class StratumFactory(Factory):
         self.log.info('Mining transaction {tx}', tx=tx)
         tx_hash = tx.get_funds_hash()
         if tx_hash in self.mining_tx_pool:
+            self.log.info('DEU RUIM AQUI NO MINE TRANSACTION {a}', a=tx_hash.hex())
             self.log.warn('Tried to mine a transaction twice or a twin.')
             return
+        self.log.info('ADDING TO MINE TRANSACTION {a}', a=tx_hash.hex())
         self.mining_tx_pool[tx_hash] = tx
         self.tx_queue.append(tx_hash)
         self.deferreds_tx[tx_hash] = deferred

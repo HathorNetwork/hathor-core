@@ -21,6 +21,9 @@ settings = HathorSettings()
 # Timeout for the pow resolution in stratum (in seconds)
 TIMEOUT_STRATUM_RESOLVE_POW = 20
 
+from twisted.logger import Logger
+log = Logger()
+
 
 @register_resource
 class SendTokensResource(resource.Resource):
@@ -92,6 +95,7 @@ class SendTokensResource(resource.Resource):
             WHen the proof of work is completed in stratum, the callback is called
         """
         # When using stratum to solve pow, we already set timestamp and parents
+        funds_hash = tx.get_funds_hash()
         stratum_deferred = Deferred()
         stratum_deferred.addCallback(self._stratum_deferred_resolve, request)
 
@@ -99,6 +103,7 @@ class SendTokensResource(resource.Resource):
         stratum_deferred.addTimeout(TIMEOUT_STRATUM_RESOLVE_POW, self.manager.reactor, onTimeoutCancel=fn_timeout)
 
         self.manager.stratum_factory.mine_transaction(tx, stratum_deferred)
+        log.info('RENDER POST STRATUM {a}', a=funds_hash.hex())
 
     def _render_POST(self, tx: Transaction, request: Request) -> None:
         """ Resolves the request without stratum
@@ -122,6 +127,7 @@ class SendTokensResource(resource.Resource):
         """ Method called after stratum resolves tx proof of work
             We remove the mining data of this tx on stratum and start a new thread to verify the tx
         """
+        log.info('STRATUM RESOLVE')
         funds_hash = tx.get_funds_hash()
         tx = self.manager.stratum_factory.mined_txs[funds_hash]
         # Delete it to avoid memory leak
@@ -144,6 +150,7 @@ class SendTokensResource(resource.Resource):
         tx = kwargs['tx']
         request = kwargs['request']
         funds_hash = tx.get_funds_hash()
+        log.info('STRATUM TIMEOUT {a}', a=funds_hash.hex())
         if funds_hash in self.manager.stratum_factory.mining_tx_pool:
             del self.manager.stratum_factory.mining_tx_pool[funds_hash]
 
