@@ -8,7 +8,7 @@ from twisted.logger import Logger
 from hathor import protos
 from hathor.conf import HathorSettings
 from hathor.transaction import BaseTransaction, TxOutput, TxVersion, sum_weights
-from hathor.transaction.exceptions import BlockDataError, BlockWithInputs, BlockWithTokensError
+from hathor.transaction.exceptions import BlockWithInputs, BlockWithTokensError, TransactionDataError
 from hathor.transaction.util import int_to_bytes, unpack, unpack_len
 
 if TYPE_CHECKING:
@@ -206,7 +206,7 @@ class Block(BaseTransaction):
 
     def verify_data(self) -> None:
         if len(self.data) > settings.BLOCK_DATA_MAX_SIZE:
-            raise BlockDataError('block data has {} bytes'.format(len(self.data)))
+            raise TransactionDataError('block data has {} bytes'.format(len(self.data)))
 
     def verify_without_storage(self) -> None:
         """ Run all verifications that do not need a storage.

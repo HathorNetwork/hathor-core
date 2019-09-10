@@ -22,6 +22,7 @@ from hathor.transaction.storage import (
     TransactionRemoteStorage,
     create_transaction_storage_server,
 )
+from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount
 
 settings = HathorSettings()
@@ -546,11 +547,13 @@ def get_genesis_key():
     return get_private_key_from_bytes(private_key_bytes)
 
 
-def create_tokens(manager: 'HathorManager', address_b58: str = None, genesis_index: int = 0, mint_amount: int = 300):
+def create_tokens(manager: 'HathorManager', address_b58: str = None, mint_amount: int = 300,
+                  token_name: str = 'TestCoin', token_symbol: str = 'TTC', propagate: bool = True):
     """Creates a new token and propagates a tx with the following UTXOs:
-    1. some tokens (already mint some tokens so they can be transferred);
-    2. mint authority;
-    3. melt authority;
+    0. some tokens (already mint some tokens so they can be transferred);
+    1. mint authority;
+    2. melt authority;
+    3. deposit change;
 
     :param manager: hathor manager
     :type manager: :class:`hathor.manager.HathorManager`
@@ -558,11 +561,11 @@ def create_tokens(manager: 'HathorManager', address_b58: str = None, genesis_ind
     :param address_b58: address where tokens will be transferred to
     :type address_b58: string
 
-    :param genesis_index: which genesis output to use for creating the token
-    :type genesis_index: int
+    :param token_name: the token name for the new token
+    :type token_name: str
 
-    :param mint_amount: how many tokens to mint
-    :type mint_amount: int
+    :param token_symbol: the token symbol for the new token
+    :type token_symbol: str
 
     :return: the propagated transaction so others can spend their outputs
     """
@@ -573,75 +576,45 @@ def create_tokens(manager: 'HathorManager', address_b58: str = None, genesis_ind
     genesis_private_key = get_genesis_key()
 
     wallet = manager.wallet
+    outputs = []
 
     if address_b58 is None:
         address_b58 = wallet.get_unused_address(mark_as_used=True)
     address = decode_address(address_b58)
 
-    _input1 = TxInput(genesis_block.hash, genesis_index, b'')
-
     parents = [tx.hash for tx in genesis_txs]
-    tx = Transaction(
+    script = P2PKH.create_output_script(address)
+    # deposit input
+    deposit_amount = get_deposit_amount(mint_amount)
+    deposit_input = TxInput(genesis_block.hash, 0, b'')
+    # mint output
+    if mint_amount > 0:
+        outputs.append(TxOutput(mint_amount, script, 0b00000001))
+    # authority outputs
+    outputs.append(TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001))
+    outputs.append(TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001))
+    # deposit output
+    outputs.append(TxOutput(genesis_block.outputs[0].value - deposit_amount, script, 0))
+
+    tx = TokenCreationTransaction(
         weight=1,
-        inputs=[_input1],
         parents=parents,
         storage=manager.tx_storage,
+        inputs=[deposit_input],
+        outputs=outputs,
+        token_name=token_name,
+        token_symbol=token_symbol,
         timestamp=int(manager.reactor.seconds())
     )
-
-    # create token
-    token_masks = TxOutput.TOKEN_CREATION_MASK | TxOutput.TOKEN_MINT_MASK | TxOutput.TOKEN_MELT_MASK
-    new_token_uid = tx.create_token_uid(0)
-    tx.tokens.append(new_token_uid)
-    script = P2PKH.create_output_script(address)
-    token_output = TxOutput(token_masks, script, 0b10000001)
-
-    # transfer genesis funds to token creator so he can mint
-    value = genesis_block.outputs[genesis_index].value
-    output = TxOutput(value, script, 0)
-
-    # finish and propagate tx
-    tx.outputs = [token_output, output]
     data_to_sign = tx.get_sighash_all(clear_input_data=True)
     public_bytes, signature = wallet.get_input_aux_data(data_to_sign, genesis_private_key)
     tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
     tx.resolve()
-    tx.verify()
-    manager.propagate_tx(tx, fails_silently=False)
-    manager.reactor.advance(8)
-
-    # mint tokens
-    parents = manager.get_new_tx_parents()
-    _input1 = TxInput(tx.hash, 0, b'')
-    # mint output
-    token_output1 = TxOutput(mint_amount, script, 0b00000001)
-    token_output2 = TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001)
-    token_output3 = TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001)
-    # deposit input
-    deposit_amount = get_deposit_amount(mint_amount)
-    deposit_input = TxInput(tx.hash, 1, b'')
-    deposit_output = TxOutput(tx.outputs[1].value - deposit_amount, script, 0)
-    tx2 = Transaction(
-        weight=1,
-        inputs=[_input1, deposit_input],
-        outputs=[token_output1, token_output2, token_output3, deposit_output],
-        parents=parents,
-        tokens=[new_token_uid],
-        storage=manager.tx_storage,
-        timestamp=int(manager.reactor.seconds())
-    )
-    # signatures
-    data_to_sign = tx2.get_sighash_all(clear_input_data=True)
-    public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(address_b58))
-    data = P2PKH.create_input_data(public_bytes, signature)
-    tx2.inputs[0].data = data
-    tx2.inputs[1].data = data
-    # resolve and propagate
-    tx2.resolve()
-    tx2.verify()
-    manager.propagate_tx(tx2, fails_silently=False)
-    manager.reactor.advance(8)
-    return tx2
+    if propagate:
+        tx.verify()
+        manager.propagate_tx(tx, fails_silently=False)
+        manager.reactor.advance(8)
+    return tx
 
 
 def start_remote_storage(tx_storage=None):

@@ -12,6 +12,7 @@ message BaseTransaction {
   oneof base_transaction {
     Transaction transaction = 1;
     Block block = 2;
+    TokenCreationTransaction tokenCreationTransaction = 3;
   }
 }
 
@@ -25,6 +26,20 @@ message Transaction {
   repeated TxOutput outputs = 7;
   uint32 nonce = 8;
   // hash may be precomputed, should only be trusted if // it is sent by the storage
+  bytes hash = 9;  // always of size 32 or empty
+  Metadata metadata = 10;
+}
+
+message TokenCreationTransaction {
+  uint32 version = 1; // 2 byte in practice
+  double weight = 2;
+  uint32 timestamp = 3;
+  repeated bytes parents = 4; // each parent is a hash (32 bytes)
+  repeated TxInput inputs = 5;
+  repeated TxOutput outputs = 6;
+  uint32 nonce = 7;
+  bytes token_info = 8;
+  // hash may be precomputed, should only be trusted if it is sent by the storage
   bytes hash = 9;  // always of size 32 or empty
   Metadata metadata = 10;
 }

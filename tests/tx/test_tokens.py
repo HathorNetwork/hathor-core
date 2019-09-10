@@ -1,10 +1,14 @@
+from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
-from hathor.transaction.exceptions import BlockWithTokensError, InputOutputMismatch, InvalidToken
+from hathor.transaction.exceptions import BlockWithTokensError, InputOutputMismatch, InvalidToken, TransactionDataError
 from hathor.transaction.scripts import P2PKH
+from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
 from tests import unittest
 from tests.utils import create_tokens, get_genesis_key
+
+settings = HathorSettings()
 
 
 class TokenTest(unittest.TestCase):
@@ -24,7 +28,7 @@ class TokenTest(unittest.TestCase):
         self.genesis_public_key = self.genesis_private_key.public_key()
 
     def test_tokens_in_block(self):
-        # a block with tokens should be invalid
+        # a block with token index > 1 should be invalid
         parents = [tx.hash for tx in self.genesis]
 
         output_script = P2PKH.create_output_script(self.address)
@@ -37,12 +41,6 @@ class TokenTest(unittest.TestCase):
             weight=1,  # low weight so we don't waste time with PoW
             storage=self.manager.tx_storage)
 
-        block.tokens = [bytes.fromhex('0023be91834c973d6a6ddd1a0ae411807b7c8ef2a015afb5177ee64b666ce602')]
-        block.resolve()
-        with self.assertRaises(BlockWithTokensError):
-            block.verify()
-
-        block.tokens = []
         block.resolve()
         with self.assertRaises(BlockWithTokensError):
             block.verify()
@@ -86,65 +84,6 @@ class TokenTest(unittest.TestCase):
         tx.resolve()
         with self.assertRaises(InvalidToken):
             tx.verify()
-
-    def test_token_uid_creation(self):
-        genesis_block = self.genesis_blocks[0]
-
-        _input = TxInput(genesis_block.hash, 0, b'')
-
-        value = genesis_block.outputs[0].value
-        script = P2PKH.create_output_script(self.address)
-        output = TxOutput(value, script, 0)
-
-        parents = [tx.hash for tx in self.genesis_txs]
-        tx = Transaction(weight=1, inputs=[_input], parents=parents, storage=self.manager.tx_storage)
-
-        # incorrect token uid
-        new_token_uid = bytes.fromhex('0023be91834c973d6a6ddd1a0ae411807b7c8ef2a015afb5177ee64b666ce602')
-        tx.tokens = [new_token_uid]
-        token_output = TxOutput(TxOutput.TOKEN_CREATION_MASK, script, 0b10000001)
-        tx.outputs = [token_output, output]
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
-        public_bytes, signature = self.manager.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
-        tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
-        tx.resolve()
-        with self.assertRaises(InvalidToken):
-            tx.verify()
-
-        # token creation with no corresponding input
-        new_token_uid = tx.create_token_uid(0)
-        tx.tokens = [new_token_uid]
-        token_output = TxOutput(TxOutput.TOKEN_CREATION_MASK, script, 0b10000001)
-        tx.outputs = [output, token_output]
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
-        public_bytes, signature = self.manager.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
-        tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
-        tx.resolve()
-        with self.assertRaises(InvalidToken):
-            tx.verify()
-
-        # token creation without creation flag
-        new_token_uid = tx.create_token_uid(0)
-        tx.tokens = [new_token_uid]
-        token_output = TxOutput(TxOutput.TOKEN_MINT_MASK | TxOutput.TOKEN_MELT_MASK, script, 0b10000001)
-        tx.outputs = [token_output, output]
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
-        public_bytes, signature = self.manager.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
-        tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
-        tx.resolve()
-        with self.assertRaises(InvalidToken):
-            tx.verify()
-
-        # correct token uid
-        new_token_uid = tx.create_token_uid(0)
-        tx.tokens = [new_token_uid]
-        token_output = TxOutput(TxOutput.TOKEN_CREATION_MASK, script, 0b10000001)
-        tx.outputs = [token_output, output]
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
-        public_bytes, signature = self.manager.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
-        tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
-        tx.resolve()
-        tx.verify()
 
     def test_token_transfer(self):
         wallet = self.manager.wallet
@@ -404,9 +343,10 @@ class TokenTest(unittest.TestCase):
         # 0. minted tokens
         # 1. mint authority;
         # 2. melt authority
+        # 3. HTR deposit change
         tx = create_tokens(self.manager, self.address_b58, mint_amount=100)
         token_uid = tx.tokens[0]
-        tokens_index = self.manager.tx_storage.tokens_index.tokens[token_uid]
+        tokens_index = self.manager.tx_storage.tokens_index.tokens[tx.tokens[0]]
         self.assertIn((tx.hash, 1), tokens_index.mint)
         self.assertIn((tx.hash, 2), tokens_index.melt)
         # there should only be one element on the indexes for the token
@@ -415,25 +355,141 @@ class TokenTest(unittest.TestCase):
         # check total amount of tokens
         self.assertEqual(100, tokens_index.total)
 
-        # create conflicting tx by changing parents
-        tx2 = Transaction.create_from_struct(tx.get_struct())
-        tx2.parents = [tx.parents[1], tx.parents[0]]
-        tx2.weight = 3
+        # new tx minting tokens
+        mint_amount = 300
+        deposit_amount = get_deposit_amount(mint_amount)
+        script = P2PKH.create_output_script(self.address)
+        # inputs
+        mint_input = TxInput(tx.hash, 1, b'')
+        melt_input = TxInput(tx.hash, 2, b'')
+        deposit_input = TxInput(tx.hash, 3, b'')
+        # outputs
+        mint_output = TxOutput(mint_amount, script, 1)
+        authority_output1 = TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001)
+        authority_output2 = TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001)
+        deposit_output = TxOutput(tx.outputs[3].value - deposit_amount, script, 0)
+        tx2 = Transaction(
+            weight=1,
+            inputs=[mint_input, melt_input, deposit_input],
+            outputs=[authority_output1, authority_output2, mint_output, deposit_output],
+            parents=self.manager.get_new_tx_parents(),
+            tokens=[token_uid],
+            storage=self.manager.tx_storage,
+            timestamp=int(self.clock.seconds())
+        )
+        # sign inputs
+        wallet = self.manager.wallet
+        data_to_sign = tx2.get_sighash_all(clear_input_data=True)
+        public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
+        data = P2PKH.create_input_data(public_bytes, signature)
+        tx2.inputs[0].data = data
+        tx2.inputs[1].data = data
+        tx2.inputs[2].data = data
         tx2.resolve()
-        self.assertNotEqual(tx.hash, tx2.hash)
-        self.assertTrue(tx2.weight > tx.weight)
-
+        tx2.verify()
         self.manager.propagate_tx(tx2)
         self.run_to_completion()
 
-        # new tx should be on tokens index. Old tx should not be present
-        self.assertIn((tx2.hash, 1), tokens_index.mint)
-        self.assertIn((tx2.hash, 2), tokens_index.melt)
         # there should only be one element on the indexes for the token
         self.assertEqual(1, len(tokens_index.mint))
         self.assertEqual(1, len(tokens_index.melt))
-        # should have same number of tokens
-        self.assertEqual(100, tokens_index.total)
+        self.assertIn((tx2.hash, 0), tokens_index.mint)
+        self.assertIn((tx2.hash, 1), tokens_index.melt)
+        # check total amount of tokens has been updated
+        self.assertEqual(400, tokens_index.total)
+
+        # create conflicting tx by changing parents
+        tx3 = Transaction.create_from_struct(tx2.get_struct())
+        tx3.parents = [tx.parents[1], tx.parents[0]]
+        tx3.weight = 3
+        tx3.resolve()
+        self.assertNotEqual(tx3.hash, tx2.hash)
+        self.assertTrue(tx3.weight > tx2.weight)
+        self.manager.propagate_tx(tx3)
+        self.run_to_completion()
+
+        # new tx should be on tokens index. Old tx should not be present
+        self.assertIn((tx3.hash, 0), tokens_index.mint)
+        self.assertIn((tx3.hash, 1), tokens_index.melt)
+        # there should only be one element on the indexes for the token
+        self.assertEqual(1, len(tokens_index.mint))
+        self.assertEqual(1, len(tokens_index.melt))
+        # should have same amount of tokens
+        self.assertEqual(400, tokens_index.total)
+
+    def test_token_info(self):
+        def update_tx(tx):
+            """ sighash_all data changes with token name or symbol, so we have to compute signature again
+            """
+            data_to_sign = tx.get_sighash_all(clear_input_data=True)
+            public_bytes, signature = self.manager.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+            tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
+            tx.resolve()
+
+        # test token name and symbol
+        tx = create_tokens(self.manager, self.address_b58)
+
+        # max token name length
+        tx.token_name = 'a' * settings.MAX_LENGTH_TOKEN_NAME
+        update_tx(tx)
+        tx.verify()
+
+        # max token symbol length
+        tx.token_symbol = 'a' * settings.MAX_LENGTH_TOKEN_SYMBOL
+        update_tx(tx)
+        tx.verify()
+
+        # long token name
+        tx.token_name = 'a' * (settings.MAX_LENGTH_TOKEN_NAME + 1)
+        update_tx(tx)
+        with self.assertRaises(TransactionDataError):
+            tx.verify()
+
+        # long token symbol
+        tx.token_name = 'ValidName'
+        tx.token_symbol = 'a' * (settings.MAX_LENGTH_TOKEN_SYMBOL + 1)
+        update_tx(tx)
+        with self.assertRaises(TransactionDataError):
+            tx.verify()
+
+    def test_token_mint_zero(self):
+        # try to mint 0 tokens
+        with self.assertRaises(InvalidToken):
+            create_tokens(self.manager, self.address_b58, mint_amount=0)
+
+    def test_token_struct(self):
+        tx = create_tokens(self.manager, self.address_b58, mint_amount=500)
+        tx2 = TokenCreationTransaction.create_from_struct(tx.get_struct())
+        self.assertEqual(tx.hash, tx2.hash)
+
+    def test_unknown_authority(self):
+        wallet = self.manager.wallet
+        tx = create_tokens(self.manager, self.address_b58, mint_amount=500)
+        token_uid = tx.tokens[0]
+        parents = self.manager.get_new_tx_parents()
+        script = P2PKH.create_output_script(self.address)
+
+        # try an unknown authority
+        input1 = TxInput(tx.hash, 1, b'')
+        input2 = TxInput(tx.hash, 2, b'')
+        output = TxOutput((TxOutput.ALL_AUTHORITIES << 1), script, 0b10000001)
+        tx2 = Transaction(
+            weight=1,
+            inputs=[input1, input2],
+            outputs=[output],
+            parents=parents,
+            tokens=[token_uid],
+            storage=self.manager.tx_storage,
+            timestamp=int(self.clock.seconds())
+        )
+        data_to_sign = tx2.get_sighash_all(clear_input_data=True)
+        public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
+        data = P2PKH.create_input_data(public_bytes, signature)
+        tx2.inputs[0].data = data
+        tx2.inputs[1].data = data
+        tx2.resolve()
+        with self.assertRaises(InvalidToken):
+            tx2.verify()
 
 
 if __name__ == '__main__':

@@ -132,3 +132,9 @@ class HathorSettings(NamedTuple):
     # The same percentage is used to calculate the number of HTR that must be withdraw when melting tokens
     # See for further information, see [rfc 0011-token-deposit].
     TOKEN_DEPOSIT_PERCENTAGE: float = 0.01
+
+    # Maximum number of characters in a token name
+    MAX_LENGTH_TOKEN_NAME: int = 30
+
+    # Maximum number of characters in a token symbol
+    MAX_LENGTH_TOKEN_SYMBOL: int = 5

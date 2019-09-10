@@ -83,6 +83,25 @@ def aux_calc_weight(w1: float, w2: float, multiplier: int) -> float:
 class TxVersion(IntEnum):
     REGULAR_BLOCK = 0
     REGULAR_TRANSACTION = 1
+    TOKEN_CREATION_TRANSACTION = 2
+
+    @classmethod
+    def _missing_(cls, value):
+        # version's first byte is reserved for future use, so we'll ignore it
+        version = value & 0xFF
+        return cls(version)
+
+    def get_cls(self) -> Type['BaseTransaction']:
+        from hathor.transaction.block import Block
+        from hathor.transaction.token_creation_tx import TokenCreationTransaction
+        from hathor.transaction.transaction import Transaction
+
+        cls_map: Dict[TxVersion, Type[BaseTransaction]] = {
+            TxVersion.REGULAR_BLOCK: Block,
+            TxVersion.REGULAR_TRANSACTION: Transaction,
+            TxVersion.TOKEN_CREATION_TRANSACTION: TokenCreationTransaction,
+        }
+        return cls_map[self]
 
 
 class BaseTransaction(ABC):
@@ -132,7 +151,7 @@ class BaseTransaction(ABC):
     def __str__(self) -> str:
         class_name = 'Block' if self.is_block else 'Transaction'
         return ('%s(nonce=%d, timestamp=%s, version=%s, weight=%f, hash=%s)' % (class_name, self.nonce, self.timestamp,
-                self.version, self.weight, self.hash_hex))
+                int(self.version), self.weight, self.hash_hex))
 
     @property
     @abstractmethod
@@ -818,6 +837,21 @@ class TxInput:
         ret += self.data
         return ret
 
+    def get_sighash_bytes(self, clear_data) -> bytes:
+        """Return a serialization of the input for the sighash
+
+        :return: Serialization of the input
+        :rtype: bytes
+        """
+        if not clear_data:
+            return bytes(self)
+        else:
+            ret = b''
+            ret += self.tx_id
+            ret += int_to_bytes(self.index, 1)
+            ret += int_to_bytes(0, 2)
+            return ret
+
     @classmethod
     def create_from_bytes(cls, buf: bytes) -> Tuple['TxInput', bytes]:
         """ Creates a TxInput from a serialized input. Returns the input
@@ -873,12 +907,12 @@ class TxOutput:
     TOKEN_INDEX_MASK = 0b01111111
     TOKEN_AUTHORITY_MASK = 0b10000000
 
-    # last bit indicates a token uid creation UTXO
-    TOKEN_CREATION_MASK = 0b00000001
-    # second to last bit is mint authority
-    TOKEN_MINT_MASK = 0b00000010
-    # and next one is melt authority
-    TOKEN_MELT_MASK = 0b00000100
+    # last bit is mint authority
+    TOKEN_MINT_MASK = 0b00000001
+    # second to last bit is melt authority
+    TOKEN_MELT_MASK = 0b00000010
+
+    ALL_AUTHORITIES = TOKEN_MINT_MASK | TOKEN_MELT_MASK
 
     def __init__(self, value: int, script: bytes, token_data: int = 0) -> None:
         """
@@ -894,6 +928,10 @@ class TxOutput:
         self.value = value  # int
         self.script = script  # bytes
         self.token_data = token_data  # int
+
+    def __str__(self) -> str:
+        value_str = bin(self.value) if self.is_token_authority else str(self.value)
+        return ('TxOutput(token_data=%s, value=%s)' % (bin(self.token_data), value_str))
 
     def __bytes__(self) -> bytes:
         """Returns a byte representation of the output
@@ -925,10 +963,6 @@ class TxOutput:
     def is_token_authority(self) -> bool:
         """Whether this is a token authority output"""
         return (self.token_data & self.TOKEN_AUTHORITY_MASK) > 0
-
-    def is_token_creation(self) -> bool:
-        """Whether this is a token creation output"""
-        return self.is_token_authority() and ((self.value & self.TOKEN_CREATION_MASK) > 0)
 
     def can_mint_token(self) -> bool:
         """Whether this utxo can mint tokens"""
@@ -1024,29 +1058,17 @@ def output_value_to_bytes(number: int) -> bytes:
 
 def tx_or_block_from_proto(tx_proto: protos.BaseTransaction,
                            storage: Optional['TransactionStorage'] = None) -> 'BaseTransaction':
-    from hathor.transaction.transaction import Transaction
     from hathor.transaction.block import Block
+    from hathor.transaction.token_creation_tx import TokenCreationTransaction
+    from hathor.transaction.transaction import Transaction
     if tx_proto.HasField('transaction'):
         return Transaction.create_from_proto(tx_proto, storage=storage)
     elif tx_proto.HasField('block'):
         return Block.create_from_proto(tx_proto, storage=storage)
+    elif tx_proto.HasField('tokenCreationTransaction'):
+        return TokenCreationTransaction.create_from_proto(tx_proto, storage=storage)
     else:
         raise ValueError('invalid base_transaction_oneof')
-
-
-def cls_from_version(version: int) -> Type['BaseTransaction']:
-    """ Returns the class for the given version
-    """
-    from hathor.transaction.transaction import Transaction
-    from hathor.transaction.block import Block
-    # version's first byte is reserved for future use, so we'll ignore it
-    real_version = version & 0xFF
-    if real_version == TxVersion.REGULAR_BLOCK:
-        return Block
-    elif real_version == TxVersion.REGULAR_TRANSACTION:
-        return Transaction
-    else:
-        raise NotImplementedError
 
 
 def tx_or_block_from_bytes(data: bytes) -> 'BaseTransaction':
@@ -1054,5 +1076,5 @@ def tx_or_block_from_bytes(data: bytes) -> 'BaseTransaction':
     """
     # version field takes up the first 2 bytes
     version = int.from_bytes(data[0:2], 'big')
-    cls = cls_from_version(version)
+    cls = TxVersion(version).get_cls()
     return cls.create_from_struct(data)

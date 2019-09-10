@@ -104,9 +104,11 @@ class SendTokensResource(resource.Resource):
         """ Resolves the request without stratum
             The transaction is completed and then sent to be mined in a thread
         """
-        max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
-        # Set tx timestamp as max between tx and inputs
-        tx.timestamp = max(max_ts_spent_tx + 1, tx.timestamp)
+        if tx.inputs:
+            max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
+            # Set tx timestamp as max between tx and inputs
+            tx.timestamp = max(max_ts_spent_tx + 1, tx.timestamp)
+
         # Set parents
         tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
 
