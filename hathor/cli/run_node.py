@@ -199,7 +199,7 @@ class RunNode:
             dns_hosts.extend(settings.BOOTSTRAP_DNS)
 
         if args.dns:
-            dns_hosts.extend(dns_hosts)
+            dns_hosts.extend(args.dns)
 
         if dns_hosts:
             self.manager.add_peer_discovery(DNSPeerDiscovery(dns_hosts))

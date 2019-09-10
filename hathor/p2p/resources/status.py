@@ -55,6 +55,7 @@ class StatusResource(resource.Resource):
                 # 'received_bytes': conn.received_bytes,
                 'last_message': time.time() - conn.last_message,
                 'plugins': status,
+                'warning_flags': [flag.value for flag in conn.warning_flags],
             })
 
         known_peers = []
@@ -62,6 +63,7 @@ class StatusResource(resource.Resource):
             known_peers.append({
                 'id': peer.id,
                 'entrypoints': peer.entrypoints,
+                'flags': [flag.value for flag in peer.flags],
             })
 
         app = 'Hathor v{}'.format(hathor.__version__)

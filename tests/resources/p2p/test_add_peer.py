@@ -12,15 +12,15 @@ class AddPeerTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_connecting_peers(self):
-        response = yield self.web.post('p2p/peers', ['tcp:localhost:8006'])
+        response = yield self.web.post('p2p/peers', ['tcp://localhost:8006'])
         data = response.json_value()
         self.assertTrue(data['success'])
 
         # test when we send a peer we're already connected to
         peer = PeerId()
-        peer.entrypoints = ['tcp:localhost:8006']
+        peer.entrypoints = ['tcp://localhost:8006']
         self.manager.connections.peer_storage.add(peer)
-        response = yield self.web.post('p2p/peers', ['tcp:localhost:8006', 'tcp:localhost:8007'])
+        response = yield self.web.post('p2p/peers', ['tcp://localhost:8006', 'tcp://localhost:8007'])
         data = response.json_value()
         self.assertTrue(data['success'])
-        self.assertEqual(data['peers'], ['tcp:localhost:8007'])
+        self.assertEqual(data['peers'], ['tcp://localhost:8007'])

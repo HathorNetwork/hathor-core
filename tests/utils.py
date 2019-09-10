@@ -4,17 +4,19 @@ import subprocess
 import time
 import urllib.parse
 from concurrent import futures
-from typing import List
+from typing import TYPE_CHECKING, List
 
 import grpc
 import numpy.random
 import requests
+from OpenSSL.crypto import X509
 from twisted.internet.task import Clock
 from twisted.test import proto_helpers
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_private_key_from_bytes
 from hathor.manager import HathorEvents, HathorManager
+from hathor.p2p.utils import generate_certificate
 from hathor.transaction import Transaction, TxInput, TxOutput, genesis
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import (
@@ -24,6 +26,9 @@ from hathor.transaction.storage import (
 )
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount
+
+if TYPE_CHECKING:
+    from hathor.p2p.peer_id import PeerId
 
 settings = HathorSettings()
 
@@ -178,6 +183,17 @@ def add_new_blocks(manager, num_blocks, advance_clock=None, *, parent_block_hash
     return blocks
 
 
+class HathorStringTransport(proto_helpers.StringTransport):
+    def __init__(self, peer: 'PeerId'):
+        self.peer = peer
+        super().__init__()
+
+    def getPeerCertificate(self) -> X509:
+        certificate = generate_certificate(self.peer.private_key, settings.CA_FILEPATH, settings.CA_KEY_FILEPATH)
+        openssl_certificate = X509.from_cryptography(certificate)
+        return openssl_certificate
+
+
 class FakeConnection:
     def __init__(self, manager1, manager2, *, latency: float = 0):
         """
@@ -192,8 +208,8 @@ class FakeConnection:
         self.proto1 = manager1.server_factory.buildProtocol(('127.0.0.1', 0))
         self.proto2 = manager2.client_factory.buildProtocol(('127.0.0.1', 0))
 
-        self.tr1 = proto_helpers.StringTransport()
-        self.tr2 = proto_helpers.StringTransport()
+        self.tr1 = HathorStringTransport(self.proto2.my_peer)
+        self.tr2 = HathorStringTransport(self.proto1.my_peer)
 
         self.proto1.makeConnection(self.tr1)
         self.proto2.makeConnection(self.tr2)

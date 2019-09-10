@@ -119,7 +119,7 @@ class HathorManager:
         self.min_tx_weight = settings.MIN_TX_WEIGHT
         self.tokens_issued_per_block = settings.TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES)
 
-        self.max_future_timestamp_allowed = 3600  # in seconds
+        self.max_future_timestamp_allowed = settings.MAX_FUTURE_TIMESTAMP_ALLOWED
 
         self.metrics = Metrics(
             pubsub=self.pubsub,
@@ -589,5 +589,5 @@ class HathorManager:
 
         if self.hostname:
             proto, _, _ = description.partition(':')
-            address = '{}:{}:{}'.format(proto, self.hostname, endpoint._port)
+            address = '{}://{}:{}'.format(proto, self.hostname, endpoint._port)
             self.my_peer.entrypoints.append(address)

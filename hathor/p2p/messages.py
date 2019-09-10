@@ -47,6 +47,9 @@ class ProtocolMessages(Enum):
     # Identifies the peer.
     PEER_ID = 'PEER-ID'
 
+    # Tell the other peer your peer-id validations were completed and you are ready
+    READY = 'READY'
+
     # Request a list of peers.
     GET_PEERS = 'GET-PEERS'
 

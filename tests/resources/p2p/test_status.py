@@ -47,7 +47,8 @@ class StatusTest(_BaseResourceTest._ResourceTest):
     def test_get_with_one_peer(self):
         self.conn1.run_one_step()  # HELLO
         self.conn1.run_one_step()  # PEER-ID
-        self.conn1.run_one_step()  # GET-PEERS
+        self.conn1.run_one_step()  # READY
+        self.conn1.run_one_step()  # BOTH PEERS ARE READY NOW
 
         response = yield self.web.get("status")
         data = response.json_value()

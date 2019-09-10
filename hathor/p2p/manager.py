@@ -1,18 +1,19 @@
-from typing import TYPE_CHECKING, Dict, Optional, Set
+from typing import TYPE_CHECKING, Dict, Optional, Set, Union
 
 from twisted.internet import endpoints
 from twisted.internet.base import ReactorBase
 from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IStreamClientEndpoint, IStreamServerEndpoint
 from twisted.logger import Logger
+from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 
-from hathor.crypto.util import generate_privkey_crt_pem
 from hathor.p2p.downloader import Downloader
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import PeerStorage
 # from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
 from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.states.ready import ReadyState
+from hathor.p2p.utils import description_to_connection_string
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
 
@@ -132,6 +133,9 @@ class ConnectionsManager:
         self.peer_storage.add_or_merge(protocol.peer)
         self.connected_peers[protocol.peer.id] = protocol
 
+        # In case it was a retry, we must reset the data only here, after it gets ready
+        protocol.peer.reset_retry_timestamp()
+
         # Notify other peers about this new peer connection.
         for conn in self.get_ready_connections():
             if conn != protocol:
@@ -190,39 +194,55 @@ class ConnectionsManager:
             return
 
         assert peer.id is not None
-        if now >= peer.retry_timestamp:
+        if peer.can_retry(now):
             self.connect_to(random.choice(peer.entrypoints), peer)
 
-    def _connect_to_callback(self, protocol: HathorProtocol, peer: Optional[PeerId],
-                             endpoint: IStreamClientEndpoint) -> None:
-        self.connecting_peers.pop(endpoint)
-        if peer is not None:
-            peer.reset_retry_timestamp()
+    def _connect_to_callback(self, protocol: Union[HathorProtocol, TLSMemoryBIOProtocol], peer: Optional[PeerId],
+                             endpoint: IStreamClientEndpoint, connection_string: str,
+                             url_peer_id: Optional[str]) -> None:
+        if isinstance(protocol, HathorProtocol):
+            # Case it's not ssl
+            conn_protocol = protocol
+        else:
+            conn_protocol = protocol.wrappedProtocol
 
-    def connect_to(self, description: str, peer: Optional[PeerId] = None, use_ssl: bool = False) -> None:
+        if url_peer_id:
+            # Set in protocol the peer id extracted from the URL that must be validated
+            conn_protocol.expected_peer_id = url_peer_id
+        else:
+            # Add warning flag
+            conn_protocol.warning_flags.add(conn_protocol.WarningFlags.NO_PEER_ID_URL)
+
+        # Setting connection string in protocol, so we can validate it matches the entrypoints data
+        conn_protocol.connection_string = connection_string
+
+        self.connecting_peers.pop(endpoint)
+
+    def connect_to(self, description: str, peer: Optional[PeerId] = None, use_ssl: bool = True) -> None:
         """ Attempt to connect to a peer, even if a connection already exists.
         Usually you should call `connect_to_if_not_connected`.
 
         If `use_ssl` is True, then the connection will be wraped by a TLS.
         """
-        endpoint = endpoints.clientFromString(self.reactor, description)
+        connection_string, peer_id = description_to_connection_string(description)
+        # When using twisted endpoints we can't have // in the connection string
+        endpoint_url = connection_string.replace('//', '')
+        endpoint = endpoints.clientFromString(self.reactor, endpoint_url)
 
         if use_ssl:
-            from twisted.internet import ssl
-            from twisted.protocols.tls import TLSMemoryBIOFactory
-            context = ssl.ClientContextFactory()
-            factory = TLSMemoryBIOFactory(context, True, self.client_factory)
+            certificate_options = self.my_peer.get_certificate_options()
+            factory = TLSMemoryBIOFactory(certificate_options, True, self.client_factory)
         else:
             factory = self.client_factory
 
         deferred = endpoint.connect(factory)
         self.connecting_peers[endpoint] = deferred
 
-        deferred.addCallback(self._connect_to_callback, peer, endpoint)
+        deferred.addCallback(self._connect_to_callback, peer, endpoint, connection_string, peer_id)
         deferred.addErrback(self.on_connection_failure, peer, endpoint)
         self.log.info('Connecting to: {description}...', description=description)
 
-    def listen(self, description: str, ssl: bool = False) -> IStreamServerEndpoint:
+    def listen(self, description: str, ssl: bool = True) -> IStreamServerEndpoint:
         """ Start to listen to new connection according to the description.
 
         If `ssl` is True, then the connection will be wraped by a TLS.
@@ -237,21 +257,8 @@ class ConnectionsManager:
         endpoint = endpoints.serverFromString(self.reactor, description)
 
         if ssl:
-            # XXX Is it safe to generate a new certificate for each connection?
-            #     What about CPU usage when many new connections arrive?
-            from twisted.internet.ssl import PrivateCertificate
-            from twisted.protocols.tls import TLSMemoryBIOFactory
-            certificate = PrivateCertificate.loadPEM(generate_privkey_crt_pem())
-            contextFactory = certificate.options()
-            factory = TLSMemoryBIOFactory(contextFactory, False, self.server_factory)
-
-            # from twisted.internet.ssl import CertificateOptions, TLSVersion
-            # options = dict(privateKey=certificate.privateKey.original, certificate=certificate.original)
-            # contextFactory = CertificateOptions(
-            #     insecurelyLowerMinimumTo=TLSVersion.TLSv1_2,
-            #     lowerMaximumSecurityTo=TLSVersion.TLSv1_3,
-            #     **options,
-            # )
+            certificate_options = self.my_peer.get_certificate_options()
+            factory = TLSMemoryBIOFactory(certificate_options, False, self.server_factory)
         else:
             factory = self.server_factory
 

@@ -4,8 +4,11 @@ import shutil
 import tempfile
 import unittest
 
+from hathor.conf import HathorSettings
 from hathor.p2p.peer_id import InvalidPeerIdException, PeerId
 from hathor.p2p.peer_storage import PeerStorage
+
+settings = HathorSettings()
 
 
 class PeerIdTest(unittest.TestCase):
@@ -130,7 +133,7 @@ class PeerIdTest(unittest.TestCase):
         p = PeerId()
         interval = p.retry_interval
         p.update_retry_timestamp(0)
-        self.assertEqual(2*interval, p.retry_interval)
+        self.assertEqual(settings.PEER_CONNECTION_RETRY_INTERVAL_MULTIPLIER*interval, p.retry_interval)
         self.assertEqual(p.retry_interval, p.retry_timestamp)
 
         # when retry_interval is already 180
