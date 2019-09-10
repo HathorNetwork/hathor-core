@@ -5,6 +5,7 @@ from typing import Optional
 
 from twisted.internet import reactor, threads
 from twisted.internet.defer import CancelledError, Deferred
+from twisted.logger import Logger
 from twisted.python.failure import Failure
 from twisted.web import resource
 from twisted.web.http import Request
@@ -29,6 +30,7 @@ class SendTokensResource(resource.Resource):
     You must run with option `--status <PORT>`.
     """
     isLeaf = True
+    log = Logger()
 
     def __init__(self, manager):
         # Important to have the manager so we can know the tx_storage
@@ -144,15 +146,23 @@ class SendTokensResource(resource.Resource):
             We remove mining data and deferred from stratum and send error as response
         """
         tx = kwargs['tx']
+        stratum_tx = None
         request = kwargs['request']
         funds_hash = tx.get_funds_hash()
         if funds_hash in self.manager.stratum_factory.mining_tx_pool:
-            del self.manager.stratum_factory.mining_tx_pool[funds_hash]
+            # We get both tx because stratum might have updated the tx (timestamp or parents)
+            stratum_tx = self.manager.stratum_factory.mining_tx_pool.pop(funds_hash)
 
         if funds_hash in self.manager.stratum_factory.deferreds_tx:
             del self.manager.stratum_factory.deferreds_tx[funds_hash]
 
         result.value = 'Timeout: error resolving transaction proof of work'
+
+        self.log.info(
+            'Stratum timeout: error resolving transaction proof of work. Tx={tx} Stratum tx={stratum_tx}',
+            tx=tx.get_struct().hex(),
+            stratum_tx=stratum_tx.get_struct().hex() if stratum_tx else ''
+        )
 
         self._err_tx_resolve(result, request)
 
