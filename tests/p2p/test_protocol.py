@@ -1,10 +1,9 @@
 import json
 
-from hathor.p2p.node_sync import NodeSyncTimestamp
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from tests import unittest
-from tests.utils import FakeConnection, add_new_block
+from tests.utils import FakeConnection
 
 
 class HathorProtocolTestCase(unittest.TestCase):
@@ -221,37 +220,3 @@ class HathorProtocolTestCase(unittest.TestCase):
 
         self._check_result_only_cmd(self.conn1.tr1.value(), b'PEERS')
         self.conn1.run_one_step()
-
-    def test_notify_data(self):
-        self.conn1.run_one_step()  # HELLO
-        self.conn1.run_one_step()  # PEER-ID
-        self.conn1.run_one_step()  # GET-PEERS
-        self.conn1.run_one_step()  # GET-TIPS
-        self.conn1.run_one_step()  # READY
-
-        node_sync = NodeSyncTimestamp(self.conn1.proto1, reactor=self.manager1.reactor)
-        block = add_new_block(self.manager2, advance_clock=1)
-
-        node_sync.send_notify_data(block)
-        full_payload = self.conn1.tr1.value().split(b'\r\n')[1]
-        cmd = full_payload.split()[0].decode('utf-8')
-        payload = b" ".join(full_payload.split()[1:]).decode('utf-8')
-        self._send_cmd(self.conn1.proto1, cmd, payload)
-        self._check_cmd_and_value(self.conn1.tr1.value(), (b'GET-DATA', block.hash.hex().encode('utf-8')))
-
-        # Testing deferred exceptions
-        node_sync.deferred_by_key['next'] = 1
-        with self.assertRaises(Exception):
-            node_sync.get_peer_next()
-
-        node_sync.deferred_by_key['tips'] = 1
-        with self.assertRaises(Exception):
-            node_sync.get_peer_tips()
-
-        node_sync.deferred_by_key['get-data-12'] = 1
-        with self.assertRaises(Exception):
-            node_sync.get_data(bytes.fromhex('12'))
-
-        # Just to test specific part of code
-        self.conn1.proto1.state.lc_ping.running = False
-        self.conn1.disconnect('Testing')

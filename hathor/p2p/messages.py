@@ -63,9 +63,9 @@ class ProtocolMessages(Enum):
     # ---
     # Hathor Specific Messages
     # ---
-    NOTIFY_DATA = 'NOTIFY-DATA'  # Notify about a new piece of data.
     GET_DATA = 'GET-DATA'  # Request the data for a specific transaction.
     DATA = 'DATA'  # Send the data for a specific transaction.
+    NOT_FOUND = 'NOT-FOUND'  # Used when a requested tx from GET-DATA is not found in the peer
 
     GET_TIPS = 'GET-TIPS'
     TIPS = 'TIPS'

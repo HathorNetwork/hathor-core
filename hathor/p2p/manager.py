@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Set
+from typing import TYPE_CHECKING, Dict, Optional, Set
 
 from twisted.internet import endpoints
 from twisted.internet.base import ReactorBase
@@ -7,6 +7,7 @@ from twisted.internet.interfaces import IStreamClientEndpoint, IStreamServerEndp
 from twisted.logger import Logger
 
 from hathor.crypto.util import generate_privkey_crt_pem
+from hathor.p2p.downloader import Downloader
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import PeerStorage
 # from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
@@ -14,6 +15,10 @@ from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.states.ready import ReadyState
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager  # noqa: F401
+    from hathor.p2p.node_sync import NodeSyncTimestamp  # noqa: F401
 
 
 class ConnectionsManager:
@@ -26,7 +31,7 @@ class ConnectionsManager:
     handshaking_peers: Set[HathorProtocol]
 
     def __init__(self, reactor: ReactorBase, my_peer: PeerId, server_factory, client_factory,
-                 pubsub: PubSubManager) -> None:
+                 pubsub: PubSubManager, manager: 'HathorManager') -> None:
         from twisted.internet.task import LoopingCall
 
         self.reactor = reactor
@@ -54,6 +59,8 @@ class ConnectionsManager:
 
         # List of known peers.
         self.peer_storage = PeerStorage()  # Dict[string (peer.id), PeerId]
+
+        self.downloader = Downloader(manager)
 
         # A timer to try to reconnect to the disconnect known peers.
         self.lc_reconnect = LoopingCall(self.reconnect_to_all)
@@ -251,3 +258,13 @@ class ConnectionsManager:
         endpoint.listen(factory)
         self.log.info('Listening to: {description}...', description=description)
         return endpoint
+
+    def get_tx(self, hash_bytes: bytes, node_sync: 'NodeSyncTimestamp') -> Deferred:
+        """ Request a tx from the downloader
+        """
+        return self.downloader.get_tx(hash_bytes, node_sync)
+
+    def retry_get_tx(self, hash_bytes: bytes) -> None:
+        """ Execute a retry of a request of a tx in the downloader
+        """
+        self.downloader.retry(hash_bytes)

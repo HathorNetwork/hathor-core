@@ -23,6 +23,16 @@ settings = HathorSettings()
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
+    from twisted.python.failure import Failure  # noqa: F401
+
+
+def _get_deps(tx: BaseTransaction) -> Iterator[bytes]:
+    """ Method to get dependencies of a block/transaction.
+    """
+    for h in tx.parents:
+        yield h
+    for txin in tx.inputs:
+        yield txin.tx_id
 
 
 @implementer(IPushProducer)
@@ -71,14 +81,6 @@ class SendDataPush:
         if len(self.queue) > 0 or len(self.priority_queue) > 0:
             self.delayed_call = self.node_sync.reactor.callLater(0, self.send_next)
 
-    def _get_deps(self, tx: BaseTransaction) -> Iterator[bytes]:
-        """ Internal method to get dependencies of a block/transaction.
-        """
-        for h in tx.parents:
-            yield h
-        for txin in tx.inputs:
-            yield txin.tx_id
-
     def add(self, tx: BaseTransaction) -> None:
         """ Add a new block/transaction to be pushed.
         """
@@ -86,7 +88,7 @@ class SendDataPush:
         if tx.is_block:
             self.add_to_priority(tx)
         else:
-            deps = list(self._get_deps(tx))
+            deps = list(_get_deps(tx))
             self.queue[tx.hash] = (tx, deps)
             self.schedule_if_needed()
 
@@ -97,7 +99,7 @@ class SendDataPush:
         assert tx.hash not in self.queue
         if tx.hash in self.priority_queue:
             return
-        deps = list(self._get_deps(tx))
+        deps = list(_get_deps(tx))
         for h in deps:
             if h in self.queue:
                 tx2, _ = self.queue.pop(h)
@@ -219,13 +221,13 @@ class NodeSyncTimestamp(Plugin):
         """ Return a dict of messages of the plugin.
         """
         return {
-            ProtocolMessages.NOTIFY_DATA: self.handle_notify_data,
             ProtocolMessages.GET_DATA: self.handle_get_data,
             ProtocolMessages.DATA: self.handle_data,
             ProtocolMessages.GET_TIPS: self.handle_get_tips,
             ProtocolMessages.TIPS: self.handle_tips,
             ProtocolMessages.GET_NEXT: self.handle_get_next,
             ProtocolMessages.NEXT: self.handle_next,
+            ProtocolMessages.NOT_FOUND: self.handle_not_found,
         }
 
     def start(self) -> None:
@@ -334,12 +336,20 @@ class NodeSyncTimestamp(Plugin):
 
         :rtype: Deferred
         """
-        key = 'get-data-{}'.format(hash_bytes.hex())
+        assert self.protocol.connections is not None
+        d = self.protocol.connections.get_tx(hash_bytes, self)
+        d.addCallback(self.on_tx_success)
+        return d
+
+    def request_data(self, hash_bytes: bytes) -> Deferred:
+        key = self.get_data_key(hash_bytes)
         if self.deferred_by_key.get(key, None) is not None:
             raise Exception('latest_deferred is not None')
         self.send_get_data(hash_bytes.hex())
         deferred = Deferred()
         self.deferred_by_key[key] = deferred
+        # In case the deferred fails we just remove it from the dictionary
+        deferred.addErrback(self.remove_deferred, hash_bytes)
         return deferred
 
     @inlineCallbacks
@@ -606,35 +616,6 @@ class NodeSyncTimestamp(Plugin):
         if deferred:
             deferred.callback(args)
 
-    def send_notify_data(self, tx):
-        """ Send a NOTIFY-DATA message, notifying a peer about a new hash.
-
-        TODO Send timestamp and parents.
-        """
-        payload = '{} {} {}'.format(
-            tx.timestamp,
-            tx.hash.hex(),
-            json.dumps([x.hex() for x in tx.parents]),
-        )
-        self.send_message(ProtocolMessages.NOTIFY_DATA, payload)
-
-    def handle_notify_data(self, payload):
-        """ Handle a NOTIFY-DATA message, downloading the new data when we don't have it.
-        """
-        timestamp, _, payload2 = payload.partition(' ')
-        hash_hex, _, parents_json = payload2.partition(' ')
-        parents = json.loads(parents_json)
-
-        if self.manager.tx_storage.transaction_exists(bytes.fromhex(hash_hex)):
-            return
-
-        for parent_hash in parents:
-            if not self.manager.tx_storage.transaction_exists(bytes.fromhex(parent_hash)):
-                # Are we out-of-sync with this peer?
-                return
-
-        self.send_get_data(hash_hex)
-
     def send_get_data(self, hash_hex: str) -> None:
         """ Send a GET-DATA message, requesting the data of a given hash.
         """
@@ -649,8 +630,16 @@ class NodeSyncTimestamp(Plugin):
             tx = self.protocol.node.tx_storage.get_transaction(bytes.fromhex(hash_hex))
             self.send_data(tx)
         except TransactionDoesNotExist:
-            # TODO Send NOT-FOUND?
-            pass
+            # In case the tx does not exist we send a NOT-FOUND message
+            self.send_message(ProtocolMessages.NOT_FOUND, hash_hex)
+
+    def handle_not_found(self, payload: str) -> None:
+        """ Handle a received NOT-FOUND message.
+        """
+        hash_hex = payload
+        # We ask for the downloader to retry the request
+        assert self.protocol.connections is not None
+        self.protocol.connections.retry_get_tx(bytes.fromhex(hash_hex))
 
     def send_data(self, tx: BaseTransaction) -> None:
         """ Send a DATA message.
@@ -675,18 +664,22 @@ class NodeSyncTimestamp(Plugin):
         tx.storage = self.protocol.node.tx_storage
         assert tx.hash is not None
 
-        key = 'get-data-{}'.format(tx.hash.hex())
+        key = self.get_data_key(tx.hash)
         deferred = self.deferred_by_key.pop(key, None)
         if deferred:
-            # If we have requested the data, we do not propagate to our peers.
-            propagate_to_peers = False
+            # Adding to the DAG will be done after the downloader validates the correct order
+            assert tx.timestamp is not None
+            self.requested_data_arrived(tx.timestamp)
+            deferred.callback(tx)
         else:
             # If we have not requested the data, it is a new transaction being propagated
             # in the network, thus, we propagate it as well.
-            propagate_to_peers = True
+            result = self.manager.on_new_tx(tx, conn=self.protocol, propagate_to_peers=True)
+            self.update_received_stats(tx, result)
 
-        result = self.manager.on_new_tx(tx, conn=self.protocol, propagate_to_peers=propagate_to_peers)
-
+    def update_received_stats(self, tx: 'BaseTransaction', result: bool) -> None:
+        """ Update protocol metrics when receiving a new tx
+        """
         # Update statistics.
         if result:
             if tx.is_block:
@@ -699,8 +692,34 @@ class NodeSyncTimestamp(Plugin):
             else:
                 self.protocol.metrics.discarded_txs += 1
 
-        if deferred:
-            assert tx.timestamp is not None
-            if tx.timestamp - 1 > self.synced_timestamp:
-                self.synced_timestamp = tx.timestamp - 1
-            deferred.callback((tx, result))
+    def requested_data_arrived(self, timestamp: int) -> None:
+        """ Update synced timestamp when a requested data arrives
+        """
+        if timestamp - 1 > self.synced_timestamp:
+            self.synced_timestamp = timestamp - 1
+
+    def get_data_key(self, hash_bytes: bytes) -> str:
+        """ Return data key corresponding a tx to be used in the deferred dict
+        """
+        key = 'get-data-{}'.format(hash_bytes.hex())
+        return key
+
+    def remove_deferred(self, reason: 'Failure',  hash_bytes: bytes) -> None:
+        """ Remove the deferred from the deferred_by_key
+            Used when a requested tx deferred fails for some reason (not found, or timeout)
+        """
+        key = self.get_data_key(hash_bytes)
+        self.deferred_by_key.pop(key, None)
+
+    def on_tx_success(self, tx: 'BaseTransaction') -> 'BaseTransaction':
+        """ Callback for the deferred when we add a new tx to the DAG
+        """
+        # When we have multiple callbacks in a deferred
+        # the parameter of the second callback is the return of the first
+        # so I need to return the same tx to guarantee that all peers will receive it
+        if tx:
+            # Add tx to the DAG.
+            success = self.manager.on_new_tx(tx)
+            # Updating stats data
+            self.update_received_stats(tx, success)
+        return tx
