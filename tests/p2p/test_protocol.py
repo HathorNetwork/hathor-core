@@ -1,5 +1,8 @@
 import json
 
+import twisted.names.client
+from twisted.internet.defer import inlineCallbacks
+
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from tests import unittest
@@ -33,7 +36,7 @@ class HathorProtocolTestCase(unittest.TestCase):
         if isinstance(line, str):
             line = line.encode('utf-8')
 
-        proto.dataReceived(line)
+        return proto.dataReceived(line)
 
     def _check_result_only_cmd(self, result, expected_cmd):
         cmd_list = []
@@ -89,8 +92,7 @@ class HathorProtocolTestCase(unittest.TestCase):
 
     def test_invalid_payload(self):
         self.conn1.run_one_step()
-        with self.assertRaises(json.decoder.JSONDecodeError):
-            self._send_cmd(self.conn1.proto1, 'PEER-ID', 'abc')
+        self.failureResultOf(self._send_cmd(self.conn1.proto1, 'PEER-ID', 'abc'), json.decoder.JSONDecodeError)
 
     def test_invalid_hello1(self):
         self.conn1.tr1.clear()
@@ -112,7 +114,11 @@ class HathorProtocolTestCase(unittest.TestCase):
 
     def test_invalid_hello4(self):
         self.conn1.tr1.clear()
-        self._send_cmd(self.conn1.proto1, 'HELLO', '{"app": 0, "remote_address": 1, "network": 2, "nonce": 3}')
+        self._send_cmd(
+            self.conn1.proto1,
+            'HELLO',
+            '{"app": 0, "remote_address": 1, "network": 2, "genesis_hash": "123", "settings_hash": "456"}'
+        )
         self._check_result_only_cmd(self.conn1.tr1.value(), b'ERROR')
         self.assertTrue(self.conn1.tr1.disconnecting)
 
@@ -123,20 +129,19 @@ class HathorProtocolTestCase(unittest.TestCase):
         self.assertFalse(self.conn1.tr1.disconnecting)
         self.assertFalse(self.conn1.tr2.disconnecting)
 
+    @inlineCallbacks
     def test_invalid_peer_id(self):
         self.conn1.run_one_step()
-        self._send_cmd(self.conn1.proto1, 'PEER-ID', '{"nonce": 0}')
+        invalid_payload = {'id': '123', 'entrypoints': ['tcp://localhost:1234']}
+        yield self._send_cmd(self.conn1.proto1, 'PEER-ID', json.dumps(invalid_payload))
         self._check_result_only_cmd(self.conn1.tr1.value(), b'ERROR')
         self.assertTrue(self.conn1.tr1.disconnecting)
-
-    def test_invalid_peer_id2(self):
-        self.conn1.run_one_step()
-        data = self.manager2.my_peer.to_json()
-        data['nonce'] = self.conn1.proto1.hello_nonce_sent
-        data['signature'] = 'MTIz'
-        self._send_cmd(self.conn1.proto1, 'PEER-ID', json.dumps(data))
-        self._check_result_only_cmd(self.conn1.tr1.value(), b'ERROR')
-        self.assertTrue(self.conn1.tr1.disconnecting)
+        # When a DNS request is made to twisted client, it starts a callLater to check the resolv file every minute
+        # https://github.com/twisted/twisted/blob/59f8266c286e2b073ddb05c70317ac20693f2b0c/src/twisted/names/client.py#L147  # noqa
+        # So we need to stop this call manually, otherwise the reactor would be unclean with a pending call
+        # TODO We should use a fake DNS resolver for tests otherwise we would need internet connection to run it
+        resolver = twisted.names.client.getResolver().resolvers[2]
+        resolver._parseCall.cancel()
 
     def test_invalid_same_peer_id(self):
         manager3 = self.create_peer(self.network, peer_id=self.peer_id1)
@@ -166,6 +171,7 @@ class HathorProtocolTestCase(unittest.TestCase):
         self.assertIsConnected()
 
     def test_send_ping(self):
+        self.conn1.run_one_step()
         self.conn1.run_one_step()
         self.conn1.run_one_step()
         # Originally, only a GET-PEERS message would be received, but now it is receiving two messages in a row.
@@ -201,6 +207,8 @@ class HathorProtocolTestCase(unittest.TestCase):
     def test_on_disconnect_after_peer_id(self):
         self.conn1.run_one_step()
         self.assertIn(self.conn1.proto1, self.manager1.connections.handshaking_peers)
+        # The peer READY now depends on a message exchange from both peers, so we need one more step
+        self.conn1.run_one_step()
         self.conn1.run_one_step()
         self.assertIn(self.conn1.proto1, self.manager1.connections.connected_peers.values())
         self.assertNotIn(self.conn1.proto1, self.manager1.connections.handshaking_peers)

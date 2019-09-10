@@ -1,16 +1,33 @@
 import base64
 import hashlib
 import json
-from typing import Any, Dict, List, Optional
+from enum import Enum
+from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Set
 
+from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from OpenSSL.crypto import X509, PKey
+from twisted.internet.defer import inlineCallbacks
+from twisted.internet.ssl import Certificate, CertificateOptions, TLSVersion, trustRootFromCertificates
+
+from hathor.conf import HathorSettings
+from hathor.p2p.utils import connection_string_to_host, discover_dns, generate_certificate
+
+if TYPE_CHECKING:
+    from hathor.p2p.protocol import HathorProtocol  # noqa: F401
+
+settings = HathorSettings()
 
 
 class InvalidPeerIdException(Exception):
     pass
+
+
+class PeerFlags(str, Enum):
+    RETRIES_EXCEEDED = 'retries_exceeded'
 
 
 class PeerId:
@@ -27,16 +44,22 @@ class PeerId:
     entrypoints: List[str]
     private_key: Optional['rsa._RSAPrivateKey']
     public_key: Optional['rsa._RSAPublicKey']
+    certificate: Optional[x509.Certificate]
     retry_timestamp: int    # should only try connecting to this peer after this timestamp
     retry_interval: int     # how long to wait for next connection retry. It will double for each failure
+    retry_attempts: int     # how many retries were made
+    flags: Set[str]
 
     def __init__(self, auto_generate_keys: bool = True) -> None:
         self.id = None
         self.private_key = None
         self.public_key = None
+        self.certificate = None
         self.entrypoints = []
         self.retry_timestamp = 0
         self.retry_interval = 5
+        self.retry_attempts = 0
+        self.flags = set()
 
         if auto_generate_keys:
             self.generate_keys()
@@ -206,7 +229,7 @@ class PeerId:
 
         :param now: current timestamp
         """
-        self.retry_interval = self.retry_interval * 2
+        self.retry_interval = self.retry_interval * settings.PEER_CONNECTION_RETRY_INTERVAL_MULTIPLIER
         if self.retry_interval > 180:
             self.retry_interval = 180
         self.retry_timestamp = now + self.retry_interval
@@ -216,3 +239,127 @@ class PeerId:
         """
         self.retry_interval = 5
         self.retry_timestamp = 0
+        self.retry_attempts = 0
+        self.flags.discard(PeerFlags.RETRIES_EXCEEDED)
+
+    def can_retry(self, now: int) -> bool:
+        """ Return if can retry to connect to self in `now` timestamp
+            We validate if peer already has RETRIES_EXCEEDED flag, or has reached the maximum allowed attempts
+            If not, we check if the timestamp is already a valid one to retry
+        """
+        if PeerFlags.RETRIES_EXCEEDED in self.flags:
+            return False
+
+        if self.retry_attempts >= settings.MAX_PEER_CONNECTION_ATTEMPS:
+            self.flags.add(PeerFlags.RETRIES_EXCEEDED)
+            return False
+
+        if now >= self.retry_timestamp:
+            self.retry_attempts += 1
+            return True
+
+        return False
+
+    def get_certificate(self) -> x509.Certificate:
+        if not self.certificate:
+            certificate = generate_certificate(self.private_key, settings.CA_FILEPATH, settings.CA_KEY_FILEPATH)
+            self.certificate = certificate
+
+        return self.certificate
+
+    def get_certificate_options(self) -> CertificateOptions:
+        """ Return certificate options
+            With certificate generated and signed with peer private key
+        """
+        certificate = self.get_certificate()
+        openssl_certificate = X509.from_cryptography(certificate)
+        openssl_pkey = PKey.from_cryptography_key(self.private_key)
+
+        with open(settings.CA_FILEPATH, 'rb') as f:
+            ca = x509.load_pem_x509_certificate(data=f.read(), backend=default_backend())
+
+        openssl_ca = X509.from_cryptography(ca)
+        ca_cert = Certificate(openssl_ca)
+        trust_root = trustRootFromCertificates([ca_cert])
+
+        # We should not use a ContextFactory
+        # https://twistedmatrix.com/documents/19.7.0/api/twisted.protocols.tls.TLSMemoryBIOFactory.html
+        certificate_options = CertificateOptions(
+            privateKey=openssl_pkey,
+            certificate=openssl_certificate,
+            trustRoot=trust_root,
+            raiseMinimumTo=TLSVersion.TLSv1_3
+        )
+        return certificate_options
+
+    @inlineCallbacks
+    def validate_entrypoint(self, protocol: 'HathorProtocol') -> Generator[Any, Any, bool]:
+        """ Validates if connection entrypoint is one of the peer entrypoints
+        """
+        found_entrypoint = False
+
+        # If has no entrypoints must be behind a NAT, so we add the flag to the connection
+        if len(self.entrypoints) == 0:
+            protocol.warning_flags.add(protocol.WarningFlags.NO_ENTRYPOINTS)
+            # If there are no entrypoints, we don't need to validate it
+            found_entrypoint = True
+
+        # Entrypoint validation with connection string and connection host
+        # Entrypoints have the format tcp://IP|name:port
+        for entrypoint in self.entrypoints:
+            if protocol.connection_string:
+                # Connection string has the format tcp://IP:port
+                # So we must consider that the entrypoint could be in name format
+                if protocol.connection_string == entrypoint:
+                    # Found the entrypoint
+                    found_entrypoint = True
+                    break
+                host = connection_string_to_host(entrypoint)
+                result = yield discover_dns(host, protocol.node.test_mode)
+                if result == protocol.connection_string:
+                    # Found the entrypoint
+                    found_entrypoint = True
+                    break
+            else:
+                # When the peer is the server part of the connection we don't have the full connection_string
+                # So we can only validate the host from the protocol
+                connection_remote = protocol.transport.getPeer()
+                connection_host = connection_remote.host
+                # Connection host has only the IP
+                # So we must consider that the entrypoint could be in name format and we just validate the host
+                host = connection_string_to_host(entrypoint)
+                if connection_host == host:
+                    found_entrypoint = True
+                    break
+                result = yield discover_dns(host, protocol.node.test_mode)
+                if connection_string_to_host(result) == connection_host:
+                    # Found the entrypoint
+                    found_entrypoint = True
+                    break
+
+        if not found_entrypoint:
+            # In case the validation fails
+            return False
+
+        return True
+
+    def validate_certificate(self, protocol: 'HathorProtocol') -> bool:
+        """ Validates if the public key of the connection certificate is the public key of the peer
+        """
+        # We must validate that the public key used to generate the connection certificate
+        # is the same public key from the peer
+        connection_cert = protocol.transport.getPeerCertificate()
+        cert_pubkey = connection_cert.to_cryptography().public_key()
+        cert_pubkey_bytes = cert_pubkey.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+        assert self.public_key is not None
+        peer_pubkey_bytes = self.public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+        if cert_pubkey_bytes != peer_pubkey_bytes:
+            return False
+
+        return True
