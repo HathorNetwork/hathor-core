@@ -133,7 +133,7 @@ class HathorManager:
         self.server_factory = HathorServerFactory(self.network, self.my_peer, node=self)
         self.client_factory = HathorClientFactory(self.network, self.my_peer, node=self)
         self.connections = ConnectionsManager(self.reactor, self.my_peer, self.server_factory, self.client_factory,
-                                              self.pubsub)
+                                              self.pubsub, self)
 
         self.wallet = wallet
         if self.wallet:

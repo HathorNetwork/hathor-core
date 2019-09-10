@@ -107,6 +107,7 @@ class HathorProtocol:
     state: Optional[BaseState]
     connection_time: float
     _state_instances: Dict[PeerState, BaseState]
+    connected: bool
 
     def __init__(self, network: str, my_peer: PeerId, connections: Optional['ConnectionsManager'] = None, *,
                  node: 'HathorManager') -> None:
@@ -139,6 +140,9 @@ class HathorProtocol:
         self.ratelimit = RateLimiter()
         # self.ratelimit.set_limit(self.RateLimitKeys.GLOBAL, 120, 60)
 
+        # If peer is connected
+        self.connected = False
+
     def change_state(self, state_enum: PeerState) -> None:
         if state_enum not in self._state_instances:
             state_cls = state_enum.value
@@ -164,6 +168,8 @@ class HathorProtocol:
         # The initial state is HELLO.
         self.change_state(self.PeerState.HELLO)
 
+        self.connected = True
+
         if self.connections:
             self.connections.on_peer_connect(self)
 
@@ -172,6 +178,7 @@ class HathorProtocol:
         """
         remote = self.transport.getPeer()
         self.log.info('HathorProtocol.connectionLost(): {remote} {reason}', remote=remote, reason=reason)
+        self.connected = False
         if self.state:
             self.state.on_exit()
         if self.connections:

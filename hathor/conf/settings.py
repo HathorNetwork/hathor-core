@@ -133,6 +133,9 @@ class HathorSettings(NamedTuple):
     # See for further information, see [rfc 0011-token-deposit].
     TOKEN_DEPOSIT_PERCENTAGE: float = 0.01
 
+    # Timeout (in seconds) for the downloading deferred (in the downloader) when syncing two peers
+    GET_DATA_TIMEOUT: int = 30
+
     # Maximum number of characters in a token name
     MAX_LENGTH_TOKEN_NAME: int = 30
 
