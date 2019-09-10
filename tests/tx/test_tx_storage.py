@@ -19,7 +19,7 @@ from hathor.transaction.storage import (
 )
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.wallet import Wallet
-from tests.utils import MIN_TIMESTAMP, add_new_blocks, add_new_transactions, start_remote_storage
+from tests.utils import MIN_TIMESTAMP, add_new_blocks, add_new_transactions, create_tokens, start_remote_storage
 
 settings = HathorSettings()
 
@@ -104,6 +104,7 @@ class _BaseTransactionStorageTest:
             self.assertTrue(self.tx_storage.transaction_exists(obj.hash))
 
             self.assertEqual(obj, loaded_obj1)
+            self.assertEqual(len(obj.get_funds_struct()), len(loaded_obj1.get_funds_struct()))
             self.assertEqual(bytes(obj), bytes(loaded_obj1))
             self.assertEqual(obj.to_json(), loaded_obj1.to_json())
             self.assertEqual(obj.is_block, loaded_obj1.is_block)
@@ -135,6 +136,10 @@ class _BaseTransactionStorageTest:
 
         def test_save_tx(self):
             self.validate_save(self.tx)
+
+        def test_save_token_creation_tx(self):
+            tx = create_tokens(self.manager, propagate=False)
+            self.validate_save(tx)
 
         def test_shared_memory(self):
             # Enable weakref to this test only.

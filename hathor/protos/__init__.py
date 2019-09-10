@@ -1,4 +1,12 @@
-from hathor.protos.transaction_pb2 import BaseTransaction, Block, Metadata, Transaction, TxInput, TxOutput
+from hathor.protos.transaction_pb2 import (
+    BaseTransaction,
+    Block,
+    Metadata,
+    TokenCreationTransaction,
+    Transaction,
+    TxInput,
+    TxOutput,
+)
 from hathor.protos.transaction_storage_pb2 import (
     ANY_ORDER,
     ANY_TYPE,
@@ -66,6 +74,7 @@ __all__ = [
     'ListItemResponse',
     'Interval',
     'SortedTxsRequest',
+    'TokenCreationTransaction',
     'TransactionStorageStub',
     'TransactionStorageServicer',
     'ANY_TYPE',

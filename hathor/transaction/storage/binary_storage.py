@@ -2,6 +2,7 @@ import json
 import os
 import re
 
+from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionMetadataDoesNotExist
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
 from hathor.transaction.transaction_metadata import TransactionMetadata
@@ -86,13 +87,8 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
     def _load_transaction_from_filepath(self, filepath):
         try:
             with open(filepath, 'rb') as fp:
-                from hathor.transaction import Transaction
                 tx_bytes = fp.read()
-                try:
-                    tx = Transaction.create_from_struct(tx_bytes)
-                except ValueError:
-                    from hathor.transaction import Block
-                    tx = Block.create_from_struct(tx_bytes)
+                tx = tx_or_block_from_bytes(tx_bytes)
                 tx.storage = self
                 tx.update_hash()
                 return tx

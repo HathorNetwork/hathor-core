@@ -184,8 +184,17 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         data = response.json_value()
         self.assertFalse(data['success'])
 
+        # test unknown token id
+        unknown_uid = '00000000228ed1dd74a2e1b920c1d64bf81dc63875dce4fac486001073b45a27'.encode()
+        response = yield resource.get('thin_wallet/token', {b'id': unknown_uid})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
         # test success case
-        tx = create_tokens(self.manager)
+        token_name = 'MyTestToken'
+        token_symbol = 'MTT'
+        amount = 150
+        tx = create_tokens(self.manager, mint_amount=amount, token_name=token_name, token_symbol=token_symbol)
         token_uid = tx.tokens[0]
         response = yield resource.get('thin_wallet/token', {b'id': token_uid.hex().encode()})
         data = response.json_value()
@@ -196,6 +205,9 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data['melt'][0]['tx_id'], tx.hash_hex)
         self.assertEqual(data['mint'][0]['index'], 1)
         self.assertEqual(data['melt'][0]['index'], 2)
+        self.assertEqual(data['total'], amount)
+        self.assertEqual(data['name'], token_name)
+        self.assertEqual(data['symbol'], token_symbol)
 
         # test no wallet index
         manager2 = self.create_peer(self.network, unlock_wallet=True)

@@ -91,7 +91,7 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
             raise error
 
     def load(self, data):
-        from hathor.transaction.base_transaction import TxOutput, TxInput, cls_from_version
+        from hathor.transaction.base_transaction import TxOutput, TxInput, TxVersion
 
         hash_bytes = bytes.fromhex(data['hash'])
         if 'data' in data:
@@ -129,7 +129,7 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
             del data['tokens']
 
         data['storage'] = self
-        cls = cls_from_version(data['version'])
+        cls = TxVersion(data['version']).get_cls()
         tx = cls(**data)
         tx.update_hash()
         assert tx.hash == hash_bytes, 'Hashes differ: {} != {}'.format(tx.hash.hex(), hash_bytes.hex())

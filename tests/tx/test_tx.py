@@ -7,7 +7,6 @@ from hathor.crypto.util import decode_address, get_address_from_public_key, get_
 from hathor.manager import TestMode
 from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
-    BlockDataError,
     BlockWithInputs,
     ConflictingInputs,
     DuplicatedParents,
@@ -21,6 +20,7 @@ from hathor.transaction.exceptions import (
     TimestampError,
     TooManyInputs,
     TooManyOutputs,
+    TransactionDataError,
     WeightError,
 )
 from hathor.transaction.scripts import P2PKH
@@ -535,7 +535,7 @@ class BasicTransaction(unittest.TestCase):
         add_block_with_data()
         add_block_with_data(b'Testing, testing 1, 2, 3...')
         add_block_with_data(100*b'a')
-        with self.assertRaises(BlockDataError):
+        with self.assertRaises(TransactionDataError):
             add_block_with_data(101*b'a')
 
     def test_output_serialization(self):
@@ -614,12 +614,12 @@ class BasicTransaction(unittest.TestCase):
             TxOutput(-1, script)
 
     def test_tx_version(self):
-        from hathor.transaction.base_transaction import cls_from_version
+        from hathor.transaction.base_transaction import TxVersion
         # test the 1st byte of version field is ignored
-        version = 0xFF00
-        self.assertEqual(cls_from_version(version), Block)
-        version = 0xFF01
-        self.assertEqual(cls_from_version(version), Transaction)
+        version = TxVersion(0xFF00)
+        self.assertEqual(version.get_cls(), Block)
+        version = TxVersion(0xFF01)
+        self.assertEqual(version.get_cls(), Transaction)
 
         # test serialization doesn't mess up with version
         block = Block(

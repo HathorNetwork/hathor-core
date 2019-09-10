@@ -41,7 +41,11 @@ class TokenResource(resource.Resource):
         except (ValueError, AttributeError):
             return json.dumps({'success': False, 'message': 'Invalid token id'}).encode('utf-8')
 
-        token_info = self.manager.tx_storage.tokens_index.get_token_info(token_uid)
+        try:
+            token_info = self.manager.tx_storage.tokens_index.get_token_info(token_uid)
+        except KeyError:
+            return json.dumps({'success': False, 'message': 'Unknown token'}).encode('utf-8')
+
         mint = []
         melt = []
 
@@ -57,8 +61,15 @@ class TokenResource(resource.Resource):
                 'index': index
             })
 
-        data = {'success': True, 'mint': mint, 'melt': melt, 'total': token_info.total}
-        return json.dumps(data, indent=4).encode('utf-8')
+        data = {
+            'name': token_info.name,
+            'symbol': token_info.symbol,
+            'success': True,
+            'mint': mint,
+            'melt': melt,
+            'total': token_info.total
+        }
+        return json.dumps(data).encode('utf-8')
 
 
 TokenResource.openapi = {
@@ -105,6 +116,8 @@ TokenResource.openapi = {
                                     'summary': 'Success',
                                     'value': {
                                         'success': True,
+                                        'name': 'MyCoin',
+                                        'symbol': 'MYC',
                                         'mint': [
                                             {
                                                 "tx_id": "00000299670db5814f69cede8b347f83"

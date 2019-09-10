@@ -72,16 +72,16 @@ class BlockError(TxValidationError):
     """Base class for Block-specific errors"""
 
 
+class TransactionDataError(TxValidationError):
+    """Block data max length exceeded"""
+
+
 class BlockWithInputs(BlockError):
     """Block has inputs"""
 
 
 class BlockWithTokensError(BlockError):
     """Block has tokens other than hathor"""
-
-
-class BlockDataError(BlockError):
-    """Block data max length exceeded"""
 
 
 class ScriptError(HathorError):
