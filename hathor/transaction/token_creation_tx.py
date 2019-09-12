@@ -19,6 +19,10 @@ _FUNDS_FORMAT_STRING = '!HBB'
 # Version (H), inputs len (B), outputs len (B)
 _SIGHASH_ALL_FORMAT_STRING = '!HBB'
 
+# used when (de)serializing token information
+# version 1 expects only token name and symbol
+TOKEN_INFO_VERSION = 1
+
 
 class TokenCreationTransaction(Transaction):
     log = Logger()
@@ -176,6 +180,7 @@ class TokenCreationTransaction(Transaction):
         """ Returns the serialization for token name and symbol
         """
         ret = b''
+        ret += int_to_bytes(TOKEN_INFO_VERSION, 1)
         ret += int_to_bytes(len(self.token_name), 1)
         ret += self.token_name.encode('utf-8')
         ret += int_to_bytes(len(self.token_symbol), 1)
@@ -186,6 +191,10 @@ class TokenCreationTransaction(Transaction):
     def deserialize_token_info(cls, buf: bytes) -> Tuple[str, str, bytes]:
         """ Gets the token name and symbol from serialized format
         """
+        (token_info_version,), buf = unpack('!B', buf)
+        if token_info_version != TOKEN_INFO_VERSION:
+            raise ValueError('unknown token info version: {}'.format(token_info_version))
+
         (name_len,), buf = unpack('!B', buf)
         name, buf = unpack_len(name_len, buf)
         (symbol_len,), buf = unpack('!B', buf)

@@ -491,6 +491,14 @@ class TokenTest(unittest.TestCase):
         with self.assertRaises(InvalidToken):
             tx2.verify()
 
+    def test_token_info_serialization(self):
+        tx = create_tokens(self.manager, self.address_b58, mint_amount=500)
+        info = tx.serialize_token_info()
+        # try with version 2
+        info2 = bytes([0x02]) + info[1:]
+        with self.assertRaises(ValueError):
+            TokenCreationTransaction.deserialize_token_info(info2)
+
 
 if __name__ == '__main__':
     unittest.main()
