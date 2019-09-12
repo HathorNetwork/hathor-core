@@ -15,6 +15,10 @@ pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov=hathor
 tests-cli:
 	pytest --durations=10 --cov=hathor/cli/ --cov-config=.coveragerc_full --cov-fail-under=61 -p no:warnings $(tests_cli)
 
+.PHONY: tests-doctests
+tests-doctests:
+	pytest --durations=10 $(pytest_flags) --doctest-modules hathor
+
 .PHONY: tests-lib
 tests-lib:
 	pytest --durations=10 $(pytest_flags) --cov-fail-under=91 $(tests_lib)
@@ -24,7 +28,7 @@ tests-simulation:
 	pytest --durations=10 --cov=hathor --cov-report=term -p no:warnings $(tests_simulation)
 
 .PHONY: tests
-tests: tests-cli tests-lib
+tests: tests-doctests tests-cli tests-lib
 
 .PHONY: tests-full
 tests-full:

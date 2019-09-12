@@ -62,7 +62,7 @@ def re_compile(pattern: str) -> Pattern[bytes]:
       (v) BLOCK: a variable length block, to be parsed later
 
     Example:
-    >>> re_compile(
+    >>> r = re_compile(
     ...     '^(?:DATA_4 OP_GREATERTHAN_TIMESTAMP)? '
     ...     'OP_DUP OP_HASH160 (DATA_20) OP_EQUALVERIFY OP_CHECKSIG$'
     ... )

@@ -99,6 +99,7 @@ class TransactionMetadata:
         """Check whether `self.get_output_spent_by(...)` has been changed since the last call to this same method.
         Notice that it will always return True when the transaction is first loaded into memory.
 
+        >>> meta = TransactionMetadata()
         >>> b1 = meta.has_spent_by_changed_since_last_call()
         >>> b2 = meta.has_spent_by_changed_since_last_call()
         >>> assert b1 != b2
@@ -113,6 +114,8 @@ class TransactionMetadata:
         """Check whether `self.voided_by` has been changed since the last call to this same method.
         Notice that it will always return True when the transaction is first loaded into memory.
 
+        >>> meta = TransactionMetadata()
+        >>> meta.voided_by = {b'pretend_this_is_a_tx_hash'}
         >>> b1 = meta.has_voided_by_changed_since_last_call()
         >>> b2 = meta.has_voided_by_changed_since_last_call()
         >>> assert b1 != b2
