@@ -47,6 +47,7 @@ class RunNode:
         parser.add_argument('--status', type=int, help='Port to run status server')
         parser.add_argument('--stratum', type=int, help='Port to run stratum server')
         parser.add_argument('--data', help='Data directory')
+        parser.add_argument('--storage-type', help='Type of storage to be used', default='compact')
         parser.add_argument('--rocksdb-storage', action='store_true', help='Use RocksDB storage backend')
         parser.add_argument('--wallet', help='Set wallet type. Options are hd (Hierarchical Deterministic) or keypair',
                             default=None)
@@ -77,6 +78,7 @@ class RunNode:
         from hathor.transaction import genesis
         from hathor.transaction.storage import (
             TransactionStorage,
+            TransactionBinaryStorage,
             TransactionCacheStorage,
             TransactionCompactStorage,
             TransactionMemoryStorage,
@@ -150,8 +152,11 @@ class RunNode:
                 print('Using TransactionRocksDBStorage at {}'.format(tx_dir))
             else:
                 tx_dir = os.path.join(args.data, 'tx')
-                tx_storage = TransactionCompactStorage(path=tx_dir, with_index=(not args.cache))
-                print('Using TransactionCompactStorage at {}'.format(tx_dir))
+                if args.storage_type == 'compact':
+                    tx_storage = TransactionCompactStorage(path=tx_dir, with_index=(not args.cache))
+                elif args.storage_type == 'binary':
+                    tx_storage = TransactionBinaryStorage(path=tx_dir, with_index=(not args.cache))
+                print('Using {} at {}'.format(tx_storage.__class__.__name__, tx_dir))
             if args.cache:
                 tx_storage = TransactionCacheStorage(tx_storage, reactor)
                 if args.cache_size:
