@@ -1,8 +1,9 @@
 import json
 import os
 import re
+import struct
 
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionMetadataDoesNotExist
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.util import deprecated, skip_warning
@@ -14,6 +15,7 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         self.path = path
         super().__init__(with_index=with_index)
 
+        self.length_format = '!I'
         filename_pattern = r'^tx_([\dabcdef]{64})\.bin$'
         self.re_pattern = re.compile(filename_pattern)
 
@@ -28,24 +30,21 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
     def _save_transaction(self, tx, *, only_metadata=False):
         if tx.is_genesis:
             return
-        if not only_metadata:
-            self._save_tx_to_disk(tx)
-        self._save_metadata(tx)
-
-    def _save_tx_to_disk(self, tx):
         tx_bytes = tx.get_struct()
+
+        meta = tx.get_metadata()
+        if meta:
+            meta_dict = self.serialize_metadata(meta)
+            meta_bytes = json.dumps(meta_dict, indent=4).encode('utf-8')
+        else:
+            meta_bytes = None
+
         filepath = self.generate_filepath(tx.hash)
         with open(filepath, 'wb') as fp:
+            fp.write(struct.pack(self.length_format, len(tx_bytes)))
             fp.write(tx_bytes)
-
-    def _save_metadata(self, tx):
-        # genesis txs and metadata are kept in memory
-        if tx.is_genesis:
-            return
-        metadata = tx.get_metadata()
-        data = self.serialize_metadata(metadata)
-        filepath = self.generate_metadata_filepath(tx.hash)
-        self.save_to_json(filepath, data)
+            if meta_bytes:
+                fp.write(meta_bytes)
 
     def generate_filepath(self, hash_bytes):
         filename = 'tx_{}.bin'.format(hash_bytes.hex())
@@ -58,11 +57,6 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
     def load_metadata(self, data):
         return TransactionMetadata.create_from_json(data)
 
-    def generate_metadata_filepath(self, hash_bytes):
-        filename = 'tx_{}_metadata.json'.format(hash_bytes.hex())
-        filepath = os.path.join(self.path, filename)
-        return filepath
-
     @deprecated('Use transaction_exists_deferred instead')
     def transaction_exists(self, hash_bytes):
         genesis = self.get_genesis(hash_bytes)
@@ -71,23 +65,13 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         filepath = self.generate_filepath(hash_bytes)
         return os.path.isfile(filepath)
 
-    def save_to_json(self, filepath, data):
-        with open(filepath, 'w') as json_file:
-            json_file.write(json.dumps(data, indent=4))
-
-    def load_from_json(self, filepath, error):
-        if os.path.isfile(filepath):
-            with open(filepath, 'r') as json_file:
-                dict_data = json.loads(json_file.read())
-                return dict_data
-        else:
-            raise error
-
     def _load_transaction_from_filepath(self, filepath):
         try:
+            length_size = struct.calcsize(self.length_format)
             with open(filepath, 'rb') as fp:
                 from hathor.transaction import Transaction
-                tx_bytes = fp.read()
+                (tx_bytes_len,) = struct.unpack(self.length_format, fp.read(length_size))
+                tx_bytes = fp.read(tx_bytes_len)
                 try:
                     tx = Transaction.create_from_struct(tx_bytes)
                 except ValueError:
@@ -95,6 +79,13 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
                     tx = Block.create_from_struct(tx_bytes)
                 tx.storage = self
                 tx.update_hash()
+
+                # Load metadata.
+                meta_bytes = fp.read()
+                if meta_bytes:
+                    meta_dict = json.loads(meta_bytes)
+                    meta = self.load_metadata(meta_dict)
+                    tx._metadata = meta
                 return tx
         except FileNotFoundError:
             raise TransactionDoesNotExist
@@ -114,18 +105,8 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
             return tx
 
         tx = self.load_transaction(hash_bytes)
-        try:
-            meta = self._get_metadata_by_hash(hash_bytes)
-            tx._metadata = meta
-        except TransactionMetadataDoesNotExist:
-            pass
         self._save_to_weakref(tx)
         return tx
-
-    def _get_metadata_by_hash(self, hash_bytes):
-        filepath = self.generate_metadata_filepath(hash_bytes)
-        data = self.load_from_json(filepath, TransactionMetadataDoesNotExist)
-        return self.load_metadata(data)
 
     @deprecated('Use get_all_transactions_deferred instead')
     def get_all_transactions(self):
