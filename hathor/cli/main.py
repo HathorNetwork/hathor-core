@@ -31,6 +31,7 @@ class CliManager:
         from . import oracle_get_pubkey
         from . import oracle_encode_data
         from . import openapi_json
+        from . import convert_tx_storage
 
         self.add_cmd('mining', 'run_miner', mining, 'Run a mining process (running node required)')
         self.add_cmd('mining', 'run_stratum_miner', stratum_mining, 'Run a mining process (running node required)')
@@ -52,6 +53,8 @@ class CliManager:
         self.add_cmd('oracle', 'oracle-encode-data', oracle_encode_data, 'Encode data and sign it with a private key')
         self.add_cmd('dev', 'shell', shell, 'Run a Python shell')
         self.add_cmd('dev', 'generate_nginx_config', nginx_config, 'Generate nginx config from OpenAPI json')
+        self.add_cmd('dev', 'convert_tx_storage', convert_tx_storage,
+                     'Convert transacion database to another storage type')
 
     def add_cmd(self, group: str, cmd: str, module: ModuleType, short_description: str = None) -> None:
         self.command_list[cmd] = module

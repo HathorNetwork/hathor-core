@@ -13,7 +13,11 @@ class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncF
 
     def __init__(self, path='./storage.db', with_index=True):
         super().__init__(with_index=with_index)
+        self.path = path
         self._db = rocksdb.DB(path, rocksdb.Options(create_if_missing=True))
+
+    def __repr__(self):
+        return '{}({})'.format(self.__class__.__name__, repr(self.path))
 
     def _load_from_bytes(self, data: bytes):
         from hathor.protos import BaseTransaction
