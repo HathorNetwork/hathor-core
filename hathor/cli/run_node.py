@@ -47,8 +47,7 @@ class RunNode:
         parser.add_argument('--status', type=int, help='Port to run status server')
         parser.add_argument('--stratum', type=int, help='Port to run stratum server')
         parser.add_argument('--data', help='Data directory')
-        parser.add_argument('--storage-type', help='Type of storage to be used', default='compact')
-        parser.add_argument('--rocksdb-storage', action='store_true', help='Use RocksDB storage backend')
+        parser.add_argument('--tx-storage', help='Type of storage to be used', default='compact')
         parser.add_argument('--wallet', help='Set wallet type. Options are hd (Hierarchical Deterministic) or keypair',
                             default=None)
         parser.add_argument('--wallet-enable-api', action='store_true',
@@ -145,18 +144,17 @@ class RunNode:
         if args.data:
             wallet_dir = args.data
             print('Using Wallet at {}'.format(wallet_dir))
-            if args.rocksdb_storage:
+            if args.tx_storage == 'rocksdb':
                 from hathor.transaction.storage import TransactionRocksDBStorage
                 tx_dir = os.path.join(args.data, 'tx.db')
                 tx_storage = TransactionRocksDBStorage(path=tx_dir, with_index=(not args.cache))
-                print('Using TransactionRocksDBStorage at {}'.format(tx_dir))
             else:
                 tx_dir = os.path.join(args.data, 'tx')
-                if args.storage_type == 'compact':
+                if args.tx_storage == 'compact':
                     tx_storage = TransactionCompactStorage(path=tx_dir, with_index=(not args.cache))
-                elif args.storage_type == 'binary':
+                elif args.tx_storage == 'binary':
                     tx_storage = TransactionBinaryStorage(path=tx_dir, with_index=(not args.cache))
-                print('Using {} at {}'.format(tx_storage.__class__.__name__, tx_dir))
+            print('Using {} at {}'.format(tx_storage.__class__.__name__, tx_dir))
             if args.cache:
                 tx_storage = TransactionCacheStorage(tx_storage, reactor)
                 if args.cache_size:
