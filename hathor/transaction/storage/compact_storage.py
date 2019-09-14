@@ -28,6 +28,9 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
         self.re_pattern = re.compile(filename_pattern)
         self.create_subfolders(self.path, settings.STORAGE_SUBFOLDERS)
 
+    def __repr__(self):
+        return '{}({})'.format(self.__class__.__name__, repr(self.path))
+
     def create_subfolders(self, path: str, num_subfolders: int):
         """ Create subfolders in the main tx storage folder.
 
@@ -186,5 +189,5 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
     @deprecated('Use get_count_tx_blocks_deferred instead')
     def get_count_tx_blocks(self):
         genesis_len = len(self.get_all_genesis())
-        files = [f for f in glob.iglob(os.path.join(self.path, '*/*')) if self.re_pattern.match(f)]
+        files = [f for f in glob.iglob(os.path.join(self.path, '*/*')) if self.re_pattern.match(os.path.basename(f))]
         return len(files) + genesis_len

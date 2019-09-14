@@ -19,6 +19,9 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         filename_pattern = r'^tx_([\dabcdef]{64})\.bin$'
         self.re_pattern = re.compile(filename_pattern)
 
+    def __repr__(self):
+        return '{}({})'.format(self.__class__.__name__, repr(self.path))
+
     @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx, *, only_metadata=False):
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
