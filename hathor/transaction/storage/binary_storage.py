@@ -95,7 +95,9 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
 
     def load_transaction(self, hash_bytes):
         filepath = self.generate_filepath(hash_bytes)
-        return self._load_transaction_from_filepath(filepath)
+        tx = self._load_transaction_from_filepath(filepath)
+        assert tx.hash == hash_bytes, 'Hashes differ: {} != {}'.format(tx.hash.hex(), hash_bytes.hex())
+        return tx
 
     @deprecated('Use get_transaction_deferred instead')
     def get_transaction(self, hash_bytes: bytes):
