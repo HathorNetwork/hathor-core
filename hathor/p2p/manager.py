@@ -131,6 +131,13 @@ class ConnectionsManager:
         self.received_peer_storage.pop(protocol.peer.id, None)
 
         self.peer_storage.add_or_merge(protocol.peer)
+
+        if protocol.peer.id in self.connected_peers:
+            # connected twice to same peer. Drop connection
+            self.log.warn('duplicate connection to peer {protocol}', protocol=protocol)
+            protocol.send_error_and_close_connection('Connection already established')
+            return
+
         self.connected_peers[protocol.peer.id] = protocol
 
         # In case it was a retry, we must reset the data only here, after it gets ready
@@ -147,12 +154,22 @@ class ConnectionsManager:
 
     def on_peer_disconnect(self, protocol: HathorProtocol) -> None:
         self.log.info('on_peer_disconnect() {protocol}', protocol=protocol)
-        if protocol.peer:
-            assert protocol.peer.id is not None
-            self.connected_peers.pop(protocol.peer.id)
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
-
+        if protocol.peer:
+            assert protocol.peer.id is not None
+            existing_protocol = self.connected_peers.pop(protocol.peer.id, None)
+            if existing_protocol is None:
+                # in this case, the connection was closed before it got to READY state
+                return
+            if existing_protocol != protocol:
+                # this is the case we're closing a duplicate connection. We need to set the
+                # existing protocol object back to connected_peers, as that connection is still ongoing.
+                # A check for duplicate connections is done during PEER_ID state, but there's still a
+                # chance it can happen if both connections start at the same time and none of them has
+                # reached READY state while the other is on PEER_ID state
+                self.connected_peers[protocol.peer.id] = existing_protocol
+                return
         self.pubsub.publish(HathorEvents.NETWORK_PEER_DISCONNECTED, protocol=protocol)
 
     def get_ready_connections(self) -> Set[HathorProtocol]:
