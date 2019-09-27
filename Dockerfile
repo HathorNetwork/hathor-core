@@ -8,7 +8,7 @@ RUN cd rocksdb && mkdir build && cd build && cmake -DBUILD_SHARED_LIBS=1 -DWITH_
 # RUN cd rocksdb && make shared_lib
 
 # based on Linux Alpine, official Python build, used for building
-FROM python:3.6-alpine as builder
+FROM python:3.6-alpine3.9 as builder
 
 # required build deps
 RUN apk add openssl-dev libffi-dev g++ git
@@ -34,7 +34,7 @@ RUN pipenv --bare install --ignore-pipfile --deploy
 RUN pipenv run pip install python-rocksdb==0.7.0
 
 # based on Linux Alpine, official Python build, final image
-FROM python:3.6-alpine
+FROM python:3.6-alpine3.9
 
 # required runtime deps
 RUN apk --no-cache add openssl libffi libstdc++ graphviz
