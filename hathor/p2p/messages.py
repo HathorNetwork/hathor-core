@@ -16,16 +16,11 @@ class NextPayload(NamedTuple):
 
 class GetTipsPayload(NamedTuple):
     timestamp: int
-    include_hashes: bool
-    offset: int = 0
 
 
 class TipsPayload(NamedTuple):
-    length: int
     timestamp: int
     merkle_tree: str
-    hashes: List[str]
-    has_more: bool
 
 
 class ProtocolMessages(Enum):
