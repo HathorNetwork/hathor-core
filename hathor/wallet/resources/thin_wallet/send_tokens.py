@@ -111,8 +111,9 @@ class SendTokensResource(resource.Resource):
             # Set tx timestamp as max between tx and inputs
             tx.timestamp = max(max_ts_spent_tx + 1, tx.timestamp)
 
-        # Set parents
-        tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
+        if len(tx.parents) == 0:
+            # Set parents
+            tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
 
         deferred = threads.deferToThreadPool(reactor, self.manager.pow_thread_pool,
                                              self._render_POST_thread, tx, request)
@@ -220,7 +221,7 @@ class SendTokensResource(resource.Resource):
             'message': message,
         }
         if tx:
-            ret['tx'] = tx.to_json()
+            ret['tx'] = tx.to_json_extended()
         return json.dumps(ret, indent=4).encode('utf-8')
 
     def render_OPTIONS(self, request):
