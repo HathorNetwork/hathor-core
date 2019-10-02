@@ -6,7 +6,6 @@ verify_ssl = true
 [dev-packages]
 grpcio-tools = "*"
 numpy = "*"
-hathor = {path = ".",editable = true}
 flake8 = "*"
 isort = "*"
 yapf = "*"
@@ -29,7 +28,7 @@ mnemonic = "*"
 prometheus_client = "*"
 protobuf = "*"
 pyOpenSSL = "*"
-pycoin = {git = "https://github.com/richardkiss/pycoin.git",ref = "f81609d"}
+pycoin = "*"
 pywin32 = {version = "*",os_name = "== 'nt'"}
 requests = "*"
 service_identity = "*"

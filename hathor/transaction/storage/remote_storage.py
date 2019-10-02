@@ -33,7 +33,7 @@ def convert_grpc_exceptions(func):
         try:
             return func(*args, **kwargs)
         except grpc.RpcError as e:
-            if e.code() is grpc.StatusCode.NOT_FOUND:
+            if e.code() == grpc.StatusCode.NOT_FOUND:
                 raise TransactionDoesNotExist
             else:
                 raise RemoteCommunicationError from e
@@ -51,7 +51,7 @@ def convert_grpc_exceptions_generator(func):
         try:
             yield from func(*args, **kwargs)
         except grpc.RpcError as e:
-            if e.code() is grpc.StatusCode.NOT_FOUND:
+            if e.code() == grpc.StatusCode.NOT_FOUND:
                 raise TransactionDoesNotExist
             else:
                 raise RemoteCommunicationError from e
@@ -621,14 +621,14 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
     @convert_hathor_exceptions
     def Count(self, request: protos.CountRequest, context: _Context) -> protos.CountResponse:
         tx_type = request.tx_type
-        if tx_type is protos.ANY_TYPE:
+        if tx_type == protos.ANY_TYPE:
             count = skip_warning(self.storage.get_count_tx_blocks)()
-        elif tx_type is protos.TRANSACTION_TYPE:
+        elif tx_type == protos.TRANSACTION_TYPE:
             count = skip_warning(self.storage.get_tx_count)()
-        elif tx_type is protos.BLOCK_TYPE:
+        elif tx_type == protos.BLOCK_TYPE:
             count = skip_warning(self.storage.get_block_count)()
         else:
-            raise ValueError('invalid tx_type')
+            raise ValueError('invalid tx_type %s' % (tx_type,))
         return protos.CountResponse(count=count)
 
     @convert_hathor_exceptions
@@ -676,8 +676,8 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
             elif request.tx_type == protos.BLOCK_TYPE:
                 tx_iter = self.storage.get_blocks_before(hash_bytes, count)
             else:
-                raise ValueError('invalid tx_type')
-        elif request.time_filter is protos.ONLY_NEWER:
+                raise ValueError('invalid tx_type %s' % (request.tx_type,))
+        elif request.time_filter == protos.ONLY_NEWER:
             if request.tx_type == protos.ANY_TYPE:
                 raise NotImplementedError
             elif request.tx_type == protos.TRANSACTION_TYPE:
@@ -685,8 +685,8 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
             elif request.tx_type == protos.BLOCK_TYPE:
                 tx_iter, has_more = self.storage.get_newer_blocks_after(timestamp, hash_bytes, count)
             else:
-                raise ValueError('invalid tx_type')
-        elif request.time_filter is protos.ONLY_OLDER:
+                raise ValueError('invalid tx_type %s' % (request.tx_type,))
+        elif request.time_filter == protos.ONLY_OLDER:
             if request.tx_type == protos.ANY_TYPE:
                 raise NotImplementedError
             elif request.tx_type == protos.TRANSACTION_TYPE:
@@ -694,11 +694,11 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
             elif request.tx_type == protos.BLOCK_TYPE:
                 tx_iter, has_more = self.storage.get_older_blocks_after(timestamp, hash_bytes, count)
             else:
-                raise ValueError('invalid tx_type')
-        elif request.time_filter is protos.NO_FILTER:
-            if request.order_by is protos.ANY_ORDER:
+                raise ValueError('invalid tx_type %s' % (request.tx_type,))
+        elif request.time_filter == protos.NO_FILTER:
+            if request.order_by == protos.ANY_ORDER:
                 tx_iter = skip_warning(self.storage.get_all_transactions)()
-            elif request.order_by is protos.TOPOLOGICAL_ORDER:
+            elif request.order_by == protos.TOPOLOGICAL_ORDER:
                 tx_iter = self.storage._topological_sort()
             else:
                 raise ValueError('invalid order_by')
@@ -728,7 +728,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         elif request.tx_type == protos.BLOCK_TYPE:
             tx_intervals = self.storage.get_block_tips(timestamp)
         else:
-            raise ValueError('invalid tx_type')
+            raise ValueError('invalid tx_type %s' % (request.tx_type,))
 
         for interval in tx_intervals:
             yield protos.Interval(begin=interval.begin, end=interval.end, data=interval.data)
@@ -743,7 +743,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         elif request.tx_type == protos.BLOCK_TYPE:
             tx_list, has_more = self.storage.get_newest_blocks(request.count)
         else:
-            raise ValueError('invalid tx_type')
+            raise ValueError('invalid tx_type %s' % (request.tx_type,))
 
         for tx in tx_list:
             yield protos.ListItemResponse(transaction=tx.to_proto())
