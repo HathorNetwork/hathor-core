@@ -4,7 +4,9 @@ import json
 from twisted.web import resource
 
 from hathor.cli.openapi_files.register import register_resource
+from hathor.crypto.util import decode_address
 from hathor.transaction import Block
+from hathor.wallet.exceptions import InvalidAddress
 
 
 @register_resource
@@ -48,7 +50,14 @@ class MiningResource(resource.Resource):
             request.setResponseCode(503)
             return json.dumps({'reason': 'Node still syncing'}).encode('utf-8')
 
-        block = self.manager.generate_mining_block()
+        if b'address' in request.args:
+            address_txt = request.args[b'address'][0].decode('utf-8')
+            try:
+                address = decode_address(address_txt)  # bytes
+            except InvalidAddress:
+                return json.dumps({'success': False, 'message': 'Invalid address'}).encode('utf-8')
+
+        block = self.manager.generate_mining_block(address=address)
         block_bytes = block.get_struct()
 
         data = {
