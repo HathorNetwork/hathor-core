@@ -13,7 +13,7 @@ from twisted.logger import Logger
 from zope.interface import implementer
 
 from hathor.conf import HathorSettings
-from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
+from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload, SyncInfoPayload
 from hathor.p2p.plugin import Plugin
 from hathor.transaction import BaseTransaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
@@ -158,7 +158,7 @@ class NodeSyncTimestamp(Plugin):
     """
     log = Logger()
 
-    MAX_HASHES = 40
+    MAX_HASHES = 80
 
     def __init__(self, protocol: 'HathorProtocol', reactor: Clock = None) -> None:
         """
@@ -177,9 +177,16 @@ class NodeSyncTimestamp(Plugin):
         self.reactor: IReactorCore = reactor
 
         self.call_later_id: Optional[IDelayedCall] = None
-        self.call_later_interval: int = 1  # seconds
+        self.call_later_interval: int = 3  # seconds
 
+        # Peer's latest tx timestamp
         self.peer_timestamp: int = 0
+
+        # Latest timestamp in which we're synced.
+        # This number may decrease if a new transaction/block arrives in a timestamp smaller than it.
+        self.synced_timestamp: int = 0
+
+        self.run_find_synced_timestamp = (protocol.peer.id > protocol.my_peer.id)
 
         self.send_data_queue: SendDataPush = SendDataPush(self)
 
@@ -190,16 +197,14 @@ class NodeSyncTimestamp(Plugin):
         # Latest deferred waiting for a reply.
         self.deferred_by_key: Dict[str, Deferred] = {}
 
-        # Latest timestamp in which we're synced.
-        # This number may decrease if a new transaction/block arrives in a timestamp smaller than it.
-        self.synced_timestamp: int = 0
-
         # Maximum difference between our latest timestamp and synced timestamp to consider
         # that the peer is synced (in seconds).
         self.sync_threshold: int = settings.P2P_SYNC_THRESHOLD
 
         # Indicate whether the synchronization is running.
         self.is_running: bool = False
+
+        self.merkle_tree_cache = {}
 
     def get_status(self):
         """ Return the status of the sync.
@@ -228,6 +233,7 @@ class NodeSyncTimestamp(Plugin):
             ProtocolMessages.GET_NEXT: self.handle_get_next,
             ProtocolMessages.NEXT: self.handle_next,
             ProtocolMessages.NOT_FOUND: self.handle_not_found,
+            ProtocolMessages.SYNC_INFO: self.handle_sync_info,
         }
 
     def start(self) -> None:
@@ -275,8 +281,24 @@ class NodeSyncTimestamp(Plugin):
 
         :rtype: Tuple[bytes(hash), List[bytes(hash)]]
         """
-        intervals = self.manager.tx_storage.get_all_tips(timestamp)
-        return self.calculate_merkle_tree(intervals)
+        self.log.debug('sync-{log_source.short_peer_id} get_merkle_tree timestamp {ts}', ts=timestamp)
+        ret = None
+        if timestamp in self.merkle_tree_cache:
+            elem = self.merkle_tree_cache[timestamp]
+            if self.reactor.seconds() - elem[0] < 15:
+                self.log.debug('sync-{log_source.short_peer_id} --- HIT')
+                ret = elem[1]
+            else:
+                del self.merkle_tree_cache[timestamp]
+
+        if ret is None:
+            self.log.debug('sync-{log_source.short_peer_id} --- no hit')
+            intervals = self.manager.tx_storage.get_all_tips(timestamp)
+            merkle_tree, _ = self.calculate_merkle_tree(intervals)
+            self.merkle_tree_cache[timestamp] = (self.reactor.seconds(), merkle_tree)
+            ret = merkle_tree
+
+        return ret, []
 
     def calculate_merkle_tree(self, intervals: Set[Interval]) -> Tuple[bytes, List[bytes]]:
         """ Generate a hash of the transactions at the intervals
@@ -308,8 +330,7 @@ class NodeSyncTimestamp(Plugin):
         self.deferred_by_key[key] = deferred
         return deferred
 
-    def get_peer_tips(self, timestamp: Optional[int] = None, include_hashes: bool = False,
-                      offset: int = 0) -> Deferred:
+    def get_peer_tips(self, timestamps: Optional[List[int]] = None, type = 0) -> Deferred:
         """ A helper that returns a deferred that is called when the peer replies.
 
         :param timestamp: Timestamp of the GET-TIPS message
@@ -323,7 +344,7 @@ class NodeSyncTimestamp(Plugin):
         key = 'tips'
         if self.deferred_by_key.get(key, None) is not None:
             raise Exception('latest_deferred is not None')
-        self.send_get_tips(timestamp, include_hashes, offset)
+        self.send_get_tips(timestamps, type)
         deferred = Deferred()
         self.deferred_by_key[key] = deferred
         return deferred
@@ -394,11 +415,13 @@ class NodeSyncTimestamp(Plugin):
         It uses an exponential search followed by a binary search.
         """
         # self.log.debug('Running find_synced_timestamp...')
+        self.log.debug('sync-{log_source.short_peer_id} find_synced_timestamp started')
+
         tips = cast(TipsPayload, (yield self.get_peer_tips()))
         if self.peer_timestamp:
             # Peer's timestamp cannot go backwards.
-            assert tips.timestamp >= self.peer_timestamp, '{} < {}'.format(tips.timestamp, self.peer_timestamp)
-        self.peer_timestamp = tips.timestamp
+            assert tips.timestamps[0] >= self.peer_timestamp, '{} < {}'.format(tips.timestamps[0], self.peer_timestamp)
+        self.peer_timestamp = tips.timestamps[0]
 
         # Assumption: Both exponential search and binary search are safe to run even when new
         #             items are arriving in the network.
@@ -409,14 +432,22 @@ class NodeSyncTimestamp(Plugin):
         cur = self.peer_timestamp
         local_merkle_tree, _ = self.get_merkle_tree(cur)
         step = 1
-        while tips.merkle_tree != local_merkle_tree:
+        tips_cache: Dict[int, str] = {}
+        peer_merkle_tree = tips.merkle_trees[0]
+        while peer_merkle_tree != local_merkle_tree:
             if cur <= self.manager.tx_storage.first_timestamp:
                 raise Exception('We cannot go before genesis. Is it an attacker?!')
             prev_cur = cur
-            cur = max(cur - step, self.manager.tx_storage.first_timestamp)
-            tips = cast(TipsPayload, (yield self.get_peer_tips(cur)))
+            cur = max(5*((cur - step)//5), self.manager.tx_storage.first_timestamp)
+            peer_merkle_tree = tips_cache.pop(cur, None)
+            if peer_merkle_tree is None:
+                tips = cast(TipsPayload, (yield self.get_peer_tips([cur, (cur - step*2), (cur - step*4)])))
+                tips_cache[cur - step*2] = tips.merkle_trees[1]
+                tips_cache[cur - step*2 - step*4] = tips.merkle_trees[2]
+                peer_merkle_tree = tips.merkle_trees[0]
             local_merkle_tree, _ = self.get_merkle_tree(cur)
-            step *= 2
+            step *= 5
+        self.log.debug('sync-{log_source.short_peer_id} find_synced_timestamp exponential search done')
 
         # Here, both nodes are synced at timestamp `cur` and not synced at timestamp `prev_cur`.
         if prev_cur is None:
@@ -428,21 +459,48 @@ class NodeSyncTimestamp(Plugin):
         # During the binary search, we are synced at `low` and not synced at `high`.
         low = cur
         high = prev_cur
+        self.log.debug('sync-{log_source.short_peer_id} low={low} high={high}', low=low, high=high)
         while high - low > 1:
             mid = (low + high + 1) // 2
-            tips = cast(TipsPayload, (yield self.get_peer_tips(mid)))
-            local_merkle_tree, _ = self.get_merkle_tree(mid)
-            if tips.merkle_tree == local_merkle_tree:
-                low = mid
+            midhigh = (mid + high + 1) // 2
+            midlow = (low + mid + 1) // 2
+            self.log.debug('sync-{log_source.short_peer_id} low={low} midlow={midlow} mid={mid} midhigh={midhigh} high={high}', low=low, high=high, midhigh=midhigh, midlow=midlow, mid=mid)
+            tips = cast(TipsPayload, (yield self.get_peer_tips([low, mid, high], 1)))
+            #peer_merkle_tree = tips.merkle_trees[0]
+            [midlow_merkle, mid_merkle, midhigh_merkle] = self.get_new_merkle(low, mid, high)
+            if high - low == 3:
+                if mid_merkle != b'' and mid_merkle == tips.merkle_trees[1]:
+                    low = mid
+                elif midlow_merkle != b'' and midlow_merkle == tips.merkle_trees[0]:
+                    low = midlow
+                    high = mid
+                else:
+                    high = midlow
+            elif high -low == 2:
+                if mid_merkle != b'' and mid_merkle == tips.merkle_trees[1]:
+                    low = mid
+                else:
+                    high = mid
             else:
-                high = mid
+                if midhigh_merkle != b'' and midhigh_merkle == tips.merkle_trees[2]:
+                    low = midhigh
+                elif mid_merkle != b'' and mid_merkle == tips.merkle_trees[1]:
+                    low = mid
+                    high = midhigh
+                elif midlow_merkle != b'' and midlow_merkle == tips.merkle_trees[0]:
+                    low = midlow
+                    high = mid
+                else:
+                    high = midlow
+        self.log.debug('sync-{log_source.short_peer_id} find_synced_timestamp binary search done')
 
         # Synced timestamp found.
         self.synced_timestamp = low
         assert self.synced_timestamp <= self.peer_timestamp
 
         if low == high:
-            assert low == tips.timestamp
+            #assert low == tips.timestamp
+            self.log.debug('sync-{log_source.short_peer_id} low==high {log_source.synced_timestamp}')
             return None
 
         assert low + 1 == high
@@ -451,10 +509,15 @@ class NodeSyncTimestamp(Plugin):
         return self.synced_timestamp + 1
 
     @inlineCallbacks
-    def _next_step(self) -> Iterator[Union[Iterator, Iterator[Deferred]]]:
+    def _next_step(self, next_timestamp: Optional[int] = None) -> Iterator[Union[Iterator, Iterator[Deferred]]]:
         """ Run the next step to keep nodes synced.
         """
-        next_timestamp = yield self.find_synced_timestamp()
+        if next_timestamp is None:
+            next_timestamp = yield self.find_synced_timestamp()
+            # send sync info to peer
+            self.send_sync_info(next_timestamp)
+            self.run_find_synced_timestamp = False
+
         self.log.debug('sync-{p} _next_step next_timestamp={ts}', p=self.short_peer_id, ts=next_timestamp)
         if next_timestamp is None:
             return
@@ -462,7 +525,7 @@ class NodeSyncTimestamp(Plugin):
         yield self.sync_from_timestamp(next_timestamp)
 
     @inlineCallbacks
-    def next_step(self) -> Iterator[Union[Iterator, Iterator[Deferred]]]:
+    def next_step(self, synced_timestamp: Optional[int] = None) -> Iterator[Union[Iterator, Iterator[Deferred]]]:
         """ Execute next step and schedule next execution.
         """
         if self.is_running:
@@ -472,7 +535,8 @@ class NodeSyncTimestamp(Plugin):
 
         try:
             self.is_running = True
-            yield self._next_step()
+            if self.run_find_synced_timestamp or synced_timestamp:
+                yield self._next_step(synced_timestamp)
         except Exception as e:
             self.log.warn('Exception: {e!r}', e=e)
             raise
@@ -546,16 +610,15 @@ class NodeSyncTimestamp(Plugin):
         if deferred:
             deferred.callback(args)
 
-    def send_get_tips(self, timestamp: Optional[int] = None, include_hashes: bool = False, offset: int = 0) -> None:
+    def send_get_tips(self, timestamps: Optional[List[int]] = None, type: int = 0) -> None:
         """ Send a GET-TIPS message.
         """
-        if timestamp is None:
+        if timestamps is None:
             self.send_message(ProtocolMessages.GET_TIPS)
         else:
             payload = json.dumps(dict(
-                timestamp=timestamp,
-                include_hashes=include_hashes,
-                offset=offset,
+                timestamps=timestamps,
+                type=type,
             ))
             self.send_message(ProtocolMessages.GET_TIPS, payload)
 
@@ -567,38 +630,74 @@ class NodeSyncTimestamp(Plugin):
         else:
             data = json.loads(payload)
             args = GetTipsPayload(**data)
-            self.send_tips(args.timestamp, args.include_hashes, args.offset)
+            if args.type == 0:
+                self.send_tips(args.timestamps)
+            else:
+                self.send_new_tips(args.timestamps)
 
-    def send_tips(self, timestamp: Optional[int] = None, include_hashes: bool = False, offset: int = 0) -> None:
+    def send_tips(self, timestamps: Optional[List[int]] = None) -> None:
         """ Send a TIPS message.
         """
-        if timestamp is None:
-            timestamp = self.manager.tx_storage.latest_timestamp
+        if timestamps is None:
+            timestamps = [self.manager.tx_storage.latest_timestamp]
 
-        # All tips
-        intervals = self.manager.tx_storage.get_all_tips(timestamp)
+        ret = []
 
-        if len(intervals) == 0:
-            raise Exception('No tips for timestamp {}'.format(timestamp))
+        for timestamp in timestamps:
+            self.log.debug('sync-{log_source.short_peer_id} send_tips timestamp {ts}', ts=timestamp)
+            merkle_tree, _ = self.get_merkle_tree(timestamp)
+            ret.append(merkle_tree.hex())
+            has_more = False
 
-        # Calculate list of hashes to be sent
-        merkle_tree, hashes = self.calculate_merkle_tree(intervals)
-        has_more = False
-
-        if not include_hashes:
-            hashes = []
-        else:
-            hashes = hashes[offset:]
-            if len(hashes) > self.MAX_HASHES:
-                hashes = hashes[:self.MAX_HASHES]
-                has_more = True
+        hashes = []
 
         data = {
-            'length': len(intervals),
-            'timestamp': timestamp,
-            'merkle_tree': merkle_tree.hex(),
+            'length': 0,
+            'timestamps': timestamps,
+            'merkle_trees': ret,
             'hashes': [h.hex() for h in hashes],
             'has_more': has_more,
+        }
+
+        self.send_message(ProtocolMessages.TIPS, json.dumps(data))
+
+    def get_new_merkle(self, low, mid, high):
+        ret = []
+        midlow = (low + mid + 1) // 2
+        midhigh = (mid + high + 1) // 2
+        elements = self.manager.tx_storage.get_all_sorted_txs_from_to(low, high)
+        merkle = hashlib.sha256()
+
+        cut_list = [midlow, mid, midhigh]
+        cut = cut_list.pop(0)
+        for element in elements:
+            if element.timestamp >= cut:
+                ret.append(merkle.digest())
+                if len(cut_list) == 0:
+                    break
+                cut = cut_list.pop(0)
+            merkle.update(element.hash)
+
+        while len(ret) < 3:
+            ret.append(b'')
+
+        return ret
+
+    def send_new_tips(self, timestamps: List[int]) -> None:
+        """ Send a TIPS message.
+        """
+        assert len(timestamps) > 1
+        low = timestamps[0]
+        middle = timestamps[1]
+        high = timestamps[2]
+        ret = self.get_new_merkle(low, middle, high)
+
+        data = {
+            'length': 0,
+            'timestamps': timestamps,
+            'merkle_trees': [m.hex() for m in ret],
+            'hashes': [],
+            'has_more': False,
         }
 
         self.send_message(ProtocolMessages.TIPS, json.dumps(data))
@@ -607,8 +706,8 @@ class NodeSyncTimestamp(Plugin):
         """ Handle a received TIPS messages.
         """
         data = json.loads(payload)
-        data['merkle_tree'] = bytes.fromhex(data['merkle_tree'])
-        data['hashes'] = [bytes.fromhex(h) for h in data['hashes']]
+        data['merkle_trees'] = [bytes.fromhex(mt) for mt in data['merkle_trees']]
+        #data['hashes'] = [bytes.fromhex(h) for h in data['hashes']]
         args = TipsPayload(**data)
 
         key = 'tips'
@@ -640,6 +739,29 @@ class NodeSyncTimestamp(Plugin):
         # We ask for the downloader to retry the request
         assert self.protocol.connections is not None
         self.protocol.connections.retry_get_tx(bytes.fromhex(hash_hex))
+
+    def send_sync_info(self, next_timestamp) -> None:
+        """ Send a SYNC-INFO message.
+        """
+        data = {
+            'synced_timestamp': self.synced_timestamp,
+            'peer_timestamp': self.manager.tx_storage.latest_timestamp,
+            'run_sync': (next_timestamp is not None),
+        }
+
+        self.send_message(ProtocolMessages.SYNC_INFO, json.dumps(data))
+
+    @inlineCallbacks
+    def handle_sync_info(self, payload: str) -> None:
+        """ Handle a received SYNC-INFO message.
+        """
+        data = json.loads(payload)
+        args = SyncInfoPayload(**data)
+        self.synced_timestamp = args.synced_timestamp
+        self.peer_timestamp = args.peer_timestamp
+        if args.run_sync:
+            yield self.next_step(args.synced_timestamp)
+        self.run_find_synced_timestamp = True
 
     def send_data(self, tx: BaseTransaction) -> None:
         """ Send a DATA message.

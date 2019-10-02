@@ -672,3 +672,8 @@ class BaseTransactionStorage(TransactionStorage):
         all_sorted = TransactionsIndex()
         all_sorted.update(txs)
         return all_sorted
+
+    def get_all_sorted_txs_from_to(self, from_: int, to: int) -> List['TransactionsIndexElement']:
+        from_idx = self.all_index.txs_index.find_first_at_timestamp(from_)
+        to_idx = self.all_index.txs_index.find_first_at_timestamp(to + 1)
+        return self.all_index.txs_index[from_idx:to_idx]

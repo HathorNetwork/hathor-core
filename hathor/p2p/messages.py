@@ -15,17 +15,22 @@ class NextPayload(NamedTuple):
 
 
 class GetTipsPayload(NamedTuple):
-    timestamp: int
-    include_hashes: bool
-    offset: int = 0
+    timestamps: int
+    type: int
 
 
 class TipsPayload(NamedTuple):
     length: int
-    timestamp: int
-    merkle_tree: str
+    timestamps: List[int]
+    merkle_trees: List[str]
     hashes: List[str]
     has_more: bool
+
+
+class SyncInfoPayload(NamedTuple):
+    synced_timestamp: int
+    peer_timestamp: int
+    run_sync: bool
 
 
 class ProtocolMessages(Enum):
@@ -83,3 +88,5 @@ class ProtocolMessages(Enum):
     TRANSACTIONS = 'TRANSACTIONS'  # Send a list of hashes for transactions.
 
     HASHES = 'HASHES'
+
+    SYNC_INFO = 'SYNC-INFO'
