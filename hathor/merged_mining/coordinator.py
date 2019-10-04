@@ -293,6 +293,7 @@ class MergedMiningStratumProtocol(JSONRPC):
         self.miner_id: Optional[str] = None
         self.miner_address: Optional[bytes] = None
         self.job_ids: List[str] = []
+        self.min_difficulty = diff_from_weight(settings.MIN_SHARE_WEIGHT)
 
         self.xnonce1 = xnonce1
         self.xnonce2_size = self.DEFAULT_XNONCE2_SIZE
@@ -361,6 +362,11 @@ class MergedMiningStratumProtocol(JSONRPC):
         self.log.debug('handle configure', msgid=msgid, params=params)
         exts, exts_params = params
         res = {ext: False for ext in exts}
+
+        if 'minimum-difficulty' in exts:
+            self.min_difficulty = float(exts_params['minimum-difficulty.value'])
+            res['minimum-difficulty'] = True
+
         self.send_result(res, msgid)
 
     def handle_subscribe(self, params: Dict, msgid: Optional[str]) -> None:
@@ -453,7 +459,9 @@ class MergedMiningStratumProtocol(JSONRPC):
         """
         # XXX: we assume bitcoin difficulty is higher than ours, which will be true for the foreseeable future
         assert self.coordinator.hathor_coord_job is not None
-        return diff_from_weight(self.coordinator.hathor_coord_job.weight)
+        difficulty = diff_from_weight(self.coordinator.hathor_coord_job.weight)
+        difficulty = max(difficulty, self.min_difficulty)
+        return difficulty
 
     def set_difficulty(self) -> None:
         """ Sends the difficulty to the connected client, applies for all future "mining.notify" until it is set again.
