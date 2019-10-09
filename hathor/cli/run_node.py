@@ -220,7 +220,7 @@ class RunNode:
 
     def register_resources(self, args: Namespace) -> None:
         from hathor.conf import HathorSettings
-        from hathor.p2p.resources import AddPeersResource, MiningResource, StatusResource
+        from hathor.p2p.resources import AddPeersResource, MiningResource, StatusResource, SyncDebugResource
         from hathor.prometheus import PrometheusMetricsExporter
         from hathor.resources import ProfilerResource
         from hathor.transaction.resources import (
@@ -297,6 +297,7 @@ class RunNode:
 
             resources = (
                 (b'status', StatusResource(self.manager), root),
+                (b'sync_debug', SyncDebugResource(self.manager), root),
                 (b'version', VersionResource(self.manager), root),
                 (b'mining', MiningResource(self.manager), root),
                 (b'decode_tx', DecodeTxResource(self.manager), root),
