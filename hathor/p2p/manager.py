@@ -126,11 +126,25 @@ class ConnectionsManager:
         assert protocol.peer is not None
         assert protocol.peer.id is not None
 
-        self.log.info('on_peer_ready() {protocol}', protocol=protocol)
+        self.log.info('on_peer_ready() {peer_id} {protocol}', peer_id=protocol.peer.id, protocol=protocol)
         self.handshaking_peers.remove(protocol)
         self.received_peer_storage.pop(protocol.peer.id, None)
 
         self.peer_storage.add_or_merge(protocol.peer)
+
+        # we emit the event even if it's a duplicate peer as a matching
+        # NETWORK_PEER_DISCONNECTED will be emmited regardless
+        self.pubsub.publish(HathorEvents.NETWORK_PEER_CONNECTED, protocol=protocol)
+
+        if protocol.peer.id in self.connected_peers:
+            # connected twice to same peer
+            self.log.warn('duplicate connection to peer {protocol}', protocol=protocol)
+            conn = self.get_connection_to_drop(protocol)
+            self.reactor.callLater(0, self.drop_duplicate_connection, conn)
+            if conn == protocol:
+                # the new connection is being dropped, so don't save it to connected_peers
+                return
+
         self.connected_peers[protocol.peer.id] = protocol
 
         # In case it was a retry, we must reset the data only here, after it gets ready
@@ -143,16 +157,23 @@ class ConnectionsManager:
                 assert isinstance(conn.state, ReadyState)
                 conn.state.send_peers([protocol])
 
-        self.pubsub.publish(HathorEvents.NETWORK_PEER_CONNECTED, protocol=protocol)
-
     def on_peer_disconnect(self, protocol: HathorProtocol) -> None:
         self.log.info('on_peer_disconnect() {protocol}', protocol=protocol)
-        if protocol.peer:
-            assert protocol.peer.id is not None
-            self.connected_peers.pop(protocol.peer.id)
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
-
+        if protocol.peer:
+            assert protocol.peer.id is not None
+            existing_protocol = self.connected_peers.pop(protocol.peer.id, None)
+            if existing_protocol is None:
+                # in this case, the connection was closed before it got to READY state
+                return
+            if existing_protocol != protocol:
+                # this is the case we're closing a duplicate connection. We need to set the
+                # existing protocol object back to connected_peers, as that connection is still ongoing.
+                # A check for duplicate connections is done during PEER_ID state, but there's still a
+                # chance it can happen if both connections start at the same time and none of them has
+                # reached READY state while the other is on PEER_ID state
+                self.connected_peers[protocol.peer.id] = existing_protocol
         self.pubsub.publish(HathorEvents.NETWORK_PEER_DISCONNECTED, protocol=protocol)
 
     def get_ready_connections(self) -> Set[HathorProtocol]:
@@ -216,6 +237,9 @@ class ConnectionsManager:
         # Setting connection string in protocol, so we can validate it matches the entrypoints data
         conn_protocol.connection_string = connection_string
 
+        # this node started the connection
+        conn_protocol.initiated_connection = True
+
         self.connecting_peers.pop(endpoint)
 
     def connect_to(self, description: str, peer: Optional[PeerId] = None, use_ssl: bool = True) -> None:
@@ -275,3 +299,35 @@ class ConnectionsManager:
         """ Execute a retry of a request of a tx in the downloader
         """
         self.downloader.retry(hash_bytes)
+
+    def get_connection_to_drop(self, protocol: HathorProtocol) -> HathorProtocol:
+        """ When there are duplicate connections, determine which one should be dropped.
+
+        We keep the connection initiated by the peer with larger id. A simple (peer_id1 > peer_id2)
+        on the peer id string is used for this comparison.
+        """
+        assert protocol.peer is not None
+        assert protocol.peer.id is not None
+        assert protocol.my_peer.id is not None
+        other_connection = self.connected_peers[protocol.peer.id]
+        if protocol.my_peer.id > protocol.peer.id:
+            # connection started by me is kept
+            if protocol.initiated_connection:
+                # other connection is dropped
+                return other_connection
+            else:
+                # this was started by peer, so drop it
+                return protocol
+        else:
+            # connection started by peer is kept
+            if protocol.initiated_connection:
+                return protocol
+            else:
+                return other_connection
+
+    def drop_duplicate_connection(self, protocol: HathorProtocol) -> None:
+        """ Drop a connection
+        """
+        assert protocol.peer is not None
+        self.log.debug('dropping connection {peer_id} {protocol}', peer_id=protocol.peer.id, protocol=protocol)
+        protocol.send_error_and_close_connection('Connection already established')
