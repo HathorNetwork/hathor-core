@@ -113,6 +113,7 @@ class HathorProtocol:
     expected_peer_id: Optional[str]
     warning_flags: Set[str]
     connected: bool
+    initiated_connection: bool
 
     def __init__(self, network: str, my_peer: PeerId, connections: Optional['ConnectionsManager'] = None, *,
                  node: 'HathorManager') -> None:
@@ -157,6 +158,9 @@ class HathorProtocol:
 
         # If peer is connected
         self.connected = False
+
+        # Set to true if this node initiated the connection
+        self.initiated_connection = False
 
     def change_state(self, state_enum: PeerState) -> None:
         if state_enum not in self._state_instances:
@@ -238,6 +242,11 @@ class HathorProtocol:
         """ Send an ERROR message to the peer, and then closes the connection.
         """
         self.send_error(msg)
+        # from twisted docs: "If a producer is being used with the transport, loseConnection will only close
+        # the connection once the producer is unregistered." We call on_exit to make sure any producers (like
+        # the one from node_sync) are unregistered
+        if self.state:
+            self.state.on_exit()
         self.transport.loseConnection()
 
     def handle_error(self, payload) -> None:
