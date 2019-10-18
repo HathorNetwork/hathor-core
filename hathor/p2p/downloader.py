@@ -58,7 +58,6 @@ class TxDetails:
         while connection is None:
             if len(self.connections) <= self.requested_index:
                 # We don't have more connections available
-                self.deferred.cancel()
                 break
 
             connection = self.connections[self.requested_index]
@@ -150,13 +149,14 @@ class Downloader:
         details = self.pending_transactions[tx_id]
         connection = details.get_connection()
 
-        assert connection is not None
+        if connection is None:
+            self._remove_pending_tx(tx_id)
+        else:
+            # Setting downloading deferred
+            self.add_get_downloading_deferred(tx_id, details, connection)
 
-        # Setting downloading deferred
-        self.add_get_downloading_deferred(tx_id, details, connection)
-
-        # Adding to download deque
-        self.downloading_deque.append(tx_id)
+            # Adding to download deque
+            self.downloading_deque.append(tx_id)
 
     def add_get_downloading_deferred(self, tx_id: bytes, details: TxDetails, connection: 'NodeSyncTimestamp') -> None:
         """ Getting a downloading deferred when requesting data from a connection
@@ -235,17 +235,27 @@ class Downloader:
             # Maybe a race condition in which the timeout has triggered and the tx has arrived.
             return
 
-        # Get new connection
-        new_connection = details.get_connection()
-
-        if new_connection is None:
-            # No new connections available
-            return
-
         # Failing old downloading deferred
         if details.downloading_deferred:
             details.downloading_deferred.cancel()
             details.downloading_deferred = None
 
+        # Get new connection
+        new_connection = details.get_connection()
+
+        if new_connection is None:
+            self._remove_pending_tx(tx_id)
+            return
+
         # Start new download
         self.add_get_downloading_deferred(tx_id, details, new_connection)
+
+    def _remove_pending_tx(self, tx_id: bytes) -> None:
+        """ Cancel tx deferred and remove it from the pending dict
+        """
+        # No new connections available, so we must remove this tx_id from pending_transactions and cancel the deferred
+        details = self.pending_transactions.pop(tx_id)
+        details.deferred.cancel()
+        self.log.warn(
+            'Downloader: No new connections available to download the transaction. Tx {}'.format(tx_id.hex())
+        )
