@@ -339,6 +339,7 @@ class NodeSyncTimestamp(Plugin):
         assert self.protocol.connections is not None
         d = self.protocol.connections.get_tx(hash_bytes, self)
         d.addCallback(self.on_tx_success)
+        d.addErrback(self.on_get_data_failed, hash_bytes)
         return d
 
     def request_data(self, hash_bytes: bytes) -> Deferred:
@@ -723,3 +724,10 @@ class NodeSyncTimestamp(Plugin):
             # Updating stats data
             self.update_received_stats(tx, success)
         return tx
+
+    def on_get_data_failed(self, reason: 'Failure', hash_bytes: bytes) -> None:
+        """ Method called when get_data deferred fails.
+            We need this errback because otherwise the sync crashes when the deferred is canceled.
+            We should just log a warning because it will continue the sync and will try to get this tx again.
+        """
+        self.log.warn('sync-{p} failed to download tx hash={h}', p=self.short_peer_id, h=hash_bytes.hex())

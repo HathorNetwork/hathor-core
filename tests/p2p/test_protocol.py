@@ -151,6 +151,41 @@ class HathorProtocolTestCase(unittest.TestCase):
         self._check_result_only_cmd(conn.tr1.value(), b'ERROR')
         self.assertTrue(conn.tr1.disconnecting)
 
+    def test_invalid_same_peer_id2(self):
+        # we connect nodes 1-2 and 1-3. Nodes 2 and 3 have the same peer_id. The connections
+        # are established simultaneously, so we do not detect a peer id duplication in PEER_ID
+        # state, only on READY state
+        manager3 = self.create_peer(self.network, peer_id=self.peer_id2)
+        conn = FakeConnection(manager3, self.manager1)
+        # HELLO
+        self.conn1.run_one_step()
+        conn.run_one_step()
+        # PEER-ID
+        self.conn1.run_one_step()
+        conn.run_one_step()
+        # READY
+        self.conn1.run_one_step()
+        conn.run_one_step()
+        self.run_to_completion()
+        # one of the peers will close the connection. We don't know which on, as it depends
+        # on the peer ids
+        conn1_value = self.conn1.tr1.value() + self.conn1.tr2.value()
+        if b'ERROR' in conn1_value:
+            conn_dead = self.conn1
+            conn_alive = conn
+        else:
+            conn_dead = conn
+            conn_alive = self.conn1
+        self._check_result_only_cmd(conn_dead.tr1.value() + conn_dead.tr2.value(), b'ERROR')
+        # at this point, the connection must be closing as the error was detected on READY state
+        self.assertIn(True, [conn_dead.tr1.disconnecting, conn_dead.tr2.disconnecting])
+        # check connected_peers
+        connected_peers = list(self.manager1.connections.connected_peers.values())
+        self.assertEquals(1, len(connected_peers))
+        self.assertIn(connected_peers[0], [conn_alive.proto1, conn_alive.proto2])
+        # connection is still up
+        self.assertIsConnected(conn_alive)
+
     def test_invalid_different_network(self):
         manager3 = self.create_peer(network='mainnet')
         conn = FakeConnection(self.manager1, manager3)
