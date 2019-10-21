@@ -92,6 +92,17 @@ MiningResource.openapi = {
             'summary': 'Block to be mined',
             'description': ('Returns the base64 of the block to be mined in'
                             'bytes and an array of the hash of parents in hex'),
+            'parameters': [
+                {
+                    'name': 'address',
+                    'in': 'query',
+                    'description': 'Address to send the mined tokens',
+                    'required': False,
+                    'schema': {
+                        'type': 'string'
+                    }
+                },
+            ],
             'responses': {
                 '503': {
                     'description': 'Node still syncing',
