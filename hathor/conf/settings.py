@@ -1,3 +1,4 @@
+import os
 from typing import List, NamedTuple
 
 DECIMAL_PLACES = 2
@@ -127,3 +128,42 @@ class HathorSettings(NamedTuple):
 
     # Whether miners are assumed to mine txs by default
     STRATUM_MINE_TXS_DEFAULT: bool = True
+
+    # Percentage used to calculate the number of HTR that must be deposited when minting new tokens
+    # The same percentage is used to calculate the number of HTR that must be withdraw when melting tokens
+    # See for further information, see [rfc 0011-token-deposit].
+    TOKEN_DEPOSIT_PERCENTAGE: float = 0.01
+
+    # Array with the settings parameters that are used when calculating the settings hash
+    P2P_SETTINGS_HASH_FIELDS: List[str] = [
+        'P2PKH_VERSION_BYTE',
+        'MULTISIG_VERSION_BYTE',
+        'MIN_BLOCK_WEIGHT',
+        'MIN_TX_WEIGHT',
+        'BLOCK_DIFFICULTY_MAX_DW',
+        'BLOCK_DATA_MAX_SIZE'
+    ]
+
+    # Maximum difference allowed between current time and a received tx timestamp (in seconds)
+    MAX_FUTURE_TIMESTAMP_ALLOWED: int = 3600
+
+    # Maximum number of peer connection attemps before stop retrying
+    MAX_PEER_CONNECTION_ATTEMPS: int = 3
+
+    # Multiplier for the value to increase the timestamp for the next retry moment to connect to the peer
+    PEER_CONNECTION_RETRY_INTERVAL_MULTIPLIER: int = 5
+
+    # Filepath of ca certificate file to generate connection certificates
+    CA_FILEPATH: str = os.path.join(os.path.dirname(__file__), '../p2p/ca.crt')
+
+    # Filepath of ca key file to sign connection certificates
+    CA_KEY_FILEPATH: str = os.path.join(os.path.dirname(__file__), '../p2p/ca.key')
+
+    # Timeout (in seconds) for the downloading deferred (in the downloader) when syncing two peers
+    GET_DATA_TIMEOUT: int = 30
+
+    # Maximum number of characters in a token name
+    MAX_LENGTH_TOKEN_NAME: int = 30
+
+    # Maximum number of characters in a token symbol
+    MAX_LENGTH_TOKEN_SYMBOL: int = 5

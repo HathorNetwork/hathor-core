@@ -1,10 +1,12 @@
 import json
 
-from hathor.p2p.node_sync import NodeSyncTimestamp
+import twisted.names.client
+from twisted.internet.defer import inlineCallbacks
+
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from tests import unittest
-from tests.utils import FakeConnection, add_new_block
+from tests.utils import FakeConnection
 
 
 class HathorProtocolTestCase(unittest.TestCase):
@@ -34,7 +36,7 @@ class HathorProtocolTestCase(unittest.TestCase):
         if isinstance(line, str):
             line = line.encode('utf-8')
 
-        proto.dataReceived(line)
+        return proto.dataReceived(line)
 
     def _check_result_only_cmd(self, result, expected_cmd):
         cmd_list = []
@@ -90,8 +92,7 @@ class HathorProtocolTestCase(unittest.TestCase):
 
     def test_invalid_payload(self):
         self.conn1.run_one_step()
-        with self.assertRaises(json.decoder.JSONDecodeError):
-            self._send_cmd(self.conn1.proto1, 'PEER-ID', 'abc')
+        self.failureResultOf(self._send_cmd(self.conn1.proto1, 'PEER-ID', 'abc'), json.decoder.JSONDecodeError)
 
     def test_invalid_hello1(self):
         self.conn1.tr1.clear()
@@ -113,7 +114,11 @@ class HathorProtocolTestCase(unittest.TestCase):
 
     def test_invalid_hello4(self):
         self.conn1.tr1.clear()
-        self._send_cmd(self.conn1.proto1, 'HELLO', '{"app": 0, "remote_address": 1, "network": 2, "nonce": 3}')
+        self._send_cmd(
+            self.conn1.proto1,
+            'HELLO',
+            '{"app": 0, "remote_address": 1, "network": 2, "genesis_hash": "123", "settings_hash": "456"}'
+        )
         self._check_result_only_cmd(self.conn1.tr1.value(), b'ERROR')
         self.assertTrue(self.conn1.tr1.disconnecting)
 
@@ -124,20 +129,19 @@ class HathorProtocolTestCase(unittest.TestCase):
         self.assertFalse(self.conn1.tr1.disconnecting)
         self.assertFalse(self.conn1.tr2.disconnecting)
 
+    @inlineCallbacks
     def test_invalid_peer_id(self):
         self.conn1.run_one_step()
-        self._send_cmd(self.conn1.proto1, 'PEER-ID', '{"nonce": 0}')
+        invalid_payload = {'id': '123', 'entrypoints': ['tcp://localhost:1234']}
+        yield self._send_cmd(self.conn1.proto1, 'PEER-ID', json.dumps(invalid_payload))
         self._check_result_only_cmd(self.conn1.tr1.value(), b'ERROR')
         self.assertTrue(self.conn1.tr1.disconnecting)
-
-    def test_invalid_peer_id2(self):
-        self.conn1.run_one_step()
-        data = self.manager2.my_peer.to_json()
-        data['nonce'] = self.conn1.proto1.hello_nonce_sent
-        data['signature'] = 'MTIz'
-        self._send_cmd(self.conn1.proto1, 'PEER-ID', json.dumps(data))
-        self._check_result_only_cmd(self.conn1.tr1.value(), b'ERROR')
-        self.assertTrue(self.conn1.tr1.disconnecting)
+        # When a DNS request is made to twisted client, it starts a callLater to check the resolv file every minute
+        # https://github.com/twisted/twisted/blob/59f8266c286e2b073ddb05c70317ac20693f2b0c/src/twisted/names/client.py#L147  # noqa
+        # So we need to stop this call manually, otherwise the reactor would be unclean with a pending call
+        # TODO We should use a fake DNS resolver for tests otherwise we would need internet connection to run it
+        resolver = twisted.names.client.getResolver().resolvers[2]
+        resolver._parseCall.cancel()
 
     def test_invalid_same_peer_id(self):
         manager3 = self.create_peer(self.network, peer_id=self.peer_id1)
@@ -146,6 +150,41 @@ class HathorProtocolTestCase(unittest.TestCase):
         conn.run_one_step()
         self._check_result_only_cmd(conn.tr1.value(), b'ERROR')
         self.assertTrue(conn.tr1.disconnecting)
+
+    def test_invalid_same_peer_id2(self):
+        # we connect nodes 1-2 and 1-3. Nodes 2 and 3 have the same peer_id. The connections
+        # are established simultaneously, so we do not detect a peer id duplication in PEER_ID
+        # state, only on READY state
+        manager3 = self.create_peer(self.network, peer_id=self.peer_id2)
+        conn = FakeConnection(manager3, self.manager1)
+        # HELLO
+        self.conn1.run_one_step()
+        conn.run_one_step()
+        # PEER-ID
+        self.conn1.run_one_step()
+        conn.run_one_step()
+        # READY
+        self.conn1.run_one_step()
+        conn.run_one_step()
+        self.run_to_completion()
+        # one of the peers will close the connection. We don't know which on, as it depends
+        # on the peer ids
+        conn1_value = self.conn1.tr1.value() + self.conn1.tr2.value()
+        if b'ERROR' in conn1_value:
+            conn_dead = self.conn1
+            conn_alive = conn
+        else:
+            conn_dead = conn
+            conn_alive = self.conn1
+        self._check_result_only_cmd(conn_dead.tr1.value() + conn_dead.tr2.value(), b'ERROR')
+        # at this point, the connection must be closing as the error was detected on READY state
+        self.assertIn(True, [conn_dead.tr1.disconnecting, conn_dead.tr2.disconnecting])
+        # check connected_peers
+        connected_peers = list(self.manager1.connections.connected_peers.values())
+        self.assertEquals(1, len(connected_peers))
+        self.assertIn(connected_peers[0], [conn_alive.proto1, conn_alive.proto2])
+        # connection is still up
+        self.assertIsConnected(conn_alive)
 
     def test_invalid_different_network(self):
         manager3 = self.create_peer(network='mainnet')
@@ -167,6 +206,7 @@ class HathorProtocolTestCase(unittest.TestCase):
         self.assertIsConnected()
 
     def test_send_ping(self):
+        self.conn1.run_one_step()
         self.conn1.run_one_step()
         self.conn1.run_one_step()
         # Originally, only a GET-PEERS message would be received, but now it is receiving two messages in a row.
@@ -202,6 +242,8 @@ class HathorProtocolTestCase(unittest.TestCase):
     def test_on_disconnect_after_peer_id(self):
         self.conn1.run_one_step()
         self.assertIn(self.conn1.proto1, self.manager1.connections.handshaking_peers)
+        # The peer READY now depends on a message exchange from both peers, so we need one more step
+        self.conn1.run_one_step()
         self.conn1.run_one_step()
         self.assertIn(self.conn1.proto1, self.manager1.connections.connected_peers.values())
         self.assertNotIn(self.conn1.proto1, self.manager1.connections.handshaking_peers)
@@ -221,37 +263,3 @@ class HathorProtocolTestCase(unittest.TestCase):
 
         self._check_result_only_cmd(self.conn1.tr1.value(), b'PEERS')
         self.conn1.run_one_step()
-
-    def test_notify_data(self):
-        self.conn1.run_one_step()  # HELLO
-        self.conn1.run_one_step()  # PEER-ID
-        self.conn1.run_one_step()  # GET-PEERS
-        self.conn1.run_one_step()  # GET-TIPS
-        self.conn1.run_one_step()  # READY
-
-        node_sync = NodeSyncTimestamp(self.conn1.proto1, reactor=self.manager1.reactor)
-        block = add_new_block(self.manager2, advance_clock=1)
-
-        node_sync.send_notify_data(block)
-        full_payload = self.conn1.tr1.value().split(b'\r\n')[1]
-        cmd = full_payload.split()[0].decode('utf-8')
-        payload = b" ".join(full_payload.split()[1:]).decode('utf-8')
-        self._send_cmd(self.conn1.proto1, cmd, payload)
-        self._check_cmd_and_value(self.conn1.tr1.value(), (b'GET-DATA', block.hash.hex().encode('utf-8')))
-
-        # Testing deferred exceptions
-        node_sync.deferred_by_key['next'] = 1
-        with self.assertRaises(Exception):
-            node_sync.get_peer_next()
-
-        node_sync.deferred_by_key['tips'] = 1
-        with self.assertRaises(Exception):
-            node_sync.get_peer_tips()
-
-        node_sync.deferred_by_key['get-data-12'] = 1
-        with self.assertRaises(Exception):
-            node_sync.get_data(bytes.fromhex('12'))
-
-        # Just to test specific part of code
-        self.conn1.proto1.state.lc_ping.running = False
-        self.conn1.disconnect('Testing')

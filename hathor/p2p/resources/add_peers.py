@@ -26,17 +26,30 @@ class AddPeersResource(resource.Resource):
         set_cors(request, 'POST')
         peers = json.loads(request.content.read().decode('utf-8'))
 
-        # remove peers we already know about
         known_peers = self.manager.connections.peer_storage.values()
-        for peer in known_peers:
-            for entrypoint in peer.entrypoints:
-                if entrypoint in peers:
-                    peers.remove(entrypoint)
 
-        pd = BootstrapPeerDiscovery(peers)
+        def already_connected(connection_string: str):
+            # determines if given connection string is already among connected or connecting peers
+            endpoint_url = connection_string.replace('//', '')
+
+            # remove peers that we're already trying to connect
+            if endpoint_url in self.manager.connections.connecting_peers:
+                return True
+
+            # remove peers we already know about
+            for peer in known_peers:
+                if connection_string in peer.entrypoints:
+                    return True
+
+            return False
+
+        filtered_peers = [connection_string for connection_string in peers if not already_connected(connection_string)]
+        print('filtered', filtered_peers)
+
+        pd = BootstrapPeerDiscovery(filtered_peers)
         pd.discover_and_connect(self.manager.connections.connect_to)
 
-        ret = {'success': True, 'peers': peers}
+        ret = {'success': True, 'peers': filtered_peers}
         return json.dumps(ret, indent=4).encode('utf-8')
 
     def render_OPTIONS(self, request):

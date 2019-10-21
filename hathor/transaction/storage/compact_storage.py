@@ -94,19 +94,16 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
             raise error
 
     def load(self, data):
-        from hathor.transaction.transaction import Transaction
-        from hathor.transaction.block import Block
-        from hathor.transaction.base_transaction import TxOutput, TxInput
+        from hathor.transaction.base_transaction import TxOutput, TxInput, TxVersion
 
-        nonce = data['nonce']
-        timestamp = data['timestamp']
-        version = data['version']
-        weight = data['weight']
         hash_bytes = bytes.fromhex(data['hash'])
+        if 'data' in data:
+            data['data'] = base64.b64decode(data['data'])
 
         parents = []
         for parent in data['parents']:
             parents.append(bytes.fromhex(parent))
+        data['parents'] = parents
 
         inputs = []
         for input_tx in data['inputs']:
@@ -114,6 +111,10 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
             index = input_tx['index']
             input_data = base64.b64decode(input_tx['data'])
             inputs.append(TxInput(tx_id, index, input_data))
+        if len(inputs) > 0:
+            data['inputs'] = inputs
+        else:
+            del data['inputs']
 
         outputs = []
         for output in data['outputs']:
@@ -121,26 +122,18 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
             script = base64.b64decode(output['script'])
             token_data = output['token_data']
             outputs.append(TxOutput(value, script, token_data))
+        if len(outputs) > 0:
+            data['outputs'] = outputs
 
         tokens = [bytes.fromhex(uid) for uid in data['tokens']]
-
-        kwargs = {
-            'nonce': nonce,
-            'timestamp': timestamp,
-            'version': version,
-            'weight': weight,
-            'outputs': outputs,
-            'parents': parents,
-            'storage': self,
-        }
-
-        if len(inputs) == 0:
-            kwargs['data'] = base64.b64decode(data['data'])
-            tx = Block(**kwargs)
+        if len(tokens) > 0:
+            data['tokens'] = tokens
         else:
-            kwargs['inputs'] = inputs
-            kwargs['tokens'] = tokens
-            tx = Transaction(**kwargs)
+            del data['tokens']
+
+        data['storage'] = self
+        cls = TxVersion(data['version']).get_cls()
+        tx = cls(**data)
         tx.update_hash()
         assert tx.hash == hash_bytes, 'Hashes differ: {} != {}'.format(tx.hash.hex(), hash_bytes.hex())
         return tx

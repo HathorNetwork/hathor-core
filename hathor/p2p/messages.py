@@ -47,6 +47,9 @@ class ProtocolMessages(Enum):
     # Identifies the peer.
     PEER_ID = 'PEER-ID'
 
+    # Tell the other peer your peer-id validations were completed and you are ready
+    READY = 'READY'
+
     # Request a list of peers.
     GET_PEERS = 'GET-PEERS'
 
@@ -63,9 +66,9 @@ class ProtocolMessages(Enum):
     # ---
     # Hathor Specific Messages
     # ---
-    NOTIFY_DATA = 'NOTIFY-DATA'  # Notify about a new piece of data.
     GET_DATA = 'GET-DATA'  # Request the data for a specific transaction.
     DATA = 'DATA'  # Send the data for a specific transaction.
+    NOT_FOUND = 'NOT-FOUND'  # Used when a requested tx from GET-DATA is not found in the peer
 
     GET_TIPS = 'GET-TIPS'
     TIPS = 'TIPS'

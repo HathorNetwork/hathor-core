@@ -15,7 +15,7 @@ from twisted.python.threadpool import ThreadPool
 
 from hathor.conf import HathorSettings
 from hathor.exception import InvalidNewTransaction
-from hathor.indexes import WalletIndex
+from hathor.indexes import TokensIndex, WalletIndex
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
@@ -112,13 +112,14 @@ class HathorManager:
         self.tx_storage.pubsub = self.pubsub
         if wallet_index and self.tx_storage.with_index:
             self.tx_storage.wallet_index = WalletIndex(self.pubsub)
+            self.tx_storage.tokens_index = TokensIndex()
 
         self.avg_time_between_blocks = settings.AVG_TIME_BETWEEN_BLOCKS
         self.min_block_weight = min_block_weight or settings.MIN_BLOCK_WEIGHT
         self.min_tx_weight = settings.MIN_TX_WEIGHT
         self.tokens_issued_per_block = settings.TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES)
 
-        self.max_future_timestamp_allowed = 3600  # in seconds
+        self.max_future_timestamp_allowed = settings.MAX_FUTURE_TIMESTAMP_ALLOWED
 
         self.metrics = Metrics(
             pubsub=self.pubsub,
@@ -132,7 +133,7 @@ class HathorManager:
         self.server_factory = HathorServerFactory(self.network, self.my_peer, node=self)
         self.client_factory = HathorClientFactory(self.network, self.my_peer, node=self)
         self.connections = ConnectionsManager(self.reactor, self.my_peer, self.server_factory, self.client_factory,
-                                              self.pubsub)
+                                              self.pubsub, self)
 
         self.wallet = wallet
         if self.wallet:
@@ -588,5 +589,5 @@ class HathorManager:
 
         if self.hostname:
             proto, _, _ = description.partition(':')
-            address = '{}:{}:{}'.format(proto, self.hostname, endpoint._port)
+            address = '{}://{}:{}'.format(proto, self.hostname, endpoint._port)
             self.my_peer.entrypoints.append(address)

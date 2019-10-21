@@ -5,6 +5,7 @@ from hathor.transaction.base_transaction import (
     BaseTransaction,
     TxInput,
     TxOutput,
+    TxVersion,
     sum_weights,
     tx_or_block_from_proto,
 )
@@ -19,6 +20,7 @@ __all__ = [
     'TransactionMetadata',
     'TxInput',
     'TxOutput',
+    'TxVersion',
     'MAX_NUM_INPUTS',
     'MAX_NUM_OUTPUTS',
     'MAX_OUTPUT_VALUE',

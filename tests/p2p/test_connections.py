@@ -11,8 +11,8 @@ from tests.utils import run_server
 class ConnectionsTest(unittest.TestCase):
     def test_connections(self):
         process = run_server()
-        process2 = run_server(listen=8006, status=8086, bootstrap='tcp:127.0.0.1:8005')
-        process3 = run_server(listen=8007, status=8087, bootstrap='tcp:127.0.0.1:8005')
+        process2 = run_server(listen=8006, status=8086, bootstrap='tcp://127.0.0.1:8005')
+        process3 = run_server(listen=8007, status=8087, bootstrap='tcp://127.0.0.1:8005')
 
         process.terminate()
         process2.terminate()
@@ -25,7 +25,7 @@ class ConnectionsTest(unittest.TestCase):
         wallet.unlock(b'teste')
         manager = HathorManager(self.clock, tx_storage=tx_storage, wallet=wallet)
 
-        endpoint = 'tcp:127.0.0.1:8005'
+        endpoint = 'tcp://127.0.0.1:8005'
         manager.connections.connect_to(endpoint, use_ssl=True)
 
         self.assertFalse(endpoint in manager.connections.connecting_peers)

@@ -1,6 +1,6 @@
 import time
 from enum import Enum
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Generator, Optional, Set
 
 from autobahn.twisted.websocket import WebSocketClientProtocol, WebSocketServerProtocol
 from twisted.internet.interfaces import ITransport
@@ -94,12 +94,14 @@ class HathorProtocol:
     class RateLimitKeys(str, Enum):
         GLOBAL = 'global'
 
+    class WarningFlags(str, Enum):
+        NO_PEER_ID_URL = 'no_peer_id_url'
+        NO_ENTRYPOINTS = 'no_entrypoints'
+
     network: str
     my_peer: PeerId
     connections: Optional['ConnectionsManager']
     node: 'HathorManager'
-    hello_nonce_received: Optional[str]
-    hello_nonce_sent: Optional[str]
     app_version: str
     last_message: float
     peer: Optional[PeerId]
@@ -107,6 +109,11 @@ class HathorProtocol:
     state: Optional[BaseState]
     connection_time: float
     _state_instances: Dict[PeerState, BaseState]
+    connection_string: Optional[str]
+    expected_peer_id: Optional[str]
+    warning_flags: Set[str]
+    connected: bool
+    initiated_connection: bool
 
     def __init__(self, network: str, my_peer: PeerId, connections: Optional['ConnectionsManager'] = None, *,
                  node: 'HathorManager') -> None:
@@ -139,6 +146,22 @@ class HathorProtocol:
         self.ratelimit = RateLimiter()
         # self.ratelimit.set_limit(self.RateLimitKeys.GLOBAL, 120, 60)
 
+        # Connection string of the peer
+        # Used to validate if entrypoints has this string
+        self.connection_string: Optional[str] = None
+
+        # Peer id sent in the connection url that is expected to connect (optional)
+        self.expected_peer_id: Optional[str] = None
+
+        # Set of warning flags that may be added during the connection process
+        self.warning_flags: Set[str] = set()
+
+        # If peer is connected
+        self.connected = False
+
+        # Set to true if this node initiated the connection
+        self.initiated_connection = False
+
     def change_state(self, state_enum: PeerState) -> None:
         if state_enum not in self._state_instances:
             state_cls = state_enum.value
@@ -164,6 +187,8 @@ class HathorProtocol:
         # The initial state is HELLO.
         self.change_state(self.PeerState.HELLO)
 
+        self.connected = True
+
         if self.connections:
             self.connections.on_peer_connect(self)
 
@@ -172,6 +197,7 @@ class HathorProtocol:
         """
         remote = self.transport.getPeer()
         self.log.info('HathorProtocol.connectionLost(): {remote} {reason}', remote=remote, reason=reason)
+        self.connected = False
         if self.state:
             self.state.on_exit()
         if self.connections:
@@ -184,7 +210,7 @@ class HathorProtocol:
         """
         raise NotImplementedError
 
-    def recv_message(self, cmd: ProtocolMessages, payload: str) -> None:
+    def recv_message(self, cmd: ProtocolMessages, payload: str) -> Optional[Generator[Any, Any, None]]:
         """ Executed when a new message arrives.
         """
         assert self.state is not None
@@ -193,17 +219,19 @@ class HathorProtocol:
 
         if not self.ratelimit.add_hit(self.RateLimitKeys.GLOBAL):
             self.state.send_throttle(self.RateLimitKeys.GLOBAL)
-            return
+            return None
 
         fn = self.state.cmd_map.get(cmd)
         if fn is not None:
             try:
-                fn(payload)
+                return fn(payload)
             except Exception as e:
                 self.log.warn('Unhandled Exception: {e!r}', e=e)
                 raise
         else:
             self.send_error('Invalid Command: {}'.format(cmd))
+
+        return None
 
     def send_error(self, msg: str) -> None:
         """ Send an error message to the peer.
@@ -214,6 +242,11 @@ class HathorProtocol:
         """ Send an ERROR message to the peer, and then closes the connection.
         """
         self.send_error(msg)
+        # from twisted docs: "If a producer is being used with the transport, loseConnection will only close
+        # the connection once the producer is unregistered." We call on_exit to make sure any producers (like
+        # the one from node_sync) are unregistered
+        if self.state:
+            self.state.on_exit()
         self.transport.loseConnection()
 
     def handle_error(self, payload) -> None:
@@ -241,23 +274,23 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
         self.log.warn('lineLengthExceeded {line_len} > {log_source.MAX_LENGTH}: {line}', line=line, line_len=len(line))
         super(HathorLineReceiver, self).lineLengthExceeded(line)
 
-    def lineReceived(self, line: bytes) -> None:
+    def lineReceived(self, line: bytes) -> Optional[Generator[Any, Any, None]]:
         self.metrics.received_messages += 1
         self.metrics.received_bytes += len(line)
         try:
             sline = line.decode('utf-8')
         except UnicodeDecodeError:
             self.transport.loseConnection()
-            return
+            return None
 
         msgtype, _, msgdata = sline.partition(' ')
         try:
             cmd = ProtocolMessages(msgtype)
         except ValueError:
             self.transport.loseConnection()
-            return
+            return None
         else:
-            self.recv_message(cmd, msgdata)
+            return self.recv_message(cmd, msgdata)
 
     def send_message(self, cmd_enum: ProtocolMessages, payload: Optional[str] = None) -> None:
         cmd = cmd_enum.value

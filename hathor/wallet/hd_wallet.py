@@ -119,7 +119,7 @@ class HDWallet(BaseWallet):
         from pycoin.networks.registry import network_for_netcode
         _register_pycoin_networks()
         network = network_for_netcode('htr')
-        key = network.extras.BIP32Node.from_master_secret(seed)
+        key = network.keys.bip32_seed(seed)
 
         # Until account key should be hardened
         # Chain path = 44'/0'/0'/0

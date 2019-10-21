@@ -396,8 +396,9 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # initial token balance
         self.assertEqual(self.manager.wallet.balance[token_id], WalletBalance(0, amount))
         # initial hathor balance
-        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
-                         WalletBalance(0, self.initial_balance))
+        # we don't consider HTR balance 0 because we transfer genesis tokens to this
+        # wallet during token creation
+        hathor_balance = self.manager.wallet.balance[settings.HATHOR_TOKEN_UID]
 
         # transfer token to another wallet and check balance again
         parents = self.manager.get_new_tx_parents()
@@ -427,5 +428,4 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # verify balance
         self.assertEqual(self.manager.wallet.balance[token_id], WalletBalance(0, amount - 30))
         # hathor balance remains the same
-        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
-                         WalletBalance(0, self.initial_balance))
+        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID], hathor_balance)

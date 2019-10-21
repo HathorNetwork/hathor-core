@@ -4,17 +4,19 @@ import subprocess
 import time
 import urllib.parse
 from concurrent import futures
-from typing import List
+from typing import TYPE_CHECKING, List
 
 import grpc
 import numpy.random
 import requests
+from OpenSSL.crypto import X509
 from twisted.internet.task import Clock
 from twisted.test import proto_helpers
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_private_key_from_bytes
 from hathor.manager import HathorEvents, HathorManager
+from hathor.p2p.utils import generate_certificate
 from hathor.transaction import Transaction, TxInput, TxOutput, genesis
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import (
@@ -22,6 +24,11 @@ from hathor.transaction.storage import (
     TransactionRemoteStorage,
     create_transaction_storage_server,
 )
+from hathor.transaction.token_creation_tx import TokenCreationTransaction
+from hathor.transaction.util import get_deposit_amount
+
+if TYPE_CHECKING:
+    from hathor.p2p.peer_id import PeerId
 
 settings = HathorSettings()
 
@@ -176,6 +183,17 @@ def add_new_blocks(manager, num_blocks, advance_clock=None, *, parent_block_hash
     return blocks
 
 
+class HathorStringTransport(proto_helpers.StringTransport):
+    def __init__(self, peer: 'PeerId'):
+        self.peer = peer
+        super().__init__()
+
+    def getPeerCertificate(self) -> X509:
+        certificate = generate_certificate(self.peer.private_key, settings.CA_FILEPATH, settings.CA_KEY_FILEPATH)
+        openssl_certificate = X509.from_cryptography(certificate)
+        return openssl_certificate
+
+
 class FakeConnection:
     def __init__(self, manager1, manager2, *, latency: float = 0):
         """
@@ -190,8 +208,8 @@ class FakeConnection:
         self.proto1 = manager1.server_factory.buildProtocol(('127.0.0.1', 0))
         self.proto2 = manager2.client_factory.buildProtocol(('127.0.0.1', 0))
 
-        self.tr1 = proto_helpers.StringTransport()
-        self.tr2 = proto_helpers.StringTransport()
+        self.tr1 = HathorStringTransport(self.proto2.my_peer)
+        self.tr2 = HathorStringTransport(self.proto1.my_peer)
 
         self.proto1.makeConnection(self.tr1)
         self.proto2.makeConnection(self.tr2)
@@ -545,11 +563,13 @@ def get_genesis_key():
     return get_private_key_from_bytes(private_key_bytes)
 
 
-def create_tokens(manager: 'HathorManager', address_b58: str = None, genesis_index: int = 0):
+def create_tokens(manager: 'HathorManager', address_b58: str = None, mint_amount: int = 300,
+                  token_name: str = 'TestCoin', token_symbol: str = 'TTC', propagate: bool = True):
     """Creates a new token and propagates a tx with the following UTXOs:
-    1. some tokens (already mint some tokens so they can be transferred);
-    2. mint authority;
-    3. melt authority;
+    0. some tokens (already mint some tokens so they can be transferred);
+    1. mint authority;
+    2. melt authority;
+    3. deposit change;
 
     :param manager: hathor manager
     :type manager: :class:`hathor.manager.HathorManager`
@@ -557,81 +577,60 @@ def create_tokens(manager: 'HathorManager', address_b58: str = None, genesis_ind
     :param address_b58: address where tokens will be transferred to
     :type address_b58: string
 
-    :param genesis_index: which genesis output to use for creating the token
-    :type genesis_index: int
+    :param token_name: the token name for the new token
+    :type token_name: str
+
+    :param token_symbol: the token symbol for the new token
+    :type token_symbol: str
 
     :return: the propagated transaction so others can spend their outputs
     """
     genesis = manager.tx_storage.get_all_genesis()
     genesis_blocks = [tx for tx in genesis if tx.is_block]
     genesis_txs = [tx for tx in genesis if not tx.is_block]
-    genesis_block = genesis_blocks[genesis_index]
+    genesis_block = genesis_blocks[0]
     genesis_private_key = get_genesis_key()
 
     wallet = manager.wallet
+    outputs = []
 
     if address_b58 is None:
         address_b58 = wallet.get_unused_address(mark_as_used=True)
     address = decode_address(address_b58)
 
-    _input1 = TxInput(genesis_block.hash, genesis_index, b'')
-
-    # we send genesis tokens to a random address so we don't add hathors to the user's wallet
-    rand_address = decode_address('1Pa4MMsr5DMRAeU1PzthFXyEJeVNXsMHoz')
-    rand_script = P2PKH.create_output_script(rand_address)
-    value = genesis_block.outputs[genesis_index].value
-    output = TxOutput(value, rand_script, 0)
-
     parents = [tx.hash for tx in genesis_txs]
-    tx = Transaction(
+    script = P2PKH.create_output_script(address)
+    # deposit input
+    deposit_amount = get_deposit_amount(mint_amount)
+    deposit_input = TxInput(genesis_block.hash, 0, b'')
+    # mint output
+    if mint_amount > 0:
+        outputs.append(TxOutput(mint_amount, script, 0b00000001))
+    # authority outputs
+    outputs.append(TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001))
+    outputs.append(TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001))
+    # deposit output
+    outputs.append(TxOutput(genesis_block.outputs[0].value - deposit_amount, script, 0))
+
+    tx = TokenCreationTransaction(
         weight=1,
-        inputs=[_input1],
         parents=parents,
         storage=manager.tx_storage,
+        inputs=[deposit_input],
+        outputs=outputs,
+        token_name=token_name,
+        token_symbol=token_symbol,
         timestamp=int(manager.reactor.seconds())
     )
-
-    # create token
-    token_masks = TxOutput.TOKEN_CREATION_MASK | TxOutput.TOKEN_MINT_MASK | TxOutput.TOKEN_MELT_MASK
-    new_token_uid = tx.create_token_uid(0)
-    tx.tokens.append(new_token_uid)
-    script = P2PKH.create_output_script(address)
-    token_output = TxOutput(token_masks, script, 0b10000001)
-
-    # finish and propagate tx
-    tx.outputs = [token_output, output]
     data_to_sign = tx.get_sighash_all(clear_input_data=True)
     public_bytes, signature = wallet.get_input_aux_data(data_to_sign, genesis_private_key)
     tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
     tx.resolve()
-    tx.verify()
-    manager.propagate_tx(tx, fails_silently=False)
-    manager.reactor.advance(8)
-
-    # mint tokens
-    parents = manager.get_new_tx_parents()
-    _input1 = TxInput(tx.hash, 0, b'')
-    # mint 300 tokens
-    token_output1 = TxOutput(300, script, 0b00000001)
-    token_output2 = TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001)
-    token_output3 = TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001)
-    tx2 = Transaction(
-        weight=1,
-        inputs=[_input1],
-        outputs=[token_output1, token_output2, token_output3],
-        parents=parents,
-        tokens=[new_token_uid],
-        storage=manager.tx_storage,
-        timestamp=int(manager.reactor.seconds())
-    )
-    data_to_sign = tx2.get_sighash_all(clear_input_data=True)
-    public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(address_b58))
-    tx2.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
-    tx2.resolve()
-    tx2.verify()
-    manager.propagate_tx(tx2, fails_silently=False)
-    manager.reactor.advance(8)
-    return tx2
+    if propagate:
+        tx.verify()
+        manager.propagate_tx(tx, fails_silently=False)
+        manager.reactor.advance(8)
+    return tx
 
 
 def start_remote_storage(tx_storage=None):

@@ -1,6 +1,6 @@
 from collections import defaultdict
 from math import inf
-from typing import TYPE_CHECKING, DefaultDict, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
+from typing import TYPE_CHECKING, DefaultDict, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple, cast
 
 from intervaltree import Interval, IntervalTree
 from sortedcontainers import SortedKeyList
@@ -8,6 +8,7 @@ from twisted.logger import Logger
 
 from hathor.pubsub import HathorEvents
 from hathor.transaction import BaseTransaction
+from hathor.transaction.base_transaction import TxVersion
 from hathor.transaction.scripts import parse_address_script
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -377,3 +378,109 @@ class WalletIndex:
         """ Get inputs/outputs history from address
         """
         return self.index[address]
+
+
+class TokensIndex:
+    """ Index of tokens by token uid
+    """
+
+    class TokenStatus:
+        """ Class used to track token info
+
+        For both sets (mint and melt), the expected tuple is (tx_id, index).
+
+        'total' tracks the amount of tokens in circulation (mint - melt)
+        """
+        def __init__(self, name: str = None, symbol: str = None, total: int = 0,
+                     mint: Set[Tuple[bytes, int]] = None, melt: Set[Tuple[bytes, int]] = None) -> None:
+            self.name = name
+            self.symbol = symbol
+            self.total = total
+            self.mint = mint or set()
+            self.melt = melt or set()
+
+    def __init__(self) -> None:
+        self.tokens: Dict[bytes, TokensIndex.TokenStatus] = defaultdict(lambda: self.TokenStatus())
+
+    def _add_to_index(self, tx: BaseTransaction, index: int):
+        """ Add tx to mint/melt indexes and total amount
+        """
+        assert tx.hash is not None
+
+        tx_output = tx.outputs[index]
+        token_uid = tx.get_token_uid(tx_output.get_token_index())
+
+        if tx_output.is_token_authority():
+            if tx_output.can_mint_token():
+                # add to mint index
+                self.tokens[token_uid].mint.add((tx.hash, index))
+            if tx_output.can_melt_token():
+                # add to melt index
+                self.tokens[token_uid].melt.add((tx.hash, index))
+        else:
+            self.tokens[token_uid].total += tx_output.value
+
+    def _remove_from_index(self, tx: BaseTransaction, index: int):
+        """ Remove tx from mint/melt indexes and total amount
+        """
+        assert tx.hash is not None
+
+        tx_output = tx.outputs[index]
+        token_uid = tx.get_token_uid(tx_output.get_token_index())
+
+        if tx_output.is_token_authority():
+            if tx_output.can_mint_token():
+                # remove from mint index
+                self.tokens[token_uid].mint.discard((tx.hash, index))
+            if tx_output.can_melt_token():
+                # remove from melt index
+                self.tokens[token_uid].melt.discard((tx.hash, index))
+        else:
+            self.tokens[token_uid].total -= tx_output.value
+
+    def add_tx(self, tx: BaseTransaction) -> None:
+        """ Checks if this tx has mint or melt inputs/outputs and adds to tokens index
+        """
+        for tx_input in tx.inputs:
+            spent_tx = tx.get_spent_tx(tx_input)
+            self._remove_from_index(spent_tx, tx_input.index)
+
+        for index in range(len(tx.outputs)):
+            self._add_to_index(tx, index)
+
+        # if it's a TokenCreationTransaction, update name and symbol
+        if tx.version == TxVersion.TOKEN_CREATION_TRANSACTION:
+            from hathor.transaction.token_creation_tx import TokenCreationTransaction
+            tx = cast(TokenCreationTransaction, tx)
+            assert tx.hash is not None
+            status = self.tokens[tx.hash]
+            status.name = tx.token_name
+            status.symbol = tx.token_symbol
+
+    def del_tx(self, tx: BaseTransaction) -> None:
+        """ Tx has been voided, so remove from tokens index (if applicable)
+        """
+        for tx_input in tx.inputs:
+            spent_tx = tx.get_spent_tx(tx_input)
+            self._add_to_index(spent_tx, tx_input.index)
+
+        for index in range(len(tx.outputs)):
+            self._remove_from_index(tx, index)
+
+        # if it's a TokenCreationTransaction, remove it from index
+        if tx.version == TxVersion.TOKEN_CREATION_TRANSACTION:
+            assert tx.hash is not None
+            del self.tokens[tx.hash]
+
+    def get_token_info(self, token_uid: bytes) -> 'TokensIndex.TokenStatus':
+        """ Get the info from the tokens dict.
+
+        We use a default dict, so querying for unknown token uids will never raise an exception. To overcome that,
+        we check the token name and, if it's None, we assume it's an unknown token uid (and raise an exception).
+
+        :raises KeyError: an unknown token uid
+        """
+        info = self.tokens[token_uid]
+        if info.name is None:
+            raise KeyError('unknown token')
+        return info

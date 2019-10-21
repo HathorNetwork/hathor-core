@@ -202,7 +202,7 @@ class RunNode:
             dns_hosts.extend(settings.BOOTSTRAP_DNS)
 
         if args.dns:
-            dns_hosts.extend(dns_hosts)
+            dns_hosts.extend(args.dns)
 
         if dns_hosts:
             self.manager.add_peer_discovery(DNSPeerDiscovery(dns_hosts))
@@ -250,7 +250,7 @@ class RunNode:
             UnlockWalletResource,
         )
         from hathor.wallet.resources.thin_wallet import (AddressHistoryResource, SendTokensResource as
-                                                         SendTokensThinResource)
+                                                         SendTokensThinResource, TokenResource)
         from hathor.wallet.resources.nano_contracts import (
             NanoContractDecodeResource,
             NanoContractExecuteResource,
@@ -314,6 +314,7 @@ class RunNode:
                 # /thin_wallet
                 (b'address_history', AddressHistoryResource(self.manager), thin_wallet_resource),
                 (b'send_tokens', SendTokensThinResource(self.manager), thin_wallet_resource),
+                (b'token', TokenResource(self.manager), thin_wallet_resource),
                 # /wallet/nano-contract
                 (b'match-value', NanoContractMatchValueResource(self.manager), contracts_resource),
                 (b'decode', NanoContractDecodeResource(self.manager), contracts_resource),

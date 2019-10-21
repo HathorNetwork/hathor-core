@@ -7,19 +7,22 @@ import time
 import weakref
 from _hashlib import HASH
 from abc import ABC, abstractclassmethod, abstractmethod
-from math import inf, log
-from struct import pack
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Iterator, List, Optional, Tuple
+from enum import IntEnum
+from math import inf, isfinite, log
+from struct import error as StructError, pack
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Iterator, List, Optional, Tuple, Type
 
 from hathor import protos
 from hathor.conf import HathorSettings
 from hathor.transaction.exceptions import (
     DuplicatedParents,
     IncorrectParents,
+    InvalidOutputValue,
     ParentDoesNotExist,
     PowError,
     TimestampError,
     TxValidationError,
+    WeightError,
 )
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import int_to_bytes, unpack, unpack_len
@@ -35,20 +38,17 @@ MAX_NUM_INPUTS = MAX_NUM_OUTPUTS = 256
 MAX_OUTPUT_VALUE = 2**63  # max value (inclusive) that is possible to encode: 9223372036854775808 ~= 9.22337e+18
 _MAX_OUTPUT_VALUE_32 = 2**31 - 1  # max value (inclusive) before having to use 8 bytes: 2147483647 ~= 2.14748e+09
 
-_INPUT_SIZE_BYTES = 32  # 256 bits
+TX_HASH_SIZE = 32   # 256 bits, 32 bytes
 
 # H = unsigned short (2 bytes), d = double(8), f = float(4), I = unsigned int (4),
 # Q = unsigned long long int (64), B = unsigned char (1 byte)
 
-# Version (H), token uids len (B) and inputs len (B), outputs len (B).
-_FUNDS_FORMAT_STRING = '!HBBB'  # Update code below if this changes.
-
-# Weight (d), timestamp (I), and parents len (B)
-_GRAPH_FORMAT_STRING = '!dIB'  # Update code below if this changes.
-
 # Version (H), inputs len (B), and outputs len (B), token uids len (B).
 # H = unsigned short (2 bytes)
 _SIGHASH_ALL_FORMAT_STRING = '!HBBB'
+
+# Weight (d), timestamp (I), and parents len (B)
+_GRAPH_FORMAT_STRING = '!dIB'
 
 # tx should have 2 parents, both other transactions
 _TX_PARENTS_TXS = 2
@@ -79,6 +79,31 @@ def aux_calc_weight(w1: float, w2: float, multiplier: int) -> float:
     return a + log(1 + 2**(b - a) * multiplier, 2)
 
 
+# Versions are sequential for blocks and transactions
+class TxVersion(IntEnum):
+    REGULAR_BLOCK = 0
+    REGULAR_TRANSACTION = 1
+    TOKEN_CREATION_TRANSACTION = 2
+
+    @classmethod
+    def _missing_(cls, value):
+        # version's first byte is reserved for future use, so we'll ignore it
+        version = value & 0xFF
+        return cls(version)
+
+    def get_cls(self) -> Type['BaseTransaction']:
+        from hathor.transaction.block import Block
+        from hathor.transaction.token_creation_tx import TokenCreationTransaction
+        from hathor.transaction.transaction import Transaction
+
+        cls_map: Dict[TxVersion, Type[BaseTransaction]] = {
+            TxVersion.REGULAR_BLOCK: Block,
+            TxVersion.REGULAR_TRANSACTION: Transaction,
+            TxVersion.TOKEN_CREATION_TRANSACTION: TokenCreationTransaction,
+        }
+        return cls_map[self]
+
+
 class BaseTransaction(ABC):
     """Hathor base transaction"""
 
@@ -88,11 +113,16 @@ class BaseTransaction(ABC):
     HASH_NONCE_SIZE = 16
     HEX_BASE = 16
 
-    def __init__(self, nonce: int = 0, timestamp: Optional[int] = None, version: int = 1, weight: float = 0,
-                 inputs: Optional[List['TxInput']] = None, outputs: Optional[List['TxOutput']] = None,
-                 parents: Optional[List[bytes]] = None, tokens: Optional[List[bytes]] = None,
-                 hash: Optional[bytes] = None, storage: Optional['TransactionStorage'] = None,
-                 is_block: bool = True) -> None:
+    def __init__(self,
+                 nonce: int = 0,
+                 timestamp: Optional[int] = None,
+                 version: int = TxVersion.REGULAR_BLOCK,
+                 weight: float = 0,
+                 inputs: Optional[List['TxInput']] = None,
+                 outputs: Optional[List['TxOutput']] = None,
+                 parents: Optional[List[bytes]] = None,
+                 hash: Optional[bytes] = None,
+                 storage: Optional['TransactionStorage'] = None) -> None:
         """
             Nonce: nonce used for the proof-of-work
             Timestamp: moment of creation
@@ -100,7 +130,6 @@ class BaseTransaction(ABC):
             Weight: different for transactions and blocks
             Outputs: all outputs that are being created
             Parents: transactions you are confirming (2 transactions and 1 block - in case of a block only)
-            Tokens: list of token uids in this transaction
         """
         self.nonce = nonce
         self.timestamp = timestamp or int(time.time())
@@ -109,10 +138,8 @@ class BaseTransaction(ABC):
         self.inputs = inputs or []
         self.outputs = outputs or []
         self.parents = parents or []
-        self.tokens = tokens or []
         self.storage = storage
         self.hash = hash  # Stored as bytes.
-        self.is_block = is_block
 
     def __repr__(self) -> str:
         class_name = type(self).__name__
@@ -124,7 +151,17 @@ class BaseTransaction(ABC):
     def __str__(self) -> str:
         class_name = 'Block' if self.is_block else 'Transaction'
         return ('%s(nonce=%d, timestamp=%s, version=%s, weight=%f, hash=%s)' % (class_name, self.nonce, self.timestamp,
-                self.version, self.weight, self.hash_hex))
+                int(self.version), self.weight, self.hash_hex))
+
+    @property
+    @abstractmethod
+    def is_block(self):
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def is_transaction(self):
+        raise NotImplementedError
 
     def get_fields_from_struct(self, struct_bytes: bytes) -> bytes:
         """ Gets all common fields for a Transaction and a Block from a buffer.
@@ -206,6 +243,8 @@ class BaseTransaction(ABC):
 
     def get_target(self, override_weight: Optional[float] = None) -> float:
         """Target to be achieved in the mining process"""
+        if not isfinite(self.weight):
+            raise WeightError
         return 2**(256 - (override_weight or self.weight)) - 1
 
     def get_time_from_now(self, now: Optional[Any] = None) -> str:
@@ -262,73 +301,9 @@ class BaseTransaction(ABC):
         """
         raise NotImplementedError
 
-    def get_sighash_all(self, clear_input_data: bool = True) -> bytes:
-        """Return a  serialization of the inputs and outputs, without including any other field
-
-        :return: Serialization of the inputs and outputs
-        :rtype: bytes
-        """
-        struct_bytes = pack(_SIGHASH_ALL_FORMAT_STRING, self.version, len(self.inputs), len(self.outputs),
-                            len(self.tokens))
-
-        for token_uid in self.tokens:
-            struct_bytes += token_uid
-
-        for input_tx in self.inputs:
-            struct_bytes += input_tx.tx_id
-            struct_bytes += bytes([input_tx.index])  # 1 byte
-
-            # data length
-            if not clear_input_data:
-                struct_bytes += int_to_bytes(len(input_tx.data), 2)
-                struct_bytes += input_tx.data
-            else:
-                struct_bytes += int_to_bytes(0, 2)
-
-        for output_tx in self.outputs:
-            struct_bytes += output_value_to_bytes(output_tx.value)
-
-            # token index
-            struct_bytes += int_to_bytes(output_tx.token_data, 1)
-
-            # script length
-            struct_bytes += int_to_bytes(len(output_tx.script), 2)
-            struct_bytes += output_tx.script
-
-        return struct_bytes
-
+    @abstractmethod
     def get_funds_fields_from_struct(self, buf: bytes) -> bytes:
-        """ Gets all common funds fields for a Transaction and a Block from a buffer.
-
-        :param buf: Bytes of a serialized transaction
-        :type buf: bytes
-
-        :return: A buffer containing the remaining struct bytes
-        :rtype: bytes
-
-        :raises ValueError: when the sequence of bytes is incorect
-        """
-        (self.version, tokens_len, inputs_len, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
-
-        for _ in range(tokens_len):
-            token_uid, buf = unpack_len(32, buf)  # 256bits
-            self.tokens.append(token_uid)
-
-        for _ in range(inputs_len):
-            input_tx_id, buf = unpack_len(_INPUT_SIZE_BYTES, buf)  # 256bits
-            (input_index, data_len), buf = unpack('!BH', buf)
-            input_data, buf = unpack_len(data_len, buf)
-            txin = TxInput(input_tx_id, input_index, input_data)
-            self.inputs.append(txin)
-
-        for _ in range(outputs_len):
-            value, buf = bytes_to_output_value(buf)
-            (token_data, script_len), buf = unpack('!BH', buf)
-            script, buf = unpack_len(script_len, buf)
-            txout = TxOutput(value, script, token_data)
-            self.outputs.append(txout)
-
-        return buf
+        raise NotImplementedError
 
     def get_graph_fields_from_struct(self, buf: bytes) -> bytes:
         """ Gets all common graph fields for a Transaction and a Block from a buffer.
@@ -344,40 +319,14 @@ class BaseTransaction(ABC):
         (self.weight, self.timestamp, parents_len), buf = unpack(_GRAPH_FORMAT_STRING, buf)
 
         for _ in range(parents_len):
-            parent, buf = unpack_len(32, buf)  # 256bits
+            parent, buf = unpack_len(TX_HASH_SIZE, buf)  # 256bits
             self.parents.append(parent)
 
         return buf
 
+    @abstractmethod
     def get_funds_struct(self) -> bytes:
-        """Return the funds data serialization of the transaction, without including the nonce field
-
-        :return: funds data serialization of the transaction
-        :rtype: bytes
-        """
-        struct_bytes = pack(_FUNDS_FORMAT_STRING, self.version, len(self.tokens), len(self.inputs), len(self.outputs))
-        for token_uid in self.tokens:
-            struct_bytes += token_uid
-
-        for input_tx in self.inputs:
-            struct_bytes += input_tx.tx_id
-            struct_bytes += bytes([input_tx.index])  # 1 byte
-
-            # data length
-            struct_bytes += int_to_bytes(len(input_tx.data), 2)
-            struct_bytes += input_tx.data
-
-        for output_tx in self.outputs:
-            struct_bytes += output_value_to_bytes(output_tx.value)
-
-            # token index
-            struct_bytes += int_to_bytes(output_tx.token_data, 1)
-
-            # script length
-            struct_bytes += int_to_bytes(len(output_tx.script), 2)
-            struct_bytes += output_tx.script
-
-        return struct_bytes
+        raise NotImplementedError
 
     def get_graph_struct(self) -> bytes:
         """Return the graph data serialization of the transaction, without including the nonce field
@@ -410,6 +359,7 @@ class BaseTransaction(ABC):
         struct_bytes += int_to_bytes(self.nonce, self.SERIALIZATION_NONCE_SIZE)
         return struct_bytes
 
+    @abstractmethod
     def verify(self) -> None:
         raise NotImplementedError
 
@@ -750,33 +700,24 @@ class BaseTransaction(ABC):
         data['hash'] = self.hash and self.hash.hex()
         data['nonce'] = self.nonce
         data['timestamp'] = self.timestamp
-        data['version'] = self.version
+        data['version'] = int(self.version)
         data['weight'] = self.weight
-        data['tokens'] = [h.hex() for h in self.tokens]
 
         data['parents'] = []
         for parent in self.parents:
             data['parents'].append(parent.hex())
 
         data['inputs'] = []
-        # Blocks don't have inputs
-        # TODO(epnichols): Refactor so that blocks/transactions know how to serialize themselves? Then we could do
-        #                  something like data['inputs'] = tx.serialize_inputs()
-        #                                 data['outputs'] = tx.serialize_outputs()
-        #                  without needing the if statement here.
-        if not self.is_block:
-            for input_self in self.inputs:
-                data_input: Dict[str, Any] = {}
-                data_input['tx_id'] = input_self.tx_id.hex()
-                data_input['index'] = input_self.index
-                data_input['data'] = base64.b64encode(input_self.data).decode('utf-8')
-                data['inputs'].append(data_input)
+        for tx_input in self.inputs:
+            data_input: Dict[str, Any] = {}
+            data_input['tx_id'] = tx_input.tx_id.hex()
+            data_input['index'] = tx_input.index
+            data_input['data'] = base64.b64encode(tx_input.data).decode('utf-8')
+            data['inputs'].append(data_input)
 
         data['outputs'] = []
         for output in self.outputs:
             data['outputs'].append(output.to_json(decode_script=decode_script))
-
-        data['tokens'] = [uid.hex() for uid in self.tokens]
 
         return data
 
@@ -792,13 +733,19 @@ class BaseTransaction(ABC):
             return data
 
         meta = self.get_metadata()
-        ret = {
+        ret: Dict[str, Any] = {
             'tx_id': self.hash.hex(),
+            'version': int(self.version),
             'timestamp': self.timestamp,
             'is_voided': bool(meta.voided_by),
             'inputs': [],
             'outputs': [],
+            'parents': [],
         }
+
+        for parent in self.parents:
+            ret['parents'].append(parent.hex())
+
         assert isinstance(ret['inputs'], list)
         assert isinstance(ret['outputs'], list)
 
@@ -856,21 +803,9 @@ class BaseTransaction(ABC):
         new_tx.storage = self.storage
         return new_tx
 
+    @abstractmethod
     def get_token_uid(self, index: int) -> bytes:
-        """Returns the token uid with corresponding index from the tx token uid list.
-
-        Hathor always has index 0, but we don't include it in the token uid list, so other tokens are
-        always 1-off. This means that token with index 1 is the first in the list.
-
-        :param index: token index on the token uid list
-        :type index: int
-
-        :return: the token uid
-        :rtype: bytes
-        """
-        if index == 0:
-            return settings.HATHOR_TOKEN_UID
-        return self.tokens[index - 1]
+        raise NotImplementedError
 
 
 class TxInput:
@@ -889,6 +824,44 @@ class TxInput:
         self.tx_id = tx_id  # bytes
         self.index = index  # int
         self.data = data  # bytes
+
+    def __bytes__(self) -> bytes:
+        """Returns a byte representation of the input
+
+        :rtype: bytes
+        """
+        ret = b''
+        ret += self.tx_id
+        ret += int_to_bytes(self.index, 1)
+        ret += int_to_bytes(len(self.data), 2)  # data length
+        ret += self.data
+        return ret
+
+    def get_sighash_bytes(self, clear_data) -> bytes:
+        """Return a serialization of the input for the sighash
+
+        :return: Serialization of the input
+        :rtype: bytes
+        """
+        if not clear_data:
+            return bytes(self)
+        else:
+            ret = b''
+            ret += self.tx_id
+            ret += int_to_bytes(self.index, 1)
+            ret += int_to_bytes(0, 2)
+            return ret
+
+    @classmethod
+    def create_from_bytes(cls, buf: bytes) -> Tuple['TxInput', bytes]:
+        """ Creates a TxInput from a serialized input. Returns the input
+        and remaining bytes
+        """
+        input_tx_id, buf = unpack_len(TX_HASH_SIZE, buf)
+        (input_index, data_len), buf = unpack('!BH', buf)
+        input_data, buf = unpack_len(data_len, buf)
+        txin = cls(input_tx_id, input_index, input_data)
+        return txin, buf
 
     def to_human_readable(self) -> Dict[str, Any]:
         """Returns dict of Input information, ready to be serialized
@@ -934,12 +907,12 @@ class TxOutput:
     TOKEN_INDEX_MASK = 0b01111111
     TOKEN_AUTHORITY_MASK = 0b10000000
 
-    # last bit indicates a token uid creation UTXO
-    TOKEN_CREATION_MASK = 0b00000001
-    # second to last bit is mint authority
-    TOKEN_MINT_MASK = 0b00000010
-    # and next one is melt authority
-    TOKEN_MELT_MASK = 0b00000100
+    # last bit is mint authority
+    TOKEN_MINT_MASK = 0b00000001
+    # second to last bit is melt authority
+    TOKEN_MELT_MASK = 0b00000010
+
+    ALL_AUTHORITIES = TOKEN_MINT_MASK | TOKEN_MELT_MASK
 
     def __init__(self, value: int, script: bytes, token_data: int = 0) -> None:
         """
@@ -950,11 +923,38 @@ class TxOutput:
         assert isinstance(value, int), 'value is %s, type %s' % (str(value), type(value))
         assert isinstance(script, bytes), 'script is %s, type %s' % (str(script), type(script))
         assert isinstance(token_data, int), 'token_data is %s, type %s' % (str(token_data), type(token_data))
-        assert value <= MAX_OUTPUT_VALUE
+        assert value <= MAX_OUTPUT_VALUE and value > 0
 
         self.value = value  # int
         self.script = script  # bytes
         self.token_data = token_data  # int
+
+    def __str__(self) -> str:
+        value_str = bin(self.value) if self.is_token_authority else str(self.value)
+        return ('TxOutput(token_data=%s, value=%s)' % (bin(self.token_data), value_str))
+
+    def __bytes__(self) -> bytes:
+        """Returns a byte representation of the output
+
+        :rtype: bytes
+        """
+        ret = b''
+        ret += output_value_to_bytes(self.value)
+        ret += int_to_bytes(self.token_data, 1)
+        ret += int_to_bytes(len(self.script), 2)    # script length
+        ret += self.script
+        return ret
+
+    @classmethod
+    def create_from_bytes(cls, buf: bytes) -> Tuple['TxOutput', bytes]:
+        """ Creates a TxOutput from a serialized output. Returns the output
+        and remaining bytes
+        """
+        value, buf = bytes_to_output_value(buf)
+        (token_data, script_len), buf = unpack('!BH', buf)
+        script, buf = unpack_len(script_len, buf)
+        txout = cls(value, script, token_data)
+        return txout, buf
 
     def get_token_index(self) -> int:
         """The token uid index in the list"""
@@ -963,10 +963,6 @@ class TxOutput:
     def is_token_authority(self) -> bool:
         """Whether this is a token authority output"""
         return (self.token_data & self.TOKEN_AUTHORITY_MASK) > 0
-
-    def is_token_creation(self) -> bool:
-        """Whether this is a token creation output"""
-        return self.is_token_authority() and ((self.value & self.TOKEN_CREATION_MASK) > 0)
 
     def can_mint_token(self) -> bool:
         """Whether this utxo can mint tokens"""
@@ -1039,7 +1035,10 @@ def bytes_to_output_value(buf: bytes) -> Tuple[int, bytes]:
     else:
         output_struct = '!i'
         value_sign = 1
-    (signed_value,), buf = unpack(output_struct, buf)
+    try:
+        (signed_value,), buf = unpack(output_struct, buf)
+    except StructError as e:
+        raise InvalidOutputValue('Invalid byte struct for output') from e
     value = signed_value * value_sign
     assert value >= 0
     if value < _MAX_OUTPUT_VALUE_32 and value_high_byte < 0:
@@ -1048,6 +1047,9 @@ def bytes_to_output_value(buf: bytes) -> Tuple[int, bytes]:
 
 
 def output_value_to_bytes(number: int) -> bytes:
+    if number <= 0:
+        raise InvalidOutputValue('Invalid value for output')
+
     if number > _MAX_OUTPUT_VALUE_32:
         return (-number).to_bytes(8, byteorder='big', signed=True)
     else:
@@ -1056,11 +1058,23 @@ def output_value_to_bytes(number: int) -> bytes:
 
 def tx_or_block_from_proto(tx_proto: protos.BaseTransaction,
                            storage: Optional['TransactionStorage'] = None) -> 'BaseTransaction':
-    from hathor.transaction.transaction import Transaction
     from hathor.transaction.block import Block
+    from hathor.transaction.token_creation_tx import TokenCreationTransaction
+    from hathor.transaction.transaction import Transaction
     if tx_proto.HasField('transaction'):
         return Transaction.create_from_proto(tx_proto, storage=storage)
     elif tx_proto.HasField('block'):
         return Block.create_from_proto(tx_proto, storage=storage)
+    elif tx_proto.HasField('tokenCreationTransaction'):
+        return TokenCreationTransaction.create_from_proto(tx_proto, storage=storage)
     else:
         raise ValueError('invalid base_transaction_oneof')
+
+
+def tx_or_block_from_bytes(data: bytes) -> 'BaseTransaction':
+    """ Creates the correct tx subclass from a sequence of bytes
+    """
+    # version field takes up the first 2 bytes
+    version = int.from_bytes(data[0:2], 'big')
+    cls = TxVersion(version).get_cls()
+    return cls.create_from_struct(data)

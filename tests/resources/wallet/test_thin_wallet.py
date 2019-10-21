@@ -4,9 +4,9 @@ from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
-from hathor.wallet.resources.thin_wallet import AddressHistoryResource, SendTokensResource
+from hathor.wallet.resources.thin_wallet import AddressHistoryResource, SendTokensResource, TokenResource
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
-from tests.utils import add_new_blocks
+from tests.utils import add_new_blocks, create_tokens
 
 settings = HathorSettings()
 
@@ -169,3 +169,50 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertIsNotNone(request._finishedDeferreds)
         resource._err_tx_resolve('Error', request)
         self.assertIsNone(request._finishedDeferreds)
+
+    @inlineCallbacks
+    def test_token(self):
+        resource = StubSite(TokenResource(self.manager))
+
+        # test invalid token id
+        response = yield resource.get('thin_wallet/token', {b'id': 'vvvv'.encode()})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # test missing token id
+        response = yield resource.get('thin_wallet/token')
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # test unknown token id
+        unknown_uid = '00000000228ed1dd74a2e1b920c1d64bf81dc63875dce4fac486001073b45a27'.encode()
+        response = yield resource.get('thin_wallet/token', {b'id': unknown_uid})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # test success case
+        token_name = 'MyTestToken'
+        token_symbol = 'MTT'
+        amount = 150
+        tx = create_tokens(self.manager, mint_amount=amount, token_name=token_name, token_symbol=token_symbol)
+        token_uid = tx.tokens[0]
+        response = yield resource.get('thin_wallet/token', {b'id': token_uid.hex().encode()})
+        data = response.json_value()
+        self.assertTrue(data['success'])
+        self.assertEqual(len(data['mint']), 1)
+        self.assertEqual(len(data['melt']), 1)
+        self.assertEqual(data['mint'][0]['tx_id'], tx.hash_hex)
+        self.assertEqual(data['melt'][0]['tx_id'], tx.hash_hex)
+        self.assertEqual(data['mint'][0]['index'], 1)
+        self.assertEqual(data['melt'][0]['index'], 2)
+        self.assertEqual(data['total'], amount)
+        self.assertEqual(data['name'], token_name)
+        self.assertEqual(data['symbol'], token_symbol)
+
+        # test no wallet index
+        manager2 = self.create_peer(self.network, unlock_wallet=True)
+        resource2 = StubSite(TokenResource(manager2))
+        response2 = yield resource2.get('thin_wallet/token')
+        data2 = response2.json_value()
+        self.assertEqual(response2.responseCode, 503)
+        self.assertFalse(data2['success'])

@@ -3,6 +3,7 @@ import os
 import re
 import struct
 
+from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
 from hathor.transaction.transaction_metadata import TransactionMetadata
@@ -72,14 +73,9 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         try:
             length_size = struct.calcsize(self.length_format)
             with open(filepath, 'rb') as fp:
-                from hathor.transaction import Transaction
                 (tx_bytes_len,) = struct.unpack(self.length_format, fp.read(length_size))
                 tx_bytes = fp.read(tx_bytes_len)
-                try:
-                    tx = Transaction.create_from_struct(tx_bytes)
-                except ValueError:
-                    from hathor.transaction import Block
-                    tx = Block.create_from_struct(tx_bytes)
+                tx = tx_or_block_from_bytes(tx_bytes)
                 tx.storage = self
                 tx.update_hash()
 

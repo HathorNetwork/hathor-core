@@ -21,14 +21,23 @@ class TestCase(unittest.TestCase):
         self._patch_genesis_block()
 
     def _patch_genesis_block(self):
+        """ Updates the genesis block so we can easily spend the outputs during tests. When we make any
+        changes to tx structure that impacts the hash, we also must change it here (the nonce and hash).
+        The steps for updating it are:
+        1. use the genesis block (block = hathor.transaction.genesis.GENESIS[0])
+        2. update the output script to use the one as bellow
+        3. mine block again: block.start_mining(update_time=False)
+        4. update hash: block.update_hash()
+        5. replace block nonce and hash on this function with the new ones
+        """
         import hathor.transaction.genesis
         from hathor.transaction import Block
         block = hathor.transaction.genesis.GENESIS[0]
         assert isinstance(block, Block)
         block.outputs[0].script = bytes.fromhex('76a914fd05059b6006249543b82f36876a17c73fd2267b88ac')
-        block.nonce = 4389000
+        block.nonce = 11467000
         block.update_hash()
-        assert block.hash.hex() == '0000047c86e5e1c98858bb2542bb846b1bc8768819763c2b7da1615d3a40650d'
+        assert block.hash_hex == '000001042d10dba47c78bdb578e2f090ca02e01d18fa19ffe5cfa044478e2b9e'
 
     def tearDown(self):
         self.clean_tmpdirs()

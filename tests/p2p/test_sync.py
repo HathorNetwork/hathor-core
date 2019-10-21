@@ -1,6 +1,8 @@
 import random
 
 from hathor.crypto.util import decode_address
+from hathor.p2p.node_sync import NodeSyncTimestamp
+from hathor.p2p.protocol import PeerIdState
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
 from hathor.transaction.storage.remote_storage import RemoteCommunicationError, TransactionRemoteStorage
 from tests import unittest
@@ -216,6 +218,81 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         self.assertTipsEqual(self.manager1, manager2)
         self.assertTipsEqual(self.manager1, manager3)
+
+    def test_downloader(self):
+        blocks = self._add_new_blocks(3)
+
+        manager2 = self.create_peer(self.network)
+        self.assertEqual(manager2.state, manager2.NodeState.READY)
+
+        conn = FakeConnection(self.manager1, manager2)
+
+        # Get to PEER-ID state only because when it gets to READY it will automatically sync
+        conn.run_one_step()
+
+        self.assertTrue(isinstance(conn.proto1.state, PeerIdState))
+        self.assertTrue(isinstance(conn.proto2.state, PeerIdState))
+
+        node_sync1 = NodeSyncTimestamp(conn.proto1, reactor=conn.proto1.node.reactor)
+        node_sync1.start()
+        node_sync2 = NodeSyncTimestamp(conn.proto2, reactor=conn.proto2.node.reactor)
+        node_sync2.start()
+
+        self.assertTrue(isinstance(conn.proto1.state, PeerIdState))
+        self.assertTrue(isinstance(conn.proto2.state, PeerIdState))
+
+        downloader = conn.proto2.connections.downloader
+
+        deferred1 = downloader.get_tx(blocks[0].hash, node_sync1)
+        deferred1.addCallback(node_sync1.on_tx_success)
+
+        self.assertEqual(len(downloader.pending_transactions), 1)
+
+        details = downloader.pending_transactions[blocks[0].hash]
+        self.assertEqual(len(details.connections), 1)
+        self.assertEqual(len(downloader.downloading_deque), 1)
+
+        deferred2 = downloader.get_tx(blocks[0].hash, node_sync2)
+        deferred2.addCallback(node_sync2.on_tx_success)
+
+        self.assertEqual(len(downloader.pending_transactions), 1)
+        self.assertEqual(len(downloader.pending_transactions[blocks[0].hash].connections), 2)
+        self.assertEqual(len(downloader.downloading_deque), 1)
+        self.assertEqual(deferred1, deferred2)
+
+        details.downloading_deferred.callback(blocks[0])
+
+        self.assertEqual(len(downloader.downloading_deque), 0)
+        self.assertEqual(len(downloader.pending_transactions), 0)
+
+        # Getting tx already downloaded
+        downloader.get_tx(blocks[0].hash, node_sync1)
+
+        self.assertEqual(len(downloader.downloading_deque), 0)
+
+        # Adding fake tx_id to downloading deque
+        downloader.downloading_deque.append('1')
+
+        # Getting new tx
+        downloader.get_tx(blocks[1].hash, node_sync1)
+
+        self.assertEqual(len(downloader.pending_transactions), 1)
+
+        details = downloader.pending_transactions[blocks[1].hash]
+        self.assertEqual(len(details.connections), 1)
+        self.assertEqual(len(downloader.downloading_deque), 2)
+
+        details.downloading_deferred.callback(blocks[1])
+
+        # Still 2 elements because the first one is not downloaded yet
+        self.assertEqual(len(downloader.downloading_deque), 2)
+
+        # Remove it
+        downloader.downloading_deque.popleft()
+
+        # And try again
+        downloader.check_downloading_queue()
+        self.assertEqual(len(downloader.downloading_deque), 0)
 
 
 class RemoteStorageSyncTest(HathorSyncMethodsTestCase):
