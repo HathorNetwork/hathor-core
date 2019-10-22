@@ -90,6 +90,9 @@ class TxVersion(IntEnum):
     def _missing_(cls, value):
         # version's first byte is reserved for future use, so we'll ignore it
         version = value & 0xFF
+        if version == value:
+            # Prevent infinite recursion when starting TxVerion with wrong version
+            raise ValueError('Invalid version.')
         return cls(version)
 
     def get_cls(self) -> Type['BaseTransaction']:
@@ -102,7 +105,13 @@ class TxVersion(IntEnum):
             TxVersion.REGULAR_TRANSACTION: Transaction,
             TxVersion.TOKEN_CREATION_TRANSACTION: TokenCreationTransaction,
         }
-        return cls_map[self]
+
+        cls = cls_map.get(self)
+
+        if cls is None:
+            raise ValueError('Invalid version.')
+        else:
+            return cls
 
 
 class BaseTransaction(ABC):
@@ -1077,10 +1086,14 @@ def tx_or_block_from_proto(tx_proto: protos.BaseTransaction,
         raise ValueError('invalid base_transaction_oneof')
 
 
-def tx_or_block_from_bytes(data: bytes) -> 'BaseTransaction':
+def tx_or_block_from_bytes(data: bytes) -> BaseTransaction:
     """ Creates the correct tx subclass from a sequence of bytes
     """
     # version field takes up the first 2 bytes
     version = int.from_bytes(data[0:2], 'big')
-    cls = TxVersion(version).get_cls()
-    return cls.create_from_struct(data)
+    try:
+        tx_version = TxVersion(version)
+        cls = tx_version.get_cls()
+        return cls.create_from_struct(data)
+    except ValueError:
+        raise StructError('Invalid bytes to create transaction subclass.')

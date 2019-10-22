@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import json
+import struct
 from collections import OrderedDict
 from math import inf
 from typing import TYPE_CHECKING, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union, cast
@@ -655,8 +656,14 @@ class NodeSyncTimestamp(Plugin):
         if not payload:
             return
         data = base64.b64decode(payload)
-        tx = tx_or_block_from_bytes(data)
 
+        try:
+            tx = tx_or_block_from_bytes(data)
+        except struct.error:
+            # Invalid data for tx decode
+            return
+
+        assert tx is not None
         assert tx.hash is not None
         if self.protocol.node.tx_storage.get_genesis(tx.hash):
             # We just got the data of a genesis tx/block. What should we do?

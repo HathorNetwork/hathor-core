@@ -10,7 +10,7 @@ from hathor.transaction.resources import PushTxResource
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.wallet.resources import BalanceResource, HistoryResource, SendTokensResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_new_blocks, get_tokens_from_mining, resolve_block_bytes
+from tests.utils import add_new_blocks, create_tokens, get_tokens_from_mining, resolve_block_bytes
 
 
 class DecodeTxTest(_BaseResourceTest._ResourceTest):
@@ -88,3 +88,9 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         data_error2 = response_error2.json_value()
 
         self.assertFalse(data_error2['success'])
+
+        # Token creation tx
+        tx2 = create_tokens(self.manager, address, mint_amount=100, propagate=False)
+        response = yield self.web.get('push_tx', {b'hex_tx': bytes(tx2.get_struct().hex(), 'utf-8')})
+        data = response.json_value()
+        self.assertTrue(data['success'])

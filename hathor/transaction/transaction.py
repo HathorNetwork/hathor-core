@@ -119,7 +119,7 @@ class Transaction(BaseTransaction):
 
         [tx.nonce, ], buf = unpack('!I', buf)
 
-        tx.hash = tx.calculate_hash()
+        tx.update_hash()
         tx.storage = storage
 
         return tx
