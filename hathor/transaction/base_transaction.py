@@ -21,6 +21,7 @@ from hathor.transaction.exceptions import (
     ParentDoesNotExist,
     PowError,
     TimestampError,
+    TooManyOutputs,
     TxValidationError,
     WeightError,
 )
@@ -449,6 +450,11 @@ class BaseTransaction(ABC):
         assert self.hash is not None
         if int(self.hash.hex(), self.HEX_BASE) >= self.get_target(override_weight):
             raise PowError('Transaction has invalid data')
+
+    def verify_number_of_outputs(self) -> None:
+        """Verify number of outputs does not exceeds the limit"""
+        if len(self.outputs) > MAX_NUM_OUTPUTS:
+            raise TooManyOutputs('Maximum number of outputs exceeded')
 
     def resolve(self, update_time: bool = True) -> bool:
         """Run a CPU mining looking for the nonce that solves the proof-of-work

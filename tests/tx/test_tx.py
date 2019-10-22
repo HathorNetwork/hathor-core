@@ -176,6 +176,26 @@ class BasicTransaction(unittest.TestCase):
         with self.assertRaises(BlockWithInputs):
             block.verify()
 
+    def test_block_outputs(self):
+        from hathor.transaction import MAX_NUM_OUTPUTS
+        from hathor.transaction.exceptions import TooManyOutputs
+        # a block should have no more than MAX_NUM_OUTPUTS outputs
+        parents = [tx.hash for tx in self.genesis]
+
+        address = get_address_from_public_key(self.genesis_public_key)
+        output_script = P2PKH.create_output_script(address)
+        tx_outputs = [TxOutput(100, output_script)] * (MAX_NUM_OUTPUTS + 1)
+
+        block = Block(
+            nonce=100,
+            outputs=tx_outputs,
+            parents=parents,
+            weight=1,  # low weight so we don't waste time with PoW
+            storage=self.tx_storage)
+
+        with self.assertRaises(TooManyOutputs):
+            block.verify_outputs()
+
     def test_tx_number_parents(self):
         genesis_block = self.genesis_blocks[0]
 
