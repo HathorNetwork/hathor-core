@@ -239,7 +239,7 @@ class BaseTransaction(ABC):
     @property
     def sum_outputs(self) -> int:
         """Sum of the value of the outputs"""
-        return sum([output.value for output in self.outputs])
+        return sum(output.value for output in self.outputs if not output.is_token_authority())
 
     def get_target(self, override_weight: Optional[float] = None) -> float:
         """Target to be achieved in the mining process"""
