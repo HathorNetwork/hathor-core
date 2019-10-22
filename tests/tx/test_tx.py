@@ -629,6 +629,17 @@ class BasicTransaction(unittest.TestCase):
         block2 = block.clone()
         self.assertEqual(block.version, block2.version)
 
+    def test_output_sum_ignore_authority(self):
+        # sum of tx outputs should ignore authority outputs
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+        output1 = TxOutput(5, script)   # regular utxo
+        output2 = TxOutput(30, script, 0b10000001)   # authority utxo
+        output3 = TxOutput(3, script)   # regular utxo
+        tx = Transaction(outputs=[output1, output2, output3], storage=self.tx_storage)
+
+        self.assertEqual(8, tx.sum_outputs)
+
 
 if __name__ == '__main__':
     unittest.main()
