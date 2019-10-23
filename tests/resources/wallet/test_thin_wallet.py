@@ -4,7 +4,12 @@ from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
-from hathor.wallet.resources.thin_wallet import AddressHistoryResource, SendTokensResource, TokenResource
+from hathor.wallet.resources.thin_wallet import (
+    AddressHistoryResource,
+    SendTokensResource,
+    TokenHistoryResource,
+    TokenResource,
+)
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
 from tests.utils import add_new_blocks, create_tokens
 
@@ -103,6 +108,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx3.get_struct().hex()})
         data_error = response.json_value()
         self.assertFalse(data_error['success'])
+        self.clock.advance(5)
 
         # Check if tokens were really sent
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID].available, (quantity-1)*per_block)
@@ -115,6 +121,14 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         response_data = response_history.json_value()['history']
         self.assertIn(data['tx']['hash'], [x['tx_id'] for x in response_data])
+
+        # Create token tx
+        tx4 = create_tokens(self.manager, address, mint_amount=100, propagate=False)
+        tx4.nonce = 0
+        tx4.timestamp = int(self.clock.seconds())
+        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx4.get_struct().hex()})
+        data = response.json_value()
+        self.assertTrue(data['success'])
 #
 #       TODO these tests were causing timeouts in CI server [yan - 01.04.2019]
 #       TODO add to top imports
@@ -216,3 +230,103 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         data2 = response2.json_value()
         self.assertEqual(response2.responseCode, 503)
         self.assertFalse(data2['success'])
+
+    @inlineCallbacks
+    def test_token_history(self):
+        self.manager.wallet.unlock(b'MYPASS')
+        resource = StubSite(TokenHistoryResource(self.manager))
+
+        tx = create_tokens(self.manager, mint_amount=100, token_name='Teste', token_symbol='TST')
+        token_uid = tx.tokens[0]
+
+        response = yield resource.get('thin_wallet/token_history', {b'id': token_uid.hex().encode(), b'count': 3})
+        data = response.json_value()
+        # Success returning the token creation tx
+        self.assertTrue(data['success'])
+        self.assertFalse(data['has_more'])
+        self.assertEqual(1, len(data['transactions']))
+        self.assertEqual(tx.hash.hex(), data['transactions'][0]['tx_id'])
+
+        response = yield resource.get('thin_wallet/token_history', {b'id': b'123', b'count': 3})
+        data = response.json_value()
+        # Fail because token is unknown
+        self.assertFalse(data['success'])
+
+        # Create a tx with this token, so we can have more tx in the history
+        output = tx.outputs[0]
+        script_type_out = parse_address_script(output.script)
+        address = script_type_out.address
+        private_key = self.manager.wallet.get_private_key(address)
+
+        output_address = decode_address(self.get_address(0))
+        o = TxOutput(100, create_output_script(output_address, None), 1)
+        i = TxInput(tx.hash, 0, b'')
+
+        tx2 = Transaction(inputs=[i], outputs=[o], tokens=[token_uid])
+        data_to_sign = tx2.get_sighash_all()
+        public_key_bytes, signature_bytes = self.manager.wallet.get_input_aux_data(data_to_sign, private_key)
+        i.data = P2PKH.create_input_data(public_key_bytes, signature_bytes)
+        tx2.inputs = [i]
+        tx2.timestamp = int(self.clock.seconds())
+        tx2.weight = self.manager.minimum_tx_weight(tx2)
+        tx2.parents = self.manager.get_new_tx_parents()
+        tx2.resolve()
+        self.manager.propagate_tx(tx2)
+
+        # Now we have 2 txs with this token
+        response = yield resource.get('thin_wallet/token_history', {b'id': token_uid.hex().encode(), b'count': 3})
+        data = response.json_value()
+        # Success returning the token creation tx and newly created tx
+        self.assertTrue(data['success'])
+        self.assertFalse(data['has_more'])
+        self.assertEqual(2, len(data['transactions']))
+        self.assertEqual(tx2.hash.hex(), data['transactions'][0]['tx_id'])
+        self.assertEqual(tx.hash.hex(), data['transactions'][1]['tx_id'])
+
+        response = yield resource.get('thin_wallet/token_history', {b'id': token_uid.hex().encode(), b'count': 1})
+        data = response.json_value()
+        # Testing has_more
+        self.assertTrue(data['success'])
+        self.assertTrue(data['has_more'])
+        self.assertEqual(1, len(data['transactions']))
+
+        response = yield resource.get('thin_wallet/token_history', {
+            b'id': token_uid.hex().encode(),
+            b'count': 10,
+            b'page': b'next',
+            b'hash': tx2.hash.hex().encode(),
+            b'timestamp': str(tx2.timestamp).encode(),
+        })
+        data = response.json_value()
+        # Testing next
+        self.assertTrue(data['success'])
+        self.assertFalse(data['has_more'])
+        self.assertEqual(1, len(data['transactions']))
+        self.assertEqual(tx.hash.hex(), data['transactions'][0]['tx_id'])
+
+        response = yield resource.get('thin_wallet/token_history', {
+            b'id': token_uid.hex().encode(),
+            b'count': 10,
+            b'page': b'previous',
+            b'hash': tx.hash.hex().encode(),
+            b'timestamp': str(tx.timestamp).encode(),
+        })
+        data = response.json_value()
+        # Testing previous
+        self.assertTrue(data['success'])
+        self.assertFalse(data['has_more'])
+        self.assertEqual(1, len(data['transactions']))
+        self.assertEqual(tx2.hash.hex(), data['transactions'][0]['tx_id'])
+
+        response = yield resource.get('thin_wallet/token_history', {
+            b'id': token_uid.hex().encode(),
+            b'count': 10,
+            b'page': b'previous',
+            b'hash': tx2.hash.hex().encode(),
+            b'timestamp': str(tx2.timestamp).encode(),
+        })
+        data = response.json_value()
+        # Testing previous from first
+        self.assertTrue(data['success'])
+        self.assertFalse(data['has_more'])
+        self.assertEqual(0, len(data['transactions']))

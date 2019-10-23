@@ -6,7 +6,7 @@ from twisted.web import resource
 
 from hathor.api_util import get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.transaction import Transaction
+from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.resources.transaction import get_tx_extra_data
 
 
@@ -42,7 +42,7 @@ class DecodeTxResource(resource.Resource):
             tx_bytes = bytes.fromhex(requested_decode)
 
             try:
-                tx = Transaction.create_from_struct(tx_bytes)
+                tx = tx_or_block_from_bytes(tx_bytes)
                 tx.storage = self.manager.tx_storage
                 data = get_tx_extra_data(tx)
             except struct.error:

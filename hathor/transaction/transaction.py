@@ -6,15 +6,7 @@ from twisted.logger import Logger
 
 from hathor import protos
 from hathor.conf import HathorSettings
-from hathor.transaction import (
-    MAX_NUM_INPUTS,
-    MAX_NUM_OUTPUTS,
-    BaseTransaction,
-    TxInput,
-    TxOutput,
-    TxVersion,
-    sum_weights,
-)
+from hathor.transaction import MAX_NUM_INPUTS, BaseTransaction, TxInput, TxOutput, TxVersion, sum_weights
 from hathor.transaction.base_transaction import TX_HASH_SIZE
 from hathor.transaction.exceptions import (
     ConflictingInputs,
@@ -26,7 +18,6 @@ from hathor.transaction.exceptions import (
     ScriptError,
     TimestampError,
     TooManyInputs,
-    TooManyOutputs,
 )
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount, unpack, unpack_len
 
@@ -128,7 +119,7 @@ class Transaction(BaseTransaction):
 
         [tx.nonce, ], buf = unpack('!I', buf)
 
-        tx.hash = tx.calculate_hash()
+        tx.update_hash()
         tx.storage = storage
 
         return tx
@@ -252,11 +243,6 @@ class Transaction(BaseTransaction):
         """Verify number of inputs does not exceeds the limit"""
         if len(self.inputs) > MAX_NUM_INPUTS:
             raise TooManyInputs('Maximum number of inputs exceeded')
-
-    def verify_number_of_outputs(self) -> None:
-        """Verify number of outputs does not exceeds the limit"""
-        if len(self.outputs) > MAX_NUM_OUTPUTS:
-            raise TooManyOutputs('Maximum number of outputs exceeded')
 
     def verify_outputs(self) -> None:
         """Verify outputs reference an existing token uid in the tx list and there are no hathor
