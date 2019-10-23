@@ -7,7 +7,7 @@ from twisted.web import resource
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.exception import InvalidNewTransaction
-from hathor.transaction import Transaction
+from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.exceptions import TxValidationError
 
 
@@ -39,7 +39,7 @@ class PushTxResource(resource.Resource):
             tx_bytes = bytes.fromhex(requested_decode)
 
             try:
-                tx = Transaction.create_from_struct(tx_bytes)
+                tx = tx_or_block_from_bytes(tx_bytes)
             except struct.error:
                 data = {
                     'success': False,

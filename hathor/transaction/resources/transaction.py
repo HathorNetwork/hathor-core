@@ -6,9 +6,20 @@ from twisted.web import resource
 from hathor.api_util import set_cors, validate_tx_hash
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
-from hathor.transaction.base_transaction import BaseTransaction
+from hathor.transaction.base_transaction import BaseTransaction, TxVersion
+from hathor.transaction.token_creation_tx import TokenCreationTransaction
 
 settings = HathorSettings()
+
+
+def update_serialized_tokens_array(tx: BaseTransaction, serialized: Dict[str, Any]):
+    """ A token creation tx to_json does not add its hash to the array of tokens
+        We manually have to add it here to make it equal to the other transactions
+    """
+    if TxVersion(tx.version) == TxVersion.TOKEN_CREATION_TRANSACTION:
+        # Token creation tx does not add tokens array in to_json method but we need it in this API
+        assert isinstance(tx, TokenCreationTransaction)
+        serialized['tokens'] = [h.hex() for h in tx.tokens]
 
 
 def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
@@ -17,6 +28,8 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
     """
     serialized = tx.to_json(decode_script=True)
     serialized['raw'] = tx.get_struct().hex()
+    # Update tokens array
+    update_serialized_tokens_array(tx, serialized)
     meta = tx.get_metadata(force_reload=True)
     # To get the updated accumulated weight just need to call the
     # TransactionAccumulatedWeightResource (/transaction_acc_weight)
@@ -42,9 +55,34 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
             output = tx2_out.to_json(decode_script=True)
             output['tx_id'] = tx2.hash.hex()
             output['index'] = tx_in.index
+
+            # We need to get the token_data from the current tx, and not the tx being spent
+            token_uid = tx2.get_token_uid(tx2_out.get_token_index())
+            for out in tx.outputs:
+                out_token_uid = tx.get_token_uid(out.get_token_index())
+                if out_token_uid == token_uid:
+                    output['decoded']['token_data'] = out.token_data
+                    break
+            else:
+                # This is the case when the token from the input does not appear in the outputs
+                # This case can happen when we have a full melt, so all tokens from the inputs are destroyed
+                # So we manually add this token to the array and set the token_data properly
+                serialized['tokens'].append(token_uid.hex())
+                output['decoded']['token_data'] = len(serialized['tokens'])
+
             inputs.append(output)
 
     serialized['inputs'] = inputs
+
+    detailed_tokens = []
+    for token_uid in serialized['tokens']:
+        assert tx.storage is not None
+        tokens_index = tx.storage.tokens_index
+        assert tokens_index is not None
+        token_info = tokens_index.get_token_info(bytes.fromhex(token_uid))
+        detailed_tokens.append({'uid': token_uid, 'name': token_info.name, 'symbol': token_info.symbol})
+
+    serialized['tokens'] = detailed_tokens
 
     return {
         'success': True,
@@ -95,6 +133,10 @@ class TransactionResource(resource.Resource):
         """ Get 'id' (hash) from request.args
             Returns the tx with this hash or {'success': False} if hash is invalid or tx does not exist
         """
+        if not self.manager.tx_storage.tokens_index:
+            request.setResponseCode(503)
+            return {'success': False}
+
         requested_hash = request.args[b'id'][0].decode('utf-8')
         success, message = validate_tx_hash(requested_hash, self.manager.tx_storage)
         if not success:
