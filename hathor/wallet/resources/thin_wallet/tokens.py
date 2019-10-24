@@ -49,6 +49,8 @@ class TokenResource(resource.Resource):
         mint = []
         melt = []
 
+        transactions_count = self.manager.tx_storage.tokens_index.get_transactions_count(token_uid)
+
         for tx_hash, index in token_info.mint:
             mint.append({
                 'tx_id': tx_hash.hex(),
@@ -67,7 +69,8 @@ class TokenResource(resource.Resource):
             'success': True,
             'mint': mint,
             'melt': melt,
-            'total': token_info.total
+            'total': token_info.total,
+            'transactions_count': transactions_count,
         }
         return json.dumps(data).encode('utf-8')
 
@@ -132,7 +135,8 @@ TokenResource.openapi = {
                                                 "index": 1
                                             }
                                         ],
-                                        'total': 50000
+                                        'total': 50000,
+                                        'transactions_count': 3,
                                     }
                                 },
                                 'error': {

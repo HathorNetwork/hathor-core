@@ -2,7 +2,9 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.transaction.genesis import get_genesis_transactions
 from hathor.transaction.resources import DecodeTxResource
+from hathor.transaction.scripts import parse_address_script
 from tests.resources.base_resource import StubSite, _BaseResourceTest
+from tests.utils import create_tokens
 
 
 class DecodeTxTest(_BaseResourceTest._ResourceTest):
@@ -34,3 +36,11 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         data_error2 = response_error2.json_value()
 
         self.assertFalse(data_error2['success'])
+
+        # Token creation tx
+        script_type_out = parse_address_script(get_genesis_transactions(self.manager.tx_storage)[0].outputs[0].script)
+        address = script_type_out.address
+        tx2 = create_tokens(self.manager, address, mint_amount=100, propagate=True)
+        response = yield self.web.get('decode_tx', {b'hex_tx': bytes(tx2.get_struct().hex(), 'utf-8')})
+        data = response.json_value()
+        self.assertTrue(data['success'])

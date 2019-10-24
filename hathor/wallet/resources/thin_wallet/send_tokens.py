@@ -15,6 +15,7 @@ from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction
+from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.exceptions import TxValidationError
 
 settings = HathorSettings()
@@ -59,7 +60,7 @@ class SendTokensResource(resource.Resource):
         tx_hex = post_data['tx_hex']
 
         try:
-            tx = Transaction.create_from_struct(bytes.fromhex(tx_hex))
+            tx = tx_or_block_from_bytes(bytes.fromhex(tx_hex))
         except struct.error:
             return self.return_POST(False, 'Error parsing hexdump to create the transaction')
 
@@ -172,10 +173,10 @@ class SendTokensResource(resource.Resource):
         # TODO Tx should be resolved in the frontend
         def _should_stop():
             return request.should_stop_mining_thread
-        hash_bytes = tx.start_mining(sleep_seconds=self.sleep_seconds, should_stop=_should_stop)
+        tx.start_mining(sleep_seconds=self.sleep_seconds, should_stop=_should_stop)
         if request.should_stop_mining_thread:
             raise CancelledError()
-        tx.hash = hash_bytes
+        tx.update_hash()
         tx.verify()
         return tx
 

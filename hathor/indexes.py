@@ -7,7 +7,7 @@ from sortedcontainers import SortedKeyList
 from twisted.logger import Logger
 
 from hathor.pubsub import HathorEvents
-from hathor.transaction import BaseTransaction
+from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.base_transaction import TxVersion
 from hathor.transaction.scripts import parse_address_script
 
@@ -193,6 +193,48 @@ class TipsIndex:
         return self.tree[index]
 
 
+def get_newest_sorted_key_list(key_list: 'SortedKeyList[TransactionIndexElement]', count: int
+                               ) -> Tuple[List[bytes], bool]:
+    """ Get newest data from a sorted key list
+        Return the elements (quantity is the 'count' parameter) and a boolean indicating if has more
+    """
+    newest = key_list[-count:]
+    newest.reverse()
+    if count >= len(key_list):
+        has_more = False
+    else:
+        has_more = True
+    return [tx_index.hash for tx_index in newest], has_more
+
+
+def get_older_sorted_key_list(key_list: 'SortedKeyList[TransactionIndexElement]', timestamp: int,
+                              hash_bytes: bytes, count: int) -> Tuple[List[bytes], bool]:
+    """ Get sorted key list data from the timestamp/hash_bytes reference to the oldest
+        Return the elements (quantity is the 'count' parameter) and a boolean indicating if has more
+    """
+    # Get idx of element
+    idx = key_list.bisect_key_left((timestamp, hash_bytes))
+    first_idx = max(0, idx - count)
+    txs = key_list[first_idx:idx]
+    # Reverse because we want the newest first
+    txs.reverse()
+    return [tx_index.hash for tx_index in txs], first_idx > 0
+
+
+def get_newer_sorted_key_list(key_list: 'SortedKeyList[TransactionIndexElement]', timestamp: int,
+                              hash_bytes: bytes, count: int) -> Tuple[List[bytes], bool]:
+    """ Get sorted key list data from the timestamp/hash_bytes reference to the newest
+        Return the elements (quantity is the 'count' parameter) and a boolean indicating if has more
+    """
+    # Get idx of element
+    idx = key_list.bisect_key_left((timestamp, hash_bytes))
+    last_idx = min(len(key_list), idx + 1 + count)
+    txs = key_list[idx + 1:last_idx]
+    # Reverse because we want the newest first
+    txs.reverse()
+    return [tx_index.hash for tx_index in txs], last_idx < len(key_list)
+
+
 class TransactionsIndex:
     """ Index of transactions sorted by their timestamps.
     """
@@ -244,13 +286,7 @@ class TransactionsIndex:
         :param count: Number of transactions or blocks to be returned
         :return: List of tx hashes and a boolean indicating if has more txs
         """
-        newest = self.transactions[-count:]
-        newest.reverse()
-        if count >= len(self.transactions):
-            has_more = False
-        else:
-            has_more = True
-        return [tx_index.hash for tx_index in newest], has_more
+        return get_newest_sorted_key_list(self.transactions, count)
 
     def get_older(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[bytes], bool]:
         """ Get transactions or blocks from the timestamp/hash_bytes reference to the oldest
@@ -260,13 +296,7 @@ class TransactionsIndex:
         :param count: Number of transactions or blocks to be returned
         :return: List of tx hashes and a boolean indicating if has more txs
         """
-        # Get idx of element
-        idx = self.transactions.bisect_key_left((timestamp, hash_bytes))
-        first_idx = max(0, idx - count)
-        txs = self.transactions[first_idx:idx]
-        # Reverse because we want the newest first
-        txs.reverse()
-        return [tx_index.hash for tx_index in txs], first_idx > 0
+        return get_older_sorted_key_list(self.transactions, timestamp, hash_bytes, count)
 
     def get_newer(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[bytes], bool]:
         """ Get transactions or blocks from the timestamp/hash_bytes reference to the newest
@@ -276,13 +306,7 @@ class TransactionsIndex:
         :param count: Number of transactions or blocks to be returned
         :return: List of tx hashes and a boolean indicating if has more txs
         """
-        # Get idx of element
-        idx = self.transactions.bisect_key_left((timestamp, hash_bytes))
-        last_idx = min(len(self.transactions), idx + 1 + count)
-        txs = self.transactions[idx + 1:last_idx]
-        # Reverse because we want the newest first
-        txs.reverse()
-        return [tx_index.hash for tx_index in txs], last_idx < len(self.transactions)
+        return get_newer_sorted_key_list(self.transactions, timestamp, hash_bytes, count)
 
     def find_first_at_timestamp(self, timestamp: int) -> int:
         """ Get index of first element at the given timestamp, or where it would be inserted if
@@ -391,6 +415,9 @@ class TokensIndex:
 
         'total' tracks the amount of tokens in circulation (mint - melt)
         """
+
+        transactions: 'SortedKeyList[TransactionIndexElement]'
+
         def __init__(self, name: str = None, symbol: str = None, total: int = 0,
                      mint: Set[Tuple[bytes, int]] = None, melt: Set[Tuple[bytes, int]] = None) -> None:
             self.name = name
@@ -398,6 +425,8 @@ class TokensIndex:
             self.total = total
             self.mint = mint or set()
             self.melt = melt or set()
+            # Saves the (timestamp, hash) of the transactions that include this token
+            self.transactions = SortedKeyList(key=lambda x: (x.timestamp, x.hash))
 
     def __init__(self) -> None:
         self.tokens: Dict[bytes, TokensIndex.TokenStatus] = defaultdict(lambda: self.TokenStatus())
@@ -457,6 +486,19 @@ class TokensIndex:
             status.name = tx.token_name
             status.symbol = tx.token_symbol
 
+        if tx.is_transaction:
+            # Adding this tx to the transactions key list
+            assert isinstance(tx, Transaction)
+            for token_uid in tx.tokens:
+                transactions = self.tokens[token_uid].transactions
+                # It is safe to use the in operator because it is O(log(n)).
+                # http://www.grantjenks.com/docs/sortedcontainers/sortedlist.html#sortedcontainers.SortedList.__contains__
+                assert tx.hash is not None
+                element = TransactionIndexElement(tx.timestamp, tx.hash)
+                if element in transactions:
+                    return
+                transactions.add(element)
+
     def del_tx(self, tx: BaseTransaction) -> None:
         """ Tx has been voided, so remove from tokens index (if applicable)
         """
@@ -472,6 +514,15 @@ class TokensIndex:
             assert tx.hash is not None
             del self.tokens[tx.hash]
 
+        if tx.is_transaction:
+            # Removing this tx from the transactions key list
+            assert isinstance(tx, Transaction)
+            for token_uid in tx.tokens:
+                transactions = self.tokens[token_uid].transactions
+                idx = transactions.bisect_key_left((tx.timestamp, tx.hash))
+                if idx < len(transactions) and transactions[idx].hash == tx.hash:
+                    transactions.pop(idx)
+
     def get_token_info(self, token_uid: bytes) -> 'TokensIndex.TokenStatus':
         """ Get the info from the tokens dict.
 
@@ -484,3 +535,29 @@ class TokensIndex:
         if info.name is None:
             raise KeyError('unknown token')
         return info
+
+    def get_transactions_count(self, token_uid: bytes) -> int:
+        """ Get quantity of transactions from requested token
+        """
+        info = self.tokens[token_uid]
+        return len(info.transactions)
+
+    def get_newest_transactions(self, token_uid: bytes, count: int) -> Tuple[List[bytes], bool]:
+        """ Get transactions from the newest to the oldest
+        """
+        info = self.tokens[token_uid]
+        return get_newest_sorted_key_list(info.transactions, count)
+
+    def get_older_transactions(self, token_uid: bytes, timestamp: int, hash_bytes: bytes, count: int
+                               ) -> Tuple[List[bytes], bool]:
+        """ Get transactions from the timestamp/hash_bytes reference to the oldest
+        """
+        info = self.tokens[token_uid]
+        return get_older_sorted_key_list(info.transactions, timestamp, hash_bytes, count)
+
+    def get_newer_transactions(self, token_uid: bytes, timestamp: int, hash_bytes: bytes, count: int
+                               ) -> Tuple[List[bytes], bool]:
+        """ Get transactions from the timestamp/hash_bytes reference to the newest
+        """
+        info = self.tokens[token_uid]
+        return get_newer_sorted_key_list(info.transactions, timestamp, hash_bytes, count)

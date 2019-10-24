@@ -21,6 +21,7 @@ from hathor.transaction.exceptions import (
     ParentDoesNotExist,
     PowError,
     TimestampError,
+    TooManyOutputs,
     TxValidationError,
     WeightError,
 )
@@ -89,6 +90,9 @@ class TxVersion(IntEnum):
     def _missing_(cls, value):
         # version's first byte is reserved for future use, so we'll ignore it
         version = value & 0xFF
+        if version == value:
+            # Prevent infinite recursion when starting TxVerion with wrong version
+            raise ValueError('Invalid version.')
         return cls(version)
 
     def get_cls(self) -> Type['BaseTransaction']:
@@ -101,7 +105,13 @@ class TxVersion(IntEnum):
             TxVersion.REGULAR_TRANSACTION: Transaction,
             TxVersion.TOKEN_CREATION_TRANSACTION: TokenCreationTransaction,
         }
-        return cls_map[self]
+
+        cls = cls_map.get(self)
+
+        if cls is None:
+            raise ValueError('Invalid version.')
+        else:
+            return cls
 
 
 class BaseTransaction(ABC):
@@ -239,7 +249,7 @@ class BaseTransaction(ABC):
     @property
     def sum_outputs(self) -> int:
         """Sum of the value of the outputs"""
-        return sum([output.value for output in self.outputs])
+        return sum(output.value for output in self.outputs if not output.is_token_authority())
 
     def get_target(self, override_weight: Optional[float] = None) -> float:
         """Target to be achieved in the mining process"""
@@ -449,6 +459,11 @@ class BaseTransaction(ABC):
         assert self.hash is not None
         if int(self.hash.hex(), self.HEX_BASE) >= self.get_target(override_weight):
             raise PowError('Transaction has invalid data')
+
+    def verify_number_of_outputs(self) -> None:
+        """Verify number of outputs does not exceeds the limit"""
+        if len(self.outputs) > MAX_NUM_OUTPUTS:
+            raise TooManyOutputs('Maximum number of outputs exceeded')
 
     def resolve(self, update_time: bool = True) -> bool:
         """Run a CPU mining looking for the nonce that solves the proof-of-work
@@ -1071,10 +1086,14 @@ def tx_or_block_from_proto(tx_proto: protos.BaseTransaction,
         raise ValueError('invalid base_transaction_oneof')
 
 
-def tx_or_block_from_bytes(data: bytes) -> 'BaseTransaction':
+def tx_or_block_from_bytes(data: bytes) -> BaseTransaction:
     """ Creates the correct tx subclass from a sequence of bytes
     """
     # version field takes up the first 2 bytes
     version = int.from_bytes(data[0:2], 'big')
-    cls = TxVersion(version).get_cls()
-    return cls.create_from_struct(data)
+    try:
+        tx_version = TxVersion(version)
+        cls = tx_version.get_cls()
+        return cls.create_from_struct(data)
+    except ValueError:
+        raise StructError('Invalid bytes to create transaction subclass.')
