@@ -50,6 +50,8 @@ class MiningResource(resource.Resource):
             request.setResponseCode(503)
             return json.dumps({'reason': 'Node still syncing'}).encode('utf-8')
 
+        address = None
+
         if b'address' in request.args:
             address_txt = request.args[b'address'][0].decode('utf-8')
             try:
