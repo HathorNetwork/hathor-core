@@ -1,5 +1,5 @@
 import datetime
-from typing import TYPE_CHECKING, Any, Dict, Generator, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
 import requests
@@ -86,7 +86,7 @@ def connection_string_to_host(connection_string: str) -> str:
 
 
 @inlineCallbacks
-def discover_dns(host: str, test_mode: int = 0) -> Generator[Any, Any, Optional[str]]:
+def discover_dns(host: str, test_mode: int = 0) -> Generator[Any, Any, List[str]]:
     """ Start a DNS peer discovery object and execute a search for the host
 
         Returns the DNS string from the requested host
