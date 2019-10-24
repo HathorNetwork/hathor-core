@@ -316,7 +316,7 @@ class PeerId:
                     break
                 host = connection_string_to_host(entrypoint)
                 result = yield discover_dns(host, protocol.node.test_mode)
-                if result == protocol.connection_string:
+                if protocol.connection_string in result:
                     # Found the entrypoint
                     found_entrypoint = True
                     break
@@ -332,7 +332,7 @@ class PeerId:
                     found_entrypoint = True
                     break
                 result = yield discover_dns(host, protocol.node.test_mode)
-                if connection_string_to_host(result) == connection_host:
+                if connection_host in [connection_string_to_host(x) for x in result]:
                     # Found the entrypoint
                     found_entrypoint = True
                     break
