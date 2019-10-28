@@ -1,10 +1,12 @@
+from struct import error as StructError
+
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import BlockWithTokensError, InputOutputMismatch, InvalidToken, TransactionDataError
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.util import get_deposit_amount, get_withdraw_amount
+from hathor.transaction.util import get_deposit_amount, get_withdraw_amount, int_to_bytes
 from tests import unittest
 from tests.utils import create_tokens, get_genesis_key
 
@@ -452,6 +454,20 @@ class TokenTest(unittest.TestCase):
         with self.assertRaises(TransactionDataError):
             tx.verify()
 
+        # Hathor token name
+        tx.token_name = settings.HATHOR_TOKEN_NAME
+        tx.token_symbol = 'TST'
+        update_tx(tx)
+        with self.assertRaises(TransactionDataError):
+            tx.verify()
+
+        # Hathor token symbol
+        tx.token_name = 'Test'
+        tx.token_symbol = settings.HATHOR_TOKEN_SYMBOL
+        update_tx(tx)
+        with self.assertRaises(TransactionDataError):
+            tx.verify()
+
     def test_token_mint_zero(self):
         # try to mint 0 tokens
         with self.assertRaises(InvalidToken):
@@ -498,6 +514,33 @@ class TokenTest(unittest.TestCase):
         info2 = bytes([0x02]) + info[1:]
         with self.assertRaises(ValueError):
             TokenCreationTransaction.deserialize_token_info(info2)
+
+    def test_token_info_not_utf8(self):
+        token_name = 'TestCoin'
+        token_symbol = 'TST'
+
+        # Token version 1; Name length; Name; Symbol length; Symbol
+        bytes1 = (bytes([0x01]) + int_to_bytes(len(token_name), 1) + token_name.encode('utf-8')
+                  + int_to_bytes(len(token_symbol), 1) + token_symbol.encode('utf-8'))
+
+        name, symbol, _ = TokenCreationTransaction.deserialize_token_info(bytes1)
+
+        self.assertEqual(name, token_name)
+        self.assertEqual(symbol, token_symbol)
+
+        encoded_name = token_name.encode('utf-16')
+        bytes2 = (bytes([0x01]) + int_to_bytes(len(encoded_name), 1) + encoded_name
+                  + int_to_bytes(len(token_symbol), 1) + token_symbol.encode('utf-8'))
+
+        with self.assertRaises(StructError):
+            TokenCreationTransaction.deserialize_token_info(bytes2)
+
+        encoded_symbol = token_symbol.encode('utf-16')
+        bytes3 = (bytes([0x01]) + int_to_bytes(len(token_name), 1) + token_name.encode('utf-8')
+                  + int_to_bytes(len(encoded_symbol), 1) + encoded_symbol)
+
+        with self.assertRaises(StructError):
+            TokenCreationTransaction.deserialize_token_info(bytes3)
 
 
 if __name__ == '__main__':
