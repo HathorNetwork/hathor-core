@@ -111,6 +111,12 @@ class TestStratum(StratumTestBase):
 
 
 class TestStratumJob(StratumTestBase):
+    def setUp(self):
+        super().setUp()
+        subscribe = b'{"jsonrpc": "2.0", "id": "52dce7e1c7b34143bdd80ead4814ef07", "method": "subscribe"}'
+        self.protocol.lineReceived(subscribe)
+        self.job = self._get_latest_message()['params']
+
     def _get_latest_message(self):
         data = self.transport.value().split(JSONRPC.delimiter)[-2]
         return json_loads(data)
@@ -137,12 +143,6 @@ class TestStratumJob(StratumTestBase):
                     **({"nonce": nonce} if nonce is not None else {}),
                 }
             }))
-
-    def setUp(self):
-        super().setUp()
-        subscribe = b'{"jsonrpc": "2.0", "id": "52dce7e1c7b34143bdd80ead4814ef07", "method": "subscribe"}'
-        self.protocol.lineReceived(subscribe)
-        self.job = self._get_latest_message()['params']
 
     def test_job_not_found(self):
         # Certainly different from received job_id
@@ -182,6 +182,20 @@ class TestStratumJob(StratumTestBase):
         self.run_to_completion()
         self._submit(self.job['job_id'], nonce)
         self.assertEqual(self._get_latest_message()['error'], STALE_JOB)
+
+    def test_min_share_weight(self):
+        # submit a job
+        nonce = self._get_nonce()
+        self._submit(self.job['job_id'], nonce)
+        msg = self._get_latest_message()
+        self.assertIn('result', msg)
+
+        # force server to have a very long time between jobs
+        self.protocol.jobs[self.protocol.job_ids[0]].tx.timestamp = 0
+
+        # get new job and check the weight
+        job = self.protocol.create_job()
+        self.assertTrue(job.weight >= 1, f'job weight of {job.weight} is too small')
 
 
 class StratumClientTest(unittest.TestCase):
