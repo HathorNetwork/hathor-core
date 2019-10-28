@@ -44,6 +44,7 @@ class HathorSettings(NamedTuple):
     # Weight of genesis and minimum weight of a tx/block
     MIN_BLOCK_WEIGHT: int = 21
     MIN_TX_WEIGHT: int = 14
+    MIN_SHARE_WEIGHT: int = 21
 
     HATHOR_TOKEN_UID: bytes = b'\x00'
 
