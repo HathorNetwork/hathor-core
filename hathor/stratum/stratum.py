@@ -649,7 +649,9 @@ class StratumProtocol(JSONRPC):
 
         hash_rate = acc_weight - log(dt, 2)
         self.estimated_hash_rate = hash_rate
-        return hash_rate + log(self.AVERAGE_JOB_TIME, 2)
+        share_weight = hash_rate + log(self.AVERAGE_JOB_TIME, 2)
+        share_weight = max(share_weight, settings.MIN_SHARE_WEIGHT)
+        return share_weight
 
     def get_stats(self) -> MinerStatistics:
         assert self.miner_id is not None
