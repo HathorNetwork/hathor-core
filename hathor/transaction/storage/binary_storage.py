@@ -2,6 +2,7 @@ import json
 import os
 import re
 import struct
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
@@ -9,9 +10,12 @@ from hathor.transaction.storage.transaction_storage import BaseTransactionStorag
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.util import deprecated, skip_warning
 
+if TYPE_CHECKING:
+    from hathor.transaction import BaseTransaction  # noqa: F401
+
 
 class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
-    def __init__(self, path='./', with_index=True):
+    def __init__(self, path: str = './', with_index: bool = True):
         os.makedirs(path, exist_ok=True)
         self.path = path
         super().__init__(with_index=with_index)
@@ -24,7 +28,8 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         return '{}({})'.format(self.__class__.__name__, repr(self.path))
 
     @deprecated('Use remove_transaction_deferred instead')
-    def remove_transaction(self, tx):
+    def remove_transaction(self, tx: 'BaseTransaction') -> None:
+        assert tx.hash is not None
         skip_warning(super().remove_transaction)(tx)
         filepath = self.generate_filepath(tx.hash)
         self._remove_from_weakref(tx)
@@ -35,19 +40,21 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
             pass
 
     @deprecated('Use save_transaction_deferred instead')
-    def save_transaction(self, tx, *, only_metadata=False):
+    def save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
         if tx.is_genesis:
             return
         self._save_transaction(tx, only_metadata=only_metadata)
         self._save_to_weakref(tx)
 
-    def _save_transaction(self, tx, *, only_metadata=False):
+    def _save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
+        assert tx.hash is not None
         if tx.is_genesis:
             return
         tx_bytes = tx.get_struct()
 
         meta = tx.get_metadata()
+        meta_bytes: Optional[bytes]
         if meta:
             meta_dict = self.serialize_metadata(meta)
             meta_bytes = json.dumps(meta_dict, indent=4).encode('utf-8')
@@ -61,26 +68,26 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
             if meta_bytes:
                 fp.write(meta_bytes)
 
-    def generate_filepath(self, hash_bytes):
+    def generate_filepath(self, hash_bytes: bytes) -> str:
         filename = 'tx_{}.bin'.format(hash_bytes.hex())
         filepath = os.path.join(self.path, filename)
         return filepath
 
-    def serialize_metadata(self, metadata):
+    def serialize_metadata(self, metadata: TransactionMetadata) -> Dict[Any, Any]:
         return metadata.to_json()
 
-    def load_metadata(self, data):
+    def load_metadata(self, data: Dict[Any, Any]) -> TransactionMetadata:
         return TransactionMetadata.create_from_json(data)
 
     @deprecated('Use transaction_exists_deferred instead')
-    def transaction_exists(self, hash_bytes):
+    def transaction_exists(self, hash_bytes: bytes) -> bool:
         genesis = self.get_genesis(hash_bytes)
         if genesis:
             return True
         filepath = self.generate_filepath(hash_bytes)
         return os.path.isfile(filepath)
 
-    def _load_transaction_from_filepath(self, filepath):
+    def _load_transaction_from_filepath(self, filepath: str) -> 'BaseTransaction':
         try:
             length_size = struct.calcsize(self.length_format)
             with open(filepath, 'rb') as fp:
@@ -100,9 +107,10 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         except FileNotFoundError:
             raise TransactionDoesNotExist
 
-    def load_transaction(self, hash_bytes):
+    def load_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
         filepath = self.generate_filepath(hash_bytes)
         tx = self._load_transaction_from_filepath(filepath)
+        assert tx.hash is not None
         assert tx.hash == hash_bytes, 'Hashes differ: {} != {}'.format(tx.hash.hex(), hash_bytes.hex())
         return tx
 
