@@ -304,11 +304,9 @@ class BaseTransaction(ABC):
             return False
 
     @abstractclassmethod
-    def update_voided_info(self) -> None:
-        """ This method is called when a new transaction or block arrives and is added to the DAG.
-        It must check whether the transaction or block is voided or not. It has different implementation
-        in each case.
-        """
+    def update_consensus(self) -> None:
+        """This method is called when a vertex is added to the DAG, and it is responsible for running
+        the consensus algorithm and decide whether the vertex is voided or not."""
         raise NotImplementedError
 
     @abstractmethod

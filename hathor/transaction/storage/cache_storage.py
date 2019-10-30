@@ -84,6 +84,13 @@ class TransactionCacheStorage(BaseTransactionStorage):
                 self.dirty_txs.discard(tx_hash)
                 skip_warning(self.store._save_transaction)(tx)
 
+    @deprecated('Use remove_transaction_deferred instead')
+    def remove_transaction(self, tx):
+        skip_warning(super().remove_transaction)(tx)
+        self.cache.pop(tx.hash, None)
+        self.dirty_txs.discard(tx.hash)
+        self._remove_from_weakref(tx)
+
     @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         self._save_transaction(tx)
@@ -159,6 +166,10 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
         # call super which adds to index if needed
         yield super().save_transaction_deferred(tx)
+
+    @inlineCallbacks
+    def remove_transaction_deferred(self, tx):
+        yield super().remove_transaction_deferred(tx)
 
     def transaction_exists_deferred(self, hash_bytes):
         if hash_bytes in self.cache:

@@ -3,10 +3,12 @@ import shutil
 import tempfile
 import time
 import unittest
+from itertools import chain
 
 from twisted.internet.task import Clock
 
 from hathor.conf import HathorSettings
+from hathor.indexes import TokensIndex, WalletIndex
 from hathor.manager import TestMode
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.storage import (
@@ -44,16 +46,19 @@ class _BaseTransactionStorageTest:
             wallet.unlock(b'teste')
             self.manager = HathorManager(self.reactor, tx_storage=self.tx_storage, wallet=wallet)
 
-            block_parents = [tx.hash for tx in self.genesis]
+            self.tx_storage.wallet_index = WalletIndex(self.manager.pubsub)
+            self.tx_storage.tokens_index = TokensIndex()
+
+            block_parents = [tx.hash for tx in chain(self.genesis_blocks, self.genesis_txs)]
             output = TxOutput(200, bytes.fromhex('1e393a5ce2ff1c98d4ff6892f2175100f2dad049'))
-            output2 = TxOutput(2, bytes.fromhex('1e393a5ce2ff1c98d4ff6892f2175100f2dad049'), 1)
-            self.block = Block(timestamp=MIN_TIMESTAMP, weight=12, outputs=[output, output2], parents=block_parents,
+            self.block = Block(timestamp=MIN_TIMESTAMP, weight=12, outputs=[output], parents=block_parents,
                                nonce=100781, storage=tx_storage)
             self.block.resolve()
+            self.block.verify()
 
             tx_parents = [tx.hash for tx in self.genesis_txs]
             tx_input = TxInput(
-                tx_id=bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902'), index=0,
+                tx_id=self.genesis_blocks[0].hash, index=0,
                 data=bytes.fromhex('46304402203470cb9818c9eb842b0c433b7e2b8aded0a51f5903e971649e870763d0266a'
                                    'd2022049b48e09e718c4b66a0f3178ef92e4d60ee333d2d0e25af8868acf5acbb35aaa583'
                                    '056301006072a8648ce3d020106052b8104000a034200042ce7b94cba00b654d4308f8840'
@@ -140,6 +145,47 @@ class _BaseTransactionStorageTest:
         def test_save_token_creation_tx(self):
             tx = create_tokens(self.manager, propagate=False)
             self.validate_save(tx)
+
+        def _validate_not_in_index(self, tx, index):
+            tips = index.tips_index[self.tx.timestamp]
+            self.assertNotIn(self.tx.hash, [x.data for x in tips])
+            self.assertNotIn(self.tx.hash, index.tips_index.tx_last_interval)
+
+            self.assertIsNone(index.txs_index.find_tx_index(tx))
+
+        def _test_remove_tx_or_block(self, tx):
+            self.validate_save(tx)
+
+            self.tx_storage.remove_transaction(tx)
+            with self.assertRaises(TransactionDoesNotExist):
+                self.tx_storage.get_transaction(tx.hash)
+
+            if hasattr(self.tx_storage, 'all_index'):
+                self._validate_not_in_index(tx, self.tx_storage.all_index)
+
+            if tx.is_block:
+                if hasattr(self.tx_storage, 'block_index'):
+                    self._validate_not_in_index(tx, self.tx_storage.block_index)
+            else:
+                if hasattr(self.tx_storage, 'tx_index'):
+                    self._validate_not_in_index(tx, self.tx_storage.tx_index)
+
+            # Check wallet index.
+            wallet_index = self.tx_storage.wallet_index
+            addresses = wallet_index._get_addresses(tx)
+            for address in addresses:
+                self.assertNotIn(tx.hash, wallet_index.index[address])
+
+            # TODO Check self.tx_storage.tokens_index
+
+            # Try to remove twice. It is supposed to do nothing.
+            self.tx_storage.remove_transaction(tx)
+
+        def test_remove_tx(self):
+            self._test_remove_tx_or_block(self.tx)
+
+        def test_remove_block(self):
+            self._test_remove_tx_or_block(self.block)
 
         def test_shared_memory(self):
             # Enable weakref to this test only.

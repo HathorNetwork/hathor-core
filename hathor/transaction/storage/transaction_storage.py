@@ -22,6 +22,9 @@ class TransactionStorage(ABC):
     with_index: bool  # noqa: E701
     wallet_index: Optional[WalletIndex]
     tokens_index: Optional[TokensIndex]
+    block_index: Optional[IndexesManager]
+    tx_index: Optional[IndexesManager]
+    all_index: Optional[IndexesManager]
 
     def __init__(self):
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
@@ -39,6 +42,14 @@ class TransactionStorage(ABC):
             self._tx_weakref[tx.hash] = tx
         else:
             assert tx is tx2, 'There are two instance of the same transaction in memory ({})'.format(tx.hash_hex)
+
+    def _remove_from_weakref(self, tx: BaseTransaction) -> None:
+        """Remove transaction from weakref.
+        """
+        if self._tx_weakref_disabled:
+            return
+        assert tx.hash is not None
+        self._tx_weakref.pop(tx.hash, None)
 
     def get_transaction_from_weakref(self, hash_bytes: bytes) -> Optional[BaseTransaction]:
         """ Get a transaction from weakref if it exists. Otherwise, returns None.
@@ -76,6 +87,25 @@ class TransactionStorage(ABC):
 
         if self.with_index and not only_metadata:
             self._add_to_cache(tx)
+
+    @abstractmethod
+    @deprecated('Use remove_transaction_deferred instead')
+    def remove_transaction(self, tx: BaseTransaction) -> None:
+        """Remove the tx.
+
+        :param tx: Trasaction to be removed
+        """
+        if self.with_index:
+            assert self.all_index is not None
+
+            self._del_from_cache(tx)
+            # TODO Move it to self._del_from_cache. We cannot simply do it because
+            #      this method is used by the consensus algorithm which does not
+            #      expect to have it removed from self.all_index.
+            self.all_index.del_tx(tx)
+
+            if self.wallet_index:
+                self.wallet_index.remove_tx(tx)
 
     @abstractmethod
     @deprecated('Use transaction_exists_deferred instead')
@@ -144,6 +174,18 @@ class TransactionStorage(ABC):
         """
         if self.with_index:
             self._add_to_cache(tx)
+        return succeed(None)
+
+    @abstractmethod
+    def remove_transaction_deferred(self, tx: BaseTransaction) -> None:
+        """Remove the tx.
+
+        :param tx: Transaction to be removed
+
+        :rtype :py:class:`twisted.internet.defer.Deferred[None]`
+        """
+        if self.with_index:
+            self._del_from_cache(tx)
         return succeed(None)
 
     @abstractmethod
@@ -393,6 +435,9 @@ class TransactionStorageAsyncFromSync(TransactionStorage):
     def save_transaction_deferred(self, tx: BaseTransaction, *, only_metadata: bool = False) -> Deferred:
         return succeed(skip_warning(self.save_transaction)(tx, only_metadata=only_metadata))
 
+    def remove_transaction_deferred(self, tx: BaseTransaction) -> Deferred:
+        return succeed(skip_warning(self.remove_transaction)(tx))
+
     def transaction_exists_deferred(self, hash_bytes: bytes) -> Deferred:
         return succeed(skip_warning(self.transaction_exists)(hash_bytes))
 
@@ -459,6 +504,7 @@ class BaseTransactionStorage(TransactionStorage):
     def get_block_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         if not self.with_index:
             raise NotImplementedError
+        assert self.block_index is not None
         if timestamp is None:
             timestamp = self.latest_timestamp
         return self.block_index.tips_index[timestamp]
@@ -466,6 +512,7 @@ class BaseTransactionStorage(TransactionStorage):
     def get_tx_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         if not self.with_index:
             raise NotImplementedError
+        assert self.tx_index is not None
         if timestamp is None:
             timestamp = self.latest_timestamp
         tips = self.tx_index.tips_index[timestamp]
@@ -480,6 +527,7 @@ class BaseTransactionStorage(TransactionStorage):
     def get_all_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         if not self.with_index:
             raise NotImplementedError
+        assert self.all_index is not None
         if timestamp is None:
             timestamp = self.latest_timestamp
         tips = self.all_index.tips_index[timestamp]
@@ -488,6 +536,7 @@ class BaseTransactionStorage(TransactionStorage):
     def get_newest_blocks(self, count: int) -> Tuple[List[Block], bool]:
         if not self.with_index:
             raise NotImplementedError
+        assert self.block_index is not None
         block_hashes, has_more = self.block_index.get_newest(count)
         blocks = [self.get_transaction(block_hash) for block_hash in block_hashes]
         return blocks, has_more
@@ -509,6 +558,7 @@ class BaseTransactionStorage(TransactionStorage):
     def get_newer_blocks_after(self, timestamp: int, hash_bytes: bytes, count: int):
         if not self.with_index:
             raise NotImplementedError
+        assert self.block_index is not None
         block_hashes, has_more = self.block_index.get_newer(timestamp, hash_bytes, count)
         blocks = [self.get_transaction(block_hash) for block_hash in block_hashes]
         return blocks, has_more
@@ -516,6 +566,7 @@ class BaseTransactionStorage(TransactionStorage):
     def get_older_txs_after(self, timestamp: int, hash_bytes: bytes, count: int):
         if not self.with_index:
             raise NotImplementedError
+        assert self.tx_index is not None
         tx_hashes, has_more = self.tx_index.get_older(timestamp, hash_bytes, count)
         txs = [self.get_transaction(tx_hash) for tx_hash in tx_hashes]
         return txs, has_more
@@ -523,6 +574,7 @@ class BaseTransactionStorage(TransactionStorage):
     def get_newer_txs_after(self, timestamp: int, hash_bytes: bytes, count: int):
         if not self.with_index:
             raise NotImplementedError
+        assert self.tx_index is not None
         tx_hashes, has_more = self.tx_index.get_newer(timestamp, hash_bytes, count)
         txs = [self.get_transaction(tx_hash) for tx_hash in tx_hashes]
         return txs, has_more
@@ -578,6 +630,9 @@ class BaseTransactionStorage(TransactionStorage):
     def _add_to_cache(self, tx: BaseTransaction) -> None:
         if not self.with_index:
             raise NotImplementedError
+        assert self.all_index is not None
+        assert self.block_index is not None
+        assert self.tx_index is not None
         self._latest_timestamp = max(self.latest_timestamp, tx.timestamp)
         self.all_index.add_tx(tx)
         if self.wallet_index:
@@ -594,6 +649,8 @@ class BaseTransactionStorage(TransactionStorage):
     def _del_from_cache(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
         if not self.with_index:
             raise NotImplementedError
+        assert self.block_index is not None
+        assert self.tx_index is not None
         if self.tokens_index:
             self.tokens_index.del_tx(tx)
         if tx.is_block:
@@ -665,6 +722,8 @@ class BaseTransactionStorage(TransactionStorage):
     def get_all_sorted_txs(self, timestamp: int, count: int, offset: int) -> TransactionsIndex:
         """ Returns ordered blocks and txs in a TransactionIndex
         """
+        assert self.all_index is not None
+
         idx = self.all_index.txs_index.find_first_at_timestamp(timestamp)
         txs = self.all_index.txs_index[idx:idx+offset+count]
 

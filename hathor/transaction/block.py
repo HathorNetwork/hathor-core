@@ -52,6 +52,9 @@ class Block(BaseTransaction):
         """Returns true if this is a transaction"""
         return False
 
+    def update_consensus(self) -> None:
+        self.update_voided_info()
+
     def to_proto(self, include_metadata: bool = True) -> protos.BaseTransaction:
         tx_proto = protos.Block(
             version=self.version,
