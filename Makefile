@@ -21,7 +21,7 @@ tests-doctests:
 
 .PHONY: tests-lib
 tests-lib:
-	pytest --durations=10 $(pytest_flags) --cov-fail-under=91 $(tests_lib)
+	pytest --durations=10 $(pytest_flags) --cov-fail-under=90 $(tests_lib)
 
 .PHONY: tests-simulation
 tests-simulation:

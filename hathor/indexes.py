@@ -280,6 +280,16 @@ class TransactionsIndex:
         if idx < len(self.transactions) and self.transactions[idx].hash == tx.hash:
             self.transactions.pop(idx)
 
+    def find_tx_index(self, tx: BaseTransaction) -> Optional[int]:
+        """Return the index of a transaction in the index
+
+        :param tx: Transaction to be found
+        """
+        idx = self.transactions.bisect_key_left((tx.timestamp, tx.hash))
+        if idx < len(self.transactions) and self.transactions[idx].hash == tx.hash:
+            return idx
+        return None
+
     def get_newest(self, count: int) -> Tuple[List[bytes], bool]:
         """ Get transactions or blocks from the newest to the oldest
 
@@ -327,7 +337,7 @@ class WalletIndex:
     """ Index of inputs/outputs by address
     """
     def __init__(self, pubsub: Optional['PubSubManager'] = None) -> None:
-        self.index: DefaultDict[str, List[bytes]] = defaultdict(list)
+        self.index: DefaultDict[str, Set[bytes]] = defaultdict(set)
         self.pubsub = pubsub
         if self.pubsub:
             self.subscribe_pubsub_events()
@@ -381,13 +391,18 @@ class WalletIndex:
 
         addresses = self._get_addresses(tx)
         for address in addresses:
-            # It should be called only once, so there must be no repeated hashes
-            # in self.index[address]. One can check it uncommenting the following
-            # line:
-            # assert address not in self.index[address]
-            self.index[address].append(tx.hash)
+            self.index[address].add(tx.hash)
 
         self.publish_tx(tx, addresses=addresses)
+
+    def remove_tx(self, tx: BaseTransaction) -> None:
+        """ Remove tx inputs and outputs from the wallet index (indexed by its addresses).
+        """
+        assert tx.hash is not None
+
+        addresses = self._get_addresses(tx)
+        for address in addresses:
+            self.index[address].discard(tx.hash)
 
     def handle_tx_event(self, key: HathorEvents, args: 'EventArguments') -> None:
         """ This method is called when pubsub publishes an event that we subscribed
@@ -401,7 +416,7 @@ class WalletIndex:
     def get_from_address(self, address: str) -> List[bytes]:
         """ Get inputs/outputs history from address
         """
-        return self.index[address]
+        return list(self.index[address])
 
 
 class TokensIndex:

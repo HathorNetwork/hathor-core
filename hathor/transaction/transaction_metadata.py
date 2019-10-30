@@ -2,6 +2,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 from hathor import protos
+from hathor.util import practically_equal
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction  # noqa: F401
@@ -128,11 +129,26 @@ class TransactionMetadata:
 
     def __eq__(self, other) -> bool:
         """Override the default Equals behavior"""
-        for field in ['hash', 'spent_outputs', 'conflict_with', 'voided_by',
-                      'received_by', 'children', 'accumulated_weight', 'twins',
-                      'score', 'first_block']:
+        for field in ['hash', 'conflict_with', 'voided_by', 'received_by',
+                      'children', 'accumulated_weight', 'twins', 'score',
+                      'first_block']:
             if (getattr(self, field) or None) != (getattr(other, field) or None):
                 return False
+
+        # Compare self.spent_outputs separately because it is a defaultdict.
+        # We need to do this because a simple access to a key may have side effects.
+        # For example:
+        #     >>> a = defaultdict(list)
+        #     >>> b = defaultdict(list)
+        #     >>> a == b
+        #     True
+        #     >>> a[0]
+        #     []
+        #     >>> a == b
+        #     False
+        if not practically_equal(self.spent_outputs, other.spent_outputs):
+            return False
+
         return True
 
     def to_json(self) -> Dict[str, Any]:

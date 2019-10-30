@@ -124,6 +124,17 @@ class TransactionRemoteStorage(TransactionStorage):
 
     # TransactionStorageSync interface implementation:
 
+    @deprecated('Use remove_transaction_deferred instead')
+    @convert_grpc_exceptions
+    def remove_transaction(self, tx: 'BaseTransaction') -> None:
+        self._check_connection()
+
+        tx_proto = tx.to_proto()
+        request = protos.RemoveRequest(transaction=tx_proto)
+        result = self._stub.Remove(request)  # noqa: F841
+        assert result.removed
+        self._remove_from_weakref(tx)
+
     @deprecated('Use save_transaction_deferred instead')
     @convert_grpc_exceptions
     def save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
@@ -194,6 +205,11 @@ class TransactionRemoteStorage(TransactionStorage):
 
     @convert_grpc_exceptions
     def save_transaction_deferred(self, tx: 'BaseTransaction', *, only_metadata=False) -> None:
+        # self._check_connection()
+        raise NotImplementedError
+
+    @convert_grpc_exceptions
+    def remove_transaction_deferred(self, tx: 'BaseTransaction') -> None:
         # self._check_connection()
         raise NotImplementedError
 
@@ -615,6 +631,20 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         tx = tx_or_block_from_proto(tx_proto, storage=self.storage)
         skip_warning(self.storage.save_transaction)(tx, only_metadata=only_metadata)
         result.saved = True
+
+        return result
+
+    @convert_hathor_exceptions
+    def Remove(self, request: protos.RemoveRequest, context: _Context) -> protos.RemoveResponse:
+        from hathor.transaction import tx_or_block_from_proto
+
+        tx_proto = request.transaction
+
+        result = protos.RemoveResponse(removed=False)
+
+        tx = tx_or_block_from_proto(tx_proto, storage=self.storage)
+        skip_warning(self.storage.remove_transaction)(tx)
+        result.removed = True
 
         return result
 

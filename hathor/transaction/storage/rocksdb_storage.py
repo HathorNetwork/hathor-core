@@ -27,6 +27,12 @@ class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncF
         tx_proto = tx.to_proto()
         return tx_proto.SerializeToString()
 
+    @deprecated('Use remove_transaction_deferred instead')
+    def remove_transaction(self, tx):
+        skip_warning(super().remove_transaction)(tx)
+        self._db.delete(tx.hash)
+        self._remove_from_weakref(tx)
+
     @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx, *, only_metadata=False):
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)

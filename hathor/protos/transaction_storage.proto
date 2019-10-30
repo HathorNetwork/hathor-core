@@ -8,6 +8,7 @@ service TransactionStorage {
   rpc Exists(ExistsRequest) returns (ExistsResponse) {}
   rpc Get(GetRequest) returns (GetResponse) {}
   rpc Save(SaveRequest) returns (SaveResponse) {}
+  rpc Remove(RemoveRequest) returns (RemoveResponse) {}
   rpc Count(CountRequest) returns (CountResponse) {}
   rpc LatestTimestamp(LatestTimestampRequest) returns (LatestTimestampResponse) {}
   rpc FirstTimestamp(FirstTimestampRequest) returns (FirstTimestampResponse) {}
@@ -42,6 +43,14 @@ message SaveRequest {
 
 message SaveResponse {
   bool saved = 1;
+}
+
+message RemoveRequest {
+  BaseTransaction transaction = 1;
+}
+
+message RemoveResponse {
+  bool removed = 1;
 }
 
 enum TxType {
