@@ -1,4 +1,4 @@
-from struct import pack
+from struct import error as StructError, pack
 from typing import Any, Dict, List, Optional, Tuple
 
 from twisted.logger import Logger
@@ -9,7 +9,7 @@ from hathor.transaction import Transaction, TxInput, TxOutput, TxVersion
 from hathor.transaction.exceptions import InvalidToken, TransactionDataError
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
 from hathor.transaction.transaction import TokenInfo
-from hathor.transaction.util import int_to_bytes, unpack, unpack_len
+from hathor.transaction.util import clean_token_string, int_to_bytes, unpack, unpack_len
 
 settings = HathorSettings()
 
@@ -199,7 +199,12 @@ class TokenCreationTransaction(Transaction):
         name, buf = unpack_len(name_len, buf)
         (symbol_len,), buf = unpack('!B', buf)
         symbol, buf = unpack_len(symbol_len, buf)
-        return name.decode('utf-8'), symbol.decode('utf-8'), buf
+
+        # Token name and symbol can be only utf-8 valid strings for now
+        decoded_name = decode_string_utf8(name, 'Token name')
+        decoded_symbol = decode_string_utf8(symbol, 'Token symbol')
+
+        return decoded_name, decoded_symbol, buf
 
     def to_json(self, decode_script: bool = False) -> Dict[str, Any]:
         json = super().to_json(decode_script)
@@ -248,3 +253,19 @@ class TokenCreationTransaction(Transaction):
             raise TransactionDataError('Invalid token name length ({})'.format(name_len))
         if symbol_len == 0 or symbol_len > settings.MAX_LENGTH_TOKEN_SYMBOL:
             raise TransactionDataError('Invalid token symbol length ({})'.format(symbol_len))
+
+        # Can't create token with hathor name or symbol
+        if clean_token_string(self.token_name) == clean_token_string(settings.HATHOR_TOKEN_NAME):
+            raise TransactionDataError('Invalid token name ({})'.format(self.token_name))
+        if clean_token_string(self.token_symbol) == clean_token_string(settings.HATHOR_TOKEN_SYMBOL):
+            raise TransactionDataError('Invalid token symbol ({})'.format(self.token_symbol))
+
+
+def decode_string_utf8(encoded: bytes, key: str) -> str:
+    """ Raises StructError in case it's not a valid utf-8 string
+    """
+    try:
+        decoded = encoded.decode('utf-8')
+        return decoded
+    except UnicodeDecodeError:
+        raise StructError('{} must be a valid utf-8 string.'.format(key))

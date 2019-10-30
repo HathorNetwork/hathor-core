@@ -45,6 +45,16 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
             folder = '%0.2x' % i
             os.makedirs(os.path.join(path, folder), exist_ok=True)
 
+    @deprecated('Use remove_transaction_deferred instead')
+    def remove_transaction(self, tx):
+        skip_warning(super().remove_transaction)(tx)
+        filepath = self.generate_filepath(tx.hash)
+        self._remove_from_weakref(tx)
+        try:
+            os.unlink(filepath)
+        except FileNotFoundError:
+            pass
+
     @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx, *, only_metadata=False):
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)

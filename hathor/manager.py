@@ -21,7 +21,7 @@ from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.stratum import StratumFactory
-from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput, sum_weights
+from hathor.transaction import BaseTransaction, Block, TxOutput, sum_weights
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.wallet import BaseWallet
@@ -458,10 +458,15 @@ class HathorManager:
             tx.reset_metadata()
             self.tx_storage._add_to_cache(tx)
 
-        if self.wallet:
-            self.wallet.on_new_tx(tx)
-
-        tx.update_parents()
+        try:
+            tx.update_parents()
+            tx.update_consensus()
+        except Exception:
+            self.tx_storage.remove_transaction(tx)
+            pretty_json = json.dumps(tx.to_json(), indent=4)
+            self.log.failure('An unexpected error occurred when processing {tx.hash_hex}\n'
+                             '{pretty_json}', tx=tx, pretty_json=pretty_json)
+            raise
 
         if not quiet:
             ts_date = datetime.datetime.fromtimestamp(tx.timestamp)
@@ -476,18 +481,13 @@ class HathorManager:
                     ' timestamp={tx.timestamp} datetime={ts_date} from_now={time_from_now}', tx=tx, ts_date=ts_date,
                     time_from_now=tx.get_time_from_now())
 
-        if tx.is_block:
-            assert isinstance(tx, Block)
-            tx.update_voided_info()
-        else:
-            assert isinstance(tx, Transaction)
-            tx.mark_inputs_as_used()
-            tx.update_voided_info()
-            tx.set_conflict_twins()
-
         if propagate_to_peers:
             # Propagate to our peers.
             self.connections.send_tx_to_peers(tx)
+
+        if self.wallet:
+            # TODO Remove it and use pubsub instead.
+            self.wallet.on_new_tx(tx)
 
         # Publish to pubsub manager the new tx accepted
         self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)

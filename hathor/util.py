@@ -1,10 +1,35 @@
 import warnings
 from enum import Enum
 from functools import partial, wraps
-from typing import Any, Callable, cast
+from typing import Any, Callable, Dict, cast
 
 from twisted.internet.interfaces import IReactorCore
 from twisted.python.threadable import isInIOThread
+
+
+def practically_equal(a: Dict[Any, Any], b: Dict[Any, Any]):
+    """ Compare two defaultdict. It is used because a simple access have
+    side effects in defaultdict.
+
+    >>> from collections import defaultdict
+    >>> a = defaultdict(list)
+    >>> b = defaultdict(list)
+    >>> a == b
+    True
+    >>> a[0]
+    []
+    >>> a == b
+    False
+    >>> practically_equal(a, b)
+    True
+    """
+    for k, v in a.items():
+        if v != b[k]:
+            return False
+    for k, v in b.items():
+        if v != a[k]:
+            return False
+    return True
 
 
 def deprecated(msg: str) -> Callable[..., Any]:

@@ -27,6 +27,12 @@ class TransactionMemoryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         else:
             return x
 
+    @deprecated('Use remove_transaction_deferred instead')
+    def remove_transaction(self, tx):
+        skip_warning(super().remove_transaction)(tx)
+        self.transactions.pop(tx.hash, None)
+        self.metadata.pop(tx.hash, None)
+
     @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)

@@ -23,6 +23,17 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
     def __repr__(self):
         return '{}({})'.format(self.__class__.__name__, repr(self.path))
 
+    @deprecated('Use remove_transaction_deferred instead')
+    def remove_transaction(self, tx):
+        skip_warning(super().remove_transaction)(tx)
+        filepath = self.generate_filepath(tx.hash)
+        self._remove_from_weakref(tx)
+
+        try:
+            os.unlink(filepath)
+        except FileNotFoundError:
+            pass
+
     @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx, *, only_metadata=False):
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)

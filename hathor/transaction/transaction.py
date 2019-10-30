@@ -151,6 +151,11 @@ class Transaction(BaseTransaction):
 
         return buf
 
+    def update_consensus(self) -> None:
+        self.mark_inputs_as_used()
+        self.update_voided_info()
+        self.set_conflict_twins()
+
     def get_funds_struct(self) -> bytes:
         """Return the funds data serialization of the transaction
 

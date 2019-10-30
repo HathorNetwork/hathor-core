@@ -168,3 +168,9 @@ class HathorSettings(NamedTuple):
 
     # Maximum number of characters in a token symbol
     MAX_LENGTH_TOKEN_SYMBOL: int = 5
+
+    # Name of the Hathor token
+    HATHOR_TOKEN_NAME: str = 'Hathor'
+
+    # Symbol of the Hathor token
+    HATHOR_TOKEN_SYMBOL: str = 'HTR'
