@@ -263,3 +263,14 @@ class HathorProtocolTestCase(unittest.TestCase):
 
         self._check_result_only_cmd(self.conn1.tr1.value(), b'PEERS')
         self.conn1.run_one_step()
+
+    @inlineCallbacks
+    def test_get_data(self):
+        self.conn1.run_one_step()
+        self.conn1.run_one_step()
+        self.conn1.run_one_step()
+        self.assertIsConnected()
+        missing_tx = '00000000228dfcd5dec1c9c6263f6430a5b4316bb9e3decb9441a6414bfd8697'
+        yield self._send_cmd(self.conn1.proto1, 'GET-DATA', missing_tx)
+        self._check_result_only_cmd(self.conn1.tr1.value(), b'NOT-FOUND')
+        self.conn1.run_one_step()
