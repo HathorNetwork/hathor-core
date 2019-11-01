@@ -25,8 +25,8 @@ class RunNode:
                             help='Reduces tx weight to 1 for testing purposes')
         parser.add_argument('--dns', action='append', help='Seed DNS')
         parser.add_argument('--peer', help='json file with peer info')
-        parser.add_argument('--listen', action='append', help='Address to listen for new connections (eg: tcp:8000)')
-        parser.add_argument('--ssl', action='store_true', help='Listen to ssl connection')
+        parser.add_argument('--listen', action='append', default=[],
+                            help='Address to listen for new connections (eg: tcp:8000)')
         parser.add_argument('--bootstrap', action='append', help='Address to connect to (eg: tcp:127.0.0.1:8000')
         parser.add_argument('--status', type=int, help='Port to run status server')
         parser.add_argument('--stratum', type=int, help='Port to run stratum server')
@@ -164,7 +164,7 @@ class RunNode:
         network = settings.NETWORK_NAME
         self.manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname,
                                      tx_storage=self.tx_storage, wallet=self.wallet, wallet_index=args.wallet_index,
-                                     stratum_port=args.stratum, min_block_weight=args.min_block_weight)
+                                     stratum_port=args.stratum, min_block_weight=args.min_block_weight, ssl=True)
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
 
@@ -185,6 +185,9 @@ class RunNode:
             self.manager.test_mode = TestMode.TEST_TX_WEIGHT
             if self.wallet:
                 self.wallet.test_mode = True
+
+        for description in args.listen:
+            self.manager.add_listen_address(description)
 
         self.start_manager()
         self.register_resources(args)
@@ -231,13 +234,6 @@ class RunNode:
         from hathor.stratum.resources import MiningStatsResource
 
         settings = HathorSettings()
-
-        if args.listen:
-            for description in args.listen:
-                ssl = False
-                if args.ssl:
-                    ssl = True
-                self.manager.listen(description, ssl=ssl)
 
         if args.prometheus:
             kwargs: Dict[str, Any] = {'metrics': self.manager.metrics}

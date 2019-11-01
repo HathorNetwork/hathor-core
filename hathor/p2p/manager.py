@@ -32,7 +32,7 @@ class ConnectionsManager:
     handshaking_peers: Set[HathorProtocol]
 
     def __init__(self, reactor: ReactorBase, my_peer: PeerId, server_factory, client_factory,
-                 pubsub: PubSubManager, manager: 'HathorManager') -> None:
+                 pubsub: PubSubManager, manager: 'HathorManager', ssl: bool) -> None:
         from twisted.internet.task import LoopingCall
 
         self.reactor = reactor
@@ -69,6 +69,8 @@ class ConnectionsManager:
 
         # Pubsub object to publish events
         self.pubsub = pubsub
+
+        self.ssl = ssl
 
     def start(self) -> None:
         self.lc_reconnect.start(5)
@@ -242,12 +244,14 @@ class ConnectionsManager:
 
         self.connecting_peers.pop(endpoint)
 
-    def connect_to(self, description: str, peer: Optional[PeerId] = None, use_ssl: bool = True) -> None:
+    def connect_to(self, description: str, peer: Optional[PeerId] = None, use_ssl: bool = None) -> None:
         """ Attempt to connect to a peer, even if a connection already exists.
         Usually you should call `connect_to_if_not_connected`.
 
         If `use_ssl` is True, then the connection will be wraped by a TLS.
         """
+        if use_ssl is None:
+            use_ssl = self.ssl
         connection_string, peer_id = description_to_connection_string(description)
         # When using twisted endpoints we can't have // in the connection string
         endpoint_url = connection_string.replace('//', '')

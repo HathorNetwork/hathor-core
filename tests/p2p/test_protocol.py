@@ -92,7 +92,10 @@ class HathorProtocolTestCase(unittest.TestCase):
 
     def test_invalid_payload(self):
         self.conn1.run_one_step()
-        self.failureResultOf(self._send_cmd(self.conn1.proto1, 'PEER-ID', 'abc'), json.decoder.JSONDecodeError)
+        self.conn1.run_one_step()
+        self.conn1.run_one_step()
+        with self.assertRaises(json.decoder.JSONDecodeError):
+            self._send_cmd(self.conn1.proto1, 'PEERS', 'abc')
 
     def test_invalid_hello1(self):
         self.conn1.tr1.clear()
