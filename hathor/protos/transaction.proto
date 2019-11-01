@@ -50,11 +50,22 @@ message Block {
   uint32 timestamp = 3;
   repeated bytes parents = 4; // each parent is a hash (32 bytes)
   repeated TxOutput outputs = 5;
-  bytes nonce = 6;
+  oneof pow_oneof {
+    bytes nonce = 6;
+    BitcoinAuxPow aux_pow = 10;
+  }
   // hash may be precomputed, should only be trusted if // it is sent by the storage
   bytes hash = 7; // always of size 32 or empty
   Metadata metadata = 8;
   bytes data = 9;
+}
+
+message BitcoinAuxPow {
+  bytes header_head = 1;
+  bytes coinbase_head = 2;
+  bytes coinbase_tail = 3;
+  repeated bytes merkle_path = 4;
+  bytes header_tail = 5;
 }
 
 message TxInput {

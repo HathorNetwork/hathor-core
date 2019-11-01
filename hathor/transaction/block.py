@@ -3,8 +3,6 @@ from itertools import chain
 from struct import pack
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set
 
-from twisted.logger import Logger
-
 from hathor import protos
 from hathor.conf import HathorSettings
 from hathor.transaction import BaseTransaction, TxOutput, TxVersion, sum_weights
@@ -24,8 +22,6 @@ _SIGHASH_ALL_FORMAT_STRING = '!HBB'
 
 
 class Block(BaseTransaction):
-    log = Logger()
-
     SERIALIZATION_NONCE_SIZE = 16
 
     def __init__(self,
@@ -41,6 +37,12 @@ class Block(BaseTransaction):
         super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight,
                          outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.data = data
+
+    def _get_formatted_fields_dict(self, short: bool = True) -> Dict[str, str]:
+        d = super()._get_formatted_fields_dict(short)
+        if not short:
+            d.update(data=self.data.hex())
+        return d
 
     @property
     def is_block(self) -> bool:
@@ -62,10 +64,10 @@ class Block(BaseTransaction):
             timestamp=self.timestamp,
             parents=self.parents,
             outputs=map(TxOutput.to_proto, self.outputs),
-            nonce=int_to_bytes(self.nonce, 16),
             hash=self.hash,
             data=self.data
         )
+        tx_proto.nonce = int_to_bytes(self.nonce, 16)
         if include_metadata:
             tx_proto.metadata.CopyFrom(self.get_metadata().to_proto())
         return protos.BaseTransaction(block=tx_proto)
@@ -78,13 +80,13 @@ class Block(BaseTransaction):
             version=block_proto.version,
             weight=block_proto.weight,
             timestamp=block_proto.timestamp,
-            nonce=int.from_bytes(block_proto.nonce, 'big'),
             hash=block_proto.hash or None,
             parents=list(block_proto.parents),
             outputs=list(map(TxOutput.create_from_proto, block_proto.outputs)),
             storage=storage,
             data=block_proto.data
         )
+        tx.nonce = int.from_bytes(block_proto.nonce, 'big')
         if block_proto.HasField('metadata'):
             from hathor.transaction import TransactionMetadata
             # make sure hash is not empty
@@ -108,7 +110,7 @@ class Block(BaseTransaction):
         return blc
 
     def get_block_parent_hash(self) -> bytes:
-        """Return the hash of the parent block.
+        """ Return the hash of the parent block.
         """
         return self.parents[0]
 
@@ -220,13 +222,17 @@ class Block(BaseTransaction):
         self.verify_outputs()
         self.verify_data()
 
+    def get_base_hash(self) -> bytes:
+        from hathor.merged_mining.bitcoin import sha256d_hash
+        return sha256d_hash(self.get_header_without_nonce())
+
     def verify(self) -> None:
         """
             (1) confirms at least two pending transactions and references last block
             (2) solves the pow with the correct weight (done in HathorManager)
             (3) creates the correct amount of tokens in the output (done in HathorManager)
             (4) all parents must exist and have timestamp smaller than ours
-            (5) data field must contain at most 100 bytes
+            (5) data field must contain at most BLOCK_DATA_MAX_SIZE bytes
         """
         # TODO Should we validate a limit of outputs?
         if self.is_genesis:

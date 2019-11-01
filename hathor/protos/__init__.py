@@ -1,5 +1,6 @@
 from hathor.protos.transaction_pb2 import (
     BaseTransaction,
+    BitcoinAuxPow,
     Block,
     Metadata,
     TokenCreationTransaction,
@@ -55,6 +56,7 @@ __all__ = [
     'Block',
     'TxInput',
     'TxOutput',
+    'BitcoinAuxPow',
     'Metadata',
     'ExistsRequest',
     'ExistsResponse',

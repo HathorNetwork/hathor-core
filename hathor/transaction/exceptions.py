@@ -56,6 +56,10 @@ class PowError(TxValidationError):
     """Proof-of-work is not correct"""
 
 
+class AuxPowError(PowError):
+    """Auxiliary Proof-of-work is not correct"""
+
+
 class WeightError(TxValidationError):
     """Transaction not using correct weight"""
 

@@ -34,6 +34,7 @@ requests = "*"
 service_identity = "*"
 pexpect = "*"
 intervaltree = "*"
+structlog = "*"
 
 [requires]
 python_version = "3.6"

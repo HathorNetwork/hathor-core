@@ -3,30 +3,14 @@ import json
 import os
 import sys
 from argparse import ArgumentParser, Namespace
-from threading import current_thread
 from typing import Any, Dict
 
 from autobahn.twisted.resource import WebSocketResource
 from twisted.internet import reactor
-from twisted.logger import (
-    FileLogObserver,
-    FilteringLogObserver,
-    LogLevel,
-    LogLevelFilterPredicate,
-    formatEventAsClassicLogText,
-    globalLogPublisher,
-)
 from twisted.web import server
 from twisted.web.resource import Resource
 
-
-def formatLogEvent(event):
-    namespace = u'{namespace}#{thread_name}'.format(
-        namespace=event.get('log_namespace', u'-'),
-        thread_name=current_thread().name,
-    )
-    event['log_namespace'] = namespace
-    return formatEventAsClassicLogText(event)
+LOGGING_CAPTURE_STDOUT = True
 
 
 class RunNode:
@@ -84,16 +68,6 @@ class RunNode:
         from hathor.wallet import HDWallet, Wallet
 
         settings = HathorSettings()
-
-        loglevel_filter = LogLevelFilterPredicate(LogLevel.info)
-        loglevel_filter.setLogLevelForNamespace('hathor.websocket.protocol.HathorAdminWebsocketProtocol',
-                                                LogLevel.warn)
-        loglevel_filter.setLogLevelForNamespace('twisted.python.log', LogLevel.warn)
-        observer = FilteringLogObserver(
-            FileLogObserver(sys.stdout, formatLogEvent),
-            [loglevel_filter],
-        )
-        globalLogPublisher.addObserver(observer)
 
         if args.recursion_limit:
             sys.setrecursionlimit(args.recursion_limit)

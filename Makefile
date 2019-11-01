@@ -21,14 +21,14 @@ tests-doctests:
 
 .PHONY: tests-lib
 tests-lib:
-	pytest --durations=10 $(pytest_flags) --cov-fail-under=90 $(tests_lib)
+	pytest --durations=10 $(pytest_flags) --doctest-modules hathor --cov-fail-under=88 $(tests_lib)
 
 .PHONY: tests-simulation
 tests-simulation:
 	pytest --durations=10 --cov=hathor --cov-report=term -p no:warnings $(tests_simulation)
 
 .PHONY: tests
-tests: tests-doctests tests-cli tests-lib
+tests: tests-cli tests-lib
 
 .PHONY: tests-full
 tests-full:
@@ -94,7 +94,11 @@ clean: clean-pyc clean-protos
 # docker:
 
 docker_dir := .
-docker_tag := $(shell git describe)
+ifneq ($(wildcard .git/.*),)
+	docker_tag := $(shell git describe)
+else
+	docker_tag := dummy
+endif
 
 .PHONY: docker
 docker: $(docker_dir)/Dockerfile $(proto_outputs)

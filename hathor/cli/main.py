@@ -4,6 +4,10 @@ from collections import defaultdict
 from types import ModuleType
 from typing import Dict, List
 
+from structlog import get_logger
+
+logger = get_logger()
+
 
 class CliManager:
     def __init__(self) -> None:
@@ -14,6 +18,7 @@ class CliManager:
         self.longest_cmd: int = 0
 
         from . import mining
+        from . import merged_mining
         from . import stratum_mining
         from . import peer_id
         from . import run_node
@@ -33,6 +38,8 @@ class CliManager:
         from . import openapi_json
 
         self.add_cmd('mining', 'run_miner', mining, 'Run a mining process (running node required)')
+        self.add_cmd('mining', 'run_merged_mining', merged_mining,
+                     'Run a merged mining coordinator (hathor and bitcoin nodes required)')
         self.add_cmd('mining', 'run_stratum_miner', stratum_mining, 'Run a mining process (running node required)')
         self.add_cmd('hathor', 'run_node', run_node, 'Run a node')
         self.add_cmd('hathor', 'gen_peer_id', peer_id, 'Generate a new random peer-id')
@@ -78,6 +85,8 @@ class CliManager:
             print()
 
     def execute_from_command_line(self):
+        from hathor.cli.util import setup_logging
+
         if len(sys.argv) < 2:
             self.help()
             return 0
@@ -94,11 +103,28 @@ class CliManager:
 
         sys.argv[0] = '{} {}'.format(sys.argv[0], cmd)
         module = self.command_list[cmd]
+
+        debug = '--debug' in sys.argv
+        if debug:
+            sys.argv.remove('--debug')
+        if '--help' in sys.argv:
+            capture_stdout = False
+        else:
+            capture_stdout = getattr(module, 'LOGGING_CAPTURE_STDOUT', False)
+        setup_logging(debug, capture_stdout)
+
         module.main()
 
 
 def main():
-    sys.exit(CliManager().execute_from_command_line())
+    try:
+        sys.exit(CliManager().execute_from_command_line())
+    except KeyboardInterrupt:
+        logger.warn('Aborting and exiting...')
+        sys.exit(1)
+    except Exception:
+        logger.exception('Uncaught exception:')
+        sys.exit(2)
 
 
 if __name__ == '__main__':
