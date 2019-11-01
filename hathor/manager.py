@@ -54,7 +54,7 @@ class HathorManager:
                  hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
                  peer_storage: Optional[Any] = None, default_port: int = 40403, wallet_index: bool = False,
-                 stratum_port: Optional[int] = None, min_block_weight: Optional[int] = None) -> None:
+                 stratum_port: Optional[int] = None, min_block_weight: Optional[int] = None, ssl: bool = True) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node. If not given, a new one is created.
@@ -132,10 +132,11 @@ class HathorManager:
 
         self.peer_discoveries: List[PeerDiscovery] = []
 
-        self.server_factory = HathorServerFactory(self.network, self.my_peer, node=self)
-        self.client_factory = HathorClientFactory(self.network, self.my_peer, node=self)
+        self.ssl = ssl
+        self.server_factory = HathorServerFactory(self.network, self.my_peer, node=self, use_ssl=ssl)
+        self.client_factory = HathorClientFactory(self.network, self.my_peer, node=self, use_ssl=ssl)
         self.connections = ConnectionsManager(self.reactor, self.my_peer, self.server_factory, self.client_factory,
-                                              self.pubsub, self)
+                                              self.pubsub, self, ssl)
 
         self.wallet = wallet
         if self.wallet:
@@ -159,6 +160,9 @@ class HathorManager:
         # Thread pool used to resolve pow when sending tokens
         self.pow_thread_pool = ThreadPool(minthreads=0, maxthreads=settings.MAX_POW_THREADS, name='Pow thread pool')
 
+        # List of addresses to listen for new connections (eg: [tcp:8000])
+        self.listen_addresses: List[str] = []
+
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
         """
@@ -171,6 +175,9 @@ class HathorManager:
 
         # Initialize manager's components.
         self._initialize_components()
+
+        for description in self.listen_addresses:
+            self.listen(description, ssl=self.ssl)
 
         for peer_discovery in self.peer_discoveries:
             peer_discovery.discover_and_connect(self.connections.connect_to)
@@ -277,6 +284,9 @@ class HathorManager:
             avg=cnt / (t2 - t0),
             dt=t2 - t0,
         )
+
+    def add_listen_address(self, addr: str) -> None:
+        self.listen_addresses.append(addr)
 
     def add_peer_discovery(self, peer_discovery: PeerDiscovery) -> None:
         self.peer_discoveries.append(peer_discovery)

@@ -156,7 +156,7 @@ class PeerIdTest(unittest.TestCase):
         peer_id.entrypoints = ['tcp://127.0.0.1:40403']
 
         # we consider that we are starting the connection to the peer
-        protocol = HathorProtocol('testnet', peer_id, None, node=manager)
+        protocol = HathorProtocol('testnet', peer_id, None, node=manager, use_ssl=True)
         protocol.connection_string = 'tcp://127.0.0.1:40403'
         result = yield peer_id.validate_entrypoint(protocol)
         self.assertTrue(result)
@@ -188,7 +188,7 @@ class PeerIdTest(unittest.TestCase):
 
     def test_validate_certificate(self):
         peer = PeerId('testnet')
-        protocol = HathorProtocol('testnet', peer, None, node=None)
+        protocol = HathorProtocol('testnet', peer, None, node=None, use_ssl=True)
 
         class FakeTransport:
             def getPeerCertificate(self):
