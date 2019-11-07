@@ -16,7 +16,7 @@ class PeerDiscovery(ABC):
     """
 
     @abstractmethod
-    def discover_and_connect(self, connect_to: Callable[[str], None]):
+    def discover_and_connect(self, connect_to: Callable[[str], None]) -> Any:
         """ This method must discover the peers and call `connect_to` for each of them.
 
         :param connect_to: Function which will be called for each discovered peer.
@@ -37,7 +37,7 @@ class BootstrapPeerDiscovery(PeerDiscovery):
         super().__init__()
         self.descriptions = descriptions
 
-    def discover_and_connect(self, connect_to: Callable[[str], None]):
+    def discover_and_connect(self, connect_to: Callable[[str], None]) -> Any:
         for description in self.descriptions:
             connect_to(description)
 

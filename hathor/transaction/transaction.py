@@ -399,7 +399,7 @@ class Transaction(BaseTransaction):
 
             if self.timestamp <= spent_tx.timestamp:
                 raise TimestampError('tx={} timestamp={}, spent_tx={} timestamp={}'.format(
-                    self.hash and self.hash.hex(),
+                    self.hash.hex() if self.hash else None,
                     self.timestamp,
                     spent_tx.hash.hex(),
                     spent_tx.timestamp,
@@ -509,6 +509,9 @@ class Transaction(BaseTransaction):
         bfs = BFSWalk(self.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
         check_list: List[Transaction] = []
         for tx in bfs.run(self, skip_root=False):
+            assert tx.storage is not None
+            assert tx.hash is not None
+
             meta = tx.get_metadata()
             assert not meta.voided_by or voided_hash not in meta.voided_by
             if tx.hash != self.hash and meta.conflict_with and not meta.voided_by:
@@ -556,8 +559,10 @@ class Transaction(BaseTransaction):
         self.log.debug('remove_voided_by tx={} voided_hash={}'.format(self.hash.hex(), voided_hash.hex()))
 
         bfs = BFSWalk(self.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
-        check_list: List[Transaction] = []
+        check_list: List[BaseTransaction] = []
         for tx in bfs.run(self, skip_root=False):
+            assert tx.storage is not None
+
             meta = tx.get_metadata()
             if not (meta.voided_by and voided_hash in meta.voided_by):
                 bfs.skip_neighbors(tx)
@@ -572,6 +577,7 @@ class Transaction(BaseTransaction):
                 self.storage._add_to_cache(tx)  # XXX: accessing private method
 
         for tx in check_list:
+            assert isinstance(tx, Transaction)
             tx.check_conflicts()
         return True
 

@@ -1,4 +1,5 @@
 import hashlib
+from typing import Optional
 
 import base58
 from cryptography.hazmat.backends import default_backend
@@ -26,7 +27,8 @@ def get_private_key_bytes(private_key: ec.EllipticCurvePrivateKey, encoding: Enc
     return private_key.private_bytes(encoding=encoding, format=format, encryption_algorithm=encryption_algorithm)
 
 
-def get_private_key_from_bytes(private_key_bytes: bytes, password: bytes = None) -> ec.EllipticCurvePrivateKey:
+def get_private_key_from_bytes(private_key_bytes: bytes,
+                               password: Optional[bytes] = None) -> ec.EllipticCurvePrivateKey:
     """Returns the cryptography ec.EllipticCurvePrivateKey from bytes"""
     return load_der_private_key(private_key_bytes, password, _BACKEND)
 

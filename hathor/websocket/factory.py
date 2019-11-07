@@ -1,6 +1,6 @@
 import json
 from collections import defaultdict, deque
-from typing import Any, DefaultDict, Dict, Set
+from typing import Any, DefaultDict, Deque, Dict, Optional, Set
 
 from autobahn.twisted.websocket import WebSocketServerFactory
 from twisted.internet import reactor
@@ -20,7 +20,7 @@ settings = HathorSettings()
 # max_hits (int) and hits_window_seconds (int): together they define the Rate Limit
 # It's how many hits can this message make in the window interval
 
-CONTROLLED_TYPES = {
+CONTROLLED_TYPES: Dict[str, Dict[str, Any]] = {
     HathorEvents.NETWORK_NEW_TX_ACCEPTED.value: {
         'buffer_size': 20,
         'time_buffering': 0.1,
@@ -64,13 +64,13 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
     def buildProtocol(self, addr):
         return self.protocol(self)
 
-    def __init__(self, metrics=None, wallet_index=None):
+    def __init__(self, metrics: Optional[Metrics] = None, wallet_index: Optional[WalletIndex] = None):
         """
         :param metrics: If not given, a new one is created.
         :type metrics: :py:class:`hathor.metrics.Metrics`
         """
         # Opened websocket connections so I can broadcast messages later
-        self.connections = set()
+        self.connections: Set[HathorAdminWebsocketProtocol] = set()
 
         # Websocket connection for each address
         self.address_connections: DefaultDict[str, Set[HathorAdminWebsocketProtocol]] = defaultdict(set)
@@ -79,9 +79,9 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         # Limit the send message rate for specific type of data
         self.rate_limiter = RateLimiter(reactor=reactor)
         # Stores the buffer of messages that exceeded the rate limit and will be sent
-        self.buffer_deques = {}
+        self.buffer_deques: Dict[str, Deque[Dict[str, Any]]] = {}
 
-        self.metrics = metrics or Metrics()
+        self.metrics = metrics
         self.wallet_index = wallet_index
 
         self.is_running = False

@@ -161,7 +161,7 @@ class TransactionStorage(ABC):
     """Async interface, all methods mirrorred from TransactionStorageSync, but suffixed with `_deferred`."""
 
     @abstractmethod
-    def save_transaction_deferred(self, tx: BaseTransaction, *, only_metadata=False) -> None:
+    def save_transaction_deferred(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         """Saves the tx.
 
         :param tx: Transaction to save
@@ -315,7 +315,7 @@ class TransactionStorage(ABC):
 
     @abstractmethod
     def get_older_blocks_after(self, timestamp: int, hash_bytes: bytes,
-                               count: int) -> Tuple[List[BaseTransaction], bool]:
+                               count: int) -> Tuple[List[Block], bool]:
         """ Get blocks from the timestamp/hash_bytes reference to the oldest
 
         :param timestamp: Timestamp reference to start the search
@@ -471,6 +471,10 @@ class BaseTransactionStorage(TransactionStorage):
     def first_timestamp(self) -> int:
         return self._first_timestamp
 
+    @abstractmethod
+    def _save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
+        raise NotImplementedError
+
     def _reset_cache(self) -> None:
         """Reset all caches. This function should not be called unless you know what you are doing."""
         if not self.with_index:
@@ -488,7 +492,7 @@ class BaseTransactionStorage(TransactionStorage):
         from hathor.transaction.genesis import get_genesis_transactions
         self._first_timestamp = min(x.timestamp for x in get_genesis_transactions(self))
 
-    def remove_cache(self):
+    def remove_cache(self) -> None:
         """Remove all caches in case we don't need it."""
         self.with_index = False
         self.block_index = None
@@ -541,21 +545,24 @@ class BaseTransactionStorage(TransactionStorage):
         blocks = [self.get_transaction(block_hash) for block_hash in block_hashes]
         return blocks, has_more
 
-    def get_newest_txs(self, count):
+    def get_newest_txs(self, count: int) -> Tuple[List[BaseTransaction], bool]:
         if not self.with_index:
             raise NotImplementedError
+        assert self.tx_index is not None
         tx_hashes, has_more = self.tx_index.get_newest(count)
         txs = [self.get_transaction(tx_hash) for tx_hash in tx_hashes]
         return txs, has_more
 
-    def get_older_blocks_after(self, timestamp, hash_bytes, count):
+    def get_older_blocks_after(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[Block], bool]:
         if not self.with_index:
             raise NotImplementedError
+        assert self.block_index is not None
         block_hashes, has_more = self.block_index.get_older(timestamp, hash_bytes, count)
         blocks = [self.get_transaction(block_hash) for block_hash in block_hashes]
         return blocks, has_more
 
-    def get_newer_blocks_after(self, timestamp: int, hash_bytes: bytes, count: int):
+    def get_newer_blocks_after(self, timestamp: int, hash_bytes: bytes,
+                               count: int) -> Tuple[List[BaseTransaction], bool]:
         if not self.with_index:
             raise NotImplementedError
         assert self.block_index is not None
@@ -563,7 +570,7 @@ class BaseTransactionStorage(TransactionStorage):
         blocks = [self.get_transaction(block_hash) for block_hash in block_hashes]
         return blocks, has_more
 
-    def get_older_txs_after(self, timestamp: int, hash_bytes: bytes, count: int):
+    def get_older_txs_after(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[BaseTransaction], bool]:
         if not self.with_index:
             raise NotImplementedError
         assert self.tx_index is not None
@@ -571,7 +578,7 @@ class BaseTransactionStorage(TransactionStorage):
         txs = [self.get_transaction(tx_hash) for tx_hash in tx_hashes]
         return txs, has_more
 
-    def get_newer_txs_after(self, timestamp: int, hash_bytes: bytes, count: int):
+    def get_newer_txs_after(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[BaseTransaction], bool]:
         if not self.with_index:
             raise NotImplementedError
         assert self.tx_index is not None
@@ -587,7 +594,7 @@ class BaseTransactionStorage(TransactionStorage):
         for tx in self._topological_sort():
             self._add_to_cache(tx)
 
-    def _topological_sort(self) -> Iterator:
+    def _topological_sort(self) -> Iterator[BaseTransaction]:
         # TODO We must optimize this algorithm to remove the `visited` set.
         #      It will consume too much memory when the number of transactions is big.
         #      A solution would be to store the ordering in disk, probably indexing by tx's height.
@@ -690,9 +697,10 @@ class BaseTransactionStorage(TransactionStorage):
             assert genesis.hash is not None
             self._genesis_cache[genesis.hash] = genesis
 
-    def get_transactions_before(self, hash_bytes, num_blocks=100):  # pragma: no cover
+    def get_transactions_before(self, hash_bytes: bytes,
+                                num_blocks: int = 100) -> List[BaseTransaction]:  # pragma: no cover
         ref_tx = self.get_transaction(hash_bytes)
-        visited = dict()  # Dict[bytes, int]
+        visited: Dict[bytes, int] = dict()  # Dict[bytes, int]
         result = [x for x in self._topological_sort_dfs(ref_tx, visited) if not x.is_block]
         result = result[-num_blocks:]
         return result

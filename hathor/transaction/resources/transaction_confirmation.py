@@ -1,5 +1,6 @@
 import json
 from math import log
+from typing import Any, Dict
 
 from twisted.web import resource
 
@@ -31,7 +32,7 @@ class TransactionAccWeightResource(resource.Resource):
             return {'success': False, 'message': 'not allowed on blocks'}
 
         meta = tx.get_metadata()
-        data = {'success': True}
+        data: Dict[str, Any] = {'success': True}
 
         if meta.first_block:
             block = self.manager.tx_storage.get_transaction(meta.first_block)

@@ -470,9 +470,6 @@ class MergedMiningStratumProtocol(JSONRPC):
 
     def job_request(self) -> None:
         """ Sends a job request to the connected client.
-
-        :param job: data representing the mining job
-        :type job: ServerJob
         """
         if not self.coordinator.merged_job:
             self.send_error(JOB_NOT_FOUND, data={'message': 'Not ready to give a job.'})
@@ -498,7 +495,7 @@ class MergedMiningStratumProtocol(JSONRPC):
             self.log.debug('job updated', bitcoin_block=bytes(bitcoin_block).hex(),
                            merkle_root=bitcoin_block.merkle_root.hex())
 
-    def dummy_work(self, job) -> SingleMinerWork:
+    def dummy_work(self, job: SingleMinerJob) -> SingleMinerWork:
         """ Useful only for debugging.
         """
         return SingleMinerWork(job.job_id, 0, self.xnonce1, b'\0' * self.xnonce2_size)
@@ -797,7 +794,7 @@ class MergedMiningCoordinator(Factory):
         d.addErrback(self._err_start_hathor_block_updater)
         # TODO: monitor connection to retry if connection is interrupted after success
 
-    def _err_start_hathor_block_updater(self, *args, **kwargs) -> None:
+    def _err_start_hathor_block_updater(self, *args: Any, **kwargs: Any) -> None:
         """ Errback used for the async call on start_hathor_block_updater.
         """
         self.log.error('failed to connect to Hathor stratum, retrying in 10s.', args=args, kwargs=kwargs)

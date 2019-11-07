@@ -2,7 +2,7 @@ import os
 import sys
 from collections import defaultdict
 from types import ModuleType
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from structlog import get_logger
 
@@ -60,7 +60,7 @@ class CliManager:
         self.add_cmd('dev', 'shell', shell, 'Run a Python shell')
         self.add_cmd('dev', 'generate_nginx_config', nginx_config, 'Generate nginx config from OpenAPI json')
 
-    def add_cmd(self, group: str, cmd: str, module: ModuleType, short_description: str = None) -> None:
+    def add_cmd(self, group: str, cmd: str, module: ModuleType, short_description: Optional[str] = None) -> None:
         self.command_list[cmd] = module
         self.groups[group].append(cmd)
         if short_description:

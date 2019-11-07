@@ -1,6 +1,6 @@
 import json
 from enum import Enum
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 from twisted.internet import threads
 from twisted.web import resource
@@ -10,6 +10,9 @@ from hathor.api_util import set_cors, validate_tx_hash
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.graphviz import GraphvizVisualizer
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager  # noqa: F401
 
 settings = HathorSettings()
 
@@ -39,7 +42,7 @@ class FileFormat(Enum):
 class _BaseGraphvizResource(resource.Resource):
     isLeaf = True
 
-    def __init__(self, manager, *, format: Union[FileFormat, str]):
+    def __init__(self, manager: 'HathorManager', *, format: Union[FileFormat, str]):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
         self.format: FileFormat = FileFormat(format)

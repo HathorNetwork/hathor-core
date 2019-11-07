@@ -127,8 +127,10 @@ class TransactionMetadata:
             return True
         return False
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: Any) -> bool:
         """Override the default Equals behavior"""
+        if not isinstance(other, TransactionMetadata):
+            return False
         for field in ['hash', 'conflict_with', 'voided_by', 'received_by',
                       'children', 'accumulated_weight', 'twins', 'score',
                       'first_block']:

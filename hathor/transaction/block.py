@@ -267,7 +267,9 @@ class Block(BaseTransaction):
                 from hathor.transaction.storage.traversal import BFSWalk
                 bfs = BFSWalk(self.storage, is_dag_verifications=True, is_left_to_right=False)
                 for tx in bfs.run(parent, skip_root=False):
+                    assert tx.hash is not None
                     assert not tx.is_block
+
                     if tx.hash in used:
                         bfs.skip_neighbors(tx)
                         continue
@@ -483,7 +485,7 @@ class Block(BaseTransaction):
                     self.update_score_and_mark_as_the_best_chain()
                     self.remove_voided_by_from_chain()
 
-    def mark_as_voided(self, *, skip_remove_first_block_markers: bool = False):
+    def mark_as_voided(self, *, skip_remove_first_block_markers: bool = False) -> None:
         """ Mark a block as voided. By default, it will remove the first block markers from
         `meta.first_block` of the transactions that point to it.
         """
@@ -550,7 +552,7 @@ class Block(BaseTransaction):
             tx.remove_voided_by(voided_hash)
         return True
 
-    def remove_voided_by_from_chain(self):
+    def remove_voided_by_from_chain(self) -> None:
         """ Remove voided_by from the chain. Now, it is the best chain.
 
         The blocks are visited from right to left (most recent to least recent).

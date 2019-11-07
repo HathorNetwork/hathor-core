@@ -23,7 +23,7 @@ class GetTipsPayload(NamedTuple):
 class TipsPayload(NamedTuple):
     length: int
     timestamp: int
-    merkle_tree: str
+    merkle_tree: bytes
     hashes: List[str]
     has_more: bool
 

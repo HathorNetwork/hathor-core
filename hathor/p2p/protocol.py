@@ -251,7 +251,7 @@ class HathorProtocol:
             self.state.on_exit()
         self.transport.loseConnection()
 
-    def handle_error(self, payload) -> None:
+    def handle_error(self, payload: str) -> None:
         """ Executed when an ERROR command is received.
         """
         self.log.warn('ERROR {payload}', payload=payload)

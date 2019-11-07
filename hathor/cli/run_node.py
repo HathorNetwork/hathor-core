@@ -3,7 +3,7 @@ import json
 import os
 import sys
 from argparse import ArgumentParser, Namespace
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from autobahn.twisted.resource import WebSocketResource
 from twisted.internet import reactor
@@ -342,7 +342,7 @@ class RunNode:
                 os.environ['HATHOR_CONFIG_FILE'] = 'hathor.conf.testnet'
         self.prepare(args)
 
-    def parse_args(self, argv) -> Namespace:
+    def parse_args(self, argv: List[str]) -> Namespace:
         return self.parser.parse_args(argv)
 
     def run(self) -> None:

@@ -26,9 +26,9 @@ class TransactionSubprocessStorage(TransactionRemoteStorage, Process):
         TransactionRemoteStorage.__init__(self, with_index=with_index)
         self._store_constructor = store_constructor
         # this queue is used by the subprocess to inform which port was selected
-        self._port_q = Queue(1)
+        self._port_q: 'Queue[int]' = Queue(1)
         # this queue is used to inform the subprocess it can end
-        self._exit_q = Queue(1)
+        self._exit_q: 'Queue[int]' = Queue(1)
 
     def _check_connection(self):
         """raise error if subprocess is not alive"""

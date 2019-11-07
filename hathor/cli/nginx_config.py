@@ -87,14 +87,14 @@ def _scale_rate_limit(raw_rate: str, rate_k: float) -> str:
     return f'{int(scaled_rate_amount)}{rate_units}'
 
 
-def _get_visibility(source: dict, fallback: Visibility) -> Tuple[Visibility, bool]:
+def _get_visibility(source: Dict[str, Any], fallback: Visibility) -> Tuple[Visibility, bool]:
     if 'x-visibility' in source:
         return Visibility(source['x-visibility']), False
     else:
         return fallback, True
 
 
-def generate_nginx_config(openapi, *, out_file, rate_k: float = 1.0,
+def generate_nginx_config(openapi: Dict[str, Any], *, out_file: TextIO, rate_k: float = 1.0,
                           fallback_visibility: Visibility = Visibility.PRIVATE) -> None:
     """ Entry point of the functionality provided by the cli
     """

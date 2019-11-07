@@ -1,7 +1,7 @@
 import json
 from abc import ABC, abstractmethod
 from itertools import count
-from typing import Callable, Dict, Iterator, List, Optional, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Union
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred
@@ -82,7 +82,7 @@ class BitcoinRPC(client.Agent, IBitcoinRPC):
             self._base_headers['Authorization'] = ['Basic ' + b64encode(auth.encode('ascii')).decode('ascii')]
         self._iter_id = id_generator and id_generator() or None
 
-    def _rpc_request(self, method: str, *args, **kwargs) -> Deferred:
+    def _rpc_request(self, method: str, *args: Any, **kwargs: Any) -> Deferred:
         """ Make a call to Bitcoin's RPC. Do not use both args and kwargs, use at most one of them.
 
         Examples:
