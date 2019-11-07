@@ -7,7 +7,7 @@ def create_parser() -> ArgumentParser:
     return configargparse.ArgumentParser(auto_env_var_prefix='hathor_')
 
 
-def setup_logging(debug=False, capture_stdout=True, *, _test_logging=False) -> None:
+def setup_logging(debug: bool = False, capture_stdout: bool = True, *, _test_logging: bool = False) -> None:
     import logging.config
 
     import colorama

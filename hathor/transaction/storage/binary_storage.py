@@ -1,12 +1,16 @@
 import json
 import os
 import re
+from typing import TYPE_CHECKING
 
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionMetadataDoesNotExist
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.util import deprecated, skip_warning
+
+if TYPE_CHECKING:
+    from hathor.transaction import BaseTransaction
 
 
 class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
@@ -117,7 +121,7 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         return self._load_transaction_from_filepath(filepath)
 
     @deprecated('Use get_transaction_deferred instead')
-    def get_transaction(self, hash_bytes: bytes):
+    def get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
         genesis = self.get_genesis(hash_bytes)
         if genesis:
             return genesis

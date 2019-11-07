@@ -224,7 +224,7 @@ class HathorManager:
             self.profiler = cProfile.Profile()
         self.profiler.enable()
 
-    def stop_profiler(self, save_to=None) -> None:
+    def stop_profiler(self, save_to: Optional[str] = None) -> None:
         """
         Stop the profile and optionally save the results for future analysis.
 

@@ -7,7 +7,7 @@ from multiprocessing import Array, Process, Queue as MQueue, Value  # type: igno
 from os import cpu_count
 from string import hexdigits
 from time import sleep
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, List, NamedTuple, Optional, Set, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple, Union, cast
 from uuid import UUID, uuid4
 
 from structlog import get_logger
@@ -101,7 +101,7 @@ class MinerJob(NamedTuple):
     nonce_size: Value = Value('I')
     weight: Value = Value('d')
 
-    def update_job(self, params: Dict) -> bool:
+    def update_job(self, params: Dict[str, Any]) -> bool:
         """
         Updates job variables shared between processes.
         Should contain the following params:
@@ -120,7 +120,7 @@ class MinerJob(NamedTuple):
         """
         try:
             data = bytes.fromhex(params['data'])
-            data_size = len(data)
+            data_size: int = len(data)
             self.data[:data_size] = data
             self.data_size.value = data_size
             self.job_id[:] = bytes.fromhex(params['job_id'])
@@ -420,6 +420,7 @@ class StratumProtocol(JSONRPC):
         if params and 'address' in params and params['address'] is not None:
             try:
                 self.miner_address = decode_address(params['address'])
+                self.log.info('Miner with ID {} using address {}'.format(self.miner_id, self.miner_address.decode()))
             except InvalidAddress:
                 self.send_error(INVALID_ADDRESS, msgid)
                 self.transport.loseConnection()
@@ -908,7 +909,7 @@ class StratumClient(JSONRPC):
         self.log.warn('handle_error', error=error, data=data)
 
 
-def miner_job(index: int, process_num: int, job_data: MinerJob, signal: Value, queue: MQueue):
+def miner_job(index: int, process_num: int, job_data: MinerJob, signal: Value, queue: MQueue) -> None:
     """
     Job to be executed by the mining process.
 
@@ -928,16 +929,16 @@ def miner_job(index: int, process_num: int, job_data: MinerJob, signal: Value, q
     :param queue: queue used to submit solutions to supervisor process
     :type queue: MQueue
     """
-    def update_job():
+    def update_job() -> Tuple[Array, int, Any, int, int]:
         while signal.value == StratumClient.SLEEP:
             sleep(StratumClient.NAP_DURATION)
-        return [
+        return (
             job_data.job_id[:],  # current_job
             2**(256 - job_data.weight.value) - 1,  # target
             sha256(bytes(job_data.data[:job_data.data_size.value])),  # midstate
             int(index * (1 << (8 * job_data.nonce_size.value)) / process_num),  # start_nonce
             job_data.nonce_size.value  # nonce_size
-        ]
+        )
 
     while signal.value != StratumClient.STOP:
         current_job, target, base, nonce, nonce_size = update_job()

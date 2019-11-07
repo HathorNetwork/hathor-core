@@ -93,7 +93,7 @@ def re_compile(pattern: str) -> Pattern[bytes]:
     return re.compile(p, re.DOTALL)
 
 
-def _re_pushdata(length):
+def _re_pushdata(length: int) -> bytes:
     """ Create a regular expression that matches a data block with a given length.
 
     :return: A non-compiled regular expression
@@ -168,7 +168,7 @@ class HathorScript:
     def addOpcode(self, opcode: Opcode) -> None:
         self.data += bytes([opcode])
 
-    def pushData(self, data: bytes) -> None:
+    def pushData(self, data: Union[int, bytes]) -> None:
         if isinstance(data, int):
             if data > 4294967295:
                 n = struct.pack('!Q', data)
@@ -303,13 +303,13 @@ class MultiSig:
         self.address = address
         self.timelock = timelock
 
-    def to_human_readable(self):
+    def to_human_readable(self) -> Dict[str, Any]:
         """ Decode MultiSig class to dict with its type and data
 
             :return: Dict with MultiSig info
             :rtype: Dict[str:]
         """
-        ret = {}
+        ret: Dict[str, Any] = {}
         ret['type'] = 'MultiSig'
         ret['address'] = self.address
         ret['timelock'] = self.timelock
@@ -445,8 +445,8 @@ class NanoContractMatchValues:
         self.value_dict = value_dict  # Dict[bytes, int]
         self.fallback_pubkey_hash = fallback_pubkey_hash
 
-    def to_human_readable(self):
-        ret = {}
+    def to_human_readable(self) -> Dict[str, Any]:
+        ret: Dict[str, Any] = {}
         ret['type'] = 'NanoContractMatchValues'
         ret['oracle_pubkey_hash'] = base64.b64encode(self.oracle_pubkey_hash).decode('utf-8')
         ret['min_timestamp'] = self.min_timestamp
@@ -461,7 +461,7 @@ class NanoContractMatchValues:
             ret['fallback_pubkey_hash'] = None
         return ret
 
-    def create_output_script(self):
+    def create_output_script(self) -> bytes:
         """
         :return: the output script in binary
         :rtype: bytes
@@ -515,7 +515,7 @@ class NanoContractMatchValues:
         return s.data
 
     @classmethod
-    def parse_script(cls, script):
+    def parse_script(cls, script: bytes) -> Optional['NanoContractMatchValues']:
         """Checks if the given script is of type NanoContractMatchValues. If it is, returns the corresponding object.
         Otherwise, returns None.
 
@@ -986,7 +986,7 @@ def op_data_strequal(stack: Stack, log: List[str], extras: ScriptExtras) -> None
     assert isinstance(data, bytes)
 
     if not isinstance(data_k, int):
-        raise VerifyFailed('OP_DATA_STREQUAL: value on stack should be an integer ({})'.format(data_k))
+        raise VerifyFailed('OP_DATA_STREQUAL: value on stack should be an integer ({!r})'.format(data_k))
 
     data_value = get_data_value(data_k, data)
     if data_value != value:
@@ -1016,7 +1016,7 @@ def op_data_greaterthan(stack: Stack, log: List[str], extras: ScriptExtras) -> N
     assert isinstance(data, bytes)
 
     if not isinstance(data_k, int):
-        raise VerifyFailed('OP_DATA_STREQUAL: value on stack should be an integer ({})'.format(data_k))
+        raise VerifyFailed('OP_DATA_STREQUAL: value on stack should be an integer ({!r})'.format(data_k))
 
     data_value = get_data_value(data_k, data)
     try:
@@ -1257,7 +1257,7 @@ def op_integer(opcode: int, stack: Stack, log: List[str], extras: ScriptExtras) 
     stack.append(to_append)
 
 
-MAP_OPCODE_TO_FN: Dict[int, Callable] = {
+MAP_OPCODE_TO_FN: Dict[int, Callable[[Stack, List[str], ScriptExtras], None]] = {
     Opcode.OP_DUP: op_dup,
     Opcode.OP_EQUAL: op_equal,
     Opcode.OP_EQUALVERIFY: op_equalverify,

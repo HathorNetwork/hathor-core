@@ -75,7 +75,7 @@ def sub_weights(w1: float, w2: float) -> float:
 def aux_calc_weight(w1: float, w2: float, multiplier: int) -> float:
     a = max(w1, w2)
     b = min(w1, w2)
-    if b == 0:
+    if b == 0.0:
         # Zero is a special acc_weight.
         # We could use float('-inf'), but it is not serializable.
         return a
@@ -90,8 +90,9 @@ class TxVersion(IntEnum):
     MERGE_MINED_BLOCK = 3
 
     @classmethod
-    def _missing_(cls, value):
+    def _missing_(cls, value: Any) -> 'TxVersion':
         # version's first byte is reserved for future use, so we'll ignore it
+        assert isinstance(value, int)
         version = value & 0xFF
         if version == value:
             # Prevent infinite recursion when starting TxVerion with wrong version
@@ -197,12 +198,12 @@ class BaseTransaction(ABC):
 
     @property
     @abstractmethod
-    def is_block(self):
+    def is_block(self) -> bool:
         raise NotImplementedError
 
     @property
     @abstractmethod
-    def is_transaction(self):
+    def is_transaction(self) -> bool:
         raise NotImplementedError
 
     def get_fields_from_struct(self, struct_bytes: bytes) -> bytes:
@@ -891,7 +892,7 @@ class TxInput:
         ret += self.data
         return ret
 
-    def get_sighash_bytes(self, clear_data) -> bytes:
+    def get_sighash_bytes(self, clear_data: bool) -> bytes:
         """Return a serialization of the input for the sighash
 
         :return: Serialization of the input
@@ -1071,7 +1072,7 @@ class TxOutput:
             token_data=self.token_data,
         )
 
-    def to_json(self, *, decode_script: bool = False) -> dict:
+    def to_json(self, *, decode_script: bool = False) -> Dict[str, Any]:
         data: Dict[str, Any] = {}
         data['value'] = self.value
         data['token_data'] = self.token_data

@@ -10,6 +10,20 @@ tests_cli = tests/cli/
 tests_lib = $(filter-out ${tests_cli} ${tests_simulation} tests/__pycache__/, $(dir $(wildcard tests/*/.)))
 
 pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov=hathor
+mypy_flags = --warn-unused-configs --disallow-incomplete-defs --no-implicit-optional --warn-redundant-casts --warn-unused-ignores
+
+#--strict-equality
+#--check-untyped-defs
+
+#--disallow-untyped-defs
+#--disallow-any-generics
+#--disallow-subclassing-any
+#--warn-return-any
+#--disallow-untyped-calls
+#--disallow-untyped-decorators
+
+#--implicit-reexport
+#--no-implicit-reexport
 
 .PHONY: tests-cli
 tests-cli:
@@ -38,7 +52,7 @@ tests-full:
 
 .PHONY: mypy
 mypy: ./hathor
-	mypy $^
+	mypy $(mypy_flags) $^
 
 .PHONY: flake8
 flake8: $(py_sources)

@@ -12,7 +12,7 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 settings = HathorSettings()
 
 
-def update_serialized_tokens_array(tx: BaseTransaction, serialized: Dict[str, Any]):
+def update_serialized_tokens_array(tx: BaseTransaction, serialized: Dict[str, Any]) -> None:
     """ A token creation tx to_json does not add its hash to the array of tokens
         We manually have to add it here to make it equal to the other transactions
     """

@@ -20,7 +20,7 @@ class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
     def onConnect(self, request):
         self.log.info('Client connecting: {request.peer}', request=request)
 
-    def onOpen(self):
+    def onOpen(self) -> None:
         self.factory.connections.add(self)
         self.log.info('WebSocket connection open.')
 
@@ -28,5 +28,5 @@ class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
         self.factory.connection_closed(self)
         self.log.info('Websocket closed: {reason}', reason=reason)
 
-    def onMessage(self, payload: bytes, isBinary: bool):
+    def onMessage(self, payload: bytes, isBinary: bool) -> None:
         self.factory.handle_message(self, payload)

@@ -219,7 +219,7 @@ class NodeSyncTimestamp(Plugin):
         assert self.protocol.peer.id is not None
         return self.protocol.peer.id[:7]
 
-    def get_cmd_dict(self) -> Dict[ProtocolMessages, Callable]:
+    def get_cmd_dict(self) -> Dict[ProtocolMessages, Callable[[str], None]]:
         """ Return a dict of messages of the plugin.
         """
         return {

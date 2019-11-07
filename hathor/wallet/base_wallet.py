@@ -1,8 +1,9 @@
 from abc import ABCMeta
 from collections import defaultdict
 from enum import Enum
+from itertools import chain
 from math import inf
-from typing import Any, DefaultDict, Dict, List, NamedTuple, Optional, Tuple
+from typing import TYPE_CHECKING, Any, DefaultDict, Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
 
 from twisted.internet.interfaces import IDelayedCall, IReactorCore
 from twisted.internet.task import Clock
@@ -17,6 +18,10 @@ from hathor.transaction.scripts import P2PKH, create_output_script, parse_addres
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.transaction import Transaction
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
+
+if TYPE_CHECKING:
+    from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
+    from pycoin.key.Key import Key
 
 settings = HathorSettings()
 
@@ -86,10 +91,10 @@ class BaseWallet:
 
         # Dict[Tuple(tx_id, index), List[SpentTx]]
         # We have for each output, which txs spent it
-        self.spent_txs: Dict[Tuple[bytes, int], List[SpentTx]] = defaultdict(list)
+        self.spent_txs: Dict[Tuple[bytes, int], List['SpentTx']] = defaultdict(list)
 
         # Save each spent tx that was voided and is not spending tokens from this wallet anymore
-        self.voided_spent: Dict[Tuple[bytes, int], List[SpentTx]] = defaultdict(list)
+        self.voided_spent: Dict[Tuple[bytes, int], List['SpentTx']] = defaultdict(list)
 
         # Save each unspent tx that was voided and is not increasing the tokens of this wallet anymore
         self.voided_unspent: Dict[Tuple[bytes, int], UnspentTx] = {}
@@ -127,14 +132,14 @@ class BaseWallet:
 
         self.reactor.callLater(UTXO_CHECK_INTERVAL, self._check_utxos)
 
-    def stop(self):
+    def stop(self) -> None:
         """ Stop the pubsub subscription if wallet has a pubsub
         """
         if self.pubsub:
             for event in self.pubsub_events:
                 self.pubsub.unsubscribe(event, self.handle_publish)
 
-    def _check_utxos(self):
+    def _check_utxos(self) -> None:
         """ Go through all elements in maybe_spent_txs and check if any of them should be
         moved back to unspent_txs
         """
@@ -157,23 +162,23 @@ class BaseWallet:
         else:
             raise NotImplementedError
 
-    def is_locked(self):
+    def is_locked(self) -> bool:
         raise NotImplementedError
 
-    def get_unused_address(self, mark_as_used=True):
+    def get_unused_address(self, mark_as_used: bool = True) -> str:
         raise NotImplementedError
 
     def get_unused_address_bytes(self, mark_as_used: bool = True) -> bytes:
         address_str = self.get_unused_address(mark_as_used)
         return decode_address(address_str)
 
-    def tokens_received(self, address58):
+    def tokens_received(self, address58: str) -> None:
         raise NotImplementedError
 
-    def get_private_key(self, address58):
+    def get_private_key(self, address58: str) -> 'EllipticCurvePrivateKey':
         raise NotImplementedError
 
-    def get_input_aux_data(self, data_to_sign, private_key):
+    def get_input_aux_data(self, data_to_sign: bytes, private_key: 'Key') -> Tuple[bytes, bytes]:
         raise NotImplementedError
 
     def prepare_transaction(self, cls: ABCMeta, inputs: List[WalletInputInfo],
@@ -359,7 +364,8 @@ class BaseWallet:
             tx_inputs.extend(inputs)
         return tx_inputs, outputs
 
-    def separate_inputs(self, inputs, tx_storage):
+    def separate_inputs(self, inputs: List['TxInput'],
+                        tx_storage: 'TransactionStorage') -> Tuple[List['TxInput'], List['TxInput']]:
         """Separates the inputs from a tx into 2 groups: the ones that belong to this wallet and the ones that don't
 
         :param inputs: transaction to decode
@@ -384,7 +390,7 @@ class BaseWallet:
 
         return my_inputs, other_inputs
 
-    def sign_transaction(self, tx, tx_storage):
+    def sign_transaction(self, tx: Transaction, tx_storage: 'TransactionStorage') -> None:
         """Signs a transaction. Iterates over all inputs and signs the ones belonging to this wallet.
 
         :param tx: transaction to sign
@@ -774,26 +780,26 @@ class BaseWallet:
             # publish update history
             self.publish_update(HathorEvents.WALLET_HISTORY_UPDATED)
 
-    def get_history(self, count=10, page=1):
+    def get_history(self, count: int = 10, page: int = 1) -> Tuple[List[Union['SpentTx', 'UnspentTx']], int]:
         """Return the last transactions in this wallet ordered by timestamp and the total
 
         :rtype: tuple[list[SpentTx, UnspentTx], int]
         """
-        history = []
+        history: List[Union['SpentTx', 'UnspentTx']] = []
 
-        for obj in self.unspent_txs.values():
-            history += obj.values()
+        for obj_dict in self.unspent_txs.values():
+            history += obj_dict.values()
 
-        for obj in self.maybe_spent_txs.values():
-            history += obj.values()
+        for obj_dict in self.maybe_spent_txs.values():
+            history += obj_dict.values()
 
-        for obj in self.spent_txs.values():
-            history += obj
+        for obj_list in self.spent_txs.values():
+            history += obj_list
 
         history += self.voided_unspent.values()
 
-        for obj in self.voided_spent.values():
-            history += obj
+        for obj_list in self.voided_spent.values():
+            history += obj_list
 
         ordered_history = sorted(history, key=lambda el: el.timestamp, reverse=True)
 
@@ -824,7 +830,7 @@ class BaseWallet:
         smallest_timestamp = inf
         for token_id, utxos in self.unspent_txs.items():
             balance = {'locked': 0, 'available': 0}
-            for utxo in list(utxos.values()) + list(self.maybe_spent_txs[token_id].values()):
+            for utxo in chain(utxos.values(), self.maybe_spent_txs[token_id].values()):
                 if utxo.is_token_authority():
                     # authority utxos don't transfer value
                     continue
@@ -866,7 +872,8 @@ class BaseWallet:
             # If dont have any other timelock, set balance update to None
             self.balance_update = None
 
-    def match_inputs(self, inputs, tx_storage):
+    def match_inputs(self, inputs: List[TxInput],
+                     tx_storage: TransactionStorage) -> Iterable[Tuple[TxInput, Optional[str]]]:
         """Returns an iterable with the inputs that belong and don't belong to this wallet
 
         :return: An iterable with the inputs and corresponding address, if it belongs to this wallet
@@ -901,8 +908,8 @@ class UnspentTx:
         self.test_used = False      # flag to prevent twin txs being created (for tests only!!)
         self.maybe_spent_ts = inf
 
-    def to_dict(self):
-        data = {}
+    def to_dict(self) -> Dict[str, Any]:
+        data: Dict[str, Any] = {}
         data['timestamp'] = self.timestamp
         data['tx_id'] = self.tx_id.hex()
         data['index'] = self.index
@@ -914,7 +921,7 @@ class UnspentTx:
         return data
 
     @classmethod
-    def from_dict(cls, data):
+    def from_dict(cls, data: Dict[str, Any]) -> 'UnspentTx':
         return cls(bytes.fromhex(data['tx_id']), data['index'], data['value'], data['timestamp'], data['address'],
                    data['token_data'], data['voided'], data['timelock'])
 
@@ -951,8 +958,8 @@ class SpentTx:
         self.timestamp = timestamp
         self.voided = voided
 
-    def to_dict(self):
-        data = {}
+    def to_dict(self) -> Dict[str, Any]:
+        data: Dict[str, Any] = {}
         data['timestamp'] = self.timestamp
         data['tx_id'] = self.tx_id.hex()
         data['from_tx_id'] = self.from_tx_id.hex()
@@ -962,7 +969,7 @@ class SpentTx:
         return data
 
     @classmethod
-    def from_dict(cls, data):
+    def from_dict(cls, data: Dict[str, Any]) -> 'SpentTx':
         return cls(
             bytes.fromhex(data['tx_id']), bytes.fromhex(data['from_tx_id']), data['from_index'], data['value'],
             data['timestamp'])

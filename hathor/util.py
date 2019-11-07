@@ -10,7 +10,7 @@ from twisted.web.iweb import IBodyProducer
 from zope.interface import implementer
 
 
-def practically_equal(a: Dict[Any, Any], b: Dict[Any, Any]):
+def practically_equal(a: Dict[Any, Any], b: Dict[Any, Any]) -> bool:
     """ Compare two defaultdict. It is used because a simple access have
     side effects in defaultdict.
 

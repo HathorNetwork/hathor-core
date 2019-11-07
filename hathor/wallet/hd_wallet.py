@@ -1,11 +1,15 @@
 import hashlib
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 from mnemonic import Mnemonic
 
 from hathor.pubsub import HathorEvents
 from hathor.wallet import BaseWallet
 from hathor.wallet.exceptions import InvalidWords
+
+if TYPE_CHECKING:
+    from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
+    from pycoin.key.Key import Key
 
 # TODO pycoin BIP32 uses their own ecdsa library to generate key that does not use OpenSSL
 # We must check if this brings any security problem to us later
@@ -132,7 +136,7 @@ class HDWallet(BaseWallet):
         for key in self.chain_key.children(self.initial_key_generation, 0, False):
             self._key_generated(key, key.child_index())
 
-    def get_private_key(self, address58):
+    def get_private_key(self, address58: str) -> 'EllipticCurvePrivateKey':
         """ We get the private key bytes and generate the cryptography object
 
             :param address58: address in base58
@@ -176,7 +180,7 @@ class HDWallet(BaseWallet):
         """
         return self.chain_key.subkey(index)
 
-    def tokens_received(self, address58):
+    def tokens_received(self, address58: str) -> None:
         """ Method called when the wallet receive new tokens
 
             If the gap limit is not yet achieved we generate more keys
@@ -196,7 +200,7 @@ class HDWallet(BaseWallet):
         # Last shared index should be at least the index after the received one
         self.last_shared_index = max(self.last_shared_index, received_key.child_index() + 1)
 
-    def get_unused_address(self, mark_as_used=True):
+    def get_unused_address(self, mark_as_used: bool = True) -> str:
         """ Return an address that is not used yet
 
             :param mark_as_used: if True we consider that this address is already used
@@ -216,7 +220,7 @@ class HDWallet(BaseWallet):
         key = self.get_key_at_index(self.last_shared_index)
         return self.get_address(key)
 
-    def is_locked(self):
+    def is_locked(self) -> bool:
         """ Return if wallet is currently locked
             The wallet is locked if self.words is None
 
@@ -291,7 +295,7 @@ class HDWallet(BaseWallet):
         if not self.words or not self.mnemonic.check(self.words):
             raise InvalidWords
 
-    def get_input_aux_data(self, data_to_sign, private_key):
+    def get_input_aux_data(self, data_to_sign: bytes, private_key: 'Key') -> Tuple[bytes, bytes]:
         """ Sign the data to be used in input and get public key compressed in bytes
 
             :param data_to_sign: Data to be signed

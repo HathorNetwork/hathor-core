@@ -1,6 +1,6 @@
 from collections import deque
 from functools import partial
-from typing import TYPE_CHECKING, Deque, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Deque, Dict, List, Optional
 
 from twisted.internet import defer
 from twisted.internet.defer import Deferred
@@ -173,16 +173,16 @@ class Downloader:
             onTimeoutCancel=fn_timeout
         )
 
-    def on_deferred_timeout(self, result, timeout, **kwargs) -> None:
+    def on_deferred_timeout(self, result: Any, timeout: int, *, tx_id: bytes) -> None:
         """ Timeout handler for the downloading deferred
             It just calls the retry method
         """
-        tx_id = kwargs['tx_id']
         self.retry(tx_id)
 
-    def on_new_tx(self, tx) -> None:
+    def on_new_tx(self, tx: 'BaseTransaction') -> None:
         """ This is called when a new transaction arrives.
         """
+        assert tx.hash is not None
         details = self.pending_transactions.get(tx.hash, None)
         if not details:
             # Something is wrong! It should never happen.

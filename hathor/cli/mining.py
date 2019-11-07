@@ -72,7 +72,7 @@ def execute(args: Namespace) -> None:
                 sys.exit(1)
             else:
                 conn_retries += 1
-                print('Waiting %d seconds to try again ({} of {})...'.format(_SLEEP_ON_ERROR_SECONDS, conn_retries,
+                print('Waiting {} seconds to try again ({} of {})...'.format(_SLEEP_ON_ERROR_SECONDS, conn_retries,
                                                                              _MAX_CONN_RETRIES))
                 time.sleep(_SLEEP_ON_ERROR_SECONDS)
                 continue

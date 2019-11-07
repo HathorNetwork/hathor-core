@@ -10,7 +10,6 @@ from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from hathor.p2p.downloader import Downloader
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import PeerStorage
-# from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
 from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.states.ready import ReadyState
 from hathor.p2p.utils import description_to_connection_string
@@ -20,6 +19,7 @@ from hathor.transaction import BaseTransaction
 if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
     from hathor.p2p.node_sync import NodeSyncTimestamp  # noqa: F401
+    from hathor.p2p.factory import HathorClientFactory, HathorServerFactory  # noqa: F401
 
 
 class ConnectionsManager:
@@ -31,8 +31,9 @@ class ConnectionsManager:
     connecting_peers: Dict[IStreamClientEndpoint, Deferred]
     handshaking_peers: Set[HathorProtocol]
 
-    def __init__(self, reactor: ReactorBase, my_peer: PeerId, server_factory, client_factory,
-                 pubsub: PubSubManager, manager: 'HathorManager', ssl: bool) -> None:
+    def __init__(self, reactor: ReactorBase, my_peer: PeerId, server_factory: 'HathorServerFactory',
+                 client_factory: 'HathorClientFactory', pubsub: PubSubManager, manager: 'HathorManager',
+                 ssl: bool) -> None:
         from twisted.internet.task import LoopingCall
 
         self.reactor = reactor
@@ -187,7 +188,7 @@ class ConnectionsManager:
         """
         return peer_id in self.connected_peers
 
-    def on_receive_peer(self, peer: PeerId, origin: ReadyState = None) -> None:
+    def on_receive_peer(self, peer: PeerId, origin: Optional[ReadyState] = None) -> None:
         """ Update a peer information in our storage, and instantly attempt to connect
         to it if it is not connected yet.
         """
@@ -244,7 +245,7 @@ class ConnectionsManager:
 
         self.connecting_peers.pop(endpoint)
 
-    def connect_to(self, description: str, peer: Optional[PeerId] = None, use_ssl: bool = None) -> None:
+    def connect_to(self, description: str, peer: Optional[PeerId] = None, use_ssl: Optional[bool] = None) -> None:
         """ Attempt to connect to a peer, even if a connection already exists.
         Usually you should call `connect_to_if_not_connected`.
 

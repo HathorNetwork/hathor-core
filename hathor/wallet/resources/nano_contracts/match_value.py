@@ -132,7 +132,8 @@ class NanoContractMatchValueResource(resource.Resource):
 
         tx.outputs.insert(0, TxOutput(total_value, nano_contract.create_output_script()))
 
-        [tx.inputs.append(TxInput(txin.tx_id, txin.index, b'')) for txin in inputs]
+        for txin in inputs:
+            tx.inputs.append(TxInput(txin.tx_id, txin.index, b''))
 
         ret = {'success': True, 'hex_tx': tx.get_struct().hex()}
         return json.dumps(ret).encode('utf-8')

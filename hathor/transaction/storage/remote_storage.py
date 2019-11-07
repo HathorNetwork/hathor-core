@@ -1,5 +1,5 @@
 from math import inf
-from typing import TYPE_CHECKING, Any, Generator, Iterator, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, Generator, Iterator, List, Optional, Set, Tuple, Union
 
 import grpc
 from grpc._server import _Context
@@ -23,7 +23,7 @@ class RemoteCommunicationError(HathorError):
     pass
 
 
-def convert_grpc_exceptions(func):
+def convert_grpc_exceptions(func: Callable) -> Callable:
     """Decorator to catch and conver grpc exceptions for hathor expections.
     """
     from functools import wraps
@@ -41,7 +41,7 @@ def convert_grpc_exceptions(func):
     return wrapper
 
 
-def convert_grpc_exceptions_generator(func):
+def convert_grpc_exceptions_generator(func: Callable) -> Callable:
     """Decorator to catch and conver grpc excpetions for hathor expections. (for generators)
     """
     from functools import wraps
@@ -59,7 +59,7 @@ def convert_grpc_exceptions_generator(func):
     return wrapper
 
 
-def convert_hathor_exceptions(func):
+def convert_hathor_exceptions(func: Callable) -> Callable:
     """Decorator to annotate better details and codes on the grpc context for known exceptions.
     """
     from functools import wraps
@@ -76,7 +76,7 @@ def convert_hathor_exceptions(func):
     return wrapper
 
 
-def convert_hathor_exceptions_generator(func):
+def convert_hathor_exceptions_generator(func: Callable) -> Callable:
     """Decorator to annotate better details and codes on the grpc context for known exceptions. (for generators)
     """
     from functools import wraps
@@ -101,13 +101,14 @@ class TransactionRemoteStorage(TransactionStorage):
     def __init__(self, with_index=None):
         super().__init__()
         self._channel = None
-        self._genesis_cache = None
+        self._genesis_cache: Dict[bytes, BaseTransaction] = None
         self.with_index = with_index
 
-    def _create_genesis_cache(self):
+    def _create_genesis_cache(self) -> None:
         from hathor.transaction.genesis import get_genesis_transactions
         self._genesis_cache = {}
         for genesis in get_genesis_transactions(self):
+            assert genesis.hash is not None
             self._genesis_cache[genesis.hash] = genesis
 
     def connect_to(self, port: int) -> None:
@@ -204,7 +205,7 @@ class TransactionRemoteStorage(TransactionStorage):
     # TransactionStorageAsync interface implementation:
 
     @convert_grpc_exceptions
-    def save_transaction_deferred(self, tx: 'BaseTransaction', *, only_metadata=False) -> None:
+    def save_transaction_deferred(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
         # self._check_connection()
         raise NotImplementedError
 
@@ -215,7 +216,7 @@ class TransactionRemoteStorage(TransactionStorage):
 
     @inlineCallbacks
     @convert_grpc_exceptions_generator
-    def transaction_exists_deferred(self, hash_bytes: bytes) -> Generator:
+    def transaction_exists_deferred(self, hash_bytes: bytes) -> Generator[None, protos.ExistsResponse, bool]:
         self._check_connection()
         request = protos.ExistsRequest(hash=hash_bytes)
         result = yield Deferred.fromFuture(self._stub.Exists.future(request))
@@ -268,7 +269,7 @@ class TransactionRemoteStorage(TransactionStorage):
         return super().get_best_block_tips(timestamp)
 
     @convert_grpc_exceptions
-    def get_all_tips(self, timestamp=None):
+    def get_all_tips(self, timestamp: Optional[Union[int, float]] = None) -> Set[Interval]:
         self._check_connection()
         if isinstance(timestamp, float) and timestamp != inf:
             self.log.warn('timestamp given in float will be truncated, use int instead')
@@ -413,7 +414,8 @@ class TransactionRemoteStorage(TransactionStorage):
         return tx_list, has_more
 
     @convert_grpc_exceptions
-    def get_older_txs_after(self, timestamp: int, hash_bytes: bytes, count: int):
+    def get_older_txs_after(self, timestamp: int, hash_bytes: bytes,
+                            count: int) -> Tuple[List['BaseTransaction'], bool]:
         from hathor.transaction import tx_or_block_from_proto
         self._check_connection()
         if isinstance(timestamp, float):
@@ -443,7 +445,8 @@ class TransactionRemoteStorage(TransactionStorage):
         return tx_list, has_more
 
     @convert_grpc_exceptions
-    def get_newer_txs_after(self, timestamp: int, hash_bytes: bytes, count: int):
+    def get_newer_txs_after(self, timestamp: int, hash_bytes: bytes,
+                            count: int) -> Tuple[List['BaseTransaction'], bool]:
         from hathor.transaction import tx_or_block_from_proto
         self._check_connection()
         if isinstance(timestamp, float):
@@ -504,7 +507,7 @@ class TransactionRemoteStorage(TransactionStorage):
         result = self._stub.MarkAs(request)  # noqa: F841
 
     @convert_grpc_exceptions
-    def _del_from_cache(self, tx, *, relax_assert: bool = False):
+    def _del_from_cache(self, tx: 'BaseTransaction', *, relax_assert: bool = False) -> None:
         self._check_connection()
         tx_proto = tx.to_proto()
         request = protos.MarkAsRequest(transaction=tx_proto, mark_type=protos.FOR_CACHING, remove_mark=True,
@@ -513,7 +516,7 @@ class TransactionRemoteStorage(TransactionStorage):
 
     # @deprecated('Use get_block_count_deferred instead')
     @convert_grpc_exceptions
-    def get_block_count(self):
+    def get_block_count(self) -> int:
         self._check_connection()
         request = protos.CountRequest(tx_type=protos.BLOCK_TYPE)
         result = self._stub.Count(request)
@@ -521,21 +524,21 @@ class TransactionRemoteStorage(TransactionStorage):
 
     # @deprecated('Use get_tx_count_deferred instead')
     @convert_grpc_exceptions
-    def get_tx_count(self):
+    def get_tx_count(self) -> int:
         self._check_connection()
         request = protos.CountRequest(tx_type=protos.TRANSACTION_TYPE)
         result = self._stub.Count(request)
         return result.count
 
-    def get_genesis(self, hash_bytes):
+    def get_genesis(self, hash_bytes: bytes) -> Optional['BaseTransaction']:
         if not self._genesis_cache:
             self._create_genesis_cache()
         return self._genesis_cache.get(hash_bytes, None)
 
-    def get_all_genesis(self):
+    def get_all_genesis(self) -> Set['BaseTransaction']:
         if not self._genesis_cache:
             self._create_genesis_cache()
-        return self._genesis_cache.values()
+        return set(self._genesis_cache.values())
 
     @convert_grpc_exceptions
     def get_transactions_before(self, hash_bytes, num_blocks=100):  # pragma: no cover
@@ -557,7 +560,7 @@ class TransactionRemoteStorage(TransactionStorage):
         return tx_list
 
     @convert_grpc_exceptions
-    def get_blocks_before(self, hash_bytes, num_blocks=100):
+    def get_blocks_before(self, hash_bytes: bytes, num_blocks: int = 100) -> List[Block]:
         from hathor.transaction import tx_or_block_from_proto
         self._check_connection()
         request = protos.ListRequest(
@@ -567,12 +570,14 @@ class TransactionRemoteStorage(TransactionStorage):
             filter_before=True,
         )
         result = self._stub.List(request)
-        tx_list = []
+        tx_list: List[Block] = []
         for list_item in result:
             if not list_item.HasField('transaction'):
                 break
             tx_proto = list_item.transaction
-            tx_list.append(tx_or_block_from_proto(tx_proto, storage=self))
+            block = tx_or_block_from_proto(tx_proto, storage=self)
+            assert isinstance(block, Block)
+            tx_list.append(block)
         return tx_list
 
     @convert_grpc_exceptions
@@ -791,7 +796,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
 
 
 def create_transaction_storage_server(server: grpc.Server, tx_storage: TransactionStorage,
-                                      port=None) -> Tuple[protos.TransactionStorageServicer, int]:
+                                      port: Optional[int] = None) -> Tuple[protos.TransactionStorageServicer, int]:
     """Create a GRPC servicer for the given storage, returns a (servicer, port) tuple.
 
     :param server: a GRPC server
@@ -808,4 +813,5 @@ def create_transaction_storage_server(server: grpc.Server, tx_storage: Transacti
     servicer = TransactionStorageServicer(tx_storage)
     protos.add_TransactionStorageServicer_to_server(servicer, server)
     port = server.add_insecure_port('127.0.0.1:0')
+    assert port is not None
     return servicer, port
