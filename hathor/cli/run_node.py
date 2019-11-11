@@ -60,6 +60,7 @@ class RunNode:
         from hathor.p2p.utils import discover_hostname
         from hathor.transaction import genesis
         from hathor.transaction.storage import (
+            BaseTransactionStorage,
             TransactionStorage,
             TransactionBinaryStorage,
             TransactionCacheStorage,
@@ -130,6 +131,7 @@ class RunNode:
                     tx_storage = TransactionBinaryStorage(path=tx_dir, with_index=(not args.cache))
             print('Using {} at {}'.format(tx_storage.__class__.__name__, tx_dir))
             if args.cache:
+                assert isinstance(tx_storage, BaseTransactionStorage)
                 tx_storage = TransactionCacheStorage(tx_storage, reactor)
                 if args.cache_size:
                     tx_storage.capacity = args.cache_size

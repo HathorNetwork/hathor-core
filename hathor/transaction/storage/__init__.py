@@ -4,7 +4,7 @@ from hathor.transaction.storage.compact_storage import TransactionCompactStorage
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.transaction.storage.remote_storage import TransactionRemoteStorage, create_transaction_storage_server
 from hathor.transaction.storage.subprocess_storage import TransactionSubprocessStorage
-from hathor.transaction.storage.transaction_storage import TransactionStorage
+from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorage
 
 try:
     from hathor.transaction.storage.rocksdb_storage import TransactionRocksDBStorage
@@ -13,6 +13,7 @@ except ImportError:
 
 __all__ = [
     'TransactionStorage',
+    'BaseTransactionStorage',
     'TransactionMemoryStorage',
     'TransactionCompactStorage',
     'TransactionCacheStorage',
