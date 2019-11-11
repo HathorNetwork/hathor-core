@@ -1,19 +1,20 @@
 from abc import ABC, abstractmethod
 from hashlib import sha256
+from itertools import count
 from json import JSONDecodeError, dumps as json_dumps, loads as json_loads
 from math import log
 from multiprocessing import Array, Process, Queue as MQueue, Value  # type: ignore
 from os import cpu_count
 from string import hexdigits
 from time import sleep
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, NamedTuple, Optional, Set, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple, Union, cast
 from uuid import UUID, uuid4
 
+from structlog import get_logger
 from twisted.internet import reactor, task
 from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IAddress, IDelayedCall, IReactorCore, IReactorTCP
 from twisted.internet.protocol import Factory
-from twisted.logger import Logger
 from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
@@ -21,13 +22,14 @@ from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
 from hathor.pubsub import EventArguments, HathorEvents
-from hathor.transaction import BaseTransaction, Block, Transaction, sum_weights
+from hathor.transaction import BaseTransaction, BitcoinAuxPow, Block, MergeMinedBlock, Transaction, sum_weights
 from hathor.transaction.exceptions import PowError, ScriptError, TxValidationError
 from hathor.wallet.exceptions import InvalidAddress
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
 
+logger = get_logger()
 settings = HathorSettings()
 
 
@@ -99,7 +101,7 @@ class MinerJob(NamedTuple):
     nonce_size: Value = Value('I')
     weight: Value = Value('d')
 
-    def update_job(self, params: Dict) -> bool:
+    def update_job(self, params: Dict[str, Any]) -> bool:
         """
         Updates job variables shared between processes.
         Should contain the following params:
@@ -118,7 +120,7 @@ class MinerJob(NamedTuple):
         """
         try:
             data = bytes.fromhex(params['data'])
-            data_size = len(data)
+            data_size: int = len(data)
             self.data[:data_size] = data
             self.data_size.value = data_size
             self.job_id[:] = bytes.fromhex(params['job_id'])
@@ -133,7 +135,9 @@ class MinerJob(NamedTuple):
 class MinerSubmit(NamedTuple):
     """ Data class used to communicate submit data between mining process and supervisor """
     job_id: str
-    nonce: str
+    # either nonce or aux_proof must be given
+    nonce: str = ''
+    aux_pow: str = ''
 
 
 class MinerStatistics(NamedTuple):
@@ -152,9 +156,11 @@ class JSONRPC(LineReceiver, ABC):
     JSONRPC implements basic functionality of JSON-RPC 2.0 Specification based on Twisted's LineReceiver.
     """
 
-    log = Logger()
-
     delimiter = b'\n'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.log = logger.new()
 
     def lineReceived(self, line: bytes) -> None:
         """Receives a line and parses it, checking if it is a valid JSON-RPC 2.0 message.
@@ -165,6 +171,7 @@ class JSONRPC(LineReceiver, ABC):
         :type line: bytes
 
         """
+        self.log.debug('LINE RECEIVED {line}', line=line)
         try:
             data = json_loads(line)
         except JSONDecodeError:
@@ -230,7 +237,8 @@ class JSONRPC(LineReceiver, ABC):
         """
         raise NotImplementedError
 
-    def send_request(self, method: str, params: Optional[Union[List, Dict]], msgid: Optional[str] = None) -> None:
+    def send_request(self, method: str, params: Optional[Union[List, Dict]], msgid: Optional[str] = None,
+                     ok: Optional[bool] = None) -> None:
         """ Sends a JSON-RPC 2.0 request.
 
         :param method: JSON-RPC 2.0 request method
@@ -243,9 +251,11 @@ class JSONRPC(LineReceiver, ABC):
         :type msgid: Optional[UUID]
         """
         data = {'method': method, 'jsonrpc': '2.0', 'params': params}
-        self.log.debug('SENDING REQUEST {method} WITH PARAMS {params}', method=method, params=params)
+        self.log.debug('send request', method=method, params=params)
         if msgid is not None:
             data['id'] = msgid
+        if ok is True:
+            data['result'] = 'ok'
         self.send_json(data)
 
     def send_result(self, result: Any, msgid: Optional[str]) -> None:
@@ -260,7 +270,7 @@ class JSONRPC(LineReceiver, ABC):
         data = {'jsonrpc': '2.0', 'result': result}
         if msgid is not None:
             data['id'] = msgid
-        self.log.debug('SENDING REPONSE WITH DATA {data}', data=data)
+        self.log.debug('send result', data=data)
         return self.send_json(data)
 
     def send_error(self, error: Dict, msgid: Optional[str] = None, data: Any = None) -> None:
@@ -279,7 +289,7 @@ class JSONRPC(LineReceiver, ABC):
         }
         if msgid is not None:
             message['id'] = msgid
-        self.log.info('SENDING ERROR {error} WITH  DATA {data}', error=error, data=data)
+        self.log.info('send_error', error=error, data=data)
         self.send_json(message)
 
         # Lose connection in case of any native JSON RPC error
@@ -295,13 +305,19 @@ class JSONRPC(LineReceiver, ABC):
         try:
             message = json_dumps(json).encode()
             self.sendLine(message)
+            self.log.debug('LINE SENT {line}', line=message)
         except TypeError:
-            self.log.info('ERROR ENCODING JSON: {json}', json=json)
+            self.log.error('failed to encode', json=json)
 
 
 class StratumProtocol(JSONRPC):
     """
     Twisted protocol that implements server side of Hathor Stratum.
+
+    References:
+    - https://en.bitcoinwiki.org/wiki/Stratum_mining_protocol
+    - https://en.bitcoin.it/wiki/Stratum_mining_protocol
+    - https://slushpool.com/help/stratum-protocol/
     """
 
     JOBS_HISTORY = 100
@@ -320,8 +336,11 @@ class StratumProtocol(JSONRPC):
     completed_jobs: int
     connection_start_time: int
     blocks_found: int
+    merged_mining: bool
 
-    def __init__(self, factory: 'StratumFactory', manager: 'HathorManager', address: IAddress):
+    def __init__(self, factory: 'StratumFactory', manager: 'HathorManager', address: IAddress,
+                 id_generator: Optional[Callable[[], Iterator[Union[str, int]]]] = lambda: count()):
+        self.log = logger.new(address=address)
         self.factory = factory
         self.manager = manager
         self.address = address
@@ -336,15 +355,22 @@ class StratumProtocol(JSONRPC):
         self.completed_jobs = 0
         self.connection_start_time = 0
         self.blocks_found = 0
+        self._iter_id = id_generator and id_generator() or None
+        self.subscribed = False
+
+    def _next_id(self):
+        if self._iter_id:
+            return str(next(self._iter_id))
 
     def connectionMade(self) -> None:
         self.miner_id = uuid4()
-        self.log.info('New miner with ID {} from {}'.format(self.miner_id, self.address))
         self.factory.miner_protocols[self.miner_id] = self
         self.connection_start_time = self.factory.get_current_timestamp()
+        self.log = self.log.bind(miner_id=self.miner_id, conn_at=self.connection_start_time)
+        self.log.info('New miner')
 
     def connectionLost(self, reason: Failure = None) -> None:
-        self.log.info('Miner with ID {} exited'.format(self.miner_id))
+        self.log.info('Miner exited')
         assert self.miner_id is not None
         self.factory.miner_protocols.pop(self.miner_id)
 
@@ -360,8 +386,7 @@ class StratumProtocol(JSONRPC):
         :param msgid: JSON-RPC 2.0 message id
         :type msgid: Optional[str]
         """
-        self.log.debug('RECEIVED REQUEST {method} FROM {msgid} WITH PARAMS {params}', msgid=msgid, method=method,
-                       params=params)
+        self.log.debug('handle request', msgid=msgid, method=method, params=params)
 
         if method in ['mining.subscribe', 'subscribe', 'mining.submit', 'submit']:
             if not self.manager.can_start_mining():
@@ -378,11 +403,11 @@ class StratumProtocol(JSONRPC):
 
     def handle_result(self, result: Any, msgid: Optional[str]) -> None:
         """ Logs any result since there are not supposed to be any """
-        self.log.debug('RECEIVED RESULT MESSAGE WITH ID={msgid} RESULT={result}', msgid=msgid, result=result)
+        self.log.debug('handle result', msgid=msgid, result=result)
 
     def handle_error(self, error: Dict, data: Any, msgid: Optional[str]) -> None:
         """ Logs any errors since there are not supposed to be any """
-        self.log.info('RECEIVED ERROR MESSAGE WITH ID={msgid} ERROR={error}', msgid=msgid, error=error)
+        self.log.error('handle error', msgid=msgid, error=error)
 
     def handle_subscribe(self, params: Dict, msgid: Optional[str]) -> None:
         """ Handles subscribe request by answering it and triggering a job request.
@@ -391,18 +416,32 @@ class StratumProtocol(JSONRPC):
         :type msgid: Optional[UUID]
         """
         assert self.miner_id is not None
+        self.log.debug('handle subscribe', msgid=msgid, params=params)
         if params and 'address' in params and params['address'] is not None:
             try:
                 self.miner_address = decode_address(params['address'])
-                self.log.info('Miner with ID {} using address {}'.format(self.miner_id, self.miner_address))
+                self.log.info('Miner with ID {} using address {}'.format(self.miner_id, self.miner_address.decode()))
             except InvalidAddress:
                 self.send_error(INVALID_ADDRESS, msgid)
                 self.transport.loseConnection()
                 return
         if params and 'mine_txs' in params:
             self.mine_txs = params['mine_txs']
-
+        if params and 'merged_mining' in params:
+            self.merged_mining = params['merged_mining']
+        else:
+            self.merged_mining = False
+        if params and params.get('mine_txs') and params.get('merged_mining'):
+            err = INVALID_PARAMS.copy()
+            err['message'] = 'Cannot set both merged_mining=True and mine_txs=True'
+            return self.send_error(err, msgid)
+        if self.merged_mining:
+            self.log.debug('merged_mining=True implies mine_txs=False')
+            self.mine_txs = False
+        self.log.info('Miner subscribed', address=self.miner_address, mine_txs=self.mine_txs,
+                      merged_mining=self.merged_mining)
         self.send_result('ok', msgid)
+        self.subscribed = True
         self.job_request()
 
     def handle_submit(self, params: Dict, msgid: Optional[str]) -> None:
@@ -414,6 +453,10 @@ class StratumProtocol(JSONRPC):
         :param msgid: JSON-RPC 2.0 message id
         :type msgid: Optional[UUID]
         """
+        from hathor.merged_mining.bitcoin import sha256d_hash
+
+        self.log.debug('handle submit', msgid=msgid, params=params)
+
         if 'job_id' not in params or 'nonce' not in params:
             return self.send_error(INVALID_PARAMS, msgid, {'params': params, 'required': ['job_id', 'nonce']})
 
@@ -441,14 +484,24 @@ class StratumProtocol(JSONRPC):
             })
 
         tx = job.tx.clone()
+        block_base = tx.get_header_without_nonce()
+        block_base_hash = sha256d_hash(block_base)
         # Stratum sends the nonce as a big-endian hexadecimal string.
-        tx.nonce = int(params['nonce'], 16)
+        if params.get('aux_pow'):
+            assert isinstance(tx, MergeMinedBlock), 'expected MergeMinedBlock got ' + type(tx).__name__
+            tx.aux_pow = BitcoinAuxPow.from_bytes(bytes.fromhex(params['aux_pow']))
+            tx.nonce = 0
+        else:
+            tx.nonce = int(params['nonce'], 16)
         tx.update_hash()
         assert tx.hash is not None
+
+        self.log.debug('submitted block', block=tx, block_base=block_base.hex(), block_base_hash=block_base_hash.hex())
 
         try:
             tx.verify_pow(job.weight)
         except PowError:
+            self.log.error('Invalid share weight', job_weight=job.weight, tx=tx)
             return self.send_error(INVALID_SOLUTION, msgid, {
                 'hash': tx.hash.hex(),
                 'target': int(tx.get_target()).to_bytes(32, 'big').hex()
@@ -457,46 +510,46 @@ class StratumProtocol(JSONRPC):
         job.submitted = self.factory.get_current_timestamp()
         self.completed_jobs += 1
 
+        # answer the miner soon, so it can start a new job
+        self.send_result('ok', msgid)
+        self.manager.reactor.callLater(0, self.job_request)
+
         try:
             tx.verify_pow()
-            if isinstance(tx, Block):
+        except PowError:
+            # Transaction pow was not enough, but the share was succesfully submited
+            self.log.info('Insufficient weight, keep searching', tx=tx)
+            if isinstance(tx, Transaction):
+                # If we can't propagate the transaction then we should put it in tx queue again
+                funds_hash = tx.get_funds_hash()
+                if funds_hash in self.factory.mining_tx_pool and funds_hash not in self.factory.tx_queue:
+                    self.factory.tx_queue.append(funds_hash)
+            return
+
+        if isinstance(tx, Block):
+            try:
                 # We only propagate blocks here in stratum
                 # For tx we need to propagate in the resource,
                 # so we can get the possible errors
                 self.manager.propagate_tx(tx, fails_silently=False)
                 self.blocks_found += 1
-                return self.send_result('block_found', msgid)
-        except (InvalidNewTransaction, TxValidationError, PowError) as e:
-            # Transaction propagation failed, but the share was succesfully submited
-            if tx.is_block:
-                self.log.debug('BLOCK VERIFICATION/PROPAGATION FAILED WITH ERROR: {error}', error=e)
+            except (InvalidNewTransaction, TxValidationError) as e:
+                # Block propagation failed, but the share was succesfully submited
+                self.log.warn('Block propagation failed.', block=tx, error=e)
             else:
-                self.log.debug('TX VERIFICATION/PROPAGATION FAILED WITH ERROR: {error}', error=e)
-            self.send_result('ok', msgid)
-
-            # If we can't propagate the transaction then we should put it in tx queue again
-            if isinstance(tx, Transaction):
-                funds_hash = tx.get_funds_hash()
-                if funds_hash in self.factory.mining_tx_pool and funds_hash not in self.factory.tx_queue:
-                    self.factory.tx_queue.append(funds_hash)
-
-            return self.job_request()
+                self.log.info('New block found.', block=tx)
+        elif isinstance(tx, Transaction):
+            self.log.info('Transaction mined.', tx=tx)
+            funds_hash = tx.get_funds_hash()
+            if funds_hash in self.factory.mining_tx_pool:
+                self.factory.mined_txs[funds_hash] = tx
+                del self.factory.mining_tx_pool[funds_hash]
+                if funds_hash in self.factory.deferreds_tx:
+                    # Return to resolve the resource to send back the response
+                    d = self.factory.deferreds_tx.pop(funds_hash)
+                    d.callback(tx)
         else:
-            self.log.info('Stratum new tx/block found: {tx.hash_hex}', tx=tx)
-
-        assert isinstance(tx, Transaction)
-        funds_hash = tx.get_funds_hash()
-
-        if funds_hash in self.factory.mining_tx_pool:
-            self.factory.mined_txs[funds_hash] = tx
-            del self.factory.mining_tx_pool[funds_hash]
-            if funds_hash in self.factory.deferreds_tx:
-                # Return to resolve the resource to send back the response
-                d = self.factory.deferreds_tx.pop(funds_hash)
-                d.callback(tx)
-
-        self.send_result('ok', msgid)
-        return self.job_request()
+            assert False, 'tx should either be a Block or Transaction'
 
     def job_request(self) -> None:
         """ Sends a job request to the connected client
@@ -509,16 +562,22 @@ class StratumProtocol(JSONRPC):
         except (ValueError, ScriptError) as e:
             # ScriptError might happen if try to use a mainnet address in the testnet or vice versa
             # ValueError happens if address is not a valid base58 address
+            # FIXME: I don't think the stratum server should send an unprompted error to the client
             self.send_error(INVALID_PARAMS, data={
                 'message': str(e)
             })
         else:
-            self.send_request('job', {
-                'data': job.tx.get_header_without_nonce().hex(),
-                'job_id': job.id.hex,
-                'nonce_size': job.tx.SERIALIZATION_NONCE_SIZE,
-                'weight': float(job.weight),
-            })
+            if job:
+                job_data = {
+                    'data': job.tx.get_header_without_nonce().hex(),
+                    'job_id': job.id.hex,
+                    'nonce_size': job.tx.SERIALIZATION_NONCE_SIZE,
+                    'weight': float(job.weight),
+                }
+                if job.tx.is_block:
+                    assert isinstance(job.tx, Block)
+                    job_data['parent_hash'] = job.tx.get_block_parent_hash().hex()
+                self.send_request('job', job_data, self._next_id())
 
     def create_job(self) -> ServerJob:
         """
@@ -575,7 +634,7 @@ class StratumProtocol(JSONRPC):
         if tx is not None:
             tx.timestamp = self.factory.get_current_timestamp()
             tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
-            self.log.debug('prepared tx for mining: {tx}', tx=tx)
+            self.log.debug('prepared tx for mining', tx=tx)
             return tx
 
         peer_id = self.manager.my_peer.id
@@ -584,8 +643,9 @@ class StratumProtocol(JSONRPC):
 
         # Only get first 32 bytes of peer_id because block data is limited to 100 bytes
         data = '{}-{}-{}'.format(peer_id[:32], self.miner_id.hex, jobid.hex).encode()[:settings.BLOCK_DATA_MAX_SIZE]
-        block = self.manager.generate_mining_block(data=data, address=self.miner_address)
-        self.log.debug('prepared block for mining: {block}', block=block)
+        block = self.manager.generate_mining_block(data=data, address=self.miner_address,
+                                                   merge_mined=self.merged_mining)
+        self.log.debug('prepared block for mining', block=block)
         return block
 
     def should_mine_block(self) -> bool:
@@ -597,7 +657,7 @@ class StratumProtocol(JSONRPC):
         :rtype: bool
         """
         if len(self.factory.tx_queue) == 0:
-            self.log.debug('NO TX ON QUEUE')
+            self.log.debug('empty queue')
             return True
 
         if not self.mine_txs:
@@ -681,9 +741,8 @@ class StratumFactory(Factory):
     mined_txs: Dict[bytes, Transaction]
     deferreds_tx: Dict[bytes, Deferred]
 
-    log: ClassVar[Logger] = Logger()
-
     def __init__(self, manager: 'HathorManager', port: int, reactor: IReactorTCP = reactor):
+        self.log = logger.new()
         self.manager = manager
         self.port = port
         self.reactor = reactor
@@ -706,7 +765,8 @@ class StratumFactory(Factory):
         Creates and sends a new job for each subscribed miner.
         """
         for miner, protocol in self.miner_protocols.items():
-            protocol.job_request()
+            if protocol.subscribed:
+                protocol.job_request()
 
     def start(self) -> None:
         """
@@ -754,8 +814,6 @@ class StratumClient(JSONRPC):
     Twisted protocol that implements client side of Hathor Stratum.
     """
 
-    log = Logger()
-
     # Flags used to send signals to the miner process
     WORK = 0
     SLEEP = 1
@@ -774,7 +832,9 @@ class StratumClient(JSONRPC):
 
     address: Optional[bytes]
 
-    def __init__(self, proc_count: Optional[int] = None, address: Optional[bytes] = None):
+    def __init__(self, proc_count: Optional[int] = None, address: Optional[bytes] = None,
+                 id_generator: Optional[Callable[[], Iterator[Union[str, int]]]] = lambda: count()):
+        self.log = logger.new()
         self.job_data = MinerJob()
         self.signal = Value('B')
         self.queue = MQueue()
@@ -783,6 +843,11 @@ class StratumClient(JSONRPC):
         self.miners = []
         self.loop = None
         self.address = address
+        self._iter_id = id_generator and id_generator() or None
+
+    def _next_id(self):
+        if self._iter_id:
+            return str(next(self._iter_id))
 
     def start(self, clock: IReactorCore = reactor) -> None:
         """
@@ -813,7 +878,7 @@ class StratumClient(JSONRPC):
             miner.join()
 
     def connectionMade(self) -> None:
-        self.send_request('subscribe', {'address': self.address}, uuid4().hex)
+        self.send_request('subscribe', {'address': self.address}, self._next_id())
 
     def handle_request(self, method: str, params: Optional[Union[List, Dict]], msgid: Optional[str]) -> None:
         """ Handles job requests.
@@ -827,7 +892,7 @@ class StratumClient(JSONRPC):
         :param msgid: JSON-RPC 2.0 message id
         :type msgid: Optional[str]
         """
-        self.log.debug('REQUEST {method} WITH PARAMS {params}', method=method, params=params)
+        self.log.debug('handle request', method=method, params=params)
 
         if method == 'job' and isinstance(params, dict):
             self.job = params
@@ -837,14 +902,14 @@ class StratumClient(JSONRPC):
 
     def handle_result(self, result: Any, msgid: Optional[str]) -> None:
         """ Logs any result since there are not supposed to be any """
-        self.log.debug('RESULT {}'.format(result))
+        self.log.debug('handle result', result=result)
 
     def handle_error(self, error: Dict, data: Any, msgid: Optional[str]) -> None:
         """ Logs any error since there are not supposed to be any """
-        self.log.info('ERROR {} DATA {}'.format(error, data))
+        self.log.warn('handle_error', error=error, data=data)
 
 
-def miner_job(index: int, process_num: int, job_data: MinerJob, signal: Value, queue: MQueue):
+def miner_job(index: int, process_num: int, job_data: MinerJob, signal: Value, queue: MQueue) -> None:
     """
     Job to be executed by the mining process.
 
@@ -864,16 +929,16 @@ def miner_job(index: int, process_num: int, job_data: MinerJob, signal: Value, q
     :param queue: queue used to submit solutions to supervisor process
     :type queue: MQueue
     """
-    def update_job():
+    def update_job() -> Tuple[Array, int, Any, int, int]:
         while signal.value == StratumClient.SLEEP:
             sleep(StratumClient.NAP_DURATION)
-        return [
+        return (
             job_data.job_id[:],  # current_job
             2**(256 - job_data.weight.value) - 1,  # target
             sha256(bytes(job_data.data[:job_data.data_size.value])),  # midstate
             int(index * (1 << (8 * job_data.nonce_size.value)) / process_num),  # start_nonce
             job_data.nonce_size.value  # nonce_size
-        ]
+        )
 
     while signal.value != StratumClient.STOP:
         current_job, target, base, nonce, nonce_size = update_job()
@@ -897,4 +962,4 @@ def supervisor_job(client: StratumClient) -> None:
         assert isinstance(data, MinerSubmit)
         if data.job_id == client.job['job_id']:
             client.log.info('Submiting job: {}'.format(data))
-            client.send_request('submit', data._asdict(), uuid4().hex)
+            client.send_request('submit', data._asdict(), client._next_id())

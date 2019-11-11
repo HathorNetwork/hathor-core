@@ -1,6 +1,7 @@
 import re
 import struct
 from math import ceil, floor
+from typing import Any, Tuple
 
 from hathor.conf import HathorSettings
 
@@ -11,12 +12,12 @@ def int_to_bytes(number: int, size: int, signed: bool = False) -> bytes:
     return number.to_bytes(size, byteorder='big', signed=signed)
 
 
-def unpack(fmt: str, buf: bytes):
+def unpack(fmt: str, buf: bytes) -> Any:
     size = struct.calcsize(fmt)
     return struct.unpack(fmt, buf[:size]), buf[size:]
 
 
-def unpack_len(n: int, buf: bytes):
+def unpack_len(n: int, buf: bytes) -> Tuple[bytes, bytes]:
     return buf[:n], buf[n:]
 
 

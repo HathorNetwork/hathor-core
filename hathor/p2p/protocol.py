@@ -116,7 +116,7 @@ class HathorProtocol:
     initiated_connection: bool
 
     def __init__(self, network: str, my_peer: PeerId, connections: Optional['ConnectionsManager'] = None, *,
-                 node: 'HathorManager') -> None:
+                 node: 'HathorManager', use_ssl: bool) -> None:
         self.network = network
         self.my_peer = my_peer
         self.connections = connections
@@ -158,6 +158,8 @@ class HathorProtocol:
 
         # If peer is connected
         self.connected = False
+
+        self.use_ssl = use_ssl
 
         # Set to true if this node initiated the connection
         self.initiated_connection = False
@@ -249,7 +251,7 @@ class HathorProtocol:
             self.state.on_exit()
         self.transport.loseConnection()
 
-    def handle_error(self, payload) -> None:
+    def handle_error(self, payload: str) -> None:
         """ Executed when an ERROR command is received.
         """
         self.log.warn('ERROR {payload}', payload=payload)
@@ -277,6 +279,7 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
     def lineReceived(self, line: bytes) -> Optional[Generator[Any, Any, None]]:
         self.metrics.received_messages += 1
         self.metrics.received_bytes += len(line)
+
         try:
             sline = line.decode('utf-8')
         except UnicodeDecodeError:
@@ -290,7 +293,8 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
             self.transport.loseConnection()
             return None
         else:
-            return self.recv_message(cmd, msgdata)
+            self.recv_message(cmd, msgdata)
+            return None
 
     def send_message(self, cmd_enum: ProtocolMessages, payload: Optional[str] = None) -> None:
         cmd = cmd_enum.value

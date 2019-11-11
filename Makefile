@@ -10,6 +10,20 @@ tests_cli = tests/cli/
 tests_lib = $(filter-out ${tests_cli} ${tests_simulation} tests/__pycache__/, $(dir $(wildcard tests/*/.)))
 
 pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov=hathor
+mypy_flags = --warn-unused-configs --disallow-incomplete-defs --no-implicit-optional --warn-redundant-casts --warn-unused-ignores
+
+#--strict-equality
+#--check-untyped-defs
+
+#--disallow-untyped-defs
+#--disallow-any-generics
+#--disallow-subclassing-any
+#--warn-return-any
+#--disallow-untyped-calls
+#--disallow-untyped-decorators
+
+#--implicit-reexport
+#--no-implicit-reexport
 
 .PHONY: tests-cli
 tests-cli:
@@ -21,14 +35,14 @@ tests-doctests:
 
 .PHONY: tests-lib
 tests-lib:
-	pytest --durations=10 $(pytest_flags) --cov-fail-under=90 $(tests_lib)
+	pytest --durations=10 $(pytest_flags) --doctest-modules hathor --cov-fail-under=88 $(tests_lib)
 
 .PHONY: tests-simulation
 tests-simulation:
 	pytest --durations=10 --cov=hathor --cov-report=term -p no:warnings $(tests_simulation)
 
 .PHONY: tests
-tests: tests-doctests tests-cli tests-lib
+tests: tests-cli tests-lib
 
 .PHONY: tests-full
 tests-full:
@@ -38,7 +52,7 @@ tests-full:
 
 .PHONY: mypy
 mypy: ./hathor
-	mypy $^
+	mypy $(mypy_flags) $^
 
 .PHONY: flake8
 flake8: $(py_sources)
@@ -94,7 +108,11 @@ clean: clean-pyc clean-protos
 # docker:
 
 docker_dir := .
-docker_tag := $(shell git describe)
+ifneq ($(wildcard .git/.*),)
+	docker_tag := $(shell git describe)
+else
+	docker_tag := dummy
+endif
 
 .PHONY: docker
 docker: $(docker_dir)/Dockerfile $(proto_outputs)

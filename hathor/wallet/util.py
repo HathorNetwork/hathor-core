@@ -1,5 +1,5 @@
 import hashlib
-from typing import List
+from typing import List, Optional
 
 import base58
 from cryptography.hazmat.primitives import hashes
@@ -67,7 +67,7 @@ def generate_multisig_address(redeem_script: bytes, version_byte: bytes = settin
     return base58.b58encode(baddress).decode('utf-8')
 
 
-def generate_signature(tx: Transaction, private_key_bytes: bytes, password: bytes = None) -> bytes:
+def generate_signature(tx: Transaction, private_key_bytes: bytes, password: Optional[bytes] = None) -> bytes:
     """ Create a signature for the tx
 
         :param tx: transaction with the data to be signed

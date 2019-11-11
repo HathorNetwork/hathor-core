@@ -4,7 +4,7 @@ from typing import Any, Callable, Dict, List
 from hathor.cli.run_node import RunNode
 
 
-def get_ipython(extra_args: List, imported_objects: Dict[str, Any]) -> Callable:
+def get_ipython(extra_args: List[Any], imported_objects: Dict[str, Any]) -> Callable[[], None]:
     from IPython import start_ipython
 
     def run_ipython():
@@ -32,7 +32,7 @@ class Shell(RunNode):
         print('------------------------')
         print()
 
-    def parse_args(self, argv) -> Namespace:
+    def parse_args(self, argv: List[str]) -> Namespace:
         # TODO: add help for the `--` extra argument separator
         extra_args: List[str] = []
         if '--' in argv:

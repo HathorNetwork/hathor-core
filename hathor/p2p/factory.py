@@ -27,12 +27,14 @@ class HathorServerFactory(protocol.ServerFactory):
             connections: Optional[ConnectionsManager] = None,
             *,
             node: 'HathorManager',
+            use_ssl: bool,
     ):
         super().__init__()
         self.network = network
         self.my_peer = my_peer
         self.connections = connections
         self.node = node
+        self.use_ssl = use_ssl
 
     def buildProtocol(self, addr: Tuple[str, int]) -> MyServerProtocol:
         p = self.protocol(
@@ -40,6 +42,7 @@ class HathorServerFactory(protocol.ServerFactory):
             my_peer=self.my_peer,
             connections=self.connections,
             node=self.node,
+            use_ssl=self.use_ssl
         )
         p.factory = self
         return p
@@ -59,12 +62,14 @@ class HathorClientFactory(protocol.ClientFactory):
             connections: Optional[ConnectionsManager] = None,
             *,
             node: 'HathorManager',
+            use_ssl: bool,
     ):
         super().__init__()
         self.network = network
         self.my_peer = my_peer
         self.connections = connections
         self.node = node
+        self.use_ssl = use_ssl
 
     def buildProtocol(self, addr: Tuple[str, int]) -> MyClientProtocol:
         p = self.protocol(
@@ -72,6 +77,7 @@ class HathorClientFactory(protocol.ClientFactory):
             my_peer=self.my_peer,
             connections=self.connections,
             node=self.node,
+            use_ssl=self.use_ssl
         )
         p.factory = self
         return p

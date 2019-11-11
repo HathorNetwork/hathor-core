@@ -1,5 +1,3 @@
-# encoding: utf-8
-
 import base64
 import datetime
 import hashlib
@@ -11,6 +9,8 @@ from enum import IntEnum
 from math import inf, isfinite, log
 from struct import error as StructError, pack
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Iterator, List, Optional, Tuple, Type
+
+from structlog import get_logger
 
 from hathor import protos
 from hathor.conf import HathorSettings
@@ -27,10 +27,12 @@ from hathor.transaction.exceptions import (
 )
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import int_to_bytes, unpack, unpack_len
+from hathor.util import classproperty
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
+logger = get_logger()
 settings = HathorSettings()
 
 MAX_NONCE = 2**32
@@ -73,7 +75,7 @@ def sub_weights(w1: float, w2: float) -> float:
 def aux_calc_weight(w1: float, w2: float, multiplier: int) -> float:
     a = max(w1, w2)
     b = min(w1, w2)
-    if b == 0:
+    if b == 0.0:
         # Zero is a special acc_weight.
         # We could use float('-inf'), but it is not serializable.
         return a
@@ -85,10 +87,12 @@ class TxVersion(IntEnum):
     REGULAR_BLOCK = 0
     REGULAR_TRANSACTION = 1
     TOKEN_CREATION_TRANSACTION = 2
+    MERGE_MINED_BLOCK = 3
 
     @classmethod
-    def _missing_(cls, value):
+    def _missing_(cls, value: Any) -> 'TxVersion':
         # version's first byte is reserved for future use, so we'll ignore it
+        assert isinstance(value, int)
         version = value & 0xFF
         if version == value:
             # Prevent infinite recursion when starting TxVerion with wrong version
@@ -97,6 +101,7 @@ class TxVersion(IntEnum):
 
     def get_cls(self) -> Type['BaseTransaction']:
         from hathor.transaction.block import Block
+        from hathor.transaction.merge_mined_block import MergeMinedBlock
         from hathor.transaction.token_creation_tx import TokenCreationTransaction
         from hathor.transaction.transaction import Transaction
 
@@ -104,6 +109,7 @@ class TxVersion(IntEnum):
             TxVersion.REGULAR_BLOCK: Block,
             TxVersion.REGULAR_TRANSACTION: Transaction,
             TxVersion.TOKEN_CREATION_TRANSACTION: TokenCreationTransaction,
+            TxVersion.MERGE_MINED_BLOCK: MergeMinedBlock,
         }
 
         cls = cls_map.get(self)
@@ -112,6 +118,9 @@ class TxVersion(IntEnum):
             raise ValueError('Invalid version.')
         else:
             return cls
+
+
+_base_transaction_log = logger.new()
 
 
 class BaseTransaction(ABC):
@@ -151,26 +160,50 @@ class BaseTransaction(ABC):
         self.storage = storage
         self.hash = hash  # Stored as bytes.
 
+    @classproperty
+    def log(cls):
+        """ This is a workaround because of a bug on structlog (or abc).
+
+        See: https://github.com/hynek/structlog/issues/229
+        """
+        return _base_transaction_log
+
+    def _get_formatted_fields_dict(self, short: bool = True) -> Dict[str, str]:
+        """ Used internally on __repr__ and __str__, returns a dict of `field_name: formatted_value`.
+        """
+        from collections import OrderedDict
+        d = OrderedDict(
+            nonce='%d' % (self.nonce or 0),
+            timestamp='%s' % self.timestamp,
+            version='%s' % int(self.version),
+            weight='%f' % self.weight,
+            hash=self.hash_hex,
+        )
+        if not short:
+            d.update(
+                inputs=repr(self.inputs),
+                outputs=repr(self.outputs),
+                parents=repr(self.parents),
+                storage=repr(self.storage),
+            )
+        return d
+
     def __repr__(self) -> str:
         class_name = type(self).__name__
-        return ('%s(nonce=%d, timestamp=%s, version=%s, weight=%f, inputs=%s, outputs=%s, parents=%s, '
-                'hash=%s, storage=%s)' %
-                (class_name, self.nonce, self.timestamp, self.version, self.weight,
-                 repr(self.inputs), repr(self.outputs), repr(self.parents), self.hash_hex, repr(self.storage)))
+        return '%s(%s)' % (class_name, ', '.join('%s=%s' % i for i in self._get_formatted_fields_dict(False).items()))
 
     def __str__(self) -> str:
-        class_name = 'Block' if self.is_block else 'Transaction'
-        return ('%s(nonce=%d, timestamp=%s, version=%s, weight=%f, hash=%s)' % (class_name, self.nonce, self.timestamp,
-                int(self.version), self.weight, self.hash_hex))
+        class_name = type(self).__name__
+        return '%s(%s)' % (class_name, ', '.join('%s=%s' % i for i in self._get_formatted_fields_dict().items()))
 
     @property
     @abstractmethod
-    def is_block(self):
+    def is_block(self) -> bool:
         raise NotImplementedError
 
     @property
     @abstractmethod
-    def is_transaction(self):
+    def is_transaction(self) -> bool:
         raise NotImplementedError
 
     def get_fields_from_struct(self, struct_bytes: bytes) -> bytes:
@@ -357,14 +390,23 @@ class BaseTransaction(ABC):
         struct_bytes += self.get_graph_struct()
         return struct_bytes
 
+    def get_struct_nonce(self) -> bytes:
+        """Return a partial serialization of the transaction's proof-of-work, which is usually the nonce field
+
+        :return: Partial serialization of the transaction's proof-of-work
+        :rtype: bytes
+        """
+        assert self.SERIALIZATION_NONCE_SIZE is not None
+        struct_bytes = int_to_bytes(self.nonce, self.SERIALIZATION_NONCE_SIZE)
+        return struct_bytes
+
     def get_struct(self) -> bytes:
         """Return the complete serialization of the transaction
 
         :rtype: bytes
         """
         struct_bytes = self.get_struct_without_nonce()
-        assert self.SERIALIZATION_NONCE_SIZE is not None
-        struct_bytes += int_to_bytes(self.nonce, self.SERIALIZATION_NONCE_SIZE)
+        struct_bytes += self.get_struct_nonce()
         return struct_bytes
 
     @abstractmethod
@@ -850,7 +892,7 @@ class TxInput:
         ret += self.data
         return ret
 
-    def get_sighash_bytes(self, clear_data) -> bytes:
+    def get_sighash_bytes(self, clear_data: bool) -> bytes:
         """Return a serialization of the input for the sighash
 
         :return: Serialization of the input
@@ -1030,7 +1072,7 @@ class TxOutput:
             token_data=self.token_data,
         )
 
-    def to_json(self, *, decode_script: bool = False) -> dict:
+    def to_json(self, *, decode_script: bool = False) -> Dict[str, Any]:
         data: Dict[str, Any] = {}
         data['value'] = self.value
         data['token_data'] = self.token_data
@@ -1072,12 +1114,16 @@ def output_value_to_bytes(number: int) -> bytes:
 def tx_or_block_from_proto(tx_proto: protos.BaseTransaction,
                            storage: Optional['TransactionStorage'] = None) -> 'BaseTransaction':
     from hathor.transaction.block import Block
+    from hathor.transaction.merge_mined_block import MergeMinedBlock
     from hathor.transaction.token_creation_tx import TokenCreationTransaction
     from hathor.transaction.transaction import Transaction
     if tx_proto.HasField('transaction'):
         return Transaction.create_from_proto(tx_proto, storage=storage)
     elif tx_proto.HasField('block'):
-        return Block.create_from_proto(tx_proto, storage=storage)
+        if tx_proto.block.HasField('aux_pow'):
+            return MergeMinedBlock.create_from_proto(tx_proto, storage=storage)
+        else:
+            return Block.create_from_proto(tx_proto, storage=storage)
     elif tx_proto.HasField('tokenCreationTransaction'):
         return TokenCreationTransaction.create_from_proto(tx_proto, storage=storage)
     else:

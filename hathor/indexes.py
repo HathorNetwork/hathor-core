@@ -433,8 +433,9 @@ class TokensIndex:
 
         transactions: 'SortedKeyList[TransactionIndexElement]'
 
-        def __init__(self, name: str = None, symbol: str = None, total: int = 0,
-                     mint: Set[Tuple[bytes, int]] = None, melt: Set[Tuple[bytes, int]] = None) -> None:
+        def __init__(self, name: Optional[str] = None, symbol: Optional[str] = None, total: int = 0,
+                     mint: Optional[Set[Tuple[bytes, int]]] = None,
+                     melt: Optional[Set[Tuple[bytes, int]]] = None) -> None:
             self.name = name
             self.symbol = symbol
             self.total = total
@@ -446,7 +447,7 @@ class TokensIndex:
     def __init__(self) -> None:
         self.tokens: Dict[bytes, TokensIndex.TokenStatus] = defaultdict(lambda: self.TokenStatus())
 
-    def _add_to_index(self, tx: BaseTransaction, index: int):
+    def _add_to_index(self, tx: BaseTransaction, index: int) -> None:
         """ Add tx to mint/melt indexes and total amount
         """
         assert tx.hash is not None
@@ -464,7 +465,7 @@ class TokensIndex:
         else:
             self.tokens[token_uid].total += tx_output.value
 
-    def _remove_from_index(self, tx: BaseTransaction, index: int):
+    def _remove_from_index(self, tx: BaseTransaction, index: int) -> None:
         """ Remove tx from mint/melt indexes and total amount
         """
         assert tx.hash is not None

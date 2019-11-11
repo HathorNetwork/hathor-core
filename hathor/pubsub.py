@@ -98,8 +98,8 @@ class EventArguments:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
-    def __contains__(self, key: HathorEvents) -> bool:
-        return key in self.__dict__
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key)
 
 
 PubSubCallable = Callable[[HathorEvents, EventArguments], None]

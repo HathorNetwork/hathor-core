@@ -3,7 +3,6 @@ from argparse import ArgumentParser, Namespace
 
 from twisted.internet import reactor
 from twisted.internet.endpoints import TCP4ClientEndpoint, connectProtocol
-from twisted.logger import FileLogObserver, FilteringLogObserver, LogLevel, LogLevelFilterPredicate, globalLogPublisher
 
 
 def create_parser() -> ArgumentParser:
@@ -38,14 +37,6 @@ def execute(args: Namespace) -> None:
 
 
 def main():
-    from hathor.cli.run_node import formatLogEvent
-
-    loglevel_filter = LogLevelFilterPredicate(LogLevel.info)
-    loglevel_filter.setLogLevelForNamespace('hathor.stratum', LogLevel.debug)
-    loglevel_filter.setLogLevelForNamespace('twisted.python.log', LogLevel.warn)
-    observer = FilteringLogObserver(FileLogObserver(sys.stdout, formatLogEvent), [loglevel_filter])
-    globalLogPublisher.addObserver(observer)
-
     parser = create_parser()
     args = parser.parse_args()
     execute(args)

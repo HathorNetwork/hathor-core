@@ -421,7 +421,7 @@ class RandomTransactionGenerator:
         self.delayedcall = self.clock.callLater(dt, self.schedule_next_transaction)
 
 
-def run_server(hostname='localhost', listen=8005, listen_ssl=False, status=8085, bootstrap=None, tries=100):
+def run_server(hostname='localhost', listen=8005, status=8085, bootstrap=None, tries=100):
     """ Starts a full node in a subprocess running the cli command
 
         :param hostname: Hostname used to be accessed by other peers
@@ -429,9 +429,6 @@ def run_server(hostname='localhost', listen=8005, listen_ssl=False, status=8085,
 
         :param listen: Port to listen for new connections (eg: 8000)
         :type listen: int
-
-        :param listen_ssl: Listen to ssl connection
-        :type listen_ssl: bool
 
         :param status: Port to run status server
         :type status: int
@@ -456,9 +453,6 @@ def run_server(hostname='localhost', listen=8005, listen_ssl=False, status=8085,
         '--allow-mining-without-peers',
         '--wallet-index'
     ])
-
-    if listen_ssl:
-        command = '{} --ssl'.format(command)
 
     if bootstrap:
         command = '{} --bootstrap {}'.format(command, bootstrap)

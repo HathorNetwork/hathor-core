@@ -115,7 +115,7 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         return tx
 
     @deprecated('Use get_transaction_deferred instead')
-    def get_transaction(self, hash_bytes: bytes):
+    def get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
         genesis = self.get_genesis(hash_bytes)
         if genesis:
             return genesis

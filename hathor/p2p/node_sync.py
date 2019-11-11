@@ -7,10 +7,10 @@ from math import inf
 from typing import TYPE_CHECKING, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union, cast
 
 from intervaltree.interval import Interval
+from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.internet.interfaces import IDelayedCall, IProtocol, IPushProducer, IReactorCore
 from twisted.internet.task import Clock
-from twisted.logger import Logger
 from zope.interface import implementer
 
 from hathor.conf import HathorSettings
@@ -21,6 +21,7 @@ from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
 settings = HathorSettings()
+logger = get_logger()
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
@@ -157,7 +158,6 @@ class NodeSyncTimestamp(Plugin):
     This algorithm must assume that a new item may arrive while it is running. The item's timestamp
     may be recent or old, changing the tips of any timestamp.
     """
-    log = Logger()
 
     MAX_HASHES = 40
 
@@ -169,6 +169,7 @@ class NodeSyncTimestamp(Plugin):
         :param reactor: Reactor to schedule later calls. (default=twisted.internet.reactor)
         :type reactor: Reactor
         """
+        self.log = logger.new()
         self.protocol = protocol
         self.manager = protocol.node
 
@@ -218,7 +219,7 @@ class NodeSyncTimestamp(Plugin):
         assert self.protocol.peer.id is not None
         return self.protocol.peer.id[:7]
 
-    def get_cmd_dict(self) -> Dict[ProtocolMessages, Callable]:
+    def get_cmd_dict(self) -> Dict[ProtocolMessages, Callable[[str], None]]:
         """ Return a dict of messages of the plugin.
         """
         return {
@@ -449,7 +450,7 @@ class NodeSyncTimestamp(Plugin):
 
         assert low + 1 == high
         self.log.debug('sync-{log_source.short_peer_id} Synced at {log_source.synced_timestamp} \
-                       (latest timestamp {log_source.peer_timestamp})')
+                       (latest timestamp {log_source.peer_timestamp})', log_source=self)
         return self.synced_timestamp + 1
 
     @inlineCallbacks

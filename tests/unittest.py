@@ -35,9 +35,10 @@ class TestCase(unittest.TestCase):
         block = hathor.transaction.genesis.GENESIS[0]
         assert isinstance(block, Block)
         block.outputs[0].script = bytes.fromhex('76a914fd05059b6006249543b82f36876a17c73fd2267b88ac')
-        block.nonce = 11467000
+        block.resolve(update_time=False)
+        block.nonce = 755544
         block.update_hash()
-        assert block.hash_hex == '000001042d10dba47c78bdb578e2f090ca02e01d18fa19ffe5cfa044478e2b9e'
+        assert block.hash_hex == '0000028d1c75cb03889d1d1bd277a15fa4100c80fb7aa08db69d1cef584e52cd'
 
     def tearDown(self):
         self.clean_tmpdirs()

@@ -1,13 +1,16 @@
-import collections
-from typing import Set
+from collections import OrderedDict
+from typing import TYPE_CHECKING, Any, Generator, Iterator, Set
 
 from twisted.internet import threads
-from twisted.internet.defer import inlineCallbacks, succeed
+from twisted.internet.defer import Deferred, inlineCallbacks, succeed
 from twisted.logger import Logger
 
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.util import deprecated, skip_warning
+
+if TYPE_CHECKING:
+    from twisted.internet import Reactor
 
 
 class TransactionCacheStorage(BaseTransactionStorage):
@@ -15,10 +18,14 @@ class TransactionCacheStorage(BaseTransactionStorage):
     """
     log = Logger()
 
-    def __init__(self, store, reactor, interval=5, capacity=10000, *, _clone_if_needed=False):
+    cache: 'OrderedDict[bytes, BaseTransaction]'
+    dirty_txs: Set[bytes]
+
+    def __init__(self, store: 'BaseTransactionStorage', reactor: 'Reactor', interval: int = 5,
+                 capacity: int = 10000, *, _clone_if_needed: bool = False):
         """
-        :param store: a subclass of TransactionStorage
-        :type store: :py:class:`hathor.transaction.storage.TransactionStorage`
+        :param store: a subclass of BaseTransactionStorage
+        :type store: :py:class:`hathor.transaction.storage.BaseTransactionStorage`
 
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :type reactor: :py:class:`twisted.internet.Reactor`
@@ -40,7 +47,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self.capacity = capacity
         self.flush_deferred = None
         self._clone_if_needed = _clone_if_needed
-        self.cache = collections.OrderedDict()
+        self.cache = OrderedDict()
         # dirty_txs has the txs that have been modified but are not persisted yet
         self.dirty_txs = set()  # Set[bytes(hash)]
         self.stats = dict(hit=0, miss=0)
@@ -54,26 +61,26 @@ class TransactionCacheStorage(BaseTransactionStorage):
         else:
             return x
 
-    def start(self):
+    def start(self) -> None:
         self.reactor.callLater(self.interval, self._start_flush_thread)
 
-    def _start_flush_thread(self):
+    def _start_flush_thread(self) -> None:
         if self.flush_deferred is None:
             deferred = threads.deferToThread(self._flush_to_storage, self.dirty_txs.copy())
             deferred.addCallback(self._cb_flush_thread)
             deferred.addErrback(self._err_flush_thread)
             self.flush_deferred = deferred
 
-    def _cb_flush_thread(self, flushed_txs):
+    def _cb_flush_thread(self, flushed_txs: Set[bytes]) -> None:
         self.reactor.callLater(self.interval, self._start_flush_thread)
         self.flush_deferred = None
 
-    def _err_flush_thread(self, reason):
+    def _err_flush_thread(self, reason: Any) -> None:
         self.log.error('Error flushing transactions: {reason}', reason=reason)
         self.reactor.callLater(self.interval, self._start_flush_thread)
         self.flush_deferred = None
 
-    def _flush_to_storage(self, dirty_txs_copy: Set) -> None:
+    def _flush_to_storage(self, dirty_txs_copy: Set[bytes]) -> None:
         """Write dirty pages to disk."""
         for tx_hash in dirty_txs_copy:
             # a dirty tx might be removed from self.cache outside this thread: if _update_cache is called
@@ -85,7 +92,8 @@ class TransactionCacheStorage(BaseTransactionStorage):
                 skip_warning(self.store._save_transaction)(tx)
 
     @deprecated('Use remove_transaction_deferred instead')
-    def remove_transaction(self, tx):
+    def remove_transaction(self, tx: BaseTransaction) -> None:
+        assert tx.hash is not None
         skip_warning(super().remove_transaction)(tx)
         self.cache.pop(tx.hash, None)
         self.dirty_txs.discard(tx.hash)
@@ -99,8 +107,9 @@ class TransactionCacheStorage(BaseTransactionStorage):
         # call super which adds to index if needed
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
 
-    def _save_transaction(self, tx: BaseTransaction) -> None:
+    def _save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         """Saves the transaction without modifying TimestampIndex entries (in superclass)."""
+        assert tx.hash is not None
         self._update_cache(tx)
         self.dirty_txs.add(tx.hash)
 
@@ -110,6 +119,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
         If we need to evict a tx from cache and it's dirty, write it to disk immediately.
         """
+        assert tx.hash is not None
         _tx = self.cache.get(tx.hash, None)
         if not _tx:
             if len(self.cache) >= self.capacity:
@@ -157,7 +167,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
         return skip_warning(self.store.get_count_tx_blocks)()
 
     @inlineCallbacks
-    def save_transaction_deferred(self, tx, *, only_metadata=False):
+    def save_transaction_deferred(self, tx: BaseTransaction, *, only_metadata: bool = False) -> Iterator[Deferred]:
         if tx.is_genesis and only_metadata:
             return
 
@@ -168,16 +178,16 @@ class TransactionCacheStorage(BaseTransactionStorage):
         yield super().save_transaction_deferred(tx)
 
     @inlineCallbacks
-    def remove_transaction_deferred(self, tx):
+    def remove_transaction_deferred(self, tx: BaseTransaction) -> Iterator[Deferred]:
         yield super().remove_transaction_deferred(tx)
 
-    def transaction_exists_deferred(self, hash_bytes):
+    def transaction_exists_deferred(self, hash_bytes: bytes) -> Deferred:
         if hash_bytes in self.cache:
             return succeed(True)
         return self.store.transaction_exists_deferred(hash_bytes)
 
     @inlineCallbacks
-    def get_transaction_deferred(self, hash_bytes):
+    def get_transaction_deferred(self, hash_bytes: bytes) -> Generator[Deferred, Any, BaseTransaction]:
         if hash_bytes in self.cache:
             tx = self._clone(self.cache[hash_bytes])
             self.cache.move_to_end(hash_bytes, last=True)

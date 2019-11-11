@@ -1,4 +1,5 @@
 import json
+from typing import Any, Dict
 
 from twisted.web import resource
 
@@ -46,7 +47,7 @@ class UnlockWalletResource(resource.Resource):
             words = data['words']
 
         passphrase = bytes(data['passphrase'], 'utf-8')
-        ret = {'success': True}
+        ret: Dict[str, Any] = {'success': True}
 
         try:
             ret_words = self.manager.wallet.unlock(self.manager.tx_storage, words, passphrase)
@@ -61,7 +62,7 @@ class UnlockWalletResource(resource.Resource):
 
     def unlock_wallet_keypair(self, data):
         password = bytes(data['password'], 'utf-8')
-        ret = {}
+        ret: Dict[str, Any] = {}
         success = True
 
         try:

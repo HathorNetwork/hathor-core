@@ -15,7 +15,7 @@ class Plugin(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_cmd_dict(self) -> Dict[ProtocolMessages, Callable]:
+    def get_cmd_dict(self) -> Dict[ProtocolMessages, Callable[[str], None]]:
         raise NotImplementedError
 
     @abstractmethod

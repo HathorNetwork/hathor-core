@@ -1,7 +1,7 @@
 import json
 import struct
 from functools import partial
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from twisted.internet import reactor, threads
 from twisted.internet.defer import CancelledError, Deferred
@@ -17,6 +17,9 @@ from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.exceptions import TxValidationError
+
+if TYPE_CHECKING:
+    from hathor.transaction import BaseTransaction
 
 settings = HathorSettings()
 
@@ -38,7 +41,7 @@ class SendTokensResource(resource.Resource):
         self.manager = manager
         self.sleep_seconds = 0
 
-    def render_POST(self, request: Request):
+    def render_POST(self, request: Request) -> Any:
         """ POST request for /thin_wallet/send_tokens/
             We expect 'tx_hex' as request args
             'tx_hex': serialized tx in hexadecimal
@@ -142,13 +145,11 @@ class SendTokensResource(resource.Resource):
         tx.verify()
         return tx
 
-    def _stratum_timeout(self, result: Failure, timeout: int, **kwargs) -> None:
+    def _stratum_timeout(self, result: Failure, timeout: int, *, tx: 'BaseTransaction', request: Request) -> None:
         """ Method called when stratum timeouts when trying to solve tx pow
             We remove mining data and deferred from stratum and send error as response
         """
-        tx = kwargs['tx']
         stratum_tx = None
-        request = kwargs['request']
         funds_hash = tx.get_funds_hash()
         if funds_hash in self.manager.stratum_factory.mining_tx_pool:
             # We get both tx because stratum might have updated the tx (timestamp or parents)

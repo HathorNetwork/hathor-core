@@ -28,7 +28,7 @@ class AddPeersResource(resource.Resource):
 
         known_peers = self.manager.connections.peer_storage.values()
 
-        def already_connected(connection_string: str):
+        def already_connected(connection_string: str) -> bool:
             # determines if given connection string is already among connected or connecting peers
             endpoint_url = connection_string.replace('//', '')
 

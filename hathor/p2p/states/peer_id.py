@@ -88,10 +88,11 @@ class PeerIdState(BaseState):
             protocol.send_error_and_close_connection('Connection string is not in the entrypoints.')
             return
 
-        certificate_valid = peer.validate_certificate(protocol)
-        if not certificate_valid:
-            protocol.send_error_and_close_connection('Public keys from peer and certificate are not the same.')
-            return
+        if protocol.use_ssl:
+            certificate_valid = peer.validate_certificate(protocol)
+            if not certificate_valid:
+                protocol.send_error_and_close_connection('Public keys from peer and certificate are not the same.')
+                return
 
         # If it gets here, the peer is validated, and we are ready to start communicating.
         protocol.peer = peer

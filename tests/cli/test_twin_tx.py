@@ -68,8 +68,7 @@ class TwinTxTest(unittest.TestCase):
         self.assertFalse(meta == meta2)
 
     def test_twin_different(self):
-        # Running with ssl just to test listening tcp with TLS factory
-        server = run_server(listen_ssl=True)
+        server = run_server()
 
         # Unlock wallet to start mining
         request_server('wallet/unlock', 'POST', data={'passphrase': '123'})
