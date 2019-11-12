@@ -1,4 +1,4 @@
-from unittest import skip
+import unittest
 
 from twisted.internet.address import IPv4Address
 from twisted.internet.defer import inlineCallbacks
@@ -19,14 +19,14 @@ class StratumResourceTest(_BaseResourceTest._ResourceTest):
         super().setUp()
         self.web = StubSite(MiningStatsResource(self.manager))
 
-    @skip('broken')
+    @unittest.skip('broken')
     @inlineCallbacks
     def test_get(self):
         response = yield self.web.get('miners')
         data = response.json_value()
         self.assertEqual(data, [])
 
-    @skip('broken')
+    @unittest.skip('broken')
     @inlineCallbacks
     def test_subscribe_and_mine(self):
         import json
