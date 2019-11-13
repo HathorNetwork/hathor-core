@@ -179,12 +179,15 @@ class TokenCreationTransaction(Transaction):
     def serialize_token_info(self) -> bytes:
         """ Returns the serialization for token name and symbol
         """
+        encoded_name = self.token_name.encode('utf-8')
+        encoded_symbol = self.token_symbol.encode('utf-8')
+
         ret = b''
         ret += int_to_bytes(TOKEN_INFO_VERSION, 1)
-        ret += int_to_bytes(len(self.token_name), 1)
-        ret += self.token_name.encode('utf-8')
-        ret += int_to_bytes(len(self.token_symbol), 1)
-        ret += self.token_symbol.encode('utf-8')
+        ret += int_to_bytes(len(encoded_name), 1)
+        ret += encoded_name
+        ret += int_to_bytes(len(encoded_symbol), 1)
+        ret += encoded_symbol
         return ret
 
     @classmethod

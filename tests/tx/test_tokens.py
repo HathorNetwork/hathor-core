@@ -468,6 +468,22 @@ class TokenTest(unittest.TestCase):
         with self.assertRaises(TransactionDataError):
             tx.verify()
 
+        # Token name unicode
+        tx.token_name = 'Test ∞'
+        tx.token_symbol = 'TST'
+        token_info = tx.serialize_token_info()
+        TokenCreationTransaction.deserialize_token_info(token_info)
+        update_tx(tx)
+        tx.verify()
+
+        # Token symbol unicode
+        tx.token_name = 'Test Token'
+        tx.token_symbol = 'TST∞'
+        token_info = tx.serialize_token_info()
+        TokenCreationTransaction.deserialize_token_info(token_info)
+        update_tx(tx)
+        tx.verify()
+
     def test_token_mint_zero(self):
         # try to mint 0 tokens
         with self.assertRaises(InvalidToken):
