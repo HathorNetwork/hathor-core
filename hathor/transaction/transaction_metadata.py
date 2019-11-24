@@ -21,6 +21,7 @@ class TransactionMetadata:
     accumulated_weight: float
     score: float
     first_block: Optional[bytes]
+    height: int
 
     # It must be a weakref.
     _tx_ref: Optional['ReferenceType[BaseTransaction]']
@@ -71,6 +72,9 @@ class TransactionMetadata:
 
         # Score
         self.score = score
+
+        # Height
+        self.height = 0
 
         # First valid block that verifies this transaction
         # If two blocks verify the same parent block and have the same score, both are valid.
@@ -166,6 +170,7 @@ class TransactionMetadata:
         data['twins'] = [x.hex() for x in self.twins]
         data['accumulated_weight'] = self.accumulated_weight
         data['score'] = self.score
+        data['height'] = self.height
         if self.first_block is not None:
             data['first_block'] = self.first_block.hex()
         else:
@@ -199,6 +204,7 @@ class TransactionMetadata:
 
         meta.accumulated_weight = data['accumulated_weight']
         meta.score = data.get('score', 0)
+        meta.height = data.get('height', 0)
 
         first_block_raw = data.get('first_block', None)
         if first_block_raw:

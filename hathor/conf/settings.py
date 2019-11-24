@@ -27,7 +27,8 @@ class HathorSettings(NamedTuple):
 
     GENESIS_TOKENS: int = GENESIS_TOKENS
 
-    TOKENS_PER_BLOCK: int = 8
+    BLOCKS_PER_HALVING: Optional[int] = 524160  # every 182 days
+    INITIAL_TOKENS_PER_BLOCK: int = 64
 
     AVG_TIME_BETWEEN_BLOCKS: int = 30  # in seconds
 
