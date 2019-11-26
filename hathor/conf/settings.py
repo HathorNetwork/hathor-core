@@ -28,6 +28,8 @@ class HathorSettings(NamedTuple):
 
     GENESIS_TOKENS: int = GENESIS_TOKENS
 
+    # To disable reward halving, one just have to set this to `None` and make sure
+    # that INITIAL_TOKEN_UNITS_PER_BLOCK is equal to MINIMUM_TOKEN_UNITS_PER_BLOCK.
     BLOCKS_PER_HALVING: Optional[int] = 1051200  # every 365 days
 
     INITIAL_TOKEN_UNITS_PER_BLOCK: int = 64
