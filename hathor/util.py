@@ -1,6 +1,7 @@
 import warnings
 from enum import Enum
 from functools import partial, wraps
+from math import log
 from typing import Any, Callable, Dict, Iterator, cast
 
 from twisted.internet.defer import succeed
@@ -15,12 +16,21 @@ settings = HathorSettings()
 
 
 def _get_tokens_issued_per_block(height: int) -> int:
+    """Return the number of tokens issued by block with a given height.
+
+    Always use Manager.get_tokens_issued_per_block.
+    You should not use this method unless you know what you are doing.
+    """
     if settings.BLOCKS_PER_HALVING is None:
-        return settings.MINIMUM_TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES)
+        return settings.MINIMUM_TOKENS_PER_BLOCK
 
     number_of_halvings = height // settings.BLOCKS_PER_HALVING
-    amount = (settings.INITIAL_TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES)) // (number_of_halvings + 1)
-    amount = max(amount, settings.MINIMUM_TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES))
+
+    if number_of_halvings > settings.MAXIMUM_NUMBER_OF_HALVINGS:
+        return settings.MINIMUM_TOKENS_PER_BLOCK
+
+    amount = settings.INITIAL_TOKENS_PER_BLOCK // (2**number_of_halvings)
+    amount = max(amount, settings.MINIMUM_TOKENS_PER_BLOCK)
     return amount
 
 

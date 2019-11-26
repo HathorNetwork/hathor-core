@@ -1,4 +1,5 @@
 import os
+from math import log
 from typing import List, NamedTuple, Optional
 
 DECIMAL_PLACES = 2
@@ -27,9 +28,23 @@ class HathorSettings(NamedTuple):
 
     GENESIS_TOKENS: int = GENESIS_TOKENS
 
-    BLOCKS_PER_HALVING: Optional[int] = 1051200  # every 182 days
-    INITIAL_TOKENS_PER_BLOCK: int = 64
-    MINIMUM_TOKENS_PER_BLOCK: int = 4
+    BLOCKS_PER_HALVING: Optional[int] = 1051200  # every 365 days
+
+    INITIAL_TOKEN_UNITS_PER_BLOCK: int = 64
+    INITIAL_TOKENS_PER_BLOCK: int = INITIAL_TOKEN_UNITS_PER_BLOCK * (10**DECIMAL_PLACES)
+
+    MINIMUM_TOKEN_UNITS_PER_BLOCK: int = 8
+    MINIMUM_TOKENS_PER_BLOCK: int = MINIMUM_TOKEN_UNITS_PER_BLOCK * (10**DECIMAL_PLACES)
+
+    # Assume that: amount < minimum
+    # But, amount = initial / (2**n), where n = number_of_halvings. Thus:
+    #   initial / (2**n) < minimum
+    #   initial / minimum < 2**n
+    #   2**n > initial / minimum
+    # Applying log to both sides:
+    #   n > log2(initial / minimum)
+    #   n > log2(initial) - log2(minimum)
+    MAXIMUM_NUMBER_OF_HALVINGS: int = log(INITIAL_TOKEN_UNITS_PER_BLOCK, 2) - log(MINIMUM_TOKEN_UNITS_PER_BLOCK, 2)
 
     AVG_TIME_BETWEEN_BLOCKS: int = 30  # in seconds
 
