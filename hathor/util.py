@@ -16,7 +16,7 @@ settings = HathorSettings()
 
 
 def _get_tokens_issued_per_block(height: int) -> int:
-    """Return the number of tokens issued by block with a given height.
+    """Return the number of tokens issued per block of a given height.
 
     Always use Manager.get_tokens_issued_per_block.
     You should not use this method unless you know what you are doing.

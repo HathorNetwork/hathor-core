@@ -379,7 +379,7 @@ class HathorManager:
         return blk
 
     def get_tokens_issued_per_block(self, height: int) -> int:
-        """Return the number of tokens issued by block with a given height."""
+        """Return the number of tokens issued per block of a given height."""
         return hathor.util._get_tokens_issued_per_block(height)
 
     def validate_new_tx(self, tx: BaseTransaction) -> bool:
