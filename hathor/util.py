@@ -9,6 +9,20 @@ from twisted.python.threadable import isInIOThread
 from twisted.web.iweb import IBodyProducer
 from zope.interface import implementer
 
+from hathor.conf import HathorSettings
+
+settings = HathorSettings()
+
+
+def _get_tokens_issued_per_block(height: int) -> int:
+    if settings.BLOCKS_PER_HALVING is None:
+        return settings.MINIMUM_TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES)
+
+    number_of_halvings = height // settings.BLOCKS_PER_HALVING
+    amount = (settings.INITIAL_TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES)) // (number_of_halvings + 1)
+    amount = max(amount, settings.MINIMUM_TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES))
+    return amount
+
 
 def practically_equal(a: Dict[Any, Any], b: Dict[Any, Any]) -> bool:
     """ Compare two defaultdict. It is used because a simple access have

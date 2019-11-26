@@ -2,7 +2,7 @@ import random
 
 from hathor.crypto.util import decode_address
 from tests import unittest
-from tests.utils import add_new_blocks, add_new_tx, get_tokens_from_mining, start_remote_storage
+from tests.utils import add_new_blocks, add_new_tx, start_remote_storage
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):
@@ -143,8 +143,9 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager1.wallet.get_unused_address_bytes()
         value = 500
+        tx_total_value = sum(txout.value for txout in tx1.outputs)
         outputs = [WalletOutputInfo(address=address, value=value, timelock=None),
-                   WalletOutputInfo(address=address, value=get_tokens_from_mining(1) - 500, timelock=None)]
+                   WalletOutputInfo(address=address, value=tx_total_value - 500, timelock=None)]
         self.clock.advance(1)
         inputs = [WalletInputInfo(i.tx_id, i.index, b'') for i in tx1.inputs]
         tx4 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs,
@@ -259,7 +260,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # ---
 
         address = self.manager1.wallet.get_unused_address_bytes()
-        value = get_tokens_from_mining(1)
+        value = blocks[3].outputs[0].value
         inputs = [WalletInputInfo(tx_id=blocks[3].hash, index=0, private_key=None)]
         outputs = [WalletOutputInfo(address=address, value=value, timelock=None)]
         self.clock.advance(1)

@@ -13,6 +13,7 @@ from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IReactorCore
 from twisted.python.threadpool import ThreadPool
 
+import hathor.util
 from hathor.conf import HathorSettings
 from hathor.exception import InvalidNewTransaction
 from hathor.indexes import TokensIndex, WalletIndex
@@ -377,14 +378,9 @@ class HathorManager:
         blk.weight = self.calculate_block_difficulty(blk)
         return blk
 
-    def get_tokens_issued_per_block(self, height: int):
-        if settings.BLOCKS_PER_HALVING is None:
-            return settings.MINIMUM_TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES)
-
-        number_of_halvings = height // settings.BLOCKS_PER_HALVING
-        amount = (settings.INITIAL_TOKENS_PER_BLOCK / number_of_halvings) * (10**settings.DECIMAL_PLACES)
-        amount = max(amount, settings.MINIMUM_TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES))
-        return amount
+    def get_tokens_issued_per_block(self, height: int) -> int:
+        """Return the number of tokens issued by block with a given height."""
+        return hathor.util._get_tokens_issued_per_block(height)
 
     def validate_new_tx(self, tx: BaseTransaction) -> bool:
         """ Process incoming transaction during initialization.
@@ -420,7 +416,8 @@ class HathorManager:
                     )
                 )
 
-            tokens_issued_per_block = self.get_tokens_issued_per_block(height)
+            parent_block = tx.get_block_parent()
+            tokens_issued_per_block = self.get_tokens_issued_per_block(parent_block.get_height() + 1)
             if tx.sum_outputs != tokens_issued_per_block:
                 raise InvalidNewTransaction(
                     'Invalid number of issued tokens tag=invalid_issued_tokens'

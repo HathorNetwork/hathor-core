@@ -6,7 +6,7 @@ from hathor.manager import TestMode
 from hathor.p2p.resources import MiningResource
 from hathor.wallet.resources import BalanceResource, HistoryResource, SendTokensResource
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
-from tests.utils import add_new_blocks, get_tokens_from_mining, resolve_block_bytes
+from tests.utils import add_new_blocks, resolve_block_bytes
 
 
 class SendTokensTest(_BaseResourceTest._ResourceTest):
@@ -43,7 +43,8 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         # Asserting new balance
         response_balance = yield self.web_balance.get("wallet/balance")
         data_balance = response_balance.json_value()
-        self.assertEqual(data_balance['balance'], {'available': get_tokens_from_mining(1) - 505, 'locked': 0})
+        tokens_per_block = self.manager.get_tokens_issued_per_block(1)
+        self.assertEqual(data_balance['balance'], {'available': tokens_per_block - 505, 'locked': 0})
 
         # Getting history, so we can get the input
         response_history = yield self.web_history.get("wallet/history", {b'page': 1, b'count': 10})
@@ -88,7 +89,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         data_json2 = {
             "outputs": [{
                 "address": self.get_address(0),
-                "value": get_tokens_from_mining(1) - 505
+                "value": self.manager.get_tokens_issued_per_block(1) - 505
             }],
             "inputs": [{
                 "tx_id": input_hash,

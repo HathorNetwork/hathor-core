@@ -9,7 +9,7 @@ from hathor.transaction.scripts import create_output_script
 from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
 from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from tests import unittest
-from tests.utils import add_new_blocks, get_tokens_from_mining
+from tests.utils import add_new_blocks
 
 settings = HathorSettings()
 
@@ -56,12 +56,13 @@ class MultiSigSpendTest(unittest.TestCase):
         # Adding funds to the wallet
         # XXX: note further down the test, 20.00 HTR will be used, block_count must yield at least that amount
         block_count = 3  # 3 * 8.00 -> 24.00 HTR is enough
-        add_new_blocks(self.manager, block_count, advance_clock=15)
-        available_tokens = get_tokens_from_mining(block_count)
+        blocks = add_new_blocks(self.manager, block_count, advance_clock=15)
+        blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
+        available_tokens = sum(blocks_tokens)
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID], WalletBalance(0, available_tokens))
 
         # First we send tokens to a multisig address
-        block_reward = get_tokens_from_mining(1)
+        block_reward = blocks_tokens[0]
         outputs = [WalletOutputInfo(address=self.multisig_address, value=block_reward, timelock=None)]
 
         tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)

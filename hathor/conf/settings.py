@@ -1,5 +1,5 @@
 import os
-from typing import List, NamedTuple
+from typing import List, NamedTuple, Optional
 
 DECIMAL_PLACES = 2
 
@@ -27,8 +27,9 @@ class HathorSettings(NamedTuple):
 
     GENESIS_TOKENS: int = GENESIS_TOKENS
 
-    BLOCKS_PER_HALVING: Optional[int] = 524160  # every 182 days
+    BLOCKS_PER_HALVING: Optional[int] = 1051200  # every 182 days
     INITIAL_TOKENS_PER_BLOCK: int = 64
+    MINIMUM_TOKENS_PER_BLOCK: int = 4
 
     AVG_TIME_BETWEEN_BLOCKS: int = 30  # in seconds
 
