@@ -44,11 +44,6 @@ class Block(BaseTransaction):
             d.update(data=self.data.hex())
         return d
 
-    def get_height(self) -> int:
-        """Return the height of the block, i.e., the number of blocks since genesis"""
-        meta = self.get_metadata()
-        return meta.height
-
     @property
     def is_block(self) -> bool:
         """Returns true if this is a block"""
@@ -113,6 +108,14 @@ class Block(BaseTransaction):
         blc.storage = storage
 
         return blc
+
+    def get_height(self) -> int:
+        """Return the height of the block, i.e., the number of blocks since genesis"""
+        if self.is_genesis:
+            return 0
+        assert self.storage is not None
+        parent_block = self.get_block_parent()
+        return parent_block.get_metadata().height + 1
 
     def get_block_parent_hash(self) -> bytes:
         """ Return the hash of the parent block.

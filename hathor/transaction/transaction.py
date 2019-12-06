@@ -124,6 +124,10 @@ class Transaction(BaseTransaction):
 
         return tx
 
+    def get_height(self) -> int:
+        # TODO: define height for txs
+        return 0
+
     def get_funds_fields_from_struct(self, buf: bytes) -> bytes:
         """ Gets all funds fields for a transaction from a buffer.
 

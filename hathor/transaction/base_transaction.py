@@ -271,6 +271,10 @@ class BaseTransaction(ABC):
         assert self.hash is not None
         return hash(self.hash)
 
+    @abstractmethod
+    def get_height(self) -> int:
+        raise NotImplementedError
+
     @property
     def hash_hex(self) -> str:
         """Return the current stored hash in hex string format"""
@@ -648,7 +652,7 @@ class BaseTransaction(ABC):
             metadata = self.storage.get_metadata(self.hash)
             self._metadata = metadata
         if not metadata:
-            metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight)
+            metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight, height=self.get_height())
             self._metadata = metadata
         metadata._tx_ref = weakref.ref(self)
         return metadata
@@ -658,7 +662,7 @@ class BaseTransaction(ABC):
         recalculating all metadata.
         """
         assert self.storage is not None
-        self._metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight)
+        self._metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight, height=self.get_height())
         self._metadata._tx_ref = weakref.ref(self)
         self.storage.save_transaction(self, only_metadata=True)
 
