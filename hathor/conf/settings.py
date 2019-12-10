@@ -46,7 +46,8 @@ class HathorSettings(NamedTuple):
     # Applying log to both sides:
     #   n > log2(initial / minimum)
     #   n > log2(initial) - log2(minimum)
-    MAXIMUM_NUMBER_OF_HALVINGS: int = log(INITIAL_TOKEN_UNITS_PER_BLOCK, 2) - log(MINIMUM_TOKEN_UNITS_PER_BLOCK, 2)
+    MAXIMUM_NUMBER_OF_HALVINGS: int = int(log(INITIAL_TOKEN_UNITS_PER_BLOCK, 2) -
+                                          log(MINIMUM_TOKEN_UNITS_PER_BLOCK, 2))
 
     AVG_TIME_BETWEEN_BLOCKS: int = 30  # in seconds
 

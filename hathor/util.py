@@ -1,7 +1,6 @@
 import warnings
 from enum import Enum
 from functools import partial, wraps
-from math import log
 from typing import Any, Callable, Dict, Iterator, cast
 
 from twisted.internet.defer import succeed
