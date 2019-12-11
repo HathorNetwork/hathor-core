@@ -363,7 +363,7 @@ class HathorManager:
             if self.wallet is None:
                 raise ValueError('No wallet available and no mining address given')
             address = self.wallet.get_unused_address_bytes(mark_as_used=False)
-        height = parent_block.get_height()
+        height = parent_block.get_height() + 1
         amount = self.get_tokens_issued_per_block(height)
         output_script = create_output_script(address)
         tx_outputs = [TxOutput(amount, output_script)]
