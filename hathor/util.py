@@ -23,7 +23,8 @@ def _get_tokens_issued_per_block(height: int) -> int:
     if settings.BLOCKS_PER_HALVING is None:
         return settings.MINIMUM_TOKENS_PER_BLOCK
 
-    number_of_halvings = height // settings.BLOCKS_PER_HALVING
+    number_of_halvings = (height - 1) // settings.BLOCKS_PER_HALVING
+    number_of_halvings = max(0, number_of_halvings)
 
     if number_of_halvings > settings.MAXIMUM_NUMBER_OF_HALVINGS:
         return settings.MINIMUM_TOKENS_PER_BLOCK
