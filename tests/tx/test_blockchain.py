@@ -54,7 +54,7 @@ class BlockchainTestCase(unittest.TestCase):
             meta = block.get_metadata()
             score = sum_weights(score, block.weight)
             self.assertAlmostEqual(score, meta.score)
-            self.assertAlmostEqual(block.calculate_score(), meta.score)
+            self.assertAlmostEqual(manager.consensus_algorithm.block_algorithm.calculate_score(block), meta.score)
 
         # Mine more 15 blocks with 10 transactions between each block
         for _ in range(15):
@@ -67,7 +67,7 @@ class BlockchainTestCase(unittest.TestCase):
                 meta = block.get_metadata()
                 score = sum_weights(score, block.weight)
                 self.assertAlmostEqual(score, meta.score)
-                self.assertAlmostEqual(block.calculate_score(), meta.score)
+                self.assertAlmostEqual(manager.consensus_algorithm.block_algorithm.calculate_score(block), meta.score)
 
     def test_single_fork_not_best(self):
         """ New blocks belong to cases (i), (ii), (iii), and (iv).

@@ -14,6 +14,7 @@ from twisted.internet.interfaces import IReactorCore
 from twisted.python.threadpool import ThreadPool
 
 from hathor.conf import HathorSettings
+from hathor.consensus import ConsensusAlgorithm
 from hathor.exception import InvalidNewTransaction
 from hathor.indexes import TokensIndex, WalletIndex
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -129,6 +130,8 @@ class HathorManager:
             tx_storage=tx_storage,
             reactor=self.reactor,
         )
+
+        self.consensus_algorithm = ConsensusAlgorithm()
 
         self.peer_discoveries: List[PeerDiscovery] = []
 
@@ -477,8 +480,8 @@ class HathorManager:
             self.tx_storage._add_to_cache(tx)
 
         try:
-            tx.update_parents()
-            tx.update_consensus()
+            tx.update_metadata()
+            self.consensus_algorithm.update(tx)
         except Exception:
             self.tx_storage.remove_transaction(tx)
             pretty_json = json.dumps(tx.to_json(), indent=4)

@@ -143,7 +143,7 @@ class BasicTransaction(unittest.TestCase):
 
     def test_children_update(self):
         tx = self._gen_tx_spending_genesis_block()
-        tx.update_parents()
+        tx.update_metadata()
 
         # genesis transactions should have only this tx in their children set
         for parent in tx.get_parents():
