@@ -1,4 +1,3 @@
-import unittest as ut
 from itertools import chain
 
 from hathor.conf import HathorSettings
@@ -363,7 +362,6 @@ class BlockchainTestCase(unittest.TestCase):
             self.assertEqual(reward, expected_reward, f'reward at height {height}')
             height += 1
 
-    @ut.skip('this test is waaay too slow')
     def test_block_rewards(self):
         # even dumber test that only check if manager.get_tokens_issued_per_block was used correctly for a really large
         # number of blocks, probably not worth running all the time
@@ -372,10 +370,10 @@ class BlockchainTestCase(unittest.TestCase):
         blocks = add_new_blocks(manager, block_count, advance_clock=block_count * 30)
         for block in blocks:
             outputs = block.outputs
-            self.assertEq(len(outputs), 1)
+            self.assertEqual(len(outputs), 1)
             output = outputs[0]
-            height = blocks.get_metadata().height
-            self.assertEq(output.value, manager.get_tokens_issued_per_block(height))
+            height = block.get_metadata().height
+            self.assertEqual(output.value, manager.get_tokens_issued_per_block(height))
 
 
 if __name__ == '__main__':
