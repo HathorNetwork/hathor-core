@@ -30,7 +30,7 @@ class HathorSettings(NamedTuple):
 
     # To disable reward halving, one just have to set this to `None` and make sure
     # that INITIAL_TOKEN_UNITS_PER_BLOCK is equal to MINIMUM_TOKEN_UNITS_PER_BLOCK.
-    BLOCKS_PER_HALVING: Optional[int] = 1051200  # every 365 days
+    BLOCKS_PER_HALVING: Optional[int] = 2 * 60 * 24 * 365  # 1051200, every 365 days
 
     INITIAL_TOKEN_UNITS_PER_BLOCK: int = 64
     INITIAL_TOKENS_PER_BLOCK: int = INITIAL_TOKEN_UNITS_PER_BLOCK * (10**DECIMAL_PLACES)
