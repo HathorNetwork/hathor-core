@@ -21,6 +21,7 @@ def _get_tokens_issued_per_block(height: int) -> int:
     You should not use this method unless you know what you are doing.
     """
     if settings.BLOCKS_PER_HALVING is None:
+        assert settings.MINIMUM_TOKENS_PER_BLOCK == settings.INITIAL_TOKENS_PER_BLOCK
         return settings.MINIMUM_TOKENS_PER_BLOCK
 
     number_of_halvings = (height - 1) // settings.BLOCKS_PER_HALVING
