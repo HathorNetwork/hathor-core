@@ -17,6 +17,9 @@ _base_transaction_log = logger.new()
 
 
 class ConsensusAlgorithm:
+    """Execute the consensus algorithm marking blocks and transactions as either executed or voided.
+    """
+
     def __init__(self) -> None:
         self.block_algorithm = BlockConsensusAlgorithm(self)
         self.transaction_algorithm = TransactionConsensusAlgorithm(self)
@@ -109,6 +112,39 @@ class BlockConsensusAlgorithm:
         assert block.hash is not None
 
         storage = block.storage
+
+        # Union of voided_by of parents
+        voided_by: Set[bytes] = set()
+        for parent in block.get_parents():
+            parent_meta = parent.get_metadata()
+            if parent_meta.voided_by:
+                voided_by.update(parent_meta.voided_by)
+
+        # Update accumulated weight of the transactions voiding us.
+        assert block.hash not in voided_by
+        for h in voided_by:
+            tx = storage.get_transaction(h)
+            tx_meta = tx.get_metadata()
+            tx_meta.accumulated_weight = sum_weights(tx_meta.accumulated_weight, block.weight)
+            storage.save_transaction(tx, only_metadata=True)
+
+        if voided_by:
+            meta = block.get_metadata()
+            meta.voided_by = voided_by.copy()
+            storage.save_transaction(block, only_metadata=True)
+
+        # Check conflicts of the transactions voiding us.
+        for h in voided_by:
+            if h == block.hash:
+                continue
+            tx = tx.storage.get_transaction(h)
+            if not tx.is_block:
+                self.consensus.transaction_algorithm.check_conflicts(tx)
+
+        meta = block.get_metadata()
+        if meta.voided_by:
+            storage._del_from_cache(block, relax_assert=True)  # XXX: accessing private method
+            return
 
         parent = block.get_block_parent()
         parent_meta = parent.get_metadata()
@@ -698,8 +734,9 @@ class TransactionConsensusAlgorithm:
 
         from hathor.transaction import Transaction
         for tx2 in check_list:
-            assert isinstance(tx2, Transaction)
-            self.check_conflicts(tx2)
+            if not tx2.is_block:
+                assert isinstance(tx2, Transaction)
+                self.check_conflicts(tx2)
         return True
 
     def mark_as_voided(self, tx: 'Transaction') -> None:
@@ -734,8 +771,15 @@ class TransactionConsensusAlgorithm:
         for tx2 in bfs.run(tx, skip_root=False):
             assert tx2.storage is not None
             assert tx2.hash is not None
-
             meta2 = tx2.get_metadata()
+
+            if tx2.is_block:
+                assert isinstance(tx2, Block)
+                self.consensus.block_algorithm.mark_as_voided(tx2)
+                tx2.storage._del_from_cache(tx2, relax_assert=True)  # XXX: accessing private method
+                continue
+
+            assert isinstance(tx2, Transaction)
             assert not meta2.voided_by or voided_hash not in meta2.voided_by
             if tx2.hash != tx.hash and meta2.conflict_with and not meta2.voided_by:
                 check_list.extend(tx2.storage.get_transaction(h) for h in meta2.conflict_with)

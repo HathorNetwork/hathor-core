@@ -183,7 +183,7 @@ class BaseTransaction(ABC):
             d.update(
                 inputs=repr(self.inputs),
                 outputs=repr(self.outputs),
-                parents=repr(self.parents),
+                parents=repr([x.hex() for x in self.parents]),
                 storage=repr(self.storage),
             )
         return d
