@@ -18,6 +18,8 @@ class TestCase(unittest.TestCase):
         self.tmpdirs = []
         self.clock = Clock()
         self.clock.advance(time.time())
+        # before patching genesis, validate the original ones are correct
+        self._validate_real_genesis()
         self._patch_genesis_block()
 
     def _patch_genesis_block(self):
@@ -36,12 +38,18 @@ class TestCase(unittest.TestCase):
         assert isinstance(block, Block)
         block.outputs[0].script = bytes.fromhex('76a914fd05059b6006249543b82f36876a17c73fd2267b88ac')
         block.resolve(update_time=False)
-        block.nonce = 755544
+        block.nonce = 1438257
         block.update_hash()
-        assert block.hash_hex == '0000028d1c75cb03889d1d1bd277a15fa4100c80fb7aa08db69d1cef584e52cd'
+        assert block.hash_hex == '00000087afe53259732782269fb62243ad52b669728394d492b1e84c259fb85c'
 
     def tearDown(self):
         self.clean_tmpdirs()
+
+    def _validate_real_genesis(self):
+        import hathor.transaction.genesis
+        for tx in hathor.transaction.genesis.GENESIS:
+            self.assertEqual(tx.hash, tx.calculate_hash())
+            tx.verify_without_storage()
 
     def _create_test_wallet(self):
         """ Generate a Wallet with a number of keypairs for testing
