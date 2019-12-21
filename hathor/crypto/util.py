@@ -11,7 +11,6 @@ from cryptography.hazmat.primitives.serialization import (
     PrivateFormat,
     PublicFormat,
     load_der_private_key,
-    load_der_public_key,
 )
 
 from hathor.conf import HathorSettings
@@ -24,6 +23,8 @@ _BACKEND = default_backend()
 def get_private_key_bytes(private_key: ec.EllipticCurvePrivateKey, encoding: Encoding = Encoding.DER,
                           format: PrivateFormat = PrivateFormat.PKCS8,
                           encryption_algorithm: KeySerializationEncryption = NoEncryption()) -> bytes:
+    """ Returns the bytes from a cryptography ec.EllipticCurvePrivateKey
+    """
     return private_key.private_bytes(encoding=encoding, format=format, encryption_algorithm=encryption_algorithm)
 
 
@@ -31,11 +32,6 @@ def get_private_key_from_bytes(private_key_bytes: bytes,
                                password: Optional[bytes] = None) -> ec.EllipticCurvePrivateKey:
     """Returns the cryptography ec.EllipticCurvePrivateKey from bytes"""
     return load_der_private_key(private_key_bytes, password, _BACKEND)
-
-
-def get_public_key_from_bytes(public_key_bytes: bytes) -> ec.EllipticCurvePublicKey:
-    """Returns the cryptography ec.EllipticCurvePublicKey from bytes"""
-    return load_der_public_key(public_key_bytes, _BACKEND)
 
 
 def get_hash160(public_key_bytes: bytes) -> bytes:
