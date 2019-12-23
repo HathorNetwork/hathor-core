@@ -702,8 +702,10 @@ class BaseTransaction(ABC):
 
         return metadata
 
-    def update_metadata(self) -> None:
-        """Update the tx's metadata.
+    def update_initial_metadata(self) -> None:
+        """Update the tx's initial metadata. It does not update the whole metadata.
+
+        It is called when a new transaction/block is received by HathorManager.
 
         :rtype None
         """

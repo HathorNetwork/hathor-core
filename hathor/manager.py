@@ -480,7 +480,7 @@ class HathorManager:
             self.tx_storage._add_to_cache(tx)
 
         try:
-            tx.update_metadata()
+            tx.update_initial_metadata()
             self.consensus_algorithm.update(tx)
         except Exception:
             self.tx_storage.remove_transaction(tx)

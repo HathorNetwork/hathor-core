@@ -11,23 +11,23 @@ GENESIS_OUTPUTS = [
 ]
 
 BLOCK_GENESIS = Block(
-    hash=bytes.fromhex('000003cf0a47d38c0407c8ffe64d47ed67e18316e43beb07c2e513f6e0b3d936'),
+    hash=bytes.fromhex('000007eb968a6cdf0499e2d033faf1e163e0dc9cf41876acad4d421836972038'),
     data=b'',
-    nonce=3593144,
+    nonce=3526202,
     timestamp=1572636343,
     weight=settings.MIN_BLOCK_WEIGHT,
     outputs=GENESIS_OUTPUTS,
 )
 
 TX_GENESIS1 = Transaction(
-    hash=bytes.fromhex('000250e65d8cb4044a4f5659720179e5faeb13d01476a3fb283c7bb8e57e4d0f'),
+    hash=bytes.fromhex('00025d75e44804a6a6a099f4320471c864b38d37b79b496ee26080a2a1fd5b7b'),
     nonce=12595,
     timestamp=1572636344,
     weight=settings.MIN_TX_WEIGHT,
 )
 
 TX_GENESIS2 = Transaction(
-    hash=bytes.fromhex('000039762550478005083fcab58a465b3d83148d067e4c827a96b5eec1635401'),
+    hash=bytes.fromhex('0002c187ab30d4f61c11a5dc43240bdf92dba4d19f40f1e883b0a5fdac54ef53'),
     nonce=21301,
     timestamp=1572636345,
     weight=settings.MIN_TX_WEIGHT,
