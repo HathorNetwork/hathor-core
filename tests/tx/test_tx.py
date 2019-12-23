@@ -466,7 +466,7 @@ class BasicTransaction(unittest.TestCase):
 
         # 4. propagate block from the future
         block = manager.generate_mining_block()
-        block.timestamp = int(self.clock.seconds()) + manager.max_future_timestamp_allowed + 100
+        block.timestamp = int(self.clock.seconds()) + settings.MAX_FUTURE_TIMESTAMP_ALLOWED + 100
         block.resolve(update_time=False)
         self.assertFalse(manager.propagate_tx(block))
 
