@@ -151,7 +151,7 @@ def add_new_transactions(manager, num_txs, advance_clock=None):
     return txs
 
 
-def add_new_block(manager, advance_clock=None, *, parent_block_hash=None, data=b''):
+def add_new_block(manager, advance_clock=None, *, parent_block_hash=None, data=b'', weight=None):
     """ Create, resolve and propagate a new block
 
         :param manager: Manager object to handle the creation
@@ -161,6 +161,8 @@ def add_new_block(manager, advance_clock=None, *, parent_block_hash=None, data=b
         :rtype: :py:class:`hathor.transaction.block.Block`
     """
     block = manager.generate_mining_block(parent_block_hash=parent_block_hash, data=data)
+    if weight is not None:
+        block.weight = weight
     block.resolve()
     block.verify()
     manager.propagate_tx(block, fails_silently=False)
@@ -169,7 +171,7 @@ def add_new_block(manager, advance_clock=None, *, parent_block_hash=None, data=b
     return block
 
 
-def add_new_blocks(manager, num_blocks, advance_clock=None, *, parent_block_hash=None, block_data=b''):
+def add_new_blocks(manager, num_blocks, advance_clock=None, *, parent_block_hash=None, block_data=b'', weight=None):
     """ Create, resolve and propagate some blocks
 
         :param manager: Manager object to handle the creation
@@ -183,7 +185,9 @@ def add_new_blocks(manager, num_blocks, advance_clock=None, *, parent_block_hash
     """
     blocks = []
     for _ in range(num_blocks):
-        blocks.append(add_new_block(manager, advance_clock, parent_block_hash=parent_block_hash, data=block_data))
+        blocks.append(
+            add_new_block(manager, advance_clock, parent_block_hash=parent_block_hash, data=block_data, weight=weight)
+        )
         if parent_block_hash:
             parent_block_hash = blocks[-1].hash
     return blocks
