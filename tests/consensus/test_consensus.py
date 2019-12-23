@@ -1,10 +1,7 @@
-from itertools import chain
-
 from hathor.graphviz import GraphvizVisualizer
-from hathor.transaction import sum_weights
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
-from tests.utils import add_new_block, add_new_blocks, add_new_transactions, add_new_double_spending
+from tests.utils import add_new_block, add_new_blocks, add_new_double_spending, add_new_transactions
 
 
 class ConsensusTestCase(unittest.TestCase):
@@ -152,7 +149,7 @@ class ConsensusTestCase(unittest.TestCase):
         # This block verifies the conflicting transaction and has a high weight.
         b0 = manager.generate_mining_block()
         b0.parents = [blocks[-1].hash, conflicting_tx.hash, conflicting_tx.parents[0]]
-        #b0.parents = [b0.parents[0], conflicting_tx.hash, conflicting_tx.parents[0]]
+        # b0.parents = [b0.parents[0], conflicting_tx.hash, conflicting_tx.parents[0]]
         b0.weight = 10
         b0.resolve()
         b0.verify()
@@ -225,4 +222,3 @@ class ConsensusTestCase(unittest.TestCase):
         for block in blocks2:
             meta = block.get_metadata()
             self.assertIsNone(meta.voided_by)
-
