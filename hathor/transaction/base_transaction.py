@@ -336,12 +336,6 @@ class BaseTransaction(ABC):
                     return True
             return False
 
-    @abstractclassmethod
-    def update_consensus(self) -> None:
-        """This method is called when a vertex is added to the DAG, and it is responsible for running
-        the consensus algorithm and decide whether the vertex is voided or not."""
-        raise NotImplementedError
-
     @abstractmethod
     def get_funds_fields_from_struct(self, buf: bytes) -> bytes:
         raise NotImplementedError
@@ -720,8 +714,10 @@ class BaseTransaction(ABC):
 
         return metadata
 
-    def update_parents(self) -> None:
-        """Update the tx's parents to add the current tx as their child.
+    def update_initial_metadata(self) -> None:
+        """Update the tx's initial metadata. It does not update the whole metadata.
+
+        It is called when a new transaction/block is received by HathorManager.
 
         :rtype None
         """
