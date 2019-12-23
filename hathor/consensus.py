@@ -117,8 +117,13 @@ class BlockConsensusAlgorithm:
         voided_by: Set[bytes] = set()
         for parent in block.get_parents():
             parent_meta = parent.get_metadata()
-            if parent_meta.voided_by:
-                voided_by.update(parent_meta.voided_by)
+            voided_by2 = parent_meta.voided_by
+            if voided_by2:
+                if parent.is_block:
+                    # We must ignore the blocks themselves.
+                    voided_by2 = voided_by2.copy()
+                    voided_by2.discard(parent.hash)
+                voided_by.update(voided_by2)
 
         # Update accumulated weight of the transactions voiding us.
         assert block.hash not in voided_by

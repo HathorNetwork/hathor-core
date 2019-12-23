@@ -15,12 +15,6 @@ class ConsensusTestCase(unittest.TestCase):
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
 
-        # TODO
-        # Let tx1 and tx2 be in conflict.
-        # - Block verifying both tx1 and tx2. Then, block must never be executed.
-        # - tx2 verify tx1. Then, tx2 must never be executed.
-
-
     def test_revert_block_high_weight(self):
         """ A conflict transaction will be propagated. At first, it will be voided.
         But, a new block with high weight will verify it, which will flip it to executed.

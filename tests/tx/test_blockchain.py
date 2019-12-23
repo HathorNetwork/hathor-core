@@ -162,9 +162,6 @@ class BlockchainTestCase(unittest.TestCase):
         fork_meta3 = fork_block3.get_metadata()
         self.assertEqual(fork_meta3.voided_by, {fork_block3.hash})
 
-        # dot = manager.tx_storage.graphviz(format='pdf')
-        # dot.render('test_fork')
-
     def test_multiple_forks(self):
         self.assertEqual(len(self.genesis_blocks), 1)
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
