@@ -862,6 +862,12 @@ class TxInput:
         self.index = index  # int
         self.data = data  # bytes
 
+    def __repr__(self) -> str:
+        return str(self)
+
+    def __str__(self) -> str:
+        return 'TxInput(tx_id=%s, index=%s)' % (self.tx_id.hex(), self.index)
+
     def __bytes__(self) -> bytes:
         """Returns a byte representation of the input
 
@@ -965,6 +971,9 @@ class TxOutput:
         self.value = value  # int
         self.script = script  # bytes
         self.token_data = token_data  # int
+
+    def __repr__(self) -> str:
+        return str(self)
 
     def __str__(self) -> str:
         value_str = bin(self.value) if self.is_token_authority else str(self.value)
