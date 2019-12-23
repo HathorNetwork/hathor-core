@@ -145,8 +145,9 @@ class HathorSettings(NamedTuple):
         'BLOCK_DATA_MAX_SIZE'
     ]
 
-    # Maximum difference allowed between current time and a received tx timestamp (in seconds)
-    MAX_FUTURE_TIMESTAMP_ALLOWED: int = 3600
+    # Maximum difference allowed between current time and a received tx timestamp (in seconds). Also used
+    # during peer connection. Peers shouldn't have their clocks more than MAX_FUTURE_TIMESTAMP_ALLOWED/2 apart
+    MAX_FUTURE_TIMESTAMP_ALLOWED: int = 5 * 60
 
     # Maximum number of peer connection attemps before stop retrying
     MAX_PEER_CONNECTION_ATTEMPS: int = 3

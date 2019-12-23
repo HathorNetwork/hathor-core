@@ -1,5 +1,5 @@
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict
 
 import hathor
 from hathor.conf import HathorSettings
@@ -23,18 +23,13 @@ class HelloState(BaseState):
     def _app(self) -> str:
         return f'Hathor v{hathor.__version__}'
 
-    def on_enter(self) -> None:
-        # After a connection is made, we just send a HELLO message.
-        self.send_hello()
-
-    def send_hello(self) -> None:
-        """ Send a HELLO message, identifying the app and giving a `nonce`
-        value which must be signed in the PEER-ID response to ensure the
-        identity of the peer.
+    def _get_hello_data(self) -> Dict[str, Any]:
+        """ Returns a dict with information about this node that will
+        be sent to a peer.
         """
         protocol = self.protocol
         remote = protocol.transport.getPeer()
-        data = {
+        return {
             'app': self._app(),
             'network': protocol.network,
             'remote_address': '{}:{}'.format(remote.host, remote.port),
@@ -43,6 +38,16 @@ class HelloState(BaseState):
             'settings_dict': get_settings_hello_dict(),
             'capabilities': [],
         }
+
+    def on_enter(self) -> None:
+        # After a connection is made, we just send a HELLO message.
+        self.send_hello()
+
+    def send_hello(self) -> None:
+        """ Send a HELLO message, identifying the app and giving extra
+        information about this node to the peer.
+        """
+        data = self._get_hello_data()
         self.send_message(ProtocolMessages.HELLO, json.dumps(data))
 
     def handle_hello(self, payload: str) -> None:
@@ -74,6 +79,10 @@ class HelloState(BaseState):
 
         if data['genesis_short_hash'] != get_genesis_short_hash():
             protocol.send_error_and_close_connection('Different genesis.')
+            return
+
+        if abs(data['timestamp'] - protocol.node.reactor.seconds()) > settings.MAX_FUTURE_TIMESTAMP_ALLOWED/2:
+            protocol.send_error_and_close_connection('Nodes timestamps too far apart.')
             return
 
         settings_dict = get_settings_hello_dict()

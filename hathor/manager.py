@@ -122,8 +122,6 @@ class HathorManager:
         self.min_tx_weight = settings.MIN_TX_WEIGHT
         self.tokens_issued_per_block = settings.TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES)
 
-        self.max_future_timestamp_allowed = settings.MAX_FUTURE_TIMESTAMP_ALLOWED
-
         self.metrics = Metrics(
             pubsub=self.pubsub,
             avg_time_between_blocks=self.avg_time_between_blocks,
@@ -394,7 +392,7 @@ class HathorManager:
             if tx.is_genesis:
                 raise InvalidNewTransaction('Genesis? {}'.format(tx.hash.hex()))
 
-        if tx.timestamp - self.reactor.seconds() > self.max_future_timestamp_allowed:
+        if tx.timestamp - self.reactor.seconds() > settings.MAX_FUTURE_TIMESTAMP_ALLOWED:
             raise InvalidNewTransaction('Ignoring transaction in the future {} (timestamp={})'.format(
                 tx.hash.hex(), tx.timestamp))
 
