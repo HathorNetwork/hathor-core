@@ -125,7 +125,7 @@ class Transaction(BaseTransaction):
         return tx
 
     def get_height(self) -> int:
-        # TODO: define height for txs
+        # XXX: transactions don't have height, using 0 as a placeholder
         return 0
 
     def get_funds_fields_from_struct(self, buf: bytes) -> bytes:
