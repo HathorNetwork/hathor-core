@@ -363,7 +363,7 @@ class HathorManager:
             if self.wallet is None:
                 raise ValueError('No wallet available and no mining address given')
             address = self.wallet.get_unused_address_bytes(mark_as_used=False)
-        height = parent_block.get_height() + 1
+        height = parent_block.get_metadata().height + 1
         amount = self.get_tokens_issued_per_block(height)
         output_script = create_output_script(address)
         tx_outputs = [TxOutput(amount, output_script)]
@@ -417,7 +417,7 @@ class HathorManager:
                 )
 
             parent_block = tx.get_block_parent()
-            tokens_issued_per_block = self.get_tokens_issued_per_block(parent_block.get_height() + 1)
+            tokens_issued_per_block = self.get_tokens_issued_per_block(parent_block.get_metadata().height + 1)
             if tx.sum_outputs != tokens_issued_per_block:
                 raise InvalidNewTransaction(
                     'Invalid number of issued tokens tag=invalid_issued_tokens'

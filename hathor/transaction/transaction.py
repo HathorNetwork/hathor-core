@@ -124,7 +124,7 @@ class Transaction(BaseTransaction):
 
         return tx
 
-    def get_height(self) -> int:
+    def calculate_height(self) -> int:
         # XXX: transactions don't have height, using 0 as a placeholder
         return 0
 

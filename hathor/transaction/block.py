@@ -109,7 +109,7 @@ class Block(BaseTransaction):
 
         return blc
 
-    def get_height(self) -> int:
+    def calculate_height(self) -> int:
         """Return the height of the block, i.e., the number of blocks since genesis"""
         if self.is_genesis:
             return 0
