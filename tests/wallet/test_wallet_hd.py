@@ -9,9 +9,6 @@ from tests.utils import add_new_block
 
 settings = HathorSettings()
 
-BLOCK_TOKENS = settings.TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES)
-TOKENS = BLOCK_TOKENS
-
 
 class WalletHD(unittest.TestCase):
     def setUp(self):
@@ -22,19 +19,22 @@ class WalletHD(unittest.TestCase):
         self.tx_storage = self.manager.tx_storage
         self.wallet.unlock(tx_storage=self.tx_storage)
 
+        self.BLOCK_TOKENS = self.manager.get_tokens_issued_per_block(1)
+        self.TOKENS = self.BLOCK_TOKENS
+
     def test_transaction_and_balance(self):
         # generate a new block and check if we increase balance
         new_address = self.wallet.get_unused_address()
-        out = WalletOutputInfo(decode_address(new_address), TOKENS, timelock=None)
+        out = WalletOutputInfo(decode_address(new_address), self.TOKENS, timelock=None)
         block = add_new_block(self.manager)
         block.verify()
         utxo = self.wallet.unspent_txs[settings.HATHOR_TOKEN_UID].get((block.hash, 0))
         self.assertIsNotNone(utxo)
-        self.assertEqual(self.wallet.balance[settings.HATHOR_TOKEN_UID], WalletBalance(0, BLOCK_TOKENS))
+        self.assertEqual(self.wallet.balance[settings.HATHOR_TOKEN_UID], WalletBalance(0, self.BLOCK_TOKENS))
 
         # create transaction spending this value, but sending to same wallet
         new_address2 = self.wallet.get_unused_address()
-        out = WalletOutputInfo(decode_address(new_address2), TOKENS, timelock=None)
+        out = WalletOutputInfo(decode_address(new_address2), self.TOKENS, timelock=None)
         tx1 = self.wallet.prepare_transaction_compute_inputs(Transaction, outputs=[out])
         tx1.update_hash()
         tx1.verify_script(tx1.inputs[0], block)
@@ -44,13 +44,13 @@ class WalletHD(unittest.TestCase):
         self.assertEqual(len(self.wallet.spent_txs), 1)
         utxo = self.wallet.unspent_txs[settings.HATHOR_TOKEN_UID].get((tx1.hash, 0))
         self.assertIsNotNone(utxo)
-        self.assertEqual(self.wallet.balance[settings.HATHOR_TOKEN_UID], WalletBalance(0, TOKENS))
+        self.assertEqual(self.wallet.balance[settings.HATHOR_TOKEN_UID], WalletBalance(0, self.TOKENS))
 
         # pass inputs and outputs to prepare_transaction, but not the input keys
         # spend output last transaction
         input_info = WalletInputInfo(tx1.hash, 0, None)
         new_address3 = self.wallet.get_unused_address()
-        out = WalletOutputInfo(decode_address(new_address3), TOKENS, timelock=None)
+        out = WalletOutputInfo(decode_address(new_address3), self.TOKENS, timelock=None)
         tx2 = self.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs=[input_info],
                                                                 outputs=[out], tx_storage=self.tx_storage)
         tx2.storage = self.tx_storage
@@ -60,7 +60,7 @@ class WalletHD(unittest.TestCase):
         self.tx_storage.save_transaction(tx2)
         self.wallet.on_new_tx(tx2)
         self.assertEqual(len(self.wallet.spent_txs), 2)
-        self.assertEqual(self.wallet.balance[settings.HATHOR_TOKEN_UID], WalletBalance(0, TOKENS))
+        self.assertEqual(self.wallet.balance[settings.HATHOR_TOKEN_UID], WalletBalance(0, self.TOKENS))
 
         # Test getting more unused addresses than the gap limit
         for i in range(3):
@@ -74,7 +74,7 @@ class WalletHD(unittest.TestCase):
     def test_insuficient_funds(self):
         # create transaction spending some value
         new_address = self.wallet.get_unused_address()
-        out = WalletOutputInfo(decode_address(new_address), TOKENS, timelock=None)
+        out = WalletOutputInfo(decode_address(new_address), self.TOKENS, timelock=None)
         with self.assertRaises(InsufficientFunds):
             self.wallet.prepare_transaction_compute_inputs(Transaction, outputs=[out])
 

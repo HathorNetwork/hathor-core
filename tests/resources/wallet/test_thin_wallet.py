@@ -34,12 +34,12 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         # Unlocking wallet
         self.manager.wallet.unlock(b'MYPASS')
 
-        per_block = settings.TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES)
         quantity = 3
 
         blocks = add_new_blocks(self.manager, quantity)
+        blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
 
-        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID].available, quantity*per_block)
+        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID].available, sum(blocks_tokens))
 
         # Options
         yield self.web.options('thin_wallet/send_tokens')
@@ -51,7 +51,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         private_key = self.manager.wallet.get_private_key(address)
 
         output_address = decode_address(self.get_address(0))
-        value = per_block
+        value = blocks_tokens[0]
         o = TxOutput(value, create_output_script(output_address, None))
         o_invalid_amount = TxOutput(value-1, create_output_script(output_address, None))
         i = TxInput(tx_id, 0, b'')
@@ -111,7 +111,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.clock.advance(5)
 
         # Check if tokens were really sent
-        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID].available, (quantity-1)*per_block)
+        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID].available, sum(blocks_tokens[:-1]))
 
         response_history = yield self.web_address_history.get(
             'thin_wallet/address_history', {

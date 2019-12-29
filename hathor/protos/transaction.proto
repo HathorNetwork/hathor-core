@@ -93,4 +93,5 @@ message Metadata {
   double accumulated_weight = 6;
   double score = 8;
   bytes first_block = 9;
+  uint64 height = 10;
 }

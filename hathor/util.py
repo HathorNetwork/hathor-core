@@ -25,6 +25,31 @@ from twisted.python.threadable import isInIOThread
 from twisted.web.iweb import IBodyProducer
 from zope.interface import implementer
 
+from hathor.conf import HathorSettings
+
+settings = HathorSettings()
+
+
+def _get_tokens_issued_per_block(height: int) -> int:
+    """Return the number of tokens issued per block of a given height.
+
+    Always use Manager.get_tokens_issued_per_block.
+    You should not use this method unless you know what you are doing.
+    """
+    if settings.BLOCKS_PER_HALVING is None:
+        assert settings.MINIMUM_TOKENS_PER_BLOCK == settings.INITIAL_TOKENS_PER_BLOCK
+        return settings.MINIMUM_TOKENS_PER_BLOCK
+
+    number_of_halvings = (height - 1) // settings.BLOCKS_PER_HALVING
+    number_of_halvings = max(0, number_of_halvings)
+
+    if number_of_halvings > settings.MAXIMUM_NUMBER_OF_HALVINGS:
+        return settings.MINIMUM_TOKENS_PER_BLOCK
+
+    amount = settings.INITIAL_TOKENS_PER_BLOCK // (2**number_of_halvings)
+    amount = max(amount, settings.MINIMUM_TOKENS_PER_BLOCK)
+    return amount
+
 
 def practically_equal(a: Dict[Any, Any], b: Dict[Any, Any]) -> bool:
     """ Compare two defaultdict. It is used because a simple access have
