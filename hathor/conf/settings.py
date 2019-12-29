@@ -1,5 +1,6 @@
 import os
-from typing import List, NamedTuple
+from math import log
+from typing import List, NamedTuple, Optional
 
 DECIMAL_PLACES = 2
 
@@ -27,7 +28,32 @@ class HathorSettings(NamedTuple):
 
     GENESIS_TOKENS: int = GENESIS_TOKENS
 
-    TOKENS_PER_BLOCK: int = 8
+    # To disable reward halving, just set this to `None` and make sure that INITIAL_TOKEN_UNITS_PER_BLOCK is equal to
+    # MINIMUM_TOKEN_UNITS_PER_BLOCK.
+    BLOCKS_PER_HALVING: Optional[int] = 2 * 60 * 24 * 365  # 1051200, every 365 days
+
+    INITIAL_TOKEN_UNITS_PER_BLOCK: int = 64
+    MINIMUM_TOKEN_UNITS_PER_BLOCK: int = 8
+
+    @property
+    def INITIAL_TOKENS_PER_BLOCK(self) -> int:
+        return self.INITIAL_TOKEN_UNITS_PER_BLOCK * (10**DECIMAL_PLACES)
+
+    @property
+    def MINIMUM_TOKENS_PER_BLOCK(self) -> int:
+        return self.MINIMUM_TOKEN_UNITS_PER_BLOCK * (10**DECIMAL_PLACES)
+
+    # Assume that: amount < minimum
+    # But, amount = initial / (2**n), where n = number_of_halvings. Thus:
+    #   initial / (2**n) < minimum
+    #   initial / minimum < 2**n
+    #   2**n > initial / minimum
+    # Applying log to both sides:
+    #   n > log2(initial / minimum)
+    #   n > log2(initial) - log2(minimum)
+    @property
+    def MAXIMUM_NUMBER_OF_HALVINGS(self) -> int:
+        return int(log(self.INITIAL_TOKEN_UNITS_PER_BLOCK, 2) - log(self.MINIMUM_TOKEN_UNITS_PER_BLOCK, 2))
 
     AVG_TIME_BETWEEN_BLOCKS: int = 30  # in seconds
 

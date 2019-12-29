@@ -1,9 +1,12 @@
 from itertools import chain
 
+from hathor.conf import HathorSettings
 from hathor.transaction import sum_weights
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
 from tests.utils import add_new_blocks, add_new_transactions
+
+settings = HathorSettings()
 
 
 class BlockchainTestCase(unittest.TestCase):
@@ -324,6 +327,53 @@ class BlockchainTestCase(unittest.TestCase):
 
         # dot = manager.tx_storage.graphviz(format='pdf')
         # dot.render('test_fork')
+
+    def test_block_height(self):
+        genesis_block = self.genesis_blocks[0]
+        self.assertEqual(genesis_block.get_metadata().height, 0)
+
+        manager = self.create_peer('testnet', tx_storage=self.tx_storage)
+
+        # Mine 50 blocks in a row with no transaction but the genesis
+        blocks = add_new_blocks(manager, 50, advance_clock=15)
+
+        for i, block in enumerate(blocks):
+            expected_height = i + 1
+            self.assertEqual(block.get_metadata().height, expected_height)
+
+    def test_tokens_issued_per_block(self):
+        manager = self.create_peer('testnet', tx_storage=self.tx_storage)
+        # this test is pretty dumb in that it test every possible height until halving has long stopped
+        initial_reward = settings.INITIAL_TOKENS_PER_BLOCK
+        final_reward = settings.MINIMUM_TOKENS_PER_BLOCK
+        expected_reward = initial_reward
+        height = 1
+        # check that there are BLOCKS_PER_HALVING with each reward, starting at the first rewardable block (height=1)
+        for _i_halving in range(0, settings.MAXIMUM_NUMBER_OF_HALVINGS):
+            for _i_block in range(0, settings.BLOCKS_PER_HALVING):
+                reward = manager.get_tokens_issued_per_block(height)
+                self.assertEqual(reward, expected_reward, f'reward at height {height}')
+                height += 1
+            expected_reward /= 2
+        self.assertEqual(expected_reward, final_reward)
+        # check that halving stops, for at least two "halving rounds"
+        for _i_block in range(0, 2 * settings.BLOCKS_PER_HALVING):
+            reward = manager.get_tokens_issued_per_block(height)
+            self.assertEqual(reward, expected_reward, f'reward at height {height}')
+            height += 1
+
+    def test_block_rewards(self):
+        # even dumber test that only check if manager.get_tokens_issued_per_block was used correctly for a really large
+        # number of blocks, probably not worth running all the time
+        manager = self.create_peer('testnet', tx_storage=self.tx_storage)
+        block_count = (settings.MAXIMUM_NUMBER_OF_HALVINGS + 1) * settings.BLOCKS_PER_HALVING
+        blocks = add_new_blocks(manager, block_count, advance_clock=block_count * 30)
+        for block in blocks:
+            outputs = block.outputs
+            self.assertEqual(len(outputs), 1)
+            output = outputs[0]
+            height = block.get_metadata().height
+            self.assertEqual(output.value, manager.get_tokens_issued_per_block(height))
 
 
 if __name__ == '__main__':

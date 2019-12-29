@@ -1,5 +1,6 @@
+import hathor.util
 from tests import unittest
-from tests.utils import execute_mining, execute_tx_gen, get_tokens_from_mining, request_server, run_server
+from tests.utils import execute_mining, execute_tx_gen, request_server, run_server
 
 
 class GenerateTxTest(unittest.TestCase):
@@ -65,7 +66,7 @@ class GenerateTxTest(unittest.TestCase):
         self.assertEqual(last_len_block, 2)
 
         # expected total token rewards
-        rewarded = get_tokens_from_mining(1)
+        rewarded = hathor.util._get_tokens_issued_per_block(1)
 
         # Chech if balance is right
         mining_balance = request_server('wallet/balance/', 'GET')

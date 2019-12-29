@@ -5,7 +5,7 @@ from hathor.transaction.scripts import P2PKH
 from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import PrivateKeyNotFound
 from tests import unittest
-from tests.utils import add_new_blocks, create_tokens, get_tokens_from_mining
+from tests.utils import add_new_blocks, create_tokens
 
 settings = HathorSettings()
 
@@ -17,12 +17,13 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, unlock_wallet=True)
 
-        add_new_blocks(self.manager, 3, advance_clock=15)
+        blocks = add_new_blocks(self.manager, 3, advance_clock=15)
+        self.blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
 
         address = self.get_address(0)
         value = 100
 
-        self.initial_balance = get_tokens_from_mining(3) - 100
+        self.initial_balance = sum(self.blocks_tokens[:3]) - 100
 
         outputs = [
             WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None)
@@ -77,7 +78,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         input_voided = tx2.inputs[0]
         key = (input_voided.tx_id, input_voided.index)
-        voided_spent = SpentTx(tx2.hash, input_voided.tx_id, input_voided.index, get_tokens_from_mining(1),
+        voided_spent = SpentTx(tx2.hash, input_voided.tx_id, input_voided.index, self.blocks_tokens[0],
                                tx2.timestamp, voided=True)
         self.assertEqual(len(self.manager.wallet.voided_spent), 1)
         self.assertEqual(len(self.manager.wallet.voided_spent[key]), 1)
@@ -109,7 +110,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # Balance changed
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
-                         WalletBalance(0, get_tokens_from_mining(3)))
+                         WalletBalance(0, sum(self.blocks_tokens[:3])))
 
     def test_balance_update3(self):
         # Tx2 is twin with tx1 with higher acc weight, so tx1 will get voided
@@ -151,7 +152,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
                          WalletBalance(0, self.initial_balance))
 
         address = self.manager.wallet.get_unused_address_bytes()
-        value = get_tokens_from_mining(1) - 100
+        value = self.blocks_tokens[0] - 100
         inputs = [WalletInputInfo(tx_id=self.tx1.hash, index=0, private_key=None)]
         outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         tx2 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
@@ -207,7 +208,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
                          WalletBalance(0, self.initial_balance))
 
         address = self.manager.wallet.get_unused_address_bytes()
-        value = get_tokens_from_mining(1) - 100
+        value = self.blocks_tokens[0] - 100
         inputs = [WalletInputInfo(tx_id=self.tx1.hash, index=0, private_key=None)]
         outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         tx2 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
@@ -287,7 +288,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
                          WalletBalance(0, self.initial_balance))
 
         address = self.manager.wallet.get_unused_address_bytes()
-        value = get_tokens_from_mining(1) - 100
+        value = self.blocks_tokens[0] - 100
         inputs = [WalletInputInfo(tx_id=self.tx1.hash, index=0, private_key=None)]
         outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         tx2 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
@@ -340,7 +341,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.run_to_completion()
 
         outputs3 = [
-            WalletOutputInfo(address=decode_address(wallet_address), value=get_tokens_from_mining(1), timelock=None)
+            WalletOutputInfo(address=decode_address(wallet_address), value=self.blocks_tokens[0], timelock=None)
         ]
         tx3 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs3)
         tx3.weight = 10
@@ -353,7 +354,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.clock.advance(1)
         new_address = self.manager.wallet.get_unused_address_bytes()
         inputs = [WalletInputInfo(tx_id=tx3.hash, index=0, private_key=None)]
-        outputs = [WalletOutputInfo(address=new_address, value=get_tokens_from_mining(1), timelock=None)]
+        outputs = [WalletOutputInfo(address=new_address, value=self.blocks_tokens[0], timelock=None)]
         tx4 = self.manager.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
                                                                         self.manager.tx_storage)
         tx4.weight = 10

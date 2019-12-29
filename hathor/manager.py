@@ -29,6 +29,7 @@ from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IReactorCore
 from twisted.python.threadpool import ThreadPool
 
+import hathor.util
 from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.exception import InvalidNewTransaction
@@ -136,7 +137,6 @@ class HathorManager:
         self.avg_time_between_blocks = settings.AVG_TIME_BETWEEN_BLOCKS
         self.min_block_weight = min_block_weight or settings.MIN_BLOCK_WEIGHT
         self.min_tx_weight = settings.MIN_TX_WEIGHT
-        self.tokens_issued_per_block = settings.TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES)
 
         self.metrics = Metrics(
             pubsub=self.pubsub,
@@ -351,14 +351,6 @@ class HathorManager:
         """
         from hathor.transaction.scripts import create_output_script
 
-        if address is None:
-            if self.wallet is None:
-                raise ValueError('No wallet available and no mining address given')
-            address = self.wallet.get_unused_address_bytes(mark_as_used=False)
-        amount = self.tokens_issued_per_block
-        output_script = create_output_script(address)
-        tx_outputs = [TxOutput(amount, output_script)]
-
         if not timestamp:
             timestamp = max(self.tx_storage.latest_timestamp, self.reactor.seconds())
 
@@ -384,6 +376,15 @@ class HathorManager:
         timestamp1 = int(timestamp)
         timestamp2 = max(x.timestamp for x in parents_tx) + 1
 
+        if address is None:
+            if self.wallet is None:
+                raise ValueError('No wallet available and no mining address given')
+            address = self.wallet.get_unused_address_bytes(mark_as_used=False)
+        height = parent_block.get_metadata().height + 1
+        amount = self.get_tokens_issued_per_block(height)
+        output_script = create_output_script(address)
+        tx_outputs = [TxOutput(amount, output_script)]
+
         cls: Union[Type['Block'], Type['MergeMinedBlock']]
         if merge_mined:
             cls = MergeMinedBlock
@@ -393,6 +394,10 @@ class HathorManager:
         blk.timestamp = max(timestamp1, timestamp2)
         blk.weight = self.calculate_block_difficulty(blk)
         return blk
+
+    def get_tokens_issued_per_block(self, height: int) -> int:
+        """Return the number of tokens issued (aka reward) per block of a given height."""
+        return hathor.util._get_tokens_issued_per_block(height)
 
     def validate_new_tx(self, tx: BaseTransaction) -> bool:
         """ Process incoming transaction during initialization.
@@ -427,12 +432,15 @@ class HathorManager:
                         tx.hash.hex(), tx.weight, block_weight
                     )
                 )
-            if tx.sum_outputs != self.tokens_issued_per_block:
+
+            parent_block = tx.get_block_parent()
+            tokens_issued_per_block = self.get_tokens_issued_per_block(parent_block.get_metadata().height + 1)
+            if tx.sum_outputs != tokens_issued_per_block:
                 raise InvalidNewTransaction(
                     'Invalid number of issued tokens tag=invalid_issued_tokens'
                     ' tx.hash={tx.hash_hex} issued={tx.sum_outputs} allowed={allowed}'.format(
                         tx=tx,
-                        allowed=self.tokens_issued_per_block,
+                        allowed=tokens_issued_per_block,
                     )
                 )
         else:
