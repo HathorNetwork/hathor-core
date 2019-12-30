@@ -197,6 +197,7 @@ class BlockConsensusAlgorithm:
         """Return the union of the voided_by of block's parents."""
         voided_by: Set[bytes] = set()
         for parent in block.get_parents():
+            assert parent.hash is not None
             parent_meta = parent.get_metadata()
             voided_by2 = parent_meta.voided_by
             if voided_by2:
@@ -207,9 +208,10 @@ class BlockConsensusAlgorithm:
                 voided_by.update(voided_by2)
         return voided_by
 
-    def update_voided_by_from_parents(self, block: 'Block') -> Set[bytes]:
+    def update_voided_by_from_parents(self, block: 'Block') -> bool:
         """Update block's metadata voided_by from parents.
         Return True if the block is voided and False otherwise."""
+        assert block.storage is not None
         voided_by: Set[bytes] = self.union_voided_by_from_parents(block)
         if voided_by:
             meta = block.get_metadata()
@@ -246,6 +248,7 @@ class BlockConsensusAlgorithm:
         If it is not, the block will be voided and the block with highest score will be set as
         best chain.
         """
+        assert block.storage is not None
         self.update_score_and_mark_as_the_best_chain(block)
         self.remove_voided_by_from_chain(block)
 

@@ -286,6 +286,10 @@ class BlockchainTestCase(unittest.TestCase):
             meta = block.get_metadata(force_reload=True)
             self.assertEqual(meta.voided_by, None)
 
+        # from hathor.graphviz import GraphvizVisualizer
+        # dot = GraphvizVisualizer(manager.tx_storage, include_verifications=True, include_funds=True).dot()
+        # dot.render('dot0')
+
         for tx in txs2:
             meta = tx.get_metadata(force_reload=True)
             self.assertEqual(meta.first_block, sidechain[0].hash)

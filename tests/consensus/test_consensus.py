@@ -1,4 +1,3 @@
-from hathor.graphviz import GraphvizVisualizer
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
 from tests.utils import add_new_block, add_new_blocks, add_new_double_spending, add_new_transactions
@@ -23,13 +22,13 @@ class ConsensusTestCase(unittest.TestCase):
         blocks = add_new_blocks(manager, 3, advance_clock=15)
 
         # Add some transactions between blocks
-        txs = add_new_transactions(manager, 5, advance_clock=15)
+        add_new_transactions(manager, 5, advance_clock=15)
 
         # Create a double spending transaction.
         conflicting_tx = add_new_double_spending(manager, use_same_parents=True)
 
         # Add a few transactions.
-        txs = add_new_transactions(manager, 10, advance_clock=15)
+        add_new_transactions(manager, 10, advance_clock=15)
 
         meta = conflicting_tx.get_metadata()
         self.assertEqual(meta.voided_by, {conflicting_tx.hash})
@@ -51,6 +50,7 @@ class ConsensusTestCase(unittest.TestCase):
         b1 = add_new_block(manager, advance_clock=15)
         b2 = add_new_block(manager, advance_clock=15)
 
+        # from hathor.graphviz import GraphvizVisualizer
         # dot = GraphvizVisualizer(manager.tx_storage, include_verifications=True, include_funds=True).dot()
         # dot.render('dot0')
 
@@ -82,13 +82,13 @@ class ConsensusTestCase(unittest.TestCase):
         blocks = add_new_blocks(manager, 3, advance_clock=15)
 
         # Add some transactions between blocks
-        txs = add_new_transactions(manager, 5, advance_clock=15)
+        add_new_transactions(manager, 5, advance_clock=15)
 
         # Create a double spending transaction.
         conflicting_tx = add_new_double_spending(manager, use_same_parents=True)
 
         # Add a few transactions.
-        txs = add_new_transactions(manager, 10, advance_clock=15)
+        add_new_transactions(manager, 10, advance_clock=15)
 
         meta = conflicting_tx.get_metadata()
         self.assertEqual(meta.voided_by, {conflicting_tx.hash})
@@ -96,7 +96,7 @@ class ConsensusTestCase(unittest.TestCase):
             self.assertNotIn(parent_hash, meta.conflict_with)
 
         # These blocks will be voided later.
-        blocks2 = add_new_blocks(manager, 2, advance_clock=15)
+        add_new_blocks(manager, 2, advance_clock=15)
 
         # This block verifies the conflicting transaction and has a low weight.
         # So, it is not enough to revert and this block will be voided as well.
@@ -113,6 +113,7 @@ class ConsensusTestCase(unittest.TestCase):
         # dot.render('dot1')
 
         self.assertNotEqual(b1.parents[0], b0.hash)
+        self.assertEqual(b2.parents[0], b1.hash)
 
         meta = conflicting_tx.get_metadata()
         self.assertEqual(meta.voided_by, {conflicting_tx.hash})
@@ -132,7 +133,7 @@ class ConsensusTestCase(unittest.TestCase):
         blocks = add_new_blocks(manager, 3, advance_clock=15)
 
         # Add some transactions between blocks
-        txs = add_new_transactions(manager, 5, advance_clock=15)
+        add_new_transactions(manager, 5, advance_clock=15)
 
         # Create a double spending transaction.
         conflicting_tx = add_new_double_spending(manager)
@@ -141,7 +142,7 @@ class ConsensusTestCase(unittest.TestCase):
         self.assertIn(list(meta.conflict_with)[0], conflicting_tx.parents)
 
         # Add a few transactions.
-        txs = add_new_transactions(manager, 10, advance_clock=15)
+        add_new_transactions(manager, 10, advance_clock=15)
 
         meta = conflicting_tx.get_metadata()
         self.assertEqual(meta.voided_by, {conflicting_tx.hash})
@@ -182,16 +183,16 @@ class ConsensusTestCase(unittest.TestCase):
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
 
         # Mine a few blocks in a row with no transaction but the genesis
-        blocks = add_new_blocks(manager, 3, advance_clock=15)
+        add_new_blocks(manager, 3, advance_clock=15)
 
         # Add some transactions between blocks
-        txs = add_new_transactions(manager, 5, advance_clock=15)
+        add_new_transactions(manager, 5, advance_clock=15)
 
         # Create a double spending transaction.
         conflicting_tx = add_new_double_spending(manager, use_same_parents=True)
 
         # Add a few transactions.
-        txs = add_new_transactions(manager, 10, advance_clock=15)
+        add_new_transactions(manager, 10, advance_clock=15)
 
         meta = conflicting_tx.get_metadata()
         self.assertEqual(meta.voided_by, {conflicting_tx.hash})
