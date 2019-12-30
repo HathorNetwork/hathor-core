@@ -113,6 +113,24 @@ class TestCase(unittest.TestCase):
         s2 = set(manager2.tx_storage.get_all_tips())
         self.assertNotEqual(s1, s2)
 
+    def assertConsensusEqual(self, manager1, manager2):
+        self.assertEqual(manager1.tx_storage.get_count_tx_blocks(), manager2.tx_storage.get_count_tx_blocks())
+        for tx1 in manager1.tx_storage.get_all_transactions():
+            tx2 = manager2.tx_storage.get_transaction(tx1.hash)
+            tx1_meta = tx1.get_metadata()
+            tx2_meta = tx2.get_metadata()
+            self.assertEqual(tx1_meta.conflict_with, tx2_meta.conflict_with)
+            # Soft verification
+            if tx1_meta.voided_by is None:
+                # If tx1 is not voided, then tx2 must be not voided.
+                self.assertIsNone(tx2_meta.voided_by)
+            else:
+                # If tx1 is voided, then tx2 must be voided.
+                self.assertGreaterEqual(len(tx1_meta.voided_by), 1)
+                self.assertGreaterEqual(len(tx2_meta.voided_by), 1)
+            # Hard verification
+            # self.assertEqual(tx1_meta.voided_by, tx2_meta.voided_by)
+
     def clean_tmpdirs(self):
         for tmpdir in self.tmpdirs:
             shutil.rmtree(tmpdir)
