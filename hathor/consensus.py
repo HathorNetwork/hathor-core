@@ -181,9 +181,10 @@ class BlockConsensusAlgorithm:
                 else:
                     # All heads must have the same score.
                     assert abs(best_score - head_meta.score) < 1e-10
-            assert isinstance(best_score, float)
+            assert isinstance(best_score, (int, float))
 
             # Calculate the score.
+            # We cannot calculate score before getting the heads.
             score = self.calculate_score(block)
 
             # Finally, check who the winner is.
