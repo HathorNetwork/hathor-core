@@ -35,7 +35,6 @@ class ConsensusTestCase(unittest.TestCase):
         self.assertEqual(meta.voided_by, {conflicting_tx.hash})
         for parent_hash in conflicting_tx.parents:
             self.assertNotIn(parent_hash, meta.conflict_with)
-        # print('!! conflicting_tx', conflicting_tx.hash.hex()[-4:], [x.hex()[-4:] for x in meta.conflict_with])
 
         # These blocks will be voided later.
         blocks2 = add_new_blocks(manager, 2, advance_clock=15)
@@ -61,9 +60,15 @@ class ConsensusTestCase(unittest.TestCase):
         meta = conflicting_tx.get_metadata()
         self.assertIsNone(meta.voided_by)
 
+        # Find the other transaction voiding the blocks.
+        tmp_tx = manager.tx_storage.get_transaction(blocks2[0].parents[1])
+        tmp_tx_meta = tmp_tx.get_metadata()
+        self.assertEqual(len(tmp_tx_meta.voided_by), 1)
+        other_tx_hash = list(tmp_tx_meta.voided_by)[0]
+
         for block in blocks2:
             meta = block.get_metadata()
-            self.assertEqual(meta.voided_by, {block.hash})
+            self.assertEqual(meta.voided_by, {other_tx_hash, block.hash})
 
     def test_dont_revert_block_low_weight(self):
         """ A conflict transaction will be propagated and voided.
@@ -89,7 +94,6 @@ class ConsensusTestCase(unittest.TestCase):
         self.assertEqual(meta.voided_by, {conflicting_tx.hash})
         for parent_hash in conflicting_tx.parents:
             self.assertNotIn(parent_hash, meta.conflict_with)
-        # print('!! conflicting_tx', conflicting_tx.hash.hex()[-4:], [x.hex()[-4:] for x in meta.conflict_with])
 
         # These blocks will be voided later.
         blocks2 = add_new_blocks(manager, 2, advance_clock=15)
@@ -114,9 +118,9 @@ class ConsensusTestCase(unittest.TestCase):
         self.assertEqual(meta.voided_by, {conflicting_tx.hash})
 
         b0_meta = b0.get_metadata()
-        self.assertEqual(b0_meta.voided_by, {conflicting_tx.hash})
+        self.assertEqual(b0_meta.voided_by, {b0.hash, conflicting_tx.hash})
 
-    def test_dont_revert_block_high_weight(self):
+    def test_dont_revert_block_high_weight_transaction_verify_other(self):
         """ A conflict transaction will be propagated and voided. But this transaction
         verifies its conflicting transaction. So, its accumulated weight will always be smaller
         than the others and it will never be executed.
@@ -141,7 +145,6 @@ class ConsensusTestCase(unittest.TestCase):
 
         meta = conflicting_tx.get_metadata()
         self.assertEqual(meta.voided_by, {conflicting_tx.hash})
-        # print('!! conflicting_tx', conflicting_tx.hash.hex()[-4:], [x.hex()[-4:] for x in meta.conflict_with])
 
         # These blocks will be voided later.
         blocks2 = add_new_blocks(manager, 2, advance_clock=15)
@@ -194,7 +197,6 @@ class ConsensusTestCase(unittest.TestCase):
         self.assertEqual(meta.voided_by, {conflicting_tx.hash})
         for parent_hash in conflicting_tx.parents:
             self.assertNotIn(parent_hash, meta.conflict_with)
-        print('!! conflicting_tx', conflicting_tx.hash.hex()[-4:], [x.hex()[-4:] for x in meta.conflict_with])
 
         # Add two blocks.
         blocks2 = add_new_blocks(manager, 2, advance_clock=15)
