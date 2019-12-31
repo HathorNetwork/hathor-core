@@ -73,9 +73,8 @@ def re_compile(pattern: str) -> Pattern[bytes]:
     special symbols:
       (i) OP_DUP, OP_HASH160, and all other opcodes;
      (ii) DATA_<length>: data with the specified length;
-    (iii) INT_<number>: the integer number (eg INT_3 means the number 3);
-     (iv) NUMBER: a 4-byte integer;
-      (v) BLOCK: a variable length block, to be parsed later
+    (iii) NUMBER: a 4-byte integer;
+     (iv) BLOCK: a variable length block, to be parsed later
 
     Example:
     >>> r = re_compile(
@@ -94,9 +93,6 @@ def re_compile(pattern: str) -> Pattern[bytes]:
         elif x.startswith('DATA_'):
             length = int(m.group()[5:])
             return _re_pushdata(length)
-        elif x.startswith('INT_'):
-            number = int(m.group()[4:])
-            return b'.{1}' + bytes([number])
         elif x.startswith('NUMBER'):
             return b'.{5}'
         elif x.startswith('BLOCK'):
@@ -115,19 +111,11 @@ def _re_pushdata(length: int) -> bytes:
     :return: A non-compiled regular expression
     :rtype: bytes
     """
-    p1 = [bytes([Opcode.OP_PUSHDATA1]), b'.{', str(length + 1).encode('ascii'), b'}']
+    ret = [bytes([Opcode.OP_PUSHDATA1]), bytes([length]), b'.{', str(length).encode('ascii'), b'}']
 
-    if length >= 75:
-        ret = p1
-    else:
-        p2 = [b'[\0-\75].{', str(length).encode('ascii'), b'}']
-        ret = [
-            b'(?:(?:',
-            b''.join(p1),
-            b')|(?:',
-            b''.join(p2),
-            b'))',
-        ]
+    if length <= 75:
+        # for now, we accept <= 75 bytes with OP_PUSHDATA1. It's optional
+        ret.insert(1, b'?')
 
     return b''.join(ret)
 
@@ -157,7 +145,7 @@ class Opcode(IntEnum):
     OP_HASH160 = 0xA9
     OP_PUSHDATA1 = 0x4C
     OP_GREATERTHAN_TIMESTAMP = 0x6F
-    OP_CHECKMULTISIG = 0xae
+    OP_CHECKMULTISIG = 0xAE
     OP_CHECKDATASIG = 0xBA
     OP_DATA_STREQUAL = 0xC0
     OP_DATA_GREATERTHAN = 0xC1
@@ -388,11 +376,7 @@ class MultiSig:
             if pushdata_timelock:
                 timelock_bytes = pushdata_timelock[1:]
                 timelock = struct.unpack('!I', timelock_bytes)[0]
-            pushdata_address = groups[1]
-            if pushdata_address[0] > 75:
-                redeem_script_hash = pushdata_address[2:]
-            else:
-                redeem_script_hash = pushdata_address[1:]
+            redeem_script_hash = get_pushdata(groups[1])
             address_b58 = get_address_b58_from_redeem_script_hash(redeem_script_hash)
             return cls(address_b58, timelock)
         return None
@@ -676,9 +660,18 @@ def execute_eval(data: bytes, log: List[str], extras: ScriptExtras) -> None:
         fn(stack, log, extras)
         pos += 1
 
+    evaluate_final_stack(stack, log)
+
+
+def evaluate_final_stack(stack: Stack, log: List[str]) -> None:
+    """ Checks the final state of the stack. It's valid if:
+          1. it's empty
+          2. top item on stack is True (non zero value)
+    """
     if len(stack) > 0:
-        if stack.pop() != 1:
-            # stack left with non zero value
+        if stack.pop() == 0:
+            # stack left with False value
+            log.append('Stack left with False value')
             raise FinalStackInvalid('\n'.join(log))
 
 
@@ -716,9 +709,12 @@ def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction) -> No
 
 def get_pushdata(data: bytes) -> bytes:
     if data[0] > 75:
-        return data[2:]
+        length = data[1]
+        start = 2
     else:
-        return data[1:]
+        length = data[0]
+        start = 1
+    return data[start:(start + length)]
 
 
 def get_data_value(k: int, data: bytes) -> bytes:
@@ -771,7 +767,7 @@ def binary_to_int(binary: bytes) -> int:
     elif len(binary) == 4:
         _format = '!I'
     elif len(binary) == 8:
-        _format == '!L'
+        _format = '!Q'
     else:
         raise struct.error
 
