@@ -375,6 +375,34 @@ class BlockchainTestCase(unittest.TestCase):
             height = block.get_metadata().height
             self.assertEqual(output.value, manager.get_tokens_issued_per_block(height))
 
+    def test_daa_sanity(self):
+        # sanity test the DAA
+        manager = self.create_peer('testnet', tx_storage=self.tx_storage)
+        manager.test_mode = 0
+        N = settings.BLOCK_DIFFICULTY_N_BLOCKS
+        T = settings.AVG_TIME_BETWEEN_BLOCKS
+        manager.avg_time_between_blocks = T
+        # stabilize weight on 2 and lower the minimum to 1, so it can vary around 2
+        manager.min_block_weight = 2
+        add_new_blocks(manager, N * 2, advance_clock=T)
+        manager.min_block_weight = 1
+        for i in range(N):
+            # decreasing solvetime should increase weight
+            base_weight = manager.generate_mining_block().weight
+            add_new_blocks(manager, i, advance_clock=T)
+            add_new_blocks(manager, 1, advance_clock=T * 0.9)
+            add_new_blocks(manager, N - i, advance_clock=T)
+            new_weight = manager.generate_mining_block().weight
+            self.assertGreater(new_weight, base_weight)
+            add_new_blocks(manager, N, advance_clock=T)
+            # increasing solvetime should decrease weight
+            base_weight = manager.generate_mining_block().weight
+            add_new_blocks(manager, i, advance_clock=T)
+            add_new_blocks(manager, 1, advance_clock=T * 1.1)
+            add_new_blocks(manager, N - i, advance_clock=T)
+            new_weight = manager.generate_mining_block().weight
+            self.assertLess(new_weight, base_weight)
+
 
 if __name__ == '__main__':
     unittest.main()

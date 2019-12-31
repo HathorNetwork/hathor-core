@@ -18,38 +18,9 @@ class TestCase(unittest.TestCase):
         self.tmpdirs = []
         self.clock = Clock()
         self.clock.advance(time.time())
-        # before patching genesis, validate the original ones are correct
-        self._validate_real_genesis()
-        self._patch_genesis_block()
-
-    def _patch_genesis_block(self):
-        """ Updates the genesis block so we can easily spend the outputs during tests. When we make any
-        changes to tx structure that impacts the hash, we also must change it here (the nonce and hash).
-        The steps for updating it are:
-        1. use the genesis block (block = hathor.transaction.genesis.GENESIS[0])
-        2. update the output script to use the one as bellow
-        3. mine block again: block.start_mining(update_time=False)
-        4. update hash: block.update_hash()
-        5. replace block nonce and hash on this function with the new ones
-        """
-        import hathor.transaction.genesis
-        from hathor.transaction import Block
-        block = hathor.transaction.genesis.GENESIS[0]
-        assert isinstance(block, Block)
-        block.outputs[0].script = bytes.fromhex('76a914fd05059b6006249543b82f36876a17c73fd2267b88ac')
-        block.resolve(update_time=False)
-        block.nonce = 1438257
-        block.update_hash()
-        assert block.hash_hex == '00000087afe53259732782269fb62243ad52b669728394d492b1e84c259fb85c'
 
     def tearDown(self):
         self.clean_tmpdirs()
-
-    def _validate_real_genesis(self):
-        import hathor.transaction.genesis
-        for tx in hathor.transaction.genesis.GENESIS:
-            self.assertEqual(tx.hash, tx.calculate_hash())
-            tx.verify_without_storage()
 
     def _create_test_wallet(self):
         """ Generate a Wallet with a number of keypairs for testing

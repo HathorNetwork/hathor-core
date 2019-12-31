@@ -304,11 +304,11 @@ class BaseTransaction(ABC):
         """Sum of the value of the outputs"""
         return sum(output.value for output in self.outputs if not output.is_token_authority())
 
-    def get_target(self, override_weight: Optional[float] = None) -> float:
+    def get_target(self, override_weight: Optional[float] = None) -> int:
         """Target to be achieved in the mining process"""
         if not isfinite(self.weight):
             raise WeightError
-        return 2**(256 - (override_weight or self.weight)) - 1
+        return int(2**(256 - (override_weight or self.weight)) - 1)
 
     def get_time_from_now(self, now: Optional[Any] = None) -> str:
         """ Return a the time difference between now and the tx's timestamp
@@ -511,8 +511,10 @@ class BaseTransaction(ABC):
         :raises PowError: when the hash is equal or greater than the target
         """
         assert self.hash is not None
-        if int(self.hash.hex(), self.HEX_BASE) >= self.get_target(override_weight):
-            raise PowError('Transaction has invalid data')
+        numeric_hash = int(self.hash.hex(), self.HEX_BASE)
+        minimum_target = self.get_target(override_weight)
+        if numeric_hash >= minimum_target:
+            raise PowError(f'Transaction has invalid data ({numeric_hash} < {minimum_target})')
 
     def verify_number_of_outputs(self) -> None:
         """Verify number of outputs does not exceeds the limit"""
@@ -654,6 +656,7 @@ class BaseTransaction(ABC):
 
         :rtype: :py:class:`hathor.transaction.TransactionMetadata`
         """
+        assert self.hash is not None
         if force_reload:
             metadata = None
         else:

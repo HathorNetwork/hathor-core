@@ -534,52 +534,65 @@ class HathorManager:
         return True
 
     def calculate_block_difficulty(self, block: Block) -> float:
-        """ Calculate block difficulty according to the ascendents of `block`.
+        """ Calculate block difficulty according to the ascendents of `block`, aka DAA/difficulty adjustment algorithm
 
-        The new difficulty is calculated so that the average time between blocks will be
-        `self.avg_time_between_blocks`. If the measured time between blocks is smaller than the target,
-        the weight increases. If it is higher than the target, the weight decreases.
+        The algorithm used is described in [RFC 22](https://gitlab.com/HathorNetwork/rfcs/merge_requests/22).
 
-        The new difficulty cannot be smaller than `self.min_block_weight`.
+        The new difficulty must not be less than `self.min_block_weight`.
         """
         # In test mode we don't validate the block difficulty
         if self.test_mode & TestMode.TEST_BLOCK_WEIGHT:
-            return 1
+            return 1.0
 
         if block.is_genesis:
             return self.min_block_weight
 
-        blocks: List[Block] = []
         root = block
-        while len(blocks) < settings.BLOCK_DIFFICULTY_N_BLOCKS:
-            if not root.parents:
-                assert root.is_genesis
-                break
-            root = root.get_block_parent()
-            assert isinstance(root, Block)
-            blocks.append(root)
-        blocks.sort(key=lambda tx: tx.timestamp)
-
-        if blocks[-1].is_genesis:
+        N = min(2 * settings.BLOCK_DIFFICULTY_N_BLOCKS, root.get_block_parent().get_metadata().height)
+        K = N // 2
+        T = self.avg_time_between_blocks
+        S = 5
+        if N < 10:
             return self.min_block_weight
 
-        dt = blocks[-1].timestamp - blocks[0].timestamp
-        assert dt > 0
+        blocks: List[Block] = []
+        while len(blocks) < N + 1:
+            root = root.get_block_parent()
+            assert isinstance(root, Block)
+            assert root is not None
+            blocks.append(root)
 
-        logH = 0.0
-        for blk in blocks:
-            logH = sum_weights(logH, blk.weight)
+        # TODO: revise if this assertion can be safely removed
+        assert blocks == sorted(blocks, key=lambda tx: -tx.timestamp)
+        blocks = list(reversed(blocks))
 
-        weight = logH - log(dt, 2) + log(self.avg_time_between_blocks, 2)
+        assert len(blocks) == N + 1
+        solvetimes, weights = zip(*(
+            (block.timestamp - prev_block.timestamp, block.weight)
+            for prev_block, block in hathor.util.iwindows(blocks, 2)
+        ))
+        assert len(solvetimes) == len(weights) == N, f'got {len(solvetimes)}, {len(weights)} expected {N}'
 
-        # Apply a maximum change in difficulty.
-        max_dw = settings.BLOCK_DIFFICULTY_MAX_DW
-        dw = weight - blocks[-1].weight
-        if dw > max_dw:
-            weight = blocks[-1].weight + max_dw
-        elif dw < -max_dw:
-            weight = blocks[-1].weight - max_dw
+        sum_solvetimes = 0.0
+        logsum_weights = 0.0
 
+        prefix_sum_solvetimes = [0]
+        for x in solvetimes:
+            prefix_sum_solvetimes.append(prefix_sum_solvetimes[-1] + x)
+
+        # Loop through N most recent blocks. N is most recently solved block.
+        for i in range(K, N):
+            solvetime = solvetimes[i]
+            weight = weights[i]
+            x = (prefix_sum_solvetimes[i + 1] - prefix_sum_solvetimes[i - K]) / K
+            ki = K * (x - T)**2 / (2 * T * T)
+            ki = max(1, ki / S)
+            sum_solvetimes += ki * solvetime
+            logsum_weights = sum_weights(logsum_weights, log(ki, 2) + weight)
+
+        weight = logsum_weights - log(sum_solvetimes, 2) + log(T, 2)
+
+        # Apply minimum weight
         if weight < self.min_block_weight:
             weight = self.min_block_weight
 
