@@ -1,3 +1,19 @@
+"""
+Copyright 2019 Hathor Labs
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+"""
+
 import base64
 from struct import pack
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
@@ -104,6 +120,14 @@ class Block(BaseTransaction):
         blc.storage = storage
 
         return blc
+
+    def calculate_height(self) -> int:
+        """Return the height of the block, i.e., the number of blocks since genesis"""
+        if self.is_genesis:
+            return 0
+        assert self.storage is not None
+        parent_block = self.get_block_parent()
+        return parent_block.get_metadata().height + 1
 
     def get_block_parent_hash(self) -> bytes:
         """ Return the hash of the parent block.

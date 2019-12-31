@@ -1,3 +1,19 @@
+"""
+Copyright 2019 Hathor Labs
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+"""
+
 from collections import namedtuple
 from struct import pack
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
@@ -123,6 +139,10 @@ class Transaction(BaseTransaction):
         tx.storage = storage
 
         return tx
+
+    def calculate_height(self) -> int:
+        # XXX: transactions don't have height, using 0 as a placeholder
+        return 0
 
     def get_funds_fields_from_struct(self, buf: bytes) -> bytes:
         """ Gets all funds fields for a transaction from a buffer.

@@ -1,3 +1,19 @@
+"""
+Copyright 2019 Hathor Labs
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+"""
+
 import base64
 import datetime
 import hashlib
@@ -270,6 +286,10 @@ class BaseTransaction(ABC):
     def __hash__(self) -> int:
         assert self.hash is not None
         return hash(self.hash)
+
+    @abstractmethod
+    def calculate_height(self) -> int:
+        raise NotImplementedError
 
     @property
     def hash_hex(self) -> str:
@@ -642,7 +662,9 @@ class BaseTransaction(ABC):
             metadata = self.storage.get_metadata(self.hash)
             self._metadata = metadata
         if not metadata:
-            metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight)
+            metadata = TransactionMetadata(hash=self.hash,
+                                           accumulated_weight=self.weight,
+                                           height=self.calculate_height())
             self._metadata = metadata
         metadata._tx_ref = weakref.ref(self)
         return metadata
@@ -652,7 +674,9 @@ class BaseTransaction(ABC):
         recalculating all metadata.
         """
         assert self.storage is not None
-        self._metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight)
+        self._metadata = TransactionMetadata(hash=self.hash,
+                                             accumulated_weight=self.weight,
+                                             height=self.calculate_height())
         self._metadata._tx_ref = weakref.ref(self)
         self.storage.save_transaction(self, only_metadata=True)
 

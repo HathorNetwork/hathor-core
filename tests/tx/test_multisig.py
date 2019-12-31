@@ -8,7 +8,7 @@ from hathor.transaction.scripts import P2PKH, MultiSig, create_output_script, pa
 from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
 from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from tests import unittest
-from tests.utils import add_new_blocks, get_tokens_from_mining
+from tests.utils import add_new_blocks
 
 settings = HathorSettings()
 
@@ -53,13 +53,15 @@ class MultisigTestCase(unittest.TestCase):
 
     def test_spend_multisig(self):
         # Adding funds to the wallet
-        add_new_blocks(self.manager, 2, advance_clock=15)
+        blocks = add_new_blocks(self.manager, 2, advance_clock=15)
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
-                         WalletBalance(0, get_tokens_from_mining(2)))
+                         WalletBalance(0, sum(blk.outputs[0].value for blk in blocks)))
+
+        first_block_amount = blocks[0].outputs[0].value
 
         # First we send tokens to a multisig address
         outputs = [
-            WalletOutputInfo(address=self.multisig_address, value=get_tokens_from_mining(1),
+            WalletOutputInfo(address=self.multisig_address, value=first_block_amount,
                              timelock=int(self.clock.seconds()) + 15)
         ]
 
@@ -72,7 +74,7 @@ class MultisigTestCase(unittest.TestCase):
         self.clock.advance(10)
 
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
-                         WalletBalance(0, get_tokens_from_mining(1)))
+                         WalletBalance(0, first_block_amount))
 
         # Then we create a new tx that spends this tokens from multisig wallet
         tx = Transaction.create_from_struct(tx1.get_struct())
@@ -84,7 +86,7 @@ class MultisigTestCase(unittest.TestCase):
 
         multisig_output = TxOutput(200, multisig_script)
         wallet_output = TxOutput(300, create_output_script(self.address))
-        outside_output = TxOutput(get_tokens_from_mining(1) - 200 - 300, create_output_script(self.outside_address))
+        outside_output = TxOutput(first_block_amount - 200 - 300, create_output_script(self.outside_address))
 
         tx.outputs = [multisig_output, wallet_output, outside_output]
 
@@ -121,7 +123,7 @@ class MultisigTestCase(unittest.TestCase):
         self.assertTrue(self.manager.propagate_tx(tx))
 
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
-                         WalletBalance(0, get_tokens_from_mining(1) + 300))
+                         WalletBalance(0, first_block_amount + 300))
 
         # Testing the MultiSig class methods
         cls_script = parse_address_script(multisig_script)

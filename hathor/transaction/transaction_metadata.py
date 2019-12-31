@@ -1,3 +1,19 @@
+"""
+Copyright 2019 Hathor Labs
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+"""
+
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
@@ -21,6 +37,7 @@ class TransactionMetadata:
     accumulated_weight: float
     score: float
     first_block: Optional[bytes]
+    height: int
 
     # It must be a weakref.
     _tx_ref: Optional['ReferenceType[BaseTransaction]']
@@ -30,7 +47,7 @@ class TransactionMetadata:
     _last_spent_by_hash: Optional[int]
 
     def __init__(self, spent_outputs: Optional[Dict[int, List[bytes]]] = None, hash: Optional[bytes] = None,
-                 accumulated_weight: float = 0, score: float = 0) -> None:
+                 accumulated_weight: float = 0, score: float = 0, height: int = 0) -> None:
 
         # Hash of the transaction.
         self.hash = hash
@@ -75,6 +92,9 @@ class TransactionMetadata:
         # First valid block that verifies this transaction
         # If two blocks verify the same parent block and have the same score, both are valid.
         self.first_block = None
+
+        # Height
+        self.height = height
 
     def get_tx(self) -> 'BaseTransaction':
         assert self._tx_ref is not None
@@ -166,6 +186,7 @@ class TransactionMetadata:
         data['twins'] = [x.hex() for x in self.twins]
         data['accumulated_weight'] = self.accumulated_weight
         data['score'] = self.score
+        data['height'] = self.height
         if self.first_block is not None:
             data['first_block'] = self.first_block.hex()
         else:
@@ -199,6 +220,7 @@ class TransactionMetadata:
 
         meta.accumulated_weight = data['accumulated_weight']
         meta.score = data.get('score', 0)
+        meta.height = data.get('height', 0)  # XXX: should we calculate the height if it's not defined?
 
         first_block_raw = data.get('first_block', None)
         if first_block_raw:
@@ -231,6 +253,7 @@ class TransactionMetadata:
         metadata.accumulated_weight = metadata_proto.accumulated_weight
         metadata.score = metadata_proto.score
         metadata.first_block = metadata_proto.first_block or None
+        metadata.height = metadata_proto.height
         return metadata
 
     def to_proto(self) -> protos.Metadata:
@@ -251,6 +274,7 @@ class TransactionMetadata:
             accumulated_weight=self.accumulated_weight,
             score=self.score,
             first_block=self.first_block,
+            height=self.height,
         )
 
     def clone(self) -> 'TransactionMetadata':

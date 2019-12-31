@@ -12,7 +12,7 @@ from hathor.wallet.resources.nano_contracts import (
     NanoContractMatchValueResource,
 )
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
-from tests.utils import add_new_blocks, get_tokens_from_mining
+from tests.utils import add_new_blocks
 
 
 class NanoContractsTest(_BaseResourceTest._ResourceTest):
@@ -33,11 +33,13 @@ class NanoContractsTest(_BaseResourceTest._ResourceTest):
         # Options
         yield match_value_resource.options("wallet/nano_contracts/match_values")
 
+        total_value = self.manager.get_tokens_issued_per_block(1)
+
         address1 = self.get_address(0)
         data_post = {
             'oracle_data_id': 'some_id',
-            'total_value': get_tokens_from_mining(1),
-            'input_value': get_tokens_from_mining(1),
+            'total_value': total_value,
+            'input_value': total_value,
             'min_timestamp': 1,
             'fallback_address': self.get_address(1),
             'values': [{
@@ -92,7 +94,7 @@ class NanoContractsTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data['outputs'][0], genesis_output.to_human_readable())
 
         address2 = self.get_address(2)
-        data_put = {'new_values': [{'address': address2, 'value': 500}], 'input_value': get_tokens_from_mining(1)}
+        data_put = {'new_values': [{'address': address2, 'value': 500}], 'input_value': total_value}
         # Error missing parameter
         response_error = yield match_value_resource.put("wallet/nano_contracts/match_value", data_put)
         data_error = response_error.json_value()
@@ -177,7 +179,7 @@ class NanoContractsTest(_BaseResourceTest._ResourceTest):
                                 '+jtqKW5/AuH+ICD0u+HyMyHe0aric=',
             'oracle_pubkey': 'Awmloohhey8WhajdDURgvbk1z3JHX2vxDSBjz9uG9wEp',
             'address': address1,
-            'value': get_tokens_from_mining(1)
+            'value': total_value,
         }
         response_error2 = yield execute_resource.post("wallet/nano_contracts/execute", data)
         data_error2 = response_error2.json_value()

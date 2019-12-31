@@ -546,19 +546,6 @@ def execute_tx_gen(*, count, address=None, value=None, timestamp=None, host='htt
     execute(args)
 
 
-def get_tokens_from_mining(blocks_mined):
-    """ Return the tokens available expected after mining
-
-        :param blocks_mined: number of blocks that were mined
-        :type blocks_mined: int
-
-        :return: Available tokens after blocks were mined
-        :rtype: int
-    """
-    tokens_issued_per_block = settings.TOKENS_PER_BLOCK * (10**settings.DECIMAL_PLACES)
-    return tokens_issued_per_block * blocks_mined
-
-
 def get_genesis_key():
     private_key_bytes = base64.b64decode(
         'MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQgOCgCddzDZsfKgiMJLOt97eov9RLwHeePyBIK2WPF8MChRA'
