@@ -62,6 +62,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.clock.advance(20)
 
         self.assertTipsNotEqual(manager1, manager2)
+        self.assertConsensusValid(manager1)
+        self.assertConsensusValid(manager2)
 
         if debug_pdf:
             dot1 = GraphvizVisualizer(manager1.tx_storage, include_verifications=True).dot()
