@@ -17,7 +17,7 @@ limitations under the License.
 import warnings
 from enum import Enum
 from functools import partial, wraps
-from typing import Any, Callable, Dict, Iterator, cast
+from typing import Any, Callable, Deque, Dict, Iterable, Iterator, Tuple, TypeVar, cast
 
 from twisted.internet.defer import succeed
 from twisted.internet.interfaces import IReactorCore
@@ -28,6 +28,9 @@ from zope.interface import implementer
 from hathor.conf import HathorSettings
 
 settings = HathorSettings()
+
+
+T = TypeVar('T')
 
 
 def _get_tokens_issued_per_block(height: int) -> int:
@@ -168,6 +171,35 @@ def ichunks(array: bytes, chunk_size: int) -> Iterator[bytes]:
     from itertools import islice, takewhile, repeat
     idata = iter(array)
     return takewhile(bool, (bytes(islice(idata, chunk_size)) for _ in repeat(None)))
+
+
+def iwindows(iterable: Iterable[T], window_size: int) -> Iterator[Tuple[T, ...]]:
+    """ Adapt iterator to yield windows of the given size.
+
+    window_size must be greater than 0
+
+    Example:
+
+    >>> list(iwindows([1, 2, 3, 4], 2))
+    [(1, 2), (2, 3), (3, 4)]
+
+    >>> list(iwindows([1, 2, 3, 4], 3))
+    [(1, 2, 3), (2, 3, 4)]
+
+    >>> list(iwindows([1, 2, 3, 4], 1))
+    [(1,), (2,), (3,), (4,)]
+    """
+    from collections import deque
+    it = iter(iterable)
+    assert window_size > 0
+    res_item: Deque[T] = deque()
+    while len(res_item) < window_size:
+        res_item.append(next(it))
+    yield tuple(res_item)
+    for item in it:
+        res_item.popleft()
+        res_item.append(item)
+        yield tuple(res_item)
 
 
 class classproperty:

@@ -67,6 +67,15 @@ class HathorSettings(NamedTuple):
     # >>> P2PKH.create_output_script(address=address).hex()
     GENESIS_OUTPUT_SCRIPT: bytes = bytes.fromhex('76a914a584cf48b161e4a49223ed220df30037ab740e0088ac')
 
+    # Genesis timestamps, nonces and hashes
+    GENESIS_TIMESTAMP: int = 1572636343  # used as is for genesis_block, +1 for genesis_tx1 and +2 for genesis_tx2
+    GENESIS_BLOCK_NONCE: int = 3526202
+    GENESIS_BLOCK_HASH: bytes = bytes.fromhex('000007eb968a6cdf0499e2d033faf1e163e0dc9cf41876acad4d421836972038')
+    GENESIS_TX1_NONCE: int = 12595
+    GENESIS_TX1_HASH: bytes = bytes.fromhex('00025d75e44804a6a6a099f4320471c864b38d37b79b496ee26080a2a1fd5b7b')
+    GENESIS_TX2_NONCE: int = 21301
+    GENESIS_TX2_HASH: bytes = bytes.fromhex('0002c187ab30d4f61c11a5dc43240bdf92dba4d19f40f1e883b0a5fdac54ef53')
+
     # Weight of genesis and minimum weight of a tx/block
     MIN_BLOCK_WEIGHT: int = 21
     MIN_TX_WEIGHT: int = 14
@@ -76,29 +85,11 @@ class HathorSettings(NamedTuple):
 
     # Maximum distance between two consecutive blocks (in seconds), except for genesis.
     # This prevent some DoS attacks exploiting the calculation of the score of a side chain.
-    MAX_DISTANCE_BETWEEN_BLOCKS: int = 30*64  # P(t > T) = 1/e^30 = 9.35e-14
+    MAX_DISTANCE_BETWEEN_BLOCKS: int = 30 * 64  # P(t > T) = 1/e^30 = 9.35e-14
 
     # Number of blocks to be found with the same hash algorithm as `block`.
     # The bigger it is, the smaller the variance of the hash rate estimator is.
-    BLOCK_DIFFICULTY_N_BLOCKS: int = 20
-
-    # Maximum change in difficulty between consecutive blocks.
-    #
-    # The variance of the hash rate estimator is high when the hash rate is increasing
-    # or decreasing. Many times it will overreact and increase/decrease the weight too
-    # much. This limit is used to make the weight change more smooth.
-    #
-    # [msbrogli]
-    # Why 0.25? I have some arguments in favor of 0.25 based on the models I've been studying.
-    # But my arguments are not very solid. They may be good to compare 0.25 with 5.0 or higher values, but not to 0.50.
-    # My best answer for now is that it will be rare to reach this limit due to the variance of the hash rate estimator
-    # So, it will be reached only when the hash rate has really changed (increased or decreased). It also reduces
-    # significantly the ripple effect overreacting to changes in the hash rate. For example, during my simulations
-    # without a max_dw, when the hash rate increased from 2^20 to 2^30, the weight change was too big, and it took more
-    # than 10 minutes to find the next block. After, it took so long that the weight change was reduced too much.
-    # This ripple was amortized over time reaching the right value. Applying a max_dw, the ripple has been reduced.
-    # Maybe 0.50 or 1.0 are good values as well.
-    BLOCK_DIFFICULTY_MAX_DW: float = 0.25
+    BLOCK_DIFFICULTY_N_BLOCKS: int = 134
 
     # Size limit in bytes for Block data field
     BLOCK_DATA_MAX_SIZE: int = 100
@@ -167,7 +158,6 @@ class HathorSettings(NamedTuple):
         'MULTISIG_VERSION_BYTE',
         'MIN_BLOCK_WEIGHT',
         'MIN_TX_WEIGHT',
-        'BLOCK_DIFFICULTY_MAX_DW',
         'BLOCK_DATA_MAX_SIZE'
     ]
 

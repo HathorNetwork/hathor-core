@@ -21,12 +21,17 @@ def get_genesis_output():
 
 class GenesisTest(unittest.TestCase):
     def test_pow(self):
-        super().setUp()
         genesis = get_genesis_transactions(None)
 
         for g in genesis:
             self.assertEqual(g.calculate_hash(), g.hash)
             self.assertIsNone(g.verify_pow())
+
+    def test_verify(self):
+        genesis = get_genesis_transactions(None)
+
+        for g in genesis:
+            g.verify_without_storage()
 
     def test_output(self):
         # Test if block output is valid
