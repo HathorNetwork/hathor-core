@@ -505,10 +505,10 @@ class HathorManager:
             tx.update_initial_metadata()
             self.consensus_algorithm.update(tx)
         except Exception:
-            self.tx_storage.remove_transaction(tx)
             pretty_json = json.dumps(tx.to_json(), indent=4)
             self.log.failure('An unexpected error occurred when processing {tx.hash_hex}\n'
                              '{pretty_json}', tx=tx, pretty_json=pretty_json)
+            self.tx_storage.remove_transaction(tx)
             raise
 
         if not quiet:

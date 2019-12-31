@@ -76,3 +76,5 @@ class TwinTransactionTestCase(unittest.TestCase):
 
         meta3 = tx3.get_metadata()
         self.assertEqual(meta3.twins, [])
+
+        self.assertConsensusValid(self.manager)

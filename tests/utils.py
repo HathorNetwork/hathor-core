@@ -48,7 +48,7 @@ def resolve_block_bytes(block_bytes):
     return block.get_struct()
 
 
-def gen_new_double_spending(manager: HathorManager):
+def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False) -> Transaction:
     tx_interval = random.choice(list(manager.tx_storage.get_tx_tips()))
     tx = manager.tx_storage.get_transaction(tx_interval.data)
     txin = random.choice(tx.inputs)
@@ -71,14 +71,20 @@ def gen_new_double_spending(manager: HathorManager):
     tx2.storage = manager.tx_storage
     tx2.weight = 1
     tx2.timestamp = max(tx.timestamp + 1, int(manager.reactor.seconds()))
-    tx2.parents = manager.get_new_tx_parents(tx2.timestamp)
+
+    if use_same_parents:
+        tx2.parents = list(tx.parents)
+    else:
+        tx2.parents = manager.get_new_tx_parents(tx2.timestamp)
+
     tx2.resolve()
     return tx2
 
 
-def add_new_double_spending(manager):
-    tx = gen_new_double_spending(manager)
+def add_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False) -> Transaction:
+    tx = gen_new_double_spending(manager, use_same_parents=use_same_parents)
     manager.propagate_tx(tx, fails_silently=False)
+    return tx
 
 
 def gen_new_tx(manager, address, value, verify=True):
