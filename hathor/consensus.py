@@ -18,6 +18,28 @@ _base_transaction_log = logger.new()
 
 class ConsensusAlgorithm:
     """Execute the consensus algorithm marking blocks and transactions as either executed or voided.
+
+    The consensus algorithm uses the metadata voided_by to set whether a block or transaction is executed.
+    If voided_by is empty, then the block or transaction is executed. Otherwise, it is voided.
+
+    The voided_by stores which hashes are causing the voidance. The hashes may be from both blocks and
+    transactions.
+
+    The voidance propagates through the DAG of transactions. For example, if tx1 is voided and tx2 verifies
+    tx1, then tx2 must be voided as well. Another example is that, if a block is not in the bestchain,
+    any transaction spending one of the block's outputs is also voided.
+
+    In the DAG of transactions, the voided_by of tx1 is always a subset of the voided_by of all transactions
+    that verifies tx1 or spend one of tx1's outputs. The hash of tx1 may only be on its own voided_by when
+    tx1 has conflicts and is not the winner.
+
+    When a block is not in the bestchain, its voided_by contains its hash. This hash is also propagated
+    through the transactions that spend one of its outputs.
+
+    Differently from transactions, the hash of the blocks are not propagated through the voided_by of
+    other blocks. For example, if b0 <- b1 <- b2 <- b3 is a side chain, i.e., not the best blockchain,
+    then b0's voided_by contains b0's hash, b1's voided_by contains b1's hash, and so on. The hash of
+    b0 will not be propagated to the voided_by of b1, b2, and b3.
     """
 
     def __init__(self) -> None:
@@ -126,8 +148,6 @@ class BlockConsensusAlgorithm:
 
         # Check conflicts of the transactions voiding us.
         for h in voided_by:
-            if h == block.hash:
-                continue
             tx = tx.storage.get_transaction(h)
             if not tx.is_block:
                 self.consensus.transaction_algorithm.check_conflicts(tx)
@@ -194,7 +214,12 @@ class BlockConsensusAlgorithm:
                     self.update_score_and_mark_as_the_best_chain_if_possible(block)
 
     def union_voided_by_from_parents(self, block: 'Block') -> Set[bytes]:
-        """Return the union of the voided_by of block's parents."""
+        """Return the union of the voided_by of block's parents.
+
+        It does not include the hash of blocks because the hash of blocks
+        are not propagated through the chains. For further information, see
+        the docstring of the ConsensusAlgorithm class.
+        """
         voided_by: Set[bytes] = set()
         for parent in block.get_parents():
             assert parent.hash is not None
@@ -202,7 +227,11 @@ class BlockConsensusAlgorithm:
             voided_by2 = parent_meta.voided_by
             if voided_by2:
                 if parent.is_block:
-                    # We must ignore the blocks themselves.
+                    # We must go through the blocks because the voidance caused
+                    # by a transaction must be sent ahead. For example, in the
+                    # chain b0 <- b1 <- b2 <- b3, if a transaction voids b1, then
+                    # it must also voids b2 and b3. But, we must ignore the hash of
+                    # the blocks themselves.
                     voided_by2 = voided_by2.copy()
                     voided_by2.discard(parent.hash)
                 voided_by.update(voided_by2)
