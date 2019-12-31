@@ -125,6 +125,9 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         node_sync = conn.proto1.state.get_sync_plugin()
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
         self.assertTipsEqual(self.manager1, manager2)
+        self.assertConsensusEqual(self.manager1, manager2)
+        self.assertConsensusValid(self.manager1)
+        self.assertConsensusValid(manager2)
 
     def test_block_sync_many_new_blocks(self):
         self._add_new_blocks(150)
@@ -143,6 +146,9 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         node_sync = conn.proto1.state.get_sync_plugin()
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
         self.assertTipsEqual(self.manager1, manager2)
+        self.assertConsensusEqual(self.manager1, manager2)
+        self.assertConsensusValid(self.manager1)
+        self.assertConsensusValid(manager2)
 
     def test_block_sync_new_blocks_and_txs(self):
         self._add_new_blocks(15)
@@ -169,6 +175,9 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(self.manager1.tx_storage.latest_timestamp, manager2.tx_storage.latest_timestamp)
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
         self.assertTipsEqual(self.manager1, manager2)
+        self.assertConsensusEqual(self.manager1, manager2)
+        self.assertConsensusValid(self.manager1)
+        self.assertConsensusValid(manager2)
 
     def test_tx_propagation_nat_peers(self):
         """ manager1 <- manager2 <- manager3
@@ -218,6 +227,11 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         self.assertTipsEqual(self.manager1, manager2)
         self.assertTipsEqual(self.manager1, manager3)
+        self.assertConsensusEqual(self.manager1, manager2)
+        self.assertConsensusEqual(self.manager1, manager3)
+        self.assertConsensusValid(self.manager1)
+        self.assertConsensusValid(manager2)
+        self.assertConsensusValid(manager3)
 
     def test_downloader(self):
         blocks = self._add_new_blocks(3)

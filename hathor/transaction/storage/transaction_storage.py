@@ -98,11 +98,11 @@ class TransactionStorage(ABC):
         if self.with_index:
             assert self.all_index is not None
 
-            self._del_from_cache(tx)
+            self._del_from_cache(tx, relax_assert=True)
             # TODO Move it to self._del_from_cache. We cannot simply do it because
             #      this method is used by the consensus algorithm which does not
             #      expect to have it removed from self.all_index.
-            self.all_index.del_tx(tx)
+            self.all_index.del_tx(tx, relax_assert=True)
 
             if self.wallet_index:
                 self.wallet_index.remove_tx(tx)

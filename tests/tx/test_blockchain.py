@@ -72,6 +72,8 @@ class BlockchainTestCase(unittest.TestCase):
                 self.assertAlmostEqual(score, meta.score)
                 self.assertAlmostEqual(manager.consensus_algorithm.block_algorithm.calculate_score(block), meta.score)
 
+        self.assertConsensusValid(manager)
+
     def test_single_fork_not_best(self):
         """ New blocks belong to cases (i), (ii), (iii), and (iv).
         The best chain never changes. All other chains are side chains.
@@ -165,8 +167,7 @@ class BlockchainTestCase(unittest.TestCase):
         fork_meta3 = fork_block3.get_metadata()
         self.assertEqual(fork_meta3.voided_by, {fork_block3.hash})
 
-        # dot = manager.tx_storage.graphviz(format='pdf')
-        # dot.render('test_fork')
+        self.assertConsensusValid(manager)
 
     def test_multiple_forks(self):
         self.assertEqual(len(self.genesis_blocks), 1)
@@ -292,6 +293,10 @@ class BlockchainTestCase(unittest.TestCase):
             meta = block.get_metadata(force_reload=True)
             self.assertEqual(meta.voided_by, None)
 
+        # from hathor.graphviz import GraphvizVisualizer
+        # dot = GraphvizVisualizer(manager.tx_storage, include_verifications=True, include_funds=True).dot()
+        # dot.render('dot0')
+
         for tx in txs2:
             meta = tx.get_metadata(force_reload=True)
             self.assertEqual(meta.first_block, sidechain[0].hash)
@@ -327,6 +332,8 @@ class BlockchainTestCase(unittest.TestCase):
 
         # dot = manager.tx_storage.graphviz(format='pdf')
         # dot.render('test_fork')
+
+        self.assertConsensusValid(manager)
 
     def test_block_height(self):
         genesis_block = self.genesis_blocks[0]

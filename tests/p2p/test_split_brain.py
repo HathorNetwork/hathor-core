@@ -62,6 +62,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.clock.advance(20)
 
         self.assertTipsNotEqual(manager1, manager2)
+        self.assertConsensusValid(manager1)
+        self.assertConsensusValid(manager2)
 
         if debug_pdf:
             dot1 = GraphvizVisualizer(manager1.tx_storage, include_verifications=True).dot()
@@ -93,6 +95,6 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         node_sync = conn.proto1.state.get_sync_plugin()
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
         self.assertTipsEqual(manager1, manager2)
-
-        # dot1 = manager1.tx_storage.graphviz(format='pdf')
-        # dot1.render('dot-merged')
+        self.assertConsensusEqual(manager1, manager2)
+        # self.assertConsensusValid(manager1)
+        self.assertConsensusValid(manager2)

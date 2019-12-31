@@ -17,6 +17,31 @@ _base_transaction_log = logger.new()
 
 
 class ConsensusAlgorithm:
+    """Execute the consensus algorithm marking blocks and transactions as either executed or voided.
+
+    The consensus algorithm uses the metadata voided_by to set whether a block or transaction is executed.
+    If voided_by is empty, then the block or transaction is executed. Otherwise, it is voided.
+
+    The voided_by stores which hashes are causing the voidance. The hashes may be from both blocks and
+    transactions.
+
+    The voidance propagates through the DAG of transactions. For example, if tx1 is voided and tx2 verifies
+    tx1, then tx2 must be voided as well. Another example is that, if a block is not in the bestchain,
+    any transaction spending one of the block's outputs is also voided.
+
+    In the DAG of transactions, the voided_by of tx1 is always a subset of the voided_by of all transactions
+    that verifies tx1 or spend one of tx1's outputs. The hash of tx1 may only be on its own voided_by when
+    tx1 has conflicts and is not the winner.
+
+    When a block is not in the bestchain, its voided_by contains its hash. This hash is also propagated
+    through the transactions that spend one of its outputs.
+
+    Differently from transactions, the hash of the blocks are not propagated through the voided_by of
+    other blocks. For example, if b0 <- b1 <- b2 <- b3 is a side chain, i.e., not the best blockchain,
+    then b0's voided_by contains b0's hash, b1's voided_by contains b1's hash, and so on. The hash of
+    b0 will not be propagated to the voided_by of b1, b2, and b3.
+    """
+
     def __init__(self) -> None:
         self.block_algorithm = BlockConsensusAlgorithm(self)
         self.transaction_algorithm = TransactionConsensusAlgorithm(self)
@@ -110,6 +135,23 @@ class BlockConsensusAlgorithm:
 
         storage = block.storage
 
+        # Union of voided_by of parents
+        voided_by: Set[bytes] = self.union_voided_by_from_parents(block)
+
+        # Update accumulated weight of the transactions voiding us.
+        assert block.hash not in voided_by
+        for h in voided_by:
+            tx = storage.get_transaction(h)
+            tx_meta = tx.get_metadata()
+            tx_meta.accumulated_weight = sum_weights(tx_meta.accumulated_weight, block.weight)
+            storage.save_transaction(tx, only_metadata=True)
+
+        # Check conflicts of the transactions voiding us.
+        for h in voided_by:
+            tx = tx.storage.get_transaction(h)
+            if not tx.is_block:
+                self.consensus.transaction_algorithm.check_conflicts(tx)
+
         parent = block.get_block_parent()
         parent_meta = parent.get_metadata()
         assert block.hash in parent_meta.children
@@ -119,7 +161,7 @@ class BlockConsensusAlgorithm:
 
         if is_connected_to_the_head and is_connected_to_the_best_chain:
             # Case (i): Single best chain, connected to the head of the best chain
-            self.update_score_and_mark_as_the_best_chain(block)
+            self.update_score_and_mark_as_the_best_chain_if_possible(block)
             heads = [storage.get_transaction(h) for h in storage.get_best_block_tips()]
             assert len(heads) == 1
 
@@ -140,15 +182,16 @@ class BlockConsensusAlgorithm:
                 else:
                     # All heads must have the same score.
                     assert abs(best_score - head_meta.score) < 1e-10
-            assert isinstance(best_score, float)
+            assert isinstance(best_score, (int, float))
 
             # Calculate the score.
+            # We cannot calculate score before getting the heads.
             score = self.calculate_score(block)
 
             # Finally, check who the winner is.
             if score <= best_score - settings.WEIGHT_TOL:
-                # Nothing to do.
-                pass
+                # Just update voided_by from parents.
+                self.update_voided_by_from_parents(block)
 
             else:
                 # Either eveyone has the same score or there is a winner.
@@ -163,28 +206,102 @@ class BlockConsensusAlgorithm:
                 # Either we have a single best chain or all chains have already been voided.
                 assert len(valid_heads) <= 1, 'We must never have more than one valid head'
 
-                # We need to go through all side chains because there may be non-voided blocks
-                # that must be voided.
-                # For instance, imagine two chains with intersection with both heads voided.
-                # Now, a new chain starting in genesis reaches the same score. Then, the tail
-                # of the two chains must be voided.
-                first_block = self._find_first_parent_in_best_chain(block)
-                for head in heads:
-                    while True:
-                        if head.timestamp <= first_block.timestamp:
-                            break
-                        meta = head.get_metadata()
-                        if not meta.voided_by:
-                            # Only mark as voided when it is non-voided.
-                            self.mark_as_voided(head)
-                        # We have to go through the chain until the first parent in the best
-                        # chain because the head may be voided with part of the tail non-voided.
-                        head = head.get_block_parent()
+                # Add voided_by to all heads.
+                self.add_voided_by_to_multiple_chains(block, heads)
 
                 if score >= best_score + settings.WEIGHT_TOL:
                     # We have a new winner.
-                    self.update_score_and_mark_as_the_best_chain(block)
-                    self.remove_voided_by_from_chain(block)
+                    self.update_score_and_mark_as_the_best_chain_if_possible(block)
+
+    def union_voided_by_from_parents(self, block: 'Block') -> Set[bytes]:
+        """Return the union of the voided_by of block's parents.
+
+        It does not include the hash of blocks because the hash of blocks
+        are not propagated through the chains. For further information, see
+        the docstring of the ConsensusAlgorithm class.
+        """
+        voided_by: Set[bytes] = set()
+        for parent in block.get_parents():
+            assert parent.hash is not None
+            parent_meta = parent.get_metadata()
+            voided_by2 = parent_meta.voided_by
+            if voided_by2:
+                if parent.is_block:
+                    # We must go through the blocks because the voidance caused
+                    # by a transaction must be sent ahead. For example, in the
+                    # chain b0 <- b1 <- b2 <- b3, if a transaction voids b1, then
+                    # it must also voids b2 and b3. But, we must ignore the hash of
+                    # the blocks themselves.
+                    voided_by2 = voided_by2.copy()
+                    voided_by2.discard(parent.hash)
+                voided_by.update(voided_by2)
+        return voided_by
+
+    def update_voided_by_from_parents(self, block: 'Block') -> bool:
+        """Update block's metadata voided_by from parents.
+        Return True if the block is voided and False otherwise."""
+        assert block.storage is not None
+        voided_by: Set[bytes] = self.union_voided_by_from_parents(block)
+        if voided_by:
+            meta = block.get_metadata()
+            if meta.voided_by:
+                meta.voided_by.update(voided_by)
+            else:
+                meta.voided_by = voided_by.copy()
+            block.storage.save_transaction(block, only_metadata=True)
+            block.storage._del_from_cache(block, relax_assert=True)  # XXX: accessing private method
+            return True
+        return False
+
+    def add_voided_by_to_multiple_chains(self, block: 'Block', heads: List['Block']) -> None:
+        # We need to go through all side chains because there may be non-voided blocks
+        # that must be voided.
+        # For instance, imagine two chains with intersection with both heads voided.
+        # Now, a new chain starting in genesis reaches the same score. Then, the tail
+        # of the two chains must be voided.
+        first_block = self._find_first_parent_in_best_chain(block)
+        for head in heads:
+            while True:
+                if head.timestamp <= first_block.timestamp:
+                    break
+                meta = head.get_metadata()
+                if not (meta.voided_by and head.hash in meta.voided_by):
+                    # Only mark as voided when it is non-voided.
+                    self.mark_as_voided(head)
+                # We have to go through the chain until the first parent in the best
+                # chain because the head may be voided with part of the tail non-voided.
+                head = head.get_block_parent()
+
+    def update_score_and_mark_as_the_best_chain_if_possible(self, block: 'Block') -> None:
+        """Update block's score and mark it as best chain if it is a valid consensus.
+        If it is not, the block will be voided and the block with highest score will be set as
+        best chain.
+        """
+        assert block.storage is not None
+        self.update_score_and_mark_as_the_best_chain(block)
+        self.remove_voided_by_from_chain(block)
+
+        if self.update_voided_by_from_parents(block):
+            storage = block.storage
+            heads = [storage.get_transaction(h) for h in storage.get_best_block_tips()]
+            best_score = 0
+            for head in heads:
+                head_meta = head.get_metadata(force_reload=True)
+                if head_meta.score <= best_score - settings.WEIGHT_TOL:
+                    continue
+
+                if head_meta.score >= best_score + settings.WEIGHT_TOL:
+                    best_heads = [head]
+                    best_score = head_meta.score
+                else:
+                    assert abs(best_score - head_meta.score) < 1e-10
+                    best_heads.append(head)
+            assert isinstance(best_score, (int, float)) and best_score > 0
+
+            assert len(best_heads) > 0
+            self.add_voided_by_to_multiple_chains(best_heads[0], [block])
+            if len(best_heads) == 1:
+                self.update_score_and_mark_as_the_best_chain_if_possible(best_heads[0])
 
     def update_score_and_mark_as_the_best_chain(self, block: 'Block') -> None:
         """ Update score and mark the chain as the best chain.
@@ -234,7 +351,7 @@ class BlockConsensusAlgorithm:
         """
         if not skip_remove_first_block_markers:
             self.remove_first_block_markers(block)
-        assert self.add_voided_by(block)
+        self.add_voided_by(block)
 
     def add_voided_by(self, block: 'Block', voided_hash: Optional[bytes] = None) -> bool:
         """ Add a new hash in its `meta.voided_by`. If `voided_hash` is None, it includes
@@ -698,8 +815,9 @@ class TransactionConsensusAlgorithm:
 
         from hathor.transaction import Transaction
         for tx2 in check_list:
-            assert isinstance(tx2, Transaction)
-            self.check_conflicts(tx2)
+            if not tx2.is_block:
+                assert isinstance(tx2, Transaction)
+                self.check_conflicts(tx2)
         return True
 
     def mark_as_voided(self, tx: 'Transaction') -> None:
@@ -734,8 +852,12 @@ class TransactionConsensusAlgorithm:
         for tx2 in bfs.run(tx, skip_root=False):
             assert tx2.storage is not None
             assert tx2.hash is not None
-
             meta2 = tx2.get_metadata()
+
+            if tx2.is_block:
+                assert isinstance(tx2, Block)
+                self.consensus.block_algorithm.mark_as_voided(tx2)
+
             assert not meta2.voided_by or voided_hash not in meta2.voided_by
             if tx2.hash != tx.hash and meta2.conflict_with and not meta2.voided_by:
                 check_list.extend(tx2.storage.get_transaction(h) for h in meta2.conflict_with)
