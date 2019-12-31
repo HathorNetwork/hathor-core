@@ -108,6 +108,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.assertNotIn(tx2.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
         self.assertIn(tx3.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
 
+        self.assertConsensusValid(self.manager1)
+
     def test_double_spending_propagation(self):
         blocks = add_new_blocks(self.manager1, 4, advance_clock=15)
 
@@ -295,6 +297,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         blocks = add_new_blocks(self.manager1, 1, advance_clock=15)
         self._add_new_transactions(self.manager1, 10)
         blocks = add_new_blocks(self.manager1, 1, advance_clock=15)
+
+        self.assertConsensusValid(self.manager1)
 
         # ---
         # dot1 = self.manager1.tx_storage.graphviz(format='pdf', acc_weight=True)

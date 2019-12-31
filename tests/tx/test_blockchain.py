@@ -69,6 +69,8 @@ class BlockchainTestCase(unittest.TestCase):
                 self.assertAlmostEqual(score, meta.score)
                 self.assertAlmostEqual(manager.consensus_algorithm.block_algorithm.calculate_score(block), meta.score)
 
+        self.assertConsensusValid(manager)
+
     def test_single_fork_not_best(self):
         """ New blocks belong to cases (i), (ii), (iii), and (iv).
         The best chain never changes. All other chains are side chains.
@@ -161,6 +163,8 @@ class BlockchainTestCase(unittest.TestCase):
         self.assertTrue(manager.propagate_tx(fork_block3))
         fork_meta3 = fork_block3.get_metadata()
         self.assertEqual(fork_meta3.voided_by, {fork_block3.hash})
+
+        self.assertConsensusValid(manager)
 
     def test_multiple_forks(self):
         self.assertEqual(len(self.genesis_blocks), 1)
@@ -325,6 +329,8 @@ class BlockchainTestCase(unittest.TestCase):
 
         # dot = manager.tx_storage.graphviz(format='pdf')
         # dot.render('test_fork')
+
+        self.assertConsensusValid(manager)
 
 
 if __name__ == '__main__':

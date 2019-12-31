@@ -131,6 +131,46 @@ class TestCase(unittest.TestCase):
             # Hard verification
             # self.assertEqual(tx1_meta.voided_by, tx2_meta.voided_by)
 
+    def assertConsensusValid(self, manager):
+        for tx in manager.tx_storage.get_all_transactions():
+            if tx.is_block:
+                self.assertBlockConsensusValid(tx)
+            else:
+                self.assertTransactionConsensusValid(tx)
+
+    def assertBlockConsensusValid(self, block):
+        self.assertTrue(block.is_block)
+        if not block.parents:
+            # Genesis
+            return
+        meta = block.get_metadata()
+        if meta.voided_by is None:
+            parent = block.get_block_parent()
+            parent_meta = parent.get_metadata()
+            self.assertIsNone(parent_meta.voided_by)
+
+    def assertTransactionConsensusValid(self, tx):
+        self.assertFalse(tx.is_block)
+        meta = tx.get_metadata()
+        if meta.voided_by and tx.hash in meta.voided_by:
+            # If a transaction voids itself, then it must have at
+            # least one conflict.
+            self.assertTrue(meta.conflict_with)
+
+        for txin in tx.inputs:
+            spent_tx = tx.get_spent_tx(txin)
+            spent_meta = spent_tx.get_metadata()
+
+            if spent_meta.voided_by is not None:
+                self.assertIsNotNone(meta.voided_by)
+                self.assertTrue(spent_meta.voided_by.issubset(meta.voided_by))
+
+        for parent in tx.get_parents():
+            parent_meta = parent.get_metadata()
+            if parent_meta.voided_by is not None:
+                self.assertIsNotNone(meta.voided_by)
+                self.assertTrue(parent_meta.voided_by.issubset(meta.voided_by))
+
     def clean_tmpdirs(self):
         for tmpdir in self.tmpdirs:
             shutil.rmtree(tmpdir)

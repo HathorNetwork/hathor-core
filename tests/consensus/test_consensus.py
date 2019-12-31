@@ -70,6 +70,8 @@ class ConsensusTestCase(unittest.TestCase):
             meta = block.get_metadata()
             self.assertEqual(meta.voided_by, {other_tx_hash, block.hash})
 
+        self.assertConsensusValid(manager)
+
     def test_dont_revert_block_low_weight(self):
         """ A conflict transaction will be propagated and voided.
         A new block with low weight will verify it, which won't be enough to flip to executed.
@@ -120,6 +122,8 @@ class ConsensusTestCase(unittest.TestCase):
 
         b0_meta = b0.get_metadata()
         self.assertEqual(b0_meta.voided_by, {b0.hash, conflicting_tx.hash})
+
+        self.assertConsensusValid(manager)
 
     def test_dont_revert_block_high_weight_transaction_verify_other(self):
         """ A conflict transaction will be propagated and voided. But this transaction
@@ -175,6 +179,8 @@ class ConsensusTestCase(unittest.TestCase):
             meta = block.get_metadata()
             self.assertIsNone(meta.voided_by)
 
+        self.assertConsensusValid(manager)
+
     def test_dont_revert_block_high_weight_verify_both(self):
         """ A conflicting transaction will be propagated and voided. But the block with high weight
         verifies both the conflicting transactions, so this block will always be voided.
@@ -225,3 +231,5 @@ class ConsensusTestCase(unittest.TestCase):
         for block in blocks2:
             meta = block.get_metadata()
             self.assertIsNone(meta.voided_by)
+
+        self.assertConsensusValid(manager)
