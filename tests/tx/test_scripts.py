@@ -7,6 +7,7 @@ from hathor.crypto.util import get_address_from_public_key, get_hash160, get_pub
 from hathor.transaction.exceptions import (
     DataIndexError,
     EqualVerifyFailed,
+    FinalStackInvalid,
     InvalidStackData,
     MissingStackItems,
     OracleChecksigFailed,
@@ -21,7 +22,10 @@ from hathor.transaction.scripts import (
     HathorScript,
     Opcode,
     ScriptExtras,
+    binary_to_int,
+    evaluate_final_stack,
     get_data_value,
+    get_pushdata,
     op_checkdatasig,
     op_checkmultisig,
     op_checksig,
@@ -38,6 +42,7 @@ from hathor.transaction.scripts import (
     op_integer,
     op_pushdata,
     op_pushdata1,
+    re_compile,
 )
 from hathor.wallet import HDWallet
 from tests import unittest
@@ -53,6 +58,80 @@ class BasicTransaction(unittest.TestCase):
         # read genesis keys
         self.genesis_private_key = get_genesis_key()
         self.genesis_public_key = self.genesis_private_key.public_key()
+
+    def test_data_pattern(self):
+        # up to 75 bytes, no Opcode is needed
+        s = HathorScript()
+        re_match = re_compile('^DATA_75$')
+        data = [0x00] * 75
+        s.pushData(bytes(data))
+        self.assertEqual(76, len(s.data))   # data_len + data
+        match = re_match.search(s.data)
+        self.assertIsNotNone(match)
+        # for now, we also accept <= 75 bytes with OP_PUSHDATA1
+        match = re_match.search(bytes([Opcode.OP_PUSHDATA1]) + s.data)
+        self.assertIsNotNone(match)
+
+        # with more, use OP_PUSHDATA1
+        s = HathorScript()
+        re_match = re_compile('^DATA_76$')
+        data = [0x00] * 76
+        s.pushData(bytes(data))
+        self.assertEqual(78, len(s.data))   # OP_PUSHDATA1 + data_len + data
+        match = re_match.search(s.data)
+        self.assertIsNotNone(match)
+        # test without PUSHDATA1 opcode. Should fail
+        match = re_match.search(s.data[1:])
+        self.assertIsNone(match)
+
+        # DATA_ between other opcodes
+        s = HathorScript()
+        re_match = re_compile('^OP_HASH160 (DATA_20) OP_EQUALVERIFY$')
+        data = [0x00] * 20
+        s.addOpcode(Opcode.OP_HASH160)
+        s.pushData(bytes(data))
+        s.addOpcode(Opcode.OP_EQUALVERIFY)
+        match = re_match.search(s.data)
+        self.assertIsNotNone(match)
+
+        # wrong length
+        s = HathorScript()
+        re_match = re_compile('^DATA_20$')
+        data = [0x00] * 20
+        s.pushData(bytes(data))
+        s.data = s.data.replace(b'\x14', b'\x15')
+        print(s.data)
+        match = re_match.search(s.data)
+        self.assertIsNone(match)
+
+    def test_push_integers(self):
+        # 1 byte
+        s = HathorScript()
+        s.pushData(255)
+        n = get_pushdata(s.data)
+        self.assertEqual(1, len(n))
+        self.assertEqual(255, binary_to_int(n))
+
+        # 2 bytes
+        s = HathorScript()
+        s.pushData(65535)
+        n = get_pushdata(s.data)
+        self.assertEqual(2, len(n))
+        self.assertEqual(65535, binary_to_int(n))
+
+        # 4 bytes
+        s = HathorScript()
+        s.pushData(4294967295)
+        n = get_pushdata(s.data)
+        self.assertEqual(4, len(n))
+        self.assertEqual(4294967295, binary_to_int(n))
+
+        # 8 bytes
+        s = HathorScript()
+        s.pushData(4294967296)
+        n = get_pushdata(s.data)
+        self.assertEqual(8, len(n))
+        self.assertEqual(4294967296, binary_to_int(n))
 
     def test_pushdata(self):
         stack = []
@@ -504,6 +583,39 @@ class BasicTransaction(unittest.TestCase):
 
         with self.assertRaises(ScriptError):
             op_integer(0x61, stack, [], None)
+
+    def test_final_stack(self):
+        # empty stack is valid
+        stack = []
+        evaluate_final_stack(stack, [])
+
+        # True (no zero value) in final stack is valid
+        stack = [1]
+        evaluate_final_stack(stack, [])
+        stack = [5]
+        evaluate_final_stack(stack, [])
+
+        # more than one item is valid, as long as top value is True
+        stack = [0, 0, 1]
+        evaluate_final_stack(stack, [])
+
+        # False on stack should fail
+        stack = [0]
+        with self.assertRaises(FinalStackInvalid):
+            evaluate_final_stack(stack, [])
+        stack = [1, 1, 1, 0]
+        with self.assertRaises(FinalStackInvalid):
+            evaluate_final_stack(stack, [])
+
+    def test_get_pushdata(self):
+        s = [0] * 10
+        s.insert(0, len(s))
+        self.assertEqual(10, len(get_pushdata(s)))
+
+        s = [0] * 100
+        s.insert(0, len(s))
+        s.insert(0, Opcode.OP_PUSHDATA1)
+        self.assertEqual(100, len(get_pushdata(s)))
 
 
 if __name__ == '__main__':
