@@ -64,6 +64,18 @@ class TransactionCacheStorage(BaseTransactionStorage):
     def start(self) -> None:
         self.reactor.callLater(self.interval, self._start_flush_thread)
 
+    def _enable_weakref(self) -> None:
+        """ For testing purposes. Weakref should never be disabled unless you know exactly what you are doing.
+        """
+        super()._enable_weakref()
+        self.store._enable_weakref()
+
+    def _disable_weakref(self) -> None:
+        """ For testing purposes. Weakref should never be disabled unless you know exactly what you are doing.
+        """
+        super()._disable_weakref()
+        self.store._disable_weakref()
+
     def _start_flush_thread(self) -> None:
         if self.flush_deferred is None:
             deferred = threads.deferToThread(self._flush_to_storage, self.dirty_txs.copy())
