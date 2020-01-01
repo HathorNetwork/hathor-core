@@ -286,8 +286,8 @@ class HathorManager:
                 assert self.on_new_tx(tx, quiet=True, fails_silently=False)
             except (InvalidNewTransaction, TxValidationError):
                 pretty_json = json.dumps(tx.to_json(), indent=4)
-                self.log.failure('An unexpected error occurred when initializing {tx.hash_hex}\n'
-                                 '{pretty_json}', tx=tx, pretty_json=pretty_json)
+                self.log.error('An unexpected error occurred when initializing {tx.hash_hex}\n'
+                               '{pretty_json}', tx=tx, pretty_json=pretty_json)
                 sys.exit(-1)
 
             if time.time() - t2 > 1:
