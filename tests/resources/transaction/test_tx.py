@@ -4,7 +4,7 @@ from hathor.transaction import Transaction
 from hathor.transaction.genesis import get_genesis_transactions
 from hathor.transaction.resources import TransactionResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_new_blocks, add_new_transactions, start_remote_storage
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions, start_remote_storage
 
 
 class TransactionTest(_BaseResourceTest._ResourceTest):
@@ -36,7 +36,8 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data_error2['success'])
 
         # Adding blocks to have funds
-        add_new_blocks(self.manager, 2)
+        add_new_blocks(self.manager, 2, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
         tx = add_new_transactions(self.manager, 1)[0]
 
         tx2 = Transaction.create_from_struct(tx.get_struct())
@@ -53,10 +54,14 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
     @inlineCallbacks
     def test_get_many(self):
         # Add some blocks and txs and get them in timestamp order
-        blocks = sorted(add_new_blocks(self.manager, 4), key=lambda x: (x.timestamp, x.hash))
+        blocks = add_new_blocks(self.manager, 4, advance_clock=1)
+        _blocks = add_blocks_unlock_reward(self.manager)
         txs = sorted(add_new_transactions(self.manager, 25), key=lambda x: (x.timestamp, x.hash))
 
-        # Get last 5 blocks
+        blocks.extend(_blocks)
+        blocks = sorted(blocks, key=lambda x: (x.timestamp, x.hash))
+
+        # Get last 2 blocks
         expected1 = blocks[-2:]
         expected1.reverse()
 
@@ -90,8 +95,8 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
             "transaction", {
                 b'count': b'3',
                 b'type': b'block',
-                b'timestamp': bytes(str(expected1[-1].timestamp), 'utf-8'),
-                b'hash': bytes(expected1[-1].hash.hex(), 'utf-8'),
+                b'timestamp': bytes(str(blocks[2].timestamp), 'utf-8'),
+                b'hash': bytes(blocks[2].hash.hex(), 'utf-8'),
                 b'page': b'next'
             })
         data3 = response3.json_value()

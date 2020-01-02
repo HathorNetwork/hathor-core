@@ -8,7 +8,7 @@ from hathor.transaction.scripts import P2PKH, MultiSig, create_output_script, pa
 from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
 from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from tests import unittest
-from tests.utils import add_new_blocks
+from tests.utils import add_blocks_unlock_reward, add_new_blocks
 
 settings = HathorSettings()
 
@@ -54,6 +54,7 @@ class MultisigTestCase(unittest.TestCase):
     def test_spend_multisig(self):
         # Adding funds to the wallet
         blocks = add_new_blocks(self.manager, 2, advance_clock=15)
+        add_blocks_unlock_reward(self.manager)
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, sum(blk.outputs[0].value for blk in blocks)))
 

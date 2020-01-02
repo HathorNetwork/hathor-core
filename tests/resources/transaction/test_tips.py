@@ -3,7 +3,7 @@ from twisted.internet.defer import inlineCallbacks
 from hathor.transaction.genesis import get_genesis_transactions
 from hathor.transaction.resources import TipsResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_new_blocks, add_new_transactions
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
 
 
 class TipsTest(_BaseResourceTest._ResourceTest):
@@ -23,7 +23,8 @@ class TipsTest(_BaseResourceTest._ResourceTest):
         self.manager.wallet.unlock(b'MYPASS')
 
         # Add blocks to have funds
-        add_new_blocks(self.manager, 2)
+        add_new_blocks(self.manager, 2, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
 
         # Add one tx, now you have only one tip
         tx = add_new_transactions(self.manager, 1)[0]

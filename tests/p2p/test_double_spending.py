@@ -2,7 +2,7 @@ import random
 
 from hathor.crypto.util import decode_address
 from tests import unittest
-from tests.utils import add_new_blocks, add_new_tx, start_remote_storage
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_tx, start_remote_storage
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):
@@ -26,6 +26,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
     def test_simple_double_spending(self):
         add_new_blocks(self.manager1, 5, advance_clock=15)
+        add_blocks_unlock_reward(self.manager1)
 
         from hathor.transaction import Transaction
         from hathor.wallet.base_wallet import WalletOutputInfo
@@ -112,6 +113,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
     def test_double_spending_propagation(self):
         blocks = add_new_blocks(self.manager1, 4, advance_clock=15)
+        add_blocks_unlock_reward(self.manager1)
 
         from hathor.transaction import Transaction
         from hathor.wallet.base_wallet import WalletOutputInfo, WalletInputInfo
@@ -294,8 +296,10 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(meta7.voided_by, None)
 
         blocks = add_new_blocks(self.manager1, 1, advance_clock=15)
+        add_blocks_unlock_reward(self.manager1)
         self._add_new_transactions(self.manager1, 10)
         blocks = add_new_blocks(self.manager1, 1, advance_clock=15)
+        add_blocks_unlock_reward(self.manager1)
         self._add_new_transactions(self.manager1, 10)
         blocks = add_new_blocks(self.manager1, 1, advance_clock=15)
 

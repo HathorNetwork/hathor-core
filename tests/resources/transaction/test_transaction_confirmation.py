@@ -3,7 +3,7 @@ from twisted.internet.defer import inlineCallbacks
 from hathor.transaction.genesis import get_genesis_transactions
 from hathor.transaction.resources import TransactionAccWeightResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_new_blocks, add_new_transactions
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
 
 
 class TransactionTest(_BaseResourceTest._ResourceTest):
@@ -25,9 +25,11 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data_success['confirmation_level'], 0)
 
         # Adding blocks to have funds
-        add_new_blocks(self.manager, 2)
+        add_new_blocks(self.manager, 2, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
         tx = add_new_transactions(self.manager, 5)[0]
-        add_new_blocks(self.manager, 2)
+        add_new_blocks(self.manager, 2, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
         response_success2 = yield self.web.get(
             "transaction_acc_weight",
             {b'id': bytes(tx.hash.hex(), 'utf-8')}

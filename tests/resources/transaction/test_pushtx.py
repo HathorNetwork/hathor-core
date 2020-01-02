@@ -10,7 +10,7 @@ from hathor.transaction.resources import PushTxResource
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.wallet.resources import BalanceResource, HistoryResource, SendTokensResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_new_blocks, create_tokens, resolve_block_bytes
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, create_tokens, resolve_block_bytes
 
 
 class DecodeTxTest(_BaseResourceTest._ResourceTest):
@@ -35,6 +35,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
 
         # Creating a valid transaction to be pushed to the network
         blocks = add_new_blocks(self.manager, 3, advance_clock=2)
+        add_blocks_unlock_reward(self.manager)
         tx_id = blocks[0].hash
         output = blocks[0].outputs[0]
         script_type_out = parse_address_script(output.script)

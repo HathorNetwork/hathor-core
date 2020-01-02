@@ -3,7 +3,7 @@ from twisted.internet.defer import inlineCallbacks
 from hathor.transaction import Transaction
 from hathor.transaction.resources import GraphvizLegacyResource
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
-from tests.utils import add_new_blocks, add_new_transactions
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
 
 
 class GraphvizTest(_BaseResourceTest._ResourceTest):
@@ -18,6 +18,7 @@ class GraphvizTest(_BaseResourceTest._ResourceTest):
 
         # Creating blocks, txs and a conflict tx to test graphviz with it
         add_new_blocks(self.manager, 2, advance_clock=2)
+        add_blocks_unlock_reward(self.manager)
         txs = add_new_transactions(self.manager, 2, advance_clock=2)
         tx = txs[0]
 

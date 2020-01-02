@@ -8,7 +8,7 @@ from hathor.transaction.scripts import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount, int_to_bytes
 from tests import unittest
-from tests.utils import create_tokens, get_genesis_key
+from tests.utils import add_blocks_unlock_reward, create_tokens, get_genesis_key
 
 settings = HathorSettings()
 
@@ -28,6 +28,9 @@ class TokenTest(unittest.TestCase):
         # read genesis keys
         self.genesis_private_key = get_genesis_key()
         self.genesis_public_key = self.genesis_private_key.public_key()
+
+        # add some blocks so we can spend the genesis outputs
+        add_blocks_unlock_reward(self.manager)
 
     def test_tokens_in_block(self):
         # a block with token index > 1 should be invalid

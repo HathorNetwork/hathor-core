@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from hathor.cli.multisig_signature import create_parser, execute
 from hathor.wallet import Wallet
 from tests import unittest
-from tests.utils import add_new_blocks, add_new_transactions
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
 
 
 class SignatureTest(unittest.TestCase):
@@ -30,6 +30,7 @@ class SignatureTest(unittest.TestCase):
 
     def test_generate_signature(self):
         add_new_blocks(self.manager, 1, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
         tx = add_new_transactions(self.manager, 1, advance_clock=1)[0]
 
         address = self.wallet.get_unused_address()

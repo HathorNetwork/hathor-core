@@ -4,7 +4,7 @@ from mnemonic import Mnemonic
 
 from hathor.manager import TestMode
 from hathor.transaction import BaseTransaction
-from hathor.transaction.genesis import genesis_transactions
+from hathor.transaction.genesis import get_genesis_transactions
 from hathor.wallet import HDWallet
 from tests import unittest
 from tests.clock import HeapClock
@@ -34,7 +34,7 @@ class HathorSimulatorTestCase(unittest.TestCase):
 
         self.network = 'testnet'
 
-        first_timestamp = min(tx.timestamp for tx in genesis_transactions(None))
+        first_timestamp = min(tx.timestamp for tx in get_genesis_transactions(None))
         self.clock.advance(first_timestamp + random.randint(3600, 120*24*3600))
 
     def tearDown(self):

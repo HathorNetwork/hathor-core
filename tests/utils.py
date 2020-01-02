@@ -34,6 +34,9 @@ settings = HathorSettings()
 
 MIN_TIMESTAMP = genesis.GENESIS[-1].timestamp + 1
 
+# useful for adding blocks to a different wallet
+BURN_ADDRESS = bytes.fromhex('28acbfb94571417423c1ed66f706730c4aea516ac5762cccb8')
+
 
 def resolve_block_bytes(block_bytes):
     """ From block bytes we create a block and resolve pow
@@ -151,7 +154,7 @@ def add_new_transactions(manager, num_txs, advance_clock=None):
     return txs
 
 
-def add_new_block(manager, advance_clock=None, *, parent_block_hash=None, data=b'', weight=None):
+def add_new_block(manager, advance_clock=None, *, parent_block_hash=None, data=b'', weight=None, address=None):
     """ Create, resolve and propagate a new block
 
         :param manager: Manager object to handle the creation
@@ -160,7 +163,7 @@ def add_new_block(manager, advance_clock=None, *, parent_block_hash=None, data=b
         :return: Block created
         :rtype: :py:class:`hathor.transaction.block.Block`
     """
-    block = manager.generate_mining_block(parent_block_hash=parent_block_hash, data=data)
+    block = manager.generate_mining_block(parent_block_hash=parent_block_hash, data=data, address=address)
     if weight is not None:
         block.weight = weight
     block.resolve()
@@ -171,7 +174,8 @@ def add_new_block(manager, advance_clock=None, *, parent_block_hash=None, data=b
     return block
 
 
-def add_new_blocks(manager, num_blocks, advance_clock=None, *, parent_block_hash=None, block_data=b'', weight=None):
+def add_new_blocks(manager, num_blocks, advance_clock=None, *, parent_block_hash=None,
+                   block_data=b'', weight=None, address=None):
     """ Create, resolve and propagate some blocks
 
         :param manager: Manager object to handle the creation
@@ -186,11 +190,20 @@ def add_new_blocks(manager, num_blocks, advance_clock=None, *, parent_block_hash
     blocks = []
     for _ in range(num_blocks):
         blocks.append(
-            add_new_block(manager, advance_clock, parent_block_hash=parent_block_hash, data=block_data, weight=weight)
+            add_new_block(manager, advance_clock, parent_block_hash=parent_block_hash,
+                          data=block_data, weight=weight, address=address)
         )
         if parent_block_hash:
             parent_block_hash = blocks[-1].hash
     return blocks
+
+
+def add_blocks_unlock_reward(manager):
+    """This method adds new blocks to a 'burn address' to make sure the existing
+    block rewards can be spent. It uses a 'burn address' so the manager's wallet
+    is not impacted.
+    """
+    return add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1, address=BURN_ADDRESS)
 
 
 class HathorStringTransport(proto_helpers.StringTransport):

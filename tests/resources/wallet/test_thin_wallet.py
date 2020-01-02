@@ -11,7 +11,7 @@ from hathor.wallet.resources.thin_wallet import (
     TokenResource,
 )
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
-from tests.utils import add_new_blocks, create_tokens
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, create_tokens
 
 settings = HathorSettings()
 
@@ -34,9 +34,8 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         # Unlocking wallet
         self.manager.wallet.unlock(b'MYPASS')
 
-        quantity = 3
-
-        blocks = add_new_blocks(self.manager, quantity)
+        blocks = add_new_blocks(self.manager, 3, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
         blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
 
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID].available, sum(blocks_tokens))
@@ -205,6 +204,8 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data['success'])
 
         # test success case
+        add_new_blocks(self.manager, 1, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
         token_name = 'MyTestToken'
         token_symbol = 'MTT'
         amount = 150
@@ -236,6 +237,8 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.manager.wallet.unlock(b'MYPASS')
         resource = StubSite(TokenHistoryResource(self.manager))
 
+        add_new_blocks(self.manager, 1, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
         tx = create_tokens(self.manager, mint_amount=100, token_name='Teste', token_symbol='TST')
         token_uid = tx.tokens[0]
 
