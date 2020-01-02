@@ -114,6 +114,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
     @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         self._save_transaction(tx)
+        self._save_to_weakref(tx)
 
         # call super which adds to index if needed
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
@@ -157,19 +158,20 @@ class TransactionCacheStorage(BaseTransactionStorage):
             tx = self._clone(self.cache[hash_bytes])
             self.cache.move_to_end(hash_bytes, last=True)
             self.stats['hit'] += 1
-            return tx
         else:
             tx = skip_warning(self.store.get_transaction)(hash_bytes)
             tx.storage = self
             self._update_cache(tx)
             self.stats['miss'] += 1
-            return tx
+        self._save_to_weakref(tx)
+        return tx
 
     @deprecated('Use get_all_transactions_deferred instead')
     def get_all_transactions(self):
         self._flush_to_storage(self.dirty_txs.copy())
         for tx in skip_warning(self.store.get_all_transactions)():
             tx.storage = self
+            self._save_to_weakref(tx)
             yield tx
 
     @deprecated('Use get_count_tx_blocks_deferred instead')
