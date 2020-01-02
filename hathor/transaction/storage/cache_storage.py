@@ -65,14 +65,10 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self.reactor.callLater(self.interval, self._start_flush_thread)
 
     def _enable_weakref(self) -> None:
-        """ For testing purposes. Weakref should never be disabled unless you know exactly what you are doing.
-        """
         super()._enable_weakref()
         self.store._enable_weakref()
 
     def _disable_weakref(self) -> None:
-        """ For testing purposes. Weakref should never be disabled unless you know exactly what you are doing.
-        """
         super()._disable_weakref()
         self.store._disable_weakref()
 

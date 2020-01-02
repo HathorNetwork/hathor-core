@@ -59,12 +59,12 @@ class TransactionStorage(ABC):
         return self._tx_weakref.get(hash_bytes, None)
 
     def _enable_weakref(self) -> None:
-        """ For testing purposes. Weakref should never be disabled unless you know exactly what you are doing.
+        """ Weakref should never be disabled unless you know exactly what you are doing.
         """
         self._tx_weakref_disabled = False
 
     def _disable_weakref(self) -> None:
-        """ For testing purposes. Weakref should never be disabled unless you know exactly what you are doing.
+        """ Weakref should never be disabled unless you know exactly what you are doing.
         """
         self._tx_weakref_disabled = True
 
