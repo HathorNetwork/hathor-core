@@ -114,7 +114,6 @@ class TransactionCacheStorage(BaseTransactionStorage):
     @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         self._save_transaction(tx)
-        self._save_to_weakref(tx)
 
         # call super which adds to index if needed
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
