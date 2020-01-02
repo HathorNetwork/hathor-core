@@ -31,7 +31,7 @@ class RemoteStorageTest(unittest.TestCase):
             self.manager.tx_storage.get_block_count()
 
     def test_get_txs(self):
-        first_block = add_new_blocks(self.manager, 3, advance_clock=1)[0]
+        first_block = add_new_blocks(self.manager, 30, advance_clock=1)[0]
         first_tx = add_new_transactions(self.manager, 3, advance_clock=1)[0]
 
         # Using timestamp as float to test code
@@ -45,7 +45,7 @@ class RemoteStorageTest(unittest.TestCase):
         self.assertEqual(len(blocks), 1)
 
         blocks, _ = self.manager.tx_storage.get_newer_blocks_after(float(first_block.timestamp), first_block.hash, 3)
-        self.assertEqual(len(blocks), 2)
+        self.assertEqual(len(blocks), 3)
 
         tx = txs[0]
         proto = tx.to_proto(include_metadata=False)

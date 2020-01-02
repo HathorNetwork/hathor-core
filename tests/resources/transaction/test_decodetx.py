@@ -4,7 +4,7 @@ from hathor.transaction.genesis import get_genesis_transactions
 from hathor.transaction.resources import DecodeTxResource
 from hathor.transaction.scripts import parse_address_script
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import create_tokens
+from tests.utils import add_blocks_unlock_reward, create_tokens
 
 
 class DecodeTxTest(_BaseResourceTest._ResourceTest):
@@ -40,6 +40,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         # Token creation tx
         script_type_out = parse_address_script(get_genesis_transactions(self.manager.tx_storage)[0].outputs[0].script)
         address = script_type_out.address
+        add_blocks_unlock_reward(self.manager)
         tx2 = create_tokens(self.manager, address, mint_amount=100, propagate=True)
         response = yield self.web.get('decode_tx', {b'hex_tx': bytes(tx2.get_struct().hex(), 'utf-8')})
         data = response.json_value()

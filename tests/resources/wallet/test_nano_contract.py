@@ -12,7 +12,7 @@ from hathor.wallet.resources.nano_contracts import (
     NanoContractMatchValueResource,
 )
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
-from tests.utils import add_new_blocks
+from tests.utils import add_blocks_unlock_reward, add_new_blocks
 
 
 class NanoContractsTest(_BaseResourceTest._ResourceTest):
@@ -29,6 +29,7 @@ class NanoContractsTest(_BaseResourceTest._ResourceTest):
         signtx_resource = StubSite(SignTxResource(self.manager))
         decodetx_resource = StubSite(DecodeTxResource(self.manager))
         add_new_blocks(self.manager, 3)
+        add_blocks_unlock_reward(self.manager)
         self.reactor.advance(3)
         # Options
         yield match_value_resource.options("wallet/nano_contracts/match_values")

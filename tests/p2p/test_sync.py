@@ -151,7 +151,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(manager2)
 
     def test_block_sync_new_blocks_and_txs(self):
-        self._add_new_blocks(15)
+        self._add_new_blocks(25)
         self._add_new_transactions(3)
         self._add_new_blocks(4)
         self._add_new_transactions(5)
@@ -182,7 +182,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
     def test_tx_propagation_nat_peers(self):
         """ manager1 <- manager2 <- manager3
         """
-        self._add_new_blocks(5)
+        self._add_new_blocks(25)
 
         manager2 = self.create_peer(self.network)
         conn1 = FakeConnection(self.manager1, manager2)

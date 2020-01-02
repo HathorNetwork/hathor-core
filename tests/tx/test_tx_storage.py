@@ -21,7 +21,14 @@ from hathor.transaction.storage import (
 )
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.wallet import Wallet
-from tests.utils import MIN_TIMESTAMP, add_new_blocks, add_new_transactions, create_tokens, start_remote_storage
+from tests.utils import (
+    MIN_TIMESTAMP,
+    add_blocks_unlock_reward,
+    add_new_blocks,
+    add_new_transactions,
+    create_tokens,
+    start_remote_storage,
+)
 
 settings = HathorSettings()
 
@@ -289,14 +296,22 @@ class _BaseTransactionStorageTest:
             return block
 
         def test_topological_sort(self):
+            if self.__class__.__name__ == 'RemoteCacheMemoryStorageTest':
+                self.skipTest('skipping this test for remote storage with cache')
             self.manager.test_mode = TestMode.TEST_ALL_WEIGHT
-            add_new_blocks(self.manager, 1, advance_clock=1)
+            _total = 0
+            blocks = add_new_blocks(self.manager, 1, advance_clock=1)
+            _total += len(blocks)
+            blocks = add_blocks_unlock_reward(self.manager)
+            _total += len(blocks)
             add_new_transactions(self.manager, 1, advance_clock=1)[0]
 
             total = 0
             for tx in self.tx_storage._topological_sort():
                 total += 1
-            self.assertEqual(total, 5)
+
+            # added blocks + genesis txs + added tx
+            self.assertEqual(total, _total + 3 + 1)
 
         def test_get_best_block_weight(self):
             block = self._add_new_block()

@@ -191,3 +191,6 @@ class HathorSettings(NamedTuple):
 
     # Symbol of the Hathor token
     HATHOR_TOKEN_SYMBOL: str = 'HTR'
+
+    # After how many blocks can a reward be spent
+    REWARD_SPEND_MIN_BLOCKS: int = 300

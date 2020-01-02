@@ -39,8 +39,8 @@ class BlockchainTestCase(unittest.TestCase):
         for tx in self.genesis_txs:
             score = sum_weights(score, tx.weight)
 
-        # Mine 50 blocks in a row with no transaction but the genesis
-        blocks = add_new_blocks(manager, 50, advance_clock=15)
+        # Mine 100 blocks in a row with no transaction but the genesis
+        blocks = add_new_blocks(manager, 100, advance_clock=15)
         for i, block in enumerate(blocks):
             meta = block.get_metadata(force_reload=True)
             score = sum_weights(score, block.weight)
@@ -51,7 +51,7 @@ class BlockchainTestCase(unittest.TestCase):
         for tx in txs:
             score = sum_weights(score, tx.weight)
 
-        # Mine more 50 blocks in a row with no transactions between them
+        # Mine 50 more blocks in a row with no transactions between them
         blocks = add_new_blocks(manager, 50)
         for i, block in enumerate(blocks):
             meta = block.get_metadata()
@@ -59,7 +59,7 @@ class BlockchainTestCase(unittest.TestCase):
             self.assertAlmostEqual(score, meta.score)
             self.assertAlmostEqual(manager.consensus_algorithm.block_algorithm.calculate_score(block), meta.score)
 
-        # Mine more 15 blocks with 10 transactions between each block
+        # Mine 15 more blocks with 10 transactions between each block
         for _ in range(15):
             txs = add_new_transactions(manager, 10, advance_clock=15)
             for tx in txs:
@@ -86,8 +86,8 @@ class BlockchainTestCase(unittest.TestCase):
         for tx in self.genesis_txs:
             score = sum_weights(score, tx.weight)
 
-        # Mine 5 blocks in a row with no transactions
-        blocks = add_new_blocks(manager, 3, advance_clock=15)
+        # Mine 30 blocks in a row with no transactions
+        blocks = add_new_blocks(manager, 30, advance_clock=15)
         for i, block in enumerate(blocks):
             meta = block.get_metadata()
             score = sum_weights(score, block.weight)
@@ -178,8 +178,8 @@ class BlockchainTestCase(unittest.TestCase):
         for tx in self.genesis_txs:
             score = sum_weights(score, tx.weight)
 
-        # Mine 5 blocks in a row with no transactions, case (i).
-        blocks = add_new_blocks(manager, 3, advance_clock=15)
+        # Mine 30 blocks in a row with no transactions, case (i).
+        blocks = add_new_blocks(manager, 30, advance_clock=15)
         for i, block in enumerate(blocks):
             meta = block.get_metadata()
             score = sum_weights(score, block.weight)
