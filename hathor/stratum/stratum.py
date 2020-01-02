@@ -419,8 +419,9 @@ class StratumProtocol(JSONRPC):
         self.log.debug('handle subscribe', msgid=msgid, params=params)
         if params and 'address' in params and params['address'] is not None:
             try:
-                self.miner_address = decode_address(params['address'])
-                self.log.info('Miner with ID {} using address {}'.format(self.miner_id, self.miner_address.decode()))
+                address = params['address']
+                self.miner_address = decode_address(address)
+                self.log.debug('miner with address', id=self.miner_id, address=address)
             except InvalidAddress:
                 self.send_error(INVALID_ADDRESS, msgid)
                 self.transport.loseConnection()
