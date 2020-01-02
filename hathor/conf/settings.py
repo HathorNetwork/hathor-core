@@ -55,6 +55,7 @@ class HathorSettings(NamedTuple):
     def MAXIMUM_NUMBER_OF_HALVINGS(self) -> int:
         return int(log(self.INITIAL_TOKEN_UNITS_PER_BLOCK, 2) - log(self.MINIMUM_TOKEN_UNITS_PER_BLOCK, 2))
 
+    # Average time between blocks.
     AVG_TIME_BETWEEN_BLOCKS: int = 30  # in seconds
 
     # Genesis pre-mined outputs
@@ -85,7 +86,37 @@ class HathorSettings(NamedTuple):
 
     # Maximum distance between two consecutive blocks (in seconds), except for genesis.
     # This prevent some DoS attacks exploiting the calculation of the score of a side chain.
-    MAX_DISTANCE_BETWEEN_BLOCKS: int = 30 * 64  # P(t > T) = 1/e^30 = 9.35e-14
+    #     P(t > T) = exp(-MAX_DISTANCE_BETWEEN_BLOCKS / AVG_TIME_BETWEEN_BLOCKS)
+    #     P(t > T) = exp(-35) = 6.3051e-16
+    MAX_DISTANCE_BETWEEN_BLOCKS: int = 150 * AVG_TIME_BETWEEN_BLOCKS
+
+    # Enable/disable weight decay.
+    WEIGHT_DECAY_ENABLED: bool = True
+
+    # Minimum distance between two consecutive blocks that enables weight decay.
+    # Assuming that the hashrate is constant, the probability of activating is:
+    #     P(t > T) = exp(-WEIGHT_DECAY_ACTIVATE_DISTANCE / AVG_TIME_BETWEEN_BLOCKS)
+    #     P(t > T) = exp(-120) = 7.66e-53
+    # But, if the hashrate drops 40 times, the expected time to find the next block
+    # becomes 40 * AVG_TIME_BETWEEN_BLOCKS = 20 minutes and the probability of
+    # activating the decay is exp(-3) = 0.05 = 5%.
+    WEIGHT_DECAY_ACTIVATE_DISTANCE: int = 120 * AVG_TIME_BETWEEN_BLOCKS
+
+    # Window size of steps in which the weight is reduced when decaying is activated.
+    # The maximum number of steps is:
+    #     max_steps = floor((MAX_DISTANCE_BETWEEN_BLOCKS - WEIGHT_DECAY_ACTIVATE_DISTANCE) / WEIGHT_DECAY_WINDOW_SIZE)
+    # Using these parameters, `max_steps = 15`.
+    WEIGHT_DECAY_WINDOW_SIZE: int = 60
+
+    # Amount to reduce the weight when decaying is activated.
+    #     adj_weight = weight - decay
+    #     difficulty = 2**adj_weight
+    #     difficulty = 2**(weight - decay)
+    #     difficulty = 2**weight / 2**decay
+    # As 2**(-2.73) = 0.15072, it reduces the mining difficulty for 15% of the original weight.
+    # Finally, the maximum decay is `max_steps * WEIGHT_DECAY_AMOUNT`.
+    # As `max_steps = 15`, then `max_decay = 2**(-15 * 2.73) = 4.71e-13`.
+    WEIGHT_DECAY_AMOUNT: float = 2.73
 
     # Number of blocks to be found with the same hash algorithm as `block`.
     # The bigger it is, the smaller the variance of the hash rate estimator is.
