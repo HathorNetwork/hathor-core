@@ -296,8 +296,6 @@ class _BaseTransactionStorageTest:
             return block
 
         def test_topological_sort(self):
-            if self.__class__.__name__ == 'RemoteCacheMemoryStorageTest':
-                self.skipTest('skipping this test for remote storage with cache')
             self.manager.test_mode = TestMode.TEST_ALL_WEIGHT
             _total = 0
             blocks = add_new_blocks(self.manager, 1, advance_clock=1)
