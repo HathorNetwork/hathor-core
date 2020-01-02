@@ -22,7 +22,7 @@ from twisted.logger import Logger
 
 from hathor import protos
 from hathor.conf import HathorSettings
-from hathor.transaction import MAX_NUM_INPUTS, BaseTransaction, TxInput, TxOutput, TxVersion
+from hathor.transaction import MAX_NUM_INPUTS, BaseTransaction, Block, TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE
 from hathor.transaction.exceptions import (
     ConflictingInputs,
@@ -31,6 +31,7 @@ from hathor.transaction.exceptions import (
     InvalidInputData,
     InvalidOutputValue,
     InvalidToken,
+    RewardLocked,
     ScriptError,
     TimestampError,
     TooManyInputs,
@@ -420,6 +421,10 @@ class Transaction(BaseTransaction):
                     spent_tx.timestamp,
                 ))
 
+            if spent_tx.is_block:
+                assert isinstance(spent_tx, Block)
+                self.verify_spent_reward(spent_tx)
+
             self.verify_script(input_tx, spent_tx)
 
             # check if any other input in this tx is spending the same output
@@ -428,6 +433,25 @@ class Transaction(BaseTransaction):
                 raise ConflictingInputs('tx {} inputs spend the same output: {} index {}'.format(
                     self.hash_hex, input_tx.tx_id.hex(), input_tx.index))
             spent_outputs.add(key)
+
+    def verify_spent_reward(self, block: Block) -> None:
+        """ Verify that the reward being spent is old enough (has enoughs blocks after it on the best chain).
+
+        We only consider the blocks on the best chain up to the tx's timestamp.
+        """
+        assert self.storage is not None
+        # using the timestamp, we get the block immediately before this transaction in the blockchain
+        tips = self.storage.get_best_block_tips(self.timestamp - 1)
+        assert len(tips) > 0
+        tip = self.storage.get_transaction(tips[0])
+        assert tip is not None
+        assert self.timestamp > tip.timestamp
+        best_height = tip.get_metadata().height
+        spent_height = block.get_metadata().height
+        spend_blocks = best_height - spent_height
+        if spend_blocks < settings.REWARD_SPEND_MIN_BLOCKS:
+            raise RewardLocked(f'Reward needs {settings.REWARD_SPEND_MIN_BLOCKS} blocks to be spent, {spend_blocks} '
+                               'not enough')
 
     def verify_script(self, input_tx: TxInput, spent_tx: BaseTransaction) -> None:
         """

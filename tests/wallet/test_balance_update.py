@@ -5,7 +5,7 @@ from hathor.transaction.scripts import P2PKH
 from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import PrivateKeyNotFound
 from tests import unittest
-from tests.utils import add_new_blocks, create_tokens
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, create_tokens
 
 settings = HathorSettings()
 
@@ -28,6 +28,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         outputs = [
             WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None)
         ]
+
+        add_blocks_unlock_reward(self.manager)
 
         self.tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
         self.tx1.weight = 10

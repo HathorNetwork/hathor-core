@@ -9,7 +9,7 @@ from hathor.transaction.scripts import create_output_script
 from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
 from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from tests import unittest
-from tests.utils import add_new_blocks
+from tests.utils import add_blocks_unlock_reward, add_new_blocks
 
 settings = HathorSettings()
 
@@ -57,6 +57,7 @@ class MultiSigSpendTest(unittest.TestCase):
         # XXX: note further down the test, 20.00 HTR will be used, block_count must yield at least that amount
         block_count = 3  # 3 * 8.00 -> 24.00 HTR is enough
         blocks = add_new_blocks(self.manager, block_count, advance_clock=15)
+        add_blocks_unlock_reward(self.manager)
         blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
         available_tokens = sum(blocks_tokens)
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID], WalletBalance(0, available_tokens))

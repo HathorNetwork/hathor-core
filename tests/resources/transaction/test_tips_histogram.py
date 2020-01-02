@@ -4,7 +4,7 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.transaction.resources import TipsHistogramResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_new_blocks, add_new_transactions
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
 
 
 class TipsTest(_BaseResourceTest._ResourceTest):
@@ -18,6 +18,7 @@ class TipsTest(_BaseResourceTest._ResourceTest):
     def test_get_tips_histogram(self):
         # Add blocks to have funds
         add_new_blocks(self.manager, 2, 2)
+        add_blocks_unlock_reward(self.manager)
 
         txs = add_new_transactions(self.manager, 10, 2)
 

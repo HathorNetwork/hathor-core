@@ -27,7 +27,7 @@ mypy_flags = --warn-unused-configs --disallow-incomplete-defs --no-implicit-opti
 
 .PHONY: tests-cli
 tests-cli:
-	pytest --durations=10 --cov=hathor/cli/ --cov-config=.coveragerc_full --cov-fail-under=61 -p no:warnings $(tests_cli)
+	pytest --durations=10 --cov=hathor/cli/ --cov-config=.coveragerc_full --cov-fail-under=40 -p no:warnings $(tests_cli)
 
 .PHONY: tests-doctests
 tests-doctests:

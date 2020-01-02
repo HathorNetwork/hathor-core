@@ -6,7 +6,7 @@ from hathor.manager import TestMode
 from hathor.p2p.resources import MiningResource
 from hathor.wallet.resources import BalanceResource, HistoryResource, SendTokensResource
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
-from tests.utils import add_new_blocks, resolve_block_bytes
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, resolve_block_bytes
 
 
 class SendTokensTest(_BaseResourceTest._ResourceTest):
@@ -24,6 +24,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         data_mining = response_mining.json_value()
         block_bytes = resolve_block_bytes(block_bytes=data_mining['block_bytes'])
         yield self.web_mining.post("mining", {'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
+        add_blocks_unlock_reward(self.manager)
         self.reactor.advance(10)
 
         # Unlocking wallet
@@ -117,7 +118,8 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         data_error3 = response_error3.json_value()
         self.assertFalse(data_error3['success'])
 
-        add_new_blocks(self.manager, 1)
+        add_new_blocks(self.manager, 1, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
 
         # Sending token with timelock
         data_timelock = {
@@ -162,7 +164,8 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_tx_weight(self):
-        add_new_blocks(self.manager, 3)
+        add_new_blocks(self.manager, 3, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
         self.reactor.advance(3)
 
         # Unlocking wallet

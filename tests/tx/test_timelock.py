@@ -4,7 +4,7 @@ from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InsufficientFunds
 from tests import unittest
-from tests.utils import add_new_blocks
+from tests.utils import add_blocks_unlock_reward, add_new_blocks
 
 settings = HathorSettings()
 
@@ -18,6 +18,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
     def test_timelock(self):
         blocks = add_new_blocks(self.manager, 5, advance_clock=15)
         blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
+        add_blocks_unlock_reward(self.manager)
 
         address = self.manager.wallet.get_unused_address()
         outside_address = self.get_address(0)
@@ -114,6 +115,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
     def test_choose_inputs(self):
         blocks = add_new_blocks(self.manager, 1, advance_clock=15)
         blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
+        add_blocks_unlock_reward(self.manager)
 
         address = self.manager.wallet.get_unused_address(mark_as_used=False)
 

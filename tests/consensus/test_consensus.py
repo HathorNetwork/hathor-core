@@ -1,6 +1,12 @@
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
-from tests.utils import add_new_block, add_new_blocks, add_new_double_spending, add_new_transactions
+from tests.utils import (
+    add_blocks_unlock_reward,
+    add_new_block,
+    add_new_blocks,
+    add_new_double_spending,
+    add_new_transactions,
+)
 
 
 class ConsensusTestCase(unittest.TestCase):
@@ -20,6 +26,7 @@ class ConsensusTestCase(unittest.TestCase):
 
         # Mine a few blocks in a row with no transaction but the genesis
         blocks = add_new_blocks(manager, 3, advance_clock=15)
+        add_blocks_unlock_reward(manager)
 
         # Add some transactions between blocks
         add_new_transactions(manager, 5, advance_clock=15)
@@ -82,6 +89,7 @@ class ConsensusTestCase(unittest.TestCase):
 
         # Mine a few blocks in a row with no transaction but the genesis
         blocks = add_new_blocks(manager, 3, advance_clock=15)
+        add_blocks_unlock_reward(manager)
 
         # Add some transactions between blocks
         add_new_transactions(manager, 5, advance_clock=15)
@@ -135,6 +143,7 @@ class ConsensusTestCase(unittest.TestCase):
 
         # Mine a few blocks in a row with no transaction but the genesis
         blocks = add_new_blocks(manager, 3, advance_clock=15)
+        add_blocks_unlock_reward(manager)
 
         # Add some transactions between blocks
         add_new_transactions(manager, 5, advance_clock=15)
@@ -190,6 +199,7 @@ class ConsensusTestCase(unittest.TestCase):
 
         # Mine a few blocks in a row with no transaction but the genesis
         add_new_blocks(manager, 3, advance_clock=15)
+        add_blocks_unlock_reward(manager)
 
         # Add some transactions between blocks
         add_new_transactions(manager, 5, advance_clock=15)

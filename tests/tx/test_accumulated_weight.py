@@ -1,7 +1,7 @@
 from hathor.transaction import sum_weights
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
-from tests.utils import add_new_blocks, add_new_transactions
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
 
 
 class AccumulatedWeightTestCase(unittest.TestCase):
@@ -20,6 +20,7 @@ class AccumulatedWeightTestCase(unittest.TestCase):
 
         # Mine 3 blocks in a row with no transaction but the genesis
         blocks = add_new_blocks(manager, 3, advance_clock=15)
+        add_blocks_unlock_reward(manager)
 
         # Add some transactions between blocks
         tx_list = add_new_transactions(manager, 20, advance_clock=15)
