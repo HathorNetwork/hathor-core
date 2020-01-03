@@ -270,7 +270,7 @@ class SingleMinerJob(NamedTuple):
         """ Build the Bitcoin Block from job and work data.
         """
         bitcoin_header, coinbase_tx = self._make_bitcoin_block_and_coinbase(work)
-        bitcoin_block = BitcoinBlock(bitcoin_header, [coinbase_tx] + self.transactions)
+        bitcoin_block = BitcoinBlock(bitcoin_header, [coinbase_tx] + self.transactions[:])
         return bitcoin_block
 
 
@@ -677,7 +677,7 @@ class MergedJob(NamedTuple):
         from hathor.merged_mining.bitcoin import sha256d_hash
 
         # base txs for merkle tree, before coinbase
-        transactions = self.bitcoin_coord.transactions
+        transactions = self.bitcoin_coord.transactions[:]
 
         # build coinbase transaction with hathor block hash
         hathor_block_hash = sha256d_hash(self.hathor_coord.data)
@@ -692,7 +692,6 @@ class MergedJob(NamedTuple):
         assert len(coinbase_bytes) == len(coinbase_head) + xnonce_size + len(coinbase_tail)  # just a sanity check
 
         # TODO: check if total transaction size increase exceed size and sigop limits, there's probably an RPC for this
-        transactions.insert(0, coinbase_tx)
 
         return SingleMinerJob(
             job_id=str(uuid4()),

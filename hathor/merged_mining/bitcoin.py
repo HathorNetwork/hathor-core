@@ -129,6 +129,8 @@ def build_merkle_path_for_coinbase(merkle_leaves: List[bytes], _partial_path: Li
 '67ce1464dc89e67dd30acf8adf74c7ec37fa9f14040b7ecd9127391af1b25f2a', \
 'ee017b11d10898f3b19194f43d9b5b9cf443b8e992797e49f4edd603fee060c7']
     """
+    merkle_leaves = merkle_leaves[:]  # copy to preserve original
+    _partial_path = _partial_path[:]  # copy to preserve original
     len_merkle_leaves = len(merkle_leaves)
     assert len_merkle_leaves > 0
     # FIXME: maybe breaks if initial merkle_leaves has len 1?
@@ -138,10 +140,10 @@ def build_merkle_path_for_coinbase(merkle_leaves: List[bytes], _partial_path: Li
         merkle_leaves.append(merkle_leaves[-1])
         len_merkle_leaves += 1
     _partial_path.append(merkle_leaves[1])  # to trace the coinbase (1st tx) we always get its pair (2nd tx)
-    iter_leaves = iter(merkle_leaves)
+    iter_leaves = iter(merkle_leaves[:])
     return build_merkle_path_for_coinbase(
         [sha256d_hash(_merkle_concat(l, r)) for l, r in zip(iter_leaves, iter_leaves)],
-        _partial_path=_partial_path[:]  # copy the list, maybe too cautious?
+        _partial_path=_partial_path
     )
 
 
@@ -209,6 +211,7 @@ def build_merkle_root_from_path(merkle_path: List[bytes]) -> bytes:
     ... ]]))).hex()
     '9fedb4e40f8532eac81338b479049a2e6bcee68d78b56767d43ebf1020ef8a68'
     """
+    merkle_path = merkle_path[:]  # copy to preserve original
     assert len(merkle_path) >= 1
     while len(merkle_path) > 1:
         a = merkle_path.pop(0)
