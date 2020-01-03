@@ -602,9 +602,11 @@ class BaseTransactionStorage(TransactionStorage):
         #      ordering (Dekel, Nassimi & Sahni 1981). See: https://epubs.siam.org/doi/10.1137/0210049
         #      See also: https://gitlab.com/HathorNetwork/hathor-python/merge_requests/31
         visited: Dict[bytes, int] = dict()  # Dict[bytes, int]
-        cnt = 0
         for tx in self.get_all_transactions():
-            cnt += 1
+            if not tx.is_block:
+                continue
+            yield from self._topological_sort_dfs(tx, visited)
+        for tx in self.get_all_transactions():
             yield from self._topological_sort_dfs(tx, visited)
 
     def _topological_sort_dfs(self, root: BaseTransaction, visited: Dict[bytes, int]) -> Iterator[BaseTransaction]:
@@ -624,15 +626,19 @@ class BaseTransactionStorage(TransactionStorage):
 
             visited[tx.hash] = 0  # 0 = Visit in progress
 
+            # The parents are reversed to go first through the blocks and only then
+            # go through the transactions. It works because blocks must have the
+            # previous block as the first parent. For transactions, the order does not
+            # matter.
+            for parent_hash in tx.parents[::-1]:
+                if parent_hash not in visited:
+                    parent = self.get_transaction(parent_hash)
+                    stack.append(parent)
+
             for txin in tx.inputs:
                 if txin.tx_id not in visited:
                     txinput = self.get_transaction(txin.tx_id)
                     stack.append(txinput)
-
-            for parent_hash in tx.parents:
-                if parent_hash not in visited:
-                    parent = self.get_transaction(parent_hash)
-                    stack.append(parent)
 
     def _add_to_cache(self, tx: BaseTransaction) -> None:
         if not self.with_index:

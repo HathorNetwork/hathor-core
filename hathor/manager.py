@@ -17,7 +17,6 @@ limitations under the License.
 import datetime
 import json
 import random
-import sys
 import time
 from enum import Enum, IntFlag
 from math import log
@@ -288,7 +287,7 @@ class HathorManager:
                 pretty_json = json.dumps(tx.to_json(), indent=4)
                 self.log.error('An unexpected error occurred when initializing {tx.hash_hex}\n'
                                '{pretty_json}', tx=tx, pretty_json=pretty_json)
-                sys.exit(-1)
+                raise
 
             if time.time() - t2 > 1:
                 self.log.warn('Warning: {} took {} seconds to be processed.'.format(tx.hash.hex(), time.time() - t2))
@@ -506,8 +505,8 @@ class HathorManager:
             self.consensus_algorithm.update(tx)
         except Exception:
             pretty_json = json.dumps(tx.to_json(), indent=4)
-            self.log.failure('An unexpected error occurred when processing {tx.hash_hex}\n'
-                             '{pretty_json}', tx=tx, pretty_json=pretty_json)
+            self.log.error('An unexpected error occurred when processing {tx.hash_hex}\n'
+                           '{pretty_json}', tx=tx, pretty_json=pretty_json)
             self.tx_storage.remove_transaction(tx)
             raise
 
