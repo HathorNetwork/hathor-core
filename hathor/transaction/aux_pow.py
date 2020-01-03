@@ -54,6 +54,8 @@ class BitcoinAuxPow(NamedTuple):
             raise AuxPowError('cannot find MAGIC_NUMBER')
         if MAGIC_NUMBER in self.coinbase_head[42:len(MAGIC_NUMBER)]:  # 42 first bytes can be ignored
             raise AuxPowError('multiple instances of MAGIC_NUMBER')
+        if len(self.merkle_path) > 12:
+            raise AuxPowError('`merkle_path` too long')
         # XXX: is there anything else that needs to be verified?
 
     def to_proto(self) -> protos.BitcoinAuxPow:
