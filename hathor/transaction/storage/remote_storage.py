@@ -603,6 +603,10 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
 
     def __init__(self, tx_storage):
         self.storage = tx_storage
+        # We must always disable weakref because it will run remotely, which means
+        # each call will create a new instance of the block/transaction during the
+        # deserialization process.
+        self.storage._disable_weakref()
 
     @convert_hathor_exceptions
     def Exists(self, request: protos.ExistsRequest, context: _Context) -> protos.ExistsResponse:
