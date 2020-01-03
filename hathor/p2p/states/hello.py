@@ -69,9 +69,7 @@ class HelloState(BaseState):
             return
 
         if data['app'] != self._app():
-            self.log.info('WARNING Different app versions: {data[app]}', data=data)
-            protocol.send_error_and_close_connection('Different version.')
-            return
+            self.log.warn('Different app versions: {data[app]}', data=data)
 
         if data['network'] != protocol.network:
             protocol.send_error_and_close_connection('Wrong network.')
