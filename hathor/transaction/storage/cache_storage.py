@@ -64,6 +64,14 @@ class TransactionCacheStorage(BaseTransactionStorage):
     def start(self) -> None:
         self.reactor.callLater(self.interval, self._start_flush_thread)
 
+    def _enable_weakref(self) -> None:
+        super()._enable_weakref()
+        self.store._enable_weakref()
+
+    def _disable_weakref(self) -> None:
+        super()._disable_weakref()
+        self.store._disable_weakref()
+
     def _start_flush_thread(self) -> None:
         if self.flush_deferred is None:
             deferred = threads.deferToThread(self._flush_to_storage, self.dirty_txs.copy())
@@ -146,19 +154,20 @@ class TransactionCacheStorage(BaseTransactionStorage):
             tx = self._clone(self.cache[hash_bytes])
             self.cache.move_to_end(hash_bytes, last=True)
             self.stats['hit'] += 1
-            return tx
         else:
             tx = skip_warning(self.store.get_transaction)(hash_bytes)
             tx.storage = self
             self._update_cache(tx)
             self.stats['miss'] += 1
-            return tx
+        self._save_to_weakref(tx)
+        return tx
 
     @deprecated('Use get_all_transactions_deferred instead')
     def get_all_transactions(self):
         self._flush_to_storage(self.dirty_txs.copy())
         for tx in skip_warning(self.store.get_all_transactions)():
             tx.storage = self
+            self._save_to_weakref(tx)
             yield tx
 
     @deprecated('Use get_count_tx_blocks_deferred instead')
