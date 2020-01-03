@@ -15,6 +15,13 @@ from hathor.util import abbrev
 logger = get_logger()
 
 
+def readBody(*args, **kwargs):
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', category=DeprecationWarning)
+        return client.readBody(*args, **kwargs)
+
+
 class RPCFailure(Failure):
     def __init__(self, message: str, code: Optional[int] = None):
         super().__init__(message)
@@ -105,7 +112,7 @@ class BitcoinRPC(client.Agent, IBitcoinRPC):
         d = self.request(b'POST', self._url, Headers(dict(self._base_headers, **{
             'Content-Type': ['text/plain'],
         })), BytesProducer(body))
-        d.addCallback(client.readBody)
+        d.addCallback(readBody)
         d.addCallback(self._cb_rpc_request, request=data)
         self.log.debug('send request', body_short=abbrev(body))
         return d
