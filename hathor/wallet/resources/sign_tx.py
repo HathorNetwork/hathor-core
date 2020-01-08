@@ -69,7 +69,7 @@ SignTxResource.openapi = {
     '/wallet/sign_tx': {
         'x-visibility': 'private',
         'get': {
-            'tags': ['wallet'],
+            'tags': ['private_wallet'],
             'operationId': 'wallet_sign_tx',
             'summary': 'Sign transaction',
             'description': ('Returns a transaction after signing. If "prepare_to_send" is true,'

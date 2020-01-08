@@ -40,7 +40,7 @@ LockWalletResource.openapi = {
     '/wallet/lock': {
         'x-visibility': 'private',
         'post': {
-            'tags': ['wallet'],
+            'tags': ['private_wallet'],
             'operationId': 'wallet_lock',
             'summary': 'Lock a wallet',
             'responses': {

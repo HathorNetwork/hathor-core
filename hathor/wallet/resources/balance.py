@@ -38,7 +38,7 @@ BalanceResource.openapi = {
     '/wallet/balance': {
         'x-visibility': 'private',
         'get': {
-            'tags': ['wallet'],
+            'tags': ['private_wallet'],
             'operationId': 'wallet_address',
             'summary': 'Balance',
             'description': 'Returns the current balance of the wallet (available and locked tokens)',
