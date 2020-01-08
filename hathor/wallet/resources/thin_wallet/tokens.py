@@ -95,7 +95,7 @@ TokenResource.openapi = {
             ]
         },
         'get': {
-            'tags': ['thin_wallet'],
+            'tags': ['wallet'],
             'operationId': 'token',
             'summary': 'Get information about a token',
             'parameters': [

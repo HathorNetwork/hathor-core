@@ -73,7 +73,7 @@ AddressHistoryResource.openapi = {
             ]
         },
         'get': {
-            'tags': ['thin_wallet'],
+            'tags': ['wallet'],
             'operationId': 'address_history',
             'summary': 'History of some addresses',
             'parameters': [

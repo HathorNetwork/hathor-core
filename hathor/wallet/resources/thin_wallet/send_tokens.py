@@ -247,9 +247,9 @@ SendTokensResource.openapi = {
             ]
         },
         'post': {
-            'tags': ['thin_wallet'],
-            'operationId': 'thin_wallet_send_tokens',
-            'summary': 'Send tokens in a thin wallet',
+            'tags': ['wallet'],
+            'operationId': 'send_tokens',
+            'summary': 'Send tokens',
             'requestBody': {
                 'description': 'Data to create the transaction',
                 'required': True,
