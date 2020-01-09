@@ -27,8 +27,7 @@ class MiningInfoResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
 
         if not self.manager.can_start_mining():
-            request.setResponseCode(503)
-            return json.dumps({'reason': 'Node still syncing'}).encode('utf-8')
+            return json.dumps({'success': False, 'message': 'Node still syncing'}).encode('utf-8')
 
         # We can use any address.
         burn_address = bytes.fromhex('28acbfb94571417423c1ed66f706730c4aea516ac5762cccb8')
@@ -45,6 +44,7 @@ class MiningInfoResource(resource.Resource):
             'hashrate': hashrate,
             'difficulty': difficulty,
             'blocks': height,
+            'success': True,
         }
         return json.dumps(data, indent=4).encode('utf-8')
 
@@ -75,7 +75,7 @@ MiningInfoResource.openapi = {
             'description': 'Return the block\'s height, global hashrate, and mining difficulty.',
             'parameters': [],
             'responses': {
-                '503': {
+                '200': {
                     'description': 'Node still syncing',
                     'content': {
                         'application/json': {
@@ -83,7 +83,8 @@ MiningInfoResource.openapi = {
                                 'error': {
                                     'summary': 'Node still syncing',
                                     'value': {
-                                        'reason': 'Node still syncing'
+                                        'success': False,
+                                        'message': 'Node still syncing'
                                     }
                                 }
                             }
@@ -100,7 +101,8 @@ MiningInfoResource.openapi = {
                                     'value': {
                                         'blocks': 6354,
                                         'difficulty': 1023.984375,
-                                        'networkhashps': 146601550370.13358
+                                        'networkhashps': 146601550370.13358,
+                                        'success': True
                                     }
                                 }
                             }
