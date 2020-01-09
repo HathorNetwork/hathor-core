@@ -764,7 +764,7 @@ class BaseTransaction(ABC):
     def to_json(self, decode_script: bool = False) -> Dict[str, Any]:
         data: Dict[str, Any] = {}
         data['hash'] = self.hash and self.hash.hex()
-        data['nonce'] = self.nonce
+        data['nonce'] = str(self.nonce)
         data['timestamp'] = self.timestamp
         data['version'] = int(self.version)
         data['weight'] = self.weight
@@ -802,6 +802,7 @@ class BaseTransaction(ABC):
         ret: Dict[str, Any] = {
             'tx_id': self.hash.hex(),
             'version': int(self.version),
+            'weight': self.weight,
             'timestamp': self.timestamp,
             'is_voided': bool(meta.voided_by),
             'inputs': [],

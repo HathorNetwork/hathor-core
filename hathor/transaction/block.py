@@ -217,6 +217,17 @@ class Block(BaseTransaction):
         json = super().to_json(decode_script)
         json['tokens'] = []
         json['data'] = base64.b64encode(self.data).decode('utf-8')
+        parent = self.get_block_parent()
+        parent_meta = self.get_metadata()
+        json['height'] = parent_meta.height
+        return json
+
+    def to_json_extended(self) -> Dict[str, Any]:
+        json = super().to_json_extended()
+        parent = self.get_block_parent()
+        parent_meta = self.get_metadata()
+        json['height'] = parent_meta.height
+
         return json
 
     def verify_no_inputs(self) -> None:
