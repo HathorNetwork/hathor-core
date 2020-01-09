@@ -32,46 +32,71 @@ class TokenResource(resource.Resource):
             request.setResponseCode(503)
             return json.dumps({'success': False}).encode('utf-8')
 
-        if b'id' not in request.args:
-            return get_missing_params_msg('id')
+        if b'id' in request.args:
+            # Get one token data specified in id
+            try:
+                token_uid_str = request.args[b'id'][0].decode('utf-8')
+                token_uid = bytes.fromhex(token_uid_str)
+            except (ValueError, AttributeError):
+                return json.dumps({'success': False, 'message': 'Invalid token id'}).encode('utf-8')
 
-        try:
-            token_uid_str = request.args[b'id'][0].decode('utf-8')
-            token_uid = bytes.fromhex(token_uid_str)
-        except (ValueError, AttributeError):
-            return json.dumps({'success': False, 'message': 'Invalid token id'}).encode('utf-8')
+            try:
+                token_info = self.manager.tx_storage.tokens_index.get_token_info(token_uid)
+            except KeyError:
+                return json.dumps({'success': False, 'message': 'Unknown token'}).encode('utf-8')
 
-        try:
-            token_info = self.manager.tx_storage.tokens_index.get_token_info(token_uid)
-        except KeyError:
-            return json.dumps({'success': False, 'message': 'Unknown token'}).encode('utf-8')
+            mint = []
+            melt = []
 
-        mint = []
-        melt = []
+            transactions_count = self.manager.tx_storage.tokens_index.get_transactions_count(token_uid)
 
-        transactions_count = self.manager.tx_storage.tokens_index.get_transactions_count(token_uid)
+            for tx_hash, index in token_info.mint:
+                mint.append({
+                    'tx_id': tx_hash.hex(),
+                    'index': index
+                })
 
-        for tx_hash, index in token_info.mint:
-            mint.append({
-                'tx_id': tx_hash.hex(),
-                'index': index
-            })
+            for tx_hash, index in token_info.melt:
+                melt.append({
+                    'tx_id': tx_hash.hex(),
+                    'index': index
+                })
 
-        for tx_hash, index in token_info.melt:
-            melt.append({
-                'tx_id': tx_hash.hex(),
-                'index': index
-            })
+            data = {
+                'name': token_info.name,
+                'symbol': token_info.symbol,
+                'success': True,
+                'mint': mint,
+                'melt': melt,
+                'total': token_info.total,
+                'transactions_count': transactions_count,
+            }
+        else:
+            # XXX We should change this in the future so we don't return all tokens in one request
+            # XXX Right now, the way we have the tokens index is not easy to do it but in the future
+            # XXX when the number of tokens grow we should refactor this resource
 
-        data = {
-            'name': token_info.name,
-            'symbol': token_info.symbol,
-            'success': True,
-            'mint': mint,
-            'melt': melt,
-            'total': token_info.total,
-            'transactions_count': transactions_count,
-        }
+            # Get all tokens
+            all_tokens = self.manager.tx_storage.tokens_index.tokens
+
+            # First remove Hathor
+            all_tokens.pop(b'\x00')
+
+            tokens = []
+            for uid, token_info in all_tokens.items():
+                tokens.append(
+                    {
+                        'uid': uid.hex(),
+                        'name': token_info.name,
+                        'symbol': token_info.symbol,
+                    }
+                )
+
+            data = {
+                'success': True,
+                'tokens': tokens,
+            }
+
         return json.dumps(data).encode('utf-8')
 
 
@@ -97,7 +122,7 @@ TokenResource.openapi = {
         'get': {
             'tags': ['wallet'],
             'operationId': 'token',
-            'summary': 'Get information about a token',
+            'summary': 'Get information about a token if send token ID, otherwise return list of tokens',
             'parameters': [
                 {
                     'name': 'id',
@@ -144,6 +169,24 @@ TokenResource.openapi = {
                                     'value': {
                                         'success': False,
                                         'message': 'Invalid token id',
+                                    }
+                                },
+                                'success_list': {
+                                    'summary': 'List of tokens success',
+                                    'value': {
+                                        'success': True,
+                                        'tokens': [
+                                            {
+                                                'uid': '00000b1b8b1df522489f9aa38cba82a450b1fe58093e97bc94a0275fbeb226b2',
+                                                'name': 'MyCoin',
+                                                'symbol': 'MYC',
+                                            },
+                                            {
+                                                'uid': '00000093f76f44c664907a017bbf9ef6bb289692e30c7cf7361e6872c5ee1796',
+                                                'name': 'New Token',
+                                                'symbol': 'NTK',
+                                            },
+                                        ],
                                     }
                                 },
                             }
