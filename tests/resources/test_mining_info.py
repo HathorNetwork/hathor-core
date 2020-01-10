@@ -22,7 +22,7 @@ class GetMiningInfoTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data1['difficulty'], 1)
 
         # Add 10 blocks
-        blocks = add_new_blocks(self.manager, 10, advance_clock=1)
+        add_new_blocks(self.manager, 10, advance_clock=1)
 
         response2 = yield self.web.get("getmininginfo")
         data2 = response2.json_value()
