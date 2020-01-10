@@ -80,7 +80,7 @@ class TokenResource(resource.Resource):
             all_tokens = self.manager.tx_storage.tokens_index.tokens
 
             # First remove Hathor
-            all_tokens.pop(b'\x00')
+            all_tokens.pop(b'\x00', None)
 
             tokens = []
             for uid, token_info in all_tokens.items():

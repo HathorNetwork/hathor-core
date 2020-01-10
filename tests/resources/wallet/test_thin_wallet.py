@@ -187,13 +187,14 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
     def test_token(self):
         resource = StubSite(TokenResource(self.manager))
 
+        # test list of tokens empty
+        response_list1 = yield resource.get('thin_wallet/token')
+        data_list1 = response_list1.json_value()
+        self.assertTrue(data_list1['success'])
+        self.assertEqual(len(data_list1['tokens']), 0)
+
         # test invalid token id
         response = yield resource.get('thin_wallet/token', {b'id': 'vvvv'.encode()})
-        data = response.json_value()
-        self.assertFalse(data['success'])
-
-        # test missing token id
-        response = yield resource.get('thin_wallet/token')
         data = response.json_value()
         self.assertFalse(data['success'])
 
@@ -223,6 +224,35 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data['total'], amount)
         self.assertEqual(data['name'], token_name)
         self.assertEqual(data['symbol'], token_symbol)
+
+        # test list of tokens with one token
+        response_list2 = yield resource.get('thin_wallet/token')
+        data_list2 = response_list2.json_value()
+        self.assertTrue(data_list2['success'])
+        self.assertEqual(len(data_list2['tokens']), 1)
+        self.assertEqual(data_list2['tokens'][0]['name'], token_name)
+        self.assertEqual(data_list2['tokens'][0]['symbol'], token_symbol)
+        self.assertEqual(data_list2['tokens'][0]['uid'], tx.id)
+
+        token_name2 = 'New Token'
+        token_symbol2 = 'NTK'
+        tx2 = create_tokens(self.manager, mint_amount=amount, token_name=token_name2, token_symbol=token_symbol2)
+
+        token_name3 = 'Wat Coin'
+        token_symbol3 = 'WTC'
+        tx3 = create_tokens(self.manager, mint_amount=amount, token_name=token_name3, token_symbol=token_symbol3)
+
+        # test list of tokens with 3 tokens
+        response_list3 = yield resource.get('thin_wallet/token')
+        data_list3 = response_list3.json_value()
+        self.assertTrue(data_list3['success'])
+        self.assertEqual(len(data_list3['tokens']), 3)
+        token1 = {'uid': tx.id, 'name': token_name, 'symbol': token_symbol}
+        token2 = {'uid': tx2.id, 'name': token_name2, 'symbol': token_symbol2}
+        token3 = {'uid': tx3.id, 'name': token_name3, 'symbol': token_symbol3}
+        self.assertIn(token1, data['tokens'])
+        self.assertIn(token2, data['tokens'])
+        self.assertIn(token3, data['tokens'])
 
         # test no wallet index
         manager2 = self.create_peer(self.network, unlock_wallet=True)
