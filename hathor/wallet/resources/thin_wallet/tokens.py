@@ -3,8 +3,11 @@ import json
 from twisted.web import resource
 from twisted.web.http import Request
 
-from hathor.api_util import get_missing_params_msg, set_cors
+from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.conf import HathorSettings
+
+settings = HathorSettings()
 
 
 @register_resource
@@ -62,6 +65,7 @@ class TokenResource(resource.Resource):
                     'index': index
                 })
 
+
             data = {
                 'name': token_info.name,
                 'symbol': token_info.symbol,
@@ -79,11 +83,11 @@ class TokenResource(resource.Resource):
             # Get all tokens
             all_tokens = self.manager.tx_storage.tokens_index.tokens
 
-            # First remove Hathor
-            all_tokens.pop(b'\x00', None)
-
             tokens = []
             for uid, token_info in all_tokens.items():
+                if uid is settings.HATHOR_TOKEN_UID:
+                    continue
+
                 tokens.append(
                     {
                         'uid': uid.hex(),
@@ -177,12 +181,14 @@ TokenResource.openapi = {
                                         'success': True,
                                         'tokens': [
                                             {
-                                                'uid': '00000b1b8b1df522489f9aa38cba82a450b1fe58093e97bc94a0275fbeb226b2',
+                                                'uid': "00000b1b8b1df522489f9aa38cba82a4"
+                                                       "50b1fe58093e97bc94a0275fbeb226b2",
                                                 'name': 'MyCoin',
                                                 'symbol': 'MYC',
                                             },
                                             {
-                                                'uid': '00000093f76f44c664907a017bbf9ef6bb289692e30c7cf7361e6872c5ee1796',
+                                                'uid': "00000093f76f44c664907a017bbf9ef6"
+                                                       "bb289692e30c7cf7361e6872c5ee1796",
                                                 'name': 'New Token',
                                                 'symbol': 'NTK',
                                             },
