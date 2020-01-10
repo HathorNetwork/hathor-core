@@ -12,8 +12,7 @@ settings = HathorSettings()
 
 @register_resource
 class MiningInfoResource(resource.Resource):
-    """ Implements an status web server API, which responds with a summary
-    of the node state.
+    """ Implements an status web server API, which responds with mining information
 
     You must run with option `--status <PORT>`.
     """
