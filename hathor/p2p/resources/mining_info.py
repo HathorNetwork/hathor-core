@@ -33,7 +33,9 @@ class MiningInfoResource(resource.Resource):
             return json.dumps({'success': False, 'message': 'Node still syncing'}).encode('utf-8')
 
         # We can use any address.
-        burn_address = bytes.fromhex(settings.P2PKH_VERSION_BYTE.hex() + 'acbfb94571417423c1ed66f706730c4aea516ac5762cccb8')
+        burn_address = bytes.fromhex(
+            settings.P2PKH_VERSION_BYTE.hex() + 'acbfb94571417423c1ed66f706730c4aea516ac5762cccb8'
+        )
         block = self.manager.generate_mining_block(address=burn_address)
 
         height = block.calculate_height() - 1
@@ -78,22 +80,6 @@ MiningInfoResource.openapi = {
             'parameters': [],
             'responses': {
                 '200': {
-                    'description': 'Node still syncing',
-                    'content': {
-                        'application/json': {
-                            'examples': {
-                                'error': {
-                                    'summary': 'Node still syncing',
-                                    'value': {
-                                        'success': False,
-                                        'message': 'Node still syncing'
-                                    }
-                                }
-                            }
-                        },
-                    }
-                },
-                '200': {
                     'description': 'Success',
                     'content': {
                         'application/json': {
@@ -105,6 +91,13 @@ MiningInfoResource.openapi = {
                                         'difficulty': 1023.984375,
                                         'networkhashps': 146601550370.13358,
                                         'success': True
+                                    }
+                                },
+                                'error': {
+                                    'summary': 'Node still syncing',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Node still syncing'
                                     }
                                 }
                             }
