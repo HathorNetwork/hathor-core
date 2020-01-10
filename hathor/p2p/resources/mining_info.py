@@ -4,7 +4,10 @@ from math import log
 from twisted.web import resource
 
 from hathor.cli.openapi_files.register import register_resource
+from hathor.conf import HathorSettings
 from hathor.merged_mining.coordinator import diff_from_weight
+
+settings = HathorSettings()
 
 
 @register_resource
@@ -30,14 +33,13 @@ class MiningInfoResource(resource.Resource):
             return json.dumps({'success': False, 'message': 'Node still syncing'}).encode('utf-8')
 
         # We can use any address.
-        burn_address = bytes.fromhex('28acbfb94571417423c1ed66f706730c4aea516ac5762cccb8')
+        burn_address = bytes.fromhex(settings.P2PKH_VERSION_BYTE.hex() + 'acbfb94571417423c1ed66f706730c4aea516ac5762cccb8')
         block = self.manager.generate_mining_block(address=burn_address)
 
-        parent = block.get_block_parent()
-        parent_meta = parent.get_metadata()
-
-        height = parent_meta.height
+        height = block.calculate_height() - 1
         difficulty = diff_from_weight(block.weight)
+
+        parent = block.get_block_parent()
         hashrate = 2**(parent.weight - log(30, 2))
 
         data = {
