@@ -568,7 +568,8 @@ def get_genesis_key():
 
 
 def create_tokens(manager: 'HathorManager', address_b58: str = None, mint_amount: int = 300,
-                  token_name: str = 'TestCoin', token_symbol: str = 'TTC', propagate: bool = True):
+                  token_name: str = 'TestCoin', token_symbol: str = 'TTC', propagate: bool = True,
+                  use_genesis: bool = True):
     """Creates a new token and propagates a tx with the following UTXOs:
     0. some tokens (already mint some tokens so they can be transferred);
     1. mint authority;
@@ -587,26 +588,49 @@ def create_tokens(manager: 'HathorManager', address_b58: str = None, mint_amount
     :param token_symbol: the token symbol for the new token
     :type token_symbol: str
 
+    :param use_genesis: If True will use genesis outputs to create token, otherwise will use manager wallet
+    :type token_symbol: bool
+
     :return: the propagated transaction so others can spend their outputs
     """
+    wallet = manager.wallet
+
+    if address_b58 is None:
+        address_b58 = wallet.get_unused_address(mark_as_used=True)
+    address = decode_address(address_b58)
+    script = P2PKH.create_output_script(address)
+    private_key = wallet.get_private_key(address_b58)
+
+    deposit_amount = get_deposit_amount(mint_amount)
     genesis = manager.tx_storage.get_all_genesis()
     genesis_blocks = [tx for tx in genesis if tx.is_block]
     genesis_txs = [tx for tx in genesis if not tx.is_block]
     genesis_block = genesis_blocks[0]
     genesis_private_key = get_genesis_key()
 
-    wallet = manager.wallet
+    if use_genesis:
+        deposit_input = [TxInput(genesis_block.hash, 0, b'')]
+        change_output = TxOutput(genesis_block.outputs[0].value - deposit_amount, script, 0)
+        parents = [tx.hash for tx in genesis_txs]
+        timestamp = int(manager.reactor.seconds())
+    else:
+        total_reward = 0
+        deposit_input = []
+        while total_reward < deposit_amount:
+            block = add_new_block(manager, advance_clock=1, address=address)
+            deposit_input.append(TxInput(block.hash, 0, b''))
+            total_reward += block.outputs[0].value
+
+        if total_reward > deposit_amount:
+            change_output = TxOutput(total_reward - deposit_amount, script, 0)
+        else:
+            change_output = None
+
+        add_blocks_unlock_reward(manager)
+        timestamp = int(manager.reactor.seconds())
+        parents = manager.get_new_tx_parents(timestamp)
+
     outputs = []
-
-    if address_b58 is None:
-        address_b58 = wallet.get_unused_address(mark_as_used=True)
-    address = decode_address(address_b58)
-
-    parents = [tx.hash for tx in genesis_txs]
-    script = P2PKH.create_output_script(address)
-    # deposit input
-    deposit_amount = get_deposit_amount(mint_amount)
-    deposit_input = TxInput(genesis_block.hash, 0, b'')
     # mint output
     if mint_amount > 0:
         outputs.append(TxOutput(mint_amount, script, 0b00000001))
@@ -614,21 +638,28 @@ def create_tokens(manager: 'HathorManager', address_b58: str = None, mint_amount
     outputs.append(TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001))
     outputs.append(TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001))
     # deposit output
-    outputs.append(TxOutput(genesis_block.outputs[0].value - deposit_amount, script, 0))
+    if change_output:
+        outputs.append(change_output)
 
     tx = TokenCreationTransaction(
         weight=1,
         parents=parents,
         storage=manager.tx_storage,
-        inputs=[deposit_input],
+        inputs=deposit_input,
         outputs=outputs,
         token_name=token_name,
         token_symbol=token_symbol,
-        timestamp=int(manager.reactor.seconds())
+        timestamp=timestamp
     )
     data_to_sign = tx.get_sighash_all(clear_input_data=True)
-    public_bytes, signature = wallet.get_input_aux_data(data_to_sign, genesis_private_key)
-    tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
+    if use_genesis:
+        public_bytes, signature = wallet.get_input_aux_data(data_to_sign, genesis_private_key)
+    else:
+        public_bytes, signature = wallet.get_input_aux_data(data_to_sign, private_key)
+
+    for input_ in tx.inputs:
+        input_.data = P2PKH.create_input_data(public_bytes, signature)
+
     tx.resolve()
     if propagate:
         tx.verify()
