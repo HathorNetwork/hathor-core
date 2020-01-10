@@ -28,6 +28,11 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
     """
     serialized = tx.to_json(decode_script=True)
     serialized['raw'] = tx.get_struct().hex()
+    serialized['nonce'] = str(tx.nonce)
+
+    if tx.is_block:
+        serialized['height'] = tx.calculate_height()
+
     # Update tokens array
     update_serialized_tokens_array(tx, serialized)
     meta = tx.get_metadata(force_reload=True)

@@ -765,7 +765,7 @@ class BaseTransaction(ABC):
     def to_json(self, decode_script: bool = False) -> Dict[str, Any]:
         data: Dict[str, Any] = {}
         data['hash'] = self.hash and self.hash.hex()
-        data['nonce'] = str(self.nonce)
+        data['nonce'] = self.nonce
         data['timestamp'] = self.timestamp
         data['version'] = int(self.version)
         data['weight'] = self.weight

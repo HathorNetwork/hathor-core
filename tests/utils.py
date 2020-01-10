@@ -599,7 +599,6 @@ def create_tokens(manager: 'HathorManager', address_b58: str = None, mint_amount
         address_b58 = wallet.get_unused_address(mark_as_used=True)
     address = decode_address(address_b58)
     script = P2PKH.create_output_script(address)
-    private_key = wallet.get_private_key(address_b58)
 
     deposit_amount = get_deposit_amount(mint_amount)
     genesis = manager.tx_storage.get_all_genesis()
@@ -655,6 +654,7 @@ def create_tokens(manager: 'HathorManager', address_b58: str = None, mint_amount
     if use_genesis:
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, genesis_private_key)
     else:
+        private_key = wallet.get_private_key(address_b58)
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, private_key)
 
     for input_ in tx.inputs:

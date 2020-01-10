@@ -217,7 +217,6 @@ class Block(BaseTransaction):
         json = super().to_json(decode_script)
         json['tokens'] = []
         json['data'] = base64.b64encode(self.data).decode('utf-8')
-        json['height'] = self.calculate_height()
         return json
 
     def to_json_extended(self) -> Dict[str, Any]:
