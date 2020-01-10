@@ -283,7 +283,8 @@ class MergedMiningStratumProtocol(JSONRPC):
 
     merged_job: 'MergedJob'
 
-    def __init__(self, coordinator: 'MergedMiningCoordinator', address: IAddress, xnonce1: bytes = b''):
+    def __init__(self, coordinator: 'MergedMiningCoordinator', address: IAddress, xnonce1: bytes = b'',
+                 job_id_generator: Optional[Callable[[], Iterator[Union[str, int]]]] = lambda: count()):
         self.log = logger.new(address=address)
         self.coordinator = coordinator
         self.address = address
@@ -293,19 +294,32 @@ class MergedMiningStratumProtocol(JSONRPC):
         self.miner_id: Optional[str] = None
         self.miner_address: Optional[bytes] = None
         self.job_ids: List[str] = []
-        self.min_difficulty = diff_from_weight(settings.MIN_SHARE_WEIGHT)
+        # TODO: maybe try to guess min_difficulty from the miner
+        # TODO: parametrize this
+        self.min_difficulty = 4096
+        self.last_sent_difficulty: Optional[int] = None
 
         self.xnonce1 = xnonce1
         self.xnonce2_size = self.DEFAULT_XNONCE2_SIZE
+
+        self._iter_job_id = job_id_generator and job_id_generator() or None
+        self.subscribed = False
+
+    def next_job_id(self):
+        if self._iter_job_id:
+            return str(next(self._iter_job_id))
+        return str(uuid4())
 
     def connectionMade(self) -> None:
         self.miner_id = str(uuid4())
         self.coordinator.miner_protocols[self.miner_id] = self
         self.log = self.log.bind(miner_id=self.miner_id)
-        self.log.info('New miner')
+        self.log.debug('connection made')
 
     def connectionLost(self, reason: Failure = None) -> None:
-        self.log.info('Miner exited')
+        self.log.debug('connection lost')
+        if self.subscribed:
+            self.log.info('Miner exited')
         assert self.miner_id is not None
         self.coordinator.miner_protocols.pop(self.miner_id)
 
@@ -384,6 +398,7 @@ class MergedMiningStratumProtocol(JSONRPC):
                 self.transport.loseConnection()
                 return
 
+        self.subscribed = True
         self.log.info('Miner subscribed', address=self.miner_address)
         self.send_result([str(self.miner_id), self.xnonce1.hex(), self.xnonce2_size], msgid)
         # self.job_request()  # waiting for the next update is better
@@ -466,7 +481,10 @@ class MergedMiningStratumProtocol(JSONRPC):
     def set_difficulty(self) -> None:
         """ Sends the difficulty to the connected client, applies for all future "mining.notify" until it is set again.
         """
-        self.send_request('mining.set_difficulty', [self.estimate_difficulty()], str(uuid4()), True)
+        diff = self.estimate_difficulty()
+        if diff != self.last_sent_difficulty:
+            self.last_sent_difficulty = diff
+            self.send_request('mining.set_difficulty', [diff])
 
     def job_request(self) -> None:
         """ Sends a job request to the connected client.
@@ -476,10 +494,7 @@ class MergedMiningStratumProtocol(JSONRPC):
             return
 
         try:
-            job = self.coordinator.merged_job.new_single_miner_job(
-                self.coordinator.payback_address_bitcoin,
-                len(self.xnonce1) + self.xnonce2_size,
-            )
+            job = self.coordinator.merged_job.new_single_miner_job(self)
         except (ValueError, ScriptError) as e:
             # ScriptError might happen if try to use a mainnet address in the testnet or vice versa
             # ValueError happens if address is not a valid base58 address
@@ -488,7 +503,7 @@ class MergedMiningStratumProtocol(JSONRPC):
             self.jobs[job.job_id] = job
 
             self.set_difficulty()
-            self.send_request('mining.notify', job.to_stratum_params(), str(uuid4()), True)
+            self.send_request('mining.notify', job.to_stratum_params())
 
             # for debugging only:
             bitcoin_block = job.build_bitcoin_block_header(self.dummy_work(job))
@@ -671,10 +686,13 @@ class MergedJob(NamedTuple):
     payback_address_bitcoin: str
     clean: bool
 
-    def new_single_miner_job(self, payback_address_bitcoin: str, xnonce_size: int) -> SingleMinerJob:
+    def new_single_miner_job(self, protocol: MergedMiningStratumProtocol) -> SingleMinerJob:
         """ Generate a partial job for a single miner, based on this job.
         """
         from hathor.merged_mining.bitcoin import sha256d_hash
+
+        # payback_address_bitcoin = protocol.coordinator.payback_address_bitcoin
+        xnonce_size = len(protocol.xnonce1) + protocol.xnonce2_size
 
         # base txs for merkle tree, before coinbase
         transactions = self.bitcoin_coord.transactions[:]
@@ -694,7 +712,7 @@ class MergedJob(NamedTuple):
         # TODO: check if total transaction size increase exceed size and sigop limits, there's probably an RPC for this
 
         return SingleMinerJob(
-            job_id=str(uuid4()),
+            job_id=protocol.next_job_id(),
             prev_hash=self.bitcoin_coord.previous_block_hash,
             coinbase_head=coinbase_head,
             coinbase_tail=coinbase_tail,
@@ -740,6 +758,7 @@ class MergedMiningCoordinator(Factory):
         self.watchdog_loop: Optional[task.LoopingCall] = None
         self.merged_job: Optional[MergedJob] = None
         self._next_xnonce1 = 0
+        self.job_count = 0
 
     def next_xnonce1(self) -> bytes:
         xnonce1 = self._next_xnonce1
@@ -756,7 +775,8 @@ class MergedMiningCoordinator(Factory):
         """
         self.merged_job = self.next_merged_job
         for miner, protocol in self.miner_protocols.items():
-            protocol.job_request()
+            if protocol.subscribed:
+                protocol.job_request()
 
     def start(self) -> None:
         """ Starts the coordinator and subscribes for new blocks on the both networks in order to update miner jobs.
@@ -802,10 +822,10 @@ class MergedMiningCoordinator(Factory):
     def update_bitcoin_block(self) -> None:
         """ Method periodically called to update the bitcoin block template.
         """
-        self.log.info('Update Bitcoin mining block')
+        self.log.debug('Update Bitcoin mining block')
         d = self.bitcoin_rpc.get_block_template()
         d.addCallback(self._cb_update_bitcoin_block)
-        d.addErrback(print)  # TODO: better error handling, maybe also retry
+        d.addErrback(self.log.error)  # TODO: better error handling, maybe also retry
 
     def _cb_update_bitcoin_block(self, data: dict) -> None:
         """ Callback used for the async call on update_bitcoin_block.
@@ -815,7 +835,7 @@ class MergedMiningCoordinator(Factory):
         del data_log['transactions']
         self.log.debug('getblocktemplate response', res=data_log)
         self.bitcoin_coord_job = BitcoinCoordJob.from_dict(data)
-        self.log.info('New Bitcoin Block template.')
+        self.log.debug('New Bitcoin Block template.')
         self.update_merged_block()
 
     def is_next_job_clean(self) -> bool:
@@ -833,8 +853,11 @@ class MergedMiningCoordinator(Factory):
 
     def update_merged_block(self) -> None:
         if self.bitcoin_coord_job is None or self.hathor_coord_job is None:
-            self.log.info('Merged block not ready to be built.')
+            self.log.debug('Merged block not ready to be built.')
             return
+        self.job_count += 1
+        if self.job_count == 1:
+            self.log.info('Merged mining ready')
         self.next_merged_job = MergedJob(
             self.hathor_coord_job,
             self.bitcoin_coord_job,
@@ -842,7 +865,7 @@ class MergedMiningCoordinator(Factory):
             self.is_next_job_clean(),
         )
         self.update_jobs()
-        self.log.info('Merged job created.')
+        self.log.debug('Merged job updated.')
 
 
 def watchdog_loop(coordinator: MergedMiningCoordinator) -> None:

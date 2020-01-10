@@ -183,10 +183,8 @@ class JSONRPC(LineReceiver, ABC):
             return self.handle_request(data['method'], data.get('params'), msgid)
 
         if 'result' in data:
-            if 'error' in data:
-                return self.send_error(INVALID_REQUEST,
-                                       msgid,
-                                       data='Request cannot have result and error simultaneously.')
+            if 'error' in data and data['error']:
+                return self.handle_error(data['error'], data.get('data'), msgid)
             return self.handle_result(data['result'], msgid)
 
         if 'error' in data:
@@ -237,7 +235,7 @@ class JSONRPC(LineReceiver, ABC):
         """
         raise NotImplementedError
 
-    def send_request(self, method: str, params: Optional[Union[List, Dict]], msgid: Optional[str] = None,
+    def send_request(self, method: str, params: Optional[Union[List, Dict]], msgid: Union[str, int, None] = None,
                      ok: Optional[bool] = None) -> None:
         """ Sends a JSON-RPC 2.0 request.
 
@@ -250,10 +248,9 @@ class JSONRPC(LineReceiver, ABC):
         :param msgid: JSON-RPC 2.0 message id
         :type msgid: Optional[UUID]
         """
-        data = {'method': method, 'jsonrpc': '2.0', 'params': params}
+        data: Dict[str, Any] = {'method': method, 'params': params}
         self.log.debug('send request', method=method, params=params)
-        if msgid is not None:
-            data['id'] = msgid
+        data['id'] = msgid
         if ok is True:
             data['result'] = 'ok'
         self.send_json(data)
@@ -267,7 +264,7 @@ class JSONRPC(LineReceiver, ABC):
         :param msgid: JSON-RPC 2.0 message id
         :type msgid: Optional[str]
         """
-        data = {'jsonrpc': '2.0', 'result': result}
+        data = {'result': result, 'error': None}
         if msgid is not None:
             data['id'] = msgid
         self.log.debug('send result', data=data)
@@ -282,11 +279,7 @@ class JSONRPC(LineReceiver, ABC):
         :param msgid: JSON-RPC 2.0 message id
         :type msgid: Optional[UUID]
         """
-        message = {
-            'jsonrpc': '2.0',
-            'error': error,
-            'data': data,
-        }
+        message = {'error': error, 'data': data}
         if msgid is not None:
             message['id'] = msgid
         self.log.info('send_error', error=error, data=data)
