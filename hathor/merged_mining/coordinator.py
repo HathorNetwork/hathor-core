@@ -155,16 +155,16 @@ def flip80(data: bytes) -> bytes:
     return b''.join(x[::-1] for x in ichunks(data, 4))
 
 
-TRUE_DIFF_ONE = float(0x00000000ffff0000000000000000000000000000000000000000000000000000)
+TRUE_DIFF_ONE = int(0x00000000ffff0000000000000000000000000000000000000000000000000000)
 
 
-def diff_from_weight(weight: float) -> float:
+def diff_from_weight(weight: float) -> int:
     """ Convert Hathor block weight to Bitcoin block difficulty.
     """
-    cut = 2**(256 - weight) - 1
-    diff = TRUE_DIFF_ONE / cut
+    cut = int(2**(256 - weight) - 1)
+    diff = TRUE_DIFF_ONE // cut
     # TODO: does rounding up make sense? cgminer does it
-    diff = max(diff, 1.0)
+    diff = max(diff, 1)
     return diff
 
 
@@ -364,7 +364,7 @@ class MergedMiningStratumProtocol(JSONRPC):
         res = {ext: False for ext in exts}
 
         if 'minimum-difficulty' in exts:
-            self.min_difficulty = float(exts_params['minimum-difficulty.value'])
+            self.min_difficulty = int(exts_params['minimum-difficulty.value'])
             res['minimum-difficulty'] = True
 
         self.send_result(res, msgid)
@@ -452,7 +452,7 @@ class MergedMiningStratumProtocol(JSONRPC):
         """
         self.log.info('Bitcoin RPC submit response', data=data)
 
-    def estimate_difficulty(self) -> float:
+    def estimate_difficulty(self) -> int:
         """ Value to send through mining.set_difficulty.
 
         Depends on the difficulty of the Hathor job and Bitcoin job.
