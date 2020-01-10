@@ -65,7 +65,6 @@ class TokenResource(resource.Resource):
                     'index': index
                 })
 
-
             data = {
                 'name': token_info.name,
                 'symbol': token_info.symbol,

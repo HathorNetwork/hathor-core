@@ -211,7 +211,13 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         token_name = 'MyTestToken'
         token_symbol = 'MTT'
         amount = 150
-        tx = create_tokens(self.manager, mint_amount=amount, token_name=token_name, token_symbol=token_symbol, use_genesis=False)
+        tx = create_tokens(
+            self.manager,
+            mint_amount=amount,
+            token_name=token_name,
+            token_symbol=token_symbol,
+            use_genesis=False
+        )
         token_uid = tx.tokens[0]
         response = yield resource.get('thin_wallet/token', {b'id': token_uid.hex().encode()})
         data = response.json_value()
@@ -237,11 +243,23 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         token_name2 = 'New Token'
         token_symbol2 = 'NTK'
-        tx2 = create_tokens(self.manager, mint_amount=amount, token_name=token_name2, token_symbol=token_symbol2, use_genesis=False)
+        tx2 = create_tokens(
+            self.manager,
+            mint_amount=amount,
+            token_name=token_name2,
+            token_symbol=token_symbol2,
+            use_genesis=False
+        )
 
         token_name3 = 'Wat Coin'
         token_symbol3 = 'WTC'
-        tx3 = create_tokens(self.manager, mint_amount=amount, token_name=token_name3, token_symbol=token_symbol3, use_genesis=False)
+        tx3 = create_tokens(
+            self.manager,
+            mint_amount=amount,
+            token_name=token_name3,
+            token_symbol=token_symbol3,
+            use_genesis=False
+        )
 
         # test list of tokens with 3 tokens
         response_list3 = yield resource.get('thin_wallet/token')
