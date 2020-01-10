@@ -100,6 +100,8 @@ VersionResource.openapi = {
                                         'min_tx_weight_k': 100,
                                         'token_deposit_percentage': 0.01,
                                         'reward_spend_min_blocks': 300,
+                                        'max_number_inputs': 256,
+                                        'max_number_outputs': 256,
                                     }
                                 }
                             }
