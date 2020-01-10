@@ -439,6 +439,8 @@ class TokensIndex:
     """ Index of tokens by token uid
     """
 
+    default_sorted_key_list = SortedKeyList(key=lambda x: (x.timestamp, x.hash))
+
     class TokenStatus:
         """ Class used to track token info
 
@@ -563,33 +565,44 @@ class TokensIndex:
 
         :raises KeyError: an unknown token uid
         """
-        info = self.tokens[token_uid]
-        if info.name is None:
+        if token_uid not in self.tokens:
             raise KeyError('unknown token')
+        info = self.tokens[token_uid]
         return info
 
     def get_transactions_count(self, token_uid: bytes) -> int:
         """ Get quantity of transactions from requested token
         """
+        if token_uid not in self.tokens:
+            return 0
         info = self.tokens[token_uid]
         return len(info.transactions)
 
     def get_newest_transactions(self, token_uid: bytes, count: int) -> Tuple[List[bytes], bool]:
         """ Get transactions from the newest to the oldest
         """
-        info = self.tokens[token_uid]
-        return get_newest_sorted_key_list(info.transactions, count)
+        if token_uid in self.tokens:
+            transactions = self.tokens[token_uid].transactions
+        else:
+            transactions = self.default_sorted_key_list
+        return get_newest_sorted_key_list(transactions, count)
 
     def get_older_transactions(self, token_uid: bytes, timestamp: int, hash_bytes: bytes, count: int
                                ) -> Tuple[List[bytes], bool]:
         """ Get transactions from the timestamp/hash_bytes reference to the oldest
         """
-        info = self.tokens[token_uid]
-        return get_older_sorted_key_list(info.transactions, timestamp, hash_bytes, count)
+        if token_uid in self.tokens:
+            transactions = self.tokens[token_uid].transactions
+        else:
+            transactions = self.default_sorted_key_list
+        return get_older_sorted_key_list(transactions, timestamp, hash_bytes, count)
 
     def get_newer_transactions(self, token_uid: bytes, timestamp: int, hash_bytes: bytes, count: int
                                ) -> Tuple[List[bytes], bool]:
         """ Get transactions from the timestamp/hash_bytes reference to the newest
         """
-        info = self.tokens[token_uid]
-        return get_newer_sorted_key_list(info.transactions, timestamp, hash_bytes, count)
+        if token_uid in self.tokens:
+            transactions = self.tokens[token_uid].transactions
+        else:
+            transactions = self.default_sorted_key_list
+        return get_newer_sorted_key_list(transactions, timestamp, hash_bytes, count)
