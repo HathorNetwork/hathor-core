@@ -227,7 +227,7 @@ class HathorSettings(NamedTuple):
     REWARD_SPEND_MIN_BLOCKS: int = 300
 
     # Mamimum number of inputs accepted
-    MAX_NUM_INPUTS: int = 256
+    MAX_NUM_INPUTS: int = 255
 
     # Mamimum number of outputs accepted
-    MAX_NUM_OUTPUTS: int = 256
+    MAX_NUM_OUTPUTS: int = 255
