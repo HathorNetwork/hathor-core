@@ -3,6 +3,7 @@ from math import log
 
 from twisted.web import resource
 
+from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.merged_mining.coordinator import diff_from_weight
@@ -27,6 +28,7 @@ class MiningInfoResource(resource.Resource):
             :rtype: string (json)
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
+        set_cors(request, 'GET')
 
         if not self.manager.can_start_mining():
             return json.dumps({'success': False, 'message': 'Node still syncing'}).encode('utf-8')
