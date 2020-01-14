@@ -39,7 +39,6 @@ MiningStatsResource.openapi = {
     '/miners': {
         'x-visibility': 'private',
         'get': {
-            'tags': ['wallet'],
             'operationId': 'miners',
             'summary': 'Mining Statistics',
             'description': 'Returns information about each miner connected to the current node',
