@@ -439,8 +439,6 @@ class TokensIndex:
     """ Index of tokens by token uid
     """
 
-    default_sorted_key_list = SortedKeyList(key=lambda x: (x.timestamp, x.hash))
-
     class TokenStatus:
         """ Class used to track token info
 
@@ -584,7 +582,7 @@ class TokensIndex:
         if token_uid in self.tokens:
             transactions = self.tokens[token_uid].transactions
         else:
-            transactions = self.default_sorted_key_list
+            return [], False
         return get_newest_sorted_key_list(transactions, count)
 
     def get_older_transactions(self, token_uid: bytes, timestamp: int, hash_bytes: bytes, count: int
@@ -594,7 +592,7 @@ class TokensIndex:
         if token_uid in self.tokens:
             transactions = self.tokens[token_uid].transactions
         else:
-            transactions = self.default_sorted_key_list
+            return [], False
         return get_older_sorted_key_list(transactions, timestamp, hash_bytes, count)
 
     def get_newer_transactions(self, token_uid: bytes, timestamp: int, hash_bytes: bytes, count: int
@@ -604,5 +602,5 @@ class TokensIndex:
         if token_uid in self.tokens:
             transactions = self.tokens[token_uid].transactions
         else:
-            transactions = self.default_sorted_key_list
+            return [], False
         return get_newer_sorted_key_list(transactions, timestamp, hash_bytes, count)
