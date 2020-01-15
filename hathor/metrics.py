@@ -163,7 +163,7 @@ class Metrics:
         (last_block, _) = self.tx_storage.get_newest_blocks(count=1)
         if last_block:
             self.hash_rate = self.calculate_new_hashrate(last_block[0])
-            self.update_height_metric(last_block)
+            self.update_height_metric(last_block[0])
 
     def start(self) -> None:
         self.is_running = True
