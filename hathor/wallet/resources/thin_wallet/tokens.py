@@ -2,6 +2,7 @@ import json
 
 from twisted.web import resource
 from twisted.web.http import Request
+from typing import Any, Dict
 
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
@@ -21,6 +22,79 @@ class TokenResource(resource.Resource):
     def __init__(self, manager):
         self.manager = manager
 
+    def get_one_token_data(self, token_uid: str) -> Dict[str, Any]:
+        # Get one token data specified in id
+        try:
+            token_info = self.manager.tx_storage.tokens_index.get_token_info(token_uid)
+        except KeyError:
+            return {'success': False, 'message': 'Unknown token'}
+
+        mint = []
+        melt = []
+
+        transactions_count = self.manager.tx_storage.tokens_index.get_transactions_count(token_uid)
+
+        for tx_hash, index in token_info.mint:
+            mint.append({
+                'tx_id': tx_hash.hex(),
+                'index': index
+            })
+
+        for tx_hash, index in token_info.melt:
+            melt.append({
+                'tx_id': tx_hash.hex(),
+                'index': index
+            })
+
+        data = {
+            'name': token_info.name,
+            'symbol': token_info.symbol,
+            'success': True,
+            'mint': mint,
+            'melt': melt,
+            'total': token_info.total,
+            'transactions_count': transactions_count,
+        }
+        return data
+
+    def get_list_token_data(self) -> Dict[str, Any]:
+        # XXX We should change this in the future so we don't return all tokens in one request
+        # XXX Right now, the way we have the tokens index is not easy to do it but in the future
+        # XXX when the number of tokens grow we should refactor this resource
+        # XXX For now we only set a fixed limit of 200 tokens to return
+
+        # Get all tokens
+        all_tokens = self.manager.tx_storage.tokens_index.tokens
+
+        tokens = []
+        count = 0
+        limit = 200
+        truncated = False
+        for uid, token_info in all_tokens.items():
+            if uid is settings.HATHOR_TOKEN_UID:
+                continue
+
+            if count >= limit:
+                truncated = True
+                break
+
+            tokens.append(
+                {
+                    'uid': uid.hex(),
+                    'name': token_info.name,
+                    'symbol': token_info.symbol,
+                }
+            )
+
+            count += 1
+
+        data = {
+            'success': True,
+            'tokens': tokens,
+            'truncated': truncated,
+        }
+        return data
+
     def render_GET(self, request: Request) -> bytes:
         """ GET request for /thin_wallet/token/
 
@@ -36,69 +110,15 @@ class TokenResource(resource.Resource):
             return json.dumps({'success': False}).encode('utf-8')
 
         if b'id' in request.args:
-            # Get one token data specified in id
             try:
                 token_uid_str = request.args[b'id'][0].decode('utf-8')
                 token_uid = bytes.fromhex(token_uid_str)
             except (ValueError, AttributeError):
                 return json.dumps({'success': False, 'message': 'Invalid token id'}).encode('utf-8')
 
-            try:
-                token_info = self.manager.tx_storage.tokens_index.get_token_info(token_uid)
-            except KeyError:
-                return json.dumps({'success': False, 'message': 'Unknown token'}).encode('utf-8')
-
-            mint = []
-            melt = []
-
-            transactions_count = self.manager.tx_storage.tokens_index.get_transactions_count(token_uid)
-
-            for tx_hash, index in token_info.mint:
-                mint.append({
-                    'tx_id': tx_hash.hex(),
-                    'index': index
-                })
-
-            for tx_hash, index in token_info.melt:
-                melt.append({
-                    'tx_id': tx_hash.hex(),
-                    'index': index
-                })
-
-            data = {
-                'name': token_info.name,
-                'symbol': token_info.symbol,
-                'success': True,
-                'mint': mint,
-                'melt': melt,
-                'total': token_info.total,
-                'transactions_count': transactions_count,
-            }
+            data = self.get_one_token_data(token_uid)
         else:
-            # XXX We should change this in the future so we don't return all tokens in one request
-            # XXX Right now, the way we have the tokens index is not easy to do it but in the future
-            # XXX when the number of tokens grow we should refactor this resource
-
-            # Get all tokens
-            all_tokens = self.manager.tx_storage.tokens_index.tokens
-
-            tokens = []
-            for uid, token_info in all_tokens.items():
-                if uid is settings.HATHOR_TOKEN_UID:
-                    continue
-
-                tokens.append(
-                    {
-                        'uid': uid.hex(),
-                        'name': token_info.name,
-                        'symbol': token_info.symbol,
-                    }
-                )
-
-            data = {
-                'success': True,
-                'tokens': tokens,
-            }
+            data = self.get_list_token_data()
 
         return json.dumps(data).encode('utf-8')
 
@@ -178,6 +198,7 @@ TokenResource.openapi = {
                                     'summary': 'List of tokens success',
                                     'value': {
                                         'success': True,
+                                        'truncated': False,
                                         'tokens': [
                                             {
                                                 'uid': "00000b1b8b1df522489f9aa38cba82a4"
