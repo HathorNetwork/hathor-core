@@ -111,6 +111,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         data = {
             'transactions': self.metrics.transactions,
             'blocks': self.metrics.blocks,
+            'height': self.metrics.height,
             'hash_rate': self.metrics.hash_rate,
             'block_hash_rate': self.metrics.block_hash_rate,
             'tx_hash_rate': self.metrics.tx_hash_rate,

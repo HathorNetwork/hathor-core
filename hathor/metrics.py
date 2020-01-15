@@ -22,6 +22,7 @@ class WeightValue(NamedTuple):
 class Metrics:
     transactions: int
     blocks: int
+    height: int
     hash_rate: float
     total_block_weight: float
     total_tx_weight: float
@@ -69,6 +70,9 @@ class Metrics:
 
         # Blocks count in the network
         self.blocks = 0
+
+        # Height of the last block of the network
+        self.height = 0
 
         # Hash rate of the network
         self.hash_rate = 0.0
@@ -159,6 +163,7 @@ class Metrics:
         (last_block, _) = self.tx_storage.get_newest_blocks(count=1)
         if last_block:
             self.hash_rate = self.calculate_new_hashrate(last_block[0])
+            self.update_height_metric(last_block)
 
     def start(self) -> None:
         self.is_running = True
@@ -193,6 +198,7 @@ class Metrics:
                 self.total_block_weight = sum_weights(data['tx'].weight, self.total_block_weight)
                 self.hash_rate = self.calculate_new_hashrate(data['tx'])
                 self.best_block_weight = self.tx_storage.get_weight_best_block()
+                self.update_height_metric(data['tx'])
             else:
                 self.transactions += 1
                 self.total_tx_weight = sum_weights(data['tx'].weight, self.total_tx_weight)
@@ -308,3 +314,8 @@ class Metrics:
 
         if self.is_running:
             self.reactor.callLater(self.collect_data_interval, self.collect_data)
+
+    def update_height_metric(self, block: Block) -> None:
+        """ Update self.height with max between current height and new block height
+        """
+        self.height = max(block.get_metadata().height, self.height)
