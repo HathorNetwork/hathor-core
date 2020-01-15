@@ -1,8 +1,8 @@
 import json
+from typing import Any, Dict
 
 from twisted.web import resource
 from twisted.web.http import Request
-from typing import Any, Dict
 
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
