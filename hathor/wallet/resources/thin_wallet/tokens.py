@@ -22,7 +22,7 @@ class TokenResource(resource.Resource):
     def __init__(self, manager):
         self.manager = manager
 
-    def get_one_token_data(self, token_uid: str) -> Dict[str, Any]:
+    def get_one_token_data(self, token_uid: bytes) -> Dict[str, Any]:
         # Get one token data specified in id
         try:
             token_info = self.manager.tx_storage.tokens_index.get_token_info(token_uid)
