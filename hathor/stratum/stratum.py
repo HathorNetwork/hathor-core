@@ -181,13 +181,17 @@ class JSONRPC(LineReceiver, ABC):
 
         if 'method' in data:
             return self.handle_request(data['method'], data.get('params'), msgid)
-
-        if 'result' in data:
-            if 'error' in data and data['error']:
+        elif 'result' in data and 'error' in data:
+            if data['result'] and data['error'] is None:
+                return self.handle_result(data['result'], msgid)
+            elif data['error'] and data['result'] is None:
                 return self.handle_error(data['error'], data.get('data'), msgid)
+            else:
+                # invalid request
+                pass
+        elif 'result' in data:
             return self.handle_result(data['result'], msgid)
-
-        if 'error' in data:
+        elif 'error' in data:
             return self.handle_error(data['error'], data.get('data'), msgid)
 
         return self.send_error(
