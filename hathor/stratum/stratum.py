@@ -252,7 +252,7 @@ class JSONRPC(LineReceiver, ABC):
         self.log.debug('send request', method=method, params=params)
         data['id'] = msgid
         if ok is True:
-            data['result'] = 'ok'
+            data['result'] = True
         self.send_json(data)
 
     def send_result(self, result: Any, msgid: Optional[str]) -> None:
