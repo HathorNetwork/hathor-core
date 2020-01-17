@@ -579,28 +579,25 @@ class TokensIndex:
     def get_newest_transactions(self, token_uid: bytes, count: int) -> Tuple[List[bytes], bool]:
         """ Get transactions from the newest to the oldest
         """
-        if token_uid in self.tokens:
-            transactions = self.tokens[token_uid].transactions
-        else:
+        if token_uid not in self.tokens:
             return [], False
+        transactions = self.tokens[token_uid].transactions
         return get_newest_sorted_key_list(transactions, count)
 
     def get_older_transactions(self, token_uid: bytes, timestamp: int, hash_bytes: bytes, count: int
                                ) -> Tuple[List[bytes], bool]:
         """ Get transactions from the timestamp/hash_bytes reference to the oldest
         """
-        if token_uid in self.tokens:
-            transactions = self.tokens[token_uid].transactions
-        else:
+        if token_uid not in self.tokens:
             return [], False
+        transactions = self.tokens[token_uid].transactions
         return get_older_sorted_key_list(transactions, timestamp, hash_bytes, count)
 
     def get_newer_transactions(self, token_uid: bytes, timestamp: int, hash_bytes: bytes, count: int
                                ) -> Tuple[List[bytes], bool]:
         """ Get transactions from the timestamp/hash_bytes reference to the newest
         """
-        if token_uid in self.tokens:
-            transactions = self.tokens[token_uid].transactions
-        else:
+        if token_uid not in self.tokens:
             return [], False
+        transactions = self.tokens[token_uid].transactions
         return get_newer_sorted_key_list(transactions, timestamp, hash_bytes, count)
