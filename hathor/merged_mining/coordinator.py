@@ -302,7 +302,7 @@ class MergedMiningStratumProtocol(JSONRPC):
         self.xnonce1 = xnonce1
         self.xnonce2_size = self.DEFAULT_XNONCE2_SIZE
 
-        self._iter_job_id = job_id_generator and job_id_generator() or None
+        self._iter_job_id = job_id_generator() if job_id_generator else None
         self.subscribed = False
 
     def next_job_id(self):
