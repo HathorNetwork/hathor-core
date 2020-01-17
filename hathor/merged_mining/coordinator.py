@@ -306,6 +306,8 @@ class MergedMiningStratumProtocol(JSONRPC):
         self.subscribed = False
 
     def next_job_id(self):
+        """ Every call will return a new sequential id for use in job.id.
+        """
         if self._iter_job_id:
             return str(next(self._iter_job_id))
         return str(uuid4())
