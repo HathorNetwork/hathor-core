@@ -30,14 +30,15 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
     serialized['raw'] = tx.get_struct().hex()
     serialized['nonce'] = str(tx.nonce)
 
-    if tx.is_block:
-        serialized['height'] = tx.calculate_height()
-
     # Update tokens array
     update_serialized_tokens_array(tx, serialized)
     meta = tx.get_metadata(force_reload=True)
     # To get the updated accumulated weight just need to call the
     # TransactionAccumulatedWeightResource (/transaction_acc_weight)
+
+    if tx.is_block:
+        # For blocks we need to add the height
+        serialized['height'] = meta.height
 
     # In the metadata we have the spent_outputs, that are the txs that spent the outputs for each index
     # However we need to send also which one of them is not voided

@@ -221,7 +221,7 @@ class Block(BaseTransaction):
 
     def to_json_extended(self) -> Dict[str, Any]:
         json = super().to_json_extended()
-        json['height'] = self.calculate_height()
+        json['height'] = self.get_metadata().height
 
         return json
 
