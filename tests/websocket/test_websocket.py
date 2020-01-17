@@ -61,8 +61,8 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
         self.factory._schedule_and_send_metric()
         value = self._decode_value(self.transport.value())
         keys = [
-            'transactions', 'blocks', 'height', 'hash_rate', 'block_hash_rate', 'tx_hash_rate', 'network_hash_rate',
-            'peers', 'type', 'time'
+            'transactions', 'blocks', 'best_block_height', 'hash_rate', 'block_hash_rate', 'tx_hash_rate',
+            'network_hash_rate', 'peers', 'type', 'time'
         ]
         self.assertEqual(len(value), len(keys))
         for key in keys:

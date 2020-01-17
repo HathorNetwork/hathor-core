@@ -283,6 +283,18 @@ class TransactionStorage(ABC):
 
         return highest_weight
 
+    def get_height_best_block(self) -> int:
+        """ Iterate over best block tips and get the highest height
+        """
+        heads = [self.get_transaction(h) for h in self.get_best_block_tips()]
+        highest_height = 0
+        for head in heads:
+            head_height = head.get_metadata().height
+            if head_height > highest_height:
+                highest_height = head_height
+
+        return highest_height
+
     @abstractmethod
     def get_block_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         raise NotImplementedError
