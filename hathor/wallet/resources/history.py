@@ -52,7 +52,7 @@ HistoryResource.openapi = {
     '/wallet/history': {
         'x-visibility': 'private',
         'get': {
-            'tags': ['wallet'],
+            'tags': ['private_wallet'],
             'operationId': 'wallet_history',
             'summary': 'History of transactions of the wallet',
             'description': ('Returns a list with all the transactions of this'

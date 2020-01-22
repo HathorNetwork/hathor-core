@@ -54,6 +54,9 @@ class VersionResource(resource.Resource):
             'min_tx_weight_coefficient': self.manager.min_tx_weight_coefficient,
             'min_tx_weight_k': self.manager.min_tx_weight_k,
             'token_deposit_percentage': settings.TOKEN_DEPOSIT_PERCENTAGE,
+            'reward_spend_min_blocks': settings.REWARD_SPEND_MIN_BLOCKS,
+            'max_number_inputs': settings.MAX_NUM_INPUTS,
+            'max_number_outputs': settings.MAX_NUM_OUTPUTS,
         }
         return json.dumps(data, indent=4).encode('utf-8')
 
@@ -96,6 +99,9 @@ VersionResource.openapi = {
                                         'min_tx_weight_coefficient': 1.6,
                                         'min_tx_weight_k': 100,
                                         'token_deposit_percentage': 0.01,
+                                        'reward_spend_min_blocks': 300,
+                                        'max_number_inputs': 256,
+                                        'max_number_outputs': 256,
                                     }
                                 }
                             }

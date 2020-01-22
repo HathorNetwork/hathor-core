@@ -82,7 +82,7 @@ UnlockWalletResource.openapi = {
     '/wallet/unlock': {
         'x-visibility': 'private',
         'post': {
-            'tags': ['wallet'],
+            'tags': ['private_wallet'],
             'operationId': 'wallet_unlock',
             'summary': 'Unlock a wallet',
             'description': ('Unlock HD Wallet or Keypair Wallet, depending on the parameters sent. For Keypair Wallet'

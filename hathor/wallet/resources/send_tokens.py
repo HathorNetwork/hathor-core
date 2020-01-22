@@ -164,7 +164,7 @@ SendTokensResource.openapi = {
     '/wallet/send_tokens': {
         'x-visibility': 'private',
         'post': {
-            'tags': ['wallet'],
+            'tags': ['private_wallet'],
             'operationId': 'wallet_send_tokens',
             'summary': 'Send tokens',
             'requestBody': {

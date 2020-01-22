@@ -51,7 +51,7 @@ AddressResource.openapi = {
     '/wallet/address': {
         'x-visibility': 'private',
         'get': {
-            'tags': ['wallet'],
+            'tags': ['private_wallet'],
             'operationId': 'wallet_address',
             'summary': 'Address',
             'description': 'Returns an address to be used in the wallet',

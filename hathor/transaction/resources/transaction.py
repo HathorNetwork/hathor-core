@@ -28,11 +28,17 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
     """
     serialized = tx.to_json(decode_script=True)
     serialized['raw'] = tx.get_struct().hex()
+    serialized['nonce'] = str(tx.nonce)
+
     # Update tokens array
     update_serialized_tokens_array(tx, serialized)
     meta = tx.get_metadata(force_reload=True)
     # To get the updated accumulated weight just need to call the
     # TransactionAccumulatedWeightResource (/transaction_acc_weight)
+
+    if tx.is_block:
+        # For blocks we need to add the height
+        serialized['height'] = meta.height
 
     # In the metadata we have the spent_outputs, that are the txs that spent the outputs for each index
     # However we need to send also which one of them is not voided
@@ -279,7 +285,7 @@ TransactionResource.openapi = {
                                     'value': {
                                         'tx': {
                                             'hash': '00002b3be4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22f',
-                                            'nonce': 17076,
+                                            'nonce': '17076',
                                             'timestamp': 1539271482,
                                             'version': 1,
                                             'weight': 14.0,
@@ -343,7 +349,6 @@ TransactionResource.openapi = {
                                             {
                                                 'tx_id': ('00000257054251161adff5899a451ae9'
                                                           '74ac62ca44a7a31179eec5750b0ea406'),
-                                                'nonce': 99579,
                                                 'timestamp': 1547163030,
                                                 'version': 1,
                                                 'weight': 18.861583646228,
@@ -379,12 +384,12 @@ TransactionResource.openapi = {
                                                         'script': 'dqkUjjPg+zwG6JDe901I0ybQxcAPrAuIrA=='
                                                     }
                                                 ],
-                                                'tokens': []
+                                                'tokens': [],
+                                                'height': 12345,
                                             },
                                             {
                                                 'tx_id': ('00000b8792cb13e8adb51cc7d866541f'
                                                           'c29b532e8dec95ae4661cf3da4d42cb4'),
-                                                'nonce': 119816,
                                                 'timestamp': 1547163025,
                                                 'version': 1,
                                                 'weight': 17.995048894541107,

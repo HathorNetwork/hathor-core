@@ -219,6 +219,12 @@ class Block(BaseTransaction):
         json['data'] = base64.b64encode(self.data).decode('utf-8')
         return json
 
+    def to_json_extended(self) -> Dict[str, Any]:
+        json = super().to_json_extended()
+        json['height'] = self.get_metadata().height
+
+        return json
+
     def verify_no_inputs(self) -> None:
         inputs = getattr(self, 'inputs', None)
         if inputs:

@@ -38,7 +38,7 @@ StateWalletResource.openapi = {
     '/wallet/state': {
         'x-visibility': 'private',
         'get': {
-            'tags': ['wallet'],
+            'tags': ['private_wallet'],
             'operationId': 'wallet_state',
             'summary': 'State of the wallet',
             'description': 'Returns if the wallet is locked and its type',
