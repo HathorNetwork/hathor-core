@@ -37,6 +37,7 @@ RUN pipenv run pip install python-rocksdb==0.7.0
 FROM python:3.6-alpine3.9
 
 ENV BRANCH_SELECTED='fix/merged-mining-tidbits'
+ENV EXTRA_ARGS=""
 ENV BTC_RPC=bitcoind-testnet
 ENV BTC_RPC_USER=user
 ENV BTC_RPC_PASS=password
@@ -62,5 +63,3 @@ EXPOSE 40403 8080 8082
 COPY entrypoint.sh ./entrypoint.sh
 
 ENTRYPOINT [ "sh", "entrypoint.sh" ]
-
-#CMD [ "python -m", "hathor", "run_merged_mining", "--port", "8082", "--hathor-stratum", "${HATHOR_BC}", "--bitcoin-rpc", "http://${BTC_RPC_USER}:${BTC_RPC_PASS}@${BTC_RPC}:{BTC_RPC_PORT}", "--hathor-address", "${HATHOR_WALLET}" ]
