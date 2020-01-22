@@ -52,7 +52,8 @@ logger = get_logger()
 settings = HathorSettings()
 
 MAX_NONCE = 2**32
-MAX_NUM_INPUTS = MAX_NUM_OUTPUTS = 256
+MAX_NUM_INPUTS = settings.MAX_NUM_INPUTS
+MAX_NUM_OUTPUTS = settings.MAX_NUM_OUTPUTS
 
 MAX_OUTPUT_VALUE = 2**63  # max value (inclusive) that is possible to encode: 9223372036854775808 ~= 9.22337e+18
 _MAX_OUTPUT_VALUE_32 = 2**31 - 1  # max value (inclusive) before having to use 8 bytes: 2147483647 ~= 2.14748e+09
@@ -802,6 +803,7 @@ class BaseTransaction(ABC):
         ret: Dict[str, Any] = {
             'tx_id': self.hash.hex(),
             'version': int(self.version),
+            'weight': self.weight,
             'timestamp': self.timestamp,
             'is_voided': bool(meta.voided_by),
             'inputs': [],

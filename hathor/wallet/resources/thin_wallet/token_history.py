@@ -106,7 +106,7 @@ TokenHistoryResource.openapi = {
             ]
         },
         'get': {
-            'tags': ['thin_wallet'],
+            'tags': ['wallet'],
             'operationId': 'tokenHistory',
             'summary': 'Get history transactions of a token',
             'parameters': [

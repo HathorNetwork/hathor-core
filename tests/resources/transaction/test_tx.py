@@ -21,6 +21,9 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         self.assertTrue(data_success['success'])
         dict_test = genesis_tx.to_json(decode_script=True)
         dict_test['raw'] = genesis_tx.get_struct().hex()
+        dict_test['nonce'] = str(dict_test['nonce'])
+        if genesis_tx.is_block:
+            dict_test['height'] = genesis_tx.calculate_height()
         self.assertEqual(data_success['tx'], dict_test)
 
         # Test sending hash that does not exist

@@ -5,14 +5,12 @@ from twisted.web import resource
 from twisted.web.http import Request
 
 from hathor.api_util import set_cors, validate_tx_hash
-from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.graphviz import GraphvizVisualizer
 
 settings = HathorSettings()
 
 
-@register_resource
 class GraphvizLegacyResource(resource.Resource):
     """ Implements a web server API that returns a visualization of the DAG using Graphviz.
 
@@ -155,7 +153,7 @@ GraphvizLegacyResource.openapi = {
         'get': {
             'tags': ['transaction'],
             'operationId': 'graphviz',
-            'summary': 'Dashboard of transactions',
+            'summary': 'Graphviz legacy',
             'description': ('Returns the generated file with the graph in the format requested.'
                             'Can be the full graph of the neighborhood graph of a transaction.'),
             'parameters': [

@@ -118,7 +118,7 @@ GraphvizFullResource.openapi = {
         'get': {
             'tags': ['transaction'],
             'operationId': 'graphviz',
-            'summary': 'Dashboard of transactions',
+            'summary': 'Graphviz',
             'description': 'Returns the generated file with the graph of the full DAG in the format requested.',
             'parameters': [
                 {
@@ -259,8 +259,8 @@ GraphvizNeighboursResource.openapi = {
         },
         'get': {
             'tags': ['transaction'],
-            'operationId': 'graphviz',
-            'summary': 'Dashboard of transactions',
+            'operationId': 'graphviz_neighbours',
+            'summary': 'Graphviz neighbours',
             'description': 'Returns the generated file with the graph of neighbours of a tx in the format requested.',
             'parameters': [
                 {
