@@ -22,6 +22,7 @@ class WeightValue(NamedTuple):
 class Metrics:
     transactions: int
     blocks: int
+    best_block_height: int
     hash_rate: float
     total_block_weight: float
     total_tx_weight: float
@@ -69,6 +70,9 @@ class Metrics:
 
         # Blocks count in the network
         self.blocks = 0
+
+        # Height of the best chain of the network
+        self.best_block_height = 0
 
         # Hash rate of the network
         self.hash_rate = 0.0
@@ -159,6 +163,7 @@ class Metrics:
         (last_block, _) = self.tx_storage.get_newest_blocks(count=1)
         if last_block:
             self.hash_rate = self.calculate_new_hashrate(last_block[0])
+            self.best_block_height = self.tx_storage.get_height_best_block()
 
     def start(self) -> None:
         self.is_running = True
@@ -193,6 +198,7 @@ class Metrics:
                 self.total_block_weight = sum_weights(data['tx'].weight, self.total_block_weight)
                 self.hash_rate = self.calculate_new_hashrate(data['tx'])
                 self.best_block_weight = self.tx_storage.get_weight_best_block()
+                self.best_block_height = self.tx_storage.get_height_best_block()
             else:
                 self.transactions += 1
                 self.total_tx_weight = sum_weights(data['tx'].weight, self.total_tx_weight)
