@@ -6,6 +6,9 @@ from twisted.web.http import Request
 
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.conf import HathorSettings
+
+settings = HathorSettings()
 
 
 @register_resource
@@ -39,17 +42,55 @@ class AddressHistoryResource(resource.Resource):
 
         addresses = request.args[b'addresses[]']
 
+        # Pagination variables
+        has_more = False
+        first_hash = None
+        first_address = None
+        total_added = 0
+
         history = []
         seen: Set[bytes] = set()
-        for address_to_decode in addresses:
+        for idx, address_to_decode in enumerate(addresses):
             address = address_to_decode.decode('utf-8')
-            for tx_hash in wallet_index.get_from_address(address):
+            hashes = wallet_index.get_sorted_from_address(address)
+            start_index = 0
+            if b'hash' in request.args and idx == 0:
+                # It's not the first request, so we must continue from the hash
+                # but we do it only for the first address
+
+                # Find index where is the hash
+                ref_hash = request.args[b'hash'][0].decode('utf-8')
+                # TODO Validate if value is a valid hash
+                try:
+                    ref_hash_bytes = bytes.fromhex(ref_hash)
+                    start_index = hashes.index(ref_hash_bytes)
+                except ValueError:
+                    # ref_hash is not in the list
+                    return json.dumps({'success': False, 'message': 'Hash {} not found on address {}'.format(ref_hash, address_to_decode)}, indent=4).encode('utf-8')
+
+            end_index = start_index + settings.MAX_TX_ADDRESSES_HISTORY - total_added
+            to_iterate = hashes[start_index:end_index]
+            for tx_hash in to_iterate:
                 tx = self.manager.tx_storage.get_transaction(tx_hash)
                 if tx_hash not in seen:
                     seen.add(tx_hash)
                     history.append(tx.to_json_extended())
+                    total_added += 1
 
-        data = {'history': history}
+            if len(hashes) > end_index:
+                # We stopped in the middle of the txs of this address
+                has_more = True
+                first_hash = hashes[end_index].hex()
+                first_address = address_to_decode
+                break
+
+        data = {
+            'success': True,
+            'history': history,
+            'has_more': has_more,
+            'first_hash': first_hash,
+            'first_address': first_address
+        }
         return json.dumps(data, indent=4).encode('utf-8')
 
 
