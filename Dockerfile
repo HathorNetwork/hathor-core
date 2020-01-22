@@ -53,5 +53,5 @@ COPY --from=rocksdb_builder /usr/lib64/librocksdb* /usr/lib/
 WORKDIR /usr/src/app/
 COPY hathor ./hathor
 
-EXPOSE 40403 8080
+EXPOSE 40403 8080 8082
 ENTRYPOINT ["python", "-m", "hathor run_merged_mining --port 8082 --hathor-stratum ${HATHOR_BC} --bitcoin-rpc ${BTC_RPC} --hathor-address ${HATHOR_WALLET}"]
