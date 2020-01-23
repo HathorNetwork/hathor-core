@@ -81,7 +81,7 @@ class AddressHistoryResource(resource.Resource):
                 # We stopped in the middle of the txs of this address
                 has_more = True
                 first_hash = hashes[end_index].hex()
-                first_address = address_to_decode
+                first_address = address_to_decode.decode('utf-8')
                 break
 
         data = {
