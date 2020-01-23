@@ -1,14 +1,15 @@
+import time
 from itertools import count
-from typing import Any, Callable, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple, Union, cast
+from typing import Any, Callable, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple, Union
 from uuid import uuid4
 
 from structlog import get_logger
 from twisted.internet import reactor, task
-from twisted.internet.endpoints import TCP4ClientEndpoint, connectProtocol
 from twisted.internet.interfaces import IAddress, IReactorTCP
 from twisted.internet.protocol import Factory
 from twisted.python.failure import Failure
 
+from hathor.client import IHathorClient
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.merged_mining.bitcoin import (
@@ -24,7 +25,7 @@ from hathor.merged_mining.bitcoin import (
 )
 from hathor.merged_mining.bitcoin_rpc import IBitcoinRPC
 from hathor.stratum import INVALID_ADDRESS, INVALID_PARAMS, JOB_NOT_FOUND, JSONRPC, METHOD_NOT_FOUND
-from hathor.transaction import BitcoinAuxPow
+from hathor.transaction import BitcoinAuxPow, MergeMinedBlock as HathorBlock
 from hathor.transaction.exceptions import ScriptError
 from hathor.util import MaxSizeOrderedDict, ichunks
 from hathor.wallet.exceptions import InvalidAddress
@@ -39,103 +40,7 @@ MAGIC_NUMBER = b'Hath'  # bytes.fromhex('48617468') or 0x68746148.to_bytes(4, 'l
 class HathorCoordJob(NamedTuple):
     """ Data class used to send a job's work to Hathor Stratum.
     """
-    data: bytes
-    job_id: bytes
-    nonce_size: int
-    weight: float
-    parent_hash: bytes
-
-    @classmethod
-    def from_dict(cls, params: dict) -> 'HathorCoordJob':
-        """ Build instance from dict (received from Hathor stratum).
-        """
-        return cls(
-            bytes.fromhex(params['data']),
-            bytes.fromhex(params['job_id']),
-            int(params['nonce_size']),
-            float(params['weight']),
-            bytes.fromhex(params['parent_hash']),  # TODO: if paremeter is not present, it is not a block
-        )
-
-
-class HathorStratumClient(JSONRPC):
-    """ Twisted protocol that implements client side of Hathor Stratum.
-    """
-
-    coordinator: 'MergedMiningCoordinator'
-    address: str
-    use_ok = False
-
-    def __init__(
-            self,
-            coordinator: 'MergedMiningCoordinator',
-            address: str,
-            id_generator: Optional[Callable[[], Iterator[Union[str, int]]]] = lambda: count(),
-    ):
-        self.log = logger.new(address=address)
-        self.coordinator = coordinator
-        self.address = address
-        self._iter_id = id_generator and id_generator() or None
-        self._subscribed = False
-        self._subscribe_msg_id = None
-
-    def _next_id(self):
-        if self._iter_id:
-            return str(next(self._iter_id))
-
-    def connectionMade(self) -> None:
-        self.log.debug('connection made')
-        self.ensure_subscribed()
-
-    def ensure_subscribed(self) -> None:
-        if self._subscribed:
-            return
-        self.log.debug('not subscribed, subscribing...')
-        if self._subscribe_msg_id is not None:
-            # TODO: timeout?
-            self.log.debug('already waiting for subcribe response')
-            return
-        self._subscribe_msg_id = self._next_id()
-        self.send_request('subscribe', {'address': self.address, 'merged_mining': True}, self._subscribe_msg_id)
-
-    def handle_request(self, method: str, params: Optional[Union[List, Dict]], msgid: Optional[str]) -> None:
-        """ Handles job requests.
-
-        :param method: JSON-RPC 2.0 request method
-        :type method: str
-
-        :param params: Hathor Stratum job request params
-        :type params: Dict
-
-        :param msgid: JSON-RPC 2.0 message id
-        :type msgid: Optional[str]
-        """
-        self.ensure_subscribed()
-        self.log.debug('handle request', method=method, params=params)
-
-        if method == 'job' and isinstance(params, dict):
-            self.coordinator.hathor_coord_job = HathorCoordJob.from_dict(params)
-            self.coordinator.update_merged_block()
-        else:
-            self.log.error('Unknown method received, ignoring', method=method)
-
-    def handle_result(self, result: Any, msgid: Optional[str]) -> None:
-        """ Logs any result since there are not supposed to be any.
-        """
-        self.log.debug('handle result', msgid=msgid, result=result)
-        if not self._subscribed:
-            if msgid == self._subscribe_msg_id:
-                self._subscribed = True
-                self.log.debug('subscribed')
-
-    def handle_error(self, error: Dict, data: Any, msgid: Optional[str]) -> None:
-        """ Logs any error since there are not supposed to be any.
-        """
-        self.log.error('handle error', msgid=msgid, error=error)
-        if not self._subscribed:
-            if msgid == self._subscribe_msg_id:
-                self._subscribe_msg_id = None
-                self.log.debug('subscribe failed')
+    block: HathorBlock
 
 
 def flip80(data: bytes) -> bytes:
@@ -167,6 +72,32 @@ def diff_from_weight(weight: float) -> int:
     # TODO: does rounding up make sense? cgminer does it
     diff = max(diff, 1)
     return diff
+
+
+def parse_login_with_addresses(login: str) -> Tuple[bytes, bytes, Optional[str]]:
+    """ Parses a login of the form HATHOR_ADDRESS.BITCOIN_ADDRESS[.WORKER_NAME] returns output scripts and worker name.
+
+    Examples:
+
+    >>> out = parse_login_with_addresses('HC7w4j7mPet49BBN5a2An3XUiPvK6C1TL7.1Mtb6rphrRq6kUdxpzQCUXZBaMbNpM3ZCN')
+    >>> out[0].hex(), out[1].hex(), out[2]
+    ('76a9143d6dbcbf6e67b2cbcc3225994756a56a5e2d3a2788ac', '76a9e52432216dabf32d60a02894ec871293baaa1b1288ac', None)
+    >>> out = parse_login_with_addresses('HC7w4j7mPet49BBN5a2An3XUiPvK6C1TL7.1Mtb6rphrRq6kUdxpzQCUXZBaMbNpM3ZCN.foo')
+    >>> out[0].hex(), out[1].hex(), out[2]
+    ('76a9143d6dbcbf6e67b2cbcc3225994756a56a5e2d3a2788ac', '76a9e52432216dabf32d60a02894ec871293baaa1b1288ac', 'foo')
+    """
+    from hathor.crypto.util import decode_address
+    from hathor.transaction.scripts import create_output_script as create_output_script_htr
+    from hathor.merged_mining.bitcoin import create_output_script as create_output_script_btc
+    parts = login.split('.', maxsplit=2)
+    if len(parts) < 2:
+        raise ValueError('Expected `{HTR_ADDR}.{BTC_ADDR}` or `{HTR_ADDR}.{BTC_ADDR}.{WORKER}` got "{}"'.format(login))
+    payback_address_hathor = parts[0]
+    payback_address_bitcoin = parts[1]
+    payback_script_hathor = create_output_script_htr(decode_address(payback_address_hathor))
+    payback_script_bitcoin = create_output_script_btc(decode_address(payback_address_bitcoin))
+    worker_name = parts[2] if len(parts) > 2 else None
+    return payback_script_hathor, payback_script_bitcoin, worker_name
 
 
 class SingleMinerWork(NamedTuple):
@@ -215,8 +146,7 @@ class SingleMinerJob(NamedTuple):
     version: int
     bits: bytes  # 4 bytes
     timestamp: int
-    hathor_data: bytes
-    hathor_job_id: bytes
+    hathor_block: HathorBlock
     transactions: List[BitcoinTransaction]
     clean: bool = True
 
@@ -263,11 +193,10 @@ class SingleMinerJob(NamedTuple):
     def build_aux_pow(self, work: SingleMinerWork) -> BitcoinAuxPow:
         """ Build the Auxiliary Proof-of-Work from job and work data.
         """
-        from hathor.merged_mining.bitcoin import sha256d_hash
         bitcoin_header, coinbase_tx = self._make_bitcoin_block_and_coinbase(work)
         header = bytes(bitcoin_header)
         header_head, header_tail = header[:36], header[-12:]
-        block_base_hash = sha256d_hash(self.hathor_data)
+        block_base_hash = self.hathor_block.get_base_hash()
         coinbase = bytes(coinbase_tx)
         coinbase_head, coinbase_tail = coinbase.split(block_base_hash)
         return BitcoinAuxPow(header_head, coinbase_head, coinbase_tail, self.merkle_path, header_tail)
@@ -280,12 +209,22 @@ class SingleMinerJob(NamedTuple):
         return bitcoin_block
 
 
+class MinerShare(NamedTuple):
+    solvetime: float
+    weight: float
+
+
 class MergedMiningStratumProtocol(JSONRPC):
     """
     Twisted protocol that implements server side of the merged mining coordinator.
     """
 
-    DEFAULT_XNONCE2_SIZE = 8
+    DEFAULT_XNONCE2_SIZE = 8  # size in bytes to reserve for extra nonce 2 (which is concatenated with extra nonce 1)
+    ESTIMATOR_LOOP_INTERVAL = 1  # in seconds, "frequency" that the function that updates the estimator will be called
+    MIN_DIFFICULTY = 128  # minimum "bitcoin difficulty" to assign to jobs
+    INITIAL_DIFFICULTY = 4096  # initial "bitcoin difficulty" to assign to jobs, can raise or drop based on solvetimes
+    MIN_JOB_TIME = 3  # in seconds, if jobs are solved faster than this, difficulty raises
+    MAX_JOB_TIME = 30  # in seconds, if jobs take longer than this, difficulty drops
     MAX_JOBS = 1000  # maximum number of jobs to keep in memory
 
     merged_job: 'MergedJob'
@@ -302,16 +241,28 @@ class MergedMiningStratumProtocol(JSONRPC):
         self.miner_id: Optional[str] = None
         self.miner_address: Optional[bytes] = None
         self.job_ids: List[str] = []
-        # TODO: maybe try to guess min_difficulty from the miner
-        # TODO: parametrize this
-        self.min_difficulty = 128
+        self.min_difficulty = self.MIN_DIFFICULTY
+        self.current_difficulty = self.INITIAL_DIFFICULTY
         self.last_sent_difficulty: Optional[int] = None
+        self.last_share_received_at: Optional[float] = None
+        self.payback_script_bitcoin: Optional[bytes] = None
+        self.payback_script_hathor: Optional[bytes] = None
+
+        # TODO: this could be persisted somewhere else to improve hashrate estimation when miner/server restarts
+        self.shares_history: List[MinerShare] = []
 
         self.xnonce1 = xnonce1
         self.xnonce2_size = self.DEFAULT_XNONCE2_SIZE
 
         self._iter_job_id = job_id_generator() if job_id_generator else None
-        self.subscribed = False
+        self._subscribed = False
+        self._authorized = False
+
+        self.estimator_loop = None
+
+    @property
+    def subscribed(self) -> bool:
+        return self._subscribed and self._authorized
 
     def next_job_id(self):
         """ Every call will return a new sequential id for use in job.id.
@@ -325,13 +276,18 @@ class MergedMiningStratumProtocol(JSONRPC):
         self.coordinator.miner_protocols[self.miner_id] = self
         self.log = self.log.bind(miner_id=self.miner_id)
         self.log.debug('connection made')
+        _estimator_loop = task.LoopingCall(estimator_loop, self)
+        _estimator_loop.start(self.ESTIMATOR_LOOP_INTERVAL)
+        self.estimator_loop = _estimator_loop
 
     def connectionLost(self, reason: Failure = None) -> None:
         self.log.debug('connection lost')
-        if self.subscribed:
+        if self._subscribed:
             self.log.info('Miner exited')
         assert self.miner_id is not None
         self.coordinator.miner_protocols.pop(self.miner_id)
+        if self.estimator_loop:
+            self.estimator_loop.stop()
 
     def handle_request(self, method: str, params: Optional[Union[List, Dict]], msgid: Optional[str]) -> None:
         """ Handles subscribe and submit requests.
@@ -348,19 +304,19 @@ class MergedMiningStratumProtocol(JSONRPC):
         self.log.debug('handle request', method=method, params=params)
 
         if method in {'subscribe', 'mining.subscribe', 'login'}:
-            params = cast(Dict, params)
+            assert isinstance(params, Dict)
             return self.handle_subscribe(params, msgid)
         if method in {'authorize', 'mining.authorize'}:
-            params = cast(Dict, params)
+            assert isinstance(params, List)
             return self.handle_authorize(params, msgid)
         if method in {'submit', 'mining.submit'}:
-            params = cast(List, params)
+            assert isinstance(params, List)
             return self.handle_submit(params, msgid)
         if method in {'configure', 'mining.configure'}:
-            params = cast(List, params)
+            assert isinstance(params, List)
             return self.handle_configure(params, msgid)
         if method in {'multi_version', 'mining.multi_version'}:
-            params = cast(List, params)
+            assert isinstance(params, List)
             return self.handle_multi_version(params, msgid)
 
         self.send_error(METHOD_NOT_FOUND, msgid, data={'method': method, 'supported_methods': ['submit', 'subscribe']})
@@ -375,11 +331,28 @@ class MergedMiningStratumProtocol(JSONRPC):
         """
         self.log.error('handle error', msgid=msgid, error=error)
 
-    def handle_authorize(self, params: Dict, msgid: Optional[str]) -> None:
+    def handle_authorize(self, params: List, msgid: Optional[str]) -> None:
         """ Handles authorize request by always authorizing even if the request is invalid.
         """
-        # TODO: authorization system
-        self.send_result(True, msgid)
+        if self.coordinator.address_from_login:
+            try:
+                login, password = params
+                self.payback_script_hathor, self.payback_script_bitcoin, worker_name = \
+                    parse_login_with_addresses(login)
+                if worker_name:
+                    self.log = self.log.bind(worker_name=worker_name)
+            except Exception as e:
+                self.log.warn('authorization failed', exc=e)
+                # TODO: proper error
+                self.send_error({'code': 0, 'message': 'Address should be of the format <HTR_ADDR>.<BTC_ADDR>'}, msgid)
+                self.transport.loseConnection()
+                return
+            self.send_result('ok', msgid)
+            self._authorized = True
+            self.job_request()
+        else:
+            # TODO: authorization system
+            self.send_result(True, msgid)
 
     def handle_configure(self, params: List, msgid: Optional[str]) -> None:
         """ Handles stratum-extensions configuration
@@ -411,10 +384,14 @@ class MergedMiningStratumProtocol(JSONRPC):
                 self.transport.loseConnection()
                 return
 
-        self.subscribed = True
+        self._subscribed = True
         self.log.info('Miner subscribed', address=self.miner_address)
-        self.send_result([str(self.miner_id), self.xnonce1.hex(), self.xnonce2_size], msgid)
-        # self.job_request()  # waiting for the next update is better
+        # session = str(self.miner_id)
+        session = [['mining.set_difficulty', '1'], ['mining.notify', str(self.miner_id)]]
+        self.send_result([session, self.xnonce1.hex(), self.xnonce2_size], msgid)
+        if not self.coordinator.address_from_login:
+            self._authorized = True
+            self.job_request()
 
     def handle_multi_version(self, params: List[Any], msgid: Optional[str]) -> None:
         """ Handles multi_version request by
@@ -433,8 +410,6 @@ class MergedMiningStratumProtocol(JSONRPC):
 
         - ['', '6a16cffa-47c0-41d9-b92f-44e05d3c25dd', '0000000000000000', 'c359f65c', '47c8f488']
         """
-        from hathor.merged_mining.bitcoin import sha256d_hash
-
         self.log.debug('handle submit', msgid=msgid, params=params)
 
         work = SingleMinerWork.from_stratum_params(self.xnonce1, params)
@@ -445,14 +420,19 @@ class MergedMiningStratumProtocol(JSONRPC):
             return
 
         bitcoin_block_header = job.build_bitcoin_block_header(work)
-        block_base = job.hathor_data
-        block_base_hash = sha256d_hash(block_base)
+        block_base_hash = job.hathor_block.get_base_hash()
         self.log.debug('work received', bitcoin_header=bytes(bitcoin_block_header).hex(),
-                       block_base=block_base.hex(), block_base_hash=block_base_hash.hex(),
+                       hathor_block=job.hathor_block, block_base_hash=block_base_hash.hex(),
                        hash=bitcoin_block_header.hash.hex())
 
         aux_pow = job.build_aux_pow(work)
         aux_pow.verify(block_base_hash)  # TODO: treat exception (respond with proper error)
+
+        now = time.time()
+        if self.last_share_received_at:
+            if now - self.last_share_received_at < self.MIN_JOB_TIME:
+                self.current_difficulty *= 2
+        self.last_share_received_at = now
 
         self.log.debug('forward work to hathor', aux_pow=aux_pow)
         self.submit_to_hathor(job, aux_pow)
@@ -467,10 +447,10 @@ class MergedMiningStratumProtocol(JSONRPC):
     def submit_to_hathor(self, job: SingleMinerJob, aux_pow: BitcoinAuxPow) -> None:
         """ Submit AuxPOW to Hathor stratum.
         """
-        from hathor.stratum.stratum import MinerSubmit as HathorMinerSubmit
-        data = HathorMinerSubmit(job.hathor_job_id.hex(), aux_pow=bytes(aux_pow).hex())
-        hathor_stratum = self.coordinator.hathor_stratum
-        hathor_stratum.send_request('submit', data._asdict(), str(hathor_stratum._next_id()))
+        block = job.hathor_block
+        block.aux_pow = aux_pow
+        res = self.coordinator.hathor_client.submit_block(block)
+        self.log.debug('hathor.submit_block', res=res)
 
     def submit_to_bitcoin(self, job: SingleMinerJob, work: SingleMinerWork) -> None:
         """ Submit work to Bitcoin RPC.
@@ -491,13 +471,11 @@ class MergedMiningStratumProtocol(JSONRPC):
     def estimate_difficulty(self) -> int:
         """ Value to send through mining.set_difficulty.
 
-        Depends on the difficulty of the Hathor job and Bitcoin job.
+        Return a difficulty that is large enough to take a few seconds, but not large enough to take more than 30s on
+        average. Depends only on the hashrate of the miner. Tuned to start at a common value (4096).
         """
-        # XXX: we assume bitcoin difficulty is higher than ours, which will be true for the foreseeable future
-        assert self.coordinator.hathor_coord_job is not None
-        difficulty = diff_from_weight(self.coordinator.hathor_coord_job.weight)
-        difficulty = max(difficulty, self.min_difficulty)
-        return difficulty
+        # TODO: better estimator
+        return self.current_difficulty
 
     def set_difficulty(self) -> None:
         """ Sends the difficulty to the connected client, applies for all future "mining.notify" until it is set again.
@@ -535,6 +513,15 @@ class MergedMiningStratumProtocol(JSONRPC):
         """ Useful only for debugging.
         """
         return SingleMinerWork(job.job_id, 0, self.xnonce1, b'\0' * self.xnonce2_size)
+
+
+def estimator_loop(self: MergedMiningStratumProtocol) -> None:
+    """ This loop only cares about reducing the current difficulty if the miner takes too long to submit a solution.
+    """
+    if self.last_share_received_at is not None:
+        if time.time() - self.last_share_received_at > self.MAX_JOB_TIME:
+            current_difficulty = self.current_difficulty // 2
+            self.current_difficulty = max(current_difficulty, self.min_difficulty)
 
 
 class BitcoinCoordJob(NamedTuple):
@@ -667,12 +654,10 @@ class BitcoinCoordJob(NamedTuple):
             list(map(BitcoinTransaction.from_dict, params['transactions'])),
         )
 
-    def make_coinbase_transaction(self, hathor_block_hash: bytes, payback_address_bitcoin: str,
+    def make_coinbase_transaction(self, hathor_block_hash: bytes, payback_script_bitcoin: bytes,
                                   extra_nonce_size: Optional[int] = None) -> BitcoinTransaction:
         """ The coinbase transaction is entirely defined by the coordinator, which acts as a pool server.
         """
-        from hathor.crypto.util import decode_address
-        from hathor.merged_mining.bitcoin import create_output_script
 
         inputs = []
         outputs: List[BitcoinTransactionOutput] = []
@@ -691,8 +676,7 @@ class BitcoinCoordJob(NamedTuple):
         inputs.append(coinbase_input)
 
         # coinbase output: payout
-        output_script = create_output_script(decode_address(payback_address_bitcoin))
-        coinbase_output = BitcoinTransactionOutput(self.coinbase_value, output_script)
+        coinbase_output = BitcoinTransactionOutput(self.coinbase_value, payback_script_bitcoin)
         outputs.append(coinbase_output)
 
         return BitcoinTransaction(inputs=inputs, outputs=outputs)
@@ -709,14 +693,12 @@ class MergedJob(NamedTuple):
 
     hathor_coord: HathorCoordJob
     bitcoin_coord: BitcoinCoordJob
-    payback_address_bitcoin: str
+    payback_script_bitcoin: Optional[bytes]
     clean: bool
 
     def new_single_miner_job(self, protocol: MergedMiningStratumProtocol) -> SingleMinerJob:
         """ Generate a partial job for a single miner, based on this job.
         """
-        from hathor.merged_mining.bitcoin import sha256d_hash
-
         # payback_address_bitcoin = protocol.coordinator.payback_address_bitcoin
         xnonce_size = len(protocol.xnonce1) + protocol.xnonce2_size
 
@@ -724,16 +706,24 @@ class MergedJob(NamedTuple):
         transactions = self.bitcoin_coord.transactions[:]
 
         # build coinbase transaction with hathor block hash
-        hathor_block_hash = sha256d_hash(self.hathor_coord.data)
+        hathor_block_hash = self.hathor_coord.block.get_base_hash()
+        payback_script_bitcoin = self.payback_script_bitcoin or protocol.payback_script_bitcoin
+        assert payback_script_bitcoin is not None
         coinbase_tx = self.bitcoin_coord.make_coinbase_transaction(
             hathor_block_hash,
-            self.payback_address_bitcoin,
+            payback_script_bitcoin,
             xnonce_size,
         )
         coinbase_bytes = bytes(coinbase_tx)
         coinbase_head, coinbase_tail = coinbase_bytes.split(hathor_block_hash + b'\0' * xnonce_size, 1)
         coinbase_head += hathor_block_hash
         assert len(coinbase_bytes) == len(coinbase_head) + xnonce_size + len(coinbase_tail)  # just a sanity check
+
+        hathor_block = self.hathor_coord.block.clone()
+        assert isinstance(hathor_block, HathorBlock)
+        if not hathor_block.outputs[0].script:
+            assert protocol.payback_script_hathor is not None
+            hathor_block.outputs[0].script = protocol.payback_script_hathor
 
         # TODO: check if total transaction size increase exceed size and sigop limits, there's probably an RPC for this
 
@@ -745,8 +735,7 @@ class MergedJob(NamedTuple):
             merkle_path=build_merkle_path_for_coinbase([tx.hash for tx in transactions]),
             version=self.bitcoin_coord.version,
             bits=self.bitcoin_coord.bits,
-            hathor_data=self.hathor_coord.data,
-            hathor_job_id=self.hathor_coord.job_id,
+            hathor_block=hathor_block,
             timestamp=self.bitcoin_coord.get_timestamp(),
             transactions=transactions,
             clean=self.clean,
@@ -767,17 +756,19 @@ class MergedMiningCoordinator(Factory):
     XNONCE1_SIZE = 2
     MAX_XNONCE1 = 2**XNONCE1_SIZE - 1
 
-    def __init__(self, port: int, bitcoin_rpc: IBitcoinRPC, hathor_stratum: str, payback_address_bitcoin: str,
-                 payback_address_hathor: str, reactor: IReactorTCP = reactor):
+    def __init__(self, port: int, bitcoin_rpc: IBitcoinRPC, hathor_client: IHathorClient,
+                 payback_address_bitcoin: Optional[str], payback_address_hathor: Optional[str],
+                 address_from_login: bool = True, reactor: IReactorTCP = reactor):
         self.log = logger.new()
         self.port = port
         self.reactor = reactor
         self.bitcoin_rpc = bitcoin_rpc
-        self._hathor_stratum_url = hathor_stratum
-        self.hathor_stratum = HathorStratumClient(self, address=payback_address_hathor)
+        self.hathor_client = hathor_client
+        self.address_from_login = address_from_login
         self.jobs: Set[SingleMinerJob] = set()
         self.miner_protocols: Dict[str, MergedMiningStratumProtocol] = {}
-        self.payback_address_bitcoin = payback_address_bitcoin
+        self.payback_address_bitcoin: Optional[str] = payback_address_bitcoin
+        self.payback_address_hathor: Optional[str] = payback_address_hathor
         self.bitcoin_coord_job: Optional[BitcoinCoordJob] = None
         self.hathor_coord_job: Optional[HathorCoordJob] = None
         self.coordinator_loop: Optional[task.LoopingCall] = None
@@ -809,7 +800,6 @@ class MergedMiningCoordinator(Factory):
         """
         self.reactor.listenTCP(self.port, self)
         self.start_watchdog_block_updater()
-        self.start_hathor_block_updater()
 
     def stop(self) -> None:
         """ Stops the client, interrupting mining processes, stoping supervisor loop , and sending finished jobs.
@@ -827,24 +817,6 @@ class MergedMiningCoordinator(Factory):
         self.watchdog_loop.clock = self.reactor
         self.watchdog_loop.start(self.WATCHDOG_LOOP_INTERVAL)
 
-    def start_hathor_block_updater(self) -> None:
-        """ Start Hathor stratum client which periodically updates blocks.
-        """
-        self.log.info('Start updating Hathor mining block')
-        host, port = self._hathor_stratum_url.split(':')  # TODO: improve url/address parsing
-        # TODO: consider using a factory, like: reactor.connectTCP(host, port, EchoClientFactory())
-        point = TCP4ClientEndpoint(self.reactor, host, int(port))
-        d = connectProtocol(point, self.hathor_stratum)
-        # retries if connection fails
-        d.addErrback(self._err_start_hathor_block_updater)
-        # TODO: monitor connection to retry if connection is interrupted after success
-
-    def _err_start_hathor_block_updater(self, *args: Any, **kwargs: Any) -> None:
-        """ Errback used for the async call on start_hathor_block_updater.
-        """
-        self.log.error('failed to connect to Hathor stratum, retrying in 10s.', args=args, kwargs=kwargs)
-        self.reactor.callLater(10.0, self.start_hathor_block_updater)
-
     def update_bitcoin_block(self) -> None:
         """ Method periodically called to update the bitcoin block template.
         """
@@ -859,9 +831,20 @@ class MergedMiningCoordinator(Factory):
         data_log = data.copy()
         data_log['len(transactions)'] = len(data_log['transactions'])
         del data_log['transactions']
-        self.log.debug('getblocktemplate response', res=data_log)
+        self.log.debug('bitcoin.getblocktemplate response', res=data_log)
         self.bitcoin_coord_job = BitcoinCoordJob.from_dict(data)
         self.log.debug('New Bitcoin Block template.')
+        self.update_merged_block()
+
+    def update_hathor_block(self) -> None:
+        """ Method periodically called to update the hathor block template.
+        """
+        self.log.debug('Update Hathor mining block')
+        block = self.hathor_client.get_block_template(merged_mining=True, address=self.payback_address_hathor)
+        assert isinstance(block, HathorBlock)
+        self.log.debug('hathor.get_block_template response', block=block)
+        self.hathor_coord_job = HathorCoordJob(block)
+        self.log.debug('New Hathor Block template.')
         self.update_merged_block()
 
     def is_next_job_clean(self) -> bool:
@@ -873,21 +856,28 @@ class MergedMiningCoordinator(Factory):
             return True
         if self.merged_job.bitcoin_coord.height != self.bitcoin_coord_job.height:
             return True
-        if self.merged_job.hathor_coord.parent_hash != self.hathor_coord_job.parent_hash:
+        if self.merged_job.hathor_coord.block.get_block_parent_hash() != \
+           self.hathor_coord_job.block.get_block_parent_hash():
             return True
         return False
 
     def update_merged_block(self) -> None:
+        from hathor.merged_mining.bitcoin import create_output_script as create_output_script_btc
         if self.bitcoin_coord_job is None or self.hathor_coord_job is None:
             self.log.debug('Merged block not ready to be built.')
             return
         self.job_count += 1
         if self.job_count == 1:
             self.log.info('Merged mining ready')
+        output_script: Optional[bytes]
+        if self.payback_address_bitcoin:
+            output_script = create_output_script_btc(decode_address(self.payback_address_bitcoin))
+        else:
+            output_script = None
         self.next_merged_job = MergedJob(
             self.hathor_coord_job,
             self.bitcoin_coord_job,
-            self.payback_address_bitcoin,
+            output_script,
             self.is_next_job_clean(),
         )
         self.update_jobs()
@@ -898,5 +888,4 @@ def watchdog_loop(coordinator: MergedMiningCoordinator) -> None:
     """ Job to be executed periodically to submit complete mining jobs.
     """
     coordinator.update_bitcoin_block()
-    if coordinator.hathor_stratum.connected:
-        coordinator.hathor_stratum.ensure_subscribed()
+    coordinator.update_hathor_block()

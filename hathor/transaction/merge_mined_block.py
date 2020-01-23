@@ -102,9 +102,8 @@ class MergeMinedBlock(Block):
 
     def to_json(self, decode_script: bool = False) -> Dict[str, Any]:
         json = super().to_json(decode_script)
-        assert self.aux_pow is not None
         del json['nonce']
-        json['aux_pow'] = bytes(self.aux_pow).hex()
+        json['aux_pow'] = bytes(self.aux_pow).hex() if self.aux_pow else None
         return json
 
     def verify_without_storage(self) -> None:

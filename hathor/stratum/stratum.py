@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from hashlib import sha256
 from itertools import count
-from json import JSONDecodeError, dumps as json_dumps, loads as json_loads
+from json import JSONDecodeError
 from math import log
 from multiprocessing import Array, Process, Queue as MQueue, Value  # type: ignore
 from os import cpu_count
@@ -24,6 +24,7 @@ from hathor.exception import InvalidNewTransaction
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.transaction import BaseTransaction, BitcoinAuxPow, Block, MergeMinedBlock, Transaction, sum_weights
 from hathor.transaction.exceptions import PowError, ScriptError, TxValidationError
+from hathor.util import json_dumpb, json_loadb
 from hathor.wallet.exceptions import InvalidAddress
 
 if TYPE_CHECKING:
@@ -174,9 +175,10 @@ class JSONRPC(LineReceiver, ABC):
         """
         self.log.debug('LINE RECEIVED {line}', line=line)
         try:
-            data = json_loads(line)
+            data = json_loadb(line)
         except JSONDecodeError:
             return self.send_error(PARSE_ERROR, data={'message': line.decode()})
+        assert isinstance(data, dict)
 
         msgid = data.get('id')
 
@@ -299,7 +301,7 @@ class JSONRPC(LineReceiver, ABC):
         :type json: Dict
         """
         try:
-            message = json_dumps(json).encode()
+            message = json_dumpb(json)
             self.sendLine(message)
             self.log.debug('LINE SENT {line}', line=message)
         except TypeError:

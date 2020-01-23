@@ -2,6 +2,7 @@ from hathor.transaction.resources.dashboard import DashboardTransactionResource
 from hathor.transaction.resources.decode_tx import DecodeTxResource
 from hathor.transaction.resources.graphviz import GraphvizFullResource, GraphvizNeighboursResource
 from hathor.transaction.resources.graphviz_legacy import GraphvizLegacyResource
+from hathor.transaction.resources.mining import GetBlockTemplateResource, SubmitBlockResource
 from hathor.transaction.resources.push_tx import PushTxResource
 from hathor.transaction.resources.tips import TipsResource
 from hathor.transaction.resources.tips_histogram import TipsHistogramResource
@@ -11,9 +12,11 @@ from hathor.transaction.resources.transaction_confirmation import TransactionAcc
 __all__ = [
     'DecodeTxResource',
     'PushTxResource',
+    'GetBlockTemplateResource',
     'GraphvizFullResource',
     'GraphvizNeighboursResource',
     'GraphvizLegacyResource',
+    'SubmitBlockResource',
     'TransactionAccWeightResource',
     'TransactionResource',
     'DashboardTransactionResource',

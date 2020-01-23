@@ -10,6 +10,8 @@ from hathor.crypto.util import decode_address
 from hathor.transaction import Block
 from hathor.wallet.exceptions import InvalidAddress
 
+# TODO: deprecate these calls to eventually remove them on v2
+
 
 @register_resource
 class MiningResource(resource.Resource):
