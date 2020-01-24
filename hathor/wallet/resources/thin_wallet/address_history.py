@@ -57,17 +57,20 @@ class AddressHistoryResource(resource.Resource):
             if b'hash' in request.args and idx == 0:
                 # It's not the first request, so we must continue from the hash
                 # but we do it only for the first address
-
-                # Find index where is the hash
                 ref_hash = request.args[b'hash'][0].decode('utf-8')
-                # TODO Validate if value is a valid hash
                 try:
                     ref_hash_bytes = bytes.fromhex(ref_hash)
+                    # Find index where the hash is
                     start_index = hashes.index(ref_hash_bytes)
                 except ValueError:
-                    # ref_hash is not in the list
-                    return json.dumps({'success': False, 'message': 'Hash {} not found on address {}'.format(ref_hash, address_to_decode)}, indent=4).encode('utf-8')
+                    # ref_hash is not in the list or is an invalid hex value
+                    return json.dumps({
+                        'success': False,
+                        'message': 'Invalid hash {}'.format(ref_hash)
+                    }, indent=4).encode('utf-8')
 
+            # Get the last index from this address history array
+            # considering the hash to start and how many txs we already added in the past addresses
             end_index = start_index + settings.MAX_TX_ADDRESSES_HISTORY - total_added
             to_iterate = hashes[start_index:end_index]
             for tx_hash in to_iterate:
@@ -79,7 +82,9 @@ class AddressHistoryResource(resource.Resource):
 
             if len(hashes) > end_index:
                 # We stopped in the middle of the txs of this address
+                # So we return that we still have more data to send
                 has_more = True
+                # The hash to start the search and which address this hash belongs
                 first_hash = hashes[end_index].hex()
                 first_address = address_to_decode.decode('utf-8')
                 break
@@ -137,6 +142,11 @@ AddressHistoryResource.openapi = {
                                 'success': {
                                     'summary': 'Success',
                                     'value': {
+                                        'success': True,
+                                        'has_more': True,
+                                        'first_hash': '00000299670db5814f69cede8b347f83'
+                                                      '0f73985eaa4cd1ce87c9a7c793771332',
+                                        'first_address': '1Pz5s5WVL52MK4EwBy9XVQUzWjF2LWWKiS',
                                         'history': [
                                             {
                                                 "hash": "00000299670db5814f69cede8b347f83"
