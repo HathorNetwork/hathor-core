@@ -48,6 +48,16 @@ class AddressHistoryResource(resource.Resource):
         first_address = None
         total_added = 0
 
+        max_quantity = settings.MAX_TX_ADDRESSES_HISTORY
+        if b'count' in request.args:
+            try:
+                max_quantity = min(int(request.args[b'count'][0]), max_quantity)
+            except (TypeError, ValueError):
+                return json.dumps({
+                    'success': False,
+                    'message': 'Invalid count value'
+                }, indent=4).encode('utf-8')
+
         history = []
         seen: Set[bytes] = set()
         for idx, address_to_decode in enumerate(addresses):
@@ -71,7 +81,7 @@ class AddressHistoryResource(resource.Resource):
 
             # Get the last index from this address history array
             # considering the hash to start and how many txs we already added in the past addresses
-            end_index = start_index + settings.MAX_TX_ADDRESSES_HISTORY - total_added
+            end_index = start_index + max_quantity - total_added
             to_iterate = hashes[start_index:end_index]
             for tx_hash in to_iterate:
                 tx = self.manager.tx_storage.get_transaction(tx_hash)
