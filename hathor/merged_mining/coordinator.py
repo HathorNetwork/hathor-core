@@ -354,7 +354,6 @@ class MergedMiningStratumProtocol(JSONRPC):
         if method in {'multi_version', 'mining.multi_version'}:
             params = cast(List, params)
             return self.handle_multi_version(params, msgid)
-        
 
         self.send_error(METHOD_NOT_FOUND, msgid, data={'method': method, 'supported_methods': ['submit', 'subscribe']})
 
@@ -415,8 +414,6 @@ class MergedMiningStratumProtocol(JSONRPC):
         - params: 
 
         Example:
-
-        - ['', '6a16cffa-47c0-41d9-b92f-44e05d3c25dd', '0000000000000000', 'c359f65c', '47c8f488']
         """
         self.send_result(True, msgid)
 
