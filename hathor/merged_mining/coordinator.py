@@ -353,6 +353,9 @@ class MergedMiningStratumProtocol(JSONRPC):
         if method in {'configure', 'mining.configure'}:
             params = cast(List, params)
             return self.handle_configure(params, msgid)
+        if method in {'multi_version', 'mining.multi_version'}:
+            params = cast(List, params)
+            return self.handle_multi_version(params, msgid)
 
         self.send_error(METHOD_NOT_FOUND, msgid, data={'method': method, 'supported_methods': ['submit', 'subscribe']})
 
@@ -406,6 +409,14 @@ class MergedMiningStratumProtocol(JSONRPC):
         self.log.info('Miner subscribed', address=self.miner_address)
         self.send_result([str(self.miner_id), self.xnonce1.hex(), self.xnonce2_size], msgid)
         # self.job_request()  # waiting for the next update is better
+
+    def handle_multi_version(self, params: List[Any], msgid: Optional[str]) -> None:
+        """ Handles multi_version request by
+        - params:
+        Example:
+        - ['', '6a16cffa-47c0-41d9-b92f-44e05d3c25dd', '0000000000000000', 'c359f65c', '47c8f488']
+        """
+        self.send_result(True, msgid)
 
     def handle_submit(self, params: List[Any], msgid: Optional[str]) -> None:
         """ Handles submit request by validating and propagating the result
