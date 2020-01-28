@@ -1,6 +1,5 @@
 import json
 from collections import defaultdict
-from typing import Set
 
 from twisted.web import resource
 from twisted.web.http import Request
@@ -52,7 +51,7 @@ class AddressBalanceResource(resource.Resource):
         else:
             return get_missing_params_msg('address')
 
-        amounts_by_token = defauldict(int)
+        amounts_by_token = defaultdict(int)
         tx_hashes = wallet_index.get_from_address(requested_address)
         for tx_hash in tx_hashes:
             tx = self.manager.tx_storage.get_transaction(tx_hash)
@@ -62,14 +61,14 @@ class AddressBalanceResource(resource.Resource):
                 for tx_input in tx.inputs:
                     tx2 = self.manager.tx_storage.get_transaction(tx_input.tx_id)
                     tx2_output = tx2.outputs[tx_input.index]
-                    if should_add_value(tx2_output, requested_address):
+                    if self.should_add_value(tx2_output, requested_address):
                         # We just consider the address that was requested
                         token_uid = tx2.get_token_uid(tx2_output.get_token_index())
                         token_uid_hex = token_uid.hex()
                         amounts_by_token[token_uid_hex]['spent'] += tx2_output.value
 
                 for tx_output in tx.outputs:
-                    if should_add_value(tx_output, requested_address):
+                    if self.should_add_value(tx_output, requested_address):
                         # We just consider the address that was requested
                         token_uid = tx.get_token_uid(tx_output.get_token_index())
                         token_uid_hex = token_uid.hex()
@@ -85,7 +84,6 @@ class AddressBalanceResource(resource.Resource):
                 # Should never get here because this token appears in our wallet index
                 # But better than get a 500 error
                 return {'success': False, 'message': 'Unknown token'}
-
 
         data = {
             'success': True,

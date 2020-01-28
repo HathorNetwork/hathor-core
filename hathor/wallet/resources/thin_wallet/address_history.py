@@ -63,7 +63,7 @@ class AddressHistoryResource(resource.Resource):
             3. First response return txs only for addr1 including tx1;
             4. New request to get the remaining txs for addr1 and the txs for addr2 (including tx1)
 
-            In this case we would return tx1 for both requests because we don't have the txs returned in the previous request.
+            In this case we would return tx1 for both requests because we don't have the txs returned previously.
             We could send in all requests the txs already returned but it does not make much difference now.
 
             :rtype: string (json)
