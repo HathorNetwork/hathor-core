@@ -24,10 +24,47 @@ class AddressHistoryResource(resource.Resource):
 
     def render_GET(self, request: Request) -> bytes:
         """ GET request for /thin_wallet/address_history/
-            Expects 'addresses[]' as request args
-            'addresses[]' is an array of address
+            Expects 'addresses[]' as request args, 'count' and 'hash'
+            as optional args to be used in pagination
 
-            Returns an array of WalletIndex for each address
+            'addresses[]' is an array of address
+            'count' is an integer
+            'hash' is the first address of the pagination to start the history
+
+            Returns an array of WalletIndex for each address until the maximum number
+
+            E.g. request:
+
+            addresses: ['WYxpdgz11cGGPSdmQPcJVwnLsUu7w5hgjw', 'WSo6BtjdxSSs7FpSzXYgEXwKZ3643K5iSQ']
+            count: 5
+
+            In the case where address 'WYxpdgz11cGGPSdmQPcJVwnLsUu7w5hgjw' has 3 txs [tx_id1, tx_id2, tx_id3] and
+            address 'WSo6BtjdxSSs7FpSzXYgEXwKZ3643K5iSQ' also has 3 txs [tx_id4, tx_id5, tx_id6].
+
+            Return: {
+                'history': [array with 3 txs from first address and 2 txs from second address],
+                'has_more': True, indicating that there are more txs for this request
+                'first_address': 'WSo6BtjdxSSs7FpSzXYgEXwKZ3643K5iSQ', indicating that the next request should
+                                                    start with this address as first element of addresses array
+                'first_hash': tx_id6, indicating that the next request should start with this transaction
+            }
+
+            So we need to execute one more request to finish getting all transactions. Request:
+
+            addresses: ['WSo6BtjdxSSs7FpSzXYgEXwKZ3643K5iSQ']
+            count: 5
+            hash: tx_id6
+
+            Important note: different requests may return the same transaction for different addresses.
+            We just validate if a transactions was already added in the same request, so e.g. the following case:
+
+            1. tx1 has outputs for addr1 and addr2;
+            2. Request to get [addr1, addr2];
+            3. First response return txs only for addr1 including tx1;
+            4. New request to get the remaining txs for addr1 and the txs for addr2 (including tx1)
+
+            In this case we would return tx1 for both requests because we don't have the txs returned in the previous request.
+            We could send in all requests the txs already returned but it does not make much difference now.
 
             :rtype: string (json)
         """
@@ -79,23 +116,31 @@ class AddressHistoryResource(resource.Resource):
                         'message': 'Invalid hash {}'.format(ref_hash)
                     }, indent=4).encode('utf-8')
 
-            # Get the last index from this address history array
-            # considering the hash to start and how many txs we already added in the past addresses
-            end_index = start_index + max_quantity - total_added
-            to_iterate = hashes[start_index:end_index]
-            for tx_hash in to_iterate:
-                tx = self.manager.tx_storage.get_transaction(tx_hash)
+            # Slice the hashes array from the start_index
+            to_iterate = hashes[start_index:]
+            did_break = False
+            for index, tx_hash in enumerate(to_iterate):
+                if total_added == max_quantity:
+                    # If already added the max number of elements possible, then break
+                    # I need to add this if at the beginning of the loop to handle the case
+                    # when the first tx of the address exceeds the limit, so we must return
+                    # that the next request should start in the first tx of this address
+                    did_break = True
+                    break
+
                 if tx_hash not in seen:
+                    tx = self.manager.tx_storage.get_transaction(tx_hash)
                     seen.add(tx_hash)
                     history.append(tx.to_json_extended())
                     total_added += 1
 
-            if len(hashes) > end_index:
+            if did_break:
                 # We stopped in the middle of the txs of this address
                 # So we return that we still have more data to send
+                break_index = start_index + index
                 has_more = True
                 # The hash to start the search and which address this hash belongs
-                first_hash = hashes[end_index].hex()
+                first_hash = hashes[break_index].hex()
                 first_address = address_to_decode.decode('utf-8')
                 break
 
@@ -131,7 +176,9 @@ AddressHistoryResource.openapi = {
         'get': {
             'tags': ['wallet'],
             'operationId': 'address_history',
-            'summary': 'History of some addresses',
+            'summary': 'History of some addresses. Important note: different requests (even pagination requests) '
+                       'may return the same transaction for different addresses. We just validate if a transactions '
+                       'was already added in the same request.',
             'parameters': [
                 {
                     'name': 'addresses[]',
