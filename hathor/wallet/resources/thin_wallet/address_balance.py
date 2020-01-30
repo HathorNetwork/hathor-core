@@ -1,5 +1,4 @@
 import json
-from collections import defaultdict
 
 from twisted.web import resource
 from twisted.web.http import Request
@@ -23,7 +22,7 @@ class AddressBalanceResource(resource.Resource):
     def __init__(self, manager):
         self.manager = manager
 
-    def should_add_output(self, output, requested_address):
+    def should_add_value(self, output, requested_address):
         script_type_out = parse_address_script(output.script)
         if script_type_out:
             if script_type_out.address == requested_address:
@@ -51,7 +50,11 @@ class AddressBalanceResource(resource.Resource):
         else:
             return get_missing_params_msg('address')
 
-        amounts_by_token = defaultdict(int)
+        # TODO Validate if address is valid
+
+        tokens_data = {}
+        # Shouldn't use defaultdict(int) because we also have strings on this dict
+        start_dict = {'received': 0, 'spent': 0}
         tx_hashes = wallet_index.get_from_address(requested_address)
         for tx_hash in tx_hashes:
             tx = self.manager.tx_storage.get_transaction(tx_hash)
@@ -65,30 +68,36 @@ class AddressBalanceResource(resource.Resource):
                         # We just consider the address that was requested
                         token_uid = tx2.get_token_uid(tx2_output.get_token_index())
                         token_uid_hex = token_uid.hex()
-                        amounts_by_token[token_uid_hex]['spent'] += tx2_output.value
+                        if token_uid_hex not in tokens_data:
+                            tokens_data[token_uid_hex] = start_dict.copy()
+                        tokens_data[token_uid_hex]['spent'] += tx2_output.value
 
                 for tx_output in tx.outputs:
                     if self.should_add_value(tx_output, requested_address):
                         # We just consider the address that was requested
                         token_uid = tx.get_token_uid(tx_output.get_token_index())
                         token_uid_hex = token_uid.hex()
-                        amounts_by_token[token_uid_hex]['received'] += tx_output.value
+                        if token_uid_hex not in tokens_data:
+                            tokens_data[token_uid_hex] = start_dict.copy()
+                        tokens_data[token_uid_hex]['received'] += tx_output.value
 
-        tokens_data = {}
-        for token_uid_hex in amounts_by_token.keys():
+        for token_uid_hex in tokens_data.keys():
             token_uid = bytes.fromhex(token_uid_hex)
-            try:
-                token_info = tokens_index.get_token_info(token_uid)
-                tokens_data[token_uid_hex] = {'name': token_info.name, 'symbol': token_info.symbol}
-            except KeyError:
-                # Should never get here because this token appears in our wallet index
-                # But better than get a 500 error
-                return {'success': False, 'message': 'Unknown token'}
-
+            if token_uid == settings.HATHOR_TOKEN_UID:
+                tokens_data[token_uid_hex]['name'] = settings.HATHOR_TOKEN_NAME
+                tokens_data[token_uid_hex]['symbol'] = settings.HATHOR_TOKEN_SYMBOL
+            else:
+                try:
+                    token_info = tokens_index.get_token_info(token_uid)
+                    tokens_data[token_uid_hex]['name'] = token_info.name
+                    tokens_data[token_uid_hex]['symbol'] = token_info.symbol
+                except KeyError:
+                    # Should never get here because this token appears in our wallet index
+                    # But better than get a 500 error
+                    return {'success': False, 'message': 'Unknown token'}
         data = {
             'success': True,
             'quantity': len(tx_hashes),
-            'amounts_by_token': amounts_by_token,
             'tokens_data': tokens_data
         }
         return json.dumps(data, indent=4).encode('utf-8')
