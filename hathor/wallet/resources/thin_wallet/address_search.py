@@ -59,7 +59,12 @@ class AddressSearchResource(resource.Resource):
                 'message': 'Invalid \'count\' parameter, expected an int'
             }).encode('utf-8')
 
-        hashes = wallet_index.get_sorted_from_address(address)
+        hashes = wallet_index.get_from_address(address)
+        # XXX To do a timestamp sorting, so the pagination works better
+        # we must get all transactions and sort them
+        # This is not optimal for performance
+        transactions = [self.manager.tx_storage.get_transaction(tx_hash).to_json_extended() for tx_hash in hashes]
+        sorted_transactions = sorted(transactions, key=lambda tx: tx['timestamp'], reverse=True)
         if b'hash' in request.args:
             # It's a paginated request, so 'page' must also be in request.args
             if b'page' not in request.args:
@@ -74,12 +79,12 @@ class AddressSearchResource(resource.Resource):
                 }, indent=4).encode('utf-8')
 
             ref_hash = request.args[b'hash'][0].decode('utf-8')
-            try:
-                ref_hash_bytes = bytes.fromhex(ref_hash)
-                # Index where the reference hash is
-                ref_index = hashes.index(ref_hash_bytes)
-            except ValueError:
-                # ref_hash is not in the list or is an invalid hex value
+            # Index where the reference hash is
+            for ref_index, tx in enumerate(sorted_transactions):
+                if tx['tx_id'] == ref_hash:
+                    break
+            else:
+                # ref_hash is not in the list
                 return json.dumps({
                     'success': False,
                     'message': 'Invalid hash {}'.format(ref_hash)
@@ -87,32 +92,27 @@ class AddressSearchResource(resource.Resource):
 
             if page == 'next':
                 # User clicked on 'Next' button, so the ref_hash is the last hash of the list
-                # So I need to get the hashes after the ref
+                # So I need to get the transactions after the ref
                 start_index = ref_index + 1
                 end_index = start_index + count
-                to_iterate = hashes[start_index:end_index]
-                # If has more hashes after this
-                has_more = len(hashes) > end_index
+                ret_transactions = sorted_transactions[start_index:end_index]
+                # If has more transactions after this
+                has_more = len(sorted_transactions) > end_index
             else:
                 # User clicked on 'Previous' button, so the ref_hash is the first hash of the list
-                # So I need to get the hashes before the ref
+                # So I need to get the transactions before the ref
                 end_index = ref_index
-                start_index = end_index - count
-                to_iterate = hashes[start_index:end_index]
-                # If has more hashes before this
+                start_index = max(end_index - count, 0)
+                ret_transactions = sorted_transactions[start_index:end_index]
+                # If has more transactions before this
                 has_more = start_index > 0
         else:
-            to_iterate = hashes[:count]
-            has_more = len(hashes) > count
-
-        transactions = []
-        for tx_hash in to_iterate:
-            tx = self.manager.tx_storage.get_transaction(tx_hash)
-            transactions.append(tx.to_json_extended())
+            ret_transactions = sorted_transactions[:count]
+            has_more = len(sorted_transactions) > count
 
         data = {
             'success': True,
-            'transactions': transactions,
+            'transactions': ret_transactions,
             'has_more': has_more,
         }
         return json.dumps(data, indent=4).encode('utf-8')
