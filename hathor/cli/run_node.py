@@ -223,7 +223,8 @@ class RunNode:
             StateWalletResource,
             UnlockWalletResource,
         )
-        from hathor.wallet.resources.thin_wallet import (AddressHistoryResource, SendTokensResource as
+        from hathor.wallet.resources.thin_wallet import (AddressBalanceResource, AddressHistoryResource,
+                                                         AddressSearchResource, SendTokensResource as
                                                          SendTokensThinResource, TokenHistoryResource, TokenResource)
         from hathor.wallet.resources.nano_contracts import (
             NanoContractDecodeResource,
@@ -281,6 +282,8 @@ class RunNode:
                 (b'profiler', ProfilerResource(self.manager), root),
                 # /thin_wallet
                 (b'address_history', AddressHistoryResource(self.manager), thin_wallet_resource),
+                (b'address_balance', AddressBalanceResource(self.manager), thin_wallet_resource),
+                (b'address_search', AddressSearchResource(self.manager), thin_wallet_resource),
                 (b'send_tokens', SendTokensThinResource(self.manager), thin_wallet_resource),
                 (b'token', TokenResource(self.manager), thin_wallet_resource),
                 (b'token_history', TokenHistoryResource(self.manager), thin_wallet_resource),
