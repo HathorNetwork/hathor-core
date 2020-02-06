@@ -24,11 +24,10 @@ class AddressHistoryResource(resource.Resource):
 
     def render_GET(self, request: Request) -> bytes:
         """ GET request for /thin_wallet/address_history/
-            Expects 'addresses[]' as request args, 'count' and 'hash'
+            Expects 'addresses[]' as request args, and 'hash'
             as optional args to be used in pagination
 
             'addresses[]' is an array of address
-            'count' is an integer
             'hash' is the first address of the pagination to start the history
 
             Returns an array of WalletIndex for each address until the maximum number
@@ -36,7 +35,6 @@ class AddressHistoryResource(resource.Resource):
             E.g. request:
 
             addresses: ['WYxpdgz11cGGPSdmQPcJVwnLsUu7w5hgjw', 'WSo6BtjdxSSs7FpSzXYgEXwKZ3643K5iSQ']
-            count: 5
 
             In the case where address 'WYxpdgz11cGGPSdmQPcJVwnLsUu7w5hgjw' has 3 txs [tx_id1, tx_id2, tx_id3] and
             address 'WSo6BtjdxSSs7FpSzXYgEXwKZ3643K5iSQ' also has 3 txs [tx_id4, tx_id5, tx_id6].
@@ -52,7 +50,6 @@ class AddressHistoryResource(resource.Resource):
             So we need to execute one more request to finish getting all transactions. Request:
 
             addresses: ['WSo6BtjdxSSs7FpSzXYgEXwKZ3643K5iSQ']
-            count: 5
             hash: tx_id6
 
             Important note: different requests may return the same transaction for different addresses.
@@ -85,16 +82,6 @@ class AddressHistoryResource(resource.Resource):
         first_address = None
         total_added = 0
 
-        max_quantity = settings.MAX_TX_ADDRESSES_HISTORY
-        if b'count' in request.args:
-            try:
-                max_quantity = min(int(request.args[b'count'][0]), max_quantity)
-            except (TypeError, ValueError):
-                return json.dumps({
-                    'success': False,
-                    'message': 'Invalid count value'
-                }, indent=4).encode('utf-8')
-
         history = []
         seen: Set[bytes] = set()
         for idx, address_to_decode in enumerate(addresses):
@@ -120,7 +107,7 @@ class AddressHistoryResource(resource.Resource):
             to_iterate = hashes[start_index:]
             did_break = False
             for index, tx_hash in enumerate(to_iterate):
-                if total_added == max_quantity:
+                if total_added == settings.MAX_TX_ADDRESSES_HISTORY:
                     # If already added the max number of elements possible, then break
                     # I need to add this if at the beginning of the loop to handle the case
                     # when the first tx of the address exceeds the limit, so we must return
