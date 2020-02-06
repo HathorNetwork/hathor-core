@@ -109,9 +109,9 @@ clean: clean-pyc clean-protos
 
 docker_dir := .
 ifneq ($(wildcard .git/.*),)
-	docker_tag := $(USER)-$(shell git describe)
+	docker_tag := $(shell git describe)
 else
-	docker_tag := dummy-$(shell date +'%y%m%d%H%M%S')-$(USER)
+	docker_tag := $(shell date +'%y%m%d%H%M%S')
 endif
 
 .PHONY: docker
@@ -121,7 +121,7 @@ docker: $(docker_dir)/Dockerfile $(proto_outputs)
 .PHONY: docker-push
 docker-push: docker
 	docker tag fullnode:$(docker_tag) hathornetwork/hathor-core:$(docker_tag)
-	docker push hathor-network/hathor-core:$(docker_tag)
+	docker push hathornetwork/hathor-core:$(docker_tag)
 
 .PHONY: docker-push
 docker-push-aws: docker
