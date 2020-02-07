@@ -1,5 +1,4 @@
 import json
-from typing import Set
 
 from twisted.web import resource
 from twisted.web.http import Request

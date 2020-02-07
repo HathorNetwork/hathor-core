@@ -1,5 +1,5 @@
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict
 
 from twisted.web import resource
 from twisted.web.http import Request
@@ -67,7 +67,7 @@ class AddressBalanceResource(resource.Resource):
                 'message': 'Invalid \'address\' parameter'
             }).encode('utf-8')
 
-        tokens_data = {}
+        tokens_data: Dict[str, Dict[str, Any]] = {}
         # Shouldn't use defaultdict(int) because we also have strings on this dict
         start_dict = {'received': 0, 'spent': 0}
         tx_hashes = wallet_index.get_from_address(requested_address)
