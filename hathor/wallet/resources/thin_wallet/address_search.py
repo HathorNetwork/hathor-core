@@ -7,6 +7,8 @@ from twisted.web.http import Request
 from hathor.api_util import get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
+from hathor.crypto.util import decode_address
+from hathor.wallet.exceptions import InvalidAddress
 
 settings = HathorSettings()
 
@@ -50,7 +52,16 @@ class AddressSearchResource(resource.Resource):
         if b'count' not in request.args:
             return get_missing_params_msg('count')
 
-        address = request.args[b'address'][0].decode('utf-8')
+        try:
+            address = request.args[b'address'][0].decode('utf-8')
+            # Check if address is valid
+            decode_address(address)
+        except InvalidAddress:
+            return json.dumps({
+                'success': False,
+                'message': 'Invalid \'address\' parameter'
+            }).encode('utf-8')
+
         try:
             count = min(int(request.args[b'count'][0]), settings.MAX_TX_COUNT)
         except ValueError:
@@ -119,14 +130,14 @@ class AddressSearchResource(resource.Resource):
 
 
 AddressSearchResource.openapi = {
-    '/thin_wallet/address_history': {
+    '/thin_wallet/address_search': {
         'x-visibility': 'public',
         'x-rate-limit': {
             'global': [
                 {
-                    'rate': '100r/s',
-                    'burst': 100,
-                    'delay': 50
+                    'rate': '50r/s',
+                    'burst': 50,
+                    'delay': 30
                 }
             ],
             'per-ip': [
@@ -139,20 +150,45 @@ AddressSearchResource.openapi = {
         },
         'get': {
             'tags': ['wallet'],
-            'operationId': 'address_history',
-            'summary': 'History of some addresses. Important note: different requests (even pagination requests) '
-                       'may return the same transaction for different addresses. We just validate if a transactions '
-                       'was already added in the same request.',
+            'operationId': 'address_search',
+            'summary': 'Search history transactions of an address with pagination',
             'parameters': [
                 {
-                    'name': 'addresses[]',
+                    'name': 'address',
                     'in': 'query',
-                    'description': 'Stringified array of addresses',
+                    'description': 'Address to be searched',
                     'required': True,
                     'schema': {
                         'type': 'string'
                     }
                 },
+                {
+                    'name': 'count',
+                    'in': 'query',
+                    'description': 'Quantity of elements to return',
+                    'required': True,
+                    'schema': {
+                        'type': 'int'
+                    }
+                },
+                {
+                    'name': 'page',
+                    'in': 'query',
+                    'description': 'If the user clicked "previous" or "next" button',
+                    'required': False,
+                    'schema': {
+                        'type': 'string'
+                    }
+                },
+                {
+                    'name': 'hash',
+                    'in': 'query',
+                    'description': 'Hash reference for the pagination',
+                    'required': False,
+                    'schema': {
+                        'type': 'string'
+                    }
+                }
             ],
             'responses': {
                 '200': {
@@ -164,59 +200,82 @@ AddressSearchResource.openapi = {
                                     'summary': 'Success',
                                     'value': {
                                         'success': True,
-                                        'has_more': True,
-                                        'first_hash': '00000299670db5814f69cede8b347f83'
-                                                      '0f73985eaa4cd1ce87c9a7c793771332',
-                                        'first_address': '1Pz5s5WVL52MK4EwBy9XVQUzWjF2LWWKiS',
-                                        'history': [
+                                        'transactions': [
                                             {
-                                                "hash": "00000299670db5814f69cede8b347f83"
-                                                        "0f73985eaa4cd1ce87c9a7c793771336",
-                                                "timestamp": 1552422415,
-                                                "is_voided": False,
+                                                'tx_id': ('00000257054251161adff5899a451ae9'
+                                                          '74ac62ca44a7a31179eec5750b0ea406'),
+                                                'timestamp': 1547163030,
+                                                'version': 1,
+                                                'weight': 18.861583646228,
                                                 'parents': [
-                                                    '00000b8792cb13e8adb51cc7d866541fc29b532e8dec95ae4661cf3da4d42cb5',
-                                                    '00001417652b9d7bd53eb14267834eab08f27e5cbfaca45a24370e79e0348bb1'
+                                                    '00000b8792cb13e8adb51cc7d866541fc29b532e8dec95ae4661cf3da4d42cb4',
+                                                    '00001417652b9d7bd53eb14267834eab08f27e5cbfaca45a24370e79e0348bb9'
                                                 ],
-                                                "inputs": [
+                                                'inputs': [
                                                     {
-                                                        "value": 42500000044,
-                                                        "script": "dqkURJPA8tDMJHU8tqv3SiO18ZCLEPaIrA==",
-                                                        "decoded": {
-                                                            "type": "P2PKH",
-                                                            "address": "17Fbx9ouRUD1sd32bp4ptGkmgNzg7p2Krj",
-                                                            "timelock": None
-                                                            },
-                                                        "token": "00",
-                                                        "tx": "000002d28696f94f89d639022ae81a1d"
-                                                              "870d55d189c27b7161d9cb214ad1c90c",
-                                                        "index": 0
-                                                        }
-                                                    ],
-                                                "outputs": [
+                                                        'tx_id': ('0000088c5a4dfcef7fd3c04a5b1eccfd'
+                                                                  '2de032b23749deff871b0a090000f5f6'),
+                                                        'index': 1,
+                                                        'data': ('RzBFAiEAvv17vp8XyHYq36PFlOGd7V2vzIkf+XIuqfyUnc2fZugC'
+                                                                 'IDnwM7PdkA/qwt2QXLB3WnegtdOqV8gv+H63voWVbsScIQPqg7y2'
+                                                                 'RanTdnQcDvFneIzjrUzJoPzkmoNStoN8XtLTUA==')
+                                                    },
                                                     {
-                                                        "value": 42499999255,
-                                                        "script": "dqkU/B6Jbf5OnslsQrvHXQ4WKDTSEGKIrA==",
-                                                        "decoded": {
-                                                            "type": "P2PKH",
-                                                            "address": "1Pz5s5WVL52MK4EwBy9XVQUzWjF2LWWKiS",
-                                                            "timelock": None
-                                                            },
-                                                        "token": "00"
-                                                        },
+                                                        'tx_id': ('0000003398322f99355f37439e32881c'
+                                                                  '83ff08b83e744e799b1d6a67f73bee45'),
+                                                        'index': 0,
+                                                        'data': ('RzBFAiEAqPvD18Uzd6NsMVkGMaI9RsxWqLow22W1KBHUUW/35UEC'
+                                                                 'IEUU9pxJEHBvXyEwYAB2/bCiWxNd4iLvyvQXGKaSaDV2IQPDL3iZ'
+                                                                 'vsDS8jdFDmlcvc2Em/ZNYYDOBWd3oZWxpuA5DQ==')
+                                                    }
+                                                ],
+                                                'outputs': [
                                                     {
-                                                        "value": 789,
-                                                        "script": "dqkUrWoWhiP+qPeI/qwfwb5fgnmtd4CIrA==",
-                                                        "decoded": {
-                                                            "type": "P2PKH",
-                                                            "address": "1GovzJvbzLw6x4H2a1hHb529cpEWzh3YRd",
-                                                            "timelock": None
-                                                            },
-                                                        "token": "00"
-                                                        }
-                                                    ]
-                                                }
-                                        ]
+                                                        'value': 1909,
+                                                        'script': 'dqkUllFFDJByV5TjVUly3Zc3bB4mMH2IrA=='
+                                                    },
+                                                    {
+                                                        'value': 55,
+                                                        'script': 'dqkUjjPg+zwG6JDe901I0ybQxcAPrAuIrA=='
+                                                    }
+                                                ],
+                                                'tokens': [],
+                                                'height': 12345,
+                                            },
+                                            {
+                                                'tx_id': ('00000b8792cb13e8adb51cc7d866541f'
+                                                          'c29b532e8dec95ae4661cf3da4d42cb4'),
+                                                'timestamp': 1547163025,
+                                                'version': 1,
+                                                'weight': 17.995048894541107,
+                                                'parents': [
+                                                    '00001417652b9d7bd53eb14267834eab08f27e5cbfaca45a24370e79e0348bb9',
+                                                    '0000088c5a4dfcef7fd3c04a5b1eccfd2de032b23749deff871b0a090000f5f6'
+                                                ],
+                                                'inputs': [
+                                                    {
+                                                        'tx_id': ('0000088c5a4dfcef7fd3c04a5b1eccfd'
+                                                                  '2de032b23749deff871b0a090000f5f6'),
+                                                        'index': 0,
+                                                        'data': ('SDBGAiEA/rtsn1oQ68uGeTj/7IVtqijxoUxzr9S/u3UGAC7wQvU'
+                                                                 'CIQDaYkL1R8LICfSCpYIn4xx6A+lxU0Fw3oKR1hK91fRnSiEDCo'
+                                                                 'A74tfBQa4IR7iXtlz+jH9UV7+YthKX4yQNaMSMfb0=')
+                                                    }
+                                                ],
+                                                'outputs': [
+                                                    {
+                                                        'value': 1894,
+                                                        'script': 'dqkUduvtU77hZm++Pwavtl9OrOSA+XiIrA=='
+                                                    },
+                                                    {
+                                                        'value': 84,
+                                                        'script': 'dqkUjjPg+zwG6JDe901I0ybQxcAPrAuIrA=='
+                                                    }
+                                                ],
+                                                'tokens': []
+                                            }
+                                        ],
+                                        'has_more': True
                                     }
                                 },
                                 'error': {
