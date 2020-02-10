@@ -2,13 +2,9 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
-from hathor.transaction import Transaction, TxInput, TxOutput
-from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
-from hathor.wallet.resources.thin_wallet import (
-    AddressBalanceResource,
-    AddressSearchResource
-)
-from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
+from hathor.transaction.scripts import parse_address_script
+from hathor.wallet.resources.thin_wallet import AddressBalanceResource, AddressSearchResource
+from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, create_tokens
 
 settings = HathorSettings()
@@ -83,7 +79,6 @@ class SearchAddressTest(_BaseResourceTest._ResourceTest):
         self.assertTrue(data3['success'])
         self.assertEqual(len(data3['transactions']), 2)
         self.assertFalse(data3['has_more'])
-
 
     @inlineCallbacks
     def test_address_balance(self):
