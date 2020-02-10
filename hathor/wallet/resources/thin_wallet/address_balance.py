@@ -31,6 +31,9 @@ class AddressBalanceResource(resource.Resource):
     def should_add_value(self, output: 'TxOutput', requested_address: str) -> bool:
         """ Check if output address is the same as requested_address
         """
+        if output.is_token_authority():
+            return False
+
         script_type_out = parse_address_script(output.script)
         if script_type_out:
             if script_type_out.address == requested_address:
