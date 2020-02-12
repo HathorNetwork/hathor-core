@@ -182,7 +182,12 @@ class SingleMinerWork(NamedTuple):
     @classmethod
     def from_stratum_params(cls, xnonce1: bytes, params: List) -> 'SingleMinerWork':
         from hathor.merged_mining.bitcoin import read_uint32
-        _rpc_user, job_id, raw_xnonce2, raw_timestamp, raw_nonce = params
+        if len(params) == 5:
+            _rpc_user, job_id, raw_xnonce2, raw_timestamp, raw_nonce = params
+        elif len(params) == 6:
+            _rpc_user, job_id, raw_xnonce2, raw_timestamp, raw_nonce, _extra = params
+        else:
+            raise ValueError(f'expected 5 or 6 params, got {len(params)} instead')
         return cls(
             job_id=job_id,
             nonce=read_uint32(bytearray(bytes.fromhex(raw_nonce)[::-1])),
