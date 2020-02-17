@@ -75,7 +75,7 @@ def setup_logging(debug: bool = False, capture_stdout: bool = True, *, _test_log
                     + '] '
                 )
 
-            event = event_dict.pop('event')
+            event = str(event_dict.pop('event'))
             if event_dict:
                 event = _pad(event, self._pad_event) + self._styles.reset + ' '
             else:
@@ -145,7 +145,7 @@ def setup_logging(debug: bool = False, capture_stdout: bool = True, *, _test_log
     })
 
     def kwargs_formatter(_, __, event_dict):
-        if event_dict and event_dict.get('event'):
+        if event_dict and event_dict.get('event') and isinstance(event_dict['event'], str):
             event_dict['event'] = event_dict['event'].format(**event_dict)
         return event_dict
 

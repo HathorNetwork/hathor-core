@@ -111,7 +111,7 @@ docker_dir := .
 ifneq ($(wildcard .git/.*),)
 	docker_tag := $(shell git describe)
 else
-	docker_tag := dummy
+	docker_tag := $(shell date +'%y%m%d%H%M%S')
 endif
 
 .PHONY: docker
@@ -120,7 +120,10 @@ docker: $(docker_dir)/Dockerfile $(proto_outputs)
 
 .PHONY: docker-push
 docker-push: docker
+	docker tag fullnode:$(docker_tag) hathornetwork/hathor-core:$(docker_tag)
+	docker push hathornetwork/hathor-core:$(docker_tag)
+
+.PHONY: docker-push
+docker-push-aws: docker
 	docker tag fullnode:$(docker_tag) 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_tag)
 	docker push 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_tag)
-	docker tag fullnode:$(docker_tag) 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:latest
-	docker push 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:latest
