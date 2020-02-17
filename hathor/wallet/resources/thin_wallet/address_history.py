@@ -76,6 +76,20 @@ class AddressHistoryResource(resource.Resource):
 
         addresses = request.args[b'addresses[]']
 
+        ref_hash_bytes = None
+        ref_hash = None
+        if b'hash' in request.args:
+            # If hash parameter is in the request, it must be a valid hex
+            ref_hash = request.args[b'hash'][0].decode('utf-8')
+            try:
+                ref_hash_bytes = bytes.fromhex(ref_hash)
+            except ValueError:
+                # ref_hash is an invalid hex value
+                return json.dumps({
+                    'success': False,
+                    'message': 'Invalid hash {}'.format(ref_hash)
+                }, indent=4).encode('utf-8')
+
         # Pagination variables
         has_more = False
         first_hash = None
@@ -88,19 +102,17 @@ class AddressHistoryResource(resource.Resource):
             address = address_to_decode.decode('utf-8')
             hashes = wallet_index.get_sorted_from_address(address)
             start_index = 0
-            if b'hash' in request.args and idx == 0:
+            if ref_hash_bytes and idx == 0:
                 # It's not the first request, so we must continue from the hash
                 # but we do it only for the first address
-                ref_hash = request.args[b'hash'][0].decode('utf-8')
                 try:
-                    ref_hash_bytes = bytes.fromhex(ref_hash)
                     # Find index where the hash is
                     start_index = hashes.index(ref_hash_bytes)
                 except ValueError:
-                    # ref_hash is not in the list or is an invalid hex value
+                    # ref_hash is not in the list
                     return json.dumps({
                         'success': False,
-                        'message': 'Invalid hash {}'.format(ref_hash)
+                        'message': 'Hash {} is not a transaction from the address {}.'.format(ref_hash, address)
                     }, indent=4).encode('utf-8')
 
             # Slice the hashes array from the start_index
