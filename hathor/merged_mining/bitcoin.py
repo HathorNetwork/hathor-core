@@ -129,8 +129,11 @@ def build_merkle_path_for_coinbase(merkle_leaves: List[bytes], _partial_path: Li
 '67ce1464dc89e67dd30acf8adf74c7ec37fa9f14040b7ecd9127391af1b25f2a', \
 'ee017b11d10898f3b19194f43d9b5b9cf443b8e992797e49f4edd603fee060c7']
     """
+    merkle_leaves = merkle_leaves[:]  # copy to preserve original
+    _partial_path = _partial_path[:]  # copy to preserve original
     len_merkle_leaves = len(merkle_leaves)
-    assert len_merkle_leaves > 0
+    if len_merkle_leaves == 0:
+        return []
     # FIXME: maybe breaks if initial merkle_leaves has len 1?
     if len_merkle_leaves <= 1:
         return _partial_path
@@ -138,10 +141,10 @@ def build_merkle_path_for_coinbase(merkle_leaves: List[bytes], _partial_path: Li
         merkle_leaves.append(merkle_leaves[-1])
         len_merkle_leaves += 1
     _partial_path.append(merkle_leaves[1])  # to trace the coinbase (1st tx) we always get its pair (2nd tx)
-    iter_leaves = iter(merkle_leaves)
+    iter_leaves = iter(merkle_leaves[:])
     return build_merkle_path_for_coinbase(
         [sha256d_hash(_merkle_concat(l, r)) for l, r in zip(iter_leaves, iter_leaves)],
-        _partial_path=_partial_path[:]  # copy the list, maybe too cautious?
+        _partial_path=_partial_path
     )
 
 
@@ -209,6 +212,7 @@ def build_merkle_root_from_path(merkle_path: List[bytes]) -> bytes:
     ... ]]))).hex()
     '9fedb4e40f8532eac81338b479049a2e6bcee68d78b56767d43ebf1020ef8a68'
     """
+    merkle_path = merkle_path[:]  # copy to preserve original
     assert len(merkle_path) >= 1
     while len(merkle_path) > 1:
         a = merkle_path.pop(0)
@@ -902,3 +906,42 @@ def skip_outputs(buffer: bytearray) -> Tuple[int, int]:
     buffer2 = buffer.copy()
     outputs = read_outputs(buffer2)
     return len(buffer) - len(buffer2), len(outputs)
+
+
+def create_output_script(address: bytes) -> bytes:
+    """ Return the Bitcoin output script for the given address (supports P2PKH and P2SH).
+
+    Examples:
+
+    >>> from hathor.crypto.util import decode_address
+    >>> create_output_script(decode_address('1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2')).hex()
+    '76a977bff20c60e522dfaa3350c39b030a5d004e839a88ac'
+    >>> create_output_script(decode_address('3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy')).hex()
+    'a9b472a266d0bd89c13706a4132ccfb16f7c3b9fcb87'
+    """
+    # OPCODES: https://en.bitcoin.it/wiki/Script#Opcodes
+    # Prefixes: https://en.bitcoin.it/wiki/List_of_address_prefixes
+    if address[0] in {0x00, 0x6f}:  # Base58 address starts with 1.. (mainnet) or m/n.. (testnet)
+        assert len(address) == 25
+        # Pay To Public Key Hash (P2PKH): OP_DUP OP_HASH160 <PubKeyHash> OP_EQUALVERIFY OP_CHECKSIG
+        # See: https://bitcoin.org/en/transactions-guide#pay-to-public-key-hash-p2pkh
+        pub_key_hash = address[1:21]
+        script = bytearray()
+        script.append(0x76)  # OP_DUP
+        script.append(0xa9)  # OP_HASH160
+        script.extend(pub_key_hash)
+        script.append(0x88)  # OP_EQUALVERIFY
+        script.append(0xac)  # OP_CHECKSIG
+        return bytes(script)
+    elif address[0] in {0x05, 0xc4}:  # Base58 address starts with 3.. (mainnet) or 2.. (testnet)
+        assert len(address) == 25
+        # Pay To Script Hash (P2SH): OP_HASH160 <Hash160(redeemScript)> OP_EQUAL
+        # See: https://bitcoin.org/en/transactions-guide#pay-to-script-hash-p2sh
+        redeem_script_hash = address[1:21]
+        script = bytearray()
+        script.append(0xa9)  # OP_HASH160
+        script.extend(redeem_script_hash)
+        script.append(0x87)  # OP_EQUAL
+        return bytes(script)
+    else:
+        raise ValueError('invalid address, or address type not supported')
