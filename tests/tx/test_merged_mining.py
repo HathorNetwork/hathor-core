@@ -1,11 +1,10 @@
-from typing import List
-
-from twisted.internet.defer import Deferred
-from twisted.internet.interfaces import IReactorTime
+import asyncio
+from typing import Any, Dict, List
 
 from hathor.client import HathorClientStub
 from hathor.merged_mining import MergedMiningCoordinator
 from hathor.merged_mining.bitcoin_rpc import IBitcoinRPC
+from hathor.merged_mining.util import as_deferred, ensure_deferred
 from tests import unittest
 
 
@@ -17,8 +16,9 @@ class SimpleTests(unittest.TestCase):
                 flip80(i)
 
 
-class MergedMiningTestBase(unittest.TestCase):
-    def setUp(self):
+class TestMergedMining(unittest.TestCase):
+    @ensure_deferred
+    async def test_coordinator(self):
         from cryptography.hazmat.backends import default_backend
         from cryptography.hazmat.primitives.asymmetric import ec
         from twisted.test.proto_helpers import MemoryReactorClock
@@ -35,29 +35,23 @@ class MergedMiningTestBase(unittest.TestCase):
         self.public_key = self.private_key.public_key()
         address = get_address_b58_from_public_key(self.public_key)
 
-        bitcoin_rpc = BitcoinRPCStub(self.reactor)
+        bitcoin_rpc = BitcoinRPCStub()
         hathor_client = HathorClientStub(self.manager)
-        self.coordinator = MergedMiningCoordinator(port=8124, bitcoin_rpc=bitcoin_rpc, hathor_client=hathor_client,
+        self.coordinator = MergedMiningCoordinator(bitcoin_rpc=bitcoin_rpc, hathor_client=hathor_client,
                                                    payback_address_bitcoin='n4VQ5YdHf7hLQ2gWQYYrcxoE5B7nWuDFNF',
-                                                   payback_address_hathor=address, reactor=self.reactor)
-        self.coordinator.start()
-
-    def tearDown(self):
-        self.coordinator.stop()
-
-
-class TestMergedMining(MergedMiningTestBase):
-    def test_dummy(self):
-        self.reactor.advance(10)
+                                                   payback_address_hathor=address)
+        await as_deferred(self.coordinator.start())
+        await as_deferred(asyncio.sleep(3))
+        await as_deferred(self.coordinator.stop())
 
 
 class BitcoinRPCStub(IBitcoinRPC):
-    def __init__(self, reactor: IReactorTime, response_delay: float = 0.01):
-        self.reactor = reactor
+    def __init__(self, response_delay: float = 0.01):
         self.response_delay = response_delay
 
-    def get_block_template(self, *, rules: List[str] = ['segwit'],
-                           capabilities: List[str] = ['coinbasetxn', 'workid', 'coinbase/append']) -> Deferred:
+    async def get_block_template(self, *, rules: List[str] = ['segwit'],
+                                 capabilities: List[str] = ['coinbasetxn', 'workid', 'coinbase/append'],
+                                 ) -> Dict[Any, Any]:
         stub = {
             'capabilities': ['proposal'],
             'version': 536870912,
@@ -1406,12 +1400,10 @@ class BitcoinRPCStub(IBitcoinRPC):
             'default_witness_commitment':
                 '6a24aa21a9edc262086872cc5db4df6ef4e90b67beadbd03d15c6289f51680af3f4483c0fa5c',
         }
-        deferred = Deferred()
-        self.reactor.callLater(self.response_delay, deferred.callback, stub)
-        return deferred
+        await asyncio.sleep(self.response_delay)
+        return stub
 
-    def submit_block(self, block: bytes) -> Deferred:
-        stub = None
-        deferred = Deferred()
-        self.reactor.callLater(self.response_delay, deferred.callback, stub)
-        return deferred
+    async def submit_block(self, block: bytes) -> str:
+        stub = 'high-hash'
+        await asyncio.sleep(self.response_delay)
+        return stub

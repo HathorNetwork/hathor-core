@@ -20,14 +20,13 @@ from enum import Enum
 from functools import partial, wraps
 from typing import Any, Callable, Deque, Dict, Iterable, Iterator, Tuple, TypeVar, cast
 
-from twisted.internet.defer import succeed
+from structlog import get_logger
 from twisted.internet.interfaces import IReactorCore
 from twisted.python.threadable import isInIOThread
-from twisted.web.iweb import IBodyProducer
-from zope.interface import implementer
 
 from hathor.conf import HathorSettings
 
+logger = get_logger()
 settings = HathorSettings()
 
 
@@ -124,23 +123,6 @@ class ReactorThread(Enum):
             # on tests, we use Clock instead of a real Reactor, so there's
             # no threading. We consider that the reactor is running
             return cls.MAIN_THREAD
-
-
-@implementer(IBodyProducer)
-class BytesProducer:
-    def __init__(self, body):
-        self.body = body
-        self.length = len(body)
-
-    def startProducing(self, consumer):
-        consumer.write(self.body)
-        return succeed(None)
-
-    def pauseProducing(self):
-        pass
-
-    def stopProducing(self):
-        pass
 
 
 def abbrev(data: bytes, max_len: int = 256, gap: bytes = b' [...] ') -> bytes:

@@ -9,11 +9,11 @@ check:
   image: python:3.6
   allow_failure: yes
   before_script:
-    # install pipenv and generate dev-requirements.txt (stdout) from Pipfile.lock on the fly
+    # install pipenv and then all the dependencies
     - pip install pipenv
-    - pip install -r <(pipenv lock -rd)
-    # dev requirements installed directly by pip, do not prefix with `pipenv run`
-    # protobuf files should be generated because they improve mypy checks
+    # this will install dependencies to the system (not virtualenv), and only consider versions on Pipfile.lock
+    - pipenv install --ignore-pipfile --deploy --system --dev
+    # generate protobuf files, needed for type checking
     - make protos
   script:
     - make check
@@ -26,9 +26,9 @@ unit-tests:
     - apt install -y graphviz
     - apt install -y librocksdb-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev
     - pip install pipenv
-    - pipenv sync -d
-    - pipenv run pip install python-rocksdb==0.7.0
-    - pipenv run make protos
+    - pipenv install --ignore-pipfile --deploy --system --dev
+    - pip install python-rocksdb==0.7.0
+    - make protos
   script:
-    - pipenv run make tests
+    - make tests
   coverage: '/^TOTAL.*\s+(\d+\%)$/'

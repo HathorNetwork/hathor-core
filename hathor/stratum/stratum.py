@@ -61,6 +61,8 @@ def valid_uuid_or_none(uuid: Any) -> bool:
     return uuid is None or valid_uuid(uuid)
 
 
+UNRECOVERABLE_ERROR_CODE_MAX = -32600
+
 PARSE_ERROR = {'code': -32700, 'message': 'Parse error'}
 INTERNAL_ERROR = {'code': -32603, 'message': 'Internal error'}
 INVALID_PARAMS = {'code': -32602, 'message': 'Invalid params'}
@@ -73,6 +75,7 @@ INVALID_SOLUTION = {'code': 30, 'message': 'Invalid solution'}
 STALE_JOB = {'code': 31, 'message': 'Stale job submitted'}
 JOB_NOT_FOUND = {'code': 32, 'message': 'Job not found'}
 PROPAGATION_FAILED = {'code': 33, 'message': 'Solution propagation failed'}
+DUPLICATE_SOLUTION = {'code': 34, 'message': 'Solution already submitted'}
 
 
 class ServerJob:
@@ -291,7 +294,7 @@ class JSONRPC(LineReceiver, ABC):
         self.send_json(message)
 
         # Lose connection in case of any native JSON RPC error
-        if error['code'] <= -32600 and self.transport is not None:
+        if error['code'] <= UNRECOVERABLE_ERROR_CODE_MAX and self.transport is not None:
             self.transport.loseConnection()
 
     def send_json(self, json: Dict) -> None:
