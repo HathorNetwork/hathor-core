@@ -1,4 +1,5 @@
 import json
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
 from twisted.web.http import Request
@@ -7,7 +8,11 @@ from hathor.api_util import get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
+from hathor.transaction.scripts import parse_address_script
 from hathor.wallet.exceptions import InvalidAddress
+
+if TYPE_CHECKING:
+    from hathor.transaction import BaseTransaction
 
 settings = HathorSettings()
 
@@ -22,6 +27,31 @@ class AddressSearchResource(resource.Resource):
 
     def __init__(self, manager):
         self.manager = manager
+
+    def has_token_and_address(self, tx: 'BaseTransaction', address: str, token: bytes) -> bool:
+        """ Validate if transactions has any input or output with the
+            address and token sent as parameter
+        """
+        for tx_input in tx.inputs:
+            spent_tx = tx.get_spent_tx(tx_input)
+            spent_output = spent_tx.outputs[tx_input.index]
+
+            input_token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
+
+            script_type_out = parse_address_script(spent_output.script)
+            if script_type_out:
+                if script_type_out.address == address and input_token_uid == token:
+                    return True
+
+        for tx_output in tx.outputs:
+            output_token_uid = tx.get_token_uid(tx_output.get_token_index())
+
+            script_type_out = parse_address_script(tx_output.script)
+            if script_type_out:
+                if script_type_out.address == address and output_token_uid == token:
+                    return True
+
+        return False
 
     def render_GET(self, request: Request) -> bytes:
         """ GET request for /thin_wallet/address_search/
@@ -69,11 +99,34 @@ class AddressSearchResource(resource.Resource):
                 'message': 'Invalid \'count\' parameter, expected an int'
             }).encode('utf-8')
 
+        token_uid = None
+        token_uid_bytes = None
+        if b'token' in request.args:
+            # It's an optional parameter, we just check if it's a valid hex
+            token_uid = request.args[b'token'][0].decode('utf-8')
+
+            try:
+                token_uid_bytes = bytes.fromhex(token_uid)
+            except ValueError:
+                return json.dumps({
+                    'success': False,
+                    'message': 'Token uid is not a valid hexadecimal value.'
+                }).encode('utf-8')
+
+
         hashes = wallet_index.get_from_address(address)
         # XXX To do a timestamp sorting, so the pagination works better
         # we must get all transactions and sort them
         # This is not optimal for performance
-        transactions = [self.manager.tx_storage.get_transaction(tx_hash).to_json_extended() for tx_hash in hashes]
+        transactions = []
+        for tx_hash in hashes:
+            tx = self.manager.tx_storage.get_transaction(tx_hash)
+            if token_uid and not self.has_token_and_address(tx, address, token_uid_bytes):
+                # Request wants to filter by token but tx does not have this token
+                # so we don't add it to the transactions array
+                continue
+            transactions.append(tx.to_json_extended())
+
         sorted_transactions = sorted(transactions, key=lambda tx: tx['timestamp'], reverse=True)
         if b'hash' in request.args:
             # It's a paginated request, so 'page' must also be in request.args
@@ -124,6 +177,7 @@ class AddressSearchResource(resource.Resource):
             'success': True,
             'transactions': ret_transactions,
             'has_more': has_more,
+            'total': len(sorted_transactions),
         }
         return json.dumps(data, indent=4).encode('utf-8')
 
@@ -274,7 +328,8 @@ AddressSearchResource.openapi = {
                                                 'tokens': []
                                             }
                                         ],
-                                        'has_more': True
+                                        'has_more': True,
+                                        'total': 10
                                     }
                                 },
                                 'error': {
