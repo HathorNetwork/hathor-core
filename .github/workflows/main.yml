@@ -1,29 +1,77 @@
 name: tests
-on: [push, pull_request]
+on:
+  push:
+    branches:
+    - master
+    - dev
+    - 'experimental/**'
+    tags:
+    - v*
+  pull_request:
+    branches:
+    - dev
 jobs:
   test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30  # default is 360
+    name: python-${{ matrix.python }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40  # default is 360
+    strategy:
+      matrix:
+        python:
+        - 3.6
+        os:
+        - ubuntu-latest
+        - macos-latest
+        tier: [1]
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up Python 3.6
-      uses: actions/setup-python@v1
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Set up Python ${{ matrix.python }}
+      uses: actions/setup-python@v2
       with:
-        python-version: 3.6
-    - name: Install Dependencies
-      run: |
-        pip install pipenv
-        pipenv install --ignore-pipfile --deploy --system --dev
-    - name: Generate protobuf files
-      run: make protos
-    - name: Run Linters
-      run: make check
-    - name: Install extra dependencies
-      run: |
-        sudo apt-get install -y graphviz librocksdb-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev
-        pip install "cython<0.30"
-        pip install python-rocksdb==0.7.0
+        python-version: ${{ matrix.python }}
+    - name: Install Ubuntu dependencies
+      if: matrix.os == 'ubuntu-latest'
+      run: sudo apt-get -y -q install graphviz librocksdb-dev libsnappy-dev liblz4-dev
+    - name: Install macOS dependencies
+      if: matrix.os == 'macos-latest'
+      run: brew install -q graphviz rocksdb
+    - name: Install Poetry
+      run: pip -q --no-input install poetry
+    - name: Get Poetry cache-dir
+      id: poetry-install
+      shell: bash
+      run: echo ::set-output name=cache-dir::$(poetry config cache-dir)
+    - name: Cache Poetry dependencies
+      uses: actions/cache@v2
+      id: poetry-cache
+      # skip on Windows because `Compile protos` hangs
+      if: matrix.os != 'windows-latest'
+      with:
+        path: ${{ steps.poetry-install.outputs.cache-dir }}
+        key: ${{ runner.os }}-py${{ matrix.python }}-pypoetry-${{ hashFiles('poetry.lock') }}
+    - name: Install Poetry dependencies (with rocksdb)
+      if: steps.poetry-cache.outputs.cache-hit != 'true' && matrix.os != 'windows-latest'
+      run: poetry install -n -E rocksdb --no-root
+    - name: Install Poetry dependencies (without rocksdb)
+      if: steps.poetry-cache.outputs.cache-hit != 'true' && matrix.os == 'windows-latest'
+      run: poetry install -n --no-root
+    - name: Compile protos
+      run: poetry run make protos
+    - name: Cache mypy
+      uses: actions/cache@v2
+      with:
+        path: .mypy_cache
+        # this key is setup such that every branch has its cache and new branches can reuse dev's cache, but not the other way around
+        key: ${{ runner.os }}-py${{ matrix.python }}-mypy-${{ github.head_ref || github.ref }}
+        restore-keys: |
+          ${{ runner.os }}-py${{ matrix.python }}-mypy-dev
+          ${{ runner.os }}-py${{ matrix.python }}-mypy-
+    - name: Run linters
+      run: poetry run make check
     - name: Run tests
-      run: make tests
-    - name: Codecov
+      run: poetry run make tests
+      continue-on-error: ${{ matrix.tier > 1 }}
+    - name: Upload coverage
       uses: codecov/codecov-action@v1
+      if: github.event_name == 'pull_request' && matrix.python == 3.6 && matrix.os == 'ubuntu-latest'
