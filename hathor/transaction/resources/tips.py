@@ -21,7 +21,7 @@ class TipsResource(resource.Resource):
     def render_GET(self, request):
         """ Get request to /tips/ that return a list of tips hashes
 
-            'timestamp' is an optional expected parameter to be used in the get_tx_tips method
+            'timestamp' is an optional parameter to be used in the get_tx_tips method
 
             :rtype: string (json)
         """
@@ -30,10 +30,16 @@ class TipsResource(resource.Resource):
 
         timestamp = None
         if b'timestamp' in request.args:
-            timestamp = int(request.args[b'timestamp'][0])
+            try:
+                timestamp = int(request.args[b'timestamp'][0])
+            except ValueError:
+                return json.dumps({
+                    'success': False,
+                    'message': 'Invalid timestamp parameter, expecting an integer'
+                }).encode('utf-8')
 
         tx_tips = self.manager.tx_storage.get_tx_tips(timestamp)
-        ret = [tip.data.hex() for tip in tx_tips]
+        ret = {'success': True, 'tips': [tip.data.hex() for tip in tx_tips]}
         return json.dumps(ret).encode('utf-8')
 
 
@@ -64,10 +70,20 @@ TipsResource.openapi = {
                             'examples': {
                                 'success': {
                                     'summary': 'Success',
-                                    'value': [
-                                        '00002b3be4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22f',
-                                        '0002bb171de3490828028ec5eef3325956acb6bcffa6a50466bb9a81d38363c2'
-                                    ]
+                                    'value': {
+                                        'success': True,
+                                        'tips': [
+                                            '00002b3be4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22f',
+                                            '0002bb171de3490828028ec5eef3325956acb6bcffa6a50466bb9a81d38363c2'
+                                        ]
+                                    }
+                                },
+                                'error': {
+                                    'summary': 'Invalid timestamp parameter',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Invalid timestamp parameter, expecting an integer'
+                                    }
                                 }
                             }
                         }

@@ -1,5 +1,5 @@
 import re
-from typing import Tuple
+from typing import Any, Dict, List, Tuple
 
 from twisted.web.http import Request
 
@@ -38,6 +38,29 @@ def get_missing_params_msg(param_name):
     """
     import json
     return json.dumps({'success': False, 'message': 'Missing parameter: {}'.format(param_name)}).encode('utf-8')
+
+
+def parse_get_arguments(args: Dict[bytes, bytes], expected_args: List[str]) -> Dict[str, Any]:
+    """Parse all expected arguments. If there are missing arguments, returns the missing arguments
+    """
+    expected_set = set(expected_args)
+    args_set = set()
+    for arg1 in args:
+        args_set.add(arg1.decode('utf-8'))
+
+    # if there are expected args missing, we return None
+    diff = expected_set.difference(args_set)
+    if diff:
+        return {'success': False, 'missing': ', '.join(diff)}
+
+    ret: Dict[str, str] = dict()
+    for arg2 in expected_args:
+        key_str = arg2.encode('utf-8')
+        first_param = args[key_str][0]
+        assert isinstance(first_param, bytes)
+        ret[arg2] = first_param.decode('utf-8')
+
+    return {'success': True, 'args': ret}
 
 
 def validate_tx_hash(hash_hex: str, tx_storage: TransactionStorage) -> Tuple[bool, str]:

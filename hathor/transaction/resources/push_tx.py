@@ -1,14 +1,15 @@
 import json
-import re
 import struct
 
 from twisted.web import resource
 
-from hathor.api_util import set_cors
+from hathor.api_util import parse_get_arguments, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.exceptions import TxValidationError
+
+ARGS = ['hex_tx']
 
 
 @register_resource
@@ -32,58 +33,54 @@ class PushTxResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        requested_decode = request.args[b'hex_tx'][0].decode('utf-8')
+        parsed = parse_get_arguments(request.args, ARGS)
+        if not parsed['success']:
+            data = {'success': False, 'message': 'Missing hexadecimal data', 'can_force': False}
+            return json.dumps(data, indent=4).encode('utf-8')
 
-        pattern = r'[a-fA-F\d]+'
-        if re.match(pattern, requested_decode) and len(requested_decode) % 2 == 0:
-            tx_bytes = bytes.fromhex(requested_decode)
-
-            try:
-                tx = tx_or_block_from_bytes(tx_bytes)
-            except struct.error:
-                data = {
-                    'success': False,
-                    'message': 'This transaction is invalid. Try to decode it first to validate it.',
-                    'can_force': False
-                }
-            else:
-                if len(tx.inputs) == 0:
-                    # It's a block and we can't push blocks
-                    data = {
-                        'success': False,
-                        'message': 'This transaction is invalid. A transaction must have at least one input',
-                        'can_force': False
-                    }
-                else:
-                    tx.storage = self.manager.tx_storage
-                    # If this tx is a double spending, don't even try to propagate in the network
-                    is_double_spending = tx.is_double_spending()
-                    if is_double_spending:
-                        data = {
-                            'success': False,
-                            'message': 'Invalid transaction. At least one of your inputs has already been spent.',
-                            'can_force': False
-                        }
-                    else:
-                        success, message = tx.validate_tx_error()
-
-                        force = b'force' in request.args and request.args[b'force'][0].decode('utf-8') == 'true'
-                        if success or force:
-                            message = ''
-                            try:
-                                success = self.manager.propagate_tx(tx, fails_silently=False)
-                            except (InvalidNewTransaction, TxValidationError) as e:
-                                success = False
-                                message = str(e)
-                            data = {'success': success, 'message': message}
-                        else:
-                            data = {'success': success, 'message': message, 'can_force': True}
-        else:
+        try:
+            tx_bytes = bytes.fromhex(parsed['args']['hex_tx'])
+            tx = tx_or_block_from_bytes(tx_bytes)
+        except ValueError:
+            data = {'success': False, 'message': 'Invalid hexadecimal data', 'can_force': False}
+        except struct.error:
             data = {
                 'success': False,
                 'message': 'This transaction is invalid. Try to decode it first to validate it.',
                 'can_force': False
             }
+        else:
+            if tx.is_block:
+                # It's a block and we can't push blocks
+                data = {
+                    'success': False,
+                    'message': 'This transaction is invalid. A transaction must have at least one input',
+                    'can_force': False
+                }
+            else:
+                tx.storage = self.manager.tx_storage
+                # If this tx is a double spending, don't even try to propagate in the network
+                is_double_spending = tx.is_double_spending()
+                if is_double_spending:
+                    data = {
+                        'success': False,
+                        'message': 'Invalid transaction. At least one of your inputs has already been spent.',
+                        'can_force': False
+                    }
+                else:
+                    success, message = tx.validate_tx_error()
+
+                    force = b'force' in request.args and request.args[b'force'][0].decode('utf-8') == 'true'
+                    if success or force:
+                        message = ''
+                        try:
+                            success = self.manager.propagate_tx(tx, fails_silently=False)
+                        except (InvalidNewTransaction, TxValidationError) as e:
+                            success = False
+                            message = str(e)
+                        data = {'success': success, 'message': message}
+                    else:
+                        data = {'success': success, 'message': message, 'can_force': True}
 
         return json.dumps(data, indent=4).encode('utf-8')
 

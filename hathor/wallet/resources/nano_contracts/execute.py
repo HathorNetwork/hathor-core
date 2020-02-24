@@ -1,15 +1,28 @@
 import base64
+import binascii
 import json
+from typing import Any, Dict, NamedTuple
 
-import base58
 from twisted.web import resource
 
 from hathor.api_util import get_missing_params_msg, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, NanoContractMatchValues
+from hathor.wallet.exceptions import InvalidAddress
 
 PARAMS = ['spent_tx_id', 'spent_tx_index', 'oracle_data', 'oracle_signature', 'oracle_pubkey', 'address', 'value']
+
+
+class DecodedParams(NamedTuple):
+    spent_tx_id: bytes
+    oracle_data: bytes
+    oracle_signature: bytes
+    oracle_pubkey: bytes
+    address: bytes
+    spent_tx_index: int
+    value: int
 
 
 @register_resource
@@ -53,19 +66,20 @@ class NanoContractExecuteResource(resource.Resource):
             if param not in data:
                 return get_missing_params_msg(param)
 
-        spent_tx_id = bytes.fromhex(data['spent_tx_id'])
-        spent_tx_index = data['spent_tx_index']
-        oracle_data = base64.b64decode(data['oracle_data'])
-        oracle_signature = base64.b64decode(data['oracle_signature'])
-        oracle_pubkey = base64.b64decode(data['oracle_pubkey'])
-        address = base58.b58decode(data['address'])
-        value = data['value']
+        try:
+            decoded_data = self.decode_params(data)
+        except ValueError as e:
+            return json.dumps({'success': False, 'message': e.message}).encode('utf-8')
 
         tx_outputs = []
-        tx_outputs.append(TxOutput(value, P2PKH.create_output_script(address)))
+        tx_outputs.append(TxOutput(decoded_data.value, P2PKH.create_output_script(decoded_data.address)))
 
-        input_data = NanoContractMatchValues.create_input_data(oracle_data, oracle_signature, oracle_pubkey)
-        tx_input = TxInput(spent_tx_id, spent_tx_index, input_data)
+        input_data = NanoContractMatchValues.create_input_data(
+            decoded_data.oracle_data,
+            decoded_data.oracle_signature,
+            decoded_data.oracle_pubkey
+        )
+        tx_input = TxInput(decoded_data.spent_tx_id, decoded_data.spent_tx_index, input_data)
         tx = Transaction(inputs=[tx_input], outputs=tx_outputs)
         tx.storage = self.manager.tx_storage
 
@@ -80,6 +94,38 @@ class NanoContractExecuteResource(resource.Resource):
 
     def render_OPTIONS(self, request):
         return render_options(request)
+
+    def decode_params(self, data: Dict[str, Any]) -> DecodedParams:
+        """Decode the data required for execute operation. Raise an error if any of the
+        fields is not of the expected type.
+        """
+        try:
+            spent_tx_id = bytes.fromhex(data['spent_tx_id'])
+        except ValueError:
+            raise ValueError('Invalid \'spent_tx_id\' parameter')
+
+        try:
+            oracle_data = base64.b64decode(data['oracle_data'])
+        except binascii.Error:
+            raise ValueError('Invalid \'oracle_data\' parameter')
+
+        try:
+            oracle_signature = base64.b64decode(data['oracle_signature'])
+        except binascii.Error:
+            raise ValueError('Invalid \'oracle_signature\' parameter')
+
+        try:
+            oracle_pubkey = base64.b64decode(data['oracle_pubkey'])
+        except binascii.Error:
+            raise ValueError('Invalid \'oracle_pubkey\' parameter')
+
+        try:
+            address = decode_address(data['address'])
+        except InvalidAddress:
+            raise ValueError('Invalid \'address\' parameter')
+
+        return DecodedParams(spent_tx_id, oracle_data, oracle_signature, oracle_pubkey,
+                             address, data['spent_tx_index'], data['value'])
 
 
 NanoContractExecuteResource.openapi = {

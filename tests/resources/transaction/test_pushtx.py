@@ -72,22 +72,33 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         data_success = response_success.json_value()
         self.assertFalse(data_success['success'])
 
+        # invalid transaction, without forcing
+        tx.timestamp = 5
+        tx.inputs = [TxInput(blocks[1].hash, 0, b'')]
+        script_type_out = parse_address_script(blocks[1].outputs[0].script)
+        private_key = self.manager.wallet.get_private_key(script_type_out.address)
+        data_to_sign = tx.get_sighash_all()
+        public_key_bytes, signature_bytes = self.manager.wallet.get_input_aux_data(data_to_sign, private_key)
+        tx.inputs[0].data = P2PKH.create_input_data(public_key_bytes, signature_bytes)
+
+        response = yield self.web.get('push_tx', {b'hex_tx': bytes(tx.get_struct().hex(), 'utf-8')})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # force
+        response = yield self.web.get('push_tx', {b'hex_tx': bytes(tx.get_struct().hex(), 'utf-8'), b'force': b'true'})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
         # Invalid tx (don't have inputs)
         genesis_tx = get_genesis_transactions(self.manager.tx_storage)[1]
         response_genesis = yield self.web.get('push_tx', {b'hex_tx': bytes(genesis_tx.get_struct().hex(), 'utf-8')})
         data_genesis = response_genesis.json_value()
         self.assertFalse(data_genesis['success'])
 
-        # Invalid hex
-        response_error1 = yield self.web.get('push_tx', {b'hex_tx': b'XXXX'})
-        data_error1 = response_error1.json_value()
-
-        self.assertFalse(data_error1['success'])
-
         # Invalid tx hex
         response_error2 = yield self.web.get('push_tx', {b'hex_tx': b'a12c'})
         data_error2 = response_error2.json_value()
-
         self.assertFalse(data_error2['success'])
 
         # Token creation tx
@@ -95,3 +106,15 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.get('push_tx', {b'hex_tx': bytes(tx2.get_struct().hex(), 'utf-8')})
         data = response.json_value()
         self.assertTrue(data['success'])
+
+    @inlineCallbacks
+    def test_invalid_params(self):
+        # Missing hex
+        response = yield self.web.get('push_tx')
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # Invalid hex
+        response = yield self.web.get('push_tx', {b'hex_tx': b'XXXX'})
+        data = response.json_value()
+        self.assertFalse(data['success'])
