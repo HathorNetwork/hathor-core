@@ -24,3 +24,15 @@ class AddPeerTest(_BaseResourceTest._ResourceTest):
         data = response.json_value()
         self.assertTrue(data['success'])
         self.assertEqual(data['peers'], ['tcp://localhost:8007'])
+
+    @inlineCallbacks
+    def test_invalid_data(self):
+        # no data
+        response = yield self.web.post('p2p/peers')
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # invalid type
+        response = yield self.web.post('p2p/peers', {'a': 'tcp://localhost:8006'})
+        data = response.json_value()
+        self.assertFalse(data['success'])

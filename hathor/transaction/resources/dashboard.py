@@ -2,11 +2,13 @@ import json
 
 from twisted.web import resource
 
-from hathor.api_util import set_cors
+from hathor.api_util import get_missing_params_msg, parse_get_arguments, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 
 settings = HathorSettings()
+
+ARGS = ['block', 'tx']
 
 
 @register_resource
@@ -34,9 +36,26 @@ class DashboardTransactionResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
+        parsed = parse_get_arguments(request.args, ARGS)
+        if not parsed['success']:
+            return get_missing_params_msg(parsed['missing'])
+
         # Get quantity for each
-        block_count = int(request.args[b'block'][0])
-        tx_count = int(request.args[b'tx'][0])
+        try:
+            block_count = int(parsed['args']['block'])
+        except ValueError:
+            return json.dumps({
+                'success': False,
+                'message': 'Invalid parameter, cannot convert to int: block'
+            }).encode('utf-8')
+
+        try:
+            tx_count = int(parsed['args']['tx'])
+        except ValueError:
+            return json.dumps({
+                'success': False,
+                'message': 'Invalid parameter, cannot convert to int: tx'
+            }).encode('utf-8')
 
         # Restrict counts
         block_count = min(block_count, settings.MAX_DASHBOARD_COUNT)
@@ -49,6 +68,7 @@ class DashboardTransactionResource(resource.Resource):
         serialized_blocks = [block.to_json_extended() for block in blocks]
 
         data = {
+            'success': True,
             'transactions': serialized_tx,
             'blocks': serialized_blocks,
         }
@@ -108,6 +128,7 @@ DashboardTransactionResource.openapi = {
                                 'success': {
                                     'summary': 'Transaction decoded',
                                     'value': {
+                                        'success': True,
                                         'transactions': [
                                             {
                                                 'tx_id': ('0002bb171de3490828028ec5eef33259'
@@ -203,6 +224,13 @@ DashboardTransactionResource.openapi = {
                                                 'tokens': []
                                             }
                                         ]
+                                    }
+                                },
+                                'error': {
+                                    'summary': 'Invalid parameters',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Invalid parameter, cannot convert to int: block',
                                     }
                                 }
                             }

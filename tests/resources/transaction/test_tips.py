@@ -18,7 +18,8 @@ class TipsTest(_BaseResourceTest._ResourceTest):
         # Tips are only the genesis
         response1 = yield self.web.get("tips")
         data1 = response1.json_value()
-        self.assertEqual(len(data1), len(genesis_txs))
+        self.assertTrue(data1['success'])
+        self.assertEqual(len(data1['tips']), len(genesis_txs))
 
         self.manager.wallet.unlock(b'MYPASS')
 
@@ -31,9 +32,17 @@ class TipsTest(_BaseResourceTest._ResourceTest):
 
         response2 = yield self.web.get("tips")
         data2 = response2.json_value()
-        self.assertEqual(len(data2), 1)
+        self.assertTrue(data2['success'])
+        self.assertEqual(len(data2['tips']), 1)
 
         # Getting tips sending timestamp as parameter
         response3 = yield self.web.get("tips", {b'timestamp': tx.timestamp - 1})
         data3 = response3.json_value()
         self.assertEqual(len(data3), 2)
+
+    @inlineCallbacks
+    def test_invalid_data(self):
+        # invalid timestamp parameter
+        response = yield self.web.get("tips", {b'timestamp': 'a'})
+        data = response.json_value()
+        self.assertFalse(data['success'])

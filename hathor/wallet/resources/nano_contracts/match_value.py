@@ -1,17 +1,37 @@
 import base64
+import binascii
 import json
+import struct
+from typing import Any, Dict, NamedTuple
 
-import base58
 from twisted.web import resource
 
 from hathor.api_util import get_missing_params_msg, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, NanoContractMatchValues
+from hathor.wallet.exceptions import InvalidAddress
 
 PARAMS_POST = ['values', 'fallback_address', 'oracle_pubkey_hash', 'oracle_data_id', 'total_value', 'input_value']
 
 PARAMS_PUT = ['hex_tx', 'new_values', 'input_value']
+
+
+class DecodedPostParams(NamedTuple):
+    value_dict: Dict[bytes, int]
+    fallback_address: bytes
+    min_timestamp: int
+    oracle_pubkey_hash: bytes
+    total_value: int
+    oracle_data_id: str
+    input_value: int
+
+
+class DecodedPutParams(NamedTuple):
+    new_value_dict: Dict[bytes, int]
+    input_value: int
+    tx_bytes: bytes
 
 
 @register_resource
@@ -51,22 +71,21 @@ class NanoContractMatchValueResource(resource.Resource):
             if param not in data:
                 return get_missing_params_msg(param)
 
-        value_dict = {}
-        for item in data['values']:
-            value_dict[base58.b58decode(item['address'])] = item['value']
-
-        fallback_address = base58.b58decode(data['fallback_address']) if data['fallback_address'] else b'\x00'
-        min_timestamp = data['min_timestamp'] if data.get('min_timestamp') else int(self.manager.reactor.seconds())
+        try:
+            decoded_params = self.decode_post_params(data)
+        except ValueError as e:
+            return json.dumps({'success': False, 'message': e.message}).encode('utf-8')
 
         nano_contract = NanoContractMatchValues(
-            base64.b64decode(data['oracle_pubkey_hash']), min_timestamp, data['oracle_data_id'].encode('utf-8'),
-            value_dict, fallback_address)
+            decoded_params.oracle_pubkey_hash, decoded_params.min_timestamp, decoded_params.oracle_data_id,
+            decoded_params.value_dict, decoded_params.fallback_address
+        )
 
         tx_outputs = []
-        tx_outputs.append(TxOutput(data['total_value'], nano_contract.create_output_script()))
+        tx_outputs.append(TxOutput(decoded_params.total_value, nano_contract.create_output_script()))
 
-        inputs, total_inputs_amount = self.manager.wallet.get_inputs_from_amount(data['input_value'])
-        change_tx = self.manager.wallet.handle_change_tx(total_inputs_amount, data['input_value'])
+        inputs, total_inputs_amount = self.manager.wallet.get_inputs_from_amount(decoded_params.input_value)
+        change_tx = self.manager.wallet.handle_change_tx(total_inputs_amount, decoded_params.input_value)
         if change_tx:
             tx_outputs.append(TxOutput(change_tx.value, P2PKH.create_output_script(change_tx.address)))
         tx_inputs = [TxInput(txin.tx_id, txin.index, b'') for txin in inputs]
@@ -75,6 +94,49 @@ class NanoContractMatchValueResource(resource.Resource):
 
         ret = {'success': True, 'hex_tx': tx.get_struct().hex()}
         return json.dumps(ret).encode('utf-8')
+
+    def decode_post_params(self, data: Dict[str, Any]) -> DecodedPostParams:
+        """Decode the data required on POST request. Raise an error if any of the
+        fields is not of the expected type.
+        """
+        value_dict = {}
+        try:
+            for item in data['values']:
+                addr = decode_address(item['address'])
+                value_dict[addr] = int(item['value'])
+        except InvalidAddress:
+            raise ValueError('Invalid \'address\' in parameters: {}'.format(item['address']))
+        except ValueError:
+            raise ValueError('Invalid \'value\' in parameters: {}'.format(item['value']))
+
+        if data['fallback_address']:
+            try:
+                fallback_address = decode_address(data['fallback_address'])
+            except InvalidAddress:
+                raise ValueError('Invalid \'fallback_address\' in parameters')
+        else:
+            fallback_address = b'\x00'
+
+        if data.get('min_timestamp'):
+            try:
+                min_timestamp = int(data['min_timestamp'])
+            except ValueError:
+                raise ValueError('Invalid \'min_timestamp\' in parameters')
+        else:
+            min_timestamp = int(self.manager.reactor.seconds())
+
+        try:
+            oracle_pubkey_hash = base64.b64decode(data['oracle_pubkey_hash'])
+        except binascii.Error:
+            raise ValueError('Invalid \'oracle_pubkey_hash\' in parameters')
+
+        try:
+            total_value = int(data['total_value'])
+        except ValueError:
+            raise ValueError('Invalid \'total_value\' in parameters')
+
+        return DecodedPostParams(value_dict, fallback_address, min_timestamp, oracle_pubkey_hash, total_value,
+                                 data['oracle_data_id'].encode('utf-8'), data['input_value'])
 
     def render_PUT(self, request):
         """ Updates a nano contract tx and returns it in hexadecimal format.
@@ -98,14 +160,15 @@ class NanoContractMatchValueResource(resource.Resource):
             if param not in data:
                 return get_missing_params_msg(param)
 
-        tx_bytes = bytes.fromhex(data['hex_tx'])
-        tx = Transaction.create_from_struct(tx_bytes)
+        try:
+            decoded_params = self.decode_put_params(data)
+        except ValueError as e:
+            return json.dumps({'success': False, 'message': e.message}).encode('utf-8')
 
-        new_value_dict = {}
-        for item in data['new_values']:
-            new_value_dict[base58.b58decode(item['address'])] = item['value']
-
-        input_value = data['input_value']
+        try:
+            tx = Transaction.create_from_struct(decoded_params.tx_bytes)
+        except struct.error:
+            return json.dumps({'success': False, 'message': 'Could not decode hex transaction'}).encode('utf-8')
 
         tx_outputs = []
         nano_contract = None
@@ -120,13 +183,13 @@ class NanoContractMatchValueResource(resource.Resource):
         if not nano_contract:
             return json.dumps({'success': False, 'message': 'Nano contract not found'}).encode('utf-8')
 
-        for address, value in new_value_dict.items():
+        for address, value in decoded_params.new_value_dict.items():
             nano_contract.value_dict[address] = value
 
         tx.outputs = tx_outputs
 
-        inputs, total_inputs_amount = self.manager.wallet.get_inputs_from_amount(input_value)
-        change_tx = self.manager.wallet.handle_change_tx(total_inputs_amount, input_value)
+        inputs, total_inputs_amount = self.manager.wallet.get_inputs_from_amount(decoded_params.input_value)
+        change_tx = self.manager.wallet.handle_change_tx(total_inputs_amount, decoded_params.input_value)
         if change_tx:
             tx.outputs.append(TxOutput(change_tx.value, P2PKH.create_output_script(change_tx.address)))
 
@@ -137,6 +200,32 @@ class NanoContractMatchValueResource(resource.Resource):
 
         ret = {'success': True, 'hex_tx': tx.get_struct().hex()}
         return json.dumps(ret).encode('utf-8')
+
+    def decode_put_params(self, data: Dict[str, Any]) -> DecodedPutParams:
+        """Decode the data required on PUT request. Raise an error if any of the
+        fields is not of the expected type.
+        """
+        value_dict = {}
+        try:
+            for item in data['new_values']:
+                addr = decode_address(item['address'])
+                value_dict[addr] = int(item['value'])
+        except InvalidAddress:
+            raise ValueError('Invalid \'address\' in parameters: {}'.format(item['address']))
+        except ValueError:
+            raise ValueError('Invalid \'value\' in parameters: {}'.format(item['value']))
+
+        try:
+            input_value = int(data['input_value'])
+        except ValueError:
+            raise ValueError('Invalid \'input_value\' in parameters')
+
+        try:
+            tx_bytes = bytes.fromhex(data['hex_tx'])
+        except ValueError:
+            raise ValueError('Could not decode hex transaction')
+
+        return DecodedPutParams(value_dict, input_value, tx_bytes)
 
     def render_OPTIONS(self, request):
         return render_options(request, 'GET, POST, PUT, OPTIONS')

@@ -43,3 +43,29 @@ class MiningTest(_BaseResourceTest._ResourceTest):
         response_post = yield self.web.post('mining', {'block_bytes': block_bytes_str})
         # Probability 2^(100 - 256) of failing
         self.assertEqual(response_post.written[0], b'0')
+
+    @inlineCallbacks
+    def test_post_invalid_data(self):
+        response_get = yield self.web.get('mining')
+        data_get = response_get.json_value()
+        block_bytes_str = data_get.get('block_bytes')
+
+        block_bytes = base64.b64decode(block_bytes_str)
+        block = Block.create_from_struct(block_bytes)
+        block.weight = 4
+        block.resolve()
+
+        block_bytes = bytes(block)
+        block_bytes_str = base64.b64encode(block_bytes).decode('ascii')
+
+        # missing post data
+        response_post = yield self.web.post('mining')
+        self.assertEqual(response_post.written[0], b'0')
+
+        # invalid block bytes
+        response_post = yield self.web.post('mining', {'block_bytes': base64.b64encode(b'aaa').decode('ascii')})
+        self.assertEqual(response_post.written[0], b'0')
+
+        # invalid base64
+        response_post = yield self.web.post('mining', {'block_bytes': 'YWFha'})
+        self.assertEqual(response_post.written[0], b'0')
