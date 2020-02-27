@@ -74,15 +74,26 @@ class DNSPeerDiscovery(PeerDiscovery):
             # Useful for testing purposes, so we don't need to execute a DNS query
             return ['tcp://127.0.0.1:40403']
 
-        d = defer.gatherResults([
-            twisted.names.client.lookupText(host).addCallback(self.dns_seed_lookup_text),
-            twisted.names.client.lookupAddress(host).addCallback(self.dns_seed_lookup_address),
-        ])
+        d1 = twisted.names.client.lookupText(host)
+        d1.addCallback(self.dns_seed_lookup_text)
+        d1.addErrback(self.errback),
+
+        d2 = twisted.names.client.lookupAddress(host)
+        d2.addCallback(self.dns_seed_lookup_address)
+        d2.addErrback(self.errback),
+
+        d = defer.gatherResults([d1, d2])
         results = yield d
         unique_urls: Set[str] = set()
         for urls in results:
             unique_urls.update(urls)
         return list(unique_urls)
+
+    def errback(self, result):
+        """ Return an empty list if any error occur.
+        """
+        self.log.error('{result}', result=result)
+        return []
 
     def dns_seed_lookup_text(
         self, results: Tuple[List['RRHeader'], List['RRHeader'], List['RRHeader']]
