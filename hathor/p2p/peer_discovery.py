@@ -1,6 +1,6 @@
 import socket
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Callable, Generator, List, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Generator, List, Set, Tuple
 
 import twisted.names.client
 from twisted.internet import defer
@@ -68,7 +68,7 @@ class DNSPeerDiscovery(PeerDiscovery):
 
     @inlineCallbacks
     def dns_seed_lookup(self, host: str) -> Generator[Any, Any, List[str]]:
-        """ Run a DNS lookup for TXT, A, and AAAA records and return the first result found.
+        """ Run a DNS lookup for TXT, A, and AAAA records and return a list of connection strings.
         """
         if self.test_mode:
             # Useful for testing purposes, so we don't need to execute a DNS query
@@ -79,68 +79,40 @@ class DNSPeerDiscovery(PeerDiscovery):
             twisted.names.client.lookupAddress(host).addCallback(self.dns_seed_lookup_address),
         ])
         results = yield d
-        for result in results:
-            if result:
-                return result
-
-        return []
+        unique_urls: Set[str] = set()
+        for urls in results:
+            unique_urls.update(urls)
+        return list(unique_urls)
 
     def dns_seed_lookup_text(
-        self, text_results: Tuple[List['RRHeader'], List['RRHeader'], List['RRHeader']]
+        self, results: Tuple[List['RRHeader'], List['RRHeader'], List['RRHeader']]
     ) -> List[str]:
         """ Run a DNS lookup for TXT records to discover new peers.
-        """
-        if text_results:
-            answers, _, _ = text_results
-            if answers:
-                return self.on_dns_seed_found(answers)
-        return []
 
-    def dns_seed_lookup_address(
-        self, address_results: Tuple[List['RRHeader'], List['RRHeader'], List['RRHeader']]
-    ) -> List[str]:
-        """ Run a DNS lookup for A records to discover new peers.
+        The `results` has three lists that contain answer records, authority records, and additional records.
         """
-        if address_results:
-            answers, _, _ = address_results
-            if answers:
-                return self.on_dns_seed_found_ipv4(answers)
-        return []
-
-    def dns_seed_lookup_ipv6_address(self, host: str) -> None:
-        """ Run a DNS lookup for AAAA records to discover new peers.
-        """
-        x = twisted.names.client.lookupIPV6Address(host)
-        x.addCallback(self.on_dns_seed_found_ipv6)
-
-    def on_dns_seed_found(self, answers: List['RRHeader']) -> List[str]:
-        """ Executed only when a new peer is discovered by `dns_seed_lookup_text`.
-        """
-        result = []
-        for entry in answers:
-            data = entry.payload.data
-            for txt in data:
+        answers, _, _ = results
+        ret: List[str] = []
+        for record in answers:
+            for txt in record.payload.data:
                 txt = txt.decode('utf-8')
                 self.log.info('Seed DNS TXT: {txt!r} found', txt=txt)
-                result.append(txt)
-        return result
+                ret.append(txt)
+        return ret
 
-    def on_dns_seed_found_ipv4(self, answers: List['RRHeader']) -> List[str]:
-        """ Executed only when a new peer is discovered by `dns_seed_lookup_address`.
+    def dns_seed_lookup_address(
+        self, results: Tuple[List['RRHeader'], List['RRHeader'], List['RRHeader']]
+    ) -> List[str]:
+        """ Run a DNS lookup for A records to discover new peers.
+
+        The `results` has three lists that contain answer records, authority records, and additional records.
         """
-        result = []
-        for entry in answers:
-            address = entry.payload.address
+        answers, _, _ = results
+        ret: List[str] = []
+        for record in answers:
+            address = record.payload.address
             host = socket.inet_ntoa(address)
-            self.log.info('Seed DNS A: {host!r} found', host=host)
-            result.append('tcp://{}:{}'.format(host, self.default_port))
-        return result
-
-    def on_dns_seed_found_ipv6(self, results):
-        """ Executed only when a new peer is discovered by `dns_seed_lookup_ipv6_address`.
-        """
-        # answers, _, _ = results
-        # for x in answers:
-        #     address = x.payload.address
-        #     host = socket.inet_ntop(socket.AF_INET6, address)
-        raise NotImplementedError
+            txt = 'tcp://{}:{}'.format(host, self.default_port)
+            self.log.info('Seed DNS A: {host!r} found, connecting to {txt!r}', host=host, txt=txt)
+            ret.append(txt)
+        return ret
