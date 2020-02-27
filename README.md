@@ -9,7 +9,7 @@ Run (assuming virtualenv is active):
     hathor-cli run_node --listen tcp:8000:interface=0.0.0.0 --testnet
 
 You can include `--status 8001` to run a status web server in port 8001. To access your
-status server, open the brower in http://localhost:80001/.
+status server, open the brower in http://localhost:8001/v1a/status.
 
 By default, it will listen in all interfaces (0.0.0.0).
 
