@@ -191,7 +191,6 @@ class AddressHistoryResource(resource.Resource):
         return json.dumps(data, indent=4).encode('utf-8')
 
 
-
 AddressHistoryResource.openapi = {
     '/thin_wallet/address_history': {
         'x-visibility': 'public',
