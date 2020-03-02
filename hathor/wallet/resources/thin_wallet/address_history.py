@@ -24,11 +24,16 @@ class AddressHistoryResource(resource.Resource):
 
     def render_GET(self, request: Request) -> bytes:
         """ GET request for /thin_wallet/address_history/
+
+            If 'paginate' parameter exists, it calls the new resource method
+            otherwise, it will call the old and deprecated one because it's
+            a request from a wallet still in an older version
+
             Expects 'addresses[]' as request args, and 'hash'
             as optional args to be used in pagination
 
             'addresses[]' is an array of address
-            'hash' is the first address of the pagination to start the history
+            'hash' is the hash of the first tx of the pagination to start the history
 
             Returns an array of WalletIndex for each address until the maximum number
 
@@ -68,12 +73,20 @@ class AddressHistoryResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        wallet_index = self.manager.tx_storage.wallet_index
-
-        if not wallet_index:
+        if not self.manager.tx_storage.wallet_index:
             request.setResponseCode(503)
             return json.dumps({'success': False}, indent=4).encode('utf-8')
 
+        paginate = b'paginate' in request.args and request.args[b'paginate'][0].decode('utf-8') == 'true'
+
+        if paginate:
+            # New resource
+            return self.new_resource(request)
+        else:
+            # Old and deprecated resource
+            return self.deprecated_resource(request)
+
+    def new_resource(self, request: Request) -> bytes:
         addresses = request.args[b'addresses[]']
 
         ref_hash_bytes = None
@@ -98,9 +111,15 @@ class AddressHistoryResource(resource.Resource):
 
         history = []
         seen: Set[bytes] = set()
+        # XXX In this algorithm we need to sort all transactions of an address
+        # and find one specific (in case of a pagination request)
+        # so if this address has many txs, this could become slow
+        # I've done some tests with 10k txs in one address and the request
+        # returned in less than 50ms, so we will move forward with it for now
+        # but this could be improved in the future
         for idx, address_to_decode in enumerate(addresses):
             address = address_to_decode.decode('utf-8')
-            hashes = wallet_index.get_sorted_from_address(address)
+            hashes = self.manager.tx_storage.wallet_index.get_sorted_from_address(address)
             start_index = 0
             if ref_hash_bytes and idx == 0:
                 # It's not the first request, so we must continue from the hash
@@ -140,7 +159,7 @@ class AddressHistoryResource(resource.Resource):
                 has_more = True
                 # The hash to start the search and which address this hash belongs
                 first_hash = hashes[break_index].hex()
-                first_address = address_to_decode.decode('utf-8')
+                first_address = address
                 break
 
         data = {
@@ -151,6 +170,26 @@ class AddressHistoryResource(resource.Resource):
             'first_address': first_address
         }
         return json.dumps(data, indent=4).encode('utf-8')
+
+    def deprecated_resource(self, request: Request) -> bytes:
+        """ This resource is deprecated. It's here only to keep
+            compatibility with old wallet versions
+        """
+        addresses = request.args[b'addresses[]']
+
+        history = []
+        seen: Set[bytes] = set()
+        for address_to_decode in addresses:
+            address = address_to_decode.decode('utf-8')
+            for tx_hash in self.manager.tx_storage.wallet_index.get_from_address(address):
+                tx = self.manager.tx_storage.get_transaction(tx_hash)
+                if tx_hash not in seen:
+                    seen.add(tx_hash)
+                    history.append(tx.to_json_extended())
+
+        data = {'history': history}
+        return json.dumps(data, indent=4).encode('utf-8')
+
 
 
 AddressHistoryResource.openapi = {
@@ -203,6 +242,60 @@ AddressHistoryResource.openapi = {
                                         'first_hash': '00000299670db5814f69cede8b347f83'
                                                       '0f73985eaa4cd1ce87c9a7c793771332',
                                         'first_address': '1Pz5s5WVL52MK4EwBy9XVQUzWjF2LWWKiS',
+                                        'history': [
+                                            {
+                                                "hash": "00000299670db5814f69cede8b347f83"
+                                                        "0f73985eaa4cd1ce87c9a7c793771336",
+                                                "timestamp": 1552422415,
+                                                "is_voided": False,
+                                                'parents': [
+                                                    '00000b8792cb13e8adb51cc7d866541fc29b532e8dec95ae4661cf3da4d42cb5',
+                                                    '00001417652b9d7bd53eb14267834eab08f27e5cbfaca45a24370e79e0348bb1'
+                                                ],
+                                                "inputs": [
+                                                    {
+                                                        "value": 42500000044,
+                                                        "script": "dqkURJPA8tDMJHU8tqv3SiO18ZCLEPaIrA==",
+                                                        "decoded": {
+                                                            "type": "P2PKH",
+                                                            "address": "17Fbx9ouRUD1sd32bp4ptGkmgNzg7p2Krj",
+                                                            "timelock": None
+                                                            },
+                                                        "token": "00",
+                                                        "tx": "000002d28696f94f89d639022ae81a1d"
+                                                              "870d55d189c27b7161d9cb214ad1c90c",
+                                                        "index": 0
+                                                        }
+                                                    ],
+                                                "outputs": [
+                                                    {
+                                                        "value": 42499999255,
+                                                        "script": "dqkU/B6Jbf5OnslsQrvHXQ4WKDTSEGKIrA==",
+                                                        "decoded": {
+                                                            "type": "P2PKH",
+                                                            "address": "1Pz5s5WVL52MK4EwBy9XVQUzWjF2LWWKiS",
+                                                            "timelock": None
+                                                            },
+                                                        "token": "00"
+                                                        },
+                                                    {
+                                                        "value": 789,
+                                                        "script": "dqkUrWoWhiP+qPeI/qwfwb5fgnmtd4CIrA==",
+                                                        "decoded": {
+                                                            "type": "P2PKH",
+                                                            "address": "1GovzJvbzLw6x4H2a1hHb529cpEWzh3YRd",
+                                                            "timelock": None
+                                                            },
+                                                        "token": "00"
+                                                        }
+                                                    ]
+                                                }
+                                        ]
+                                    }
+                                },
+                                'deprecated_success': {
+                                    'summary': 'Deprecated success',
+                                    'value': {
                                         'history': [
                                             {
                                                 "hash": "00000299670db5814f69cede8b347f83"
