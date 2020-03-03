@@ -234,3 +234,6 @@ class HathorSettings(NamedTuple):
 
     # Mamimum number of outputs accepted
     MAX_NUM_OUTPUTS: int = 255
+
+    # Maximum number of transactions returned on addresses history API
+    MAX_TX_ADDRESSES_HISTORY: int = 50
