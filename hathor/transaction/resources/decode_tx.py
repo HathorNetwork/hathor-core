@@ -1,13 +1,14 @@
 import json
-import re
 import struct
 
 from twisted.web import resource
 
-from hathor.api_util import get_missing_params_msg, set_cors
+from hathor.api_util import get_missing_params_msg, parse_get_arguments, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.resources.transaction import get_tx_extra_data
+
+ARGS = ['hex_tx']
 
 
 @register_resource
@@ -32,24 +33,20 @@ class DecodeTxResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        if b'hex_tx' in request.args:
-            requested_decode = request.args[b'hex_tx'][0].decode('utf-8')
-        else:
-            return get_missing_params_msg('hex_tx')
+        parsed = parse_get_arguments(request.args, ARGS)
+        if not parsed['success']:
+            return get_missing_params_msg(parsed['missing'])
 
-        pattern = r'[a-fA-F\d]+'
-        if re.match(pattern, requested_decode) and len(requested_decode) % 2 == 0:
-            tx_bytes = bytes.fromhex(requested_decode)
+        try:
+            tx_bytes = bytes.fromhex(parsed['args']['hex_tx'])
+            tx = tx_or_block_from_bytes(tx_bytes)
+            tx.storage = self.manager.tx_storage
+            data = get_tx_extra_data(tx)
+        except ValueError:
+            data = {'success': False, 'message': 'Invalid hexadecimal data'}
+        except struct.error:
+            data = {'success': False, 'message': 'Could not decode transaction'}
 
-            try:
-                tx = tx_or_block_from_bytes(tx_bytes)
-                tx.storage = self.manager.tx_storage
-                data = get_tx_extra_data(tx)
-            except struct.error:
-                data = {'success': False}
-
-        else:
-            data = {'success': False}
         return json.dumps(data, indent=4).encode('utf-8')
 
 

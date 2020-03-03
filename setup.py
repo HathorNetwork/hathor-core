@@ -29,14 +29,14 @@ setup(
     author='Hathor Team',
     author_email='contact@hathor.network',
     url='https://hathor.network/',
-    license='Proprietary',
+    license='Apache-2.0',
     entry_points={
         'console_scripts': ['hathor-cli=hathor.cli.main:main'],
     },
     classifiers=[
         'Programming Language :: Python :: 3',
         'Operating System :: OS Independent',
-        'License :: Other/Proprietary License',
+        'License :: OSI Approved :: Apache Software License',
         'Private :: Do Not Upload',
     ],
     packages=find_packages(exclude=('tests', 'tests.*')),

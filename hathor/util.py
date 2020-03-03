@@ -15,6 +15,7 @@ limitations under the License.
 """
 
 import warnings
+from collections import OrderedDict
 from enum import Enum
 from functools import partial, wraps
 from typing import Any, Callable, Deque, Dict, Iterable, Iterator, Tuple, TypeVar, cast
@@ -213,3 +214,35 @@ class classproperty:
 
     def __get__(self, obj, owner):
         return self.f(owner)
+
+
+class MaxSizeOrderedDict(OrderedDict):
+    """ And OrderedDict that has a maximum size, if new elements are added, the oldest elements are silently deleted.
+
+    Examples:
+
+    >>> foo = MaxSizeOrderedDict(max=5)
+    >>> foo[1] = 'a'
+    >>> foo[2] = 'b'
+    >>> foo[3] = 'c'
+    >>> foo[4] = 'd'
+    >>> foo[5] = 'e'
+    >>> foo
+    MaxSizeOrderedDict([(1, 'a'), (2, 'b'), (3, 'c'), (4, 'd'), (5, 'e')])
+    >>> foo[6] = 'f'
+    >>> foo
+    MaxSizeOrderedDict([(2, 'b'), (3, 'c'), (4, 'd'), (5, 'e'), (6, 'f')])
+    >>> foo[7] = 'g'
+    >>> foo
+    MaxSizeOrderedDict([(3, 'c'), (4, 'd'), (5, 'e'), (6, 'f'), (7, 'g')])
+    """
+    # Kindly stolen from: https://stackoverflow.com/a/49274421/947511
+    def __init__(self, *args, max=0, **kwargs):
+        self._max = max
+        super().__init__(*args, **kwargs)
+
+    def __setitem__(self, key, value):
+        OrderedDict.__setitem__(self, key, value)
+        if self._max > 0:
+            if len(self) > self._max:
+                self.popitem(False)

@@ -26,7 +26,7 @@ from hathor.merged_mining.bitcoin_rpc import IBitcoinRPC
 from hathor.stratum import INVALID_ADDRESS, INVALID_PARAMS, JOB_NOT_FOUND, JSONRPC, METHOD_NOT_FOUND
 from hathor.transaction import BitcoinAuxPow
 from hathor.transaction.exceptions import ScriptError
-from hathor.util import ichunks
+from hathor.util import MaxSizeOrderedDict, ichunks
 from hathor.wallet.exceptions import InvalidAddress
 
 logger = get_logger()
@@ -286,6 +286,7 @@ class MergedMiningStratumProtocol(JSONRPC):
     """
 
     DEFAULT_XNONCE2_SIZE = 8
+    MAX_JOBS = 1000  # maximum number of jobs to keep in memory
 
     merged_job: 'MergedJob'
     use_ok = False
@@ -297,7 +298,7 @@ class MergedMiningStratumProtocol(JSONRPC):
         self.address = address
 
         self.current_job = None
-        self.jobs: Dict[str, SingleMinerJob] = {}
+        self.jobs: MaxSizeOrderedDict = MaxSizeOrderedDict(max=self.MAX_JOBS)
         self.miner_id: Optional[str] = None
         self.miner_address: Optional[bytes] = None
         self.job_ids: List[str] = []

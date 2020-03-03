@@ -20,11 +20,21 @@ class AddPeersResource(resource.Resource):
 
     def render_POST(self, request):
         """ Add p2p peers
-            It expects a list of peers, in the format protocol:host:port (tcp:172.121.212.12:40403)
+            It expects a list of peers, in the format protocol://host:port (tcp://172.121.212.12:40403)
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
-        peers = json.loads(request.content.read().decode('utf-8'))
+
+        try:
+            peers = json.loads(request.content.read().decode('utf-8'))
+        except (json.JSONDecodeError, AttributeError):
+            return json.dumps({'success': False, 'message': 'Invalid format for post data'}).encode('utf-8')
+
+        if not isinstance(peers, list):
+            return json.dumps({
+                'success': False,
+                'message': 'Invalid format for post data. It was expected a list of strings.'
+            }).encode('utf-8')
 
         known_peers = self.manager.connections.peer_storage.values()
 
@@ -44,7 +54,6 @@ class AddPeersResource(resource.Resource):
             return False
 
         filtered_peers = [connection_string for connection_string in peers if not already_connected(connection_string)]
-        print('filtered', filtered_peers)
 
         pd = BootstrapPeerDiscovery(filtered_peers)
         pd.discover_and_connect(self.manager.connections.connect_to)
@@ -71,7 +80,7 @@ AddPeersResource.openapi = {
                     'application/json': {
                         'schema': {
                             'type': 'array',
-                            'description': 'List of peers to connect in the format "protocol:host:port"',
+                            'description': 'List of peers to connect in the format "protocol://host:port"',
                             'items': {
                                 'type': 'string'
                             }
@@ -96,6 +105,13 @@ AddPeersResource.openapi = {
                                     'value': {
                                         'success': True,
                                         'peers': ['tcp:localhost:8000', 'tcp:17.24.137.234:40403']
+                                    }
+                                },
+                                'error': {
+                                    'summary': 'Invalid data',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Invalid format for post data',
                                     }
                                 }
                             }

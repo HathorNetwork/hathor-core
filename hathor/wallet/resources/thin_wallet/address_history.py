@@ -4,9 +4,11 @@ from typing import Set
 from twisted.web import resource
 from twisted.web.http import Request
 
-from hathor.api_util import set_cors
+from hathor.api_util import get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
+from hathor.crypto.util import decode_address
+from hathor.wallet.exceptions import InvalidAddress
 
 settings = HathorSettings()
 
@@ -87,6 +89,9 @@ class AddressHistoryResource(resource.Resource):
             return self.deprecated_resource(request)
 
     def new_resource(self, request: Request) -> bytes:
+        if b'addresses[]' not in request.args:
+            return get_missing_params_msg('addresses[]')
+
         addresses = request.args[b'addresses[]']
 
         ref_hash_bytes = None
@@ -119,6 +124,14 @@ class AddressHistoryResource(resource.Resource):
         # but this could be improved in the future
         for idx, address_to_decode in enumerate(addresses):
             address = address_to_decode.decode('utf-8')
+            try:
+                decode_address(address)
+            except InvalidAddress:
+                return json.dumps({
+                    'success': False,
+                    'message': 'The address {} is invalid'.format(address)
+                }).encode('utf-8')
+
             hashes = self.manager.tx_storage.wallet_index.get_sorted_from_address(address)
             start_index = 0
             if ref_hash_bytes and idx == 0:
@@ -175,12 +188,22 @@ class AddressHistoryResource(resource.Resource):
         """ This resource is deprecated. It's here only to keep
             compatibility with old wallet versions
         """
-        addresses = request.args[b'addresses[]']
+        if b'addresses[]' not in request.args:
+            return get_missing_params_msg('addresses[]')
 
+        addresses = request.args[b'addresses[]']
         history = []
         seen: Set[bytes] = set()
         for address_to_decode in addresses:
             address = address_to_decode.decode('utf-8')
+            try:
+                decode_address(address)
+            except InvalidAddress:
+                return json.dumps({
+                    'success': False,
+                    'message': 'The address {} is invalid'.format(address)
+                }).encode('utf-8')
+
             for tx_hash in self.manager.tx_storage.wallet_index.get_from_address(address):
                 tx = self.manager.tx_storage.get_transaction(tx_hash)
                 if tx_hash not in seen:

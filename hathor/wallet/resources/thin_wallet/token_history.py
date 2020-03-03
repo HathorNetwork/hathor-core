@@ -3,11 +3,13 @@ import json
 from twisted.web import resource
 from twisted.web.http import Request
 
-from hathor.api_util import get_missing_params_msg, set_cors
+from hathor.api_util import get_missing_params_msg, parse_get_arguments, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 
 settings = HathorSettings()
+
+ARGS = ['id', 'count']
 
 
 @register_resource
@@ -25,7 +27,7 @@ class TokenHistoryResource(resource.Resource):
         """ GET request for /thin_wallet/token_history/
 
             Expects as GET parameter of the queried token:
-                - 'id': token uid the history is being requested
+                - 'id': uid of token whose history is being requested
                 - 'count': int, to indicate the quantity of elements we should return
                 - 'hash': string, the hash reference we are in the pagination
                 - 'timestamp': int, the timestamp reference we are in the pagination
@@ -40,40 +42,62 @@ class TokenHistoryResource(resource.Resource):
             request.setResponseCode(503)
             return json.dumps({'success': False}).encode('utf-8')
 
+        parsed = parse_get_arguments(request.args, ARGS)
+        if not parsed['success']:
+            return get_missing_params_msg(parsed['missing'])
+
         if b'id' not in request.args:
             return get_missing_params_msg('id')
 
         try:
-            token_uid_str = request.args[b'id'][0].decode('utf-8')
-            token_uid = bytes.fromhex(token_uid_str)
+            token_uid = bytes.fromhex(parsed['args']['id'])
         except (ValueError, AttributeError):
             return json.dumps({'success': False, 'message': 'Invalid token id'}).encode('utf-8')
 
-        if b'count' not in request.args:
-            return get_missing_params_msg('count')
-
-        count = min(int(request.args[b'count'][0]), settings.MAX_TX_COUNT)
+        try:
+            count = min(int(parsed['args']['count']), settings.MAX_TX_COUNT)
+        except ValueError:
+            return json.dumps({
+                'success': False,
+                'message': 'Invalid \'count\' parameter, expected an int'
+            }).encode('utf-8')
 
         if b'hash' in request.args:
-            if b'timestamp' not in request.args:
-                return get_missing_params_msg('timestamp')
+            parsed = parse_get_arguments(request.args, ['timestamp', 'page', 'hash'])
+            if not parsed['success']:
+                return get_missing_params_msg(parsed['missing'])
 
-            if b'page' not in request.args:
-                return get_missing_params_msg('page')
+            try:
+                hash_bytes = bytes.fromhex(parsed['args']['hash'])
+            except ValueError:
+                return json.dumps({
+                    'success': False,
+                    'message': 'Invalid \'hash\' parameter, could not decode hexadecimal'
+                }).encode('utf-8')
 
-            ref_hash = request.args[b'hash'][0].decode('utf-8')
-            ref_timestamp = int(request.args[b'timestamp'][0].decode('utf-8'))
-            page = request.args[b'page'][0].decode('utf-8')
+            page = parsed['args']['page']
+            if page != 'previous' and page != 'next':
+                return json.dumps({
+                    'success': False,
+                    'message': 'Invalid \'page\' parameter, expected \'previous\' or \'next\''
+                }).encode('utf-8')
+
+            try:
+                ref_timestamp = int(parsed['args']['timestamp'])
+            except ValueError:
+                return json.dumps({
+                    'success': False,
+                    'message': 'Invalid \'timestamp\' parameter, expected an int'
+                }).encode('utf-8')
 
             if page == 'previous':
                 elements, has_more = self.manager.tx_storage.tokens_index.get_newer_transactions(
-                        token_uid, ref_timestamp, bytes.fromhex(ref_hash), count)
+                        token_uid, ref_timestamp, hash_bytes, count)
             else:
                 elements, has_more = self.manager.tx_storage.tokens_index.get_older_transactions(
-                        token_uid, ref_timestamp, bytes.fromhex(ref_hash), count)
+                        token_uid, ref_timestamp, hash_bytes, count)
         else:
-            elements, has_more = self.manager.tx_storage.tokens_index.get_newest_transactions(
-                    token_uid, count)
+            elements, has_more = self.manager.tx_storage.tokens_index.get_newest_transactions(token_uid, count)
 
         transactions = [self.manager.tx_storage.get_transaction(element) for element in elements]
         serialized = [tx.to_json_extended() for tx in transactions]
