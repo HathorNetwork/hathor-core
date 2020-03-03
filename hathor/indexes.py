@@ -430,9 +430,14 @@ class WalletIndex:
             self.publish_tx(tx)
 
     def get_from_address(self, address: str) -> List[bytes]:
-        """ Get inputs/outputs history from address
+        """ Get list of transaction hashes of an address
         """
         return list(self.index[address])
+
+    def get_sorted_from_address(self, address: str) -> List[bytes]:
+        """ Get a sorted list of transaction hashes of an address
+        """
+        return sorted(self.index[address])
 
 
 class TokensIndex:
