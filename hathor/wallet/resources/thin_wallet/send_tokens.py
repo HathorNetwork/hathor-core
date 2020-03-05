@@ -59,12 +59,21 @@ class SendTokensResource(resource.Resource):
                 'The server is currently fully loaded to send tokens. Wait a moment and try again, please.'
             )
 
-        post_data = json.loads(request.content.read().decode('utf-8'))
-        tx_hex = post_data['tx_hex']
+        try:
+            post_data = json.loads(request.content.read().decode('utf-8'))
+        except AttributeError:
+            return self.return_POST(False, 'Missing transaction hexadecimal in POST data')
+
+        try:
+            tx_hex = post_data['tx_hex']
+        except KeyError:
+            return self.return_POST(False, 'Missing \'tx_hex\' parameter')
 
         try:
             tx = tx_or_block_from_bytes(bytes.fromhex(tx_hex))
-        except struct.error:
+        except (ValueError, struct.error):
+            # ValueError: invalid hex
+            # struct.error: invalid transaction data
             return self.return_POST(False, 'Error parsing hexdump to create the transaction')
 
         assert isinstance(tx, Transaction)

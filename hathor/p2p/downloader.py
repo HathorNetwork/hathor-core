@@ -58,6 +58,7 @@ class TxDetails:
         self.connections = connections
         self.downloading_deferred = None
         self.requested_index = 0
+        self.retry_count = 0
 
     def get_connection(self) -> Optional['NodeSyncTimestamp']:
         """ Get a connection to start the download for this tx detail
@@ -77,7 +78,12 @@ class TxDetails:
                 break
 
             connection = self.connections[self.requested_index]
-            self.requested_index += 1
+            self.retry_count += 1
+
+            # only try next peer if we reach max retries on the current one
+            if self.retry_count >= settings.GET_DATA_RETRIES:
+                self.requested_index += 1
+                self.retry_count = 0
 
             if not connection.protocol.connected:
                 # Connection was already closed, so try the next one
@@ -199,6 +205,8 @@ class Downloader:
         """ This is called when a new transaction arrives.
         """
         assert tx.hash is not None
+        self.log.debug('Downloader: on_new_tx {}'.format(tx.hash.hex()))
+
         details = self.pending_transactions.get(tx.hash, None)
         if not details:
             # Something is wrong! It should never happen.
@@ -242,8 +250,10 @@ class Downloader:
 
     def retry(self, tx_id: bytes) -> None:
         """ Retry a failed download
-            It will only try once per connection
+            It will try up to settings.GET_DATA_RETRIES per connection
         """
+        self.log.warn('Downloader: retry tx {}'.format(tx_id.hex()))
+
         details = self.pending_transactions.get(tx_id, None)
 
         if details is None:
@@ -267,11 +277,15 @@ class Downloader:
         self.add_get_downloading_deferred(tx_id, details, new_connection)
 
     def _remove_pending_tx(self, tx_id: bytes) -> None:
-        """ Cancel tx deferred and remove it from the pending dict
+        """ Cancel tx deferred and remove it from the pending dict and download deque
         """
-        # No new connections available, so we must remove this tx_id from pending_transactions and cancel the deferred
-        details = self.pending_transactions.pop(tx_id)
-        details.deferred.cancel()
         self.log.warn(
             'Downloader: No new connections available to download the transaction. Tx {}'.format(tx_id.hex())
         )
+        # remove this tx_id from pending_transactions and cancel the deferred
+        details = self.pending_transactions.pop(tx_id)
+        details.deferred.cancel()
+
+        # also remove from downloading queue
+        if tx_id in self.downloading_deque:
+            self.downloading_deque.remove(tx_id)

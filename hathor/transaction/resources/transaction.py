@@ -3,13 +3,15 @@ from typing import Any, Dict
 
 from twisted.web import resource
 
-from hathor.api_util import set_cors, validate_tx_hash
+from hathor.api_util import get_missing_params_msg, parse_get_arguments, set_cors, validate_tx_hash
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.transaction.base_transaction import BaseTransaction, TxVersion
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 
 settings = HathorSettings()
+
+GET_LIST_ARGS = ['count', 'type']
 
 
 def update_serialized_tokens_array(tx: BaseTransaction, serialized: Dict[str, Any]) -> None:
@@ -133,7 +135,7 @@ class TransactionResource(resource.Resource):
             # Get all tx
             data = self.get_list_tx(request)
 
-        return json.dumps(data, indent=4).encode('utf-8')
+        return data
 
     def get_one_tx(self, request):
         """ Get 'id' (hash) from request.args
@@ -141,7 +143,7 @@ class TransactionResource(resource.Resource):
         """
         if not self.manager.tx_storage.tokens_index:
             request.setResponseCode(503)
-            return {'success': False}
+            return json.dumps({'success': False}).encode('utf-8')
 
         requested_hash = request.args[b'id'][0].decode('utf-8')
         success, message = validate_tx_hash(requested_hash, self.manager.tx_storage)
@@ -153,7 +155,7 @@ class TransactionResource(resource.Resource):
             tx.storage = self.manager.tx_storage
             data = get_tx_extra_data(tx)
 
-        return data
+        return json.dumps(data, indent=4).encode('utf-8')
 
     def get_list_tx(self, request):
         """ Get parameter from request.args and return list of blocks/txs
@@ -164,14 +166,48 @@ class TransactionResource(resource.Resource):
             'timestamp': int, the timestamp reference we are in the pagination
             'page': 'previous' or 'next', to indicate if the user wants after or before the hash reference
         """
-        count = min(int(request.args[b'count'][0]), settings.MAX_TX_COUNT)
-        type_tx = request.args[b'type'][0].decode('utf-8')
+        parsed = parse_get_arguments(request.args, GET_LIST_ARGS)
+        if not parsed['success']:
+            return get_missing_params_msg(parsed['missing'])
+
+        args = parsed['args']
+        error = None
+
+        try:
+            count = min(int(args['count']), settings.MAX_TX_COUNT)
+        except ValueError:
+            error = {'success': False, 'message': 'Invalid \'count\' parameter, expected an integer'}
+
+        type_tx = args['type']
+        if type_tx != 'tx' and type_tx != 'block':
+            error = {'success': False, 'message': 'Invalid \'type\' parameter, expected \'block\' or \'tx\''}
+
+        if error:
+            return json.dumps(error).encode('utf-8')
+
         ref_hash = None
         page = ''
         if b'hash' in request.args:
             ref_hash = request.args[b'hash'][0].decode('utf-8')
-            ref_timestamp = int(request.args[b'timestamp'][0].decode('utf-8'))
-            page = request.args[b'page'][0].decode('utf-8')
+
+            parsed = parse_get_arguments(request.args, ['timestamp', 'page'])
+            if not parsed['success']:
+                return get_missing_params_msg(parsed['missing'])
+
+            try:
+                ref_timestamp = int(parsed['args']['timestamp'])
+            except ValueError:
+                return json.dumps({
+                    'success': False,
+                    'message': 'Invalid \'timestamp\' parameter, expected an integer'
+                }).encode('utf-8')
+
+            page = parsed['args']['page']
+            if page != 'previous' and page != 'next':
+                return json.dumps({
+                    'success': False,
+                    'message': 'Invalid \'page\' parameter, expected \'previous\' or \'next\''
+                }).encode('utf-8')
 
             if type_tx == 'block':
                 if page == 'previous':
@@ -197,7 +233,7 @@ class TransactionResource(resource.Resource):
         serialized = [element.to_json_extended() for element in elements]
 
         data = {'transactions': serialized, 'has_more': has_more}
-        return data
+        return json.dumps(data, indent=4).encode('utf-8')
 
 
 TransactionResource.openapi = {

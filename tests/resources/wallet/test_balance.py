@@ -18,6 +18,7 @@ class BalanceTest(_BaseResourceTest._ResourceTest):
     def test_get(self):
         response = yield self.web.get("wallet/balance")
         data = response.json_value()
+        self.assertTrue(data['success'])
         self.assertEqual(data['balance'], {'available': 0, 'locked': 0})
 
         # Mining new block
@@ -29,5 +30,6 @@ class BalanceTest(_BaseResourceTest._ResourceTest):
         # Get new balance after block
         response2 = yield self.web.get("wallet/balance")
         data2 = response2.json_value()
+        self.assertTrue(data2['success'])
         tokens = self.manager.get_tokens_issued_per_block(1)
         self.assertEqual(data2['balance'], {'available': tokens, 'locked': 0})

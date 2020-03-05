@@ -209,7 +209,10 @@ class HathorSettings(NamedTuple):
     CA_KEY_FILEPATH: str = os.path.join(os.path.dirname(__file__), '../p2p/ca.key')
 
     # Timeout (in seconds) for the downloading deferred (in the downloader) when syncing two peers
-    GET_DATA_TIMEOUT: int = 30
+    GET_DATA_TIMEOUT: int = 90
+
+    # Number of retries for downloading a tx from a peer (in the downloader)
+    GET_DATA_RETRIES: int = 5
 
     # Maximum number of characters in a token name
     MAX_LENGTH_TOKEN_NAME: int = 30
@@ -231,3 +234,6 @@ class HathorSettings(NamedTuple):
 
     # Mamimum number of outputs accepted
     MAX_NUM_OUTPUTS: int = 255
+
+    # Maximum number of transactions returned on addresses history API
+    MAX_TX_ADDRESSES_HISTORY: int = 50

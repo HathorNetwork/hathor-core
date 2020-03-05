@@ -30,7 +30,10 @@ class BalanceResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        data = {'balance': self.manager.wallet.balance[settings.HATHOR_TOKEN_UID]._asdict()}
+        if not self.manager.wallet:
+            return {'success': False, 'message': 'No wallet started on node'}
+
+        data = {'success': True, 'balance': self.manager.wallet.balance[settings.HATHOR_TOKEN_UID]._asdict()}
         return json.dumps(data, indent=4).encode('utf-8')
 
 

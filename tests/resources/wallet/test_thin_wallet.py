@@ -291,7 +291,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         tx = create_tokens(self.manager, mint_amount=100, token_name='Teste', token_symbol='TST')
         token_uid = tx.tokens[0]
 
-        response = yield resource.get('thin_wallet/token_history', {b'id': token_uid.hex().encode(), b'count': 3})
+        response = yield resource.get('thin_wallet/token_history', {b'id': token_uid.hex().encode(), b'count': b'3'})
         data = response.json_value()
         # Success returning the token creation tx
         self.assertTrue(data['success'])
@@ -299,7 +299,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(1, len(data['transactions']))
         self.assertEqual(tx.hash.hex(), data['transactions'][0]['tx_id'])
 
-        response = yield resource.get('thin_wallet/token_history', {b'id': b'123', b'count': 3})
+        response = yield resource.get('thin_wallet/token_history', {b'id': b'123', b'count': b'3'})
         data = response.json_value()
         # Fail because token is unknown
         self.assertFalse(data['success'])
@@ -326,7 +326,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.manager.propagate_tx(tx2)
 
         # Now we have 2 txs with this token
-        response = yield resource.get('thin_wallet/token_history', {b'id': token_uid.hex().encode(), b'count': 3})
+        response = yield resource.get('thin_wallet/token_history', {b'id': token_uid.hex().encode(), b'count': b'3'})
         data = response.json_value()
         # Success returning the token creation tx and newly created tx
         self.assertTrue(data['success'])
@@ -335,7 +335,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(tx2.hash.hex(), data['transactions'][0]['tx_id'])
         self.assertEqual(tx.hash.hex(), data['transactions'][1]['tx_id'])
 
-        response = yield resource.get('thin_wallet/token_history', {b'id': token_uid.hex().encode(), b'count': 1})
+        response = yield resource.get('thin_wallet/token_history', {b'id': token_uid.hex().encode(), b'count': b'1'})
         data = response.json_value()
         # Testing has_more
         self.assertTrue(data['success'])
@@ -344,7 +344,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         response = yield resource.get('thin_wallet/token_history', {
             b'id': token_uid.hex().encode(),
-            b'count': 10,
+            b'count': b'10',
             b'page': b'next',
             b'hash': tx2.hash.hex().encode(),
             b'timestamp': str(tx2.timestamp).encode(),
@@ -358,7 +358,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         response = yield resource.get('thin_wallet/token_history', {
             b'id': token_uid.hex().encode(),
-            b'count': 10,
+            b'count': b'10',
             b'page': b'previous',
             b'hash': tx.hash.hex().encode(),
             b'timestamp': str(tx.timestamp).encode(),
@@ -372,7 +372,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         response = yield resource.get('thin_wallet/token_history', {
             b'id': token_uid.hex().encode(),
-            b'count': 10,
+            b'count': b'10',
             b'page': b'previous',
             b'hash': tx2.hash.hex().encode(),
             b'timestamp': str(tx2.timestamp).encode(),
@@ -382,3 +382,104 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertTrue(data['success'])
         self.assertFalse(data['has_more'])
         self.assertEqual(0, len(data['transactions']))
+
+    @inlineCallbacks
+    def test_address_history_invalid_params(self):
+        # missing param
+        response_history = yield self.web_address_history.get('thin_wallet/address_history')
+        response_data = response_history.json_value()
+        self.assertFalse(response_data['success'])
+
+        # invalid address
+        response_history = yield self.web_address_history.get(
+            'thin_wallet/address_history', {
+                b'addresses[]': b'aaa'
+            }
+        )
+        response_data = response_history.json_value()
+        self.assertFalse(response_data['success'])
+
+    @inlineCallbacks
+    def test_send_tokens_invalid_params(self):
+        # missing body
+        response = yield self.web.post('thin_wallet/send_tokens')
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # missing param
+        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hexYYY': 'aaa'})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # missing param
+        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': 'aaa'})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+    @inlineCallbacks
+    def test_token_history_invalid_params(self):
+        resource = StubSite(TokenHistoryResource(self.manager))
+
+        # invalid count
+        response = yield resource.get('thin_wallet/token_history', {
+            b'id': b'000003a3b261e142d3dfd84970d3a50a93b5bc3a66a3b6ba973956148a3eb824',
+            b'count': b'a'
+        })
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # missing token uid
+        response = yield resource.get('thin_wallet/token_history', {
+            b'count': b'3'
+        })
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # invalid token uid
+        response = yield resource.get('thin_wallet/token_history', {
+            b'id': b'000',
+            b'count': b'3'
+        })
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # missing timestamp
+        response = yield resource.get('thin_wallet/token_history', {
+            b'id': b'000003a3b261e142d3dfd84970d3a50a93b5bc3a66a3b6ba973956148a3eb824',
+            b'count': b'3',
+            b'hash': b'0000b1448893eb7efdd3c71b97b74d934a4ecaaf8a6b52f6cb5b60fdaf21497b',
+        })
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # invalid timestamp
+        response = yield resource.get('thin_wallet/token_history', {
+            b'id': b'000003a3b261e142d3dfd84970d3a50a93b5bc3a66a3b6ba973956148a3eb824',
+            b'count': b'3',
+            b'hash': b'0000b1448893eb7efdd3c71b97b74d934a4ecaaf8a6b52f6cb5b60fdaf21497b',
+            b'timestamp': b'a'
+        })
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # invalid hash
+        response = yield resource.get('thin_wallet/token_history', {
+            b'id': b'000003a3b261e142d3dfd84970d3a50a93b5bc3a66a3b6ba973956148a3eb824',
+            b'count': b'3',
+            b'timestamp': b'1578118186',
+            b'page': b'next',
+            b'hash': b'000',
+        })
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # invalid page
+        response = yield resource.get('thin_wallet/token_history', {
+            b'id': b'000003a3b261e142d3dfd84970d3a50a93b5bc3a66a3b6ba973956148a3eb824',
+            b'count': b'3',
+            b'timestamp': b'1578118186',
+            b'page': b'nextYY',
+            b'hash': b'0000b1448893eb7efdd3c71b97b74d934a4ecaaf8a6b52f6cb5b60fdaf21497b',
+        })
+        data = response.json_value()
+        self.assertFalse(data['success'])

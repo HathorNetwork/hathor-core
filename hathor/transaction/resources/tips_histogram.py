@@ -2,8 +2,10 @@ import json
 
 from twisted.web import resource
 
-from hathor.api_util import set_cors
+from hathor.api_util import parse_get_arguments, set_cors
 from hathor.cli.openapi_files.register import register_resource
+
+ARGS = ['begin', 'end']
 
 
 @register_resource
@@ -30,16 +32,38 @@ class TipsHistogramResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
+        parsed = parse_get_arguments(request.args, ARGS)
+        if not parsed['success']:
+            return json.dumps({
+                'success': False,
+                'message': 'Missing parameter: {}'.format(parsed['missing'])
+            }).encode('utf-8')
+
+        args = parsed['args']
+
         # Get quantity for each
-        begin = int(request.args[b'begin'][0])
-        end = int(request.args[b'end'][0])
+        try:
+            begin = int(args['begin'])
+        except ValueError:
+            return json.dumps({
+                'success': False,
+                'message': 'Invalid parameter, cannot convert to int: begin'
+            }).encode('utf-8')
+
+        try:
+            end = int(args['end'])
+        except ValueError:
+            return json.dumps({
+                'success': False,
+                'message': 'Invalid parameter, cannot convert to int: end'
+            }).encode('utf-8')
 
         v = []
         for timestamp in range(begin, end + 1):
             tx_tips = self.manager.tx_storage.get_tx_tips(timestamp)
             v.append((timestamp, len(tx_tips)))
 
-        return json.dumps(v).encode('utf-8')
+        return json.dumps({'success': True, 'tips': v}).encode('utf-8')
 
 
 TipsHistogramResource.openapi = {
@@ -93,6 +117,13 @@ TipsHistogramResource.openapi = {
                                             2
                                         ]
                                     ]
+                                },
+                                'error': {
+                                    'summary': 'Invalid parameter',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Missing parameter: begin'
+                                    }
                                 }
                             }
                         }

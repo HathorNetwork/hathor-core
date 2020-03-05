@@ -1,5 +1,7 @@
 import base64
+import binascii
 import json
+import struct
 
 from twisted.web import resource
 
@@ -28,10 +30,20 @@ class MiningResource(resource.Resource):
 
             :rtype: bytes
         """
-        post_data = json.loads(request.content.read().decode('utf-8'))
-        block_bytes_str = post_data['block_bytes']
-        block_bytes = base64.b64decode(block_bytes_str)
-        block = Block.create_from_struct(block_bytes, storage=self.manager.tx_storage)
+        try:
+            post_data = json.loads(request.content.read().decode('utf-8'))
+            block_bytes_str = post_data['block_bytes']
+            block_bytes = base64.b64decode(block_bytes_str)
+            block = Block.create_from_struct(block_bytes, storage=self.manager.tx_storage)
+        except (AttributeError, KeyError, ValueError, json.JSONDecodeError, binascii.Error, struct.error):
+            # XXX ideally, we should catch each error separately and send an specific error
+            # message, but we only return 0 or 1 on the API
+            # AttributeError, json.JSONDecodeError: empty data or error decoding json
+            # KeyError: missing 'block_bytes' on post_data
+            # ValueError, struct.error: raised in create_block_from_struct
+            # binascii.Error: incorrect base64 data
+            return b'0'
+
         ret = self.manager.propagate_tx(block)
         if ret:
             return b'1'

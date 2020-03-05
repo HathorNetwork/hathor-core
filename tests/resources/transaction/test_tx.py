@@ -167,6 +167,72 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
         self.assertTrue(data6['has_more'])
 
+    @inlineCallbacks
+    def test_invalid_params(self):
+        # Add some blocks and txs
+        add_new_blocks(self.manager, 4, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
+        add_new_transactions(self.manager, 3)
+
+        # invalid count
+        response = yield self.web.get("transaction", {b'count': b'a', b'type': b'block'})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # missing type
+        response = yield self.web.get("transaction", {b'count': b'3'})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # invalid type
+        response = yield self.web.get("transaction", {b'count': b'3', b'type': b'block1'})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # missing timestamp
+        response = yield self.web.get(
+                "transaction", {
+                    b'count': b'3',
+                    b'type': b'block',
+                    b'hash': bytes('0000000043bae7193ae512e8e6e6cd666ef3ea46db6df63bd22f201c5fd682ea', 'utf-8')
+                })
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # invalid timestamp
+        response = yield self.web.get(
+                "transaction", {
+                    b'count': b'3',
+                    b'type': b'block',
+                    b'hash': bytes('0000000043bae7193ae512e8e6e6cd666ef3ea46db6df63bd22f201c5fd682ea', 'utf-8'),
+                    b'timestamp': b'aa'
+                })
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # missing page
+        response = yield self.web.get(
+                "transaction", {
+                    b'count': b'3',
+                    b'type': b'block',
+                    b'hash': bytes('0000000043bae7193ae512e8e6e6cd666ef3ea46db6df63bd22f201c5fd682ea', 'utf-8'),
+                    b'timestamp': b'1579716659'
+                })
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # invalid timestamp
+        response = yield self.web.get(
+                "transaction", {
+                    b'count': b'3',
+                    b'type': b'block',
+                    b'hash': bytes('0000000043bae7193ae512e8e6e6cd666ef3ea46db6df63bd22f201c5fd682ea', 'utf-8'),
+                    b'timestamp': b'1579716659',
+                    b'page': b'next1'
+                })
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
 
 class RemoteStorageTransactionTest(TransactionTest):
     def setUp(self):

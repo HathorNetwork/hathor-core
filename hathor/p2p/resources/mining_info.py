@@ -75,7 +75,7 @@ MiningInfoResource.openapi = {
         },
         'get': {
             'tags': ['p2p'],
-            'operationId': 'mining_get',
+            'operationId': 'mining_info',
             'summary': 'Mining info',
             'description': 'Return the block\'s height, global hashrate, and mining difficulty.',
             'parameters': [],
