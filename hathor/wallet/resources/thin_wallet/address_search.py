@@ -29,7 +29,7 @@ class AddressSearchResource(resource.Resource):
         self.manager = manager
 
     def has_token_and_address(self, tx: 'BaseTransaction', address: str, token: bytes) -> bool:
-        """ Validate if transactions has any input or output with the
+        """ Validate if transaction has any input or output with the
             address and token sent as parameter
         """
         for tx_input in tx.inputs:
@@ -56,10 +56,12 @@ class AddressSearchResource(resource.Resource):
     def render_GET(self, request: Request) -> bytes:
         """ GET request for /thin_wallet/address_search/
             Expects 'address' and 'count' as required request args
+            'token' is an optional parameter to define if the search wants an specific token only
             'hash' and 'page' are optional args to be used in pagination
 
             'address' is a base58 address string
             'count' is an integer indicating the quantity of elements to be returned
+            'token' is the token uid in hex to be searched
             'hash' is the first address of the pagination to start the history
             'page' is either 'previous' or 'next' to indicate the page clicked
 
@@ -99,7 +101,6 @@ class AddressSearchResource(resource.Resource):
                 'message': 'Invalid \'count\' parameter, expected an int'
             }).encode('utf-8')
 
-        token_uid = None
         token_uid_bytes = None
         if b'token' in request.args:
             # It's an optional parameter, we just check if it's a valid hex
@@ -121,7 +122,7 @@ class AddressSearchResource(resource.Resource):
         transactions = []
         for tx_hash in hashes:
             tx = self.manager.tx_storage.get_transaction(tx_hash)
-            if token_uid and not self.has_token_and_address(tx, address, token_uid_bytes):
+            if token_uid_bytes and not self.has_token_and_address(tx, address, token_uid_bytes):
                 # Request wants to filter by token but tx does not have this token
                 # so we don't add it to the transactions array
                 continue

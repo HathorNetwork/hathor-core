@@ -28,7 +28,7 @@ class AddressBalanceResource(resource.Resource):
     def __init__(self, manager):
         self.manager = manager
 
-    def should_add_value(self, output: 'TxOutput', requested_address: str) -> bool:
+    def has_address(self, output: 'TxOutput', requested_address: str) -> bool:
         """ Check if output address is the same as requested_address
         """
         if output.is_token_authority():
@@ -82,7 +82,7 @@ class AddressBalanceResource(resource.Resource):
                 for tx_input in tx.inputs:
                     tx2 = self.manager.tx_storage.get_transaction(tx_input.tx_id)
                     tx2_output = tx2.outputs[tx_input.index]
-                    if self.should_add_value(tx2_output, requested_address):
+                    if self.has_address(tx2_output, requested_address):
                         # We just consider the address that was requested
                         token_uid = tx2.get_token_uid(tx2_output.get_token_index())
                         token_uid_hex = token_uid.hex()
@@ -91,7 +91,7 @@ class AddressBalanceResource(resource.Resource):
                         tokens_data[token_uid_hex]['spent'] += tx2_output.value
 
                 for tx_output in tx.outputs:
-                    if self.should_add_value(tx_output, requested_address):
+                    if self.has_address(tx_output, requested_address):
                         # We just consider the address that was requested
                         token_uid = tx.get_token_uid(tx_output.get_token_index())
                         token_uid_hex = token_uid.hex()
@@ -112,10 +112,11 @@ class AddressBalanceResource(resource.Resource):
                 except KeyError:
                     # Should never get here because this token appears in our wallet index
                     # But better than get a 500 error
-                    return json.dumps({'success': False, 'message': 'Unknown token'}, indent=4).encode('utf-8')
+                    tokens_data[token_uid_hex]['name'] = '- (unable to fetch token information)'
+                    tokens_data[token_uid_hex]['symbol'] = '- (unable to fetch token information)'
         data = {
             'success': True,
-            'quantity': len(tx_hashes),
+            'total_transactions': len(tx_hashes),
             'tokens_data': tokens_data
         }
         return json.dumps(data, indent=4).encode('utf-8')
@@ -165,7 +166,7 @@ AddressBalanceResource.openapi = {
                                     'summary': 'Success',
                                     'value': {
                                         'success': True,
-                                        'quantity': 5,
+                                        'total_transactions': 5,
                                         'tokens_data': {
                                             '00': {
                                                 'name': 'Hathor',

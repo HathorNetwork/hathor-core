@@ -25,7 +25,7 @@ class SearchAddressTest(_BaseResourceTest._ResourceTest):
         tx = create_tokens(self.manager, mint_amount=100, token_name='Teste', token_symbol='TST')
         self.token_uid = tx.tokens[0]
 
-        # Create a tx with this token, so we can have more tx in the history
+        # Create a tx with the same address, so we can have more tx in the history
         output = tx.outputs[0]
         script_type_out = parse_address_script(output.script)
         self.address = script_type_out.address
@@ -44,6 +44,7 @@ class SearchAddressTest(_BaseResourceTest._ResourceTest):
         data_error = response_error.json_value()
         self.assertFalse(data_error['success'])
 
+        # Get address search first page success
         response = yield resource.get('thin_wallet/address_search', {b'address': self.address.encode(), b'count': 3})
         data = response.json_value()
         self.assertTrue(data['success'])
@@ -57,13 +58,18 @@ class SearchAddressTest(_BaseResourceTest._ResourceTest):
                 b'address': self.address.encode(),
                 b'count': 3,
                 b'page': b'next',
-                b'hash': data['transactions'][2]['tx_id'].encode()
+                b'hash': data['transactions'][-1]['tx_id'].encode()
             }
         )
         data2 = response2.json_value()
         self.assertTrue(data2['success'])
         self.assertEqual(len(data2['transactions']), 3)
         self.assertFalse(data2['has_more'])
+
+        # Testing that no tx in data is also in data2
+        tx_ids_data = [tx['tx_id'] for tx in data['transactions']]
+        for tx in data2['transactions']:
+            self.assertNotIn(tx['tx_id'])
 
         # Getting previous page from third element
         response3 = yield resource.get(
@@ -72,13 +78,18 @@ class SearchAddressTest(_BaseResourceTest._ResourceTest):
                 b'address': self.address.encode(),
                 b'count': 3,
                 b'page': b'previous',
-                b'hash': data['transactions'][2]['tx_id'].encode()
+                b'hash': data['transactions'][-1]['tx_id'].encode()
             }
         )
         data3 = response3.json_value()
         self.assertTrue(data3['success'])
         self.assertEqual(len(data3['transactions']), 2)
         self.assertFalse(data3['has_more'])
+
+        # Testing that no tx in data3 is also in data2
+        tx_ids_data = [tx['tx_id'] for tx in data3['transactions']]
+        for tx in data2['transactions']:
+            self.assertNotIn(tx['tx_id'])
 
     @inlineCallbacks
     def test_address_balance(self):
