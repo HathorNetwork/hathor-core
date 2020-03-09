@@ -69,7 +69,7 @@ class SearchAddressTest(_BaseResourceTest._ResourceTest):
         # Testing that no tx in data is also in data2
         tx_ids_data = [tx['tx_id'] for tx in data['transactions']]
         for tx in data2['transactions']:
-            self.assertNotIn(tx['tx_id'])
+            self.assertNotIn(tx['tx_id'], tx_ids_data)
 
         # Getting previous page from third element
         response3 = yield resource.get(
@@ -89,7 +89,7 @@ class SearchAddressTest(_BaseResourceTest._ResourceTest):
         # Testing that no tx in data3 is also in data2
         tx_ids_data = [tx['tx_id'] for tx in data3['transactions']]
         for tx in data2['transactions']:
-            self.assertNotIn(tx['tx_id'])
+            self.assertNotIn(tx['tx_id'], tx_ids_data)
 
     @inlineCallbacks
     def test_address_balance(self):
@@ -105,7 +105,7 @@ class SearchAddressTest(_BaseResourceTest._ResourceTest):
         self.assertTrue(data['success'])
         # Genesis - token deposit + blocks mined
         HTR_value = settings.GENESIS_TOKENS - 1 + (settings.INITIAL_TOKENS_PER_BLOCK * 5)
-        self.assertEqual(data['quantity'], 6)  # 5 blocks mined + token creation tx
+        self.assertEqual(data['total_transactions'], 6)  # 5 blocks mined + token creation tx
         self.assertIn(settings.HATHOR_TOKEN_UID.hex(), data['tokens_data'])
         self.assertIn(self.token_uid.hex(), data['tokens_data'])
         self.assertEqual(HTR_value, data['tokens_data'][settings.HATHOR_TOKEN_UID.hex()]['received'])

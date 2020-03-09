@@ -114,7 +114,6 @@ class AddressSearchResource(resource.Resource):
                     'message': 'Token uid is not a valid hexadecimal value.'
                 }).encode('utf-8')
 
-
         hashes = wallet_index.get_from_address(address)
         # XXX To do a timestamp sorting, so the pagination works better
         # we must get all transactions and sort them

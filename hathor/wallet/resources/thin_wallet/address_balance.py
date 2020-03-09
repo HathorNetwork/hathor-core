@@ -1,4 +1,5 @@
 import json
+from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Dict
 
 from twisted.web import resource
@@ -70,9 +71,21 @@ class AddressBalanceResource(resource.Resource):
                 'message': 'Invalid \'address\' parameter'
             }).encode('utf-8')
 
-        tokens_data: Dict[str, Dict[str, Any]] = {}
-        # Shouldn't use defaultdict(int) because we also have strings on this dict
-        start_dict = {'received': 0, 'spent': 0}
+        class TokenData:
+            received: int = 0
+            spent: int = 0
+            name: str = ''
+            symbol: str = ''
+
+            def to_dict(self):
+                return {
+                    'received': self.received,
+                    'spent': self.spent,
+                    'name': self.name,
+                    'symbol': self.symbol,
+                }
+
+        tokens_data: Dict[str, TokenData] = defaultdict(TokenData)
         tx_hashes = wallet_index.get_from_address(requested_address)
         for tx_hash in tx_hashes:
             tx = self.manager.tx_storage.get_transaction(tx_hash)
@@ -86,38 +99,37 @@ class AddressBalanceResource(resource.Resource):
                         # We just consider the address that was requested
                         token_uid = tx2.get_token_uid(tx2_output.get_token_index())
                         token_uid_hex = token_uid.hex()
-                        if token_uid_hex not in tokens_data:
-                            tokens_data[token_uid_hex] = start_dict.copy()
-                        tokens_data[token_uid_hex]['spent'] += tx2_output.value
+                        tokens_data[token_uid_hex].spent += tx2_output.value
 
                 for tx_output in tx.outputs:
                     if self.has_address(tx_output, requested_address):
                         # We just consider the address that was requested
                         token_uid = tx.get_token_uid(tx_output.get_token_index())
                         token_uid_hex = token_uid.hex()
-                        if token_uid_hex not in tokens_data:
-                            tokens_data[token_uid_hex] = start_dict.copy()
-                        tokens_data[token_uid_hex]['received'] += tx_output.value
+                        tokens_data[token_uid_hex].received += tx_output.value
 
+        return_tokens_data: Dict[str, Dict[str, Any]] = {}
         for token_uid_hex in tokens_data.keys():
             token_uid = bytes.fromhex(token_uid_hex)
             if token_uid == settings.HATHOR_TOKEN_UID:
-                tokens_data[token_uid_hex]['name'] = settings.HATHOR_TOKEN_NAME
-                tokens_data[token_uid_hex]['symbol'] = settings.HATHOR_TOKEN_SYMBOL
+                tokens_data[token_uid_hex].name = settings.HATHOR_TOKEN_NAME
+                tokens_data[token_uid_hex].symbol = settings.HATHOR_TOKEN_SYMBOL
             else:
                 try:
                     token_info = tokens_index.get_token_info(token_uid)
-                    tokens_data[token_uid_hex]['name'] = token_info.name
-                    tokens_data[token_uid_hex]['symbol'] = token_info.symbol
+                    tokens_data[token_uid_hex].name = token_info.name
+                    tokens_data[token_uid_hex].symbol = token_info.symbol
                 except KeyError:
                     # Should never get here because this token appears in our wallet index
                     # But better than get a 500 error
-                    tokens_data[token_uid_hex]['name'] = '- (unable to fetch token information)'
-                    tokens_data[token_uid_hex]['symbol'] = '- (unable to fetch token information)'
+                    tokens_data[token_uid_hex].name = '- (unable to fetch token information)'
+                    tokens_data[token_uid_hex].symbol = '- (unable to fetch token information)'
+            return_tokens_data[token_uid_hex] = tokens_data[token_uid_hex].to_dict()
+
         data = {
             'success': True,
             'total_transactions': len(tx_hashes),
-            'tokens_data': tokens_data
+            'tokens_data': return_tokens_data
         }
         return json.dumps(data, indent=4).encode('utf-8')
 
