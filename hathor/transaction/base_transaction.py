@@ -713,18 +713,20 @@ class BaseTransaction(ABC):
 
         :rtype: :py:class:`hathor.transaction.TransactionMetadata`
         """
-        assert self.hash is not None
         if force_reload:
             metadata = None
         else:
             metadata = getattr(self, '_metadata', None)
         if not metadata and use_storage and self.storage:
+            assert self.hash is not None
             metadata = self.storage.get_metadata(self.hash)
             self._metadata = metadata
         if not metadata:
-            metadata = TransactionMetadata(hash=self.hash,
-                                           accumulated_weight=self.weight,
-                                           height=self.calculate_height())
+            # FIXME: there is code that set use_storage=False but relies on correct height being calculated
+            #        which requires the use of a storage, this is a workaround that should be fixed, places where this
+            #        happens include generating new mining blocks and some tests
+            height = self.calculate_height() if self.storage else 0
+            metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight, height=height)
             self._metadata = metadata
         metadata._tx_ref = weakref.ref(self)
         return metadata

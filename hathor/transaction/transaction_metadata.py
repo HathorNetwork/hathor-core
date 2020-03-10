@@ -196,7 +196,7 @@ class TransactionMetadata:
     @classmethod
     def create_from_json(cls, data: Dict[str, Any]) -> 'TransactionMetadata':
         meta = cls()
-        meta.hash = bytes.fromhex(data['hash'])
+        meta.hash = bytes.fromhex(data['hash']) if data['hash'] else None
         for idx, hashes in data['spent_outputs']:
             for h_hex in hashes:
                 meta.spent_outputs[idx].append(bytes.fromhex(h_hex))
