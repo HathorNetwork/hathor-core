@@ -23,6 +23,10 @@ class RunNode:
         parser.add_argument('--testnet', action='store_true', help='Connect to Hathor testnet')
         parser.add_argument('--test-mode-tx-weight', action='store_true',
                             help='Reduces tx weight to 1 for testing purposes')
+        parser.add_argument('--min-tx-weight-coefficient', type=float,
+                            help='Changes the min_tx_weight_coefficient parameter, used for calculating tx weight')
+        parser.add_argument('--min-tx-weight-k', type=int,
+                            help='Changes the min_tx_weight_k parameter, used for calculating tx weight')
         parser.add_argument('--dns', action='append', help='Seed DNS')
         parser.add_argument('--peer', help='json file with peer info')
         parser.add_argument('--listen', action='append', default=[],
@@ -166,7 +170,9 @@ class RunNode:
         network = settings.NETWORK_NAME
         self.manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname,
                                      tx_storage=self.tx_storage, wallet=self.wallet, wallet_index=args.wallet_index,
-                                     stratum_port=args.stratum, min_block_weight=args.min_block_weight, ssl=True)
+                                     stratum_port=args.stratum, min_block_weight=args.min_block_weight, ssl=True,
+                                     min_tx_weight_coefficient=args.min_tx_weight_coefficient,
+                                     min_tx_weight_k=args.min_tx_weight_k)
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
 

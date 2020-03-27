@@ -71,7 +71,8 @@ class HathorManager:
                  hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
                  peer_storage: Optional[Any] = None, default_port: int = 40403, wallet_index: bool = False,
-                 stratum_port: Optional[int] = None, min_block_weight: Optional[int] = None, ssl: bool = True) -> None:
+                 stratum_port: Optional[int] = None, min_block_weight: Optional[int] = None, ssl: bool = True,
+                 min_tx_weight_coefficient: Optional[float] = None, min_tx_weight_k: Optional[int] = None) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node. If not given, a new one is created.
@@ -162,10 +163,9 @@ class HathorManager:
         # When manager is in test mode we reduce the weight of blocks/transactions.
         self.test_mode: int = 0
 
-        # Multiplier coefficient to adjust the minimum weight of a normal tx to 18
-        self.min_tx_weight_coefficient = 1.6
-        # Amount in which tx min weight reaches the middle point between the minimum and maximum weight.
-        self.min_tx_weight_k = 100
+        # tx weight parameters
+        self.min_tx_weight_coefficient = min_tx_weight_coefficient or settings.MIN_TX_WEIGHT_COEFFICIENT
+        self.min_tx_weight_k = min_tx_weight_k or settings.MIN_TX_WEIGHT_K
 
         self.stratum_factory = StratumFactory(manager=self, port=stratum_port) if stratum_port else None
         # Set stratum factory for metrics object
