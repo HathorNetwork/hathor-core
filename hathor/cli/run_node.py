@@ -71,6 +71,8 @@ class RunNode:
 
         if args.recursion_limit:
             sys.setrecursionlimit(args.recursion_limit)
+        else:
+            sys.setrecursionlimit(5000)
 
         if not args.peer:
             peer_id = PeerId()
