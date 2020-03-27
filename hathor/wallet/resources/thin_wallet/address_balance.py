@@ -18,6 +18,21 @@ if TYPE_CHECKING:
 settings = HathorSettings()
 
 
+class TokenData:
+    received: int = 0
+    spent: int = 0
+    name: str = ''
+    symbol: str = ''
+
+    def to_dict(self):
+        return {
+            'received': self.received,
+            'spent': self.spent,
+            'name': self.name,
+            'symbol': self.symbol,
+        }
+
+
 @register_resource
 class AddressBalanceResource(resource.Resource):
     """ Implements a web server API to return the address balance
@@ -70,20 +85,6 @@ class AddressBalanceResource(resource.Resource):
                 'success': False,
                 'message': 'Invalid \'address\' parameter'
             }).encode('utf-8')
-
-        class TokenData:
-            received: int = 0
-            spent: int = 0
-            name: str = ''
-            symbol: str = ''
-
-            def to_dict(self):
-                return {
-                    'received': self.received,
-                    'spent': self.spent,
-                    'name': self.name,
-                    'symbol': self.symbol,
-                }
 
         tokens_data: Dict[str, TokenData] = defaultdict(TokenData)
         tx_hashes = wallet_index.get_from_address(requested_address)
