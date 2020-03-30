@@ -135,7 +135,6 @@ class HathorManager:
 
         self.avg_time_between_blocks = settings.AVG_TIME_BETWEEN_BLOCKS
         self.min_block_weight = min_block_weight or settings.MIN_BLOCK_WEIGHT
-        self.min_tx_weight = settings.MIN_TX_WEIGHT
 
         self.metrics = Metrics(
             pubsub=self.pubsub,
@@ -161,11 +160,6 @@ class HathorManager:
 
         # When manager is in test mode we reduce the weight of blocks/transactions.
         self.test_mode: int = 0
-
-        # Multiplier coefficient to adjust the minimum weight of a normal tx to 18
-        self.min_tx_weight_coefficient = 1.6
-        # Amount in which tx min weight reaches the middle point between the minimum and maximum weight.
-        self.min_tx_weight_k = 100
 
         self.stratum_factory = StratumFactory(manager=self, port=stratum_port) if stratum_port else None
         # Set stratum factory for metrics object
@@ -634,7 +628,7 @@ class HathorManager:
             return 1
 
         if tx.is_genesis:
-            return self.min_tx_weight
+            return settings.MIN_TX_WEIGHT
 
         tx_size = len(tx.get_struct())
 
@@ -643,12 +637,12 @@ class HathorManager:
         # Max below is preventing division by 0 when handling authority methods that have no outputs
         amount = max(1, tx.sum_outputs) / (10 ** settings.DECIMAL_PLACES)
         weight = (
-            + self.min_tx_weight_coefficient * log(tx_size, 2)
-            + 4 / (1 + self.min_tx_weight_k / amount) + 4
+            + settings.MIN_TX_WEIGHT_COEFFICIENT * log(tx_size, 2)
+            + 4 / (1 + settings.MIN_TX_WEIGHT_K / amount) + 4
         )
 
         # Make sure the calculated weight is at least the minimum
-        weight = max(weight, self.min_tx_weight)
+        weight = max(weight, settings.MIN_TX_WEIGHT)
 
         return weight
 

@@ -237,3 +237,9 @@ class HathorSettings(NamedTuple):
 
     # Maximum number of transactions returned on addresses history API
     MAX_TX_ADDRESSES_HISTORY: int = 50
+
+    # Multiplier coefficient to adjust the minimum weight of a normal tx to 18
+    MIN_TX_WEIGHT_COEFFICIENT: float = 1.6
+
+    # Amount in which tx min weight reaches the middle point between the minimum and maximum weight
+    MIN_TX_WEIGHT_K: int = 100
