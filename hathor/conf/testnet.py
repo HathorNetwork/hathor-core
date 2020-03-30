@@ -14,6 +14,8 @@ SETTINGS = HathorSettings(
     GENESIS_TX1_HASH=bytes.fromhex('00025d75e44804a6a6a099f4320471c864b38d37b79b496ee26080a2a1fd5b7b'),
     GENESIS_TX2_NONCE=21301,
     GENESIS_TX2_HASH=bytes.fromhex('0002c187ab30d4f61c11a5dc43240bdf92dba4d19f40f1e883b0a5fdac54ef53'),
-    MIN_TX_WEIGHT_K=100,
-    MIN_TX_WEIGHT_COEFFICIENT=1.6,
+    # tx weight parameters. With these settings, tx weight is always 8
+    MIN_TX_WEIGHT_K=0,
+    MIN_TX_WEIGHT_COEFFICIENT=0,
+    MIN_TX_WEIGHT=8,
 )

@@ -135,7 +135,6 @@ class HathorManager:
 
         self.avg_time_between_blocks = settings.AVG_TIME_BETWEEN_BLOCKS
         self.min_block_weight = min_block_weight or settings.MIN_BLOCK_WEIGHT
-        self.min_tx_weight = settings.MIN_TX_WEIGHT
 
         self.metrics = Metrics(
             pubsub=self.pubsub,
@@ -629,7 +628,7 @@ class HathorManager:
             return 1
 
         if tx.is_genesis:
-            return self.min_tx_weight
+            return settings.MIN_TX_WEIGHT
 
         tx_size = len(tx.get_struct())
 
@@ -643,7 +642,7 @@ class HathorManager:
         )
 
         # Make sure the calculated weight is at least the minimum
-        weight = max(weight, self.min_tx_weight)
+        weight = max(weight, settings.MIN_TX_WEIGHT)
 
         return weight
 
