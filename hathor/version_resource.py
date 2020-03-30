@@ -51,8 +51,8 @@ class VersionResource(resource.Resource):
             'network': self.manager.network,
             'min_weight': self.manager.min_tx_weight,  # DEPRECATED
             'min_tx_weight': self.manager.min_tx_weight,
-            'min_tx_weight_coefficient': self.manager.min_tx_weight_coefficient,
-            'min_tx_weight_k': self.manager.min_tx_weight_k,
+            'min_tx_weight_coefficient': settings.MIN_TX_WEIGHT_COEFFICIENT,
+            'min_tx_weight_k': settings.MIN_TX_WEIGHT_K,
             'token_deposit_percentage': settings.TOKEN_DEPOSIT_PERCENTAGE,
             'reward_spend_min_blocks': settings.REWARD_SPEND_MIN_BLOCKS,
             'max_number_inputs': settings.MAX_NUM_INPUTS,

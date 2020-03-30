@@ -71,8 +71,7 @@ class HathorManager:
                  hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
                  peer_storage: Optional[Any] = None, default_port: int = 40403, wallet_index: bool = False,
-                 stratum_port: Optional[int] = None, min_block_weight: Optional[int] = None, ssl: bool = True,
-                 min_tx_weight_coefficient: Optional[float] = None, min_tx_weight_k: Optional[int] = None) -> None:
+                 stratum_port: Optional[int] = None, min_block_weight: Optional[int] = None, ssl: bool = True) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node. If not given, a new one is created.
@@ -162,10 +161,6 @@ class HathorManager:
 
         # When manager is in test mode we reduce the weight of blocks/transactions.
         self.test_mode: int = 0
-
-        # tx weight parameters
-        self.min_tx_weight_coefficient = min_tx_weight_coefficient or settings.MIN_TX_WEIGHT_COEFFICIENT
-        self.min_tx_weight_k = min_tx_weight_k or settings.MIN_TX_WEIGHT_K
 
         self.stratum_factory = StratumFactory(manager=self, port=stratum_port) if stratum_port else None
         # Set stratum factory for metrics object
@@ -643,8 +638,8 @@ class HathorManager:
         # Max below is preventing division by 0 when handling authority methods that have no outputs
         amount = max(1, tx.sum_outputs) / (10 ** settings.DECIMAL_PLACES)
         weight = (
-            + self.min_tx_weight_coefficient * log(tx_size, 2)
-            + 4 / (1 + self.min_tx_weight_k / amount) + 4
+            + settings.MIN_TX_WEIGHT_COEFFICIENT * log(tx_size, 2)
+            + 4 / (1 + settings.MIN_TX_WEIGHT_K / amount) + 4
         )
 
         # Make sure the calculated weight is at least the minimum
