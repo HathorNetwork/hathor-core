@@ -86,7 +86,7 @@ class AddressBalanceResource(resource.Resource):
                 'message': 'Invalid \'address\' parameter'
             }).encode('utf-8')
 
-        tokens_data: Dict[str, TokenData] = defaultdict(TokenData)
+        tokens_data: Dict[bytes, TokenData] = defaultdict(TokenData)
         tx_hashes = wallet_index.get_from_address(requested_address)
         for tx_hash in tx_hashes:
             tx = self.manager.tx_storage.get_transaction(tx_hash)
@@ -99,33 +99,30 @@ class AddressBalanceResource(resource.Resource):
                     if self.has_address(tx2_output, requested_address):
                         # We just consider the address that was requested
                         token_uid = tx2.get_token_uid(tx2_output.get_token_index())
-                        token_uid_hex = token_uid.hex()
-                        tokens_data[token_uid_hex].spent += tx2_output.value
+                        tokens_data[token_uid].spent += tx2_output.value
 
                 for tx_output in tx.outputs:
                     if self.has_address(tx_output, requested_address):
                         # We just consider the address that was requested
                         token_uid = tx.get_token_uid(tx_output.get_token_index())
-                        token_uid_hex = token_uid.hex()
-                        tokens_data[token_uid_hex].received += tx_output.value
+                        tokens_data[token_uid].received += tx_output.value
 
         return_tokens_data: Dict[str, Dict[str, Any]] = {}
-        for token_uid_hex in tokens_data.keys():
-            token_uid = bytes.fromhex(token_uid_hex)
+        for token_uid in tokens_data.keys():
             if token_uid == settings.HATHOR_TOKEN_UID:
-                tokens_data[token_uid_hex].name = settings.HATHOR_TOKEN_NAME
-                tokens_data[token_uid_hex].symbol = settings.HATHOR_TOKEN_SYMBOL
+                tokens_data[token_uid].name = settings.HATHOR_TOKEN_NAME
+                tokens_data[token_uid].symbol = settings.HATHOR_TOKEN_SYMBOL
             else:
                 try:
                     token_info = tokens_index.get_token_info(token_uid)
-                    tokens_data[token_uid_hex].name = token_info.name
-                    tokens_data[token_uid_hex].symbol = token_info.symbol
+                    tokens_data[token_uid].name = token_info.name
+                    tokens_data[token_uid].symbol = token_info.symbol
                 except KeyError:
                     # Should never get here because this token appears in our wallet index
                     # But better than get a 500 error
-                    tokens_data[token_uid_hex].name = '- (unable to fetch token information)'
-                    tokens_data[token_uid_hex].symbol = '- (unable to fetch token information)'
-            return_tokens_data[token_uid_hex] = tokens_data[token_uid_hex].to_dict()
+                    tokens_data[token_uid].name = '- (unable to fetch token information)'
+                    tokens_data[token_uid].symbol = '- (unable to fetch token information)'
+            return_tokens_data[token_uid.hex()] = tokens_data[token_uid].to_dict()
 
         data = {
             'success': True,
@@ -187,7 +184,7 @@ AddressBalanceResource.openapi = {
                                                 'received': 1000,
                                                 'spent': 800,
                                             },
-                                            '00001241240': {
+                                            '00000828d80dd4cd809c959139f7b4261df41152f4cce65a8777eb1c3a1f9702': {
                                                 'name': 'NewCoin',
                                                 'symbol': 'NCN',
                                                 'received': 100,
