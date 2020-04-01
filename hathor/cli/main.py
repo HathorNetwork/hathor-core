@@ -52,6 +52,7 @@ class CliManager:
         from . import oracle_get_pubkey
         from . import oracle_encode_data
         from . import openapi_json
+        from . import streaming_tx
 
         self.add_cmd('mining', 'run_miner', mining, 'Run a mining process (running node required)')
         self.add_cmd('mining', 'run_merged_mining', merged_mining,
@@ -65,6 +66,7 @@ class CliManager:
         self.add_cmd('multisig', 'tx_signature', multisig_signature, 'Generate a signature of a multisig tx')
         self.add_cmd('tests', 'gen_rand_tx', tx_generator, 'Generate random transactions (running node required)')
         self.add_cmd('tests', 'gen_twin_tx', twin_tx, 'Generate a twin transaction from a transaction hash')
+        self.add_cmd('tests', 'streaming_tx', streaming_tx, 'Stream transactions and blocks')
         self.add_cmd('wallet', 'gen_kp_wallet', wallet, 'Generate a new KeyPair wallet')
         self.add_cmd('wallet', 'gen_hd_words', generate_valid_words, 'Generate random words for HD wallet')
         self.add_cmd('grafana', 'grafana_dashboard', grafana_dashboard,
