@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod, abstractproperty
 from collections import deque
+from threading import Lock
 from typing import Any, Dict, Generator, Iterator, List, Optional, Set, Tuple
 from weakref import WeakValueDictionary
 
@@ -30,6 +31,13 @@ class TransactionStorage(ABC):
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
         self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
         self._tx_weakref_disabled: bool = False
+
+        # This lock is needed everytime a storage is getting a tx from the weakref and,
+        # in the case the tx is not there, it creates a new object to save there.
+        # We were having some concurrent access and two different objects were being saved
+        # in the weakref, what is an error (https://github.com/HathorNetwork/hathor-core/issues/70)
+        # With this lock we guarantee there isn't going to be any problem with concurrent access
+        self._weakref_lock = Lock()
 
     def _save_to_weakref(self, tx: BaseTransaction) -> None:
         """ Save transaction to weakref.

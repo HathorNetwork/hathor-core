@@ -71,17 +71,21 @@ class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncF
         if genesis:
             return genesis
 
+        self._weakref_lock.acquire()
         tx = self.get_transaction_from_weakref(hash_bytes)
         if tx is not None:
+            self._weakref_lock.release()
             return tx
 
         tx = self._get_transaction(hash_bytes)
         if not tx:
+            self._weakref_lock.release()
             raise TransactionDoesNotExist(hash_bytes.hex())
 
         assert tx.hash == hash_bytes
 
         self._save_to_weakref(tx)
+        self._weakref_lock.release()
         return tx
 
     def _get_transaction(self, hash_bytes: bytes) -> Optional['BaseTransaction']:
@@ -104,11 +108,13 @@ class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncF
         for key, data in items:
             hash_bytes = key
 
+            self._weakref_lock.acquire()
             tx = self.get_transaction_from_weakref(hash_bytes)
             if tx is None:
                 tx = self._load_from_bytes(data)
                 assert tx.hash == hash_bytes
                 self._save_to_weakref(tx)
+            self._weakref_lock.release()
 
             assert tx is not None
             yield tx

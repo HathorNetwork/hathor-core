@@ -126,17 +126,26 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         if genesis:
             return genesis
 
+        self._weakref_lock.acquire()
         tx = self.get_transaction_from_weakref(hash_bytes)
         if tx is not None:
+            self._weakref_lock.release()
             return tx
 
-        tx = self.load_transaction(hash_bytes)
+        try:
+            tx = self.load_transaction(hash_bytes)
+        except TransactionDoesNotExist:
+            self._weakref_lock.release()
+            raise
+
         try:
             meta = self._get_metadata_by_hash(hash_bytes)
             tx._metadata = meta
         except TransactionMetadataDoesNotExist:
             pass
+
         self._save_to_weakref(tx)
+        self._weakref_lock.release()
         return tx
 
     def _get_metadata_by_hash(self, hash_bytes):
@@ -156,13 +165,16 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
                 match = self.re_pattern.match(f.name)
                 if match:
                     hash_bytes = bytes.fromhex(match.groups()[0])
+                    self._weakref_lock.acquire()
                     tx = self.get_transaction_from_weakref(hash_bytes)
                     if tx is not None:
+                        self._weakref_lock.release()
                         yield tx
                     else:
                         # TODO Return a proxy that will load the transaction only when it is used.
                         tx = self._load_transaction_from_filepath(f.path)
                         self._save_to_weakref(tx)
+                        self._weakref_lock.release()
                         yield tx
 
     @deprecated('Use get_count_tx_blocks_deferred instead')
