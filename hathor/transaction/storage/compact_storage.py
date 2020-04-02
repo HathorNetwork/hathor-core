@@ -188,6 +188,7 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
             if match:
                 hash_bytes = bytes.fromhex(match.groups()[0])
                 tx = self.get_transaction(hash_bytes)
+                assert tx is not None
                 yield tx
 
     @deprecated('Use get_count_tx_blocks_deferred instead')
