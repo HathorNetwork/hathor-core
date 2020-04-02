@@ -62,33 +62,29 @@ class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncF
         may_exist, _ = self._db.key_may_exist(hash_bytes)
         if not may_exist:
             return False
-        tx_exists = self._get_transaction(hash_bytes) is not None
+        tx_exists = self._get_transaction_from_db(hash_bytes) is not None
         return tx_exists
 
     @deprecated('Use get_transaction_deferred instead')
-    def get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
+    def _get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
         genesis = self.get_genesis(hash_bytes)
         if genesis:
             return genesis
 
-        self._weakref_lock.acquire()
         tx = self.get_transaction_from_weakref(hash_bytes)
         if tx is not None:
-            self._weakref_lock.release()
             return tx
 
-        tx = self._get_transaction(hash_bytes)
+        tx = self._get_transaction_from_db(hash_bytes)
         if not tx:
-            self._weakref_lock.release()
             raise TransactionDoesNotExist(hash_bytes.hex())
 
         assert tx.hash == hash_bytes
 
         self._save_to_weakref(tx)
-        self._weakref_lock.release()
         return tx
 
-    def _get_transaction(self, hash_bytes: bytes) -> Optional['BaseTransaction']:
+    def _get_transaction_from_db(self, hash_bytes: bytes) -> Optional['BaseTransaction']:
         key = hash_bytes
         data = self._db.get(key)
         if data is None:
@@ -108,13 +104,14 @@ class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncF
         for key, data in items:
             hash_bytes = key
 
-            self._weakref_lock.acquire()
+            lock = self._weakref_lock_per_hash[hash_bytes]
+            lock.acquire()
             tx = self.get_transaction_from_weakref(hash_bytes)
             if tx is None:
                 tx = self._load_from_bytes(data)
                 assert tx.hash == hash_bytes
                 self._save_to_weakref(tx)
-            self._weakref_lock.release()
+            lock.release()
 
             assert tx is not None
             yield tx

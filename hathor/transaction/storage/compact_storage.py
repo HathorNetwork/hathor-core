@@ -157,30 +157,23 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
         return tx
 
     @deprecated('Use get_transaction_deferred instead')
-    def get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
+    def _get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
         genesis = self.get_genesis(hash_bytes)
         if genesis:
             return genesis
 
-        self._weakref_lock.acquire()
         tx = self.get_transaction_from_weakref(hash_bytes)
         if tx is not None:
-            self._weakref_lock.release()
             return tx
 
         filepath = self.generate_filepath(hash_bytes)
-        try:
-            data = self.load_from_json(filepath, TransactionDoesNotExist(hash_bytes.hex()))
-        except TransactionDoesNotExist:
-            self._weakref_lock.release()
-            raise
+        data = self.load_from_json(filepath, TransactionDoesNotExist(hash_bytes.hex()))
 
         tx = self.load(data['tx'])
         if 'meta' in data.keys():
             meta = TransactionMetadata.create_from_json(data['meta'])
             tx._metadata = meta
         self._save_to_weakref(tx)
-        self._weakref_lock.release()
         return tx
 
     @deprecated('Use get_all_transactions_deferred instead')
@@ -194,26 +187,8 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
             match = self.re_pattern.match(os.path.basename(f))
             if match:
                 hash_bytes = bytes.fromhex(match.groups()[0])
-                self._weakref_lock.acquire()
-                tx = self.get_transaction_from_weakref(hash_bytes)
-                if tx is not None:
-                    self._weakref_lock.release()
-                    yield tx
-                else:
-                    # TODO Return a proxy that will load the transaction only when it is used.
-                    try:
-                        data = self.load_from_json(f, TransactionDoesNotExist())
-                    except TransactionDoesNotExist:
-                        self._weakref_lock.release()
-                        raise
-
-                    tx = self.load(data['tx'])
-                    if 'meta' in data.keys():
-                        meta = TransactionMetadata.create_from_json(data['meta'])
-                        tx._metadata = meta
-                    self._save_to_weakref(tx)
-                    self._weakref_lock.release()
-                    yield tx
+                tx = self.get_transaction(hash_bytes)
+                yield tx
 
     @deprecated('Use get_count_tx_blocks_deferred instead')
     def get_count_tx_blocks(self) -> int:

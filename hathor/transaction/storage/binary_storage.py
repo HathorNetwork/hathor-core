@@ -121,23 +121,16 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         return self._load_transaction_from_filepath(filepath)
 
     @deprecated('Use get_transaction_deferred instead')
-    def get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
+    def _get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
         genesis = self.get_genesis(hash_bytes)
         if genesis:
             return genesis
 
-        self._weakref_lock.acquire()
         tx = self.get_transaction_from_weakref(hash_bytes)
         if tx is not None:
-            self._weakref_lock.release()
             return tx
 
-        try:
-            tx = self.load_transaction(hash_bytes)
-        except TransactionDoesNotExist:
-            self._weakref_lock.release()
-            raise
-
+        tx = self.load_transaction(hash_bytes)
         try:
             meta = self._get_metadata_by_hash(hash_bytes)
             tx._metadata = meta
@@ -145,7 +138,6 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
             pass
 
         self._save_to_weakref(tx)
-        self._weakref_lock.release()
         return tx
 
     def _get_metadata_by_hash(self, hash_bytes):
@@ -165,16 +157,17 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
                 match = self.re_pattern.match(f.name)
                 if match:
                     hash_bytes = bytes.fromhex(match.groups()[0])
-                    self._weakref_lock.acquire()
+                    lock = self._weakref_lock_per_hash[hash_bytes]
+                    lock.acquire()
                     tx = self.get_transaction_from_weakref(hash_bytes)
                     if tx is not None:
-                        self._weakref_lock.release()
+                        lock.release()
                         yield tx
                     else:
                         # TODO Return a proxy that will load the transaction only when it is used.
                         tx = self._load_transaction_from_filepath(f.path)
                         self._save_to_weakref(tx)
-                        self._weakref_lock.release()
+                        lock.release()
                         yield tx
 
     @deprecated('Use get_count_tx_blocks_deferred instead')
