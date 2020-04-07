@@ -188,16 +188,14 @@ class TransactionRemoteStorage(TransactionStorage):
             tx_proto = list_item.transaction
             tx = tx_or_block_from_proto(tx_proto, storage=self)
             assert tx.hash is not None
-            lock = self._weakref_lock_per_hash[tx.hash]
-            lock.acquire()
-            tx2 = self.get_transaction_from_weakref(tx.hash)
-            if tx2:
-                lock.release()
-                yield tx2
-            else:
-                self._save_to_weakref(tx)
-                lock.release()
-                yield tx
+            lock = self._get_lock(tx.hash)
+            with lock:
+                tx2 = self.get_transaction_from_weakref(tx.hash)
+                if tx2:
+                    tx = tx2
+                else:
+                    self._save_to_weakref(tx)
+            yield tx
 
     @deprecated('Use get_count_tx_blocks_deferred instead')
     @convert_grpc_exceptions

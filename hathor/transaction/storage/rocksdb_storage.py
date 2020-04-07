@@ -104,14 +104,13 @@ class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncF
         for key, data in items:
             hash_bytes = key
 
-            lock = self._weakref_lock_per_hash[hash_bytes]
-            lock.acquire()
-            tx = self.get_transaction_from_weakref(hash_bytes)
-            if tx is None:
-                tx = self._load_from_bytes(data)
-                assert tx.hash == hash_bytes
-                self._save_to_weakref(tx)
-            lock.release()
+            lock = self._get_lock(hash_bytes)
+            with lock:
+                tx = self.get_transaction_from_weakref(hash_bytes)
+                if tx is None:
+                    tx = self._load_from_bytes(data)
+                    assert tx.hash == hash_bytes
+                    self._save_to_weakref(tx)
 
             assert tx is not None
             yield tx
