@@ -1,6 +1,9 @@
+import asyncio
 from argparse import ArgumentParser, Namespace
 
-from twisted.internet import reactor
+from structlog import get_logger
+
+logger = get_logger()
 
 
 def create_parser() -> ArgumentParser:
@@ -11,6 +14,7 @@ def create_parser() -> ArgumentParser:
     parser.add_argument('--hathor-address', help='Hathor address to send funds to', type=str, required=False)
     parser.add_argument('--bitcoin-rpc', help='Endpoint of the Bitcoin RPC', type=str, required=True)
     parser.add_argument('--bitcoin-address', help='Bitcoin address to send funds to', type=str, required=False)
+    parser.add_argument('--min-diff', help='Minimum difficulty to set for jobs', type=int, required=False)
     return parser
 
 
@@ -19,16 +23,34 @@ def execute(args: Namespace) -> None:
     from hathor.merged_mining import MergedMiningCoordinator
     from hathor.merged_mining.bitcoin_rpc import BitcoinRPC
 
-    bitcoin_rpc = BitcoinRPC(reactor, args.bitcoin_rpc)
-    hathor_client = HathorClient(args.hathor_api)
+    loop = asyncio.get_event_loop()
 
+    bitcoin_rpc = BitcoinRPC(args.bitcoin_rpc)
+    hathor_client = HathorClient(args.hathor_api)
     # TODO: validate addresses?
     merged_mining = MergedMiningCoordinator(
-        port=args.port, bitcoin_rpc=bitcoin_rpc, hathor_client=hathor_client,
-        payback_address_hathor=args.hathor_address, payback_address_bitcoin=args.bitcoin_address,
+        bitcoin_rpc=bitcoin_rpc,
+        hathor_client=hathor_client,
+        payback_address_hathor=args.hathor_address,
+        payback_address_bitcoin=args.bitcoin_address,
+        address_from_login=not (args.hathor_address and args.bitcoin_address),
+        min_difficulty=args.min_diff,
     )
-    merged_mining.start()
-    reactor.run()
+    loop.run_until_complete(bitcoin_rpc.start())
+    loop.run_until_complete(hathor_client.start())
+    loop.run_until_complete(merged_mining.start())
+
+    server = loop.run_until_complete(loop.create_server(merged_mining, '0.0.0.0', args.port))
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        logger.info('Stopping')
+    server.close()
+    loop.run_until_complete(server.wait_closed())
+    loop.run_until_complete(merged_mining.stop())
+    loop.run_until_complete(hathor_client.stop())
+    loop.run_until_complete(bitcoin_rpc.stop())
+    loop.close()
 
 
 def main():

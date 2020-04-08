@@ -35,6 +35,7 @@ service_identity = "*"
 pexpect = "*"
 intervaltree = "*"
 structlog = "*"
+aiohttp = "*"
 
 [requires]
 python_version = "3.6"

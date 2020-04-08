@@ -6,7 +6,7 @@ from twisted.web import resource
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
-from hathor.merged_mining.coordinator import diff_from_weight
+from hathor.difficulty import Weight
 
 settings = HathorSettings()
 
@@ -40,7 +40,7 @@ class MiningInfoResource(resource.Resource):
         block = self.manager.generate_mining_block(address=burn_address)
 
         height = block.calculate_height() - 1
-        difficulty = diff_from_weight(block.weight)
+        difficulty = max(int(Weight(block.weight).to_pdiff()), 1)
 
         parent = block.get_block_parent()
         hashrate = 2**(parent.weight - log(30, 2))
