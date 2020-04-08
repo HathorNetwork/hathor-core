@@ -3,9 +3,9 @@ from typing import List
 from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IReactorTime
 
+from hathor.client import HathorClientStub
 from hathor.merged_mining import MergedMiningCoordinator
 from hathor.merged_mining.bitcoin_rpc import IBitcoinRPC
-from hathor.stratum import StratumFactory
 from tests import unittest
 
 
@@ -19,7 +19,11 @@ class SimpleTests(unittest.TestCase):
 
 class MergedMiningTestBase(unittest.TestCase):
     def setUp(self):
-        from twisted.test.proto_helpers import MemoryReactorClock, StringTransportWithDisconnection
+        from cryptography.hazmat.backends import default_backend
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from twisted.test.proto_helpers import MemoryReactorClock
+
+        from hathor.crypto.util import get_address_b58_from_public_key
 
         super().setUp()
         self.manager = self.create_peer('testnet')
@@ -27,23 +31,19 @@ class MergedMiningTestBase(unittest.TestCase):
 
         self.reactor = MemoryReactorClock()
 
-        self.stratum_factory = StratumFactory(self.manager, port=8123, reactor=self.reactor)
-        self.stratum_factory.start()
-        self.stratum_protocol = self.stratum_factory.buildProtocol('127.0.0.1')
-        self.stratum_transport = StringTransportWithDisconnection()
-        self.stratum_transport.protocol = self.stratum_protocol
-        self.stratum_protocol.makeConnection(self.stratum_transport)
+        self.private_key = ec.generate_private_key(ec.SECP256K1(), default_backend())
+        self.public_key = self.private_key.public_key()
+        address = get_address_b58_from_public_key(self.public_key)
 
         bitcoin_rpc = BitcoinRPCStub(self.reactor)
-        self.coordinator = MergedMiningCoordinator(port=8124, bitcoin_rpc=bitcoin_rpc, hathor_stratum='localhost:8123',
+        hathor_client = HathorClientStub(self.manager)
+        self.coordinator = MergedMiningCoordinator(port=8124, bitcoin_rpc=bitcoin_rpc, hathor_client=hathor_client,
                                                    payback_address_bitcoin='n4VQ5YdHf7hLQ2gWQYYrcxoE5B7nWuDFNF',
-                                                   payback_address_hathor='WTPcVyGjo9tSet8QAH7qudW2LwtkgubZGU',
-                                                   reactor=self.reactor)
+                                                   payback_address_hathor=address, reactor=self.reactor)
         self.coordinator.start()
 
     def tearDown(self):
         self.coordinator.stop()
-        self.stratum_factory.stop()
 
 
 class TestMergedMining(MergedMiningTestBase):

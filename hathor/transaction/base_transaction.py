@@ -266,6 +266,62 @@ class BaseTransaction(ABC):
         """
         raise NotImplementedError
 
+    @classmethod
+    def create_from_dict(cls, data: Dict[str, Any], update_hash: bool = False,
+                         storage: Optional['TransactionStorage'] = None) -> 'BaseTransaction':
+        from hathor.transaction.aux_pow import BitcoinAuxPow
+        from hathor.transaction.base_transaction import TxOutput, TxInput, TxVersion
+
+        hash_bytes = bytes.fromhex(data['hash']) if 'hash' in data else None
+        if 'data' in data:
+            data['data'] = base64.b64decode(data['data'])
+
+        parents = []
+        for parent in data['parents']:
+            parents.append(bytes.fromhex(parent))
+        data['parents'] = parents
+
+        inputs = []
+        for input_tx in data['inputs']:
+            tx_id = bytes.fromhex(input_tx['tx_id'])
+            index = input_tx['index']
+            input_data = base64.b64decode(input_tx['data'])
+            inputs.append(TxInput(tx_id, index, input_data))
+        if len(inputs) > 0:
+            data['inputs'] = inputs
+        else:
+            del data['inputs']
+
+        outputs = []
+        for output in data['outputs']:
+            value = output['value']
+            script = base64.b64decode(output['script'])
+            token_data = output['token_data']
+            outputs.append(TxOutput(value, script, token_data))
+        if len(outputs) > 0:
+            data['outputs'] = outputs
+
+        tokens = [bytes.fromhex(uid) for uid in data['tokens']]
+        if len(tokens) > 0:
+            data['tokens'] = tokens
+        else:
+            del data['tokens']
+
+        if 'aux_pow' in data:
+            data['aux_pow'] = BitcoinAuxPow.from_bytes(bytes.fromhex(data['aux_pow']))
+
+        if storage:
+            data['storage'] = storage
+
+        cls = TxVersion(data['version']).get_cls()
+        tx = cls(**data)
+        if update_hash:
+            tx.update_hash()
+            assert tx.hash is not None
+        if hash_bytes:
+            assert tx.hash == hash_bytes, f'Hashes differ: {tx.hash!r} != {hash_bytes!r}'
+        return tx
+
     def __eq__(self, other: object) -> bool:
         """Two transactions are equal when their hash matches
 
@@ -1152,7 +1208,8 @@ def tx_or_block_from_proto(tx_proto: protos.BaseTransaction,
         raise ValueError('invalid base_transaction_oneof')
 
 
-def tx_or_block_from_bytes(data: bytes) -> BaseTransaction:
+def tx_or_block_from_bytes(data: bytes,
+                           storage: Optional['TransactionStorage'] = None) -> BaseTransaction:
     """ Creates the correct tx subclass from a sequence of bytes
     """
     # version field takes up the first 2 bytes
@@ -1160,6 +1217,6 @@ def tx_or_block_from_bytes(data: bytes) -> BaseTransaction:
     try:
         tx_version = TxVersion(version)
         cls = tx_version.get_cls()
-        return cls.create_from_struct(data)
+        return cls.create_from_struct(data, storage=storage)
     except ValueError:
         raise StructError('Invalid bytes to create transaction subclass.')

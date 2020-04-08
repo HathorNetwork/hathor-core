@@ -205,10 +205,12 @@ class RunNode:
         from hathor.transaction.resources import (
             DashboardTransactionResource,
             DecodeTxResource,
+            GetBlockTemplateResource,
             GraphvizLegacyResource,
             GraphvizFullResource,
             GraphvizNeighboursResource,
             PushTxResource,
+            SubmitBlockResource,
             TipsHistogramResource,
             TipsResource,
             TransactionAccWeightResource,
@@ -282,6 +284,9 @@ class RunNode:
                 (b'transaction_acc_weight', TransactionAccWeightResource(self.manager), root),
                 (b'dashboard_tx', DashboardTransactionResource(self.manager), root),
                 (b'profiler', ProfilerResource(self.manager), root),
+                # mining
+                (b'get_block_template', GetBlockTemplateResource(self.manager), root),
+                (b'submit_block', SubmitBlockResource(self.manager), root),
                 # /thin_wallet
                 (b'address_history', AddressHistoryResource(self.manager), thin_wallet_resource),
                 (b'address_balance', AddressBalanceResource(self.manager), thin_wallet_resource),
