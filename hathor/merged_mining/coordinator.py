@@ -73,6 +73,12 @@ class HathorCoordJob(NamedTuple):
     """ Data class used to send a job's work to Hathor Stratum.
     """
     block: HathorBlock
+    height: Optional[int]
+
+    def to_dict(self) -> Dict[Any, Any]:
+        d = self.block.to_json()
+        d['height'] = self.height
+        return d
 
 
 def flip80(data: bytes) -> bytes:
@@ -262,6 +268,8 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         self.payback_script_bitcoin: Optional[bytes] = None
         self.payback_script_hathor: Optional[bytes] = None
         self.dump_bad_jobs = False
+        self.worker_name: Optional[str] = None
+        self.login: Optional[str] = None
         # used to estimate the miner's hashrate, items are a tuple (timestamp, logwork)
         self._submitted_work: List[Tuple[float, Weight, Hash]] = []
         self._new_submitted_work: List[Tuple[float, Weight, Hash]] = []
@@ -279,9 +287,36 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         self.estimator_task: Optional[Periodic] = None
         self.buffer = bytearray()
 
+        self.subscribed_at = 0.0
+        self.last_submit_at = 0.0
+
     @property
     def subscribed(self) -> bool:
         return self._subscribed and self._authorized
+
+    @property
+    def uptime(self) -> float:
+        """ Live uptime calculated from time.time() and self.started_at.
+        """
+        if not self.subscribed_at:
+            return 0.0
+        return time.time() - self.subscribed_at
+
+    def status(self) -> Dict[Any, Any]:
+        """ Build status dict with useful metrics for use in MM Status API.
+        """
+        return {
+            'id': self.miner_id,
+            'hashrate_ths': self.hashrate_ths,
+            'worker': self.login,
+            'worker_name': self.worker_name,
+            'xnonce1_hex': self.xnonce1.hex(),
+            'xnonce2_size': self.xnonce2_size,
+            'subscribed_at': self.subscribed_at or None,
+            'last_submit_at': self.last_submit_at or None,
+            'uptime': self.uptime,
+            'diff': self._current_difficulty,
+        }
 
     def next_job_id(self):
         """ Every call will return a new sequential id for use in job.id.
@@ -454,10 +489,10 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         if self.coordinator.address_from_login:
             try:
                 login, password = params
-                self.payback_script_hathor, self.payback_script_bitcoin, worker_name = \
+                self.payback_script_hathor, self.payback_script_bitcoin, self.worker_name = \
                     parse_login_with_addresses(login)
-                if worker_name:
-                    self.log = self.log.bind(worker_name=worker_name)
+                if self.worker_name:
+                    self.log = self.log.bind(worker_name=self.worker_name)
             except Exception as e:
                 self.log.warn('authorization failed', exc=e, login=login, password=password)
                 # TODO: proper error
@@ -467,7 +502,9 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
             self.send_result(True, msgid)
         else:
             # TODO: authorization system
+            login, _password = params
             self.send_result(True, msgid)
+        self.login = login
         self._authorized = True
         self.log.info('Miner authorized')
         self.job_request()
@@ -504,6 +541,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
                 return
 
         self._subscribed = True
+        self.subscribed_at = time.time()
         self.log.info('Miner subscribed', address=self.miner_address)
         # session = str(self.miner_id)
         session = [['mining.set_difficulty', '1'], ['mining.notify', str(self.miner_id)]]
@@ -540,6 +578,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
             self.log.error('job not found', job_id=work.job_id)
             self.send_error(JOB_NOT_FOUND, data={'message': 'Job not found.'})
             return
+        self.last_submit_at = time.time()
 
         bitcoin_block_header = job.build_bitcoin_block_header(work)
         block_base_hash = job.hathor_block.get_base_hash()
@@ -843,6 +882,27 @@ class BitcoinCoordJob(NamedTuple):
             list(map(BitcoinTransaction.from_dict, params['transactions'])),
         )
 
+    def to_dict(self) -> Dict[Any, Any]:
+        """ Convert back to a simplified dict format similar to Bitcoin's, used by MM Status API.
+        """
+        return {
+            'version': self.version,
+            'previousblockhash': self.previous_block_hash.hex(),
+            'coinbasevalue': self.coinbase_value,
+            'target': self.target.hex(),
+            'mintime': self.min_time,
+            'sizelimit': self.size_limit,
+            'bits': self.bits.hex(),
+            'height': self.height,
+            'transactions': [
+                {
+                    'txid': tx.txid.hex(),
+                    'hash': tx.hash.hex(),
+                }
+                for tx in self.transactions
+            ],
+        }
+
     def make_coinbase_transaction(self, hathor_block_hash: bytes, payback_script_bitcoin: bytes,
                                   extra_nonce_size: Optional[int] = None) -> BitcoinTransaction:
         """ The coinbase transaction is entirely defined by the coordinator, which acts as a pool server.
@@ -964,12 +1024,23 @@ class MergedMiningCoordinator:
         self.payback_address_hathor: Optional[str] = payback_address_hathor
         self.bitcoin_coord_job: Optional[BitcoinCoordJob] = None
         self.hathor_coord_job: Optional[HathorCoordJob] = None
+        self.last_bitcoin_block_received = 0.0
+        self.last_hathor_block_received = 0.0
         self.merged_job: Optional[MergedJob] = None
         self.min_difficulty = min_difficulty
         self._next_xnonce1 = 0
         self.job_count = 0
         self.update_bitcoin_block_task: Optional[Periodic] = None
         self.update_hathor_block_task: Optional[Periodic] = None
+        self.started_at = 0.0
+
+    @property
+    def uptime(self) -> float:
+        """ Live uptime calculated from time.time() and self.started_at.
+        """
+        if not self.started_at:
+            return 0.0
+        return time.time() - self.started_at
 
     def next_xnonce1(self) -> bytes:
         """ Generate the next xnonce1, for keeping each subscription with a different xnonce1.
@@ -998,6 +1069,7 @@ class MergedMiningCoordinator:
     async def start(self) -> None:
         """ Starts the coordinator and subscribes for new blocks on the both networks in order to update miner jobs.
         """
+        self.started_at = time.time()
         self.update_bitcoin_block_task = Periodic(self.update_bitcoin_block, self.BITCOIN_UPDATE_INTERVAL)
         await self.update_bitcoin_block_task.start()
         self.update_hathor_block_task = Periodic(self.update_hathor_block, self.HATHOR_UPDATE_INTERVAL)
@@ -1020,6 +1092,7 @@ class MergedMiningCoordinator:
         except Exception:
             self.log.exception('Failed to get Bitcoin Block Template')
             return
+        self.last_bitcoin_block_received = time.time()
         data_log = data.copy()
         data_log['len(transactions)'] = len(data_log['transactions'])
         del data_log['transactions']
@@ -1035,12 +1108,14 @@ class MergedMiningCoordinator:
         try:
             block = await self.hathor_client.get_block_template(merged_mining=True,
                                                                 address=self.payback_address_hathor)
+            height = block.get_metadata(use_storage=False).height or None
         except Exception:
             self.log.exception('Failed to get Hathor Block Template')
             return
         assert isinstance(block, HathorBlock)
+        self.last_hathor_block_received = time.time()
         self.log.debug('hathor.get_block_template response', block=block)
-        self.hathor_coord_job = HathorCoordJob(block)
+        self.hathor_coord_job = HathorCoordJob(block, height)
         self.log.debug('New Hathor Block template.')
         self.update_merged_block()
 
@@ -1084,3 +1159,17 @@ class MergedMiningCoordinator:
         )
         self.update_jobs()
         self.log.debug('Merged job updated.')
+
+    def status(self) -> Dict[Any, Any]:
+        """ Build status dict with useful metrics for use in MM Status API.
+        """
+        miners = [p.status() for p in self.miner_protocols.values()]
+        total_hashrate_ths = sum(p.hashrate_ths or 0 for p in self.miner_protocols.values())
+        return {
+            'miners': miners,
+            'total_hashrate_ths': total_hashrate_ths,
+            'started_at': self.started_at,
+            'uptime': self.uptime,
+            'bitcoin_job': self.bitcoin_coord_job.to_dict() if self.bitcoin_coord_job else None,
+            'hathor_job': self.hathor_coord_job.to_dict() if self.hathor_coord_job else None,
+        }

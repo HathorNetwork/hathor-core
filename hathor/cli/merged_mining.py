@@ -1,6 +1,8 @@
 import asyncio
 from argparse import ArgumentParser, Namespace
+from typing import Optional
 
+from aiohttp import web
 from structlog import get_logger
 
 logger = get_logger()
@@ -10,6 +12,7 @@ def create_parser() -> ArgumentParser:
     from hathor.cli.util import create_parser
     parser = create_parser()
     parser.add_argument('--port', help='Port of Stratum server', type=int, required=True)
+    parser.add_argument('--status', help='Port of Status server', type=int, required=False)
     parser.add_argument('--hathor-api', help='Endpoint of the Hathor API (without version)', type=str, required=True)
     parser.add_argument('--hathor-address', help='Hathor address to send funds to', type=str, required=False)
     parser.add_argument('--bitcoin-rpc', help='Endpoint of the Bitcoin RPC', type=str, required=True)
@@ -21,6 +24,7 @@ def create_parser() -> ArgumentParser:
 def execute(args: Namespace) -> None:
     from hathor.client import HathorClient
     from hathor.merged_mining import MergedMiningCoordinator
+    from hathor.merged_mining.status_api import make_app
     from hathor.merged_mining.bitcoin_rpc import BitcoinRPC
 
     loop = asyncio.get_event_loop()
@@ -39,14 +43,22 @@ def execute(args: Namespace) -> None:
     loop.run_until_complete(bitcoin_rpc.start())
     loop.run_until_complete(hathor_client.start())
     loop.run_until_complete(merged_mining.start())
-
-    server = loop.run_until_complete(loop.create_server(merged_mining, '0.0.0.0', args.port))
+    mm_server = loop.run_until_complete(loop.create_server(merged_mining, '0.0.0.0', args.port))
+    web_runner: Optional[web.BaseRunner] = None
+    if args.status:
+        app = loop.run_until_complete(make_app(merged_mining))
+        web_runner = web.AppRunner(app)
+        loop.run_until_complete(web_runner.setup())
+        site = web.TCPSite(web_runner, '0.0.0.0', args.status)
+        loop.run_until_complete(site.start())
     try:
         loop.run_forever()
     except KeyboardInterrupt:
         logger.info('Stopping')
-    server.close()
-    loop.run_until_complete(server.wait_closed())
+    mm_server.close()
+    if web_runner is not None:
+        loop.run_until_complete(web_runner.cleanup())
+    loop.run_until_complete(mm_server.wait_closed())
     loop.run_until_complete(merged_mining.stop())
     loop.run_until_complete(hathor_client.stop())
     loop.run_until_complete(bitcoin_rpc.stop())
