@@ -161,7 +161,7 @@ class TransactionRemoteStorage(TransactionStorage):
 
     @deprecated('Use get_transaction_deferred instead')
     @convert_grpc_exceptions
-    def get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
+    def _get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
         tx = self.get_transaction_from_weakref(hash_bytes)
         if tx is not None:
             return tx
@@ -170,6 +170,7 @@ class TransactionRemoteStorage(TransactionStorage):
         self._check_connection()
         request = protos.GetRequest(hash=hash_bytes)
         result = self._stub.Get(request)
+
         tx = tx_or_block_from_proto(result.transaction, storage=self)
         self._save_to_weakref(tx)
         return tx
@@ -187,12 +188,14 @@ class TransactionRemoteStorage(TransactionStorage):
             tx_proto = list_item.transaction
             tx = tx_or_block_from_proto(tx_proto, storage=self)
             assert tx.hash is not None
-            tx2 = self.get_transaction_from_weakref(tx.hash)
-            if tx2:
-                yield tx2
-            else:
-                self._save_to_weakref(tx)
-                yield tx
+            lock = self._get_lock(tx.hash)
+            with lock:
+                tx2 = self.get_transaction_from_weakref(tx.hash)
+                if tx2:
+                    tx = tx2
+                else:
+                    self._save_to_weakref(tx)
+            yield tx
 
     @deprecated('Use get_count_tx_blocks_deferred instead')
     @convert_grpc_exceptions

@@ -121,7 +121,7 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         return self._load_transaction_from_filepath(filepath)
 
     @deprecated('Use get_transaction_deferred instead')
-    def get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
+    def _get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
         genesis = self.get_genesis(hash_bytes)
         if genesis:
             return genesis
@@ -136,6 +136,7 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
             tx._metadata = meta
         except TransactionMetadataDoesNotExist:
             pass
+
         self._save_to_weakref(tx)
         return tx
 
@@ -156,14 +157,14 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
                 match = self.re_pattern.match(f.name)
                 if match:
                     hash_bytes = bytes.fromhex(match.groups()[0])
-                    tx = self.get_transaction_from_weakref(hash_bytes)
-                    if tx is not None:
-                        yield tx
-                    else:
-                        # TODO Return a proxy that will load the transaction only when it is used.
-                        tx = self._load_transaction_from_filepath(f.path)
-                        self._save_to_weakref(tx)
-                        yield tx
+                    lock = self._get_lock(hash_bytes)
+                    with lock:
+                        tx = self.get_transaction_from_weakref(hash_bytes)
+                        if tx is None:
+                            # TODO Return a proxy that will load the transaction only when it is used.
+                            tx = self._load_transaction_from_filepath(f.path)
+                            self._save_to_weakref(tx)
+                    yield tx
 
     @deprecated('Use get_count_tx_blocks_deferred instead')
     def get_count_tx_blocks(self):
