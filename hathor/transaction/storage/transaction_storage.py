@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod, abstractproperty
 from collections import deque
+from threading import Lock
 from typing import Any, Dict, Generator, Iterator, List, Optional, Set, Tuple
 from weakref import WeakValueDictionary
 
@@ -30,6 +31,16 @@ class TransactionStorage(ABC):
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
         self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
         self._tx_weakref_disabled: bool = False
+
+        # This lock is needed everytime a storage is getting a tx from the weakref and,
+        # in the case the tx is not there, it creates a new object to save there.
+        # We were having some concurrent access and two different objects were being saved
+        # in the weakref, what is an error (https://github.com/HathorNetwork/hathor-core/issues/70)
+        # With this lock we guarantee there isn't going to be any problem with concurrent access
+        self._weakref_lock_per_hash: WeakValueDictionary[bytes, Lock] = WeakValueDictionary()
+
+        # This is a global lock used to prevent concurrent access when getting the tx lock in the dict above
+        self._weakref_lock: Lock = Lock()
 
     def _save_to_weakref(self, tx: BaseTransaction) -> None:
         """ Save transaction to weakref.
@@ -118,12 +129,34 @@ class TransactionStorage(ABC):
 
     @abstractmethod
     @deprecated('Use get_transaction_deferred instead')
-    def get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
+    def _get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
         """Returns the transaction with hash `hash_bytes`.
 
         :param hash_bytes: Hash in bytes that will be checked.
         """
         raise NotImplementedError
+
+    def _get_lock(self, hash_bytes: bytes) -> Lock:
+        """ Get lock for tx hash in the weakref dictionary
+        """
+        with self._weakref_lock:
+            lock = self._weakref_lock_per_hash.get(hash_bytes, None)
+            if lock is None:
+                lock = Lock()
+                self._weakref_lock_per_hash[hash_bytes] = lock
+        return lock
+
+    @deprecated('Use get_transaction_deferred instead')
+    def get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
+        """Acquire the lock and get the transaction with hash `hash_bytes`.
+
+        :param hash_bytes: Hash in bytes that will be checked.
+        """
+
+        lock = self._get_lock(hash_bytes)
+        with lock:
+            tx = self._get_transaction(hash_bytes)
+        return tx
 
     @deprecated('Use get_metadata_deferred instead')
     def get_metadata(self, hash_bytes: bytes) -> Optional[TransactionMetadata]:

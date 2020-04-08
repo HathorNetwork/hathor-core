@@ -2,10 +2,12 @@ import os
 import shutil
 import tempfile
 import time
-import unittest
 from itertools import chain
 
+from twisted.internet.defer import gatherResults, inlineCallbacks
 from twisted.internet.task import Clock
+from twisted.internet.threads import deferToThread
+from twisted.trial import unittest
 
 from hathor.conf import HathorSettings
 from hathor.indexes import TokensIndex, WalletIndex
@@ -315,6 +317,24 @@ class _BaseTransactionStorageTest:
             block = self._add_new_block()
             weight = self.tx_storage.get_weight_best_block()
             self.assertEqual(block.weight, weight)
+
+        @inlineCallbacks
+        def test_concurrent_access(self):
+            self.tx_storage.save_transaction(self.tx)
+            self.tx_storage._enable_weakref()
+
+            def handle_error(err):
+                self.fail('Error resolving concurrent access deferred. {}'.format(err))
+
+            deferreds = []
+            for i in range(5):
+                d = deferToThread(self.tx_storage.get_transaction, self.tx.hash)
+                d.addErrback(handle_error)
+                deferreds.append(d)
+
+            self.reactor.advance(3)
+            yield gatherResults(deferreds)
+            self.tx_storage._disable_weakref()
 
     class _RemoteStorageTest(_TransactionStorageTest):
         def setUp(self, tx_storage, reactor=None):

@@ -56,7 +56,7 @@ class TransactionMemoryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         return hash_bytes in self.transactions
 
     @deprecated('Use get_transaction_deferred instead')
-    def get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
+    def _get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
         genesis = self.get_genesis(hash_bytes)
         if genesis:
             if hash_bytes in self.metadata:

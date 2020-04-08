@@ -149,7 +149,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
         return skip_warning(self.store.transaction_exists)(hash_bytes)
 
     @deprecated('Use get_transaction_deferred instead')
-    def get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
+    def _get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
         if hash_bytes in self.cache:
             tx = self._clone(self.cache[hash_bytes])
             self.cache.move_to_end(hash_bytes, last=True)
