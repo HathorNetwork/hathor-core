@@ -9,10 +9,8 @@ docker: nginx.conf
 
 .PHONY: docker-push
 docker-push: docker
-	#docker tag fullnode:$(docker_tag) 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_tag)
-	#docker push 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_tag)
-	docker tag hathor-nginx:$(docker_tag) 537254410709.dkr.ecr.us-east-1.amazonaws.com/webtank:latest
-	docker push 537254410709.dkr.ecr.us-east-1.amazonaws.com/webtank:latest
+	docker tag hathor-nginx:$(docker_tag) 769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:latest
+	docker push 769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:latest
 
 .PHONY: run
 run: docker

@@ -109,7 +109,7 @@ clean: clean-pyc clean-protos
 
 docker_dir := .
 ifneq ($(wildcard .git/.*),)
-	docker_tag := $(shell git describe)
+	docker_tag := $(shell git describe --tags --dirty)
 else
 	docker_tag := $(shell date +'%y%m%d%H%M%S')
 endif
@@ -125,5 +125,5 @@ docker-push: docker
 
 .PHONY: docker-push
 docker-push-aws: docker
-	docker tag fullnode:$(docker_tag) 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_tag)
-	docker push 537254410709.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_tag)
+	docker tag fullnode:$(docker_tag) 769498303037.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_tag)
+	docker push 769498303037.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_tag)
