@@ -227,8 +227,8 @@ AddressHistoryResource.openapi = {
             ],
             'per-ip': [
                 {
-                    'rate': '3r/s',
-                    'burst': 10,
+                    'rate': '6r/s',
+                    'burst': 15,
                     'delay': 3
                 }
             ]
