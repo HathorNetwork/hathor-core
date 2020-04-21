@@ -1,3 +1,5 @@
+import math
+
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.conf import HathorSettings
@@ -11,7 +13,7 @@ from hathor.wallet.resources.thin_wallet import (
     TokenResource,
 )
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, create_tokens
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_tx, create_tokens
 
 settings = HathorSettings()
 
@@ -174,6 +176,89 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 #        # Waiting for all threads to finish
 #        for d in deferreds:
 #            yield d.request.thread_deferred
+
+    @inlineCallbacks
+    def test_history_paginate(self):
+        # Unlocking wallet
+        self.manager.wallet.unlock(b'MYPASS')
+
+        blocks = add_new_blocks(self.manager, 3, advance_clock=1)
+
+        output = blocks[0].outputs[0]
+        script_type_out = parse_address_script(output.script)
+        address = script_type_out.address
+        address_bytes = decode_address(address)
+
+        # Test paginate
+        response_history = yield self.web_address_history.get(
+            'thin_wallet/address_history', {
+                b'addresses[]': address.encode(),
+                b'paginate': b'true'
+            }
+        )
+
+        response_data = response_history.json_value()
+        self.assertEqual(len(response_data['history']), 1)
+        self.assertEqual(blocks[0].hash.hex(), response_data['history'][0]['tx_id'])
+        self.assertFalse(response_data['has_more'])
+
+        add_new_blocks(self.manager, settings.MAX_TX_ADDRESSES_HISTORY, advance_clock=1, address=address_bytes)
+
+        # Test paginate with two pages
+        response_history = yield self.web_address_history.get(
+            'thin_wallet/address_history', {
+                b'addresses[]': address.encode(),
+                b'paginate': b'true'
+            }
+        )
+
+        response_data = response_history.json_value()
+        self.assertEqual(len(response_data['history']), settings.MAX_TX_ADDRESSES_HISTORY)
+        self.assertTrue(response_data['has_more'])
+        self.assertEqual(response_data['first_address'], address)
+
+        # Test paginate with big txs
+        amount = settings.MAX_NUM_INPUTS*settings.INITIAL_TOKENS_PER_BLOCK
+        add_new_blocks(self.manager, 500, advance_clock=1, address=address_bytes)
+        add_blocks_unlock_reward(self.manager)
+
+        tx_count = math.ceil(settings.MAX_INPUTS_OUTPUTS_ADDRESS_HISTORY / settings.MAX_NUM_INPUTS)
+
+        output2 = blocks[1].outputs[0]
+        script_type_out2 = parse_address_script(output2.script)
+        address2 = script_type_out2.address
+        address_bytes2 = decode_address(address2)
+
+        for i in range(tx_count):
+            tx = add_new_tx(self.manager, address2, amount - i, advance_clock=1)
+            if i != tx_count - 1:
+                add_new_blocks(self.manager, settings.MAX_NUM_INPUTS, advance_clock=1, address=address_bytes)
+                add_blocks_unlock_reward(self.manager)
+
+        response_history = yield self.web_address_history.get(
+            'thin_wallet/address_history', {
+                b'addresses[]': address2.encode(),
+                b'paginate': b'true'
+            }
+        )
+
+        response_data = response_history.json_value()
+        self.assertTrue(response_data['has_more'])
+        # 1 block + 3 big txs
+        self.assertEqual(len(response_data['history']), tx_count)
+
+        response_history = yield self.web_address_history.get(
+            'thin_wallet/address_history', {
+                b'addresses[]': address2.encode(),
+                b'hash': response_data['first_hash'].encode(),
+                b'paginate': b'true'
+            }
+        )
+
+        response_data = response_history.json_value()
+        self.assertFalse(response_data['has_more'])
+        # The last big tx
+        self.assertEqual(len(response_data['history']), 1)
 
     def test_error_request(self):
         resource = SendTokensResource(self.manager)
