@@ -202,7 +202,12 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(blocks[0].hash.hex(), response_data['history'][0]['tx_id'])
         self.assertFalse(response_data['has_more'])
 
-        add_new_blocks(self.manager, settings.MAX_TX_ADDRESSES_HISTORY, advance_clock=1, address=address_bytes)
+        new_blocks = add_new_blocks(
+            self.manager,
+            settings.MAX_TX_ADDRESSES_HISTORY,
+            advance_clock=1,
+            address=address_bytes
+        )
 
         # Test paginate with two pages
         response_history = yield self.web_address_history.get(
@@ -218,25 +223,27 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(response_data['first_address'], address)
 
         # Test paginate with big txs
-        amount = settings.MAX_NUM_INPUTS*settings.INITIAL_TOKENS_PER_BLOCK
-        add_new_blocks(self.manager, 500, advance_clock=1, address=address_bytes)
+        tx_count = math.ceil(settings.MAX_INPUTS_OUTPUTS_ADDRESS_HISTORY / settings.MAX_NUM_INPUTS)
+        blocks.extend(new_blocks)
+        new_blocks = add_new_blocks(
+            self.manager,
+            tx_count*settings.MAX_NUM_INPUTS - len(blocks),
+            advance_clock=1,
+            address=address_bytes
+        )
+        blocks.extend(new_blocks)
+        random_address = self.get_address(0)
         add_blocks_unlock_reward(self.manager)
 
-        tx_count = math.ceil(settings.MAX_INPUTS_OUTPUTS_ADDRESS_HISTORY / settings.MAX_NUM_INPUTS)
-
-        output2 = blocks[1].outputs[0]
-        script_type_out2 = parse_address_script(output2.script)
-        address2 = script_type_out2.address
-
         for i in range(tx_count):
-            add_new_tx(self.manager, address2, amount - i, advance_clock=1)
-            if i != tx_count - 1:
-                add_new_blocks(self.manager, settings.MAX_NUM_INPUTS, advance_clock=1, address=address_bytes)
-                add_blocks_unlock_reward(self.manager)
+            start_index = i*settings.MAX_NUM_INPUTS
+            end_index = start_index + settings.MAX_NUM_INPUTS
+            amount = sum([b.outputs[0].value for b in blocks[start_index:end_index]])
+            add_new_tx(self.manager, random_address, amount, advance_clock=1)
 
         response_history = yield self.web_address_history.get(
             'thin_wallet/address_history', {
-                b'addresses[]': address2.encode(),
+                b'addresses[]': random_address.encode(),
                 b'paginate': b'true'
             }
         )
@@ -244,11 +251,11 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         response_data = response_history.json_value()
         self.assertTrue(response_data['has_more'])
         # 1 block + 3 big txs
-        self.assertEqual(len(response_data['history']), tx_count)
+        self.assertEqual(len(response_data['history']), tx_count - 1)
 
         response_history = yield self.web_address_history.get(
             'thin_wallet/address_history', {
-                b'addresses[]': address2.encode(),
+                b'addresses[]': random_address.encode(),
                 b'hash': response_data['first_hash'].encode(),
                 b'paginate': b'true'
             }
