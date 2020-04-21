@@ -238,6 +238,10 @@ class HathorSettings(NamedTuple):
     # Maximum number of transactions returned on addresses history API
     MAX_TX_ADDRESSES_HISTORY: int = 150
 
+    # Maximum number of elements (inputs and outputs) to be returned on address history API
+    # As a normal tx has ~2-4 inputs and 2 outputs, I would say the maximum should be 150*6 = 900 elements
+    MAX_INPUTS_OUTPUTS_ADDRESS_HISTORY: int = 900
+
     # Multiplier coefficient to adjust the minimum weight of a normal tx to 18
     MIN_TX_WEIGHT_COEFFICIENT: float = 1.6
 

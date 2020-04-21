@@ -113,6 +113,7 @@ class AddressHistoryResource(resource.Resource):
         first_hash = None
         first_address = None
         total_added = 0
+        total_elements = 0
 
         history = []
         seen: Set[bytes] = set()
@@ -161,9 +162,18 @@ class AddressHistoryResource(resource.Resource):
 
                 if tx_hash not in seen:
                     tx = self.manager.tx_storage.get_transaction(tx_hash)
+                    tx_elements = len(tx.inputs) + len(tx.outputs)
+                    if total_elements + tx_elements > settings.MAX_INPUTS_OUTPUTS_ADDRESS_HISTORY:
+                        # If the adition of this tx overcomes the maximum number of inputs and outputs, then break
+                        # It's important to validate also the maximum number of inputs and outputs because some txs
+                        # are really big and the response payload becomes too big
+                        did_break = True
+                        break
+
                     seen.add(tx_hash)
                     history.append(tx.to_json_extended())
                     total_added += 1
+                    total_elements += tx_elements
 
             if did_break:
                 # We stopped in the middle of the txs of this address
