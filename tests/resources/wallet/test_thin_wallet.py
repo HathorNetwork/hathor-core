@@ -227,10 +227,9 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         output2 = blocks[1].outputs[0]
         script_type_out2 = parse_address_script(output2.script)
         address2 = script_type_out2.address
-        address_bytes2 = decode_address(address2)
 
         for i in range(tx_count):
-            tx = add_new_tx(self.manager, address2, amount - i, advance_clock=1)
+            add_new_tx(self.manager, address2, amount - i, advance_clock=1)
             if i != tx_count - 1:
                 add_new_blocks(self.manager, settings.MAX_NUM_INPUTS, advance_clock=1, address=address_bytes)
                 add_blocks_unlock_reward(self.manager)
