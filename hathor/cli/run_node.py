@@ -199,6 +199,7 @@ class RunNode:
 
     def register_resources(self, args: Namespace) -> None:
         from hathor.conf import HathorSettings
+        from hathor.mined_tokens import MinedTokensResource
         from hathor.p2p.resources import AddPeersResource, MiningInfoResource, MiningResource, StatusResource
         from hathor.prometheus import PrometheusMetricsExporter
         from hathor.resources import ProfilerResource
@@ -284,6 +285,7 @@ class RunNode:
                 (b'transaction_acc_weight', TransactionAccWeightResource(self.manager), root),
                 (b'dashboard_tx', DashboardTransactionResource(self.manager), root),
                 (b'profiler', ProfilerResource(self.manager), root),
+                (b'mined_tokens', MinedTokensResource(self.manager), root),
                 # mining
                 (b'get_block_template', GetBlockTemplateResource(self.manager), root),
                 (b'submit_block', SubmitBlockResource(self.manager), root),
