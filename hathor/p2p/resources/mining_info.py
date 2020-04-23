@@ -7,6 +7,7 @@ from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.difficulty import Weight
+from hathor.util import get_mined_tokens
 
 settings = HathorSettings()
 
@@ -45,10 +46,13 @@ class MiningInfoResource(resource.Resource):
         parent = block.get_block_parent()
         hashrate = 2**(parent.weight - log(30, 2))
 
+        mined_tokens = get_mined_tokens(height)
+
         data = {
             'hashrate': hashrate,
             'difficulty': difficulty,
             'blocks': height,
+            'mined_tokens': mined_tokens,
             'success': True,
         }
         return json.dumps(data, indent=4).encode('utf-8')
@@ -89,6 +93,7 @@ MiningInfoResource.openapi = {
                                     'summary': 'Block\'s height, global hashrate, and mining difficulty.',
                                     'value': {
                                         'blocks': 6354,
+                                        'mined_tokens': 40665600,
                                         'difficulty': 1023.984375,
                                         'networkhashps': 146601550370.13358,
                                         'success': True
