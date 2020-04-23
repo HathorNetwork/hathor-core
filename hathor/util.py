@@ -54,6 +54,30 @@ def _get_tokens_issued_per_block(height: int) -> int:
     return amount
 
 
+def get_mined_tokens(height: int) -> int:
+    """Return the number of tokens mined in total at height
+    """
+    assert settings.BLOCKS_PER_HALVING is not None
+    number_of_halvings = (height - 1) // settings.BLOCKS_PER_HALVING
+    number_of_halvings = max(0, number_of_halvings)
+
+    blocks_in_this_halving = height - number_of_halvings * settings.BLOCKS_PER_HALVING
+
+    tokens_per_block = settings.INITIAL_TOKENS_PER_BLOCK
+    mined_tokens = 0
+
+    # Sum the past halvings
+    for _ in range(number_of_halvings):
+        mined_tokens += settings.BLOCKS_PER_HALVING * tokens_per_block
+        tokens_per_block //= 2
+        tokens_per_block = max(tokens_per_block, settings.MINIMUM_TOKENS_PER_BLOCK)
+
+    # Sum the blocks in the current halving
+    mined_tokens += blocks_in_this_halving * tokens_per_block
+
+    return mined_tokens
+
+
 def practically_equal(a: Dict[Any, Any], b: Dict[Any, Any]) -> bool:
     """ Compare two defaultdict. It is used because a simple access have
     side effects in defaultdict.
