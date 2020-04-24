@@ -31,6 +31,7 @@ from hathor.transaction.exceptions import (
     InvalidInputData,
     InvalidOutputValue,
     InvalidToken,
+    NoInputError,
     RewardLocked,
     ScriptError,
     TimestampError,
@@ -261,9 +262,13 @@ class Transaction(BaseTransaction):
         self.verify_outputs()
 
     def verify_number_of_inputs(self) -> None:
-        """Verify number of inputs does not exceeds the limit"""
+        """Verify number of inputs is in a valid range"""
         if len(self.inputs) > MAX_NUM_INPUTS:
             raise TooManyInputs('Maximum number of inputs exceeded')
+
+        if len(self.inputs) == 0:
+            if not self.is_genesis:
+                raise NoInputError('Transaction must have at least one input')
 
     def verify_outputs(self) -> None:
         """Verify outputs reference an existing token uid in the tx list and there are no hathor
@@ -271,7 +276,7 @@ class Transaction(BaseTransaction):
 
         :raises InvalidToken: output references non existent token uid or when there's a hathor authority utxo
         """
-        for output in self.outputs:
+        for index, output in enumerate(self.outputs):
             # check index is valid
             if output.get_token_index() > len(self.tokens):
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
@@ -280,6 +285,11 @@ class Transaction(BaseTransaction):
             if (output.get_token_index() == 0) and output.is_token_authority():
                 raise InvalidToken('Cannot have authority UTXO for hathor tokens: {}'.format(
                     output.to_human_readable()))
+
+            # output value must be positive
+            if output.value <= 0:
+                raise InvalidOutputValue('Output value must be a positive integer. Value: {} and index: {}'.format(
+                    output.value, index))
 
     def get_token_info_from_inputs(self) -> Dict[bytes, TokenInfo]:
         """Sum up all tokens present in the inputs and their properties (amount, can_mint, can_melt)
@@ -317,10 +327,6 @@ class Transaction(BaseTransaction):
         """
         # iterate over outputs and add values to token_dict
         for index, tx_output in enumerate(self.outputs):
-            if tx_output.value <= 0:
-                raise InvalidOutputValue('Output value must be a positive integer. Value: {} and index: {}'.format(
-                    tx_output.value, index))
-
             token_uid = self.get_token_uid(tx_output.get_token_index())
             token_info = token_dict.get(token_uid)
             if token_info is None:

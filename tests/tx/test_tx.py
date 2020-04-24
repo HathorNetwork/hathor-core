@@ -15,6 +15,7 @@ from hathor.transaction.exceptions import (
     InputOutputMismatch,
     InvalidInputData,
     InvalidOutputValue,
+    NoInputError,
     ParentDoesNotExist,
     PowError,
     TimestampError,
@@ -107,6 +108,12 @@ class BasicTransaction(unittest.TestCase):
         tx = Transaction(inputs=inputs, storage=self.tx_storage)
 
         with self.assertRaises(TooManyInputs):
+            tx.verify_number_of_inputs()
+
+    def test_no_inputs(self):
+        tx = Transaction(inputs=[], storage=self.tx_storage)
+
+        with self.assertRaises(NoInputError):
             tx.verify_number_of_inputs()
 
     def test_too_many_outputs(self):
@@ -627,7 +634,9 @@ class BasicTransaction(unittest.TestCase):
         script = P2PKH.create_output_script(address)
         output = TxOutput(value, script)
         output.value = -1
-        tx = Transaction(inputs=[], outputs=[output], parents=parents, storage=self.tx_storage)
+        random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
+        _input = TxInput(random_bytes, 0, random_bytes)
+        tx = Transaction(inputs=[_input], outputs=[output], parents=parents, storage=self.tx_storage)
         with self.assertRaises(InvalidOutputValue):
             tx.resolve()
 
