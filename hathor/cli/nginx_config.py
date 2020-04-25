@@ -158,7 +158,7 @@ def generate_nginx_config(openapi: Dict[str, Any], *, out_file: TextIO, rate_k: 
             # zone, for top level `limit_req_zone`
             size = '10m'
             rate = _scale_rate_limit(rate_limit['rate'], rate_k)
-            zone = RateLimitZone(name, '$perip', size, rate)
+            zone = RateLimitZone(name, '$binary_remote_addr', size, rate)
             limit_rate_zones.append(zone)
             # limit, for location level `limit_req`
             burst = rate_limit.get('burst')
@@ -185,7 +185,7 @@ def generate_nginx_config(openapi: Dict[str, Any], *, out_file: TextIO, rate_k: 
 server_tokens off;
 
 limit_conn_zone global zone=global__ws:32k;
-limit_conn_zone $perip zone=per_ip__ws:10m;
+limit_conn_zone $binary_remote_addr zone=per_ip__ws:10m;
 '''
 
     server_open = f'''
@@ -197,10 +197,15 @@ server {{
     listen 80;
     server_name localhost;
 
-    set $perip $remote_addr;  # binary_remote_addr won't help much anyway
-    if ($http_x_forwarded_for) {{
-        set $perip $http_x_forwarded_for;
-    }}
+    # Look for client IP in the X-Forwarded-For header
+    real_ip_header X-Forwarded-For;
+    # Ignore trusted IPs
+    real_ip_recursive on;
+    # Set ELB IP as trusted
+    set_real_ip_from 10.0.0.0/8;
+    set_real_ip_from 172.16.0.0/12;
+    set_real_ip_from 192.168.0.0/16;
+
 
     client_max_body_size 10M;
     limit_req_status 429;
