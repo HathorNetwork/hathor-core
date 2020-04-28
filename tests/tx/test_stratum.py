@@ -2,7 +2,7 @@ from hashlib import sha256
 from json import dumps as json_dumps, loads as json_loads
 from time import sleep
 from typing import Optional
-from uuid import UUID
+from uuid import uuid4
 
 from twisted.test.proto_helpers import MemoryReactorClock, StringTransportWithDisconnection
 
@@ -23,6 +23,13 @@ from hathor.transaction.genesis import get_genesis_transactions
 from tests import unittest
 
 
+def _send_subscribe(protocol, id=None):
+    """Sends subcribe request."""
+    if id is None:
+        id = uuid4()
+    protocol.lineReceived('{{"jsonrpc": "2.0", "id": "{}", "method": "subscribe"}}'.format(id).encode())
+
+
 class StratumTestBase(unittest.TestCase):
     def setUp(self):
         super().setUp()
@@ -34,13 +41,22 @@ class StratumTestBase(unittest.TestCase):
         self.transport = StringTransportWithDisconnection()
         self.transport.protocol = self.protocol
         self.protocol.makeConnection(self.transport)
+        # subscribe and ignore response
+        _send_subscribe(self.protocol)
+        self.job = self._get_latest_message()['params']
+        self.transport.clear()
 
     def tearDown(self):
         super().tearDown()
         self.factory.stop()
 
+    def _get_latest_message(self):
+        data = self.transport.value().split(JSONRPC.delimiter)[-2]
+        return json_loads(data)
+
 
 class TestStratum(StratumTestBase):
+
     def test_parse_error(self):
         self.protocol.lineReceived(b'{]')
         response = json_loads(self.transport.value())
@@ -71,7 +87,7 @@ class TestStratum(StratumTestBase):
 
     def test_json_rpc(self):
         # Test sending request
-        uuid = UUID('eadee1bd-5581-4f04-98c9-fbee30456ec4')
+        uuid = uuid4()
         self.protocol.send_request('foo', ['bar', 'foobar'], uuid)
         # Test receiving response
         self.protocol.lineReceived(b'{"jsonrpc": "2.0", "result": "foo"}')
@@ -84,6 +100,8 @@ class TestStratum(StratumTestBase):
         transport = StringTransportWithDisconnection()
         protocol = self.factory.buildProtocol('127.0.0.1')
         protocol.makeConnection(transport)
+        self.assertEqual(len(self.factory.miner_protocols), 1)
+        _send_subscribe(protocol)
         self.assertEqual(len(self.factory.miner_protocols), 2)
         protocol.connectionLost()
         self.assertEqual(len(self.factory.miner_protocols), 1)
@@ -101,13 +119,18 @@ class TestStratum(StratumTestBase):
         self.assertEqual(response['error'], METHOD_NOT_FOUND)
 
     def test_subscribe(self):
-        id = "52dce7e1c7b34143bdd80ead4814ef07"
-        self.protocol.lineReceived('{{"jsonrpc": "2.0", "id": "{}", "method": "subscribe"}}'.format(id).encode())
-        data = self.transport.value().split(JSONRPC.delimiter)
+        transport = StringTransportWithDisconnection()
+        protocol = self.factory.buildProtocol('127.0.0.1')
+        protocol.makeConnection(transport)
+        id = uuid4()
+        _send_subscribe(protocol, id)
+
+        self.assertEqual(len(self.factory.miner_protocols), 2)
+        data = transport.value().split(JSONRPC.delimiter)
         self.assertEqual(len(data), 3)
 
         response = json_loads(data[0])
-        self.assertEqual(response['id'], id)
+        self.assertEqual(response['id'], str(id))
         self.assertEqual(response['result'], "ok")
 
         job = json_loads(data[1])
@@ -115,16 +138,6 @@ class TestStratum(StratumTestBase):
 
 
 class TestStratumJob(StratumTestBase):
-    def setUp(self):
-        super().setUp()
-        subscribe = b'{"jsonrpc": "2.0", "id": "52dce7e1c7b34143bdd80ead4814ef07", "method": "subscribe"}'
-        self.protocol.lineReceived(subscribe)
-        self.job = self._get_latest_message()['params']
-
-    def _get_latest_message(self):
-        data = self.transport.value().split(JSONRPC.delimiter)[-2]
-        return json_loads(data)
-
     def _get_nonce(self, valid=True):
         target = 2**(256 - self.job['weight']) - 1
         base = sha256(bytes.fromhex(self.job['data']))
