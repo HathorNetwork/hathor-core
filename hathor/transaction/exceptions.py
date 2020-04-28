@@ -48,6 +48,10 @@ class InvalidInputData(TxValidationError):
     """Input data does not solve output script correctly"""
 
 
+class NoInputError(TxValidationError):
+    """There is not input"""
+
+
 class TooManyInputs(TxValidationError):
     """More than 256 inputs"""
 
