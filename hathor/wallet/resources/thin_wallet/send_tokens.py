@@ -56,25 +56,38 @@ class SendTokensResource(resource.Resource):
         if len(self.manager.pow_thread_pool.working) == settings.MAX_POW_THREADS:
             return self.return_POST(
                 False,
-                'The server is currently fully loaded to send tokens. Wait a moment and try again, please.'
+                'The server is currently fully loaded to send tokens. Wait a moment and try again, please.',
+                return_code='max_pow_threads'
             )
 
         try:
             post_data = json.loads(request.content.read().decode('utf-8'))
         except AttributeError:
-            return self.return_POST(False, 'Missing transaction hexadecimal in POST data')
+            return self.return_POST(
+                False,
+                'Missing transaction hexadecimal in POST data',
+                return_code='missing_tx_data'
+            )
 
         try:
             tx_hex = post_data['tx_hex']
         except KeyError:
-            return self.return_POST(False, 'Missing \'tx_hex\' parameter')
+            return self.return_POST(
+                False,
+                'Missing \'tx_hex\' parameter',
+                return_code='missing_tx_hex_param'
+            )
 
         try:
             tx = tx_or_block_from_bytes(bytes.fromhex(tx_hex))
         except (ValueError, struct.error):
             # ValueError: invalid hex
             # struct.error: invalid transaction data
-            return self.return_POST(False, 'Error parsing hexdump to create the transaction')
+            return self.return_POST(
+                False,
+                'Error parsing hexdump to create the transaction',
+                return_code='param_invalid_hex'
+            )
 
         assert isinstance(tx, Transaction)
         # Set tx storage
@@ -83,11 +96,11 @@ class SendTokensResource(resource.Resource):
         # If this tx is a double spending, don't even try to propagate in the network
         is_double_spending = tx.is_double_spending()
         if is_double_spending:
-            data = {
-                'success': False,
-                'message': 'Invalid transaction. At least one of your inputs has already been spent.'
-            }
-            return json.dumps(data, indent=4).encode('utf-8')
+            return self.return_POST(
+                False,
+                'Invalid transaction. At least one of your inputs has already been spent.',
+                return_code='double_spending'
+            )
 
         request.should_stop_mining_thread = False
 
@@ -130,7 +143,7 @@ class SendTokensResource(resource.Resource):
         deferred = threads.deferToThreadPool(reactor, self.manager.pow_thread_pool,
                                              self._render_POST_thread, tx, request)
         deferred.addCallback(self._cb_tx_resolve, request)
-        deferred.addErrback(self._err_tx_resolve, request)
+        deferred.addErrback(self._err_tx_resolve, request, 'python_resolve')
 
     def _responseFailed(self, err, request):
         request.should_stop_mining_thread = True
@@ -146,7 +159,7 @@ class SendTokensResource(resource.Resource):
 
         deferred = threads.deferToThreadPool(reactor, self.manager.pow_thread_pool, self._stratum_thread_verify, tx)
         deferred.addCallback(self._cb_tx_resolve, request)
-        deferred.addErrback(self._err_tx_resolve, request)
+        deferred.addErrback(self._err_tx_resolve, request, 'stratum_resolve')
 
     def _stratum_thread_verify(self, tx: Transaction) -> Transaction:
         """ Method to verify the transaction that runs in a separated thread
@@ -178,7 +191,7 @@ class SendTokensResource(resource.Resource):
         # update metrics
         self.manager.metrics.send_token_timeouts += 1
 
-        self._err_tx_resolve(result, request)
+        self._err_tx_resolve(result, request, 'stratum_timeout')
 
     def _render_POST_thread(self, tx: Transaction, request: Request) -> Transaction:
         """ Method called in a thread to solve tx pow without stratum
@@ -197,28 +210,38 @@ class SendTokensResource(resource.Resource):
         """ Called when `_render_POST_thread` finishes
         """
         message = ''
+        return_code = ''
         try:
             success = self.manager.propagate_tx(tx, fails_silently=False)
+            if success:
+                return_code = 'success'
+            else:
+                return_code = 'propagating_error'
         except (InvalidNewTransaction, TxValidationError) as e:
             success = False
             message = str(e)
+            return_code = 'propagating_error'
 
-        result = self.return_POST(success, message, tx=tx)
+        result = self.return_POST(success, message, tx=tx, return_code=return_code)
 
         request.write(result)
         request.finish()
 
-    def _err_tx_resolve(self, reason, request):
+    def _err_tx_resolve(self, reason, request, return_code):
         """ Called when an error occur in `_render_POST_thread`
         """
         message = ''
         if hasattr(reason, 'value'):
             message = str(reason.value)
-        result = self.return_POST(False, message)
+        result = self.return_POST(False, message, return_code=return_code)
         request.write(result)
         request.finish()
 
-    def return_POST(self, success: bool, message: str, tx: Optional[Transaction] = None) -> bytes:
+    def return_POST(self,
+                    success: bool,
+                    message: str,
+                    tx: Optional[Transaction] = None,
+                    return_code: str = '') -> bytes:
         """ Auxiliar method to return result of POST method
 
             :param success: If tx was created successfully
@@ -232,9 +255,11 @@ class SendTokensResource(resource.Resource):
         ret = {
             'success': success,
             'message': message,
+            'return_code': return_code,
         }
         if tx:
             ret['tx'] = tx.to_json()
+
         return json.dumps(ret, indent=4).encode('utf-8')
 
     def render_OPTIONS(self, request):
@@ -329,6 +354,7 @@ SendTokensResource.openapi = {
                                 },
                                 'error1': {
                                     'summary': 'Invalid address',
+                                    'return_code': 'stratum_resolve',
                                     'value': {
                                         'success': False,
                                         'message': 'The address abc is invalid'
@@ -336,6 +362,7 @@ SendTokensResource.openapi = {
                                 },
                                 'error2': {
                                     'summary': 'Insufficient funds',
+                                    'return_code': 'python_resolve',
                                     'value': {
                                         'success': False,
                                         'message': 'Insufficient funds'
@@ -343,6 +370,7 @@ SendTokensResource.openapi = {
                                 },
                                 'error3': {
                                     'summary': 'Invalid input',
+                                    'return_code': 'python_resolve',
                                     'value': {
                                         'success': False,
                                         'message': 'Invalid input to create transaction'
@@ -352,6 +380,7 @@ SendTokensResource.openapi = {
                                     'summary': 'Propagation error',
                                     'value': {
                                         'success': False,
+                                        'return_code': 'propagating_error',
                                         'message': 'Propagation error message',
                                         'tx': {
                                             'hash': '00002b3be4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22f',
@@ -372,6 +401,7 @@ SendTokensResource.openapi = {
                                     'summary': 'Double spending error',
                                     'value': {
                                         'success': False,
+                                        'return_code': 'double_spending',
                                         'message': ('Invalid transaction. At least one of your inputs has'
                                                     'already been spent.')
                                     }

@@ -271,7 +271,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         request = TestDummyRequest('POST', 'thin_wallet/send_tokens', {})
 
         self.assertIsNotNone(request._finishedDeferreds)
-        resource._err_tx_resolve('Error', request)
+        resource._err_tx_resolve('Error', request, 'error')
         self.assertIsNone(request._finishedDeferreds)
 
     @inlineCallbacks
