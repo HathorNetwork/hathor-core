@@ -21,6 +21,7 @@ METRIC_INFO = {
     'completed_jobs': 'Number of completed jobs in stratum',
     'blocks_found': 'Number of blocks found by the miner in stratum',
     'estimated_hash_rate': 'Estimated hash rate for stratum miners',
+    'send_token_timeouts': 'Number of times send_token API has timed-out',
 }
 
 

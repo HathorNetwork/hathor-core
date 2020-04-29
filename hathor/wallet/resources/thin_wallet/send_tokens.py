@@ -169,11 +169,14 @@ class SendTokensResource(resource.Resource):
 
         result.value = 'Timeout: error resolving transaction proof of work'
 
-        self.log.info(
+        self.log.warn(
             'Stratum timeout: error resolving transaction proof of work. Tx={tx} Stratum tx={stratum_tx}',
             tx=tx.get_struct().hex(),
             stratum_tx=stratum_tx.get_struct().hex() if stratum_tx else ''
         )
+
+        # update metrics
+        self.manager.metrics.send_token_timeouts += 1
 
         self._err_tx_resolve(result, request)
 

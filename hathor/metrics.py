@@ -50,6 +50,7 @@ class Metrics:
     blocks_found: int
     estimated_hash_rate: float  # log(H/s)
     stratum_factory: Optional['StratumFactory']
+    send_token_timeouts: int
 
     def __init__(
             self,
@@ -145,6 +146,9 @@ class Metrics:
 
         # Stratum factory
         self.stratum_factory = None
+
+        # Send-token timeouts counter
+        self.send_token_timeouts = 0
 
         self._initial_setup()
 
