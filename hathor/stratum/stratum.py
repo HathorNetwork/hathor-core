@@ -365,15 +365,14 @@ class StratumProtocol(JSONRPC):
 
     def connectionMade(self) -> None:
         self.miner_id = uuid4()
-        self.factory.miner_protocols[self.miner_id] = self
         self.connection_start_time = self.factory.get_current_timestamp()
-        self.log = self.log.bind(miner_id=self.miner_id, conn_at=self.connection_start_time)
-        self.log.info('New miner')
+        self.log = self.log.bind(miner_id=self.miner_id, conn_at=self.connection_start_time, address=self.address)
+        self.log.debug('New connection')
 
     def connectionLost(self, reason: Failure = None) -> None:
         self.log.info('Miner exited')
         assert self.miner_id is not None
-        self.factory.miner_protocols.pop(self.miner_id)
+        self.factory.miner_protocols.pop(self.miner_id, None)
 
     def handle_request(self, method: str, params: Optional[Union[List, Dict]], msgid: Optional[str]) -> None:
         """ Handles subscribe and submit requests.
@@ -440,6 +439,7 @@ class StratumProtocol(JSONRPC):
         if self.merged_mining:
             self.log.debug('merged_mining=True implies mine_txs=False')
             self.mine_txs = False
+        self.factory.miner_protocols[self.miner_id] = self
         self.log.info('Miner subscribed', address=self.miner_address, mine_txs=self.mine_txs,
                       merged_mining=self.merged_mining)
         self.send_result('ok', msgid)
