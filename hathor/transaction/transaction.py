@@ -15,6 +15,7 @@ limitations under the License.
 """
 
 from collections import namedtuple
+from functools import lru_cache
 from struct import pack
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 
@@ -76,6 +77,7 @@ class Transaction(BaseTransaction):
         super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight, inputs=inputs
                          or [], outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.tokens = tokens or []
+        self._height_cache = None
 
     @property
     def is_block(self) -> bool:
@@ -192,25 +194,30 @@ class Transaction(BaseTransaction):
 
         return struct_bytes
 
+    @lru_cache(maxsize=None)
     def get_sighash_all(self, clear_input_data: bool = True) -> bytes:
         """Return a serialization of the inputs, outputs and tokens without including any other field
 
         :return: Serialization of the inputs, outputs and tokens
         :rtype: bytes
         """
-        struct_bytes = pack(_SIGHASH_ALL_FORMAT_STRING, self.version, len(self.tokens), len(self.inputs),
-                            len(self.outputs))
+        from hathor.transaction.util import int_to_bytes
+        struct_bytes = bytearray(pack(_SIGHASH_ALL_FORMAT_STRING, self.version, len(self.tokens), len(self.inputs),
+                            len(self.outputs)))
 
         for token_uid in self.tokens:
             struct_bytes += token_uid
 
         for tx_input in self.inputs:
-            struct_bytes += tx_input.get_sighash_bytes(clear_input_data)
+            #struct_bytes += tx_input.get_sighash_bytes(clear_input_data)
+            struct_bytes += tx_input.tx_id
+            struct_bytes += int_to_bytes(tx_input.index, 1)
+            struct_bytes += int_to_bytes(0, 2)
 
         for tx_output in self.outputs:
             struct_bytes += bytes(tx_output)
 
-        return struct_bytes
+        return bytes(struct_bytes)
 
     def get_token_uid(self, index: int) -> bytes:
         """Returns the token uid with corresponding index from the tx token uid list.
@@ -446,13 +453,17 @@ class Transaction(BaseTransaction):
         We only consider the blocks on the best chain up to the tx's timestamp.
         """
         assert self.storage is not None
-        # using the timestamp, we get the block immediately before this transaction in the blockchain
-        tips = self.storage.get_best_block_tips(self.timestamp - 1)
-        assert len(tips) > 0
-        tip = self.storage.get_transaction(tips[0])
-        assert tip is not None
-        assert self.timestamp > tip.timestamp
-        best_height = tip.get_metadata().height
+        if self._height_cache:
+            best_height = self._height_cache
+        else:
+            # using the timestamp, we get the block immediately before this transaction in the blockchain
+            tips = self.storage.get_best_block_tips(self.timestamp - 1)
+            assert len(tips) > 0
+            tip = self.storage.get_transaction(tips[0])
+            assert tip is not None
+            assert self.timestamp > tip.timestamp
+            best_height = tip.get_metadata().height
+            self._height_cache = best_height
         spent_height = block.get_metadata().height
         spend_blocks = best_height - spent_height
         if spend_blocks < settings.REWARD_SPEND_MIN_BLOCKS:
