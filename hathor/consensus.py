@@ -162,8 +162,8 @@ class BlockConsensusAlgorithm:
         if is_connected_to_the_head and is_connected_to_the_best_chain:
             # Case (i): Single best chain, connected to the head of the best chain
             self.update_score_and_mark_as_the_best_chain_if_possible(block)
-            heads = [storage.get_transaction(h) for h in storage.get_best_block_tips()]
-            assert len(heads) == 1
+            assert len(storage.get_best_block_tips(skip_cache=True)) == 1
+            storage._best_block_tips = heads
 
         else:
             # Resolve all other cases, but (i).
@@ -173,7 +173,7 @@ class BlockConsensusAlgorithm:
 
             # Get the score of the best chains.
             # We need to void this block first, because otherwise it would always be one of the heads.
-            heads = [storage.get_transaction(h) for h in storage.get_best_block_tips()]
+            heads = [storage.get_transaction(h) for h in storage.get_best_block_tips(skip_cache=True)]
             best_score = None
             for head in heads:
                 head_meta = head.get_metadata(force_reload=True)
@@ -212,6 +212,9 @@ class BlockConsensusAlgorithm:
                 if score >= best_score + settings.WEIGHT_TOL:
                     # We have a new winner.
                     self.update_score_and_mark_as_the_best_chain_if_possible(block)
+                    storage._best_block_tips = [block.hash]
+                else:
+                    storage._best_block_tips = [blk.hash for blk in heads]
 
     def union_voided_by_from_parents(self, block: 'Block') -> Set[bytes]:
         """Return the union of the voided_by of block's parents.
@@ -283,7 +286,7 @@ class BlockConsensusAlgorithm:
 
         if self.update_voided_by_from_parents(block):
             storage = block.storage
-            heads = [storage.get_transaction(h) for h in storage.get_best_block_tips()]
+            heads = [storage.get_transaction(h) for h in storage.get_best_block_tips(skip_cache=True)]
             best_score = 0
             for head in heads:
                 head_meta = head.get_metadata(force_reload=True)
