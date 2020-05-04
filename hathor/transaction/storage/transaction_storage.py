@@ -286,12 +286,14 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_best_block_tips(self, timestamp: Optional[float] = None) -> List[bytes]:
+    def get_best_block_tips(self, timestamp: Optional[float] = None, *, skip_cache: bool = False) -> List[bytes]:
         """ Return a list of blocks that are heads in a best chain. It must be used when mining.
 
         When more than one block is returned, it means that there are multiple best chains and
         you can choose any of them.
         """
+        if timestamp is None and not skip_cache:
+            return self._best_block_tips
         best_score = 0
         best_tip_blocks = []  # List[bytes(hash)]
         tip_blocks = [x.data for x in self.get_block_tips(timestamp)]
@@ -504,6 +506,7 @@ class BaseTransactionStorage(TransactionStorage):
         if with_index:
             self._reset_cache()
         self._genesis_cache: Optional[Dict[bytes, BaseTransaction]] = None
+        self._best_block_tips = []
 
         # Pubsub is used to publish tx voided and winner but it's optional
         self.pubsub = pubsub
@@ -544,8 +547,8 @@ class BaseTransactionStorage(TransactionStorage):
         self.tx_index = None
         self.all_index = None
 
-    def get_best_block_tips(self, timestamp: Optional[float] = None) -> List[bytes]:
-        return super().get_best_block_tips(timestamp)
+    def get_best_block_tips(self, timestamp: Optional[float] = None, *, skip_cache: bool = False) -> List[bytes]:
+        return super().get_best_block_tips(timestamp, skip_cache=skip_cache)
 
     def get_weight_best_block(self) -> float:
         return super().get_weight_best_block()
