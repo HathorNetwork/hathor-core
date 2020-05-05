@@ -126,7 +126,10 @@ class SendTokensResource(resource.Resource):
         fn_timeout = partial(self._stratum_timeout, request=request, tx=tx)
         stratum_deferred.addTimeout(TIMEOUT_STRATUM_RESOLVE_POW, self.manager.reactor, onTimeoutCancel=fn_timeout)
 
+        # this prepares transaction for mining
         self.manager.stratum_factory.mine_transaction(tx, stratum_deferred)
+        # process it right away
+        self.manager.stratum_factory.update_jobs()
 
     def _render_POST(self, tx: Transaction, request: Request) -> None:
         """ Resolves the request without stratum
@@ -187,6 +190,9 @@ class SendTokensResource(resource.Resource):
             tx=tx.get_struct().hex(),
             stratum_tx=stratum_tx.get_struct().hex() if stratum_tx else ''
         )
+
+        # start new job in stratum, so the miner doesn't waste more time on this tx
+        self.manager.stratum_factory.update_jobs()
 
         # update metrics
         self.manager.metrics.send_token_timeouts += 1
