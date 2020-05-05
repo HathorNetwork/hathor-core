@@ -129,6 +129,14 @@ def get_grafana_dashboard_json(title: str, data_source: str = DATA_SOURCE) -> st
             chart_data['id'] = id_count
             id_count += 1
 
+            # add alert to stratum, if needed
+            if chart_file == 'stratum_estimated_hash_rate':
+                # get from nodes.json config file if we want alerts for this node
+                alert = node.get('stratum_alert')
+                if alert:
+                    # if it's set, add the alert part
+                    chart_data['alert'] = get_stratum_alert_data(alert['threshold'], alert['notification_channel'])
+
             chart_data.update(default_data)
             data['panels'].append(chart_data)
 
@@ -260,6 +268,45 @@ def get_graph_data(pos: Dict[str, int], targets: List[Dict[str, Any]], node: str
     graph_data['yaxes'][0]['min'] = y_min
     graph_data['yaxes'][0]['max'] = y_max
     return graph_data
+
+
+def get_stratum_alert_data(threshold: float, notification_channel: int) -> Dict[str, Any]:
+    """ Gets alert config for when stratum goes below given threshold
+
+        :param threshold: Below this value, grafana should send an alert
+        :type description: float
+
+        :param notification_channel: Id of the notification channel the alert should be sent to
+        :type notification_channel: int
+
+        :return: Data of the alert
+        :rtype: Dict
+    """
+    return {
+        "conditions": [
+            {
+                "evaluator": {
+                    "params": [threshold],
+                    "type": "lt"
+                },
+                "operator": {"type": "and"},
+                "query": {
+                    "params": ["A", "5m", "now"]
+                },
+                "reducer": {
+                    "params": [],
+                    "type": "avg"
+                },
+                "type": "query"
+            }
+        ],
+        "executionErrorState": "alerting",
+        "frequency": "60s",
+        "handler": 1,
+        "name": "Estimated hash rate on stratum alert",
+        "noDataState": "alerting",
+        "notifications": [{"id": notification_channel}]
+    }
 
 
 def get_initial_data(title: str) -> Dict[str, Any]:
