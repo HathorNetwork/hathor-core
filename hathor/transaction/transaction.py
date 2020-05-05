@@ -15,7 +15,6 @@ limitations under the License.
 """
 
 from collections import namedtuple
-from functools import lru_cache
 from struct import pack
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 
@@ -78,6 +77,8 @@ class Transaction(BaseTransaction):
                          or [], outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.tokens = tokens or []
         self._height_cache = None
+        self._sighash_cache1 = None
+        self._sighash_cache2 = None
 
     @property
     def is_block(self) -> bool:
@@ -194,13 +195,17 @@ class Transaction(BaseTransaction):
 
         return struct_bytes
 
-    @lru_cache(maxsize=None)
     def get_sighash_all(self, clear_input_data: bool = True) -> bytes:
         """Return a serialization of the inputs, outputs and tokens without including any other field
 
         :return: Serialization of the inputs, outputs and tokens
         :rtype: bytes
         """
+        if clear_input_data and self._sighash_cache1:
+            return self._sighash_cache1
+        elif not clear_input_data and self._sighash_cache2:
+            return self._sighash_cache2
+
         from hathor.transaction.util import int_to_bytes
         struct_bytes = bytearray(pack(_SIGHASH_ALL_FORMAT_STRING, self.version, len(self.tokens), len(self.inputs),
                             len(self.outputs)))
@@ -209,15 +214,17 @@ class Transaction(BaseTransaction):
             struct_bytes += token_uid
 
         for tx_input in self.inputs:
-            #struct_bytes += tx_input.get_sighash_bytes(clear_input_data)
-            struct_bytes += tx_input.tx_id
-            struct_bytes += int_to_bytes(tx_input.index, 1)
-            struct_bytes += int_to_bytes(0, 2)
+            struct_bytes += tx_input.get_sighash_bytes(clear_input_data)
 
         for tx_output in self.outputs:
             struct_bytes += bytes(tx_output)
 
-        return bytes(struct_bytes)
+        ret = bytes(struct_bytes)
+        if clear_input_data:
+            self._sighash_cache1 = ret
+        else:
+            self._sighash_cache2 = ret
+        return ret
 
     def get_token_uid(self, index: int) -> bytes:
         """Returns the token uid with corresponding index from the tx token uid list.

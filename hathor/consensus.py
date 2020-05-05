@@ -162,7 +162,7 @@ class BlockConsensusAlgorithm:
         if is_connected_to_the_head and is_connected_to_the_best_chain:
             # Case (i): Single best chain, connected to the head of the best chain
             self.update_score_and_mark_as_the_best_chain_if_possible(block)
-            assert len(storage.get_best_block_tips(skip_cache=True)) == 1
+            # assert len(storage.get_best_block_tips(skip_cache=True)) == 1
             storage._best_block_tips = [block.hash]
         else:
             # Resolve all other cases, but (i).
@@ -172,7 +172,7 @@ class BlockConsensusAlgorithm:
 
             # Get the score of the best chains.
             # We need to void this block first, because otherwise it would always be one of the heads.
-            heads = [storage.get_transaction(h) for h in storage.get_best_block_tips(skip_cache=True)]
+            heads = [storage.get_transaction(h) for h in storage.get_best_block_tips()]
             best_score = None
             for head in heads:
                 head_meta = head.get_metadata(force_reload=True)
@@ -285,7 +285,7 @@ class BlockConsensusAlgorithm:
 
         if self.update_voided_by_from_parents(block):
             storage = block.storage
-            heads = [storage.get_transaction(h) for h in storage.get_best_block_tips(skip_cache=True)]
+            heads = [storage.get_transaction(h) for h in storage.get_best_block_tips()]
             best_score = 0
             for head in heads:
                 head_meta = head.get_metadata(force_reload=True)
