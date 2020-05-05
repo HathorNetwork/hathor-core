@@ -42,6 +42,9 @@ class TransactionStorage(ABC):
         # This is a global lock used to prevent concurrent access when getting the tx lock in the dict above
         self._weakref_lock: Lock = Lock()
 
+        # Cache fot the best block tips
+        self._best_block_tips = []
+
     def _save_to_weakref(self, tx: BaseTransaction) -> None:
         """ Save transaction to weakref.
         """
@@ -506,7 +509,6 @@ class BaseTransactionStorage(TransactionStorage):
         if with_index:
             self._reset_cache()
         self._genesis_cache: Optional[Dict[bytes, BaseTransaction]] = None
-        self._best_block_tips = []
 
         # Pubsub is used to publish tx voided and winner but it's optional
         self.pubsub = pubsub
