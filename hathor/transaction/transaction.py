@@ -206,9 +206,8 @@ class Transaction(BaseTransaction):
         elif not clear_input_data and self._sighash_cache2:
             return self._sighash_cache2
 
-        from hathor.transaction.util import int_to_bytes
         struct_bytes = bytearray(pack(_SIGHASH_ALL_FORMAT_STRING, self.version, len(self.tokens), len(self.inputs),
-                            len(self.outputs)))
+                                 len(self.outputs)))
 
         for token_uid in self.tokens:
             struct_bytes += token_uid
