@@ -77,8 +77,8 @@ class Transaction(BaseTransaction):
                          or [], outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.tokens = tokens or []
         self._height_cache = None
-        self._sighash_cache1 = None
-        self._sighash_cache2 = None
+        self._sighash_cache1: Optional[bytes] = None
+        self._sighash_cache2: Optional[bytes] = None
 
     @property
     def is_block(self) -> bool:
