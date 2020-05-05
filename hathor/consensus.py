@@ -163,8 +163,7 @@ class BlockConsensusAlgorithm:
             # Case (i): Single best chain, connected to the head of the best chain
             self.update_score_and_mark_as_the_best_chain_if_possible(block)
             assert len(storage.get_best_block_tips(skip_cache=True)) == 1
-            storage._best_block_tips = heads
-
+            storage._best_block_tips = [block.hash]
         else:
             # Resolve all other cases, but (i).
 
