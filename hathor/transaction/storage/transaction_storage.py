@@ -42,7 +42,7 @@ class TransactionStorage(ABC):
         # This is a global lock used to prevent concurrent access when getting the tx lock in the dict above
         self._weakref_lock: Lock = Lock()
 
-        # Cache fot the best block tips
+        # Cache for the best block tips
         self._best_block_tips = []
 
     def _save_to_weakref(self, tx: BaseTransaction) -> None:
