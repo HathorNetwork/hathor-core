@@ -76,7 +76,7 @@ class Transaction(BaseTransaction):
         super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight, inputs=inputs
                          or [], outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.tokens = tokens or []
-        self._height_cache: Optional[bytes] = None
+        self._height_cache: Optional[int] = None
         self._sighash_cache1: Optional[bytes] = None
         self._sighash_cache2: Optional[bytes] = None
 
