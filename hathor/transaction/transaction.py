@@ -76,7 +76,7 @@ class Transaction(BaseTransaction):
         super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight, inputs=inputs
                          or [], outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.tokens = tokens or []
-        self._height_cache = None
+        self._height_cache: Optional[bytes] = None
         self._sighash_cache1: Optional[bytes] = None
         self._sighash_cache2: Optional[bytes] = None
 
@@ -201,6 +201,10 @@ class Transaction(BaseTransaction):
         :return: Serialization of the inputs, outputs and tokens
         :rtype: bytes
         """
+        # This method does not depend on the input itself, however we call it for each one to sign it.
+        # For transactions that have many inputs there is a significant decrease on the verify time
+        # when using this cache, so we call this method only once.
+        # We need two caches because the returned value is different depending on clear_input_data value (True/False)
         if clear_input_data and self._sighash_cache1:
             return self._sighash_cache1
         elif not clear_input_data and self._sighash_cache2:
@@ -460,6 +464,10 @@ class Transaction(BaseTransaction):
         """
         assert self.storage is not None
         if self._height_cache:
+            # get_best_block_tips is a costly method because there are many orphan blocks in our blockchain
+            # This method is called for each input that spends a block and, since we have many transactions
+            # that consolidate blocks rewards, this is common.
+            # This cache helps to decrease 90% of the verify time for those transactions.
             best_height = self._height_cache
         else:
             # using the timestamp, we get the block immediately before this transaction in the blockchain
