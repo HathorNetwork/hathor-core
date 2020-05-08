@@ -498,7 +498,8 @@ class StratumProtocol(JSONRPC):
         tx.update_hash()
         assert tx.hash is not None
 
-        self.log.debug('submitted block', block=tx, block_base=block_base.hex(), block_base_hash=block_base_hash.hex())
+        self.log.debug('Miner submitted nonce, will validate it',
+                       block=tx, block_base=block_base.hex(), block_base_hash=block_base_hash.hex())
 
         try:
             tx.verify_pow(job.weight)
@@ -521,11 +522,6 @@ class StratumProtocol(JSONRPC):
         except PowError:
             # Transaction pow was not enough, but the share was succesfully submited
             self.log.info('Insufficient weight, keep searching', tx=tx)
-            if isinstance(tx, Transaction):
-                # If we can't propagate the transaction then we should put it in tx queue again
-                funds_hash = tx.get_funds_hash()
-                if funds_hash in self.factory.mining_tx_pool and funds_hash not in self.factory.tx_queue:
-                    self.factory.tx_queue.append(funds_hash)
             return
 
         if isinstance(tx, Block):
@@ -546,6 +542,8 @@ class StratumProtocol(JSONRPC):
             if funds_hash in self.factory.mining_tx_pool:
                 self.factory.mined_txs[funds_hash] = tx
                 del self.factory.mining_tx_pool[funds_hash]
+                if funds_hash in self.factory.tx_queue:
+                    self.factory.tx_queue.remove(funds_hash)
                 if funds_hash in self.factory.deferreds_tx:
                     # Return to resolve the resource to send back the response
                     d = self.factory.deferreds_tx.pop(funds_hash)
@@ -590,8 +588,10 @@ class StratumProtocol(JSONRPC):
         """
         assert self.miner_id is not None
 
-        jobid = uuid4()
+        # before creating the job, make sure we cancel any outstanding timeout
+        self.cancel_current_job_timeout()
 
+        jobid = uuid4()
         tx = self.create_job_tx(jobid)
         job = ServerJob(jobid, self.factory.get_current_timestamp(), self.miner_id, tx, 0.0)
 
@@ -604,12 +604,6 @@ class StratumProtocol(JSONRPC):
 
         def jobTimeout(job: ServerJob, protocol: StratumProtocol) -> None:
             if job is protocol.current_job and job.submitted is None:
-                # If tx job times out, put tx back in queue
-                if isinstance(tx, Transaction):
-                    funds_hash = tx.get_funds_hash()
-                    if funds_hash in self.factory.mining_tx_pool and funds_hash not in self.factory.tx_queue:
-                        self.factory.tx_queue.append(funds_hash)
-
                 # Only send new jobs if miner is still connected
                 if self.miner_id in self.factory.miner_protocols:
                     protocol.job_request()
@@ -628,12 +622,12 @@ class StratumProtocol(JSONRPC):
         :return: created BaseTransaction
         :rtype: BaseTransaction
         """
-        tx = None
-        while not self.should_mine_block() and tx is None:
-            funds_hash = self.factory.tx_queue.pop(0)
+        # if there's a tx, always mine it. Blocks are not priority
+        if self.mine_txs and self.factory.tx_queue:
+            # we're always returning the first tx on the queue and we don't remove it. It will only be removed
+            # when the job is done or times out. This means that 2 different miners will work on the same tx.
+            funds_hash = self.factory.tx_queue[0]
             tx = self.factory.mining_tx_pool[funds_hash]
-
-        if tx is not None:
             tx.timestamp = self.factory.get_current_timestamp()
             tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
             self.log.debug('prepared tx for mining', tx=tx)
@@ -650,43 +644,11 @@ class StratumProtocol(JSONRPC):
         self.log.debug('prepared block for mining', block=block)
         return block
 
-    def should_mine_block(self) -> bool:
+    def cancel_current_job_timeout(self) -> None:
+        """ Cancel current's job timeout, if it exists
         """
-        Calculates whether the next mining job should be an block or not,
-        based on the recent history of mined jobs.
-
-        :return: whether the next mining job should be an block or not.
-        :rtype: bool
-        """
-        if len(self.factory.tx_queue) == 0:
-            self.log.debug('empty queue')
-            return True
-
-        if not self.mine_txs:
-            return True
-
-        # Asure miners won't spend more time on tx jobs than on block jobs
-        # Prevents against DoS from tx with huge weight
-        tx_acc_weight = 0.0
-        block_acc_weight = 0.0
-
-        # Asure miners won't mine more tx jobs than block jobs
-        # Prevents against DoS from lots of tx with small weight
-        tx_count = 0
-        block_count = 0
-
-        for job in self.jobs.values():
-            if job.submitted is None:
-                continue
-
-            if isinstance(job.tx, Block):
-                tx_count += 1
-                block_acc_weight = sum_weights(block_acc_weight, job.weight)
-            else:
-                block_count += 1
-                tx_acc_weight = sum_weights(tx_acc_weight, job.weight)
-
-        return block_acc_weight <= tx_acc_weight and tx_count <= block_count
+        if self.current_job and self.current_job.timeoutTask and self.current_job.timeoutTask.active():
+            self.current_job.timeoutTask.cancel()
 
     def calculate_share_weight(self) -> float:
         """
