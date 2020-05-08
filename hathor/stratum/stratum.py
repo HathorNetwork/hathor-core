@@ -323,7 +323,9 @@ class StratumProtocol(JSONRPC):
 
     JOBS_HISTORY = 100
     AVERAGE_JOB_TIME = 5
-    MAXIMUM_JOB_TIME = 15
+    BLOCK_MAXIMUM_JOB_TIME = 15
+    # we use a short timeout period when mining txs because the nonce is only 4 bytes
+    TX_MAXIMUM_JOB_TIME = 1
 
     address: IAddress
     current_job: Optional[ServerJob]
@@ -608,7 +610,8 @@ class StratumProtocol(JSONRPC):
                 if self.miner_id in self.factory.miner_protocols:
                     protocol.job_request()
 
-        job.timeoutTask = self.manager.reactor.callLater(self.MAXIMUM_JOB_TIME, jobTimeout, job, self)
+        timeout = self.BLOCK_MAXIMUM_JOB_TIME if tx.is_block else self.TX_MAXIMUM_JOB_TIME
+        job.timeoutTask = self.manager.reactor.callLater(timeout, jobTimeout, job, self)
 
         if len(self.job_ids) > self.JOBS_HISTORY:
             del self.jobs[self.job_ids.pop(0)]
