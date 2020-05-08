@@ -109,7 +109,7 @@ class SendTokensResource(resource.Resource):
         else:
             self._render_POST(tx, request)
 
-        request.notifyFinish().addErrback(self._responseFailed, request)
+        request.notifyFinish().addErrback(self._responseFailed, tx, request)
 
         from twisted.web.server import NOT_DONE_YET
         return NOT_DONE_YET
@@ -148,8 +148,17 @@ class SendTokensResource(resource.Resource):
         deferred.addCallback(self._cb_tx_resolve, request)
         deferred.addErrback(self._err_tx_resolve, request, 'python_resolve')
 
-    def _responseFailed(self, err, request):
-        request.should_stop_mining_thread = True
+    def _responseFailed(self, err, tx, request):
+        # response failed, should stop mining
+        self.log.warn('Connection closed while resolving transaction proof of work. Tx={tx}', tx=tx)
+        if settings.SEND_TOKENS_STRATUM and self.manager.stratum_factory:
+            funds_hash = tx.get_funds_hash()
+            self._cleanup_stratum(funds_hash)
+            # start new job in stratum, so the miner doesn't waste more time on this tx
+            self.manager.stratum_factory.update_jobs()
+        else:
+            # if we're mining on a thread, stop it
+            request.should_stop_mining_thread = True
 
     def _stratum_deferred_resolve(self, tx: Transaction, request: Request) -> None:
         """ Method called after stratum resolves tx proof of work
@@ -176,12 +185,9 @@ class SendTokensResource(resource.Resource):
         """
         stratum_tx = None
         funds_hash = tx.get_funds_hash()
-        if funds_hash in self.manager.stratum_factory.mining_tx_pool:
-            # We get both tx because stratum might have updated the tx (timestamp or parents)
-            stratum_tx = self.manager.stratum_factory.mining_tx_pool.pop(funds_hash)
 
-        if funds_hash in self.manager.stratum_factory.deferreds_tx:
-            del self.manager.stratum_factory.deferreds_tx[funds_hash]
+        # We get both tx because stratum might have updated the tx (timestamp or parents)
+        stratum_tx = self._cleanup_stratum(funds_hash)
 
         result.value = 'Timeout: error resolving transaction proof of work'
 
@@ -198,6 +204,21 @@ class SendTokensResource(resource.Resource):
         self.manager.metrics.send_token_timeouts += 1
 
         self._err_tx_resolve(result, request, 'stratum_timeout')
+
+    def _cleanup_stratum(self, funds_hash: bytes) -> Optional[Transaction]:
+        """ Cleans information on stratum factory related to this transaction
+        """
+        stratum_tx = None
+        if funds_hash in self.manager.stratum_factory.mining_tx_pool:
+            stratum_tx = self.manager.stratum_factory.mining_tx_pool.pop(funds_hash)
+
+        if funds_hash in self.manager.stratum_factory.deferreds_tx:
+            del self.manager.stratum_factory.deferreds_tx[funds_hash]
+
+        if funds_hash in self.manager.stratum_factory.tx_queue:
+            self.manager.stratum_factory.tx_queue.remove(funds_hash)
+
+        return stratum_tx
 
     def _render_POST_thread(self, tx: Transaction, request: Request) -> Transaction:
         """ Method called in a thread to solve tx pow without stratum
