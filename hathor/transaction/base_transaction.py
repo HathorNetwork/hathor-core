@@ -978,11 +978,11 @@ class TxInput:
         if not clear_data:
             return bytes(self)
         else:
-            ret = b''
+            ret = bytearray()
             ret += self.tx_id
             ret += int_to_bytes(self.index, 1)
             ret += int_to_bytes(0, 2)
-            return ret
+            return bytes(ret)
 
     @classmethod
     def create_from_bytes(cls, buf: bytes) -> Tuple['TxInput', bytes]:
