@@ -268,8 +268,8 @@ class TransactionRemoteStorage(TransactionStorage):
         result = self._stub.FirstTimestamp(request)
         return result.timestamp
 
-    def get_best_block_tips(self, timestamp: Optional[float] = None) -> List[bytes]:
-        return super().get_best_block_tips(timestamp)
+    def get_best_block_tips(self, timestamp: Optional[float] = None, *, skip_cache: bool = False) -> List[bytes]:
+        return super().get_best_block_tips(timestamp, skip_cache=skip_cache)
 
     @convert_grpc_exceptions
     def get_all_tips(self, timestamp: Optional[Union[int, float]] = None) -> Set[Interval]:

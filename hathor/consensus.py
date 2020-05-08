@@ -162,9 +162,8 @@ class BlockConsensusAlgorithm:
         if is_connected_to_the_head and is_connected_to_the_best_chain:
             # Case (i): Single best chain, connected to the head of the best chain
             self.update_score_and_mark_as_the_best_chain_if_possible(block)
-            heads = [storage.get_transaction(h) for h in storage.get_best_block_tips()]
-            assert len(heads) == 1
-
+            # assert len(storage.get_best_block_tips(skip_cache=True)) == 1
+            storage._best_block_tips = [block.hash]
         else:
             # Resolve all other cases, but (i).
 
@@ -212,6 +211,9 @@ class BlockConsensusAlgorithm:
                 if score >= best_score + settings.WEIGHT_TOL:
                     # We have a new winner.
                     self.update_score_and_mark_as_the_best_chain_if_possible(block)
+                    storage._best_block_tips = [block.hash]
+                else:
+                    storage._best_block_tips = [blk.hash for blk in heads]
 
     def union_voided_by_from_parents(self, block: 'Block') -> Set[bytes]:
         """Return the union of the voided_by of block's parents.

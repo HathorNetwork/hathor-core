@@ -76,6 +76,9 @@ class Transaction(BaseTransaction):
         super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight, inputs=inputs
                          or [], outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.tokens = tokens or []
+        self._height_cache: Optional[int] = None
+        self._sighash_cache1: Optional[bytes] = None
+        self._sighash_cache2: Optional[bytes] = None
 
     @property
     def is_block(self) -> bool:
@@ -198,8 +201,17 @@ class Transaction(BaseTransaction):
         :return: Serialization of the inputs, outputs and tokens
         :rtype: bytes
         """
-        struct_bytes = pack(_SIGHASH_ALL_FORMAT_STRING, self.version, len(self.tokens), len(self.inputs),
-                            len(self.outputs))
+        # This method does not depend on the input itself, however we call it for each one to sign it.
+        # For transactions that have many inputs there is a significant decrease on the verify time
+        # when using this cache, so we call this method only once.
+        # We need two caches because the returned value is different depending on clear_input_data value (True/False)
+        if clear_input_data and self._sighash_cache1:
+            return self._sighash_cache1
+        elif not clear_input_data and self._sighash_cache2:
+            return self._sighash_cache2
+
+        struct_bytes = bytearray(pack(_SIGHASH_ALL_FORMAT_STRING, self.version, len(self.tokens), len(self.inputs),
+                                 len(self.outputs)))
 
         for token_uid in self.tokens:
             struct_bytes += token_uid
@@ -210,7 +222,12 @@ class Transaction(BaseTransaction):
         for tx_output in self.outputs:
             struct_bytes += bytes(tx_output)
 
-        return struct_bytes
+        ret = bytes(struct_bytes)
+        if clear_input_data:
+            self._sighash_cache1 = ret
+        else:
+            self._sighash_cache2 = ret
+        return ret
 
     def get_token_uid(self, index: int) -> bytes:
         """Returns the token uid with corresponding index from the tx token uid list.
@@ -446,13 +463,21 @@ class Transaction(BaseTransaction):
         We only consider the blocks on the best chain up to the tx's timestamp.
         """
         assert self.storage is not None
-        # using the timestamp, we get the block immediately before this transaction in the blockchain
-        tips = self.storage.get_best_block_tips(self.timestamp - 1)
-        assert len(tips) > 0
-        tip = self.storage.get_transaction(tips[0])
-        assert tip is not None
-        assert self.timestamp > tip.timestamp
-        best_height = tip.get_metadata().height
+        if self._height_cache:
+            # get_best_block_tips is a costly method because there are many orphan blocks in our blockchain
+            # This method is called for each input that spends a block and, since we have many transactions
+            # that consolidate blocks rewards, this is common.
+            # This cache helps to decrease 90% of the verify time for those transactions.
+            best_height = self._height_cache
+        else:
+            # using the timestamp, we get the block immediately before this transaction in the blockchain
+            tips = self.storage.get_best_block_tips(self.timestamp - 1)
+            assert len(tips) > 0
+            tip = self.storage.get_transaction(tips[0])
+            assert tip is not None
+            assert self.timestamp > tip.timestamp
+            best_height = tip.get_metadata().height
+            self._height_cache = best_height
         spent_height = block.get_metadata().height
         spend_blocks = best_height - spent_height
         if spend_blocks < settings.REWARD_SPEND_MIN_BLOCKS:

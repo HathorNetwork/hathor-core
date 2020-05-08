@@ -736,6 +736,7 @@ class BasicTransaction(unittest.TestCase):
             tx.verify()
 
         # we can fix it be incrementing the timestamp
+        tx._height_cache = None
         tx.timestamp = blocks[-1].timestamp + 1
         tx.resolve()
         tx.verify()

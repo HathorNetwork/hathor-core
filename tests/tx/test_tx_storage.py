@@ -293,7 +293,7 @@ class _BaseTransactionStorageTest:
             block.weight = 10
             self.assertTrue(block.resolve())
             block.verify()
-            self.manager.tx_storage.save_transaction(block)
+            self.manager.propagate_tx(block, fails_silently=False)
             self.reactor.advance(5)
             return block
 
