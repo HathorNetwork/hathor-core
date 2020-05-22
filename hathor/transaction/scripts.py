@@ -25,7 +25,6 @@ from typing import Any, Callable, Dict, List, NamedTuple, Optional, Pattern, Typ
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
-from twisted.logger import Logger
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import (
@@ -164,8 +163,6 @@ class HathorScript:
 
     pushData abstracts this differences and presents an unique interface.
     """
-    log = Logger()
-
     def __init__(self) -> None:
         self.data = b''
 

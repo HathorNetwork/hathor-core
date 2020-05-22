@@ -6,7 +6,6 @@ from typing import Any, Dict, Optional, Tuple
 from cryptography.hazmat.backends.openssl.ec import _EllipticCurvePrivateKey
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
-from twisted.logger import Logger
 
 from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.pubsub import HathorEvents
@@ -16,8 +15,6 @@ from hathor.wallet.keypair import KeyPair
 
 
 class Wallet(BaseWallet):
-    log = Logger()
-
     def __init__(self, keys: Optional[Any] = None, directory: str = './', filename: str = 'keys.json',
                  pubsub: Optional[Any] = None, reactor: Optional[Any] = None) -> None:
         """ A wallet will hold key pair objects and the unspent and
@@ -59,7 +56,7 @@ class Wallet(BaseWallet):
 
     def _manually_initialize(self) -> None:
         if os.path.isfile(self.filepath):
-            self.log.info('Loading keys...')
+            self.log.info('load keys')
             self.read_keys_from_file()
 
     def read_keys_from_file(self):
@@ -88,7 +85,7 @@ class Wallet(BaseWallet):
         else:
             if self.flush_schedule is None:
                 remaining = self.flush_to_disk_interval - dt
-                self.log.info('Wallet: Flush delayed {remaining} seconds...', remaining=remaining)
+                self.log.info('flush delayed', remaining_secs=remaining)
                 assert remaining >= 0
                 self.flush_schedule = self.reactor.callLater(remaining, self._write_keys_to_file)
 
@@ -98,7 +95,7 @@ class Wallet(BaseWallet):
         data = [keypair.to_json() for keypair in self.keys.values()]
         with open(self.filepath, 'w') as json_file:
             json_file.write(json.dumps(data, indent=4))
-        self.log.info('Wallet: Keys successfully written to disk.')
+        self.log.info('keys successfully written to disk')
 
     def unlock(self, password: bytes) -> None:
         """ Validates if the password is valid

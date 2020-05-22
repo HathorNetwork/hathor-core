@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, Generator, Iterator, List
 import grpc
 from grpc._server import _Context
 from intervaltree import Interval
+from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
-from twisted.logger import Logger
 
 from hathor import protos
 from hathor.exception import HathorError
@@ -16,6 +16,8 @@ from hathor.transaction.storage.transaction_storage import AllTipsCache, Transac
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction  # noqa: F401
+
+logger = get_logger()
 
 
 class RemoteCommunicationError(HathorError):
@@ -95,7 +97,6 @@ def convert_hathor_exceptions_generator(func: Callable) -> Callable:
 class TransactionRemoteStorage(TransactionStorage):
     """Connects to a Storage API Server at given port and exposes standard storage interface.
     """
-    log = Logger()
 
     def __init__(self, with_index=None):
         super().__init__()
@@ -630,9 +631,9 @@ class TransactionRemoteStorage(TransactionStorage):
 
 
 class TransactionStorageServicer(protos.TransactionStorageServicer):
-    log = Logger()
 
     def __init__(self, tx_storage):
+        self.log = logger.new()
         self.storage = tx_storage
         # We must always disable weakref because it will run remotely, which means
         # each call will create a new instance of the block/transaction during the

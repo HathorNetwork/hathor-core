@@ -15,7 +15,6 @@ limitations under the License.
 """
 
 import datetime
-import json
 import random
 import sys
 import time
@@ -181,8 +180,7 @@ class HathorManager:
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
         """
-        self.log.info('Starting HathorManager...')
-        self.log.info('Network: {network}', network=self.network)
+        self.log.info('start manager', network=self.network)
         # If it's a full verification, we save on the storage that we are starting it
         # this is required because if we stop the initilization in the middle, the metadata
         # saved on the storage is not reliable anymore, only if we finish it
@@ -249,7 +247,7 @@ class HathorManager:
     def stop(self) -> Deferred:
         waits = []
 
-        self.log.info('Stopping HathorManager...')
+        self.log.info('stop manager')
         self.tx_storage.stop_running_manager()
         self.connections.stop()
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
@@ -296,7 +294,7 @@ class HathorManager:
 
         This method runs through all transactions, verifying them and updating our wallet.
         """
-        self.log.info('Initializing node...')
+        self.log.info('initialize')
         if self.wallet:
             self.wallet._manually_initialize()
         t0 = time.time()
@@ -311,14 +309,12 @@ class HathorManager:
             assert tx.hash is not None
 
             t2 = time.time()
-            if t2 - t1 > 5:
+            dt = hathor.util.LogDuration(t2 - t1)
+            dcnt = cnt - cnt2
+            if dt > 30:
                 ts_date = datetime.datetime.fromtimestamp(self.tx_storage.latest_timestamp)
-                self.log.info(
-                    'Verifying transations in storage... avg={avg:.4f} tx/s total={total} (latest timedate: {ts})',
-                    avg=(cnt - cnt2) / (t2 - t1),
-                    total=cnt,
-                    ts=ts_date,
-                )
+                self.log.info('load transactions...', tx_rate=dcnt / dt, tx_new=dcnt, dt=dt,
+                              total=cnt, latest_ts=ts_date)
                 t1 = t2
                 cnt2 = cnt
             cnt += 1
@@ -337,25 +333,19 @@ class HathorManager:
                     skip_block_weight_verification=skip_block_weight_verification
                 )
             except (InvalidNewTransaction, TxValidationError):
-                pretty_json = json.dumps(tx.to_json(), indent=4)
-                self.log.error('An unexpected error occurred when initializing {tx.hash_hex}\n'
-                               '{pretty_json}', tx=tx, pretty_json=pretty_json)
+                self.log.error('unexpected error when initializing', tx=tx, exc_info=True)
                 raise
 
             if tx.is_block:
                 block_count += 1
 
             if time.time() - t2 > 1:
-                self.log.warn('Warning: {} took {} seconds to be processed.'.format(tx.hash.hex(), time.time() - t2))
+                dt = hathor.util.LogDuration(time.time() - t2)
+                self.log.warn('tx took too long to load', tx=tx.hash_hex, dt=dt)
 
         # self.stop_profiler(save_to='profiles/initializing.prof')
         self.state = self.NodeState.READY
-        self.log.info(
-            'Node successfully initialized (total={total}, avg={avg:.2f} tx/s in {dt} seconds).',
-            total=cnt,
-            avg=cnt / (t2 - t0),
-            dt=t2 - t0,
-        )
+        self.log.info('ready', tx_count=cnt, tx_rate=cnt / (t2 - t0), total_dt=t2 - t0)
 
     def add_listen_address(self, addr: str) -> None:
         self.listen_addresses.append(addr)
@@ -414,20 +404,23 @@ class HathorManager:
         # We must update it after choosing the parent block, so we may benefit from cache.
         if timestamp is None:
             timestamp = max(self.tx_storage.latest_timestamp, self.reactor.seconds())
+        assert timestamp is not None
 
         parent_block = self.tx_storage.get_transaction(random.choice(tip_blocks))
+        assert parent_block.timestamp is not None
+        assert parent_block.hash is not None
         assert timestamp is not None
+
         if not parent_block.is_genesis and timestamp - parent_block.timestamp > settings.MAX_DISTANCE_BETWEEN_BLOCKS:
             timestamp = parent_block.timestamp + settings.MAX_DISTANCE_BETWEEN_BLOCKS
 
-        assert timestamp is not None
         tip_txs = self.get_new_tx_parents(timestamp - 1)
 
         assert len(tip_blocks) >= 1
         assert len(tip_txs) == 2
 
         assert parent_block.hash is not None
-        parents = [parent_block.hash] + tip_txs
+        parents: List[bytes] = [parent_block.hash] + tip_txs
 
         parents_tx = [self.tx_storage.get_transaction(x) for x in parents]
 
@@ -472,11 +465,11 @@ class HathorManager:
 
         else:
             if tx.is_genesis:
-                raise InvalidNewTransaction('Genesis? {}'.format(tx.hash.hex()))
+                raise InvalidNewTransaction('Genesis? {}'.format(tx.hash_hex))
 
         if tx.timestamp - self.reactor.seconds() > settings.MAX_FUTURE_TIMESTAMP_ALLOWED:
             raise InvalidNewTransaction('Ignoring transaction in the future {} (timestamp={})'.format(
-                tx.hash.hex(), tx.timestamp))
+                tx.hash_hex, tx.timestamp))
 
         # Verify transaction and raises an TxValidationError if tx is not valid.
         tx.verify()
@@ -513,7 +506,7 @@ class HathorManager:
             if tx.weight < min_tx_weight - settings.WEIGHT_TOL:
                 raise InvalidNewTransaction(
                     'Invalid new tx {}: weight ({}) is smaller than the minimum weight ({})'.format(
-                        tx.hash.hex(), tx.weight, min_tx_weight
+                        tx.hash_hex, tx.weight, min_tx_weight
                     )
                 )
 
@@ -545,16 +538,16 @@ class HathorManager:
         if self.state != self.NodeState.INITIALIZING:
             if self.tx_storage.transaction_exists(tx.hash):
                 if not fails_silently:
-                    raise InvalidNewTransaction('Transaction already exists {}'.format(tx.hash.hex()))
-                self.log.debug('on_new_tx(): Already have transaction {}'.format(tx.hash.hex()))
+                    raise InvalidNewTransaction('Transaction already exists {}'.format(tx.hash_hex))
+                self.log.debug('on_new_tx(): Transaction already exists', tx=tx.hash_hex)
                 return False
 
         if self.state != self.NodeState.INITIALIZING or self._full_verification:
             try:
                 assert self.validate_new_tx(tx, skip_block_weight_verification=skip_block_weight_verification) is True
-            except (InvalidNewTransaction, TxValidationError) as e:
+            except (InvalidNewTransaction, TxValidationError):
                 # Discard invalid Transaction/block.
-                self.log.debug('Transaction/Block discarded', tx=tx, exc=e)
+                self.log.debug('tx/block discarded', tx=tx, exc_info=True)
                 if not fails_silently:
                     raise
                 return False
@@ -578,20 +571,16 @@ class HathorManager:
                 tx.update_initial_metadata()
                 self.consensus_algorithm.update(tx)
             except Exception:
-                pretty_json = json.dumps(tx.to_json(), indent=4)
-                self.log.error('An unexpected error occurred when processing {tx.hash_hex}\n'
-                               '{pretty_json}', tx=tx, pretty_json=pretty_json)
+                self.log.exception('unexpected error when processing tx', tx=tx)
                 self.tx_storage.remove_transaction(tx)
                 raise
 
         if not quiet:
             ts_date = datetime.datetime.fromtimestamp(tx.timestamp)
             if tx.is_block:
-                self.log.info('New block found',
-                              tag='new_block', tx=tx, ts_date=ts_date, time_from_now=tx.get_time_from_now())
+                self.log.info('new block', tx=tx, ts_date=ts_date, time_from_now=tx.get_time_from_now())
             else:
-                self.log.info('New transaction found',
-                              tag='new_tx', tx=tx, ts_date=ts_date, time_from_now=tx.get_time_from_now())
+                self.log.info('new tx', tx=tx, ts_date=ts_date, time_from_now=tx.get_time_from_now())
 
         if propagate_to_peers:
             # Propagate to our peers.

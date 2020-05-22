@@ -3,9 +3,10 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, Generator, Optional, Set
 
 from autobahn.twisted.websocket import WebSocketClientProtocol, WebSocketServerProtocol
+from structlog import get_logger
 from twisted.internet.interfaces import ITransport
-from twisted.logger import Logger
 from twisted.protocols.basic import LineReceiver
+from twisted.python.failure import Failure
 
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
@@ -15,6 +16,8 @@ from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
 if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
     from hathor.p2p.manager import ConnectionsManager  # noqa: F401
+
+logger = get_logger()
 
 
 class HathorProtocol:
@@ -35,7 +38,6 @@ class HathorProtocol:
     The available states are listed in PeerState class.
     The available commands are listed in the ProtocolMessages class.
     """
-    log = Logger()
 
     class PeerState(Enum):
         HELLO = HelloState
@@ -164,6 +166,8 @@ class HathorProtocol:
         # Set to true if this node initiated the connection
         self.initiated_connection = False
 
+        self.log = logger.new()
+
     def change_state(self, state_enum: PeerState) -> None:
         if state_enum not in self._state_instances:
             state_cls = state_enum.value
@@ -182,7 +186,7 @@ class HathorProtocol:
         """ Executed when the connection is established.
         """
         remote = self.transport.getPeer()
-        self.log.info('HathorProtocol.connectionMade(): {remote}', remote=remote)
+        self.log.info('peer connected', remote=remote)
 
         self.connection_time = time.time()
 
@@ -194,11 +198,11 @@ class HathorProtocol:
         if self.connections:
             self.connections.on_peer_connect(self)
 
-    def on_disconnect(self, reason: str) -> None:
+    def on_disconnect(self, reason: Failure) -> None:
         """ Executed when the connection is lost.
         """
         remote = self.transport.getPeer()
-        self.log.info('HathorProtocol.connectionLost(): {remote} {reason}', remote=remote, reason=reason)
+        self.log.info('disconnected', remote=remote, reason=reason.getErrorMessage())
         self.connected = False
         if self.state:
             self.state.on_exit()
@@ -227,8 +231,8 @@ class HathorProtocol:
         if fn is not None:
             try:
                 return fn(payload)
-            except Exception as e:
-                self.log.warn('Unhandled Exception: {e!r}', e=e)
+            except Exception:
+                self.log.warn('recv_message processing error', exc_info=True)
                 raise
         else:
             self.send_error('Invalid Command: {}'.format(cmd))
@@ -254,7 +258,7 @@ class HathorProtocol:
     def handle_error(self, payload: str) -> None:
         """ Executed when an ERROR command is received.
         """
-        self.log.warn('ERROR {payload}', payload=payload)
+        self.log.warn('remote error', payload=payload)
 
 
 class HathorLineReceiver(HathorProtocol, LineReceiver):
@@ -268,12 +272,12 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
         self.setLineMode()
         self.on_connect()
 
-    def connectionLost(self, reason: str) -> None:
+    def connectionLost(self, reason: Failure) -> None:
         super(HathorLineReceiver, self).connectionLost()
         self.on_disconnect(reason)
 
     def lineLengthExceeded(self, line: str) -> None:
-        self.log.warn('lineLengthExceeded {line_len} > {log_source.MAX_LENGTH}: {line}', line=line, line_len=len(line))
+        self.log.warn('lineLengthExceeded', line=line, line_len=len(line), max_line_len=self.MAX_LENGTH)
         super(HathorLineReceiver, self).lineLengthExceeded(line)
 
     def lineReceived(self, line: bytes) -> Optional[Generator[Any, Any, None]]:

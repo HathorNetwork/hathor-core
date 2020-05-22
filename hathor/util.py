@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import math
 import warnings
 from collections import OrderedDict
 from enum import Enum
@@ -286,3 +287,14 @@ def api_catch_exceptions(func: Callable[..., bytes]) -> Callable[..., bytes]:
             request.setResponseCode(getattr(e, 'status_code', 500))
             return json_dumpb({'error': str(e)})
     return wrapper
+
+
+class LogDuration(float):
+    def __str__(x):
+        if x >= 1:
+            return f'~{math.trunc(x)}s'
+        elif x >= 0.001:
+            return f'~{math.trunc(x * 1000)}ms'
+        else:
+            return '<1ms'
+    __repr__ = __str__

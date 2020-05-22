@@ -451,9 +451,9 @@ class BaseTransaction(ABC):
                 assert parent.hash is not None
                 if self.timestamp <= parent.timestamp:
                     raise TimestampError('tx={} timestamp={}, parent={} timestamp={}'.format(
-                        self.hash.hex(),
+                        self.hash_hex,
                         self.timestamp,
-                        parent.hash.hex(),
+                        parent.hash_hex,
                         parent.timestamp,
                     ))
 
@@ -475,15 +475,15 @@ class BaseTransaction(ABC):
                 else:
                     if min_timestamp and parent.timestamp < min_timestamp:
                         raise TimestampError('tx={} timestamp={}, parent={} timestamp={}, min_timestamp={}'.format(
-                            self.hash.hex(),
+                            self.hash_hex,
                             self.timestamp,
-                            parent.hash.hex(),
+                            parent.hash_hex,
                             parent.timestamp,
                             min_timestamp
                         ))
                     my_parents_txs += 1
             except TransactionDoesNotExist:
-                raise ParentDoesNotExist('tx={} parent={}'.format(self.hash.hex(), parent_hash.hex()))
+                raise ParentDoesNotExist('tx={} parent={}'.format(self.hash_hex, parent_hash.hex()))
 
         # check for correct number of parents
         if self.is_block:
@@ -505,7 +505,7 @@ class BaseTransaction(ABC):
         :raises PowError: when the hash is equal or greater than the target
         """
         assert self.hash is not None
-        numeric_hash = int(self.hash.hex(), self.HEX_BASE)
+        numeric_hash = int(self.hash_hex, self.HEX_BASE)
         minimum_target = self.get_target(override_weight)
         if numeric_hash >= minimum_target:
             raise PowError(f'Transaction has invalid data ({numeric_hash} < {minimum_target})')
@@ -763,7 +763,7 @@ class BaseTransaction(ABC):
         """ Creates a json serializable Dict object from self
         """
         data: Dict[str, Any] = {}
-        data['hash'] = self.hash and self.hash.hex()
+        data['hash'] = self.hash_hex or None
         data['nonce'] = self.nonce
         data['timestamp'] = self.timestamp
         data['version'] = int(self.version)
@@ -803,7 +803,7 @@ class BaseTransaction(ABC):
 
         meta = self.get_metadata()
         ret: Dict[str, Any] = {
-            'tx_id': self.hash.hex(),
+            'tx_id': self.hash_hex,
             'version': int(self.version),
             'weight': self.weight,
             'timestamp': self.timestamp,
@@ -824,7 +824,7 @@ class BaseTransaction(ABC):
             tx2_out = tx2.outputs[tx_in.index]
             output = serialize_output(tx2, tx2_out)
             assert tx2.hash is not None
-            output['tx_id'] = tx2.hash.hex()
+            output['tx_id'] = tx2.hash_hex
             output['index'] = tx_in.index
             ret['inputs'].append(output)
 

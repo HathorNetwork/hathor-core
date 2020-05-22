@@ -16,12 +16,13 @@ limitations under the License.
 
 from typing import TYPE_CHECKING, Dict, Optional, Set, Union
 
+from structlog import get_logger
 from twisted.internet import endpoints
 from twisted.internet.base import ReactorBase
 from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IStreamClientEndpoint, IStreamServerEndpoint
-from twisted.logger import Logger
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
+from twisted.python.failure import Failure
 
 from hathor.p2p.downloader import Downloader
 from hathor.p2p.peer_id import PeerId
@@ -37,11 +38,12 @@ if TYPE_CHECKING:
     from hathor.p2p.node_sync import NodeSyncTimestamp  # noqa: F401
     from hathor.p2p.factory import HathorClientFactory, HathorServerFactory  # noqa: F401
 
+logger = get_logger()
+
 
 class ConnectionsManager:
     """ It manages all peer-to-peer connections and events related to control messages.
     """
-    log = Logger()
 
     connected_peers: Dict[str, HathorProtocol]
     connecting_peers: Dict[IStreamClientEndpoint, Deferred]
@@ -51,6 +53,7 @@ class ConnectionsManager:
                  client_factory: 'HathorClientFactory', pubsub: PubSubManager, manager: 'HathorManager',
                  ssl: bool) -> None:
         from twisted.internet.task import LoopingCall
+        self.log = logger.new()
 
         self.reactor = reactor
         self.my_peer = my_peer
@@ -126,26 +129,22 @@ class ConnectionsManager:
             assert isinstance(conn.state, ReadyState)
             conn.state.send_tx_to_peer(tx)
 
-    def on_connection_failure(self, failure: str, peer: Optional[PeerId], endpoint: IStreamClientEndpoint) -> None:
-        self.log.info(
-            'Connection failure: address={endpoint._host}:{endpoint._port} message={failure}',
-            endpoint=endpoint,
-            failure=failure,
-        )
+    def on_connection_failure(self, failure: Failure, peer: Optional[PeerId], endpoint: IStreamClientEndpoint) -> None:
+        self.log.warn('connection failure', endpoint=endpoint, failure=failure.getErrorMessage())
         self.connecting_peers.pop(endpoint)
         if peer is not None:
             now = int(self.reactor.seconds())
             peer.update_retry_timestamp(now)
 
     def on_peer_connect(self, protocol: HathorProtocol) -> None:
-        self.log.info('on_peer_connect() {protocol}', protocol=protocol)
+        self.log.debug('peer connect', protocol=type(protocol).__name__)
         self.handshaking_peers.add(protocol)
 
     def on_peer_ready(self, protocol: HathorProtocol) -> None:
         assert protocol.peer is not None
         assert protocol.peer.id is not None
 
-        self.log.info('on_peer_ready() {peer_id} {protocol}', peer_id=protocol.peer.id, protocol=protocol)
+        self.log.debug('ready', peer_id=protocol.peer.id)
         self.handshaking_peers.remove(protocol)
         self.received_peer_storage.pop(protocol.peer.id, None)
 
@@ -157,7 +156,7 @@ class ConnectionsManager:
 
         if protocol.peer.id in self.connected_peers:
             # connected twice to same peer
-            self.log.warn('duplicate connection to peer {protocol}', protocol=protocol)
+            self.log.warn('duplicate connection to peer', protocol=protocol)
             conn = self.get_connection_to_drop(protocol)
             self.reactor.callLater(0, self.drop_duplicate_connection, conn)
             if conn == protocol:
@@ -177,7 +176,7 @@ class ConnectionsManager:
                 conn.state.send_peers([protocol])
 
     def on_peer_disconnect(self, protocol: HathorProtocol) -> None:
-        self.log.info('on_peer_disconnect() {protocol}', protocol=protocol)
+        self.log.debug('peer disconnect', protocol=type(protocol).__name__)
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
         if protocol.peer:
@@ -285,7 +284,7 @@ class ConnectionsManager:
 
         deferred.addCallback(self._connect_to_callback, peer, endpoint, connection_string, peer_id)
         deferred.addErrback(self.on_connection_failure, peer, endpoint)
-        self.log.info('Connecting to: {description}...', description=description)
+        self.log.info('connect to ', endpoint=description)
 
     def listen(self, description: str, ssl: bool = True) -> IStreamServerEndpoint:
         """ Start to listen to new connection according to the description.
@@ -307,8 +306,8 @@ class ConnectionsManager:
         else:
             factory = self.server_factory
 
+        self.log.info('listen on', endpoint=description)
         endpoint.listen(factory)
-        self.log.info('Listening to: {description}...', description=description)
         return endpoint
 
     def get_tx(self, hash_bytes: bytes, node_sync: 'NodeSyncTimestamp') -> Deferred:
@@ -350,5 +349,5 @@ class ConnectionsManager:
         """ Drop a connection
         """
         assert protocol.peer is not None
-        self.log.debug('dropping connection {peer_id} {protocol}', peer_id=protocol.peer.id, protocol=protocol)
+        self.log.debug('dropping connection', peer_id=protocol.peer.id, protocol=type(protocol).__name__)
         protocol.send_error_and_close_connection('Connection already established')

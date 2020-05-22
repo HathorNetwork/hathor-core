@@ -42,27 +42,33 @@ def execute(args: Namespace) -> None:
         address_from_login=not (args.hathor_address and args.bitcoin_address),
         min_difficulty=args.min_diff,
     )
+    logger.info('start Bitcoin RPC', url=args.bitcoin_rpc)
     loop.run_until_complete(bitcoin_rpc.start())
+    logger.info('start Hathor Client', url=args.hathor_api)
     loop.run_until_complete(hathor_client.start())
+    logger.info('start Merged Mining Server', listen=f'0.0.0.0:{args.port}')
     loop.run_until_complete(merged_mining.start())
     mm_server = loop.run_until_complete(loop.create_server(merged_mining, '0.0.0.0', args.port))
     web_runner: Optional[web.BaseRunner] = None
     if args.status:
+        logger.info('start Status API', listen=f'0.0.0.0:{args.status}')
         app = loop.run_until_complete(make_status_app(merged_mining))
         web_runner = web.AppRunner(app)
         loop.run_until_complete(web_runner.setup())
         site = web.TCPSite(web_runner, '0.0.0.0', args.status)
         loop.run_until_complete(site.start())
     if args.debug_listen:
+        logger.info('start DEBUG API', listen=f'127.0.0.1:{args.debug_listen}')
         app = loop.run_until_complete(make_debug_app(merged_mining))
         web_runner = web.AppRunner(app)
         loop.run_until_complete(web_runner.setup())
         site = web.TCPSite(web_runner, '127.0.0.1', args.debug_listen)
         loop.run_until_complete(site.start())
     try:
+        logger.info('initialize')
         loop.run_forever()
     except KeyboardInterrupt:
-        logger.info('Stopping')
+        logger.info('quit')
     mm_server.close()
     if web_runner is not None:
         loop.run_until_complete(web_runner.cleanup())
@@ -71,6 +77,7 @@ def execute(args: Namespace) -> None:
     loop.run_until_complete(hathor_client.stop())
     loop.run_until_complete(bitcoin_rpc.stop())
     loop.close()
+    logger.info('bye')
 
 
 def main():

@@ -3,9 +3,9 @@ import struct
 from functools import partial
 from typing import TYPE_CHECKING, Any, Optional
 
+from structlog import get_logger
 from twisted.internet import reactor, threads
 from twisted.internet.defer import CancelledError, Deferred
-from twisted.logger import Logger
 from twisted.python.failure import Failure
 from twisted.web import resource
 from twisted.web.http import Request
@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
 
 settings = HathorSettings()
+logger = get_logger()
 
 # Timeout for the pow resolution in stratum (in seconds)
 TIMEOUT_STRATUM_RESOLVE_POW = 20
@@ -34,12 +35,12 @@ class SendTokensResource(resource.Resource):
     You must run with option `--status <PORT>`.
     """
     isLeaf = True
-    log = Logger()
 
     def __init__(self, manager):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
         self.sleep_seconds = 0
+        self.log = logger.new()
 
     def render_POST(self, request: Request) -> Any:
         """ POST request for /thin_wallet/send_tokens/
@@ -150,7 +151,7 @@ class SendTokensResource(resource.Resource):
 
     def _responseFailed(self, err, tx, request):
         # response failed, should stop mining
-        self.log.warn('Connection closed while resolving transaction proof of work. Tx={tx}', tx=tx)
+        self.log.warn('connection closed while resolving transaction proof of work', tx=tx)
         if settings.SEND_TOKENS_STRATUM and self.manager.stratum_factory:
             funds_hash = tx.get_funds_hash()
             self._cleanup_stratum(funds_hash)
@@ -191,11 +192,8 @@ class SendTokensResource(resource.Resource):
 
         result.value = 'Timeout: error resolving transaction proof of work'
 
-        self.log.warn(
-            'Stratum timeout: error resolving transaction proof of work. Tx={tx} Stratum tx={stratum_tx}',
-            tx=tx.get_struct().hex(),
-            stratum_tx=stratum_tx.get_struct().hex() if stratum_tx else ''
-        )
+        self.log.warn('stratum timeout: error resolving transaction proof of work', tx=tx.get_struct().hex(),
+                      stratum_tx=stratum_tx.get_struct().hex() if stratum_tx else '')
 
         # start new job in stratum, so the miner doesn't waste more time on this tx
         self.manager.stratum_factory.update_jobs()

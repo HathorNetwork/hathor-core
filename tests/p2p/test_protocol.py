@@ -2,6 +2,7 @@ import json
 
 import twisted.names.client
 from twisted.internet.defer import inlineCallbacks
+from twisted.python.failure import Failure
 
 from hathor.conf import HathorSettings
 from hathor.p2p.peer_id import PeerId
@@ -81,7 +82,7 @@ class HathorProtocolTestCase(unittest.TestCase):
         # Test empty disconnect
         self.conn1.proto1.state = None
         self.conn1.proto1.connections = None
-        self.conn1.proto1.on_disconnect('')
+        self.conn1.proto1.on_disconnect(Failure(Exception()))
 
     def test_invalid_size(self):
         self.conn1.tr1.clear()
@@ -249,13 +250,13 @@ class HathorProtocolTestCase(unittest.TestCase):
 
     def test_on_disconnect(self):
         self.assertIn(self.conn1.proto1, self.manager1.connections.handshaking_peers)
-        self.conn1.disconnect('Testing')
+        self.conn1.disconnect(Failure(Exception('testing')))
         self.assertNotIn(self.conn1.proto1, self.manager1.connections.handshaking_peers)
 
     def test_on_disconnect_after_hello(self):
         self.conn1.run_one_step()
         self.assertIn(self.conn1.proto1, self.manager1.connections.handshaking_peers)
-        self.conn1.disconnect('Testing')
+        self.conn1.disconnect(Failure(Exception('testing')))
         self.assertNotIn(self.conn1.proto1, self.manager1.connections.handshaking_peers)
 
     def test_on_disconnect_after_peer_id(self):
@@ -266,7 +267,7 @@ class HathorProtocolTestCase(unittest.TestCase):
         self.conn1.run_one_step()
         self.assertIn(self.conn1.proto1, self.manager1.connections.connected_peers.values())
         self.assertNotIn(self.conn1.proto1, self.manager1.connections.handshaking_peers)
-        self.conn1.disconnect('Testing')
+        self.conn1.disconnect(Failure(Exception('testing')))
         self.assertNotIn(self.conn1.proto1, self.manager1.connections.connected_peers.values())
 
     def test_two_connections(self):
