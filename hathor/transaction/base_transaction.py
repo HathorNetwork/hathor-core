@@ -149,6 +149,8 @@ class BaseTransaction(ABC):
     HASH_NONCE_SIZE = 16
     HEX_BASE = 16
 
+    _metadata: TransactionMetadata
+
     def __init__(self,
                  nonce: int = 0,
                  timestamp: Optional[int] = None,
@@ -282,7 +284,7 @@ class BaseTransaction(ABC):
         data['parents'] = parents
 
         inputs = []
-        for input_tx in data['inputs']:
+        for input_tx in data.get('inputs', []):
             tx_id = bytes.fromhex(input_tx['tx_id'])
             index = input_tx['index']
             input_data = base64.b64decode(input_tx['data'])
@@ -290,7 +292,7 @@ class BaseTransaction(ABC):
         if len(inputs) > 0:
             data['inputs'] = inputs
         else:
-            del data['inputs']
+            data.pop('inputs', [])
 
         outputs = []
         for output in data['outputs']:
@@ -314,12 +316,17 @@ class BaseTransaction(ABC):
             data['storage'] = storage
 
         cls = TxVersion(data['version']).get_cls()
+        metadata = data.pop('metadata', None)
         tx = cls(**data)
         if update_hash:
             tx.update_hash()
             assert tx.hash is not None
         if hash_bytes:
             assert tx.hash == hash_bytes, f'Hashes differ: {tx.hash!r} != {hash_bytes!r}'
+        if metadata:
+            tx._metadata = TransactionMetadata.create_from_json(metadata)
+            if tx._metadata.hash and hash_bytes:
+                assert tx._metadata.hash == hash_bytes
         return tx
 
     def __eq__(self, other: object) -> bool:
@@ -728,6 +735,8 @@ class BaseTransaction(ABC):
             height = self.calculate_height() if self.storage else 0
             metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight, height=height)
             self._metadata = metadata
+        if not metadata.hash:
+            metadata.hash = self.hash
         metadata._tx_ref = weakref.ref(self)
         return metadata
 
@@ -820,7 +829,9 @@ class BaseTransaction(ABC):
         assert self.storage is not None
         return self.storage.get_transaction(input_tx.tx_id)
 
-    def to_json(self, decode_script: bool = False) -> Dict[str, Any]:
+    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
+        """ Creates a json serializable Dict object from self
+        """
         data: Dict[str, Any] = {}
         data['hash'] = self.hash and self.hash.hex()
         data['nonce'] = self.nonce
@@ -843,6 +854,9 @@ class BaseTransaction(ABC):
         data['outputs'] = []
         for output in self.outputs:
             data['outputs'].append(output.to_json(decode_script=decode_script))
+
+        if include_metadata:
+            data['metadata'] = self.get_metadata().to_json()
 
         return data
 
@@ -893,6 +907,7 @@ class BaseTransaction(ABC):
 
     @abstractmethod
     def to_proto(self, include_metadata: bool = True) -> protos.BaseTransaction:
+        # TODO: make default value for include_metadata consistent with to_json
         """ Creates a Protobuf object from self
 
         :param include_metadata: Whether to include metadata, regardless if there is

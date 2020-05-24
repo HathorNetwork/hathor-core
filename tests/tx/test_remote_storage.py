@@ -48,12 +48,12 @@ class RemoteStorageTest(unittest.TestCase):
         self.assertEqual(len(blocks), 3)
 
         tx = txs[0]
-        proto = tx.to_proto(include_metadata=False)
+        proto = tx.to_proto()
         tx2 = Transaction.create_from_proto(proto)
         self.assertEqual(tx, tx2)
 
         block = blocks[0]
-        proto2 = block.to_proto(include_metadata=False)
+        proto2 = block.to_proto()
         block2 = Block.create_from_proto(proto2)
         self.assertEqual(block, block2)
 

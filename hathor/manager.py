@@ -388,6 +388,7 @@ class HathorManager:
         blk = cls(outputs=tx_outputs, parents=parents, storage=self.tx_storage, data=data)
         blk.timestamp = max(timestamp1, timestamp2)
         blk.weight = self.calculate_block_difficulty(blk)
+        blk.get_metadata(use_storage=False)
         return blk
 
     def get_tokens_issued_per_block(self, height: int) -> int:

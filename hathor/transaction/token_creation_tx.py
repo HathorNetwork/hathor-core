@@ -225,8 +225,8 @@ class TokenCreationTransaction(Transaction):
 
         return decoded_name, decoded_symbol, buf
 
-    def to_json(self, decode_script: bool = False) -> Dict[str, Any]:
-        json = super().to_json(decode_script)
+    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
+        json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['token_name'] = self.token_name
         json['token_symbol'] = self.token_symbol
         json['tokens'] = []

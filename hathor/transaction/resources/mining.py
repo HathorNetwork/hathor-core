@@ -59,7 +59,7 @@ class GetBlockTemplateResource(resource.Resource):
         block = self.manager.generate_mining_block(address=address, merge_mined=merged_mining)
 
         # serialize
-        data = block.to_json()
+        data = block.to_json(include_metadata=True)
         data.pop('hash')
         data.pop('inputs')
         data.pop('nonce', None)
