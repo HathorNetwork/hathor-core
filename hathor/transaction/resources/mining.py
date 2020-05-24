@@ -110,7 +110,21 @@ class SubmitBlockResource(resource.Resource):
 
 GetBlockTemplateResource.openapi = {
     '/get_block_template': {
-        'x-visibility': 'private',
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '50r/s',
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '1r/s',
+                    'burst': 1,
+                    'delay': 3,
+                }
+            ]
+        },
         'get': {
             'tags': ['mining'],
             'operationId': 'get_block_template',
@@ -182,7 +196,23 @@ GetBlockTemplateResource.openapi = {
 
 SubmitBlockResource.openapi = {
     '/submit_block': {
-        'x-visibility': 'private',
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '50r/s',
+                    'burst': 10,
+                    'delay': 0,
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '5r/s',
+                    'burst': 1,
+                    'delay': 0,
+                }
+            ]
+        },
         'post': {
             'tags': ['mining'],
             'operationId': 'submit_block',

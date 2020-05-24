@@ -35,11 +35,11 @@ _WS = 'websockets'
 async def make_app(mm_coord: MergedMiningCoordinator) -> web.Application:
     """ Create instance of asyncio.web.Application that serves the status API.
     """
+    global routes
     app = web.Application()
     app[_LOG] = logger.new()
     app[_MM] = mm_coord
     app[_WS] = []  # websocket handlers should add/remove connections here
-    global routes
     app.router.add_routes(routes)
     app.on_shutdown.append(_close_websockets)
     return app
@@ -79,3 +79,10 @@ async def get_status_ws(request: web.Request) -> web.WebSocketResponse:
     finally:
         request.app[_WS].remove(ws)
     return ws
+
+
+@routes.get('/health_check')
+async def get_health_check(request: web.Request) -> web.Response:
+    """ GET JSON endpoint for returning the current status.
+    """
+    return web.Response(status=204)
