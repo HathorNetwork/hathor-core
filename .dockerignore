@@ -5,6 +5,7 @@ cover/
 coverage*/
 data*/
 docs/
+tmp/
 *.egg-info
 .git
 .mypy_cache
