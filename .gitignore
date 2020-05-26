@@ -9,7 +9,7 @@ docs/_build/
 
 .coverage
 cover/
-coverage_html_report/
+/coverage*
 
 .mypy_cache
 .pytest_cache

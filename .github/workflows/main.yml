@@ -1,0 +1,29 @@
+name: tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30  # default is 360
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python 3.6
+      uses: actions/setup-python@v1
+      with:
+        python-version: 3.6
+    - name: Install Dependencies
+      run: |
+        pip install pipenv
+        pipenv install --ignore-pipfile --deploy --system --dev
+    - name: Generate protobuf files
+      run: make protos
+    - name: Run Linters
+      run: make check
+    - name: Install extra dependencies
+      run: |
+        sudo apt-get install -y graphviz librocksdb-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev
+        pip install "cython<0.30"
+        pip install python-rocksdb==0.7.0
+    - name: Run tests
+      run: make tests
+    - name: Codecov
+      uses: codecov/codecov-action@v1

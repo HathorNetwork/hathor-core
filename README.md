@@ -1,6 +1,10 @@
 Hathor Network
 ==============
 
+![tests](https://github.com/HathorNetwork/hathor-core/workflows/tests/badge.svg)
+[![codecov](https://codecov.io/gh/hathornetwork/hathor-core/branch/dev/graph/badge.svg)](https://codecov.io/gh/hathornetwork/hathor-core)
+
+
 Connect to Hathor testnet
 ------
 
