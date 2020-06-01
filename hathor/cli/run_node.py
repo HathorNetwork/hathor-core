@@ -215,6 +215,7 @@ class RunNode:
             TipsResource,
             TransactionAccWeightResource,
             TransactionResource,
+            TxParentsResource,
         )
         from hathor.version_resource import VersionResource
         from hathor.wallet.resources import (
@@ -287,6 +288,7 @@ class RunNode:
                 # mining
                 (b'get_block_template', GetBlockTemplateResource(self.manager), root),
                 (b'submit_block', SubmitBlockResource(self.manager), root),
+                (b'tx_parents', TxParentsResource(self.manager), root),
                 # /thin_wallet
                 (b'address_history', AddressHistoryResource(self.manager), thin_wallet_resource),
                 (b'address_balance', AddressBalanceResource(self.manager), thin_wallet_resource),
