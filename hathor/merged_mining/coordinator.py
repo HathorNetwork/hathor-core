@@ -66,6 +66,7 @@ settings = HathorSettings()
 
 
 MAGIC_NUMBER = b'Hath'  # bytes.fromhex('48617468') or 0x68746148.to_bytes(4, 'little')
+NICEHASH_MIN_DIFF = 500_000  # as per https://www.nicehash.com/pool-operators
 
 
 class HathorCoordJob(NamedTuple):
@@ -496,6 +497,9 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
                 self.send_error({'code': 0, 'message': 'Address should be of the format <HTR_ADDR>.<BTC_ADDR>'}, msgid)
                 self.transport.close()
                 return
+            if 'nicehash' in password.lower():
+                self.log.info('special case mindiff for NiceHash')
+                self.min_difficulty = NICEHASH_MIN_DIFF
             self.send_result(True, msgid)
         else:
             # TODO: authorization system
