@@ -20,6 +20,7 @@ Asyncio with async/await is much more ergonomic and less cumbersome than twisted
 
 import asyncio
 import pickle
+import random
 import time
 from itertools import count
 from tempfile import NamedTemporaryFile
@@ -47,7 +48,6 @@ from hathor.merged_mining.bitcoin_rpc import IBitcoinRPC
 from hathor.merged_mining.util import Periodic
 from hathor.stratum.stratum import (
     DUPLICATE_SOLUTION,
-    INVALID_ADDRESS,
     INVALID_PARAMS,
     INVALID_REQUEST,
     INVALID_SOLUTION,
@@ -60,7 +60,6 @@ from hathor.stratum.stratum import (
 from hathor.transaction import BitcoinAuxPow, MergeMinedBlock as HathorBlock
 from hathor.transaction.exceptions import ScriptError, TxValidationError
 from hathor.util import MaxSizeOrderedDict, ichunks
-from hathor.wallet.exceptions import InvalidAddress
 
 logger = get_logger()
 settings = HathorSettings()
@@ -111,7 +110,6 @@ def parse_login_with_addresses(login: str) -> Tuple[bytes, bytes, Optional[str]]
     >>> out[0].hex(), out[1].hex(), out[2]
     ('76a9143d6dbcbf6e67b2cbcc3225994756a56a5e2d3a2788ac', '76a9e52432216dabf32d60a02894ec871293baaa1b1288ac', 'foo')
     """
-    from hathor.crypto.util import decode_address
     from hathor.transaction.scripts import create_output_script as create_output_script_htr
     from hathor.merged_mining.bitcoin import create_output_script as create_output_script_btc
     parts = login.split('.', maxsplit=2)
@@ -169,7 +167,7 @@ class SingleMinerJob(NamedTuple):
     prev_hash: bytes
     coinbase_head: bytes
     coinbase_tail: bytes
-    merkle_path: List[bytes]
+    merkle_path: Tuple[bytes, ...]
     version: int
     bits: bytes  # 4 bytes
     timestamp: int
@@ -204,7 +202,7 @@ class SingleMinerJob(NamedTuple):
         bitcoin_header = BitcoinBlockHeader(
             self.version,
             self.prev_hash,
-            build_merkle_root_from_path([coinbase_tx.hash] + self.merkle_path),
+            build_merkle_root_from_path([coinbase_tx.hash] + list(self.merkle_path)),
             work.timestamp or self.timestamp,
             self.bits,
             work.nonce
@@ -227,7 +225,7 @@ class SingleMinerJob(NamedTuple):
         coinbase = bytes(coinbase_tx)
         assert block_base_hash in coinbase
         coinbase_head, coinbase_tail = coinbase.split(block_base_hash)
-        return BitcoinAuxPow(header_head, coinbase_head, coinbase_tail, self.merkle_path, header_tail)
+        return BitcoinAuxPow(header_head, coinbase_head, coinbase_tail, list(self.merkle_path), header_tail)
 
     def build_bitcoin_block(self, work: SingleMinerWork) -> BitcoinBlock:
         """ Build the Bitcoin Block from job and work data.
@@ -454,7 +452,6 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         self.log.debug('handle request', method=method, params=params)
 
         if method in {'subscribe', 'mining.subscribe', 'login'}:
-            assert isinstance(params, Dict)
             return self.handle_subscribe(params, msgid)
         if method in {'authorize', 'mining.authorize'}:
             assert isinstance(params, List)
@@ -525,21 +522,13 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
 
         self.send_result(res, msgid)
 
-    def handle_subscribe(self, params: Dict, msgid: Optional[str]) -> None:
+    def handle_subscribe(self, params: Any, msgid: Optional[str]) -> None:
         """ Handles subscribe request by answering it and triggering a job request.
 
         :param msgid: JSON-RPC 2.0 message id
         :type msgid: Optional[str]
         """
         assert self.miner_id is not None
-        if params and 'address' in params and params['address'] is not None:
-            try:
-                self.miner_address = decode_address(params['address'])
-            except InvalidAddress:
-                self.send_error(INVALID_ADDRESS, msgid)
-                self.transport.loseConnection()
-                return
-
         self._subscribed = True
         self.subscribed_at = time.time()
         self.log.info('Miner subscribed', address=self.miner_address)
@@ -649,12 +638,14 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         """ Submit work to Bitcoin RPC.
         """
         bitcoin_rpc = self.coordinator.bitcoin_rpc
-        bitcoin_block = job.build_bitcoin_block(work)
-        block_hash = Hash(bitcoin_block.header.hash)
-        block_target = Target(int.from_bytes(bitcoin_block.header.bits, 'big'))
+        # bitcoin_block = job.build_bitcoin_block(work)  # XXX: too expensive for now
+        bitcoin_block_header = job.build_bitcoin_block_header(work)
+        block_hash = Hash(bitcoin_block_header.hash)
+        block_target = Target(int.from_bytes(bitcoin_block_header.bits, 'big'))
         if block_hash.to_u256() > block_target.to_u256():
             self.log.debug('high hash, skipping Bitcoin submit')
             return
+        bitcoin_block = job.build_bitcoin_block(work)  # XXX: far fewer cases, so it's OK now
         data = bytes(bitcoin_block)
         try:
             res = await bitcoin_rpc.submit_block(data)
@@ -763,6 +754,7 @@ class BitcoinCoordJob(NamedTuple):
     bits: bytes
     height: int
     transactions: List[BitcoinTransaction]
+    merkle_path: Tuple[bytes, ...]
 
     @classmethod
     def from_dict(cls, params: dict) -> 'BitcoinCoordJob':
@@ -880,6 +872,7 @@ class BitcoinCoordJob(NamedTuple):
             bytes.fromhex(params['bits']),
             params['height'],
             list(map(BitcoinTransaction.from_dict, params['transactions'])),
+            tuple(build_merkle_path_for_coinbase([bytes.fromhex(tx['hash']) for tx in params['transactions']])),
         )
 
     def to_dict(self) -> Dict[Any, Any]:
@@ -901,6 +894,7 @@ class BitcoinCoordJob(NamedTuple):
                 }
                 for tx in self.transactions
             ],
+            'merkle_path': [h.hex() for h in self.merkle_path],
         }
 
     def make_coinbase_transaction(self, hathor_block_hash: bytes, payback_script_bitcoin: bytes,
@@ -952,7 +946,7 @@ class MergedJob(NamedTuple):
         xnonce_size = len(protocol.xnonce1) + protocol.xnonce2_size
 
         # base txs for merkle tree, before coinbase
-        transactions = self.bitcoin_coord.transactions[:]
+        transactions = self.bitcoin_coord.transactions
 
         # payback_address_hathor
         hathor_block = self.hathor_coord.block.clone()
@@ -987,7 +981,7 @@ class MergedJob(NamedTuple):
             prev_hash=self.bitcoin_coord.previous_block_hash,
             coinbase_head=coinbase_head,
             coinbase_tail=coinbase_tail,
-            merkle_path=build_merkle_path_for_coinbase([tx.hash for tx in transactions]),
+            merkle_path=self.bitcoin_coord.merkle_path,
             version=self.bitcoin_coord.version,
             bits=self.bitcoin_coord.bits,
             hathor_block=hathor_block,
@@ -1013,7 +1007,8 @@ class MergedMiningCoordinator:
 
     def __init__(self,  bitcoin_rpc: IBitcoinRPC, hathor_client: IHathorClient,
                  payback_address_bitcoin: Optional[str], payback_address_hathor: Optional[str],
-                 address_from_login: bool = True, min_difficulty: Optional[int] = None):
+                 address_from_login: bool = True, min_difficulty: Optional[int] = None,
+                 sequential_xnonce1: bool = False):
         self.log = logger.new()
         self.bitcoin_rpc = bitcoin_rpc
         self.hathor_client = hathor_client
@@ -1028,6 +1023,7 @@ class MergedMiningCoordinator:
         self.last_hathor_block_received = 0.0
         self.merged_job: Optional[MergedJob] = None
         self.min_difficulty = min_difficulty
+        self.sequential_xnonce1 = sequential_xnonce1
         self._next_xnonce1 = 0
         self.job_count = 0
         self.update_bitcoin_block_task: Optional[Periodic] = None
@@ -1045,10 +1041,13 @@ class MergedMiningCoordinator:
     def next_xnonce1(self) -> bytes:
         """ Generate the next xnonce1, for keeping each subscription with a different xnonce1.
         """
-        xnonce1 = self._next_xnonce1
-        self._next_xnonce1 += 1
-        if self._next_xnonce1 > self.MAX_XNONCE1:
-            self._next_xnonce1 = 0
+        if self.sequential_xnonce1:
+            xnonce1 = self._next_xnonce1
+            self._next_xnonce1 += 1
+            if self._next_xnonce1 > self.MAX_XNONCE1:
+                self._next_xnonce1 = 0
+        else:
+            xnonce1 = random.getrandbits(8 * self.XNONCE1_SIZE)
         return xnonce1.to_bytes(self.XNONCE1_SIZE, 'big')
 
     def __call__(self) -> MergedMiningStratumProtocol:
