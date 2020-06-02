@@ -1,9 +1,7 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.transaction.genesis import get_genesis_transactions
 from hathor.transaction.resources import TxParentsResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, create_tokens
 
 
 class DecodeTxTest(_BaseResourceTest._ResourceTest):
