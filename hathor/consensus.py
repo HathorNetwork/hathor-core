@@ -378,7 +378,7 @@ class BlockConsensusAlgorithm:
 
         meta.voided_by.add(voided_hash)
         storage.save_transaction(block, only_metadata=True)
-        tx.storage._del_from_cache(block)  # XXX: accessing private method
+        block.storage._del_from_cache(block)  # XXX: accessing private method
 
         spent_by: Iterable[bytes] = chain(*meta.spent_outputs.values())
         for tx_hash in spent_by:
@@ -411,7 +411,7 @@ class BlockConsensusAlgorithm:
         if not meta.voided_by:
             meta.voided_by = None
         block.storage.save_transaction(block, only_metadata=True)
-        tx.storage._add_to_cache(block)  # XXX: accessing private method
+        block.storage._add_to_cache(block)  # XXX: accessing private method
 
         spent_by: Iterable[bytes] = chain(*meta.spent_outputs.values())
         for tx_hash in spent_by:
