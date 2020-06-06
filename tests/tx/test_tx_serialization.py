@@ -69,11 +69,14 @@ class _Base:
 
     class _SerializationWithoutMetadataTest(_SerializationTest):
         def _assertTxEq(self, tx1, tx2):
+            self.log.info('assertEqual tx without metadata', a=tx1.to_json(), b=tx2.to_json())
             self.assertEqual(tx1, tx2)
 
     class _SerializationWithMetadataTest(_SerializationTest):
         def _assertTxEq(self, tx1, tx2):
+            self.log.info('assertEqual tx with metadata', a=tx1.to_json(), b=tx2.to_json())
             self.assertEqual(tx1, tx2)
+            self.log.info('assertEqual tx metadata', a=tx1.get_metadata().to_json(), b=tx2.get_metadata().to_json())
             self.assertEqual(tx1.get_metadata(), tx2.get_metadata())
 
 
@@ -95,9 +98,7 @@ class ProtobufSerializationTest(_Base._SerializationWithMetadataTest):
     def _reserialize(self, tx):
         from hathor.transaction import tx_or_block_from_proto
         tx_proto = tx.to_proto()
-        print(tx.get_metadata().to_json(), flush=True)
         tx_re = tx_or_block_from_proto(tx_proto)
-        print(tx_re.get_metadata().to_json(), flush=True)
         return tx_re
 
 

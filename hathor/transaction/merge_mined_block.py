@@ -100,8 +100,8 @@ class MergeMinedBlock(Block):
             return dummy_bytes
         return bytes(self.aux_pow)
 
-    def to_json(self, decode_script: bool = False) -> Dict[str, Any]:
-        json = super().to_json(decode_script)
+    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
+        json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         del json['nonce']
         json['aux_pow'] = bytes(self.aux_pow).hex() if self.aux_pow else None
         return json

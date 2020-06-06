@@ -245,8 +245,8 @@ class Transaction(BaseTransaction):
             return settings.HATHOR_TOKEN_UID
         return self.tokens[index - 1]
 
-    def to_json(self, decode_script: bool = False) -> Dict[str, Any]:
-        json = super().to_json(decode_script)
+    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
+        json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['tokens'] = [h.hex() for h in self.tokens]
         return json
 

@@ -213,8 +213,8 @@ class Block(BaseTransaction):
         return settings.HATHOR_TOKEN_UID
 
     # TODO: maybe introduce convention on serialization methods names (e.g. to_json vs get_struct)
-    def to_json(self, decode_script: bool = False) -> Dict[str, Any]:
-        json = super().to_json(decode_script)
+    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
+        json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['tokens'] = []
         json['data'] = base64.b64encode(self.data).decode('utf-8')
         return json
