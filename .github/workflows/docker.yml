@@ -11,7 +11,7 @@ on:
   - cron: '0 4 * * *'  # nightlies at 4am UTC
 jobs:
   buildx:
-    name: docker buildx ${{ matrix.python-impl }}-${{ matrix.python-version }}
+    name: buildx ${{ matrix.python-impl }}-${{ matrix.python-version }}
     runs-on: ubuntu-latest
     timeout-minutes: 180  # default is 360
     strategy:
@@ -20,26 +20,15 @@ jobs:
         - python
         python-version:
         - 3.6
+        - 3.7
+        - 3.8
+        - 3.9
+        include:
+        - python-impl: pypy
+          python-version: 3.6
+        - python-impl: pypy
+          python-version: 3.7
     steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-    - name: Set up Python 3.6 (base)
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.6
-    - name: Install Poetry
-      run: pip -q --no-input install poetry
-    - name: Cache Poetry dependencies
-      uses: actions/cache@v2
-      id: poetry-cache
-      with:
-        path: ~/.cache/pypoetry
-        key: ${{ runner.os }}-py3.6-pypoetry-${{ hashFiles('poetry.lock') }}
-    - name: Install Poetry dependencies
-      if: steps.poetry-cache.outputs.cache-hit != 'true'
-      run: poetry install -n --no-root
-    - name: Generate protobuf files
-      run: poetry run make protos
     - name: Prepare tags
       id: prep
       run: |
@@ -96,15 +85,6 @@ jobs:
         echo ::set-output name=tags::${TAGS}
         echo ::set-output name=created::$(date -u +'%Y-%m-%dT%H:%M:%SZ')
         echo ::set-output name=dockerfile::${DOCKERFILE}
-    - name: Cache Docker layers
-      uses: actions/cache@v2
-      with:
-        path: /tmp/.buildx-cache
-        # this key is setup such that every branch has its cache and new branches can reuse dev's cache, but not the other way around
-        key: ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-${{ github.head_ref || github.ref }}-${{ github.sha }}
-        restore-keys: |
-          ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-${{ github.head_ref || github.ref }}-
-          ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-refs/heads/dev-
     - name: Set up QEMU  # arm64 is not available natively
       uses: docker/setup-qemu-action@v1
       with:
@@ -126,6 +106,41 @@ jobs:
         registry: ghcr.io
         username: ${{ secrets.GHCR_USERNAME }}
         password: ${{ secrets.GHCR_TOKEN }}
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Set up Python 3.7 (base) # 3.7 is the fastest to setup, and the specific version doesn't matter here
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.7
+    - name: Install Poetry
+      run: pip -q --no-input install poetry
+    - name: Cache Poetry dependencies
+      uses: actions/cache@v2
+      id: poetry-cache
+      with:
+        path: ~/.cache/pypoetry
+        key: ${{ runner.os }}-py3.7-pypoetry-${{ hashFiles('poetry.lock') }}
+    - name: Install Poetry dependencies
+      if: steps.poetry-cache.outputs.cache-hit != 'true'
+      run: poetry install -n --no-root
+    - name: Generate protobuf files
+      run: poetry run make protos
+    - name: Build source package
+      run: poetry build -f wheel
+    - name: Generate requirements
+      run: |
+        poetry remove -D grpcio-tools --dry-run  # workaround for Poetry bug
+        poetry export -o requirements.txt -E rocksdb
+    - name: Cache Docker layers
+      uses: actions/cache@v2
+      with:
+        path: /tmp/.buildx-cache
+        # this key is setup such that every branch has its cache and new branches can reuse dev's cache, but not the other way around
+        key: ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-${{ github.head_ref || github.ref }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-${{ github.head_ref || github.ref }}-
+          ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-refs/heads/dev-
+          ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-
     - name: Build and push
       uses: docker/build-push-action@v2
       id: docker_build

@@ -99,6 +99,7 @@ def generate_nginx_config(openapi: Dict[str, Any], *, out_file: TextIO, rate_k: 
     """ Entry point of the functionality provided by the cli
     """
     from datetime import datetime
+
     from hathor.conf import HathorSettings
 
     settings = HathorSettings()

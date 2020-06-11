@@ -1,8 +1,7 @@
 import struct
-from typing import Dict, List, NamedTuple, Sequence, SupportsBytes, Tuple, Union
+from typing import Dict, List, NamedTuple, Sequence, Tuple, Union
 
 
-@SupportsBytes.register
 class BitcoinRawTransaction(NamedTuple):
     hash: bytes
     txid: bytes
@@ -16,7 +15,6 @@ class BitcoinRawTransaction(NamedTuple):
         return self.data
 
 
-@SupportsBytes.register
 class BitcoinBlockHeader(NamedTuple):
     version: int  # Block version information (note, this is signed)
     prev_block: bytes  # The hash value of the previous block this particular block references
@@ -243,7 +241,6 @@ def build_merkle_root_from_path(merkle_path: List[bytes]) -> bytes:
     return merkle_path[0]
 
 
-@SupportsBytes.register
 class BitcoinOutPoint(NamedTuple):
     hash: bytes  # The hash of the referenced transaction.
     idx: int  # The index of the specific output in the transaction. The first output is 0, etc.
@@ -275,7 +272,6 @@ class BitcoinOutPoint(NamedTuple):
 SEQUENCE_FINAL = 0xffff_ffff
 
 
-@SupportsBytes.register
 class BitcoinTransactionInput(NamedTuple):
     previous_output: BitcoinOutPoint  # The previous output transaction reference, as an OutPoint structure
     script_sig: bytes  # Computational Script for confirming transaction authorization
@@ -356,7 +352,6 @@ class BitcoinTransactionInput(NamedTuple):
             list(map(bytes.fromhex, params.get('txinwitness', []))))
 
 
-@SupportsBytes.register
 class BitcoinTransactionOutput(NamedTuple):
     value: int = 0xffff_ffff_ffff_ffff  # Transaction Value
     script_pubkey: bytes = b''  # Usually contains the public key as a Bitcoin script to claim this output.
@@ -413,7 +408,6 @@ class BitcoinTransactionOutput(NamedTuple):
         return cls(int(params['value'] * 100_000_000), bytes.fromhex(params['scriptPubKey']['hex']))
 
 
-@SupportsBytes.register
 class BitcoinTransaction(NamedTuple):
     version: int = 1  # Transaction data format version (note, this is signed)
     include_witness: bool = True  # Whether to include the witness flag (0001)
@@ -718,7 +712,6 @@ class BitcoinTransaction(NamedTuple):
         return any(i.has_witness() for i in self.inputs)
 
 
-@SupportsBytes.register
 class BitcoinBlock(NamedTuple):
     header: BitcoinBlockHeader
     transactions: Sequence[Union[BitcoinRawTransaction, BitcoinTransaction]]

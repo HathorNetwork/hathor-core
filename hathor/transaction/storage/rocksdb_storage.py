@@ -1,8 +1,6 @@
 import os
 from typing import TYPE_CHECKING, Iterator, Optional
 
-import rocksdb
-
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
 
@@ -17,6 +15,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncF
     """
 
     def __init__(self, path='./', with_index=True):
+        import rocksdb
         tx_dir = os.path.join(path, 'tx.db')
         self._db = rocksdb.DB(tx_dir, rocksdb.Options(create_if_missing=True))
 

@@ -58,6 +58,7 @@ class MergeMinedBlock(Block):
         tx.aux_pow = BitcoinAuxPow.create_from_proto(block_proto.aux_pow)
         if block_proto.HasField('metadata'):
             from hathor.transaction import TransactionMetadata
+
             # make sure hash is not empty
             tx.hash = tx.hash or tx.calculate_hash()
             tx._metadata = TransactionMetadata.create_from_proto(tx.hash, block_proto.metadata)

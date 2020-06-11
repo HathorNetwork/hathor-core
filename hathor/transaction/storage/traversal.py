@@ -5,8 +5,8 @@ from itertools import chain
 from typing import TYPE_CHECKING, Any, Iterator, List, Optional, Set
 
 if TYPE_CHECKING:
-    from hathor.transaction.storage import TransactionStorage  # noqa: F401
     from hathor.transaction import BaseTransaction  # noqa: F401
+    from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 
 class HeapItem:

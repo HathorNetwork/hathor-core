@@ -20,7 +20,7 @@ settings = HathorSettings()
 _BACKEND = default_backend()
 
 
-def get_private_key_bytes(private_key: ec.EllipticCurvePrivateKey, encoding: Encoding = Encoding.DER,
+def get_private_key_bytes(private_key: ec.EllipticCurvePrivateKeyWithSerialization, encoding: Encoding = Encoding.DER,
                           format: PrivateFormat = PrivateFormat.PKCS8,
                           encryption_algorithm: KeySerializationEncryption = NoEncryption()) -> bytes:
     """ Returns the bytes from a cryptography ec.EllipticCurvePrivateKey
@@ -29,7 +29,7 @@ def get_private_key_bytes(private_key: ec.EllipticCurvePrivateKey, encoding: Enc
 
 
 def get_private_key_from_bytes(private_key_bytes: bytes,
-                               password: Optional[bytes] = None) -> ec.EllipticCurvePrivateKey:
+                               password: Optional[bytes] = None) -> ec.EllipticCurvePrivateKeyWithSerialization:
     """Returns the cryptography ec.EllipticCurvePrivateKey from bytes"""
     return load_der_private_key(private_key_bytes, password, _BACKEND)
 

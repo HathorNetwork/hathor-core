@@ -39,8 +39,9 @@ settings = HathorSettings()
 logger = get_logger()
 
 if TYPE_CHECKING:
-    from hathor.p2p.protocol import HathorProtocol  # noqa: F401
     from twisted.python.failure import Failure  # noqa: F401
+
+    from hathor.p2p.protocol import HathorProtocol  # noqa: F401
 
 
 def _get_deps(tx: BaseTransaction) -> Iterator[bytes]:

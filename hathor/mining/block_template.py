@@ -37,7 +37,7 @@ class BlockTemplate(NamedTuple):
 
     def generate_minimaly_valid_block(self) -> BaseTransaction:
         """ Generates a block, without any extra information that is valid for this template. No random choices."""
-        from hathor.transaction import TxVersion, TxOutput
+        from hathor.transaction import TxOutput, TxVersion
         return TxVersion(min(self.versions)).get_cls()(
             timestamp=self.timestamp_min,
             parents=self.parents[:] + sorted(self.parents_any)[:(3 - len(self.parents))],
@@ -54,7 +54,7 @@ class BlockTemplate(NamedTuple):
         Note that if a timestamp is given it will be coerced into the [timestamp_min, timestamp_max] range.
         """
         # XXX: importing these here to try to contain hathor dependencies as much as possible
-        from hathor.transaction import TxOutput, TransactionMetadata
+        from hathor.transaction import TransactionMetadata, TxOutput
         from hathor.transaction.scripts import create_output_script
 
         parents = list(self.get_random_parents())

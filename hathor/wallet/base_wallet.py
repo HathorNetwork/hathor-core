@@ -3,8 +3,10 @@ from collections import defaultdict
 from enum import Enum
 from itertools import chain
 from math import inf
-from typing import TYPE_CHECKING, Any, DefaultDict, Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
+from typing import Any, DefaultDict, Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
 
+from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
+from pycoin.key.Key import Key
 from structlog import get_logger
 from twisted.internet.interfaces import IDelayedCall, IReactorCore
 from twisted.internet.task import Clock
@@ -19,10 +21,6 @@ from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.transaction import Transaction
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
 
-if TYPE_CHECKING:
-    from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
-    from pycoin.key.Key import Key
-
 settings = HathorSettings()
 logger = get_logger()
 
@@ -35,7 +33,7 @@ UTXO_SPENT_INTERVAL = 5
 class WalletInputInfo(NamedTuple):
     tx_id: bytes
     index: Any  # FIXME: actually `int`, rename this field because `namedtuple` has an `index` method
-    private_key: bytes
+    private_key: EllipticCurvePrivateKey
 
 
 class WalletOutputInfo(NamedTuple):
@@ -176,10 +174,10 @@ class BaseWallet:
     def tokens_received(self, address58: str) -> None:
         raise NotImplementedError
 
-    def get_private_key(self, address58: str) -> 'EllipticCurvePrivateKey':
+    def get_private_key(self, address58: str) -> EllipticCurvePrivateKey:
         raise NotImplementedError
 
-    def get_input_aux_data(self, data_to_sign: bytes, private_key: 'Key') -> Tuple[bytes, bytes]:
+    def get_input_aux_data(self, data_to_sign: bytes, private_key: Key) -> Tuple[bytes, bytes]:
         raise NotImplementedError
 
     def prepare_transaction(self, cls: ABCMeta, inputs: List[WalletInputInfo],

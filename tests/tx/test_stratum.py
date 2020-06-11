@@ -149,7 +149,7 @@ class TestStratumJob(StratumTestBase):
                 return hex(nonce)
             nonce += 1
 
-    def _submit(self, job_id: Optional[str], nonce: Optional[int]):
+    def _submit(self, job_id: Optional[str], nonce: Optional[int]) -> None:
         self.protocol.lineReceived(
             json_dumps({
                 "jsonrpc": "2.0",

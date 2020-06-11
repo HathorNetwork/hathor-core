@@ -116,7 +116,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         add_blocks_unlock_reward(self.manager1)
 
         from hathor.transaction import Transaction
-        from hathor.wallet.base_wallet import WalletOutputInfo, WalletInputInfo
+        from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 
         # ---
         # tx1 and tx4 spends the same output (double spending)

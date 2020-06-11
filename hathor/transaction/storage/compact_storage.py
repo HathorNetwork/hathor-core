@@ -99,7 +99,7 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
 
     def load(self, data: Dict[str, Any]) -> 'BaseTransaction':
         from hathor.transaction.aux_pow import BitcoinAuxPow
-        from hathor.transaction.base_transaction import TxOutput, TxInput, TxVersion
+        from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 
         hash_bytes = bytes.fromhex(data['hash'])
         if 'data' in data:

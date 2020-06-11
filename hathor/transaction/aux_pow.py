@@ -107,7 +107,7 @@ class BitcoinAuxPow(NamedTuple):
     def from_bytes(cls, b: bytes) -> 'BitcoinAuxPow':
         """ Convert bytes to class instance.
         """
-        from hathor.merged_mining.bitcoin import read_nbytes, read_bytes, read_varint
+        from hathor.merged_mining.bitcoin import read_bytes, read_nbytes, read_varint
         a = bytearray(b)
         header_head = read_nbytes(a, 36)
         coinbase_head = read_bytes(a)

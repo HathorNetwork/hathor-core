@@ -1,4 +1,5 @@
 import base64
+from typing import Generator
 
 from twisted.internet.defer import inlineCallbacks
 
@@ -22,7 +23,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         self.web_history = StubSite(HistoryResource(self.manager))
 
     @inlineCallbacks
-    def _run_push_tx_test(self, is_post: bool):
+    def _run_push_tx_test(self, is_post: bool) -> Generator:
         # Mining new block
         response_mining = yield self.web_mining.get('mining')
         data_mining = response_mining.json_value()
@@ -38,10 +39,13 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         tx_id = blocks[0].hash
         output = blocks[0].outputs[0]
         script_type_out = parse_address_script(output.script)
+        assert script_type_out is not None
         address = script_type_out.address
         private_key = self.manager.wallet.get_private_key(address)
 
-        output_address = decode_address(self.get_address(0))
+        script_out_addr = self.get_address(0)
+        assert script_out_addr is not None
+        output_address = decode_address(script_out_addr)
         value = self.manager.get_tokens_issued_per_block(1)
         o = TxOutput(value, create_output_script(output_address, None))
         i = TxInput(tx_id, 0, b'')
@@ -85,6 +89,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         tx.timestamp = 5
         tx.inputs = [TxInput(blocks[1].hash, 0, b'')]
         script_type_out = parse_address_script(blocks[1].outputs[0].script)
+        assert script_type_out is not None
         private_key = self.manager.wallet.get_private_key(script_type_out.address)
         data_to_sign = tx.get_sighash_all()
         public_key_bytes, signature_bytes = self.manager.wallet.get_input_aux_data(data_to_sign, private_key)
@@ -126,7 +131,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         self.assertTrue(data['success'])
 
     @inlineCallbacks
-    def _run_invalid_params_test(self, is_post: bool):
+    def _run_invalid_params_test(self, is_post: bool) -> Generator:
         push_tx_fn = self.web.post if is_post else self.web.get
         hex_param = 'hex_tx' if is_post else b'hex_tx'
 

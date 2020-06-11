@@ -28,7 +28,7 @@ from hathor.transaction.base_transaction import TxVersion
 from hathor.transaction.scripts import parse_address_script
 
 if TYPE_CHECKING:  # pragma: no cover
-    from hathor.pubsub import PubSubManager, EventArguments  # noqa: F401
+    from hathor.pubsub import EventArguments, PubSubManager  # noqa: F401
     from hathor.transaction import TxOutput  # noqa: F401
 
 logger = get_logger()
