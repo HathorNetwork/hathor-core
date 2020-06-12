@@ -1,7 +1,8 @@
+import hashlib
 from abc import ABC, abstractmethod, abstractproperty
 from collections import deque
 from threading import Lock
-from typing import Any, Dict, Generator, Iterator, List, Optional, Set, Tuple
+from typing import Any, Dict, Generator, Iterator, List, NamedTuple, Optional, Set, Tuple
 from weakref import WeakValueDictionary
 
 from intervaltree.interval import Interval
@@ -14,6 +15,13 @@ from hathor.transaction.storage.exceptions import TransactionDoesNotExist, Trans
 from hathor.transaction.transaction import BaseTransaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.util import deprecated, skip_warning
+
+
+class AllTipsCache(NamedTuple):
+    timestamp: int
+    tips: List
+    merkle_tree: bytes
+    hashes: List[bytes]
 
 
 class TransactionStorage(ABC):
@@ -44,6 +52,9 @@ class TransactionStorage(ABC):
 
         # Cache for the best block tips
         self._best_block_tips = []
+
+        # Cache for the latest timestamp of all tips with merkle tree precalculated to be used on the sync algorithm
+        self._all_tips_cache: Optional[AllTipsCache] = None
 
     def _save_to_weakref(self, tx: BaseTransaction) -> None:
         """ Save transaction to weakref.
@@ -584,8 +595,49 @@ class BaseTransactionStorage(TransactionStorage):
         assert self.all_index is not None
         if timestamp is None:
             timestamp = self.latest_timestamp
+
+        if self._all_tips_cache is not None and timestamp >= self._all_tips_cache.timestamp:
+            return self._all_tips_cache.tips
+
         tips = self.all_index.tips_index[timestamp]
+        if timestamp >= self.latest_timestamp:
+            merkle_tree, hashes = self.calculate_merkle_tree(tips)
+            self._all_tips_cache = AllTipsCache(self.latest_timestamp, tips, merkle_tree, hashes)
+
         return tips
+
+    def get_merkle_tree(self, timestamp: int) -> Tuple[bytes, List[bytes]]:
+        """ Generate a hash to check whether the DAG is the same at that timestamp.
+
+        :rtype: Tuple[bytes(hash), List[bytes(hash)]]
+        """
+        if not self.with_index:
+            raise NotImplementedError
+        assert self.all_index is not None
+
+        if self._all_tips_cache is not None and timestamp >= self._all_tips_cache.timestamp:
+            return self._all_tips_cache.merkle_tree, self._all_tips_cache.hashes
+
+        intervals = self.get_all_tips(timestamp)
+        if timestamp >= self.latest_timestamp:
+            # get_all_tips will add to cache in that case
+            return self._all_tips_cache.merkle_tree, self._all_tips_cache.hashes
+
+        return self.calculate_merkle_tree(intervals)
+
+    def calculate_merkle_tree(self, intervals: Set[Interval]) -> Tuple[bytes, List[bytes]]:
+        """ Generate a hash of the transactions at the intervals
+
+        :rtype: Tuple[bytes(hash), List[bytes(hash)]]
+        """
+        hashes = [x.data for x in intervals]
+        hashes.sort()
+
+        merkle = hashlib.sha256()
+        for h in hashes:
+            merkle.update(h)
+
+        return merkle.digest(), hashes
 
     def get_newest_blocks(self, count: int) -> Tuple[List[Block], bool]:
         if not self.with_index:
@@ -697,6 +749,7 @@ class BaseTransactionStorage(TransactionStorage):
         assert self.block_index is not None
         assert self.tx_index is not None
         self._latest_timestamp = max(self.latest_timestamp, tx.timestamp)
+        self._all_tips_cache = None
         self.all_index.add_tx(tx)
         if self.wallet_index:
             self.wallet_index.add_tx(tx)

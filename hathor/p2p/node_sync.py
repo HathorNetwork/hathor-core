@@ -15,7 +15,6 @@ limitations under the License.
 """
 
 import base64
-import hashlib
 import json
 import struct
 from collections import OrderedDict
@@ -288,28 +287,6 @@ class NodeSyncTimestamp(Plugin):
         else:
             self.send_data(tx)
 
-    def get_merkle_tree(self, timestamp: int) -> Tuple[bytes, List[bytes]]:
-        """ Generate a hash to check whether the DAG is the same at that timestamp.
-
-        :rtype: Tuple[bytes(hash), List[bytes(hash)]]
-        """
-        intervals = self.manager.tx_storage.get_all_tips(timestamp)
-        return self.calculate_merkle_tree(intervals)
-
-    def calculate_merkle_tree(self, intervals: Set[Interval]) -> Tuple[bytes, List[bytes]]:
-        """ Generate a hash of the transactions at the intervals
-
-        :rtype: Tuple[bytes(hash), List[bytes(hash)]]
-        """
-        hashes = [x.data for x in intervals]
-        hashes.sort()
-
-        merkle = hashlib.sha256()
-        for h in hashes:
-            merkle.update(h)
-
-        return merkle.digest(), hashes
-
     def get_peer_next(self, timestamp: Optional[int] = None, offset: int = 0) -> Deferred:
         """ A helper that returns a deferred that is called when the peer replies.
 
@@ -426,7 +403,7 @@ class NodeSyncTimestamp(Plugin):
         # Maximum of ceil(log(k)), where k is the number of items between the new one and the latest item.
         prev_cur = None
         cur = self.peer_timestamp
-        local_merkle_tree, _ = self.get_merkle_tree(cur)
+        local_merkle_tree, _ = self.manager.tx_storage.get_merkle_tree(cur)
         step = 1
         while tips.merkle_tree != local_merkle_tree:
             if cur <= self.manager.tx_storage.first_timestamp:
@@ -434,7 +411,7 @@ class NodeSyncTimestamp(Plugin):
             prev_cur = cur
             cur = max(cur - step, self.manager.tx_storage.first_timestamp)
             tips = cast(TipsPayload, (yield self.get_peer_tips(cur)))
-            local_merkle_tree, _ = self.get_merkle_tree(cur)
+            local_merkle_tree, _ = self.manager.tx_storage.get_merkle_tree(cur)
             step *= 2
 
         # Here, both nodes are synced at timestamp `cur` and not synced at timestamp `prev_cur`.
@@ -450,7 +427,7 @@ class NodeSyncTimestamp(Plugin):
         while high - low > 1:
             mid = (low + high + 1) // 2
             tips = cast(TipsPayload, (yield self.get_peer_tips(mid)))
-            local_merkle_tree, _ = self.get_merkle_tree(mid)
+            local_merkle_tree, _ = self.manager.tx_storage.get_merkle_tree(mid)
             if tips.merkle_tree == local_merkle_tree:
                 low = mid
             else:
@@ -601,7 +578,7 @@ class NodeSyncTimestamp(Plugin):
             raise Exception('No tips for timestamp {}'.format(timestamp))
 
         # Calculate list of hashes to be sent
-        merkle_tree, hashes = self.calculate_merkle_tree(intervals)
+        merkle_tree, hashes = self.manager.tx_storage.get_merkle_tree(timestamp)
         has_more = False
 
         if not include_hashes:
