@@ -344,13 +344,14 @@ class HathorManager:
         """
         from hathor.transaction.scripts import create_output_script
 
-        if not timestamp:
-            timestamp = max(self.tx_storage.latest_timestamp, self.reactor.seconds())
-
         if parent_block_hash is None:
             tip_blocks = self.tx_storage.get_best_block_tips(timestamp)
         else:
             tip_blocks = [parent_block_hash]
+
+        # We must update it after choosing the parent block, so we may benefit from cache.
+        if timestamp is None:
+            timestamp = max(self.tx_storage.latest_timestamp, self.reactor.seconds())
 
         parent_block = self.tx_storage.get_transaction(random.choice(tip_blocks))
         if not parent_block.is_genesis and timestamp - parent_block.timestamp > settings.MAX_DISTANCE_BETWEEN_BLOCKS:

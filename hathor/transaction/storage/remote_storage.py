@@ -103,6 +103,8 @@ class TransactionRemoteStorage(TransactionStorage):
         self._channel = None
         self._genesis_cache: Dict[bytes, BaseTransaction] = None
         self.with_index = with_index
+        # Set initial value for _best_block_tips cache.
+        self._best_block_tips = [x.hash for x in self.get_all_genesis() if x.is_block]
 
     def _create_genesis_cache(self) -> None:
         from hathor.transaction.genesis import get_genesis_transactions
