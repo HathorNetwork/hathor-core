@@ -13,6 +13,7 @@ def create_parser() -> ArgumentParser:
     parser = create_parser()
     parser.add_argument('--port', help='Port of Stratum server', type=int, required=True)
     parser.add_argument('--status', help='Port of Status server', type=int, required=False)
+    parser.add_argument('--debug-listen', help='Port to listen for Debug API', type=int, required=False)
     parser.add_argument('--hathor-api', help='Endpoint of the Hathor API (without version)', type=str, required=True)
     parser.add_argument('--hathor-address', help='Hathor address to send funds to', type=str, required=False)
     parser.add_argument('--bitcoin-rpc', help='Endpoint of the Bitcoin RPC', type=str, required=True)
@@ -24,7 +25,8 @@ def create_parser() -> ArgumentParser:
 def execute(args: Namespace) -> None:
     from hathor.client import HathorClient
     from hathor.merged_mining import MergedMiningCoordinator
-    from hathor.merged_mining.status_api import make_app
+    from hathor.merged_mining.status_api import make_app as make_status_app
+    from hathor.merged_mining.debug_api import make_app as make_debug_app
     from hathor.merged_mining.bitcoin_rpc import BitcoinRPC
 
     loop = asyncio.get_event_loop()
@@ -46,10 +48,16 @@ def execute(args: Namespace) -> None:
     mm_server = loop.run_until_complete(loop.create_server(merged_mining, '0.0.0.0', args.port))
     web_runner: Optional[web.BaseRunner] = None
     if args.status:
-        app = loop.run_until_complete(make_app(merged_mining))
+        app = loop.run_until_complete(make_status_app(merged_mining))
         web_runner = web.AppRunner(app)
         loop.run_until_complete(web_runner.setup())
         site = web.TCPSite(web_runner, '0.0.0.0', args.status)
+        loop.run_until_complete(site.start())
+    if args.debug_listen:
+        app = loop.run_until_complete(make_debug_app(merged_mining))
+        web_runner = web.AppRunner(app)
+        loop.run_until_complete(web_runner.setup())
+        site = web.TCPSite(web_runner, '127.0.0.1', args.debug_listen)
         loop.run_until_complete(site.start())
     try:
         loop.run_forever()

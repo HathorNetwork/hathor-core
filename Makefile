@@ -9,7 +9,7 @@ tests_simulation = tests/simulation/
 tests_cli = tests/cli/
 tests_lib = $(filter-out ${tests_cli} ${tests_simulation} tests/__pycache__/, $(dir $(wildcard tests/*/.)))
 
-pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov=hathor
+pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov-report=xml --cov=hathor
 mypy_flags = --warn-unused-configs --disallow-incomplete-defs --no-implicit-optional --warn-redundant-casts --warn-unused-ignores
 
 #--strict-equality
@@ -35,7 +35,7 @@ tests-doctests:
 
 .PHONY: tests-lib
 tests-lib:
-	pytest --durations=10 $(pytest_flags) --doctest-modules hathor --cov-fail-under=86 $(tests_lib)
+	pytest --durations=10 $(pytest_flags) --doctest-modules hathor --cov-fail-under=85 $(tests_lib)
 
 .PHONY: tests-simulation
 tests-simulation:
@@ -108,10 +108,14 @@ clean: clean-pyc clean-protos
 # docker:
 
 docker_dir := .
+ifdef GITHUB_REF
+	docker_tag := $(GITHUB_REF)
+else
 ifneq ($(wildcard .git/.*),)
 	docker_tag := $(shell git describe --tags --dirty)
 else
 	docker_tag := $(shell date +'%y%m%d%H%M%S')
+endif
 endif
 
 .PHONY: docker

@@ -1,4 +1,4 @@
-FROM nginx:1.16-alpine
+FROM nginx:1.18-alpine
 RUN rm /etc/nginx/conf.d/default.conf
 COPY cors_params /etc/nginx/cors_params
 COPY proxy_params /etc/nginx/proxy_params

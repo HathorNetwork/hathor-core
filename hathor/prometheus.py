@@ -16,6 +16,7 @@ METRIC_INFO = {
     'block_hash_rate': 'Hash rate of blocks',
     'tx_hash_rate': 'Hash rate of tx',
     'best_block_weight': 'Weight of blocks',
+    'best_block_height': 'Height of best chain',
     'websocket_connections': 'Number of connections in the websocket',
     'subscribed_addresses': 'Number of subscribed addresses in the websocket',
     'completed_jobs': 'Number of completed jobs in stratum',

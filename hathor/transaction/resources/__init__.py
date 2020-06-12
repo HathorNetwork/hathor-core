@@ -8,6 +8,7 @@ from hathor.transaction.resources.tips import TipsResource
 from hathor.transaction.resources.tips_histogram import TipsHistogramResource
 from hathor.transaction.resources.transaction import TransactionResource
 from hathor.transaction.resources.transaction_confirmation import TransactionAccWeightResource
+from hathor.transaction.resources.tx_parents import TxParentsResource
 
 __all__ = [
     'DecodeTxResource',
@@ -22,4 +23,5 @@ __all__ = [
     'DashboardTransactionResource',
     'TipsHistogramResource',
     'TipsResource',
+    'TxParentsResource',
 ]

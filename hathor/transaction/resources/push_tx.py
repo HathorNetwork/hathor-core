@@ -79,6 +79,8 @@ class PushTxResource(resource.Resource):
                             success = False
                             message = str(e)
                         data = {'success': success, 'message': message}
+                        if success:
+                            data['tx'] = tx.to_json()
                     else:
                         data = {'success': success, 'message': message, 'can_force': True}
 

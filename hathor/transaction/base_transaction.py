@@ -149,6 +149,8 @@ class BaseTransaction(ABC):
     HASH_NONCE_SIZE = 16
     HEX_BASE = 16
 
+    _metadata: TransactionMetadata
+
     def __init__(self,
                  nonce: int = 0,
                  timestamp: Optional[int] = None,
@@ -265,62 +267,6 @@ class BaseTransaction(ABC):
         :rtype :py:class:`hathor.transaction.BaseTransaction`
         """
         raise NotImplementedError
-
-    @classmethod
-    def create_from_dict(cls, data: Dict[str, Any], update_hash: bool = False,
-                         storage: Optional['TransactionStorage'] = None) -> 'BaseTransaction':
-        from hathor.transaction.aux_pow import BitcoinAuxPow
-        from hathor.transaction.base_transaction import TxOutput, TxInput, TxVersion
-
-        hash_bytes = bytes.fromhex(data['hash']) if 'hash' in data else None
-        if 'data' in data:
-            data['data'] = base64.b64decode(data['data'])
-
-        parents = []
-        for parent in data['parents']:
-            parents.append(bytes.fromhex(parent))
-        data['parents'] = parents
-
-        inputs = []
-        for input_tx in data['inputs']:
-            tx_id = bytes.fromhex(input_tx['tx_id'])
-            index = input_tx['index']
-            input_data = base64.b64decode(input_tx['data'])
-            inputs.append(TxInput(tx_id, index, input_data))
-        if len(inputs) > 0:
-            data['inputs'] = inputs
-        else:
-            del data['inputs']
-
-        outputs = []
-        for output in data['outputs']:
-            value = output['value']
-            script = base64.b64decode(output['script'])
-            token_data = output['token_data']
-            outputs.append(TxOutput(value, script, token_data))
-        if len(outputs) > 0:
-            data['outputs'] = outputs
-
-        tokens = [bytes.fromhex(uid) for uid in data['tokens']]
-        if len(tokens) > 0:
-            data['tokens'] = tokens
-        else:
-            del data['tokens']
-
-        if 'aux_pow' in data:
-            data['aux_pow'] = BitcoinAuxPow.from_bytes(bytes.fromhex(data['aux_pow']))
-
-        if storage:
-            data['storage'] = storage
-
-        cls = TxVersion(data['version']).get_cls()
-        tx = cls(**data)
-        if update_hash:
-            tx.update_hash()
-            assert tx.hash is not None
-        if hash_bytes:
-            assert tx.hash == hash_bytes, f'Hashes differ: {tx.hash!r} != {hash_bytes!r}'
-        return tx
 
     def __eq__(self, other: object) -> bool:
         """Two transactions are equal when their hash matches
@@ -728,6 +674,8 @@ class BaseTransaction(ABC):
             height = self.calculate_height() if self.storage else 0
             metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight, height=height)
             self._metadata = metadata
+        if not metadata.hash:
+            metadata.hash = self.hash
         metadata._tx_ref = weakref.ref(self)
         return metadata
 
@@ -820,7 +768,9 @@ class BaseTransaction(ABC):
         assert self.storage is not None
         return self.storage.get_transaction(input_tx.tx_id)
 
-    def to_json(self, decode_script: bool = False) -> Dict[str, Any]:
+    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
+        """ Creates a json serializable Dict object from self
+        """
         data: Dict[str, Any] = {}
         data['hash'] = self.hash and self.hash.hex()
         data['nonce'] = self.nonce
@@ -843,6 +793,9 @@ class BaseTransaction(ABC):
         data['outputs'] = []
         for output in self.outputs:
             data['outputs'].append(output.to_json(decode_script=decode_script))
+
+        if include_metadata:
+            data['metadata'] = self.get_metadata().to_json()
 
         return data
 
@@ -893,6 +846,7 @@ class BaseTransaction(ABC):
 
     @abstractmethod
     def to_proto(self, include_metadata: bool = True) -> protos.BaseTransaction:
+        # TODO: make default value for include_metadata consistent with to_json
         """ Creates a Protobuf object from self
 
         :param include_metadata: Whether to include metadata, regardless if there is
@@ -978,11 +932,11 @@ class TxInput:
         if not clear_data:
             return bytes(self)
         else:
-            ret = b''
+            ret = bytearray()
             ret += self.tx_id
             ret += int_to_bytes(self.index, 1)
             ret += int_to_bytes(0, 2)
-            return ret
+            return bytes(ret)
 
     @classmethod
     def create_from_bytes(cls, buf: bytes) -> Tuple['TxInput', bytes]:

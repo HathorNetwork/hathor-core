@@ -4,6 +4,7 @@ import tempfile
 import time
 
 import numpy.random
+from structlog import get_logger
 from twisted.internet import reactor
 from twisted.internet.task import Clock
 from twisted.trial import unittest
@@ -12,12 +13,15 @@ from hathor.manager import HathorManager, TestMode
 from hathor.p2p.peer_id import PeerId
 from hathor.wallet import Wallet
 
+logger = get_logger()
+
 
 class TestCase(unittest.TestCase):
     def setUp(self):
         self.tmpdirs = []
         self.clock = Clock()
         self.clock.advance(time.time())
+        self.log = logger.new()
 
     def tearDown(self):
         self.clean_tmpdirs()

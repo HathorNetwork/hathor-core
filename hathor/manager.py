@@ -377,7 +377,7 @@ class HathorManager:
 
         height = parent_block.get_metadata().height + 1
         amount = self.get_tokens_issued_per_block(height)
-        output_script = create_output_script(address)
+        output_script = create_output_script(address) if address else b''
         tx_outputs = [TxOutput(amount, output_script)]
 
         cls: Union[Type['Block'], Type['MergeMinedBlock']]
@@ -388,6 +388,7 @@ class HathorManager:
         blk = cls(outputs=tx_outputs, parents=parents, storage=self.tx_storage, data=data)
         blk.timestamp = max(timestamp1, timestamp2)
         blk.weight = self.calculate_block_difficulty(blk)
+        blk.get_metadata(use_storage=False)
         return blk
 
     def get_tokens_issued_per_block(self, height: int) -> int:

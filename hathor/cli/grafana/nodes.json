@@ -1,27 +1,24 @@
 [
     {
-        "name": "Node 1",
-        "host": "node1.testnet.hathor.network:9100",
-        "job": "node1"
+        "name": "ap-southeast-1 fullnode",
+        "host": "i-01eb0969870c0c7e4",
+        "job": "aws-nodes"
     },
     {
-        "name": "Node 2",
-        "host": "node2.testnet.hathor.network:9100",
-        "job": "node1"
+        "name": "eu-central-1 fullnode node1 3.120.208.199",
+        "host": "i-02242e02c9f80eb07",
+        "job": "aws-nodes",
+        "stratum_alert": {"threshold": 30, "notification_channel": 1}
     },
     {
-        "name": "Node 3",
-        "host": "node3.testnet.hathor.network:9100",
-        "job": "node1"
+        "name": "eu-west-1 fullnode (public stratum)",
+        "host": "i-0328353e7c02e86ab",
+        "job": "aws-nodes"
     },
     {
-        "name": "Node 4",
-        "host": "node4.testnet.hathor.network:9100",
-        "job": "node1"
-    },
-    {
-        "name": "Node 5",
-        "host": "node5.testnet.hathor.network:9100",
-        "job": "node1"
+        "name": "us-east-1 fullnode node2 54.89.255.163",
+        "host": "i-0dd8ac889befa90c8",
+        "job": "aws-nodes",
+        "stratum_alert": {"threshold": 30, "notification_channel": 1}
     }
 ]

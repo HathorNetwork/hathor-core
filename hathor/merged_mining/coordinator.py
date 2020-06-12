@@ -20,6 +20,7 @@ Asyncio with async/await is much more ergonomic and less cumbersome than twisted
 
 import asyncio
 import pickle
+import random
 import time
 from itertools import count
 from tempfile import NamedTemporaryFile
@@ -47,7 +48,6 @@ from hathor.merged_mining.bitcoin_rpc import IBitcoinRPC
 from hathor.merged_mining.util import Periodic
 from hathor.stratum.stratum import (
     DUPLICATE_SOLUTION,
-    INVALID_ADDRESS,
     INVALID_PARAMS,
     INVALID_REQUEST,
     INVALID_SOLUTION,
@@ -60,13 +60,13 @@ from hathor.stratum.stratum import (
 from hathor.transaction import BitcoinAuxPow, MergeMinedBlock as HathorBlock
 from hathor.transaction.exceptions import ScriptError, TxValidationError
 from hathor.util import MaxSizeOrderedDict, ichunks
-from hathor.wallet.exceptions import InvalidAddress
 
 logger = get_logger()
 settings = HathorSettings()
 
 
 MAGIC_NUMBER = b'Hath'  # bytes.fromhex('48617468') or 0x68746148.to_bytes(4, 'little')
+NICEHASH_MIN_DIFF = 500_000  # as per https://www.nicehash.com/pool-operators
 
 
 class HathorCoordJob(NamedTuple):
@@ -111,7 +111,6 @@ def parse_login_with_addresses(login: str) -> Tuple[bytes, bytes, Optional[str]]
     >>> out[0].hex(), out[1].hex(), out[2]
     ('76a9143d6dbcbf6e67b2cbcc3225994756a56a5e2d3a2788ac', '76a9e52432216dabf32d60a02894ec871293baaa1b1288ac', 'foo')
     """
-    from hathor.crypto.util import decode_address
     from hathor.transaction.scripts import create_output_script as create_output_script_htr
     from hathor.merged_mining.bitcoin import create_output_script as create_output_script_btc
     parts = login.split('.', maxsplit=2)
@@ -169,13 +168,15 @@ class SingleMinerJob(NamedTuple):
     prev_hash: bytes
     coinbase_head: bytes
     coinbase_tail: bytes
-    merkle_path: List[bytes]
+    merkle_path: Tuple[bytes, ...]
     version: int
     bits: bytes  # 4 bytes
     timestamp: int
     hathor_block: HathorBlock
     transactions: List[BitcoinTransaction]
     clean: bool = True
+    bitcoin_height: int = 0
+    hathor_height: Optional[int] = None
 
     def to_stratum_params(self) -> List:
         """ Assemble the parameters the way a Stratum client typically expects.
@@ -204,7 +205,7 @@ class SingleMinerJob(NamedTuple):
         bitcoin_header = BitcoinBlockHeader(
             self.version,
             self.prev_hash,
-            build_merkle_root_from_path([coinbase_tx.hash] + self.merkle_path),
+            build_merkle_root_from_path([coinbase_tx.hash] + list(self.merkle_path)),
             work.timestamp or self.timestamp,
             self.bits,
             work.nonce
@@ -227,7 +228,7 @@ class SingleMinerJob(NamedTuple):
         coinbase = bytes(coinbase_tx)
         assert block_base_hash in coinbase
         coinbase_head, coinbase_tail = coinbase.split(block_base_hash)
-        return BitcoinAuxPow(header_head, coinbase_head, coinbase_tail, self.merkle_path, header_tail)
+        return BitcoinAuxPow(header_head, coinbase_head, coinbase_tail, list(self.merkle_path), header_tail)
 
     def build_bitcoin_block(self, work: SingleMinerWork) -> BitcoinBlock:
         """ Build the Bitcoin Block from job and work data.
@@ -249,7 +250,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
     MAX_DIFFICULTY = 2**208  # maximum "bitcoin difficulty" to assign to jobs
     INITIAL_DIFFICULTY = 8192  # initial "bitcoin difficulty" to assign to jobs, can raise or drop based on solvetimes
     TARGET_JOB_TIME = 15  # in seconds, adjust difficulty so jobs take this long
-    MAX_JOBS = 1000  # maximum number of jobs to keep in memory
+    MAX_JOBS = 150  # maximum number of jobs to keep in memory
 
     merged_job: 'MergedJob'
 
@@ -454,7 +455,6 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         self.log.debug('handle request', method=method, params=params)
 
         if method in {'subscribe', 'mining.subscribe', 'login'}:
-            assert isinstance(params, Dict)
             return self.handle_subscribe(params, msgid)
         if method in {'authorize', 'mining.authorize'}:
             assert isinstance(params, List)
@@ -499,6 +499,9 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
                 self.send_error({'code': 0, 'message': 'Address should be of the format <HTR_ADDR>.<BTC_ADDR>'}, msgid)
                 self.transport.close()
                 return
+            if 'nicehash' in password.lower():
+                self.log.info('special case mindiff for NiceHash')
+                self.min_difficulty = NICEHASH_MIN_DIFF
             self.send_result(True, msgid)
         else:
             # TODO: authorization system
@@ -525,21 +528,13 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
 
         self.send_result(res, msgid)
 
-    def handle_subscribe(self, params: Dict, msgid: Optional[str]) -> None:
+    def handle_subscribe(self, params: Any, msgid: Optional[str]) -> None:
         """ Handles subscribe request by answering it and triggering a job request.
 
         :param msgid: JSON-RPC 2.0 message id
         :type msgid: Optional[str]
         """
         assert self.miner_id is not None
-        if params and 'address' in params and params['address'] is not None:
-            try:
-                self.miner_address = decode_address(params['address'])
-            except InvalidAddress:
-                self.send_error(INVALID_ADDRESS, msgid)
-                self.transport.loseConnection()
-                return
-
         self._subscribed = True
         self.subscribed_at = time.time()
         self.log.info('Miner subscribed', address=self.miner_address)
@@ -635,12 +630,18 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
             self.log.debug('high hash, skipping Hathor submit')
             return
         assert block.hash is not None
+        if job.hathor_height is not None:
+            if self.coordinator.should_skip_hathor_submit(job.hathor_height):
+                self.log.debug('share is too late, skip Hathor submit')
+                return
         try:
             res = await self.coordinator.hathor_client.submit_block(block)
         except Exception:
             self.log.exception('submit to Hathor failed')
             return
         self.log.debug('hathor_client.submit_block', res=res)
+        if job.hathor_height is not None:
+            self.coordinator.update_hathor_submitted(job.hathor_height)
         if res:
             self.log.info('Hurray!!! Hathor block found!!!', hash=block.hash.hex())
             await self.coordinator.update_hathor_block()
@@ -649,18 +650,24 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         """ Submit work to Bitcoin RPC.
         """
         bitcoin_rpc = self.coordinator.bitcoin_rpc
-        bitcoin_block = job.build_bitcoin_block(work)
-        block_hash = Hash(bitcoin_block.header.hash)
-        block_target = Target(int.from_bytes(bitcoin_block.header.bits, 'big'))
+        # bitcoin_block = job.build_bitcoin_block(work)  # XXX: too expensive for now
+        bitcoin_block_header = job.build_bitcoin_block_header(work)
+        block_hash = Hash(bitcoin_block_header.hash)
+        block_target = Target(int.from_bytes(bitcoin_block_header.bits, 'big'))
         if block_hash.to_u256() > block_target.to_u256():
             self.log.debug('high hash, skipping Bitcoin submit')
             return
+        if self.coordinator.should_skip_bitcoin_submit(job.bitcoin_height):
+            self.log.debug('late winning share, skipping Bitcoin submit')
+            return
+        bitcoin_block = job.build_bitcoin_block(work)  # XXX: far fewer cases, so it's OK now
         data = bytes(bitcoin_block)
         try:
             res = await bitcoin_rpc.submit_block(data)
         except Exception:
             self.log.exception('submit to Bitcoin failed')
             return
+        self.coordinator.update_bitcoin_submitted(job.bitcoin_height)
         self.log.debug('bitcoin_rpc.submit_block', res=res)
         if res is None:
             self.log.info('Hurray!!! Bitcoin block found!!!', hash=bitcoin_block.header.hash.hex())
@@ -763,6 +770,7 @@ class BitcoinCoordJob(NamedTuple):
     bits: bytes
     height: int
     transactions: List[BitcoinTransaction]
+    merkle_path: Tuple[bytes, ...]
 
     @classmethod
     def from_dict(cls, params: dict) -> 'BitcoinCoordJob':
@@ -880,6 +888,7 @@ class BitcoinCoordJob(NamedTuple):
             bytes.fromhex(params['bits']),
             params['height'],
             list(map(BitcoinTransaction.from_dict, params['transactions'])),
+            tuple(build_merkle_path_for_coinbase([bytes.fromhex(tx['hash']) for tx in params['transactions']])),
         )
 
     def to_dict(self) -> Dict[Any, Any]:
@@ -901,6 +910,7 @@ class BitcoinCoordJob(NamedTuple):
                 }
                 for tx in self.transactions
             ],
+            'merkle_path': [h.hex() for h in self.merkle_path],
         }
 
     def make_coinbase_transaction(self, hathor_block_hash: bytes, payback_script_bitcoin: bytes,
@@ -952,7 +962,7 @@ class MergedJob(NamedTuple):
         xnonce_size = len(protocol.xnonce1) + protocol.xnonce2_size
 
         # base txs for merkle tree, before coinbase
-        transactions = self.bitcoin_coord.transactions[:]
+        transactions = self.bitcoin_coord.transactions
 
         # payback_address_hathor
         hathor_block = self.hathor_coord.block.clone()
@@ -987,13 +997,15 @@ class MergedJob(NamedTuple):
             prev_hash=self.bitcoin_coord.previous_block_hash,
             coinbase_head=coinbase_head,
             coinbase_tail=coinbase_tail,
-            merkle_path=build_merkle_path_for_coinbase([tx.hash for tx in transactions]),
+            merkle_path=self.bitcoin_coord.merkle_path,
             version=self.bitcoin_coord.version,
             bits=self.bitcoin_coord.bits,
             hathor_block=hathor_block,
             timestamp=self.bitcoin_coord.get_timestamp(),
             transactions=transactions,
             clean=self.clean,
+            bitcoin_height=self.bitcoin_coord.height,
+            hathor_height=self.hathor_coord.height,
         )
 
 
@@ -1008,12 +1020,16 @@ class MergedMiningCoordinator:
 
     BITCOIN_UPDATE_INTERVAL = 10.0
     HATHOR_UPDATE_INTERVAL = 3.0
+    # very arbitrary, max times since last submit that we consider sending a new winning share
+    BITCOIN_MAX_FUTURE_SUBMIT_SECONDS = 30.0
+    HATHOR_MAX_FUTURE_SUBMIT_SECONDS = 30.0
     XNONCE1_SIZE = 2
     MAX_XNONCE1 = 2**XNONCE1_SIZE - 1
 
     def __init__(self,  bitcoin_rpc: IBitcoinRPC, hathor_client: IHathorClient,
                  payback_address_bitcoin: Optional[str], payback_address_hathor: Optional[str],
-                 address_from_login: bool = True, min_difficulty: Optional[int] = None):
+                 address_from_login: bool = True, min_difficulty: Optional[int] = None,
+                 sequential_xnonce1: bool = False):
         self.log = logger.new()
         self.bitcoin_rpc = bitcoin_rpc
         self.hathor_client = hathor_client
@@ -1025,9 +1041,14 @@ class MergedMiningCoordinator:
         self.bitcoin_coord_job: Optional[BitcoinCoordJob] = None
         self.hathor_coord_job: Optional[HathorCoordJob] = None
         self.last_bitcoin_block_received = 0.0
+        self.last_bitcoin_height_submitted = 0
+        self.last_bitcoin_timestamp_submitted = 0.0
         self.last_hathor_block_received = 0.0
+        self.last_hathor_height_submitted = 0
+        self.last_hathor_timestamp_submitted = 0.0
         self.merged_job: Optional[MergedJob] = None
         self.min_difficulty = min_difficulty
+        self.sequential_xnonce1 = sequential_xnonce1
         self._next_xnonce1 = 0
         self.job_count = 0
         self.update_bitcoin_block_task: Optional[Periodic] = None
@@ -1045,10 +1066,13 @@ class MergedMiningCoordinator:
     def next_xnonce1(self) -> bytes:
         """ Generate the next xnonce1, for keeping each subscription with a different xnonce1.
         """
-        xnonce1 = self._next_xnonce1
-        self._next_xnonce1 += 1
-        if self._next_xnonce1 > self.MAX_XNONCE1:
-            self._next_xnonce1 = 0
+        if self.sequential_xnonce1:
+            xnonce1 = self._next_xnonce1
+            self._next_xnonce1 += 1
+            if self._next_xnonce1 > self.MAX_XNONCE1:
+                self._next_xnonce1 = 0
+        else:
+            xnonce1 = random.getrandbits(8 * self.XNONCE1_SIZE)
         return xnonce1.to_bytes(self.XNONCE1_SIZE, 'big')
 
     def __call__(self) -> MergedMiningStratumProtocol:
@@ -1101,6 +1125,42 @@ class MergedMiningCoordinator:
         self.log.debug('New Bitcoin Block template.')
         self.update_merged_block()
 
+    def update_bitcoin_submitted(self, height: int) -> None:
+        """ Used to remember the last height submitted, for use when discarding late winning shares.
+        """
+        timestamp = time.time()
+        if height > self.last_bitcoin_height_submitted:
+            self.last_bitcoin_height_submitted = height
+            self.last_bitcoin_timestamp_submitted = timestamp
+
+    def should_skip_bitcoin_submit(self, height: int) -> bool:
+        """ Check the last submit timestamp and height to decide if the winning share is too late to be submitted.
+        """
+        timestamp = time.time()
+        if height == self.last_bitcoin_height_submitted:
+            # if timestamp too into the future, SKIP
+            return timestamp - self.last_bitcoin_timestamp_submitted > self.BITCOIN_MAX_FUTURE_SUBMIT_SECONDS
+        # if height less than last submission, SKIP
+        return height < self.last_bitcoin_height_submitted
+
+    def update_hathor_submitted(self, height: int) -> None:
+        """ Used to remember the last height submitted, for use when discarding late winning shares.
+        """
+        timestamp = time.time()
+        if height > self.last_hathor_height_submitted:
+            self.last_hathor_height_submitted = height
+            self.last_hathor_timestamp_submitted = timestamp
+
+    def should_skip_hathor_submit(self, height: int) -> bool:
+        """ Check the last submit timestamp and height to decide if the winning share is too late to be submitted.
+        """
+        timestamp = time.time()
+        if height == self.last_hathor_height_submitted:
+            # if timestamp too into the future, SKIP
+            return timestamp - self.last_hathor_timestamp_submitted > self.HATHOR_MAX_FUTURE_SUBMIT_SECONDS
+        # if height less than last submission, SKIP
+        return height < self.last_hathor_height_submitted
+
     async def update_hathor_block(self) -> None:
         """ Method periodically called to update the hathor block template.
         """
@@ -1114,7 +1174,7 @@ class MergedMiningCoordinator:
             return
         assert isinstance(block, HathorBlock)
         self.last_hathor_block_received = time.time()
-        self.log.debug('hathor.get_block_template response', block=block)
+        # self.log.debug('hathor.get_block_template response', block=block, height=height)
         self.hathor_coord_job = HathorCoordJob(block, height)
         self.log.debug('New Hathor Block template.')
         self.update_merged_block()
