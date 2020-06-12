@@ -19,9 +19,8 @@ import json
 import struct
 from collections import OrderedDict
 from math import inf
-from typing import TYPE_CHECKING, Callable, Dict, Iterator, List, Optional, Set, Tuple, Union, cast
+from typing import TYPE_CHECKING, Callable, Dict, Iterator, List, Optional, Tuple, Union, cast
 
-from intervaltree.interval import Interval
 from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.internet.interfaces import IDelayedCall, IProtocol, IPushProducer, IReactorCore
