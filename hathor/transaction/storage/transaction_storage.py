@@ -374,7 +374,6 @@ class TransactionStorage(ABC):
 
         return merkle.digest(), hashes
 
-
     @abstractmethod
     def get_block_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         raise NotImplementedError
