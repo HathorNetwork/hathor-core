@@ -19,7 +19,7 @@ from hathor.util import deprecated, skip_warning
 
 class AllTipsCache(NamedTuple):
     timestamp: int
-    tips: List
+    tips: Set[Interval]
     merkle_tree: bytes
     hashes: List[bytes]
 
@@ -345,6 +345,10 @@ class TransactionStorage(ABC):
         return highest_height
 
     @abstractmethod
+    def get_merkle_tree(self, timestamp: int) -> Tuple[bytes, List[bytes]]:
+        raise NotImplementedError
+
+    @abstractmethod
     def get_block_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         raise NotImplementedError
 
@@ -621,6 +625,7 @@ class BaseTransactionStorage(TransactionStorage):
         intervals = self.get_all_tips(timestamp)
         if timestamp >= self.latest_timestamp:
             # get_all_tips will add to cache in that case
+            assert self._all_tips_cache is not None
             return self._all_tips_cache.merkle_tree, self._all_tips_cache.hashes
 
         return self.calculate_merkle_tree(intervals)
