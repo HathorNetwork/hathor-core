@@ -344,9 +344,36 @@ class TransactionStorage(ABC):
 
         return highest_height
 
-    @abstractmethod
     def get_merkle_tree(self, timestamp: int) -> Tuple[bytes, List[bytes]]:
-        raise NotImplementedError
+        """ Generate a hash to check whether the DAG is the same at that timestamp.
+
+        :rtype: Tuple[bytes(hash), List[bytes(hash)]]
+        """
+        if self._all_tips_cache is not None and timestamp >= self._all_tips_cache.timestamp:
+            return self._all_tips_cache.merkle_tree, self._all_tips_cache.hashes
+
+        intervals = self.get_all_tips(timestamp)
+        if timestamp >= self.latest_timestamp:
+            # get_all_tips will add to cache in that case
+            assert self._all_tips_cache is not None
+            return self._all_tips_cache.merkle_tree, self._all_tips_cache.hashes
+
+        return self.calculate_merkle_tree(intervals)
+
+    def calculate_merkle_tree(self, intervals: Set[Interval]) -> Tuple[bytes, List[bytes]]:
+        """ Generate a hash of the transactions at the intervals
+
+        :rtype: Tuple[bytes(hash), List[bytes(hash)]]
+        """
+        hashes = [x.data for x in intervals]
+        hashes.sort()
+
+        merkle = hashlib.sha256()
+        for h in hashes:
+            merkle.update(h)
+
+        return merkle.digest(), hashes
+
 
     @abstractmethod
     def get_block_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
@@ -609,40 +636,6 @@ class BaseTransactionStorage(TransactionStorage):
             self._all_tips_cache = AllTipsCache(self.latest_timestamp, tips, merkle_tree, hashes)
 
         return tips
-
-    def get_merkle_tree(self, timestamp: int) -> Tuple[bytes, List[bytes]]:
-        """ Generate a hash to check whether the DAG is the same at that timestamp.
-
-        :rtype: Tuple[bytes(hash), List[bytes(hash)]]
-        """
-        if not self.with_index:
-            raise NotImplementedError
-        assert self.all_index is not None
-
-        if self._all_tips_cache is not None and timestamp >= self._all_tips_cache.timestamp:
-            return self._all_tips_cache.merkle_tree, self._all_tips_cache.hashes
-
-        intervals = self.get_all_tips(timestamp)
-        if timestamp >= self.latest_timestamp:
-            # get_all_tips will add to cache in that case
-            assert self._all_tips_cache is not None
-            return self._all_tips_cache.merkle_tree, self._all_tips_cache.hashes
-
-        return self.calculate_merkle_tree(intervals)
-
-    def calculate_merkle_tree(self, intervals: Set[Interval]) -> Tuple[bytes, List[bytes]]:
-        """ Generate a hash of the transactions at the intervals
-
-        :rtype: Tuple[bytes(hash), List[bytes(hash)]]
-        """
-        hashes = [x.data for x in intervals]
-        hashes.sort()
-
-        merkle = hashlib.sha256()
-        for h in hashes:
-            merkle.update(h)
-
-        return merkle.digest(), hashes
 
     def get_newest_blocks(self, count: int) -> Tuple[List[Block], bool]:
         if not self.with_index:
