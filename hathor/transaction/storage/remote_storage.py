@@ -12,7 +12,7 @@ from hathor.exception import HathorError
 from hathor.indexes import TransactionIndexElement, TransactionsIndex
 from hathor.transaction import Block
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.transaction.storage.transaction_storage import TransactionStorage, AllTipsCache
+from hathor.transaction.storage.transaction_storage import AllTipsCache, TransactionStorage
 from hathor.util import deprecated, skip_warning
 
 if TYPE_CHECKING:
