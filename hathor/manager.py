@@ -330,7 +330,7 @@ class HathorManager:
         """
         if self._allow_mining_without_peers:
             return True
-        return self.connections.has_synced_peer()
+        return self.connections.is_practically_synced()
 
     def generate_mining_block(self, timestamp: Optional[float] = None,
                               parent_block_hash: Optional[bytes] = None,

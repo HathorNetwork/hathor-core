@@ -195,7 +195,12 @@ class NodeSyncTimestamp(Plugin):
         self.call_later_id: Optional[IDelayedCall] = None
         self.call_later_interval: int = 1  # seconds
 
+        # Timestamp of the peer's latest block (according to the peer itself)
         self.peer_timestamp: int = 0
+
+        # Latest timestamp in which we're synced.
+        # This number may decrease if a new transaction/block arrives in a timestamp smaller than it.
+        self.synced_timestamp: int = 0
 
         self.send_data_queue: SendDataPush = SendDataPush(self)
 
@@ -205,10 +210,6 @@ class NodeSyncTimestamp(Plugin):
 
         # Latest deferred waiting for a reply.
         self.deferred_by_key: Dict[str, Deferred] = {}
-
-        # Latest timestamp in which we're synced.
-        # This number may decrease if a new transaction/block arrives in a timestamp smaller than it.
-        self.synced_timestamp: int = 0
 
         # Maximum difference between our latest timestamp and synced timestamp to consider
         # that the peer is synced (in seconds).
@@ -264,7 +265,7 @@ class NodeSyncTimestamp(Plugin):
     def is_synced(self) -> bool:
         """ Return True if we are synced.
         """
-        return self.manager.tx_storage.latest_timestamp - self.synced_timestamp <= self.sync_threshold
+        return self.peer_timestamp - self.manager.tx_storage.latest_timestamp <= self.sync_threshold
 
     def send_tx_to_peer_if_possible(self, tx: BaseTransaction) -> None:
         if self.peer_timestamp is None:

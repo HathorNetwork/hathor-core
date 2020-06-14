@@ -23,6 +23,7 @@ from twisted.internet.interfaces import IStreamClientEndpoint, IStreamServerEndp
 from twisted.logger import Logger
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 
+from hathor.conf import HathorSettings
 from hathor.p2p.downloader import Downloader
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import PeerStorage
@@ -36,6 +37,8 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
     from hathor.p2p.node_sync import NodeSyncTimestamp  # noqa: F401
     from hathor.p2p.factory import HathorClientFactory, HathorServerFactory  # noqa: F401
+
+settings = HathorSettings()
 
 
 class ConnectionsManager:
@@ -96,13 +99,36 @@ class ConnectionsManager:
         if self.lc_reconnect.running:
             self.lc_reconnect.stop()
 
-    def has_synced_peer(self) -> bool:
-        """ Return whether we are synced to at least one peer.
+    def is_practically_synced(self) -> bool:
+        """ Returns whether we can consider for practical resons that we are synced to the network.
+
+        This method name is intentionally a bit vague to give room for some imprecisions and subjective protection
+        against malicious or rogue nodes. This method is primarily intended for use by APIs that need to wait for the
+        sync to finish but can work when it hasn't (even with bad, but not catastrophic consequences).
+
+        For example: `get_block_template` API can work at anytime, but before the node has synced, it will lead to
+        blocks way into the past with too low difficulty (because of decay), which is bad, but not catastrophic.
         """
+        # How it works: filter out the peers that seem to have a reasonable timestamp (not way into the future, and not
+        # way into the past). Test if we're synced with any of them.
         connections = list(self.get_ready_connections())
+        # fail fast if no connections
+        if not connections:
+            return False
+        # figure out the highest peer_timestamp
+        best_timestamp = 0
         for conn in connections:
             assert conn.state is not None
             assert isinstance(conn.state, ReadyState)
+            best_timestamp = max(best_timestamp, conn.state.get_sync_plugin().peer_timestamp)
+        # check if any peer within a reasonable synced timestamp is synced with us
+        for conn in connections:
+            assert conn.state is not None
+            assert isinstance(conn.state, ReadyState)
+            peer = conn.state.get_sync_plugin()
+            reasonable_timestamp = range(best_timestamp - peer.sync_threshold, best_timestamp + peer.sync_threshold)
+            if peer.synced_timestamp not in reasonable_timestamp:
+                continue
             if conn.state.is_synced():
                 return True
         return False
