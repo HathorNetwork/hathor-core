@@ -14,7 +14,12 @@ logger = get_logger()
 
 
 class APIError(HathorError):
-    pass
+    """Used for aborting and returning an error with optional status code."""
+    status_code: int
+
+    def __init__(self, msg, status_code=400):
+        super().__init__(msg)
+        self.status_code = status_code
 
 
 class Capabilities(enum.Enum):
@@ -52,7 +57,8 @@ class GetBlockTemplateResource(resource.Resource):
 
         if not self.manager.can_start_mining():
             self.log.debug('cannot generate Block Template, node syncing')
-            raise APIError('Node syncing')
+            # XXX: HTTP 503 Service Unavailable is suitable for temporary server errors
+            raise APIError('Node syncing', 503)
 
         # get block
         # XXX: miner can edit block data and output_script, so it's fine if address is None
