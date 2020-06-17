@@ -162,8 +162,13 @@ class BlockConsensusAlgorithm:
         if is_connected_to_the_head and is_connected_to_the_best_chain:
             # Case (i): Single best chain, connected to the head of the best chain
             self.update_score_and_mark_as_the_best_chain_if_possible(block)
-            # assert len(storage.get_best_block_tips(skip_cache=True)) == 1
-            storage._best_block_tips = [block.hash]
+            # As `update_score_and_mark_as_the_best_chain_if_possible` may affect `voided_by`,
+            # we need to check that block is not voided.
+            meta = block.get_metadata()
+            if not meta.voided_by:
+                storage._best_block_tips = [block.hash]
+            # The following assert must be true, but it is commented out for performance reasons.
+            #     assert len(storage.get_best_block_tips(skip_cache=True)) == 1
         else:
             # Resolve all other cases, but (i).
 
@@ -209,11 +214,20 @@ class BlockConsensusAlgorithm:
                 self.add_voided_by_to_multiple_chains(block, heads)
 
                 if score >= best_score + settings.WEIGHT_TOL:
-                    # We have a new winner.
+                    # We have a new winner candidate.
                     self.update_score_and_mark_as_the_best_chain_if_possible(block)
-                    storage._best_block_tips = [block.hash]
+                    # As `update_score_and_mark_as_the_best_chain_if_possible` may affect `voided_by`,
+                    # we need to check that block is not voided.
+                    meta = block.get_metadata()
+                    if not meta.voided_by:
+                        storage._best_block_tips = [block.hash]
                 else:
                     storage._best_block_tips = [blk.hash for blk in heads]
+
+        # Uncomment the following lines to check that the cache update is working properly.
+        # You shouldn't run this test in production because it dampens performance.
+        #     v = storage.get_best_block_tips(skip_cache=True)
+        #     assert v == storage._best_block_tips
 
     def union_voided_by_from_parents(self, block: 'Block') -> Set[bytes]:
         """Return the union of the voided_by of block's parents.
