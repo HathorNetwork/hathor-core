@@ -51,6 +51,7 @@ class TransactionStorage(ABC):
         self._weakref_lock: Lock = Lock()
 
         # Cache for the best block tips
+        # This cache is updated in the consensus algorithm.
         self._best_block_tips = []
 
         # Cache for the latest timestamp of all tips with merkle tree precalculated to be used on the sync algorithm
@@ -552,6 +553,9 @@ class BaseTransactionStorage(TransactionStorage):
         if with_index:
             self._reset_cache()
         self._genesis_cache: Optional[Dict[bytes, BaseTransaction]] = None
+
+        # Set initial value for _best_block_tips cache.
+        self._best_block_tips = [x.hash for x in self.get_all_genesis() if x.is_block]
 
         # Pubsub is used to publish tx voided and winner but it's optional
         self.pubsub = pubsub
