@@ -54,6 +54,8 @@ class TransactionStorage(ABC):
         self._best_block_tips = []
 
         # Cache for the latest timestamp of all tips with merkle tree precalculated to be used on the sync algorithm
+        # This cache is invalidated every time a new tx or block is added to the cache and
+        # self._all_tips_cache.timestamp is always self.latest_timestamp
         self._all_tips_cache: Optional[AllTipsCache] = None
 
     def _save_to_weakref(self, tx: BaseTransaction) -> None:
@@ -627,6 +629,7 @@ class BaseTransactionStorage(TransactionStorage):
             timestamp = self.latest_timestamp
 
         if self._all_tips_cache is not None and timestamp >= self._all_tips_cache.timestamp:
+            assert self._all_tips_cache.timestamp == self.latest_timestamp
             return self._all_tips_cache.tips
 
         tips = self.all_index.tips_index[timestamp]
