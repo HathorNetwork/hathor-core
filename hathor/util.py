@@ -16,9 +16,10 @@ limitations under the License.
 
 import warnings
 from collections import OrderedDict
-from enum import Enum
-from functools import partial, wraps
-from typing import Any, Callable, Deque, Dict, Iterable, Iterator, Tuple, TypeVar, cast
+from enum import Enum, Flag
+from functools import partial, reduce, wraps
+from operator import or_
+from typing import Any, Callable, Deque, Dict, Iterable, Iterator, Tuple, Type, TypeVar, cast
 
 from structlog import get_logger
 from twisted.internet.interfaces import IReactorCore
@@ -281,3 +282,13 @@ def api_catch_exceptions(func: Callable[..., bytes]) -> Callable[..., bytes]:
         except HathorError as e:
             return json_dumpb({'error': str(e)})
     return wrapper
+
+
+# adapted from https://stackoverflow.com/a/42253518/947511
+def enum_flag_all_none(enumeration: Type[Flag]) -> Type[Flag]:
+    """Add NONE and ALL pseudo-members to enum.Flag classes"""
+    none_mbr = enumeration(0)
+    all_mbr = enumeration(reduce(or_, enumeration))
+    enumeration._member_map_['NONE'] = none_mbr  # type: ignore
+    enumeration._member_map_['ALL'] = all_mbr  # type: ignore
+    return enumeration
