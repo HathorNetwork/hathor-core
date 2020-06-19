@@ -5,7 +5,6 @@ from twisted.internet.defer import inlineCallbacks
 from hathor.crypto.util import decode_address
 from hathor.p2p.resources import MiningResource
 from hathor.transaction import Transaction, TxInput, TxOutput
-from hathor.transaction.genesis import get_genesis_transactions
 from hathor.transaction.resources import PushTxResource
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.wallet.resources import BalanceResource, HistoryResource, SendTokensResource
@@ -91,7 +90,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data['success'])
 
         # Invalid tx (don't have inputs)
-        genesis_tx = get_genesis_transactions(self.manager.tx_storage)[1]
+        genesis_tx = next(x for x in self.manager.tx_storage.get_all_genesis() if x.is_transaction)
         response_genesis = yield self.web.get('push_tx', {b'hex_tx': bytes(genesis_tx.get_struct().hex(), 'utf-8')})
         data_genesis = response_genesis.json_value()
         self.assertFalse(data_genesis['success'])

@@ -16,7 +16,6 @@ from hathor.transaction.exceptions import (
     TimeLocked,
     VerifyFailed,
 )
-from hathor.transaction.genesis import get_genesis_transactions
 from hathor.transaction.scripts import (
     P2PKH,
     HathorScript,
@@ -44,6 +43,7 @@ from hathor.transaction.scripts import (
     op_pushdata1,
     re_compile,
 )
+from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet import HDWallet
 from tests import unittest
 from tests.utils import get_genesis_key
@@ -52,8 +52,9 @@ from tests.utils import get_genesis_key
 class BasicTransaction(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        self.genesis_blocks = [tx for tx in get_genesis_transactions(None) if tx.is_block]
-        self.genesis_txs = [tx for tx in get_genesis_transactions(None) if not tx.is_block]
+        tx_storage = TransactionMemoryStorage()
+        self.genesis_blocks = [tx for tx in tx_storage.get_all_genesis() if tx.is_block]
+        self.genesis_txs = [tx for tx in tx_storage.get_all_genesis() if not tx.is_block]
 
         # read genesis keys
         self.genesis_private_key = get_genesis_key()
@@ -445,7 +446,7 @@ class BasicTransaction(unittest.TestCase):
         with self.assertRaises(MissingStackItems):
             op_checkmultisig([], log=[], extras=None)
 
-        block = [x for x in get_genesis_transactions(None) if x.is_block][0]
+        block = self.genesis_blocks[0]
 
         from hathor.transaction import Transaction, TxInput, TxOutput
         txin = TxInput(tx_id=block.hash, index=0, data=b'')

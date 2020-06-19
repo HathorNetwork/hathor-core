@@ -42,27 +42,17 @@ class TransactionMemoryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
     def _save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         assert tx.hash is not None
         if not only_metadata:
-            if not tx.is_genesis:
-                self.transactions[tx.hash] = self._clone(tx)
+            self.transactions[tx.hash] = self._clone(tx)
         meta = getattr(tx, '_metadata', None)
         if meta:
             self.metadata[tx.hash] = self._clone(meta)
 
     @deprecated('Use transaction_exists_deferred instead')
     def transaction_exists(self, hash_bytes: bytes) -> bool:
-        genesis = self.get_genesis(hash_bytes)
-        if genesis:
-            return True
         return hash_bytes in self.transactions
 
     @deprecated('Use get_transaction_deferred instead')
     def _get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
-        genesis = self.get_genesis(hash_bytes)
-        if genesis:
-            if hash_bytes in self.metadata:
-                genesis._metadata = self._clone(self.metadata[hash_bytes])
-            return genesis
-
         if hash_bytes in self.transactions:
             tx = self._clone(self.transactions[hash_bytes])
             if hash_bytes in self.metadata:
@@ -73,11 +63,6 @@ class TransactionMemoryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
 
     @deprecated('Use get_all_transactions_deferred instead')
     def get_all_transactions(self) -> Iterator[BaseTransaction]:
-        for tx in self.get_all_genesis():
-            # Genesis metadata is not saved in the storage because they are kept in memory
-            # so we don't need to take care of it here
-            tx = self._clone(tx)
-            yield tx
         for tx in self.transactions.values():
             tx = self._clone(tx)
             if tx.hash in self.metadata:
@@ -86,5 +71,4 @@ class TransactionMemoryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
 
     @deprecated('Use get_count_tx_blocks_deferred instead')
     def get_count_tx_blocks(self) -> int:
-        genesis_len = len(self.get_all_genesis())
-        return len(self.transactions) + genesis_len
+        return len(self.transactions)

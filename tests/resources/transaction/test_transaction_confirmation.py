@@ -1,6 +1,5 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.transaction.genesis import get_genesis_transactions
 from hathor.transaction.resources import TransactionAccWeightResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
@@ -14,7 +13,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_get_data(self):
-        genesis_tx = get_genesis_transactions(self.manager.tx_storage)[1]
+        genesis_tx = next(x for x in self.manager.tx_storage.get_all_genesis() if x.is_transaction)
         response_success = yield self.web.get(
             "transaction_acc_weight",
             {b'id': bytes(genesis_tx.hash.hex(), 'utf-8')}
@@ -52,7 +51,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_blocks_are_blocked(self):
-        genesis_tx = get_genesis_transactions(self.manager.tx_storage)[0]
+        genesis_tx = next(x for x in self.manager.tx_storage.get_all_genesis() if x.is_block)
         response_success = yield self.web.get(
             "transaction_acc_weight",
             {b'id': bytes(genesis_tx.hash.hex(), 'utf-8')}

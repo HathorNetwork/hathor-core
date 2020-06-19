@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Any, Generator, Iterator, Set
+from typing import TYPE_CHECKING, Any, Generator, Iterator, Optional, Set
 
 from twisted.internet import threads
 from twisted.internet.defer import Deferred, inlineCallbacks, succeed
@@ -51,8 +51,10 @@ class TransactionCacheStorage(BaseTransactionStorage):
         # dirty_txs has the txs that have been modified but are not persisted yet
         self.dirty_txs = set()  # Set[bytes(hash)]
         self.stats = dict(hit=0, miss=0)
+
+        # we need to use only one weakref dict, so we must first initialize super, and then
+        # attribute the same weakref for both.
         super().__init__()
-        # we need to use only one weakref dict
         self._tx_weakref = store._tx_weakref
 
     def _clone(self, x: BaseTransaction) -> BaseTransaction:
@@ -115,6 +117,9 @@ class TransactionCacheStorage(BaseTransactionStorage):
         # call super which adds to index if needed
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
 
+    def get_all_genesis(self) -> Set[BaseTransaction]:
+        return self.store.get_all_genesis()
+
     def _save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         """Saves the transaction without modifying TimestampIndex entries (in superclass)."""
         assert tx.hash is not None
@@ -150,16 +155,22 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
     @deprecated('Use get_transaction_deferred instead')
     def _get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
+        tx: Optional[BaseTransaction]
         if hash_bytes in self.cache:
             tx = self._clone(self.cache[hash_bytes])
             self.cache.move_to_end(hash_bytes, last=True)
             self.stats['hit'] += 1
         else:
-            tx = skip_warning(self.store.get_transaction)(hash_bytes)
-            tx.storage = self
+            tx = self.get_transaction_from_weakref(hash_bytes)
+            if tx is not None:
+                self.stats['hit'] += 1
+            else:
+                tx = skip_warning(self.store.get_transaction)(hash_bytes)
+                tx.storage = self
+                self.stats['miss'] += 1
             self._update_cache(tx)
-            self.stats['miss'] += 1
         self._save_to_weakref(tx)
+        assert tx is not None
         return tx
 
     @deprecated('Use get_all_transactions_deferred instead')
@@ -177,9 +188,6 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
     @inlineCallbacks
     def save_transaction_deferred(self, tx: BaseTransaction, *, only_metadata: bool = False) -> Iterator[Deferred]:
-        if tx.is_genesis and only_metadata:
-            return
-
         # TODO: yield self._save_transaction_deferred
         self._save_transaction(tx)
 

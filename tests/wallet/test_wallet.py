@@ -7,7 +7,6 @@ from cryptography.hazmat.primitives import serialization
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key, get_private_key_bytes
 from hathor.transaction import Transaction, TxInput
-from hathor.transaction.genesis import get_genesis_transactions
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet import Wallet
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
@@ -66,7 +65,7 @@ class BasicWallet(unittest.TestCase):
         keys[key_pair.address] = key_pair
         w = Wallet(keys=keys, directory=self.directory)
         w.unlock(PASSWORD)
-        genesis_blocks = [tx for tx in get_genesis_transactions(None) if tx.is_block]
+        genesis_blocks = [tx for tx in self.storage.get_all_genesis() if tx.is_block]
         genesis_block = genesis_blocks[0]
         genesis_value = sum([output.value for output in genesis_block.outputs])
 
@@ -171,7 +170,7 @@ class BasicWallet(unittest.TestCase):
     def test_separate_inputs(self):
         block = add_new_block(self.manager, advance_clock=5)
         my_input = TxInput(block.hash, 0, b'')
-        genesis_blocks = [tx for tx in get_genesis_transactions(None) if tx.is_block]
+        genesis_blocks = [tx for tx in self.storage.get_all_genesis() if tx.is_block]
         genesis_block = genesis_blocks[0]
         other_input = TxInput(genesis_block.hash, 0, b'')
         my_inputs, other_inputs = self.manager.wallet.separate_inputs([my_input, other_input], self.manager.tx_storage)
