@@ -12,7 +12,7 @@ from hathor.exception import HathorError
 from hathor.indexes import TransactionIndexElement, TransactionsIndex
 from hathor.transaction import Block
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.transaction.storage.transaction_storage import TransactionStorage
+from hathor.transaction.storage.transaction_storage import AllTipsCache, TransactionStorage
 from hathor.util import deprecated, skip_warning
 
 if TYPE_CHECKING:
@@ -103,6 +103,8 @@ class TransactionRemoteStorage(TransactionStorage):
         self._channel = None
         self._genesis_cache: Dict[bytes, BaseTransaction] = None
         self.with_index = with_index
+        # Set initial value for _best_block_tips cache.
+        self._best_block_tips = [x.hash for x in self.get_all_genesis() if x.is_block]
 
     def _create_genesis_cache(self) -> None:
         from hathor.transaction.genesis import get_genesis_transactions
@@ -277,11 +279,20 @@ class TransactionRemoteStorage(TransactionStorage):
         if isinstance(timestamp, float) and timestamp != inf:
             self.log.warn('timestamp given in float will be truncated, use int instead')
             timestamp = int(timestamp)
+
+        if self._all_tips_cache is not None and timestamp is not None and timestamp >= self._all_tips_cache.timestamp:
+            return self._all_tips_cache.tips
+
         request = protos.ListTipsRequest(tx_type=protos.ANY_TYPE, timestamp=timestamp)
         result = self._stub.ListTips(request)
         tips = set()
         for interval_proto in result:
             tips.add(Interval(interval_proto.begin, interval_proto.end, interval_proto.data))
+
+        if timestamp is not None and timestamp >= self.latest_timestamp:
+            merkle_tree, hashes = self.calculate_merkle_tree(tips)
+            self._all_tips_cache = AllTipsCache(self.latest_timestamp, tips, merkle_tree, hashes)
+
         return tips
 
     @convert_grpc_exceptions
