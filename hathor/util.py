@@ -255,7 +255,7 @@ class MaxSizeOrderedDict(OrderedDict):
                 self.popitem(False)
 
 
-def json_loadb(raw: bytes) -> object:
+def json_loadb(raw: bytes) -> Dict:
     """Compact loading raw as UTF-8 encoded bytes to a Python object."""
     import json
     # XXX: from Python3.6 onwards, json.loads can take bytes
@@ -266,7 +266,7 @@ def json_loadb(raw: bytes) -> object:
 def json_dumpb(obj: object) -> bytes:
     """Compact formating obj as JSON to UTF-8 encoded bytes."""
     import json
-    return json.dumps(obj, separators=(',', ':')).encode('utf-8')
+    return json.dumps(obj, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
 
 
 def api_catch_exceptions(func: Callable[..., bytes]) -> Callable[..., bytes]:
@@ -276,16 +276,25 @@ def api_catch_exceptions(func: Callable[..., bytes]) -> Callable[..., bytes]:
     """
     from hathor.exception import HathorError
     from twisted.web.http import Request
+    from twisted.web.resource import Resource
+    from autobahn.twisted.websocket import WebSocketAdapterProtocol
 
     @wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return func(*args, **kwargs)
         except HathorError as e:
-            request = args[1]
-            assert isinstance(request, Request)
-            request.setResponseCode(getattr(e, 'status_code', 500))
-            return json_dumpb({'error': str(e)})
+            self = args[0] if len(args) > 0 else None
+            if isinstance(self, Resource):
+                request = args[1] if len(args) > 1 else None
+                assert isinstance(request, Request)
+                request.setResponseCode(getattr(e, 'status_code', 500))
+                return json_dumpb({'error': str(e)})
+            elif isinstance(self, WebSocketAdapterProtocol):
+                self.sendClose(reason=json_dumpb({'error': str(e)}))
+            else:
+                logger.error('could not handle error', args=args, error=e)
+                raise  # reraise because we don't know how to handle this
     return wrapper
 
 

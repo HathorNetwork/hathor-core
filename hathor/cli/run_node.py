@@ -240,6 +240,7 @@ class RunNode:
             NanoContractMatchValueResource,
         )
         from hathor.websocket import HathorAdminWebsocketFactory, WebsocketStatsResource
+        from hathor.mining.ws import MiningWebsocketFactory
         from hathor.stratum.resources import MiningStatsResource
 
         settings = HathorSettings()
@@ -331,8 +332,11 @@ class RunNode:
             ws_factory = HathorAdminWebsocketFactory(metrics=self.manager.metrics,
                                                      wallet_index=self.manager.tx_storage.wallet_index)
             ws_factory.start()
-            resource = WebSocketResource(ws_factory)
-            root.putChild(b"ws", resource)
+            root.putChild(b'ws', WebSocketResource(ws_factory))
+
+            # Mining websocket resource
+            mining_ws_factory = MiningWebsocketFactory(self.manager)
+            root.putChild(b'mining_ws', WebSocketResource(mining_ws_factory))
 
             ws_factory.subscribe(self.manager.pubsub)
 
