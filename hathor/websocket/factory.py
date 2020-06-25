@@ -54,6 +54,14 @@ ADDRESS_EVENTS = [
     HathorEvents.WALLET_ELEMENT_VOIDED.value
 ]
 
+# Possible channels that can be subscribed on the websocket
+# Each channel has a list of events that emits.
+CHANNELS = {
+    'wallet-service': [
+        HathorEvents.NETWORK_NEW_TX_ACCEPTED.value,
+    ]
+}
+
 
 class HathorAdminWebsocketFactory(WebSocketServerFactory):
     """ Factory of the admin websocket protocol so we can subscribe to events and
@@ -72,6 +80,9 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         # Opened websocket connections so I can broadcast messages later
         self.connections: Set[HathorAdminWebsocketProtocol] = set()
 
+        # Connections that are subscribed for each channel
+        self.subscribed_connections: DefaultDict[str, Set[HathorAdminWebsocketProtocol]] = defaultdict(set)
+
         # Websocket connection for each address
         self.address_connections: DefaultDict[str, Set[HathorAdminWebsocketProtocol]] = defaultdict(set)
         super().__init__()
@@ -85,6 +96,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         self.wallet_index = wallet_index
 
         self.is_running = False
+
 
     def start(self):
         self.is_running = True
@@ -226,6 +238,22 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         else:
             self.send_message(data)
 
+        # Check if the data is supposed to be sent in one of the subscribed channels
+        # Even though it's better for the code to have a dict with the event type as the key
+        # and the channels as the value (EVENTS[event] would be an array of channels to send)
+        # it seems more logical to think which events each channel needs
+        # So, since the dict and the arrays are not going to be big, I think it's better
+        # to keep more logical to fill the dict in case we add a new channel
+        for key, value in CHANNELS.items():
+            if data['type'] in value:
+                self.send_message_channel(data, key)
+
+    def send_message_channel(self, data: Dict[str, Any], channel: str) -> None:
+        """ Send the data for all the connections of the channel
+        """
+        for connection in self.subscribed_connections[channel]:
+            self.execute_send(data, [connection])
+
     def enqueue_for_later(self, data):
         """ Add this date to the correct deque to be processed later
             If this deque is not programed to be called later yet, we call it
@@ -271,6 +299,8 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             self._handle_subscribe_address(connection, message)
         elif message['type'] == 'unsubscribe_address':
             self._handle_unsubscribe_address(connection, message)
+        elif message['type'] == 'subscribe':
+            self._handle_subscribe_channel(connection, message)
 
     def _handle_ping(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
         """ Handler for ping message, should respond with a simple {"type": "pong"}"""
@@ -314,13 +344,36 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         if len(self.address_connections[address]) == 0:
             del self.address_connections[address]
 
+    def _handle_subscribe_channel(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
+        """ Handler for subscription to a channel."""
+        channel: str = message['channel']
+        if channel in CHANNELS:
+            # Remove from the all connections set
+            self.connections.remove(connection)
+            # Add the connection to the set
+            self.subscribed_connections[channel].add(connection)
+        # Reply back as subscribed success
+        payload = json.dumps({'type': 'subscribed', 'channel': channel, 'success': True}).encode('utf-8')
+        connection.sendMessage(payload, False)
+
     def connection_closed(self, connection: HathorAdminWebsocketProtocol) -> None:
         """ Called when a ws connection is closed
             We should remove it from self.connections and from self.address_connections set for each address
         """
-        self.connections.remove(connection)
+        if connection in self.connections:
+            # With connections subscribing to an specific channel, we need to do this check
+            # In the future all connections should subscribe to channels
+            self.connections.remove(connection)
+
         for address in connection.subscribed_to:
             self._remove_connection_from_address_dict(connection, address)
+
+        # Removing from subsbribed channels set
+        # Should we have an easier way to check in each channels the connections is subscribed to?
+        # For now we have only one channel, so this shouldn't be a problem
+        for conn_set in self.subscribed_connections.values():
+            if connection in conn_set:
+                conn_set.remove(connection)
 
 
 def _count_empty(addresses: Set[str], wallet_index: WalletIndex) -> int:
