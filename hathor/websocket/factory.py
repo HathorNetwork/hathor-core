@@ -97,7 +97,6 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
 
         self.is_running = False
 
-
     def start(self):
         self.is_running = True
 
@@ -251,8 +250,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
     def send_message_channel(self, data: Dict[str, Any], channel: str) -> None:
         """ Send the data for all the connections of the channel
         """
-        for connection in self.subscribed_connections[channel]:
-            self.execute_send(data, [connection])
+        self.execute_send(data, self.subscribed_connections[channel])
 
     def enqueue_for_later(self, data):
         """ Add this date to the correct deque to be processed later
