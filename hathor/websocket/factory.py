@@ -54,13 +54,28 @@ ADDRESS_EVENTS = [
     HathorEvents.WALLET_ELEMENT_VOIDED.value
 ]
 
-# Possible channels that can be subscribed on the websocket
-# Each channel has a list of events that emits.
-CHANNELS = {
-    'wallet-service': [
-        HathorEvents.NETWORK_NEW_TX_ACCEPTED.value,
-    ]
-}
+# All pubsub events we will subscribe to receive and send in the websocket
+PUBSUB_EVENTS = [
+    HathorEvents.NETWORK_NEW_TX_ACCEPTED,
+    HathorEvents.WALLET_OUTPUT_RECEIVED,
+    HathorEvents.WALLET_INPUT_SPENT,
+    HathorEvents.WALLET_BALANCE_UPDATED,
+    HathorEvents.WALLET_KEYS_GENERATED,
+    HathorEvents.WALLET_GAP_LIMIT,
+    HathorEvents.WALLET_HISTORY_UPDATED,
+    HathorEvents.WALLET_ADDRESS_HISTORY,
+    HathorEvents.WALLET_ELEMENT_WINNER,
+    HathorEvents.WALLET_ELEMENT_VOIDED,
+]
+
+# All ws messages that will be sent
+# We have all the pubsub events plus some custom ws messages
+WS_MESSAGES = [
+    'dashboard:metrics',
+]
+
+for pubsub_event in PUBSUB_EVENTS:
+    WS_MESSAGES.append(pubsub_event.value)
 
 
 class HathorAdminWebsocketFactory(WebSocketServerFactory):
@@ -80,7 +95,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         # Opened websocket connections so I can broadcast messages later
         self.connections: Set[HathorAdminWebsocketProtocol] = set()
 
-        # Connections that are subscribed for each channel
+        # Connections that are subscribed for each message
         self.subscribed_connections: DefaultDict[str, Set[HathorAdminWebsocketProtocol]] = defaultdict(set)
 
         # Websocket connection for each address
@@ -140,20 +155,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
     def subscribe(self, pubsub):
         """ Subscribe to defined events for the pubsub received
         """
-        events = [
-            HathorEvents.NETWORK_NEW_TX_ACCEPTED,
-            HathorEvents.WALLET_OUTPUT_RECEIVED,
-            HathorEvents.WALLET_INPUT_SPENT,
-            HathorEvents.WALLET_BALANCE_UPDATED,
-            HathorEvents.WALLET_KEYS_GENERATED,
-            HathorEvents.WALLET_GAP_LIMIT,
-            HathorEvents.WALLET_HISTORY_UPDATED,
-            HathorEvents.WALLET_ADDRESS_HISTORY,
-            HathorEvents.WALLET_ELEMENT_WINNER,
-            HathorEvents.WALLET_ELEMENT_VOIDED,
-        ]
-
-        for event in events:
+        for event in PUBSUB_EVENTS:
             pubsub.subscribe(event, self.handle_publish)
 
     def handle_publish(self, key, args):
@@ -237,20 +239,8 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         else:
             self.send_message(data)
 
-        # Check if the data is supposed to be sent in one of the subscribed channels
-        # Even though it's better for the code to have a dict with the event type as the key
-        # and the channels as the value (EVENTS[event] would be an array of channels to send)
-        # it seems more logical to think which events each channel needs
-        # So, since the dict and the arrays are not going to be big, I think it's better
-        # to keep more logical to fill the dict in case we add a new channel
-        for key, value in CHANNELS.items():
-            if data['type'] in value:
-                self.send_message_channel(data, key)
-
-    def send_message_channel(self, data: Dict[str, Any], channel: str) -> None:
-        """ Send the data for all the connections of the channel
-        """
-        self.execute_send(data, self.subscribed_connections[channel])
+        # Send message to each connection that subscribed to it
+        self.execute_send(data, self.subscribed_connections[data['type']])
 
     def enqueue_for_later(self, data):
         """ Add this date to the correct deque to be processed later
@@ -298,7 +288,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         elif message['type'] == 'unsubscribe_address':
             self._handle_unsubscribe_address(connection, message)
         elif message['type'] == 'subscribe':
-            self._handle_subscribe_channel(connection, message)
+            self._handle_subscribe(connection, message)
 
     def _handle_ping(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
         """ Handler for ping message, should respond with a simple {"type": "pong"}"""
@@ -342,16 +332,19 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         if len(self.address_connections[address]) == 0:
             del self.address_connections[address]
 
-    def _handle_subscribe_channel(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
-        """ Handler for subscription to a channel."""
-        channel: str = message['channel']
-        if channel in CHANNELS:
+    def _handle_subscribe(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
+        """ Handler for subscription to a ws message."""
+        ws_message: Optional[str] = message.get('message')
+        if ws_message is None:
+            # No message key
+            return
+        if ws_message in WS_MESSAGES:
             # Remove from the all connections set
             self.connections.remove(connection)
             # Add the connection to the set
-            self.subscribed_connections[channel].add(connection)
+            self.subscribed_connections[ws_message].add(connection)
         # Reply back as subscribed success
-        payload = json.dumps({'type': 'subscribed', 'channel': channel, 'success': True}).encode('utf-8')
+        payload = json.dumps({'type': 'subscribed', 'message': ws_message, 'success': True}).encode('utf-8')
         connection.sendMessage(payload, False)
 
     def connection_closed(self, connection: HathorAdminWebsocketProtocol) -> None:
