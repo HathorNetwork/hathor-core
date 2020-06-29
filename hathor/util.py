@@ -22,6 +22,7 @@ from operator import or_
 from typing import Any, Callable, Deque, Dict, Iterable, Iterator, Tuple, Type, TypeVar, cast
 
 from structlog import get_logger
+from twisted.internet.defer import ensureDeferred
 from twisted.internet.interfaces import IReactorCore
 from twisted.python.threadable import isInIOThread
 
@@ -296,3 +297,12 @@ def enum_flag_all_none(enumeration: Type[Flag]) -> Type[Flag]:
     enumeration._member_map_['NONE'] = none_mbr  # type: ignore
     enumeration._member_map_['ALL'] = all_mbr  # type: ignore
     return enumeration
+
+
+def ensure_deferred(f):
+    """Decorator to convert an `async def` function into a `-> Deferred` function that can be used by twisted."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        result = f(*args, **kwargs)
+        return ensureDeferred(result)
+    return wrapper

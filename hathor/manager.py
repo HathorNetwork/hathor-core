@@ -20,15 +20,15 @@ import random
 import time
 from enum import Enum, IntFlag
 from math import log
-from typing import Any, List, Optional, Type, Union, cast
+from typing import Any, Generator, List, Optional, Type, Union, cast
 
 from structlog import get_logger
 from twisted.internet import defer
-from twisted.internet.defer import Deferred
+from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.internet.interfaces import IReactorCore
+from twisted.internet.task import deferLater
 from twisted.python.threadpool import ThreadPool
 
-import hathor.util
 from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.exception import InvalidNewTransaction
@@ -41,6 +41,7 @@ from hathor.stratum import StratumFactory
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, TxOutput, sum_weights
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
+from hathor.util import _get_tokens_issued_per_block, iwindows
 from hathor.wallet import BaseWallet
 
 settings = HathorSettings()
@@ -61,11 +62,17 @@ class HathorManager:
     """
 
     class NodeState(Enum):
+        # Initial state, node has not started loading
+        INITIAL = 'INITIAL'
+
         # This node is still initializing
-        INITIALIZING = 'INITIALIZING'
+        LOADING = 'LOADING'
 
         # This node is ready to establish new connections, sync, and exchange transactions.
         READY = 'READY'
+
+        def ready(self) -> bool:
+            return self == HathorManager.NodeState.READY
 
     def __init__(self, reactor: IReactorCore, peer_id: Optional[PeerId] = None, network: Optional[str] = None,
                  hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
@@ -113,7 +120,7 @@ class HathorManager:
         if hasattr(self.reactor, 'addSystemEventTrigger'):
             self.reactor.addSystemEventTrigger('after', 'shutdown', self.stop)
 
-        self.state: Optional[HathorManager.NodeState] = None
+        self.state: HathorManager.NodeState = HathorManager.NodeState.INITIAL
         self.profiler: Optional[Any] = None
 
         # Hostname, used to be accessed by other peers.
@@ -173,18 +180,22 @@ class HathorManager:
         # List of addresses to listen for new connections (eg: [tcp:8000])
         self.listen_addresses: List[str] = []
 
-    def start(self) -> None:
+        self._started = False
+        self.start_time = time.time()
+
+    @inlineCallbacks
+    def start(self) -> Generator[Any, Any, None]:
         """ A factory must be started only once. And it is usually automatically started.
         """
         self.log.info('Starting HathorManager...')
         self.log.info('Network: {network}', network=self.network)
-        self.state = self.NodeState.INITIALIZING
+        self.state = self.NodeState.LOADING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
         self.connections.start()
         self.pow_thread_pool.start()
 
         # Initialize manager's components.
-        self._initialize_components()
+        yield self._initialize_components()
 
         for description in self.listen_addresses:
             self.listen(description, ssl=self.ssl)
@@ -203,7 +214,11 @@ class HathorManager:
         if self.stratum_factory:
             self.stratum_factory.start()
 
+        self._started = True
+
     def stop(self) -> Deferred:
+        if not self._started:
+            return
         waits = []
 
         self.log.info('Stopping HathorManager...')
@@ -246,7 +261,8 @@ class HathorManager:
         if save_to:
             self.profiler.dump_stats(save_to)
 
-    def _initialize_components(self) -> None:
+    @inlineCallbacks
+    def _initialize_components(self) -> Generator[Any, Any, None]:
         """You are not supposed to run this method manually. You should run `doStart()` to initialize the
         manager.
 
@@ -257,6 +273,7 @@ class HathorManager:
             self.wallet._manually_initialize()
         t0 = time.time()
         t1 = t0
+        t1b = t0
         cnt = 0
 
         # self.start_profiler()
@@ -264,7 +281,10 @@ class HathorManager:
             assert tx.hash is not None
 
             t2 = time.time()
-            if t2 - t1 > 5:
+            if t2 - t1b > 1:
+                yield deferLater(self.reactor, 0, lambda: None)  # temporarily yield control to eventloop
+                t1b = t2
+            if t2 - t1 > 30:
                 ts_date = datetime.datetime.fromtimestamp(self.tx_storage.latest_timestamp)
                 self.log.info(
                     'Verifying transations in storage... avg={avg:.4f} tx/s total={total} (latest timedate: {ts})',
@@ -394,7 +414,7 @@ class HathorManager:
 
     def get_tokens_issued_per_block(self, height: int) -> int:
         """Return the number of tokens issued (aka reward) per block of a given height."""
-        return hathor.util._get_tokens_issued_per_block(height)
+        return _get_tokens_issued_per_block(height)
 
     def validate_new_tx(self, tx: BaseTransaction) -> bool:
         """ Process incoming transaction during initialization.
@@ -402,7 +422,7 @@ class HathorManager:
         """
         assert tx.hash is not None
 
-        if self.state == self.NodeState.INITIALIZING:
+        if not self.state.ready():
             if tx.is_genesis:
                 return True
 
@@ -476,7 +496,7 @@ class HathorManager:
         :rtype: bool
         """
         assert tx.hash is not None
-        if self.state != self.NodeState.INITIALIZING:
+        if self.state.ready():
             if self.tx_storage.transaction_exists(tx.hash):
                 if not fails_silently:
                     raise InvalidNewTransaction('Transaction already exists {}'.format(tx.hash.hex()))
@@ -492,7 +512,7 @@ class HathorManager:
                 raise
             return False
 
-        if self.state != self.NodeState.INITIALIZING:
+        if self.state.ready():
             self.tx_storage.save_transaction(tx)
         else:
             tx.reset_metadata()
@@ -580,7 +600,7 @@ class HathorManager:
         assert len(blocks) == N + 1
         solvetimes, weights = zip(*(
             (block.timestamp - prev_block.timestamp, block.weight)
-            for prev_block, block in hathor.util.iwindows(blocks, 2)
+            for prev_block, block in iwindows(blocks, 2)
         ))
         assert len(solvetimes) == len(weights) == N, f'got {len(solvetimes)}, {len(weights)} expected {N}'
 

@@ -191,11 +191,10 @@ class RunNode:
         for description in args.listen:
             self.manager.add_listen_address(description)
 
-        self.start_manager()
         self.register_resources(args)
 
     def start_manager(self) -> None:
-        self.manager.start()
+        reactor.callLater(0, self.manager.start)
 
     def register_resources(self, args: Namespace) -> None:
         from hathor.conf import HathorSettings
@@ -359,6 +358,7 @@ class RunNode:
         return self.parser.parse_args(argv)
 
     def run(self) -> None:
+        self.start_manager()
         reactor.run()
 
 
