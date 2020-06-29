@@ -275,11 +275,15 @@ def api_catch_exceptions(func: Callable[..., bytes]) -> Callable[..., bytes]:
     Useful for annotating API methods and reduce error handling boilerplate.
     """
     from hathor.exception import HathorError
+    from twisted.web.http import Request
     @wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return func(*args, **kwargs)
         except HathorError as e:
+            request = args[1]
+            assert isinstance(request, Request)
+            request.setResponseCode(getattr(e, 'status_code', 500))
             return json_dumpb({'error': str(e)})
     return wrapper
 
