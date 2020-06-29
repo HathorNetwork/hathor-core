@@ -15,11 +15,10 @@
 import asyncio
 from asyncio import Future
 from contextlib import suppress
-from functools import wraps
 from typing import Any, Awaitable, Callable, Dict, Optional, Tuple, Union
 
 from structlog import get_logger
-from twisted.internet.defer import Deferred, ensureDeferred
+from twisted.internet.defer import Deferred
 
 logger = get_logger()
 
@@ -84,11 +83,3 @@ def as_future(d: Deferred) -> Callable[..., Awaitable[Any]]:
 def as_deferred(f: Awaitable[Any]) -> Deferred:
     """Convert asyncio future to twisted deferred."""
     return Deferred.fromFuture(asyncio.ensure_future(f))
-
-
-def ensure_deferred(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        result = f(*args, **kwargs)
-        return ensureDeferred(result)
-    return wrapper

@@ -4,7 +4,8 @@ from typing import Any, Dict, List
 from hathor.client import HathorClientStub
 from hathor.merged_mining import MergedMiningCoordinator
 from hathor.merged_mining.bitcoin_rpc import IBitcoinRPC
-from hathor.merged_mining.util import as_deferred, ensure_deferred
+from hathor.merged_mining.util import as_deferred
+from hathor.util import ensure_deferred
 from tests import unittest
 
 
