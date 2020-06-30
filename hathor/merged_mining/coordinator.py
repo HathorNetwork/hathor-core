@@ -507,6 +507,8 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
             # TODO: authorization system
             login, _password = params
             self.send_result(True, msgid)
+        if self._subscribed:
+            self.set_difficulty(self.INITIAL_DIFFICULTY)
         self.login = login
         self._authorized = True
         self.log.info('Miner authorized')
@@ -541,7 +543,8 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         # session = str(self.miner_id)
         session = [['mining.set_difficulty', '1'], ['mining.notify', str(self.miner_id)]]
         self.send_result([session, self.xnonce1.hex(), self.xnonce2_size], msgid)
-        self.set_difficulty(self.INITIAL_DIFFICULTY)
+        if self._authorized:
+            self.set_difficulty(self.INITIAL_DIFFICULTY)
 
     def handle_multi_version(self, params: List[Any], msgid: Optional[str]) -> None:
         """ Handles multi_version requests
