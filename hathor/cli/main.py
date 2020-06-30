@@ -127,8 +127,16 @@ class CliManager:
             capture_stdout = False
         else:
             capture_stdout = getattr(module, 'LOGGING_CAPTURE_STDOUT', False)
-        setup_logging(debug, capture_stdout)
 
+        # Enable pudb to stop on an unhandled exception.
+        pudb = '--pudb' in sys.argv
+        if pudb:
+            sys.argv.remove('--pudb')
+            import pudb
+            pudb.set_trace(paused=False)
+            capture_stdout = False
+
+        setup_logging(debug, capture_stdout)
         module.main()
 
 

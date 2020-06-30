@@ -89,7 +89,7 @@ class TransactionStorage(ABC):
         if tx2 is None:
             self._tx_weakref[tx.hash] = tx
         else:
-            assert tx is tx2, 'There are two instance of the same transaction in memory ({})'.format(tx.hash_hex)
+            assert tx is tx2, 'There are two instances of the same transaction in memory ({})'.format(tx.hash_hex)
 
     def _remove_from_weakref(self, tx: BaseTransaction) -> None:
         """Remove transaction from weakref.
