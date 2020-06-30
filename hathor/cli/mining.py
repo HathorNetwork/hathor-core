@@ -33,6 +33,7 @@ def create_parser() -> ArgumentParser:
     parser.add_argument('--init-delay', type=float, help='Wait N seconds before starting (in seconds)', default=None)
     parser.add_argument('--sleep', type=float, help='Sleep every 2 seconds (in seconds)')
     parser.add_argument('--count', type=int, help='Quantity of blocks to be mined')
+    parser.add_argument('--address', help='Address to mine blocks')
     return parser
 
 
@@ -63,7 +64,10 @@ def execute(args: Namespace) -> None:
     while True:
         print('Requesting mining information...')
         try:
-            response = requests.get(args.url)
+            params = {}
+            if args.address:
+                params['address'] = args.address
+            response = requests.get(args.url, params=params)
         except ConnectionError as e:
             print('Error connecting to server: {}'.format(args.url))
             print(e)
@@ -92,6 +96,13 @@ def execute(args: Namespace) -> None:
             print('Waiting {} seconds to try again...'.format(_SLEEP_ON_ERROR_SECONDS))
             time.sleep(_SLEEP_ON_ERROR_SECONDS)
             continue
+
+        if 'block_bytes' not in data:
+            print('Something is wrong in the response.')
+            print(data)
+            time.sleep(_SLEEP_ON_ERROR_SECONDS)
+            continue
+
         block_bytes = base64.b64decode(data['block_bytes'])
         block = Block.create_from_struct(block_bytes)
         assert block.hash is not None
