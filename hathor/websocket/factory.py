@@ -146,7 +146,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             'type': 'dashboard:metrics',
             'time': reactor.seconds(),
         }
-        self.broadcast_message(data)
+        self.send_or_enqueue(data)
 
         if self.is_running:
             # Schedule next message
@@ -339,8 +339,10 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             # No message key
             return
         if ws_message in WS_MESSAGES:
-            # Remove from the all connections set
-            self.connections.remove(connection)
+            if connection in self.connections:
+                # Remove from the all connections set
+                # Only in the first message subscription will still be in the set
+                self.connections.remove(connection)
             # Add the connection to the set
             self.subscribed_connections[ws_message].add(connection)
         # Reply back as subscribed success
