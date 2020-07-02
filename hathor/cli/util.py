@@ -1,4 +1,8 @@
 from argparse import ArgumentParser
+from enum import Flag
+from functools import reduce
+from operator import or_
+from typing import Type
 
 import configargparse
 
@@ -176,3 +180,13 @@ def setup_logging(debug: bool = False, capture_stdout: bool = True, *, _test_log
         logger.warning('Test: warning.')
         logger.error('Test error.')
         logger.critical('Test: critical.')
+
+
+# adapted from https://stackoverflow.com/a/42253518/947511
+def enum_flag_all_none(enumeration: Type[Flag]) -> Type[Flag]:
+    """Add NONE and ALL pseudo-members to enum.Flag classes"""
+    none_mbr = enumeration(0)
+    all_mbr = enumeration(reduce(or_, enumeration))
+    enumeration._member_map_['NONE'] = none_mbr  # type: ignore
+    enumeration._member_map_['ALL'] = all_mbr  # type: ignore
+    return enumeration
