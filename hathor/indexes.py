@@ -47,13 +47,15 @@ class IndexesManager:
         self.tips_index = TipsIndex()
         self.txs_index = TransactionsIndex()
 
-    def add_tx(self, tx: BaseTransaction) -> None:
+    def add_tx(self, tx: BaseTransaction) -> bool:
         """ Add a transaction to the indexes
 
         :param tx: Transaction to be added
         """
-        self.tips_index.add_tx(tx)
-        self.txs_index.add_tx(tx)
+        r1 = self.tips_index.add_tx(tx)
+        r2 = self.txs_index.add_tx(tx)
+        assert r1 == r2
+        return r1
 
     def del_tx(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
         """ Delete a transaction from the indexes
@@ -121,7 +123,7 @@ class TipsIndex:
         self.tree = IntervalTree()
         self.tx_last_interval = {}  # Dict[bytes(hash), Interval]
 
-    def add_tx(self, tx: BaseTransaction) -> None:
+    def add_tx(self, tx: BaseTransaction) -> bool:
         """ Add a new transaction to the index
 
         :param tx: Transaction to be added
@@ -129,7 +131,7 @@ class TipsIndex:
         assert tx.hash is not None
         assert tx.storage is not None
         if tx.hash in self.tx_last_interval:
-            return
+            return False
 
         # Fix the end of the interval of its parents.
         for parent_hash in tx.parents:
@@ -155,6 +157,7 @@ class TipsIndex:
         interval = Interval(tx.timestamp, min_timestamp, tx.hash)
         self.tree.add(interval)
         self.tx_last_interval[tx.hash] = interval
+        return True
 
     def del_tx(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
         """ Remove a transaction from the index.
@@ -274,7 +277,7 @@ class TransactionsIndex:
         """
         self.transactions.update(values)
 
-    def add_tx(self, tx: BaseTransaction) -> None:
+    def add_tx(self, tx: BaseTransaction) -> bool:
         """ Add a transaction to the index
 
         :param tx: Transaction to be added
@@ -284,8 +287,9 @@ class TransactionsIndex:
         # http://www.grantjenks.com/docs/sortedcontainers/sortedlist.html#sortedcontainers.SortedList.__contains__
         element = TransactionIndexElement(tx.timestamp, tx.hash)
         if element in self.transactions:
-            return
+            return False
         self.transactions.add(element)
+        return True
 
     def del_tx(self, tx: BaseTransaction) -> None:
         """ Delete a transaction from the index

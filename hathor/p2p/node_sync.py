@@ -409,6 +409,7 @@ class NodeSyncTimestamp(Plugin):
             if cur <= self.manager.tx_storage.first_timestamp:
                 raise Exception('We cannot go before genesis. Is it an attacker?!')
             prev_cur = cur
+            assert self.manager.tx_storage.first_timestamp > 0
             cur = max(cur - step, self.manager.tx_storage.first_timestamp)
             tips = cast(TipsPayload, (yield self.get_peer_tips(cur)))
             local_merkle_tree, _ = self.manager.tx_storage.get_merkle_tree(cur)
@@ -731,4 +732,5 @@ class NodeSyncTimestamp(Plugin):
             We need this errback because otherwise the sync crashes when the deferred is canceled.
             We should just log a warning because it will continue the sync and will try to get this tx again.
         """
-        self.log.warn('sync-{p} failed to download tx hash={h}', p=self.short_peer_id, h=hash_bytes.hex())
+        self.log.warn('sync-{p} failed to download tx hash={h}, reason={reason}',
+                      p=self.short_peer_id, h=hash_bytes.hex(), reason=reason)

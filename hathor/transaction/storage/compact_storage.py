@@ -26,11 +26,12 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
     def __init__(self, path: str = './', with_index: bool = True):
         os.makedirs(path, exist_ok=True)
         self.path = path
-        super().__init__(with_index=with_index)
 
         filename_pattern = r'^tx_([\dabcdef]{64})\.json$'
         self.re_pattern = re.compile(filename_pattern)
         self.create_subfolders(self.path, settings.STORAGE_SUBFOLDERS)
+
+        super().__init__(with_index=with_index)
 
     def create_subfolders(self, path: str, num_subfolders: int) -> None:
         """ Create subfolders in the main tx storage folder.
@@ -60,17 +61,11 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
     @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
-        # genesis txs and metadata are kept in memory
-        if tx.is_genesis:
-            return
         self._save_transaction(tx, only_metadata=only_metadata)
         self._save_to_weakref(tx)
 
     def _save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
         assert tx.hash is not None
-        # genesis txs and metadata are kept in memory
-        if tx.is_genesis:
-            return
         data = {}
         data['tx'] = tx.to_json()
         meta = getattr(tx, '_metadata', None)
@@ -88,9 +83,6 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
 
     @deprecated('Use transaction_exists_deferred instead')
     def transaction_exists(self, hash_bytes: bytes) -> bool:
-        genesis = self.get_genesis(hash_bytes)
-        if genesis:
-            return True
         filepath = self.generate_filepath(hash_bytes)
         return os.path.isfile(filepath)
 
@@ -158,10 +150,6 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
 
     @deprecated('Use get_transaction_deferred instead')
     def _get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
-        genesis = self.get_genesis(hash_bytes)
-        if genesis:
-            return genesis
-
         tx = self.get_transaction_from_weakref(hash_bytes)
         if tx is not None:
             return tx
@@ -180,9 +168,6 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
     def get_all_transactions(self) -> Iterator['BaseTransaction']:
         tx: Optional['BaseTransaction']
 
-        for tx in self.get_all_genesis():
-            yield tx
-
         for f in glob.iglob(os.path.join(self.path, '*/*')):
             match = self.re_pattern.match(os.path.basename(f))
             if match:
@@ -193,6 +178,5 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
 
     @deprecated('Use get_count_tx_blocks_deferred instead')
     def get_count_tx_blocks(self) -> int:
-        genesis_len = len(self.get_all_genesis())
-        files = [f for f in glob.iglob(os.path.join(self.path, '*/*')) if self.re_pattern.match(f)]
-        return len(files) + genesis_len
+        files = [f for f in glob.iglob(os.path.join(self.path, '*/*')) if self.re_pattern.match(os.path.basename(f))]
+        return len(files)

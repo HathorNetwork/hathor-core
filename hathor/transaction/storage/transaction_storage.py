@@ -59,6 +59,26 @@ class TransactionStorage(ABC):
         # self._all_tips_cache.timestamp is always self.latest_timestamp
         self._all_tips_cache: Optional[AllTipsCache] = None
 
+        # Initialize cache for genesis transactions.
+        self._genesis_cache: Dict[bytes, BaseTransaction] = {}
+
+    def _save_or_verify_genesis(self) -> None:
+        """Save all genesis in the storage."""
+        for tx in self._get_genesis_from_settings():
+            try:
+                tx2 = self.get_transaction(tx.hash)
+                assert tx == tx2
+            except TransactionDoesNotExist:
+                self.save_transaction(tx)
+                tx2 = tx
+            assert tx2.hash is not None
+            self._genesis_cache[tx2.hash] = tx2
+
+    def _get_genesis_from_settings(self) -> List[BaseTransaction]:
+        """Return all genesis from settings."""
+        from hathor.transaction.genesis import _get_genesis_transactions_unsafe
+        return _get_genesis_transactions_unsafe(self)
+
     def _save_to_weakref(self, tx: BaseTransaction) -> None:
         """ Save transaction to weakref.
         """
@@ -69,7 +89,7 @@ class TransactionStorage(ABC):
         if tx2 is None:
             self._tx_weakref[tx.hash] = tx
         else:
-            assert tx is tx2, 'There are two instance of the same transaction in memory ({})'.format(tx.hash_hex)
+            assert tx is tx2, 'There are two instances of the same transaction in memory ({})'.format(tx.hash_hex)
 
     def _remove_from_weakref(self, tx: BaseTransaction) -> None:
         """Remove transaction from weakref.
@@ -169,7 +189,6 @@ class TransactionStorage(ABC):
 
         :param hash_bytes: Hash in bytes that will be checked.
         """
-
         lock = self._get_lock(hash_bytes)
         with lock:
             tx = self._get_transaction(hash_bytes)
@@ -549,16 +568,19 @@ class BaseTransactionStorage(TransactionStorage):
     def __init__(self, with_index: bool = True, pubsub: Optional[Any] = None) -> None:
         super().__init__()
 
+        # Pubsub is used to publish tx voided and winner but it's optional
+        self.pubsub = pubsub
+
+        # Initialize index if needed.
         self.with_index = with_index
         if with_index:
             self._reset_cache()
-        self._genesis_cache: Optional[Dict[bytes, BaseTransaction]] = None
+
+        # Either save or verify all genesis.
+        self._save_or_verify_genesis()
 
         # Set initial value for _best_block_tips cache.
         self._best_block_tips = [x.hash for x in self.get_all_genesis() if x.is_block]
-
-        # Pubsub is used to publish tx voided and winner but it's optional
-        self.pubsub = pubsub
 
     @property
     def latest_timestamp(self) -> int:
@@ -574,8 +596,7 @@ class BaseTransactionStorage(TransactionStorage):
 
     def _reset_cache(self) -> None:
         """Reset all caches. This function should not be called unless you know what you are doing."""
-        if not self.with_index:
-            raise NotImplementedError
+        assert self.with_index, 'Cannot reset cache because it has not been enabled.'
         self._cache_block_count = 0
         self._cache_tx_count = 0
 
@@ -585,9 +606,13 @@ class BaseTransactionStorage(TransactionStorage):
         self.wallet_index = None
         self.tokens_index = None
 
-        self._latest_timestamp = 0
-        from hathor.transaction.genesis import get_genesis_transactions
-        self._first_timestamp = min(x.timestamp for x in get_genesis_transactions(self))
+        genesis = self.get_all_genesis()
+        if genesis:
+            self._latest_timestamp = max(x.timestamp for x in genesis)
+            self._first_timestamp = min(x.timestamp for x in genesis)
+        else:
+            self._latest_timestamp = 0
+            self._first_timestamp = 0
 
     def remove_cache(self) -> None:
         """Remove all caches in case we don't need it."""
@@ -753,6 +778,11 @@ class BaseTransactionStorage(TransactionStorage):
         assert self.block_index is not None
         assert self.tx_index is not None
         self._latest_timestamp = max(self.latest_timestamp, tx.timestamp)
+        if self._first_timestamp == 0:
+            self._first_timestamp = tx.timestamp
+        else:
+            self._first_timestamp = min(self.first_timestamp, tx.timestamp)
+        self._first_timestamp = min(self.first_timestamp, tx.timestamp)
         self._all_tips_cache = None
         self.all_index.add_tx(tx)
         if self.wallet_index:
@@ -760,11 +790,11 @@ class BaseTransactionStorage(TransactionStorage):
         if self.tokens_index:
             self.tokens_index.add_tx(tx)
         if tx.is_block:
-            self._cache_block_count += 1
-            self.block_index.add_tx(tx)
+            if self.block_index.add_tx(tx):
+                self._cache_block_count += 1
         else:
-            self._cache_tx_count += 1
-            self.tx_index.add_tx(tx)
+            if self.tx_index.add_tx(tx):
+                self._cache_tx_count += 1
 
     def _del_from_cache(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
         if not self.with_index:
@@ -791,24 +821,12 @@ class BaseTransactionStorage(TransactionStorage):
         return self._cache_tx_count
 
     def get_genesis(self, hash_bytes: bytes) -> Optional[BaseTransaction]:
-        if not self._genesis_cache:
-            self._create_genesis_cache()
         assert self._genesis_cache is not None
         return self._genesis_cache.get(hash_bytes, None)
 
     def get_all_genesis(self) -> Set[BaseTransaction]:
-        if not self._genesis_cache:
-            self._create_genesis_cache()
         assert self._genesis_cache is not None
         return set(self._genesis_cache.values())
-
-    def _create_genesis_cache(self) -> None:
-        from hathor.transaction.genesis import get_genesis_transactions
-        self._genesis_cache = {}
-        assert self._genesis_cache is not None
-        for genesis in get_genesis_transactions(self):
-            assert genesis.hash is not None
-            self._genesis_cache[genesis.hash] = genesis
 
     def get_transactions_before(self, hash_bytes: bytes,
                                 num_blocks: int = 100) -> List[BaseTransaction]:  # pragma: no cover

@@ -3,7 +3,6 @@ import json
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.transaction import Transaction
-from hathor.transaction.genesis import get_genesis_transactions
 from hathor.transaction.resources import DecodeTxResource, PushTxResource
 from hathor.wallet.resources import SignTxResource
 from hathor.wallet.resources.nano_contracts import (
@@ -79,7 +78,7 @@ class NanoContractsTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data_error3['success'])
 
         # decode
-        genesis_output = [tx for tx in get_genesis_transactions(None) if tx.is_block][0].outputs[0]
+        genesis_output = [tx for tx in self.manager.tx_storage.get_all_genesis() if tx.is_block][0].outputs[0]
         partial_tx = Transaction.create_from_struct(bytes.fromhex(nano_contract_hex))
         partial_tx.outputs.append(genesis_output)
         response_decode = yield decode_resource.get("wallet/nano_contracts/decode",

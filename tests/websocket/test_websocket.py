@@ -7,7 +7,6 @@ from twisted.test import proto_helpers
 from hathor.conf import HathorSettings
 from hathor.metrics import Metrics
 from hathor.pubsub import EventArguments, HathorEvents
-from hathor.transaction.genesis import get_genesis_transactions
 from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance
 from hathor.websocket import WebsocketStatsResource
 from hathor.websocket.factory import HathorAdminWebsocketFactory, HathorAdminWebsocketProtocol
@@ -32,6 +31,12 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
         self.transport = proto_helpers.StringTransport()
         self.protocol.makeConnection(self.transport)
 
+        self.genesis = list(self.manager.tx_storage.get_all_genesis())
+        self.genesis.sort(key=lambda x: x.timestamp)
+        self.assertTrue(self.genesis[0].is_block)
+        for tx in self.genesis[1:]:
+            self.assertTrue(tx.is_transaction)
+
         self.web = StubSite(WebsocketStatsResource(self.factory))
 
     def _decode_value(self, value):
@@ -48,11 +53,13 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
     def test_new_tx(self):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
+
+        tx = self.genesis[1]
         self.manager.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED,
-                                    tx=get_genesis_transactions(self.manager.tx_storage)[1])
+                                    tx=tx)
         self.run_to_completion()
         value = self._decode_value(self.transport.value())
-        self.assertEqual(value['tx_id'], get_genesis_transactions(None)[1].hash.hex())
+        self.assertEqual(value['tx_id'], tx.hash.hex())
         self.assertEqual(value['type'], 'network:new_tx_accepted')
 
     def test_metric(self):
@@ -91,7 +98,7 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
     def test_output_received(self):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
-        gen_tx = get_genesis_transactions(None)[0]
+        gen_tx = self.genesis[0]
         output = UnspentTx(gen_tx.hash, 0, 10, gen_tx.timestamp, '', gen_tx.outputs[0].token_data)
         self.manager.pubsub.publish(HathorEvents.WALLET_OUTPUT_RECEIVED, total=10, output=output)
         self.run_to_completion()
@@ -103,8 +110,8 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
     def test_input_spent_received(self):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
-        gen_tx = get_genesis_transactions(None)[0]
-        gen_tx2 = get_genesis_transactions(None)[1]
+        gen_tx = self.genesis[0]
+        gen_tx2 = self.genesis[1]
         spent = SpentTx(gen_tx2.hash, gen_tx.hash, 0, 10, gen_tx.timestamp + 1)
         self.manager.pubsub.publish(HathorEvents.WALLET_INPUT_SPENT, output_spent=spent)
         self.run_to_completion()
@@ -149,7 +156,7 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
         self.protocol.onMessage(payload, True)
         self.assertEqual(len(self.factory.address_connections), 1)
 
-        block_genesis = [tx for tx in get_genesis_transactions(self.manager.tx_storage) if tx.is_block][0]
+        block_genesis = self.genesis[0]
 
         # Test publish address history
         # First clean the transport to make sure the value comes from this execution
