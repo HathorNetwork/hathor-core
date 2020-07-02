@@ -20,6 +20,7 @@ import struct
 from collections import OrderedDict
 from math import inf
 from typing import TYPE_CHECKING, Callable, Dict, Iterator, List, Optional, Tuple, Union, cast
+from weakref import WeakSet
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
@@ -357,7 +358,7 @@ class NodeSyncTimestamp(Plugin):
         self.log.debug('sync-{p} Sync starting at {next_timestamp}', p=self.short_peer_id,
                        next_timestamp=next_timestamp)
         assert next_timestamp < inf
-        pending = []
+        pending: WeakSet[Deferred] = WeakSet()
         next_offset = 0
         while True:
             payload = cast(NextPayload, (yield self.get_peer_next(next_timestamp, offset=next_offset)))
@@ -367,7 +368,7 @@ class NodeSyncTimestamp(Plugin):
             count = 0
             for h in payload.hashes:
                 if not self.manager.tx_storage.transaction_exists(h):
-                    pending.append(self.get_data(h))
+                    pending.add(self.get_data(h))
                     count += 1
             self.log.debug('sync-{p} next_ts={ts} count={c} pending={pen}', p=self.short_peer_id,
                            ts=next_timestamp, c=count, pen=len(pending))
