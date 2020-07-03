@@ -20,6 +20,7 @@ import struct
 from collections import OrderedDict
 from math import inf
 from typing import TYPE_CHECKING, Callable, Dict, Iterator, List, Optional, Tuple, Union, cast
+from weakref import WeakSet
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
@@ -357,7 +358,7 @@ class NodeSyncTimestamp(Plugin):
         self.log.debug('sync-{p} Sync starting at {next_timestamp}', p=self.short_peer_id,
                        next_timestamp=next_timestamp)
         assert next_timestamp < inf
-        pending = []
+        pending: WeakSet[Deferred] = WeakSet()
         next_offset = 0
         while True:
             payload = cast(NextPayload, (yield self.get_peer_next(next_timestamp, offset=next_offset)))
@@ -367,7 +368,7 @@ class NodeSyncTimestamp(Plugin):
             count = 0
             for h in payload.hashes:
                 if not self.manager.tx_storage.transaction_exists(h):
-                    pending.append(self.get_data(h))
+                    pending.add(self.get_data(h))
                     count += 1
             self.log.debug('sync-{p} next_ts={ts} count={c} pending={pen}', p=self.short_peer_id,
                            ts=next_timestamp, c=count, pen=len(pending))
@@ -408,6 +409,7 @@ class NodeSyncTimestamp(Plugin):
             if cur <= self.manager.tx_storage.first_timestamp:
                 raise Exception('We cannot go before genesis. Is it an attacker?!')
             prev_cur = cur
+            assert self.manager.tx_storage.first_timestamp > 0
             cur = max(cur - step, self.manager.tx_storage.first_timestamp)
             tips = cast(TipsPayload, (yield self.get_peer_tips(cur)))
             local_merkle_tree, _ = self.manager.tx_storage.get_merkle_tree(cur)
@@ -730,4 +732,5 @@ class NodeSyncTimestamp(Plugin):
             We need this errback because otherwise the sync crashes when the deferred is canceled.
             We should just log a warning because it will continue the sync and will try to get this tx again.
         """
-        self.log.warn('sync-{p} failed to download tx hash={h}', p=self.short_peer_id, h=hash_bytes.hex())
+        self.log.warn('sync-{p} failed to download tx hash={h}, reason={reason}',
+                      p=self.short_peer_id, h=hash_bytes.hex(), reason=reason)

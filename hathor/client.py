@@ -98,6 +98,7 @@ class HathorClient(IHathorClient):
                 params.add('capabilities', cap.value)
 
         async with self.session.get(self._get_url('get_block_template'), params=params) as resp:
+            resp.raise_for_status()
             data = await resp.json()
             block = create_tx_from_dict(data)
             assert isinstance(block, Block)
@@ -108,6 +109,7 @@ class HathorClient(IHathorClient):
             'hexdata': bytes(block).hex(),
         }
         async with self.session.post(self._get_url('submit_block'), json=data) as resp:
+            resp.raise_for_status()
             return (await resp.json())['result']
 
 

@@ -198,13 +198,13 @@ class Metrics:
         data = args.__dict__
         if key == HathorEvents.NETWORK_NEW_TX_ACCEPTED:
             if data['tx'].is_block:
-                self.blocks += 1
+                self.blocks = self.tx_storage.get_block_count()
                 self.total_block_weight = sum_weights(data['tx'].weight, self.total_block_weight)
                 self.hash_rate = self.calculate_new_hashrate(data['tx'])
                 self.best_block_weight = self.tx_storage.get_weight_best_block()
                 self.best_block_height = self.tx_storage.get_height_best_block()
             else:
-                self.transactions += 1
+                self.transactions = self.tx_storage.get_tx_count()
                 self.total_tx_weight = sum_weights(data['tx'].weight, self.total_tx_weight)
         elif key == HathorEvents.NETWORK_PEER_CONNECTED:
             self.peers += 1

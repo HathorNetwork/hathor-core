@@ -1,5 +1,5 @@
 from math import inf
-from typing import TYPE_CHECKING, Any, Callable, Dict, Generator, Iterator, List, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Generator, Iterator, List, Optional, Set, Tuple, Union
 
 import grpc
 from grpc._server import _Context
@@ -101,23 +101,21 @@ class TransactionRemoteStorage(TransactionStorage):
     def __init__(self, with_index=None):
         super().__init__()
         self._channel = None
-        self._genesis_cache: Dict[bytes, BaseTransaction] = None
         self.with_index = with_index
         # Set initial value for _best_block_tips cache.
-        self._best_block_tips = [x.hash for x in self.get_all_genesis() if x.is_block]
-
-    def _create_genesis_cache(self) -> None:
-        from hathor.transaction.genesis import get_genesis_transactions
-        self._genesis_cache = {}
-        for genesis in get_genesis_transactions(self):
-            assert genesis.hash is not None
-            self._genesis_cache[genesis.hash] = genesis
+        self._best_block_tips = []
 
     def connect_to(self, port: int) -> None:
         if self._channel:
             self._channel.close()
         self._channel = grpc.insecure_channel('127.0.0.1:{}'.format(port))
         self._stub = protos.TransactionStorageStub(self._channel)
+
+        # Initialize genesis.
+        self._save_or_verify_genesis()
+
+        # Set initial value for _best_block_tips cache.
+        self._best_block_tips = [x.hash for x in self.get_all_genesis() if x.is_block]
 
     def _check_connection(self) -> None:
         """raise error if not connected"""
@@ -142,10 +140,6 @@ class TransactionRemoteStorage(TransactionStorage):
     @convert_grpc_exceptions
     def save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
         self._check_connection()
-
-        # genesis txs and metadata are kept in memory
-        if tx.is_genesis and not only_metadata:
-            return
 
         tx_proto = tx.to_proto()
         request = protos.SaveRequest(transaction=tx_proto, only_metadata=only_metadata)
@@ -507,7 +501,15 @@ class TransactionRemoteStorage(TransactionStorage):
             if not list_item.HasField('transaction'):
                 break
             tx_proto = list_item.transaction
-            yield tx_or_block_from_proto(tx_proto, storage=self)
+            tx = tx_or_block_from_proto(tx_proto, storage=self)
+            lock = self._get_lock(tx.hash)
+            with lock:
+                tx2 = self.get_transaction_from_weakref(tx.hash)
+                if tx2:
+                    tx = tx2
+                else:
+                    self._save_to_weakref(tx)
+            yield tx
 
     @convert_grpc_exceptions_generator
     def _topological_sort(self):
@@ -545,13 +547,11 @@ class TransactionRemoteStorage(TransactionStorage):
         return result.count
 
     def get_genesis(self, hash_bytes: bytes) -> Optional['BaseTransaction']:
-        if not self._genesis_cache:
-            self._create_genesis_cache()
+        assert self._genesis_cache is not None
         return self._genesis_cache.get(hash_bytes, None)
 
     def get_all_genesis(self) -> Set['BaseTransaction']:
-        if not self._genesis_cache:
-            self._create_genesis_cache()
+        assert self._genesis_cache is not None
         return set(self._genesis_cache.values())
 
     @convert_grpc_exceptions

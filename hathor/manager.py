@@ -139,7 +139,7 @@ class HathorManager:
         self.metrics = Metrics(
             pubsub=self.pubsub,
             avg_time_between_blocks=self.avg_time_between_blocks,
-            tx_storage=tx_storage,
+            tx_storage=self.tx_storage,
             reactor=self.reactor,
         )
 
@@ -258,6 +258,7 @@ class HathorManager:
         t0 = time.time()
         t1 = t0
         cnt = 0
+        cnt2 = 0
 
         # self.start_profiler()
         for tx in self.tx_storage._topological_sort():
@@ -268,11 +269,12 @@ class HathorManager:
                 ts_date = datetime.datetime.fromtimestamp(self.tx_storage.latest_timestamp)
                 self.log.info(
                     'Verifying transations in storage... avg={avg:.4f} tx/s total={total} (latest timedate: {ts})',
-                    avg=cnt / (t2 - t0),
+                    avg=(cnt - cnt2) / (t2 - t1),
                     total=cnt,
                     ts=ts_date,
                 )
                 t1 = t2
+                cnt2 = cnt
             cnt += 1
 
             try:

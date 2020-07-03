@@ -17,10 +17,11 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
     def __init__(self, path='./', with_index=True):
         os.makedirs(path, exist_ok=True)
         self.path = path
-        super().__init__(with_index=with_index)
 
         filename_pattern = r'^tx_([\dabcdef]{64})\.bin$'
         self.re_pattern = re.compile(filename_pattern)
+
+        super().__init__(with_index=with_index)
 
     @deprecated('Use remove_transaction_deferred instead')
     def remove_transaction(self, tx):
@@ -42,14 +43,10 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
     @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx, *, only_metadata=False):
         skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
-        if tx.is_genesis:
-            return
         self._save_transaction(tx, only_metadata=only_metadata)
         self._save_to_weakref(tx)
 
     def _save_transaction(self, tx, *, only_metadata=False):
-        if tx.is_genesis:
-            return
         if not only_metadata:
             self._save_tx_to_disk(tx)
         self._save_metadata(tx)
@@ -61,9 +58,6 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
             fp.write(tx_bytes)
 
     def _save_metadata(self, tx):
-        # genesis txs and metadata are kept in memory
-        if tx.is_genesis:
-            return
         metadata = tx.get_metadata()
         data = self.serialize_metadata(metadata)
         filepath = self.generate_metadata_filepath(tx.hash)
@@ -87,9 +81,6 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
 
     @deprecated('Use transaction_exists_deferred instead')
     def transaction_exists(self, hash_bytes):
-        genesis = self.get_genesis(hash_bytes)
-        if genesis:
-            return True
         filepath = self.generate_filepath(hash_bytes)
         return os.path.isfile(filepath)
 
@@ -122,10 +113,6 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
 
     @deprecated('Use get_transaction_deferred instead')
     def _get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
-        genesis = self.get_genesis(hash_bytes)
-        if genesis:
-            return genesis
-
         tx = self.get_transaction_from_weakref(hash_bytes)
         if tx is not None:
             return tx
@@ -147,11 +134,7 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
 
     @deprecated('Use get_all_transactions_deferred instead')
     def get_all_transactions(self):
-        for tx in self.get_all_genesis():
-            yield tx
-
         path = self.path
-
         with os.scandir(path) as it:
             for f in it:
                 match = self.re_pattern.match(f.name)
@@ -168,7 +151,6 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
 
     @deprecated('Use get_count_tx_blocks_deferred instead')
     def get_count_tx_blocks(self):
-        genesis_len = len(self.get_all_genesis())
-        path = self.path
-        files = os.listdir(path)
-        return len(files) + genesis_len
+        files = os.listdir(self.path)
+        assert len(files) % 2 == 0
+        return len(files) // 2

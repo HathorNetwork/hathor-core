@@ -206,7 +206,6 @@ class RunNode:
             DashboardTransactionResource,
             DecodeTxResource,
             GetBlockTemplateResource,
-            GraphvizLegacyResource,
             GraphvizFullResource,
             GraphvizNeighboursResource,
             PushTxResource,
@@ -263,7 +262,7 @@ class RunNode:
             wallet_resource.putChild(b'nano-contract', contracts_resource)
             p2p_resource = Resource()
             root.putChild(b'p2p', p2p_resource)
-            graphviz = GraphvizLegacyResource(self.manager)
+            graphviz = Resource()
             # XXX: reach the resource through /graphviz/ too, previously it was a leaf so this wasn't a problem
             graphviz.putChild(b'', graphviz)
             for fmt in ['dot', 'pdf', 'png', 'jpg']:

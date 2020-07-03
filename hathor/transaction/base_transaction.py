@@ -346,18 +346,8 @@ class BaseTransaction(ABC):
         """
         if self.hash is None:
             return False
-        if self.storage:
-            genesis = self.storage.get_genesis(self.hash)
-            if genesis:
-                return True
-            else:
-                return False
-        else:
-            from hathor.transaction.genesis import get_genesis_transactions
-            for genesis in get_genesis_transactions(self.storage):
-                if self == genesis:
-                    return True
-            return False
+        from hathor.transaction.genesis import is_genesis
+        return is_genesis(self.hash)
 
     @abstractmethod
     def get_funds_fields_from_struct(self, buf: bytes) -> bytes:

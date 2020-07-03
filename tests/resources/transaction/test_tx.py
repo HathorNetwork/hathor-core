@@ -1,7 +1,6 @@
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.transaction import Transaction
-from hathor.transaction.genesis import get_genesis_transactions
 from hathor.transaction.resources import TransactionResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions, start_remote_storage
@@ -15,7 +14,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_get_one(self):
-        genesis_tx = get_genesis_transactions(self.manager.tx_storage)[0]
+        genesis_tx = next(x for x in self.manager.tx_storage.get_all_genesis() if x.is_block)
         response_success = yield self.web.get("transaction", {b'id': bytes(genesis_tx.hash.hex(), 'utf-8')})
         data_success = response_success.json_value()
         self.assertTrue(data_success['success'])

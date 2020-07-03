@@ -5,7 +5,7 @@ from argparse import ArgumentParser, Namespace
 from enum import Flag, auto
 from typing import Any, Callable, Dict, List, Optional
 
-from hathor.util import enum_flag_all_none
+from hathor.cli.util import enum_flag_all_none
 
 # Path of this file
 dir_path = os.path.dirname(os.path.realpath(__file__))

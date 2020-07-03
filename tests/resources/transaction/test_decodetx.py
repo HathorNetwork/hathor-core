@@ -1,6 +1,5 @@
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.transaction.genesis import get_genesis_transactions
 from hathor.transaction.resources import DecodeTxResource
 from hathor.transaction.scripts import parse_address_script
 from tests.resources.base_resource import StubSite, _BaseResourceTest
@@ -14,7 +13,13 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_get(self):
-        genesis_tx = get_genesis_transactions(self.manager.tx_storage)[1]
+        genesis = list(self.manager.tx_storage.get_all_genesis())
+        genesis.sort(key=lambda x: x.timestamp)
+        self.assertTrue(genesis[0].is_block)
+        for tx in genesis[1:]:
+            self.assertTrue(tx.is_transaction)
+
+        genesis_tx = genesis[1]
         response_success = yield self.web.get("decode_tx", {b'hex_tx': bytes(genesis_tx.get_struct().hex(), 'utf-8')})
         data_success = response_success.json_value()
 
@@ -39,7 +44,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data_error2['success'])
 
         # Token creation tx
-        script_type_out = parse_address_script(get_genesis_transactions(self.manager.tx_storage)[0].outputs[0].script)
+        script_type_out = parse_address_script(genesis[0].outputs[0].script)
         address = script_type_out.address
         add_blocks_unlock_reward(self.manager)
         tx2 = create_tokens(self.manager, address, mint_amount=100, propagate=True)

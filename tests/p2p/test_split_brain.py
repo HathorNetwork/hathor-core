@@ -4,7 +4,6 @@ from mnemonic import Mnemonic
 
 from hathor.graphviz import GraphvizVisualizer
 from hathor.manager import TestMode
-from hathor.transaction.genesis import get_genesis_transactions
 from hathor.wallet import HDWallet
 from tests import unittest
 from tests.utils import (
@@ -26,7 +25,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # self.set_random_seed(0)
 
-        first_timestamp = min(tx.timestamp for tx in get_genesis_transactions(None))
+        from hathor.transaction.genesis import _get_genesis_transactions_unsafe
+        first_timestamp = min(tx.timestamp for tx in _get_genesis_transactions_unsafe(None))
         self.clock.advance(first_timestamp + random.randint(3600, 120*24*3600))
 
         self.network = 'testnet'
