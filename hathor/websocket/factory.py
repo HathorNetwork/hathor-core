@@ -1,6 +1,6 @@
 import json
 from collections import defaultdict, deque
-from typing import Any, DefaultDict, Deque, Dict, Optional, Set
+from typing import Any, DefaultDict, Deque, Dict, List, Optional, Set
 
 from autobahn.twisted.websocket import WebSocketServerFactory
 from twisted.internet import reactor
@@ -333,20 +333,21 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             del self.address_connections[address]
 
     def _handle_subscribe(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
-        """ Handler for subscription to a ws message."""
-        ws_message: Optional[str] = message.get('message')
-        if ws_message is None:
-            # No message key
+        """ Handler for subscription to ws messages."""
+        ws_messages: Optional[List[str]] = message.get('messages')
+        if ws_messages is None:
+            # No messages key
             return
-        if ws_message in WS_MESSAGES:
-            if connection in self.connections:
-                # Remove from the all connections set
-                # Only in the first message subscription will still be in the set
-                self.connections.remove(connection)
-            # Add the connection to the set
-            self.subscribed_connections[ws_message].add(connection)
+        for ws_message in ws_messages:
+            if ws_message in WS_MESSAGES:
+                if connection in self.connections:
+                    # Remove from the all connections set
+                    # Only in the first message subscription will still be in the set
+                    self.connections.remove(connection)
+                # Add the connection to the set
+                self.subscribed_connections[ws_message].add(connection)
         # Reply back as subscribed success
-        payload = json.dumps({'type': 'subscribed', 'message': ws_message, 'success': True}).encode('utf-8')
+        payload = json.dumps({'type': 'subscribed', 'messages': ws_messages, 'success': True}).encode('utf-8')
         connection.sendMessage(payload, False)
 
     def connection_closed(self, connection: HathorAdminWebsocketProtocol) -> None:
@@ -361,9 +362,9 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         for address in connection.subscribed_to:
             self._remove_connection_from_address_dict(connection, address)
 
-        # Removing from subsbribed channels set
-        # Should we have an easier way to check in each channels the connections is subscribed to?
-        # For now we have only one channel, so this shouldn't be a problem
+        # Removing from subsbribed connections set
+        # Given that we don't have many message types and use a set for storing the connections,
+        # shouldn't be a very expensive operation.
         for conn_set in self.subscribed_connections.values():
             if connection in conn_set:
                 conn_set.remove(connection)
