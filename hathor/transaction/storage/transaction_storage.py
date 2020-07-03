@@ -69,6 +69,7 @@ class TransactionStorage(ABC):
         """Save all genesis in the storage."""
         for tx in self._get_genesis_from_settings():
             try:
+                assert tx.hash is not None
                 tx2 = self.get_transaction(tx.hash)
                 assert tx == tx2
             except TransactionDoesNotExist:
