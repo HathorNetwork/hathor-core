@@ -13,7 +13,6 @@ from hathor.indexes import TransactionIndexElement, TransactionsIndex
 from hathor.transaction import Block
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import AllTipsCache, TransactionStorage
-from hathor.util import deprecated, skip_warning
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction  # noqa: F401
@@ -125,7 +124,6 @@ class TransactionRemoteStorage(TransactionStorage):
 
     # TransactionStorageSync interface implementation:
 
-    @deprecated('Use remove_transaction_deferred instead')
     @convert_grpc_exceptions
     def remove_transaction(self, tx: 'BaseTransaction') -> None:
         self._check_connection()
@@ -136,7 +134,6 @@ class TransactionRemoteStorage(TransactionStorage):
         assert result.removed
         self._remove_from_weakref(tx)
 
-    @deprecated('Use save_transaction_deferred instead')
     @convert_grpc_exceptions
     def save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
         self._check_connection()
@@ -147,7 +144,6 @@ class TransactionRemoteStorage(TransactionStorage):
         assert result.saved
         self._save_to_weakref(tx)
 
-    @deprecated('Use transaction_exists_deferred instead')
     @convert_grpc_exceptions
     def transaction_exists(self, hash_bytes: bytes) -> bool:
         self._check_connection()
@@ -155,7 +151,6 @@ class TransactionRemoteStorage(TransactionStorage):
         result = self._stub.Exists(request)
         return result.exists
 
-    @deprecated('Use get_transaction_deferred instead')
     @convert_grpc_exceptions
     def _get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
         tx = self.get_transaction_from_weakref(hash_bytes)
@@ -171,13 +166,21 @@ class TransactionRemoteStorage(TransactionStorage):
         self._save_to_weakref(tx)
         return tx
 
-    @deprecated('Use get_all_transactions_deferred instead')
     @convert_grpc_exceptions_generator
     def get_all_transactions(self) -> Iterator['BaseTransaction']:
         from hathor.transaction import tx_or_block_from_proto
         self._check_connection()
         request = protos.ListRequest()
         result = self._stub.List(request)
+
+        def get_tx(tx):
+            tx2 = self.get_transaction_from_weakref(tx.hash)
+            if tx2:
+                tx = tx2
+            else:
+                self._save_to_weakref(tx)
+            return tx
+
         for list_item in result:
             if not list_item.HasField('transaction'):
                 break
@@ -185,15 +188,14 @@ class TransactionRemoteStorage(TransactionStorage):
             tx = tx_or_block_from_proto(tx_proto, storage=self)
             assert tx.hash is not None
             lock = self._get_lock(tx.hash)
-            with lock:
-                tx2 = self.get_transaction_from_weakref(tx.hash)
-                if tx2:
-                    tx = tx2
-                else:
-                    self._save_to_weakref(tx)
+
+            if lock:
+                with lock:
+                    tx = get_tx(tx)
+            else:
+                tx = get_tx(tx)
             yield tx
 
-    @deprecated('Use get_count_tx_blocks_deferred instead')
     @convert_grpc_exceptions
     def get_count_tx_blocks(self) -> int:
         self._check_connection()
@@ -530,7 +532,6 @@ class TransactionRemoteStorage(TransactionStorage):
                                        relax_assert=relax_assert)
         result = self._stub.MarkAs(request)  # noqa: F841
 
-    # @deprecated('Use get_block_count_deferred instead')
     @convert_grpc_exceptions
     def get_block_count(self) -> int:
         self._check_connection()
@@ -538,7 +539,6 @@ class TransactionRemoteStorage(TransactionStorage):
         result = self._stub.Count(request)
         return result.count
 
-    # @deprecated('Use get_tx_count_deferred instead')
     @convert_grpc_exceptions
     def get_tx_count(self) -> int:
         self._check_connection()
@@ -625,7 +625,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
     @convert_hathor_exceptions
     def Exists(self, request: protos.ExistsRequest, context: _Context) -> protos.ExistsResponse:
         hash_bytes = request.hash
-        exists = skip_warning(self.storage.transaction_exists)(hash_bytes)
+        exists = self.storage.transaction_exists(hash_bytes)
         return protos.ExistsResponse(exists=exists)
 
     @convert_hathor_exceptions
@@ -633,7 +633,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         hash_bytes = request.hash
         exclude_metadata = request.exclude_metadata
 
-        tx = skip_warning(self.storage.get_transaction)(hash_bytes)
+        tx = self.storage.get_transaction(hash_bytes)
 
         if exclude_metadata:
             del tx._metadata
@@ -652,7 +652,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         result = protos.SaveResponse(saved=False)
 
         tx = tx_or_block_from_proto(tx_proto, storage=self.storage)
-        skip_warning(self.storage.save_transaction)(tx, only_metadata=only_metadata)
+        self.storage.save_transaction(tx, only_metadata=only_metadata)
         result.saved = True
 
         return result
@@ -666,7 +666,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         result = protos.RemoveResponse(removed=False)
 
         tx = tx_or_block_from_proto(tx_proto, storage=self.storage)
-        skip_warning(self.storage.remove_transaction)(tx)
+        self.storage.remove_transaction(tx)
         result.removed = True
 
         return result
@@ -675,11 +675,11 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
     def Count(self, request: protos.CountRequest, context: _Context) -> protos.CountResponse:
         tx_type = request.tx_type
         if tx_type == protos.ANY_TYPE:
-            count = skip_warning(self.storage.get_count_tx_blocks)()
+            count = self.storage.get_count_tx_blocks()
         elif tx_type == protos.TRANSACTION_TYPE:
-            count = skip_warning(self.storage.get_tx_count)()
+            count = self.storage.get_tx_count()
         elif tx_type == protos.BLOCK_TYPE:
-            count = skip_warning(self.storage.get_block_count)()
+            count = self.storage.get_block_count()
         else:
             raise ValueError('invalid tx_type %s' % (tx_type,))
         return protos.CountResponse(count=count)
@@ -750,7 +750,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
                 raise ValueError('invalid tx_type %s' % (request.tx_type,))
         elif request.time_filter == protos.NO_FILTER:
             if request.order_by == protos.ANY_ORDER:
-                tx_iter = skip_warning(self.storage.get_all_transactions)()
+                tx_iter = self.storage.get_all_transactions()
             elif request.order_by == protos.TOPOLOGICAL_ORDER:
                 tx_iter = self.storage._topological_sort()
             else:

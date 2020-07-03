@@ -86,6 +86,8 @@ class _BaseTransactionStorageTest:
             # Disable weakref to test the internal methods. Otherwise, most methods return objects from weakref.
             self.tx_storage._disable_weakref()
 
+            self.tx_storage.enable_lock()
+
         def tearDown(self):
             shutil.rmtree(self.tmpdir)
 

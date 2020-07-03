@@ -1,5 +1,5 @@
 from itertools import chain
-from typing import TYPE_CHECKING, Iterable, List, Optional, Set
+from typing import TYPE_CHECKING, Iterable, List, Optional, Set, cast
 
 from structlog import get_logger
 
@@ -148,8 +148,9 @@ class BlockConsensusAlgorithm:
 
         # Check conflicts of the transactions voiding us.
         for h in voided_by:
-            tx = tx.storage.get_transaction(h)
+            tx = storage.get_transaction(h)
             if not tx.is_block:
+                assert isinstance(tx, Transaction)
                 self.consensus.transaction_algorithm.check_conflicts(tx)
 
         parent = block.get_block_parent()
@@ -177,7 +178,7 @@ class BlockConsensusAlgorithm:
 
             # Get the score of the best chains.
             # We need to void this block first, because otherwise it would always be one of the heads.
-            heads = [storage.get_transaction(h) for h in storage.get_best_block_tips()]
+            heads = [cast(Block, storage.get_transaction(h)) for h in storage.get_best_block_tips()]
             best_score = None
             for head in heads:
                 head_meta = head.get_metadata(force_reload=True)
@@ -299,8 +300,8 @@ class BlockConsensusAlgorithm:
 
         if self.update_voided_by_from_parents(block):
             storage = block.storage
-            heads = [storage.get_transaction(h) for h in storage.get_best_block_tips()]
-            best_score = 0
+            heads = [cast(Block, storage.get_transaction(h)) for h in storage.get_best_block_tips()]
+            best_score = 0.0
             for head in heads:
                 head_meta = head.get_metadata(force_reload=True)
                 if head_meta.score <= best_score - settings.WEIGHT_TOL:
@@ -354,6 +355,7 @@ class BlockConsensusAlgorithm:
         parent_hash = block.get_block_parent_hash()
         while True:
             parent = storage.get_transaction(parent_hash)
+            assert isinstance(parent, Block)
             parent_meta = parent.get_metadata()
             if not parent_meta.voided_by:
                 break
@@ -396,7 +398,7 @@ class BlockConsensusAlgorithm:
         spent_by: Iterable[bytes] = chain(*meta.spent_outputs.values())
         for tx_hash in spent_by:
             tx = storage.get_transaction(tx_hash)
-            assert not tx.is_block
+            assert isinstance(tx, Transaction)
             self.consensus.transaction_algorithm.add_voided_by(tx, voided_hash)
         return True
 
@@ -428,7 +430,7 @@ class BlockConsensusAlgorithm:
         spent_by: Iterable[bytes] = chain(*meta.spent_outputs.values())
         for tx_hash in spent_by:
             tx = storage.get_transaction(tx_hash)
-            assert not tx.is_block
+            assert isinstance(tx, Transaction)
             self.consensus.transaction_algorithm.remove_voided_by(tx, voided_hash)
         return True
 
@@ -698,6 +700,7 @@ class TransactionConsensusAlgorithm:
             tx2 = tx.storage.get_transaction(h)
             tx2_meta = tx2.get_metadata()
             tx2_meta.accumulated_weight = sum_weights(tx2_meta.accumulated_weight, tx.weight)
+            assert tx2.storage is not None
             tx2.storage.save_transaction(tx2, only_metadata=True)
 
         # Then, we add ourselves.
@@ -718,6 +721,7 @@ class TransactionConsensusAlgorithm:
                 continue
             conflict_tx = tx.storage.get_transaction(h)
             if not conflict_tx.is_block:
+                assert isinstance(conflict_tx, Transaction)
                 self.check_conflicts(conflict_tx)
 
         # Finally, check our conflicts.
@@ -742,7 +746,7 @@ class TransactionConsensusAlgorithm:
         # Filter the possible candidates to compare to tx.
         candidates: List['Transaction'] = []
         for h in meta.conflict_with or []:
-            conflict_tx = tx.storage.get_transaction(h)
+            conflict_tx = cast(Transaction, tx.storage.get_transaction(h))
             conflict_tx_meta = conflict_tx.get_metadata()
             if not conflict_tx_meta.voided_by or conflict_tx_meta.voided_by == {tx.hash}:
                 candidates.append(conflict_tx)
@@ -876,7 +880,7 @@ class TransactionConsensusAlgorithm:
 
             assert not meta2.voided_by or voided_hash not in meta2.voided_by
             if tx2.hash != tx.hash and meta2.conflict_with and not meta2.voided_by:
-                check_list.extend(tx2.storage.get_transaction(h) for h in meta2.conflict_with)
+                check_list.extend(cast(Transaction, tx2.storage.get_transaction(h)) for h in meta2.conflict_with)
             if meta2.voided_by:
                 meta2.voided_by.add(voided_hash)
             else:

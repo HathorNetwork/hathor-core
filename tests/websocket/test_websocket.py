@@ -5,7 +5,6 @@ from twisted.internet.defer import inlineCallbacks
 from twisted.test import proto_helpers
 
 from hathor.conf import HathorSettings
-from hathor.metrics import Metrics
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance
 from hathor.websocket import WebsocketStatsResource
@@ -68,7 +67,7 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
         self.factory._schedule_and_send_metric()
         value = self._decode_value(self.transport.value())
         keys = [
-            'transactions', 'blocks', 'best_block_height', 'hash_rate', 'block_hash_rate', 'tx_hash_rate',
+            'transactions', 'blocks', 'best_block_height', 'hash_rate',
             'network_hash_rate', 'peers', 'type', 'time'
         ]
         self.assertEqual(len(value), len(keys))
@@ -194,20 +193,6 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
         arg = EventArguments(**kwargs)
         with self.assertRaises(ValueError):
             self.manager.metrics.handle_publish('invalid_key', arg)
-
-        metrics = Metrics(
-            pubsub=self.manager.pubsub,
-            avg_time_between_blocks=self.manager.avg_time_between_blocks,
-            tx_storage=self.manager.tx_storage,
-        )
-
-        self.assertNotEqual(metrics.reactor, self.manager.reactor)
-
-        hash_rate = metrics.get_current_hash_rate(metrics.weight_block_deque, metrics.total_block_weight,
-                                                  metrics.set_current_block_hash_rate,
-                                                  metrics.block_hash_store_interval)
-
-        self.assertEqual(hash_rate, 0)
 
     @inlineCallbacks
     def test_get_stats(self):

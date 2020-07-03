@@ -4,7 +4,6 @@ import rocksdb
 
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
-from hathor.util import deprecated, skip_warning
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
@@ -32,15 +31,13 @@ class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncF
         tx_proto = tx.to_proto()
         return tx_proto.SerializeToString()
 
-    @deprecated('Use remove_transaction_deferred instead')
     def remove_transaction(self, tx: 'BaseTransaction') -> None:
-        skip_warning(super().remove_transaction)(tx)
+        super().remove_transaction(tx)
         self._db.delete(tx.hash)
         self._remove_from_weakref(tx)
 
-    @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
-        skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
+        super().save_transaction(tx, only_metadata=only_metadata)
         self._save_transaction(tx, only_metadata=only_metadata)
         self._save_to_weakref(tx)
 
@@ -49,7 +46,6 @@ class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncF
         key = tx.hash
         self._db.put(key, data)
 
-    @deprecated('Use transaction_exists_deferred instead')
     def transaction_exists(self, hash_bytes: bytes) -> bool:
         may_exist, _ = self._db.key_may_exist(hash_bytes)
         if not may_exist:
@@ -57,7 +53,6 @@ class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncF
         tx_exists = self._get_transaction_from_db(hash_bytes) is not None
         return tx_exists
 
-    @deprecated('Use get_transaction_deferred instead')
     def _get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
         tx = self.get_transaction_from_weakref(hash_bytes)
         if tx is not None:
@@ -80,27 +75,33 @@ class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncF
         tx = self._load_from_bytes(data)
         return tx
 
-    @deprecated('Use get_all_transactions_deferred instead')
     def get_all_transactions(self) -> Iterator['BaseTransaction']:
         tx: Optional['BaseTransaction']
 
         items = self._db.iteritems()
         items.seek_to_first()
+
+        def get_tx(hash_bytes, data):
+            tx = self.get_transaction_from_weakref(hash_bytes)
+            if tx is None:
+                tx = self._load_from_bytes(data)
+                assert tx.hash == hash_bytes
+                self._save_to_weakref(tx)
+            return tx
+
         for key, data in items:
             hash_bytes = key
 
             lock = self._get_lock(hash_bytes)
-            with lock:
-                tx = self.get_transaction_from_weakref(hash_bytes)
-                if tx is None:
-                    tx = self._load_from_bytes(data)
-                    assert tx.hash == hash_bytes
-                    self._save_to_weakref(tx)
+            if lock:
+                with lock:
+                    tx = get_tx(hash_bytes, data)
+            else:
+                tx = get_tx(hash_bytes, data)
 
             assert tx is not None
             yield tx
 
-    @deprecated('Use get_count_tx_blocks_deferred instead')
     def get_count_tx_blocks(self) -> int:
         # XXX: there may be a more efficient way, see: https://stackoverflow.com/a/25775882
         keys = self._db.iterkeys()

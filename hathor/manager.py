@@ -173,6 +173,10 @@ class HathorManager:
         # List of addresses to listen for new connections (eg: [tcp:8000])
         self.listen_addresses: List[str] = []
 
+        # Fast initialization that skips some tx validations
+        # Can be activated on the command line with --fast-init
+        self._fast_init = False
+
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
         """
@@ -183,8 +187,13 @@ class HathorManager:
         self.connections.start()
         self.pow_thread_pool.start()
 
+        # Disable get transaction lock when initializing components
+        self.tx_storage.disable_lock()
         # Initialize manager's components.
         self._initialize_components()
+        self.tx_storage.enable_lock()
+        # Metric starts to capture data
+        self.metrics.start()
 
         for description in self.listen_addresses:
             self.listen(description, ssl=self.ssl)
@@ -193,9 +202,6 @@ class HathorManager:
             peer_discovery.discover_and_connect(self.connections.connect_to)
 
         self.start_time = time.time()
-
-        # Metric starts to capture data
-        self.metrics.start()
 
         if self.wallet:
             self.wallet.start()
@@ -290,6 +296,10 @@ class HathorManager:
 
         # self.stop_profiler(save_to='profiles/initializing.prof')
         self.state = self.NodeState.READY
+        # This is important because after loading the data from storage we must calculate the cache again
+        # We are not calculanting the consensus while loading data but we do for the genesis
+        # After merging the genesis metadata MR, this can be removed
+        self.tx_storage.reset_best_block_tips_cache()
         self.log.info(
             'Node successfully initialized (total={total}, avg={avg:.2f} tx/s in {dt} seconds).',
             total=cnt,
@@ -356,6 +366,7 @@ class HathorManager:
             timestamp = max(self.tx_storage.latest_timestamp, self.reactor.seconds())
 
         parent_block = self.tx_storage.get_transaction(random.choice(tip_blocks))
+        assert timestamp is not None
         if not parent_block.is_genesis and timestamp - parent_block.timestamp > settings.MAX_DISTANCE_BETWEEN_BLOCKS:
             timestamp = parent_block.timestamp + settings.MAX_DISTANCE_BETWEEN_BLOCKS
 
@@ -365,6 +376,7 @@ class HathorManager:
         assert len(tip_blocks) >= 1
         assert len(tip_txs) == 2
 
+        assert parent_block.hash is not None
         parents = [parent_block.hash] + tip_txs
 
         parents_tx = [self.tx_storage.get_transaction(x) for x in parents]
@@ -485,30 +497,43 @@ class HathorManager:
                 self.log.debug('on_new_tx(): Already have transaction {}'.format(tx.hash.hex()))
                 return False
 
-        try:
-            assert self.validate_new_tx(tx) is True
-        except (InvalidNewTransaction, TxValidationError) as e:
-            # Discard invalid Transaction/block.
-            self.log.debug('Transaction/Block discarded', tx=tx, exc=e)
-            if not fails_silently:
-                raise
-            return False
+        if self.state != self.NodeState.INITIALIZING or not self._fast_init:
+            try:
+                assert self.validate_new_tx(tx) is True
+            except (InvalidNewTransaction, TxValidationError) as e:
+                # Discard invalid Transaction/block.
+                self.log.debug('Transaction/Block discarded', tx=tx, exc=e)
+                if not fails_silently:
+                    raise
+                return False
 
         if self.state != self.NodeState.INITIALIZING:
             self.tx_storage.save_transaction(tx)
         else:
-            tx.reset_metadata()
+            if not self._fast_init:
+                tx.reset_metadata()
+
             self.tx_storage._add_to_cache(tx)
 
-        try:
-            tx.update_initial_metadata()
-            self.consensus_algorithm.update(tx)
-        except Exception:
-            pretty_json = json.dumps(tx.to_json(), indent=4)
-            self.log.error('An unexpected error occurred when processing {tx.hash_hex}\n'
-                           '{pretty_json}', tx=tx, pretty_json=pretty_json)
-            self.tx_storage.remove_transaction(tx)
-            raise
+            if self._fast_init:
+                # When doing a fast init, we don't update the consensus, so we must trust the data on the metadata
+                # For transactions, we don't store them on the tips index if they are voided
+                # We have to execute _add_to_cache before because _del_from_cache does not remove from all indexes
+                metadata = tx.get_metadata()
+                if not tx.is_block and metadata.voided_by:
+                    self.tx_storage._del_from_cache(tx)
+
+        # Updating when it's genesis is useful for the tests
+        if self.state != self.NodeState.INITIALIZING or tx.is_genesis or not self._fast_init:
+            try:
+                tx.update_initial_metadata()
+                self.consensus_algorithm.update(tx)
+            except Exception:
+                pretty_json = json.dumps(tx.to_json(), indent=4)
+                self.log.error('An unexpected error occurred when processing {tx.hash_hex}\n'
+                               '{pretty_json}', tx=tx, pretty_json=pretty_json)
+                self.tx_storage.remove_transaction(tx)
+                raise
 
         if not quiet:
             ts_date = datetime.datetime.fromtimestamp(tx.timestamp)
