@@ -1,5 +1,5 @@
 from math import inf
-from typing import TYPE_CHECKING, Any, Callable, Generator, Iterator, List, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, Generator, Iterator, List, Optional, Set, Tuple, Union
 
 import grpc
 from grpc._server import _Context
@@ -168,33 +168,7 @@ class TransactionRemoteStorage(TransactionStorage):
 
     @convert_grpc_exceptions_generator
     def get_all_transactions(self) -> Iterator['BaseTransaction']:
-        from hathor.transaction import tx_or_block_from_proto
-        self._check_connection()
-        request = protos.ListRequest()
-        result = self._stub.List(request)
-
-        def get_tx(tx):
-            tx2 = self.get_transaction_from_weakref(tx.hash)
-            if tx2:
-                tx = tx2
-            else:
-                self._save_to_weakref(tx)
-            return tx
-
-        for list_item in result:
-            if not list_item.HasField('transaction'):
-                break
-            tx_proto = list_item.transaction
-            tx = tx_or_block_from_proto(tx_proto, storage=self)
-            assert tx.hash is not None
-            lock = self._get_lock(tx.hash)
-
-            if lock:
-                with lock:
-                    tx = get_tx(tx)
-            else:
-                tx = get_tx(tx)
-            yield tx
+        yield from self._call_list_request_generators()
 
     @convert_grpc_exceptions
     def get_count_tx_blocks(self) -> int:
@@ -489,15 +463,26 @@ class TransactionRemoteStorage(TransactionStorage):
         pass
 
     @convert_grpc_exceptions_generator
-    def _call_list_request_generators(self, kwargs):
+    def _call_list_request_generators(self, kwargs: Optional[Dict[str, Any]] = None):
         """ Execute a call for the ListRequest and yield the blocks or txs
 
             :param kwargs: Parameters to be sent to ListRequest
             :type kwargs: Dict[str,]
         """
         from hathor.transaction import tx_or_block_from_proto
+        def get_tx(tx):
+            tx2 = self.get_transaction_from_weakref(tx.hash)
+            if tx2:
+                tx = tx2
+            else:
+                self._save_to_weakref(tx)
+            return tx
+
         self._check_connection()
-        request = protos.ListRequest(**kwargs)
+        if kwargs:
+            request = protos.ListRequest(**kwargs)
+        else:
+            request = protos.ListRequest()
         result = self._stub.List(request)
         for list_item in result:
             if not list_item.HasField('transaction'):
@@ -505,12 +490,12 @@ class TransactionRemoteStorage(TransactionStorage):
             tx_proto = list_item.transaction
             tx = tx_or_block_from_proto(tx_proto, storage=self)
             lock = self._get_lock(tx.hash)
-            with lock:
-                tx2 = self.get_transaction_from_weakref(tx.hash)
-                if tx2:
-                    tx = tx2
-                else:
-                    self._save_to_weakref(tx)
+
+            if lock:
+                with lock:
+                    tx = get_tx(tx)
+            else:
+                tx = get_tx(tx)
             yield tx
 
     @convert_grpc_exceptions_generator
