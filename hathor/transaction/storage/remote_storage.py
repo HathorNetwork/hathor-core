@@ -463,7 +463,7 @@ class TransactionRemoteStorage(TransactionStorage):
         pass
 
     @convert_grpc_exceptions_generator
-    def _call_list_request_generators(self, kwargs: Optional[Dict[str, Any]] = None):
+    def _call_list_request_generators(self, kwargs: Optional[Dict[str, Any]] = None) -> Iterator['BaseTransaction']:
         """ Execute a call for the ListRequest and yield the blocks or txs
 
             :param kwargs: Parameters to be sent to ListRequest
@@ -484,12 +484,14 @@ class TransactionRemoteStorage(TransactionStorage):
             request = protos.ListRequest(**kwargs)
         else:
             request = protos.ListRequest()
+
         result = self._stub.List(request)
         for list_item in result:
             if not list_item.HasField('transaction'):
                 break
             tx_proto = list_item.transaction
             tx = tx_or_block_from_proto(tx_proto, storage=self)
+            assert tx.hash is not None
             lock = self._get_lock(tx.hash)
 
             if lock:
