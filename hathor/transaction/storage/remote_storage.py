@@ -470,6 +470,7 @@ class TransactionRemoteStorage(TransactionStorage):
             :type kwargs: Dict[str,]
         """
         from hathor.transaction import tx_or_block_from_proto
+
         def get_tx(tx):
             tx2 = self.get_transaction_from_weakref(tx.hash)
             if tx2:
