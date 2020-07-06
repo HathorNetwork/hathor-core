@@ -49,8 +49,8 @@ class RunNode:
         parser.add_argument('--recursion-limit', type=int, help='Set python recursion limit')
         parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
         parser.add_argument('--min-block-weight', type=int, help='Minimum weight for blocks')
-        parser.add_argument('--fast-init', action='store_true',
-                            help='Skip some transaction validations when initializing the node')
+        parser.add_argument('--full-verification', action='store_true',
+                            help='Execute all transactions/blocks validations when initializing the node')
         return parser
 
     def prepare(self, args: Namespace) -> None:
@@ -190,8 +190,8 @@ class RunNode:
             if self.wallet:
                 self.wallet.test_mode = True
 
-        if args.fast_init:
-            self.manager._fast_init = True
+        if args.full_verification:
+            self.manager._full_verification = True
 
         for description in args.listen:
             self.manager.add_listen_address(description)
