@@ -517,7 +517,6 @@ class HathorManager:
                 if not tx.is_block and metadata.voided_by:
                     self.tx_storage._del_from_cache(tx)
 
-
         if self.state != self.NodeState.INITIALIZING or self._full_verification:
             try:
                 tx.update_initial_metadata()
