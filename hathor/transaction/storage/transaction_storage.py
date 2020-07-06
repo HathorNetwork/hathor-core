@@ -359,9 +359,6 @@ class TransactionStorage(ABC):
                 best_tip_blocks = [block_hash]
         return best_tip_blocks
 
-    def reset_best_block_tips_cache(self) -> None:
-        self._best_block_tips = None
-
     def get_weight_best_block(self) -> float:
         heads = [self.get_transaction(h) for h in self.get_best_block_tips()]
         highest_weight = 0.0
@@ -595,9 +592,6 @@ class BaseTransactionStorage(TransactionStorage):
 
         # Either save or verify all genesis.
         self._save_or_verify_genesis()
-
-        # Set initial value for _best_block_tips cache.
-        self._best_block_tips = [x.hash for x in self.get_all_genesis() if x.is_block]
 
     @property
     def latest_timestamp(self) -> int:

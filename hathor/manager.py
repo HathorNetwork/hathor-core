@@ -173,9 +173,9 @@ class HathorManager:
         # List of addresses to listen for new connections (eg: [tcp:8000])
         self.listen_addresses: List[str] = []
 
-        # Fast initialization that skips some tx validations
-        # Can be activated on the command line with --fast-init
-        self._fast_init = False
+        # Full verification execute all validations for transactions and blocks when initializing the node
+        # Can be activated on the command line with --full-verification
+        self._full_verification = False
 
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
@@ -296,10 +296,6 @@ class HathorManager:
 
         # self.stop_profiler(save_to='profiles/initializing.prof')
         self.state = self.NodeState.READY
-        # This is important because after loading the data from storage we must calculate the cache again
-        # We are not calculanting the consensus while loading data but we do for the genesis
-        # After merging the genesis metadata MR, this can be removed
-        self.tx_storage.reset_best_block_tips_cache()
         self.log.info(
             'Node successfully initialized (total={total}, avg={avg:.2f} tx/s in {dt} seconds).',
             total=cnt,
@@ -497,7 +493,7 @@ class HathorManager:
                 self.log.debug('on_new_tx(): Already have transaction {}'.format(tx.hash.hex()))
                 return False
 
-        if self.state != self.NodeState.INITIALIZING or not self._fast_init:
+        if self.state != self.NodeState.INITIALIZING or self._full_verification:
             try:
                 assert self.validate_new_tx(tx) is True
             except (InvalidNewTransaction, TxValidationError) as e:
@@ -510,12 +506,10 @@ class HathorManager:
         if self.state != self.NodeState.INITIALIZING:
             self.tx_storage.save_transaction(tx)
         else:
-            if not self._fast_init:
-                tx.reset_metadata()
-
             self.tx_storage._add_to_cache(tx)
-
-            if self._fast_init:
+            if self._full_verification:
+                tx.reset_metadata()
+            else:
                 # When doing a fast init, we don't update the consensus, so we must trust the data on the metadata
                 # For transactions, we don't store them on the tips index if they are voided
                 # We have to execute _add_to_cache before because _del_from_cache does not remove from all indexes
@@ -523,8 +517,8 @@ class HathorManager:
                 if not tx.is_block and metadata.voided_by:
                     self.tx_storage._del_from_cache(tx)
 
-        # Updating when it's genesis is useful for the tests
-        if self.state != self.NodeState.INITIALIZING or tx.is_genesis or not self._fast_init:
+
+        if self.state != self.NodeState.INITIALIZING or self._full_verification:
             try:
                 tx.update_initial_metadata()
                 self.consensus_algorithm.update(tx)
