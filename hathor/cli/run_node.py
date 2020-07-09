@@ -50,7 +50,8 @@ class RunNode:
         parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
         parser.add_argument('--min-block-weight', type=int, help='Minimum weight for blocks')
         parser.add_argument('--full-verification', action='store_true',
-                            help='Execute all transactions/blocks validations when initializing the node')
+                            help='Execute all transactions/blocks validations when initializing the node. '
+                                 'This will break your storage if you stop midway.')
         return parser
 
     def prepare(self, args: Namespace) -> None:
