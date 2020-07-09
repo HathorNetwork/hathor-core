@@ -376,8 +376,13 @@ class _BaseTransactionStorageTest:
 
             # We should do this test only for the storages above or a cache storage
             # that uses one of the storages above as store
-            if isinstance(self.tx_storage, storages_to_test) or (isinstance(self.tx_storage, TransactionCacheStorage)
-                    and isinstance(self.tx_storage.store, storages_to_test)):
+            if (
+                isinstance(self.tx_storage, storages_to_test)
+                or (
+                    isinstance(self.tx_storage, TransactionCacheStorage)
+                    and isinstance(self.tx_storage.store, storages_to_test)
+                )
+            ):
                 self.assertFalse(self.tx_storage.running_full_verification_active())
                 self.tx_storage.enable_full_verification()
                 self.assertTrue(self.tx_storage.running_full_verification_active())
