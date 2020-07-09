@@ -265,6 +265,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         self.miner_id: Optional[str] = None
         self.miner_address: Optional[bytes] = None
         self.min_difficulty = min_difficulty if min_difficulty is not None else self.MIN_DIFFICULTY
+        self.initial_difficulty = PDiff(self.INITIAL_DIFFICULTY)
         self._current_difficulty = PDiff(1)
         self.payback_script_bitcoin: Optional[bytes] = None
         self.payback_script_hathor: Optional[bytes] = None
@@ -277,6 +278,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         self.last_reduce = 0.0
         self._estimator_last_len = 0
         self.hashrate_ths: Optional[float] = None
+        self.user_agent = ''
 
         self.xnonce1 = xnonce1
         self.xnonce2_size = self.DEFAULT_XNONCE2_SIZE
@@ -309,6 +311,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         return {
             'id': self.miner_id,
             'hashrate_ths': self.hashrate_ths,
+            'user_agent': self.user_agent,
             'worker': self.login,
             'worker_name': self.worker_name,
             'xnonce1_hex': self.xnonce1.hex(),
@@ -455,6 +458,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         self.log.debug('handle request', method=method, params=params)
 
         if method in {'subscribe', 'mining.subscribe', 'login'}:
+            assert isinstance(params, List)
             return self.handle_subscribe(params, msgid)
         if method in {'authorize', 'mining.authorize'}:
             assert isinstance(params, List)
@@ -508,7 +512,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
             login, _password = params
             self.send_result(True, msgid)
         if self._subscribed:
-            self.set_difficulty(self.INITIAL_DIFFICULTY)
+            self.set_difficulty(self.initial_difficulty)
         self.login = login
         self._authorized = True
         self.log.info('Miner authorized')
@@ -530,12 +534,13 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
 
         self.send_result(res, msgid)
 
-    def handle_subscribe(self, params: Any, msgid: Optional[str]) -> None:
+    def handle_subscribe(self, params: List[str], msgid: Optional[str]) -> None:
         """ Handles subscribe request by answering it and triggering a job request.
 
         :param msgid: JSON-RPC 2.0 message id
         :type msgid: Optional[str]
         """
+        from math import log2
         assert self.miner_id is not None
         self._subscribed = True
         self.subscribed_at = time.time()
@@ -543,8 +548,23 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         # session = str(self.miner_id)
         session = [['mining.set_difficulty', '1'], ['mining.notify', str(self.miner_id)]]
         self.send_result([session, self.xnonce1.hex(), self.xnonce2_size], msgid)
+        self.user_agent = params[0]
+        if 'nicehash' in self.user_agent.lower():
+            self.log.info('special case mindiff for NiceHash')
+            self.initial_difficulty = PDiff(NICEHASH_MIN_DIFF)
+            self.min_difficulty = NICEHASH_MIN_DIFF
+        if '/' in self.user_agent:
+            try:
+                # example: bmminer/2.0.0/Antminer S9j/14500
+                # the last part will often contain an indication of the hashrate (in GH/s)
+                hashrate_ghs = int(self.user_agent.split('/')[-1])
+                self.log.debug('detected hashrate', hashrate_ghs=hashrate_ghs)
+            except ValueError:
+                pass
+            else:
+                self.initial_difficulty = Weight(log2(hashrate_ghs * self.TARGET_JOB_TIME) + log2(1e9)).to_pdiff()
         if self._authorized:
-            self.set_difficulty(self.INITIAL_DIFFICULTY)
+            self.set_difficulty(self.initial_difficulty)
 
     def handle_multi_version(self, params: List[Any], msgid: Optional[str]) -> None:
         """ Handles multi_version requests
