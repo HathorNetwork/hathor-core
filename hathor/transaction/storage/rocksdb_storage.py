@@ -1,12 +1,16 @@
+import os
 from typing import TYPE_CHECKING, Iterator, Optional
 
 import rocksdb
 
+from hathor.conf import HathorSettings
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
+
+settings = HathorSettings()
 
 
 class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
@@ -15,8 +19,12 @@ class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncF
     It uses Protobuf serialization internally.
     """
 
-    def __init__(self, path='./storage.db', with_index=True):
-        self._db = rocksdb.DB(path, rocksdb.Options(create_if_missing=True))
+    def __init__(self, path='./', with_index=True):
+        tx_dir = os.path.join(path, 'tx.db')
+        self._db = rocksdb.DB(tx_dir, rocksdb.Options(create_if_missing=True))
+
+        attributes_dir = os.path.join(path, 'attributes.db')
+        self.attributes_db = rocksdb.DB(attributes_dir, rocksdb.Options(create_if_missing=True))
         super().__init__(with_index=with_index)
 
     def _load_from_bytes(self, data: bytes) -> 'BaseTransaction':
@@ -108,3 +116,16 @@ class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncF
         keys.seek_to_first()
         keys_count = sum(1 for _ in keys)
         return keys_count
+
+    def enable_full_verification(self) -> None:
+        self.attributes_db.put(settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE.encode('utf-8'), b'true')
+
+    def disable_full_verification(self) -> None:
+        self.attributes_db.delete(settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE.encode('utf-8'))
+
+    def running_full_verification_active(self) -> bool:
+        data = self.attributes_db.get(settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE.encode('utf-8'))
+        if data is None:
+            return False
+        else:
+            return True

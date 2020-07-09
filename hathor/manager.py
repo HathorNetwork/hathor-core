@@ -17,6 +17,7 @@ limitations under the License.
 import datetime
 import json
 import random
+import sys
 import time
 from enum import Enum, IntFlag
 from math import log
@@ -182,6 +183,22 @@ class HathorManager:
         """
         self.log.info('Starting HathorManager...')
         self.log.info('Network: {network}', network=self.network)
+        # If it's a full verification, we save on the storage that we are starting it
+        # this is required because if we stop the initilization in the middle, the metadata
+        # saved on the storage is not reliable anymore, only if we finish it
+        if self._full_verification:
+            self.tx_storage.enable_full_verification()
+        else:
+            # If it's a fast initialization and the last time a full initialization stopped in the middle
+            # we can't allow the full node to continue, so we need to remove the storage and do a full sync
+            # or execute an initialization with full verification
+            if self.tx_storage.running_full_verification_active():
+                self.log.error(
+                    'Error initializing node. The last time you started your node you did a full verification '
+                    'that was stopped in the middle. The storage is not reliable anymore because of that, so '
+                    'you must initialize with a full verification again or remove your storage and do a full sync.'
+                )
+                sys.exit()
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
         self.connections.start()
@@ -191,6 +208,8 @@ class HathorManager:
         self.tx_storage.disable_lock()
         # Initialize manager's components.
         self._initialize_components()
+        if self._full_verification:
+            self.tx_storage.disable_full_verification()
         self.tx_storage.enable_lock()
         # Metric starts to capture data
         self.metrics.start()

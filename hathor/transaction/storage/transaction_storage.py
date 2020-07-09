@@ -555,6 +555,25 @@ class TransactionStorage(ABC):
         """
         raise NotImplementedError
 
+    def enable_full_verification(self) -> None:
+        """ Save on storage that the full node is initializing with a full verification
+        """
+        # XXX Some storages (e.g. memory storage) don't need this attribute
+        return
+
+    def disable_full_verification(self) -> None:
+        """ Remove from storage that the full node is initializing with a full verification
+        """
+        # XXX Some storages (e.g. memory storage) don't need this attribute
+        return
+
+    def running_full_verification_active(self) -> bool:
+        """ Return if the full node is initializing with a full verification
+            or was running a full verification and was stopped in the middle
+        """
+        # XXX Some storages (e.g. memory storage) don't need this attribute
+        return False
+
 
 class TransactionStorageAsyncFromSync(TransactionStorage):
     """Implement async interface from sync interface, for legacy implementations."""

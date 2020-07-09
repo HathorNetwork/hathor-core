@@ -228,3 +228,12 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self._flush_to_storage(self.dirty_txs.copy())
         res = yield self.store.get_count_tx_blocks_deferred()
         return res
+
+    def enable_full_verification(self) -> None:
+        self.store.enable_full_verification()
+
+    def disable_full_verification(self) -> None:
+        self.store.disable_full_verification()
+
+    def running_full_verification_active(self) -> bool:
+        return self.store.running_full_verification_active()

@@ -123,13 +123,11 @@ class RunNode:
             print('Using Wallet at {}'.format(wallet_dir))
             if args.rocksdb_storage:
                 from hathor.transaction.storage import TransactionRocksDBStorage
-                tx_dir = os.path.join(args.data, 'tx.db')
-                tx_storage = TransactionRocksDBStorage(path=tx_dir, with_index=(not args.cache))
-                print('Using TransactionRocksDBStorage at {}'.format(tx_dir))
+                tx_storage = TransactionRocksDBStorage(path=args.data, with_index=(not args.cache))
+                print('Using TransactionRocksDBStorage at {}'.format(args.data))
             else:
-                tx_dir = os.path.join(args.data, 'tx')
-                tx_storage = TransactionCompactStorage(path=tx_dir, with_index=(not args.cache))
-                print('Using TransactionCompactStorage at {}'.format(tx_dir))
+                tx_storage = TransactionCompactStorage(path=args.data, with_index=(not args.cache))
+                print('Using TransactionCompactStorage at {}'.format(args.data))
             if args.cache:
                 tx_storage = TransactionCacheStorage(tx_storage, reactor)
                 if args.cache_size:

@@ -6,7 +6,7 @@ import re
 from typing import TYPE_CHECKING, Any, Dict, Iterator, Optional
 
 from hathor.conf import HathorSettings
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.transaction.storage.exceptions import AttributeDoesNotExist, TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
 from hathor.transaction.transaction_metadata import TransactionMetadata
 
@@ -23,12 +23,15 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
     """
 
     def __init__(self, path: str = './', with_index: bool = True):
-        os.makedirs(path, exist_ok=True)
-        self.path = path
+        self.tx_path = os.path.join(path, 'tx')
+        os.makedirs(self.tx_path, exist_ok=True)
 
         filename_pattern = r'^tx_([\dabcdef]{64})\.json$'
         self.re_pattern = re.compile(filename_pattern)
-        self.create_subfolders(self.path, settings.STORAGE_SUBFOLDERS)
+        self.create_subfolders(self.tx_path, settings.STORAGE_SUBFOLDERS)
+
+        self.attributes_path = os.path.join(path, 'attributes')
+        os.makedirs(self.attributes_path, exist_ok=True)
 
         super().__init__(with_index=with_index)
 
@@ -75,7 +78,7 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
         hash_hex = hash_bytes.hex()
         filename = 'tx_{}.json'.format(hash_hex)
         subfolder = hash_hex[-2:]
-        filepath = os.path.join(self.path, subfolder, filename)
+        filepath = os.path.join(self.tx_path, subfolder, filename)
         return filepath
 
     def transaction_exists(self, hash_bytes: bytes) -> bool:
@@ -162,7 +165,7 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
     def get_all_transactions(self) -> Iterator['BaseTransaction']:
         tx: Optional['BaseTransaction']
 
-        for f in glob.iglob(os.path.join(self.path, '*/*')):
+        for f in glob.iglob(os.path.join(self.tx_path, '*/*')):
             match = self.re_pattern.match(os.path.basename(f))
             if match:
                 hash_bytes = bytes.fromhex(match.groups()[0])
@@ -171,5 +174,27 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
                 yield tx
 
     def get_count_tx_blocks(self) -> int:
-        files = [f for f in glob.iglob(os.path.join(self.path, '*/*')) if self.re_pattern.match(os.path.basename(f))]
+        files = [
+            f for f in glob.iglob(os.path.join(self.tx_path, '*/*')) if self.re_pattern.match(os.path.basename(f))
+        ]
         return len(files)
+
+    def enable_full_verification(self) -> None:
+        filepath = os.path.join(self.attributes_path, settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE)
+        with open(filepath, 'w') as json_file:
+            json_file.write(json.dumps(True))
+
+    def disable_full_verification(self) -> None:
+        filepath = os.path.join(self.attributes_path, settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE)
+        try:
+            os.unlink(filepath)
+        except FileNotFoundError:
+            pass
+
+    def running_full_verification_active(self) -> bool:
+        filepath = os.path.join(self.attributes_path, settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE)
+        try:
+            self.load_from_json(filepath, AttributeDoesNotExist())
+            return True
+        except AttributeDoesNotExist:
+            return False

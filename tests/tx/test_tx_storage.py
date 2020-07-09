@@ -367,6 +367,23 @@ class _BaseTransactionStorageTest:
             yield gatherResults(deferreds)
             self.tx_storage._disable_weakref()
 
+        def test_full_verification_attribute(self):
+            storages_to_test = (
+                TransactionRocksDBStorage,
+                TransactionCompactStorage,
+                TransactionBinaryStorage
+            )
+
+            # We should do this test only for the storages above or a cache storage
+            # that uses one of the storages above as store
+            if isinstance(self.tx_storage, storages_to_test) or (isinstance(self.tx_storage, TransactionCacheStorage)
+                    and isinstance(self.tx_storage.store, storages_to_test)):
+                self.assertFalse(self.tx_storage.running_full_verification_active())
+                self.tx_storage.enable_full_verification()
+                self.assertTrue(self.tx_storage.running_full_verification_active())
+                self.tx_storage.disable_full_verification()
+                self.assertFalse(self.tx_storage.running_full_verification_active())
+
     class _RemoteStorageTest(_TransactionStorageTest):
         def setUp(self, tx_storage, reactor=None):
             tx_storage, self._server = start_remote_storage(tx_storage=tx_storage)
@@ -406,7 +423,8 @@ class TransactionCompactStorageTest(_BaseTransactionStorageTest._TransactionStor
 
     def test_subfolders(self):
         # test we have the subfolders under the main tx folder
-        subfolders = os.listdir(self.directory)
+        subfolders_path = os.path.join(self.directory, 'tx')
+        subfolders = os.listdir(subfolders_path)
         self.assertEqual(settings.STORAGE_SUBFOLDERS, len(subfolders))
 
     def tearDown(self):

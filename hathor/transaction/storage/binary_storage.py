@@ -3,22 +3,32 @@ import os
 import re
 from typing import TYPE_CHECKING
 
+from hathor.conf import HathorSettings
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionMetadataDoesNotExist
+from hathor.transaction.storage.exceptions import (
+    AttributeDoesNotExist,
+    TransactionDoesNotExist,
+    TransactionMetadataDoesNotExist,
+)
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
 from hathor.transaction.transaction_metadata import TransactionMetadata
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
 
+settings = HathorSettings()
+
 
 class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
     def __init__(self, path='./', with_index=True):
-        os.makedirs(path, exist_ok=True)
-        self.path = path
+        self.tx_path = os.path.join(path, 'tx')
+        os.makedirs(self.tx_path, exist_ok=True)
 
         filename_pattern = r'^tx_([\dabcdef]{64})\.bin$'
         self.re_pattern = re.compile(filename_pattern)
+
+        self.attributes_path = os.path.join(path, 'attributes')
+        os.makedirs(self.attributes_path, exist_ok=True)
 
         super().__init__(with_index=with_index)
 
@@ -62,7 +72,7 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
 
     def generate_filepath(self, hash_bytes):
         filename = 'tx_{}.bin'.format(hash_bytes.hex())
-        filepath = os.path.join(self.path, filename)
+        filepath = os.path.join(self.tx_path, filename)
         return filepath
 
     def serialize_metadata(self, metadata):
@@ -73,7 +83,7 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
 
     def generate_metadata_filepath(self, hash_bytes):
         filename = 'tx_{}_metadata.json'.format(hash_bytes.hex())
-        filepath = os.path.join(self.path, filename)
+        filepath = os.path.join(self.tx_path, filename)
         return filepath
 
     def transaction_exists(self, hash_bytes):
@@ -128,7 +138,7 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         return self.load_metadata(data)
 
     def get_all_transactions(self):
-        path = self.path
+        path = self.tx_path
 
         def get_tx(hash_bytes, path):
             tx = self.get_transaction_from_weakref(hash_bytes)
@@ -153,6 +163,25 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
                     yield tx
 
     def get_count_tx_blocks(self):
-        files = os.listdir(self.path)
+        files = os.listdir(self.tx_path)
         assert len(files) % 2 == 0
         return len(files) // 2
+
+    def enable_full_verification(self) -> None:
+        filepath = os.path.join(self.attributes_path, settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE)
+        self.save_to_json(filepath, True)
+
+    def disable_full_verification(self) -> None:
+        filepath = os.path.join(self.attributes_path, settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE)
+        try:
+            os.unlink(filepath)
+        except FileNotFoundError:
+            pass
+
+    def running_full_verification_active(self) -> bool:
+        filepath = os.path.join(self.attributes_path, settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE)
+        try:
+            self.load_from_json(filepath, AttributeDoesNotExist())
+            return True
+        except AttributeDoesNotExist:
+            return False
