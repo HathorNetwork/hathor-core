@@ -8,19 +8,15 @@ settings = HathorSettings()
 
 
 def get_genesis_output():
-    import base58
+    # use this if to calculate the genesis output. We have to do it if:
+    # - we change genesis priv/pub keys
+    # - there's some change to the way we calculate hathor addresses
     from hathor.transaction.scripts import P2PKH
-    if settings.NETWORK_NAME == 'mainnet':
-        address = 'HJB2yxxsHtudGGy3jmVeadwMfRi2zNCKKD'
-    elif settings.NETWORK_NAME == 'testnet-echo':
-        address = 'WdmDUMp8KvzhWB7KLgguA2wBiKsh4Ha8eX'
-    elif settings.NETWORK_NAME == 'unittests':
-        address = 'HVayMofEDh4XGsaQJeRJKhutYxYodYNop6'
-    else:
-        raise ValueError('Network unknown.')
-
-    address_bytes = base58.b58decode(address)
-    return P2PKH.create_output_script(address_bytes).hex()
+    from hathor.crypto.util import get_address_from_public_key
+    # read genesis keys
+    genesis_private_key = get_genesis_key()
+    address = get_address_from_public_key(genesis_private_key.public_key())
+    return P2PKH.create_output_script(address).hex()
 
 
 class GenesisTest(unittest.TestCase):
