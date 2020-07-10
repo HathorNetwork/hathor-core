@@ -2,7 +2,6 @@ from hathor.conf import HathorSettings
 from hathor.manager import TestMode
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
-from tests.utils import get_genesis_key
 
 settings = HathorSettings()
 
