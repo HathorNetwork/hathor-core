@@ -36,13 +36,15 @@ from hathor.difficulty import Hash, PDiff, Target, Weight
 from hathor.merged_mining.bitcoin import (
     BitcoinBlock,
     BitcoinBlockHeader,
+    BitcoinRawTransaction,
     BitcoinTransaction,
     BitcoinTransactionInput,
     BitcoinTransactionOutput,
     build_merkle_path_for_coinbase,
+    build_merkle_root,
     build_merkle_root_from_path,
+    encode_bytearray,
     encode_uint32,
-    encode_varint,
 )
 from hathor.merged_mining.bitcoin_rpc import IBitcoinRPC
 from hathor.merged_mining.util import Periodic
@@ -173,7 +175,9 @@ class SingleMinerJob(NamedTuple):
     bits: bytes  # 4 bytes
     timestamp: int
     hathor_block: HathorBlock
-    transactions: List[BitcoinTransaction]
+    transactions: List[BitcoinRawTransaction]
+    xnonce1: bytes
+    xnonce2_size: int
     clean: bool = True
     bitcoin_height: int = 0
     hathor_height: Optional[int] = None
@@ -205,7 +209,7 @@ class SingleMinerJob(NamedTuple):
         bitcoin_header = BitcoinBlockHeader(
             self.version,
             self.prev_hash,
-            build_merkle_root_from_path([coinbase_tx.hash] + list(self.merkle_path)),
+            build_merkle_root_from_path([coinbase_tx.txid] + list(self.merkle_path)),
             work.timestamp or self.timestamp,
             self.bits,
             work.nonce
@@ -234,8 +238,18 @@ class SingleMinerJob(NamedTuple):
         """ Build the Bitcoin Block from job and work data.
         """
         bitcoin_header, coinbase_tx = self._make_bitcoin_block_and_coinbase(work)
-        bitcoin_block = BitcoinBlock(bitcoin_header, [coinbase_tx] + self.transactions[:])
+        bitcoin_block = BitcoinBlock(bitcoin_header, [coinbase_tx.to_raw()] + self.transactions[:])
         return bitcoin_block
+
+    def dummy_work(self) -> SingleMinerWork:
+        """ Used for debugging and validating a block proposal.
+        """
+        return SingleMinerWork(self.job_id, 0, self.xnonce1, b'\0' * self.xnonce2_size)
+
+    def dummy_bitcoin_block(self) -> BitcoinBlock:
+        """ Used for debugging and validating a block proposal.
+        """
+        return self.build_bitcoin_block(self.dummy_work())
 
 
 class MergedMiningStratumProtocol(asyncio.Protocol):
@@ -741,14 +755,9 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
             self.send_request('mining.notify', job.to_stratum_params())
 
             # for debugging only:
-            bitcoin_block = job.build_bitcoin_block_header(self.dummy_work(job))
+            bitcoin_block = job.build_bitcoin_block_header(job.dummy_work())
             self.log.debug('job updated', bitcoin_block=bytes(bitcoin_block).hex(),
                            merkle_root=bitcoin_block.merkle_root.hex())
-
-    def dummy_work(self, job: SingleMinerJob) -> SingleMinerWork:
-        """ Useful only for debugging.
-        """
-        return SingleMinerWork(job.job_id, 0, self.xnonce1, b'\0' * self.xnonce2_size)
 
     async def estimator_loop(self) -> None:
         """ This loop only cares about reducing the current difficulty if the miner takes too long to submit a solution.
@@ -792,8 +801,10 @@ class BitcoinCoordJob(NamedTuple):
     size_limit: int
     bits: bytes
     height: int
-    transactions: List[BitcoinTransaction]
+    transactions: List[BitcoinRawTransaction]
     merkle_path: Tuple[bytes, ...]
+    witness_commitment: Optional[bytes] = None
+    append_to_input: bool = True
 
     @classmethod
     def from_dict(cls, params: dict) -> 'BitcoinCoordJob':
@@ -901,6 +912,7 @@ class BitcoinCoordJob(NamedTuple):
         ... })
         BitcoinCoordJob(...)
         """
+        segwit_commitment = params.get('default_witness_commitment')
         return cls(
             params['version'],
             bytes.fromhex(params['previousblockhash']),
@@ -910,8 +922,9 @@ class BitcoinCoordJob(NamedTuple):
             params['sizelimit'],
             bytes.fromhex(params['bits']),
             params['height'],
-            list(map(BitcoinTransaction.from_dict, params['transactions'])),
-            tuple(build_merkle_path_for_coinbase([bytes.fromhex(tx['hash']) for tx in params['transactions']])),
+            list(map(BitcoinRawTransaction.from_dict, params['transactions'])),
+            tuple(build_merkle_path_for_coinbase([bytes.fromhex(tx['txid']) for tx in params['transactions']])),
+            bytes.fromhex(segwit_commitment) if segwit_commitment is not None else None,
         )
 
     def to_dict(self) -> Dict[Any, Any]:
@@ -940,28 +953,46 @@ class BitcoinCoordJob(NamedTuple):
                                   extra_nonce_size: Optional[int] = None) -> BitcoinTransaction:
         """ The coinbase transaction is entirely defined by the coordinator, which acts as a pool server.
         """
+        import struct
 
         inputs = []
         outputs: List[BitcoinTransactionOutput] = []
 
         # coinbase input
-        coinbase_script = encode_varint(self.height)
+        coinbase_script = encode_bytearray(struct.pack('<q', self.height).rstrip(b'\0'))
 
-        # add hathor base block hash to coinbase:
-        coinbase_script += MAGIC_NUMBER
-        coinbase_script += hathor_block_hash
-
-        if extra_nonce_size is not None:
-            coinbase_script += b'\0' * extra_nonce_size
+        if self.append_to_input:
+            coinbase_script += MAGIC_NUMBER
+            coinbase_script += hathor_block_hash
+            if extra_nonce_size is not None:
+                coinbase_script += b'\0' * extra_nonce_size
 
         coinbase_input = BitcoinTransactionInput.coinbase(coinbase_script)
-        inputs.append(coinbase_input)
+        # append after sorting out segwit
 
         # coinbase output: payout
         coinbase_output = BitcoinTransactionOutput(self.coinbase_value, payback_script_bitcoin)
         outputs.append(coinbase_output)
 
-        return BitcoinTransaction(inputs=inputs, outputs=outputs)
+        if self.witness_commitment is not None:
+            segwit_output = BitcoinTransactionOutput(0, self.witness_commitment)
+            outputs.append(segwit_output)
+            coinbase_input.script_witness.append(b'\0' * 32)
+
+        # append now because segwit presence may change this
+        inputs.append(coinbase_input)
+
+        # add hathor base block hash to coinbase:
+        if not self.append_to_input:
+            output_script = MAGIC_NUMBER
+            output_script += hathor_block_hash
+            if extra_nonce_size is not None:
+                output_script += b'\0' * extra_nonce_size
+
+            coinbase_output = BitcoinTransactionOutput(0, output_script)
+            outputs.append(coinbase_output)
+
+        return BitcoinTransaction(inputs=inputs, outputs=outputs, include_witness=False)
 
     def get_timestamp(self) -> int:
         """ Timestamp is now or min_time, whatever is higher."""
@@ -978,11 +1009,34 @@ class MergedJob(NamedTuple):
     payback_script_bitcoin: Optional[bytes]
     clean: bool
 
+    def build_sample_block_proposal(self) -> BitcoinBlock:
+        return self._new_single_miner_job(
+            '',
+            b'\0' * MergedMiningCoordinator.XNONCE1_SIZE,
+            MergedMiningStratumProtocol.DEFAULT_XNONCE2_SIZE,
+            b'',
+            b'',
+        ).dummy_bitcoin_block()
+
     def new_single_miner_job(self, protocol: MergedMiningStratumProtocol) -> SingleMinerJob:
         """ Generate a partial job for a single miner, based on this job.
         """
-        # payback_address_bitcoin = protocol.coordinator.payback_address_bitcoin
-        xnonce_size = len(protocol.xnonce1) + protocol.xnonce2_size
+        assert protocol.payback_script_hathor is not None
+        payback_script_bitcoin = self.payback_script_bitcoin or protocol.payback_script_bitcoin
+        assert payback_script_bitcoin is not None
+        return self._new_single_miner_job(
+            protocol.next_job_id(),
+            protocol.xnonce1,
+            protocol.xnonce2_size,
+            protocol.payback_script_hathor,
+            payback_script_bitcoin,
+        )
+
+    def _new_single_miner_job(self, job_id: str, xnonce1: bytes, xnonce2_size: int, payback_script_hathor: bytes,
+                              payback_script_bitcoin: bytes) -> SingleMinerJob:
+        """ Private method, used on `build_sample_block_proposal` and `new_single_miner_job`.
+        """
+        xnonce_size = len(xnonce1) + xnonce2_size
 
         # base txs for merkle tree, before coinbase
         transactions = self.bitcoin_coord.transactions
@@ -991,14 +1045,11 @@ class MergedJob(NamedTuple):
         hathor_block = self.hathor_coord.block.clone()
         assert isinstance(hathor_block, HathorBlock)
         if not hathor_block.outputs[0].script:
-            assert protocol.payback_script_hathor is not None
-            hathor_block.outputs[0].script = protocol.payback_script_hathor
+            hathor_block.outputs[0].script = payback_script_hathor
             hathor_block.update_hash()
 
         # build coinbase transaction with hathor block hash
         hathor_block_hash = hathor_block.get_base_hash()
-        payback_script_bitcoin = self.payback_script_bitcoin or protocol.payback_script_bitcoin
-        assert payback_script_bitcoin is not None
         coinbase_tx = self.bitcoin_coord.make_coinbase_transaction(
             hathor_block_hash,
             payback_script_bitcoin,
@@ -1016,7 +1067,7 @@ class MergedJob(NamedTuple):
         # TODO: check if total transaction size increase exceed size and sigop limits, there's probably an RPC for this
 
         return SingleMinerJob(
-            job_id=protocol.next_job_id(),
+            job_id=job_id,
             prev_hash=self.bitcoin_coord.previous_block_hash,
             coinbase_head=coinbase_head,
             coinbase_tail=coinbase_tail,
@@ -1029,7 +1080,26 @@ class MergedJob(NamedTuple):
             clean=self.clean,
             bitcoin_height=self.bitcoin_coord.height,
             hathor_height=self.hathor_coord.height,
+            xnonce1=xnonce1,
+            xnonce2_size=xnonce2_size,
         )
+
+
+def strip_transactions(data: Dict, rm_cond: Callable[[Dict], bool]) -> None:
+    """ Remove all transactions from gbt data for which rm_cond returns True. """
+    selected_txs = []
+    excluded_txs = []
+    for t in data['transactions']:
+        if rm_cond(t):
+            excluded_txs.append(t)
+        else:
+            selected_txs.append(t)
+    if excluded_txs:
+        excluded_fee = sum(t['fee'] for t in excluded_txs)
+        data['coinbasevalue'] -= excluded_fee
+        data['transactions'] = selected_txs
+        logger.warn('{removed} txs removed, {left} left', removed=len(excluded_txs), left=len(selected_txs),
+                    removed_fee=excluded_fee)
 
 
 class MergedMiningCoordinator:
@@ -1077,6 +1147,8 @@ class MergedMiningCoordinator:
         self.update_bitcoin_block_task: Optional[Periodic] = None
         self.update_hathor_block_task: Optional[Periodic] = None
         self.started_at = 0.0
+        self.strip_all_transactions = False
+        self.strip_segwit_transactions = False
 
     @property
     def uptime(self) -> float:
@@ -1140,13 +1212,19 @@ class MergedMiningCoordinator:
             self.log.exception('Failed to get Bitcoin Block Template')
             return
         self.last_bitcoin_block_received = time.time()
+        if self.strip_all_transactions:
+            strip_transactions(data, lambda t: True)
+            data.pop('default_witness_commitment', None)
+        elif self.strip_segwit_transactions:
+            strip_transactions(data, lambda t: BitcoinTransaction.from_dict(t).include_witness)
+            data.pop('default_witness_commitment', None)
         data_log = data.copy()
         data_log['len(transactions)'] = len(data_log['transactions'])
         del data_log['transactions']
         self.log.debug('bitcoin.getblocktemplate response', res=data_log)
         self.bitcoin_coord_job = BitcoinCoordJob.from_dict(data)
         self.log.debug('New Bitcoin Block template.')
-        self.update_merged_block()
+        await self.update_merged_block()
 
     def update_bitcoin_submitted(self, height: int) -> None:
         """ Used to remember the last height submitted, for use when discarding late winning shares.
@@ -1200,7 +1278,7 @@ class MergedMiningCoordinator:
         # self.log.debug('hathor.get_block_template response', block=block, height=height)
         self.hathor_coord_job = HathorCoordJob(block, height)
         self.log.debug('New Hathor Block template.')
-        self.update_merged_block()
+        await self.update_merged_block()
 
     def is_next_job_clean(self) -> bool:
         """ Used to determine if the current job must be immediatly stopped in favor of the next job.
@@ -1219,7 +1297,7 @@ class MergedMiningCoordinator:
             return True
         return False
 
-    def update_merged_block(self) -> None:
+    async def update_merged_block(self) -> None:
         """ This should be called after either (Hathor/Bitcoin) block template is updated to downstream the changes.
         """
         from hathor.merged_mining.bitcoin import create_output_script as create_output_script_btc
@@ -1234,14 +1312,24 @@ class MergedMiningCoordinator:
             output_script = create_output_script_btc(decode_address(self.payback_address_bitcoin))
         else:
             output_script = None
-        self.next_merged_job = MergedJob(
+        merged_job = MergedJob(
             self.hathor_coord_job,
             self.bitcoin_coord_job,
             output_script,
             self.is_next_job_clean(),
         )
-        self.update_jobs()
-        self.log.debug('Merged job updated.')
+        # validate built job
+        block_proposal = merged_job.build_sample_block_proposal()
+        merkle_root = build_merkle_root(list(tx.txid for tx in block_proposal.transactions))
+        if merkle_root != block_proposal.header.merkle_root:
+            self.log.warn('bad merkle root', expected=merkle_root.hex(), got=block_proposal.header.merkle_root.hex())
+        error = await self.bitcoin_rpc.verify_block_proposal(block=bytes(block_proposal))
+        if error is not None:
+            self.log.warn('proposed block is invalid, skipping update', error=error)
+        else:
+            self.next_merged_job = merged_job
+            self.update_jobs()
+            self.log.debug('merged job updated')
 
     def status(self) -> Dict[Any, Any]:
         """ Build status dict with useful metrics for use in MM Status API.

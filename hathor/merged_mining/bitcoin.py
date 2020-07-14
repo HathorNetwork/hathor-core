@@ -1,5 +1,19 @@
 import struct
-from typing import List, NamedTuple, Sequence, SupportsBytes, Tuple
+from typing import Dict, List, NamedTuple, Sequence, SupportsBytes, Tuple, Union
+
+
+@SupportsBytes.register
+class BitcoinRawTransaction(NamedTuple):
+    hash: bytes
+    txid: bytes
+    data: bytes
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'BitcoinRawTransaction':
+        return cls(bytes.fromhex(data['hash']), bytes.fromhex(data['txid']), bytes.fromhex(data['data']))
+
+    def __bytes__(self) -> bytes:
+        return self.data
 
 
 @SupportsBytes.register
@@ -38,7 +52,7 @@ class BitcoinBlockHeader(NamedTuple):
         ])
 
     @classmethod
-    def from_dict(cls, params: dict) -> 'BitcoinBlockHeader':
+    def from_dict(cls, params: Dict) -> 'BitcoinBlockHeader':
         r""" Convert from dict of the properties returned from Bitcoin RPC.
 
         Examples:
@@ -101,11 +115,11 @@ def _merkle_concat(left: bytes, right: bytes) -> bytes:
     return bytes(reversed(left)) + bytes(reversed(right))
 
 
-def build_merkle_path_for_coinbase(merkle_leaves: List[bytes], _partial_path: List[bytes] = []) -> List[bytes]:
-    """ Return the merkle path (unidirectional since it's a list) to the coinbase (first tx) from hash leaves.
+def build_merkle_path_for_coinbase(merkle_leaves: List[bytes]) -> List[bytes]:
+    """ Return the merkle path (unidirectional since it's a list) to the coinbase (not included) from hash leaves.
 
-    >>> [i.hex() for i in build_merkle_path_for_coinbase([bytes.fromhex(tx) for tx in [
-    ...     '32a31fb3f8596e5de0a40a53748839d15e0a1a1d264da5b7dacec9209a59fd2a',
+    >>> tx_list = [bytes.fromhex(tx) for tx in [
+    ...     #'32a31fb3f8596e5de0a40a53748839d15e0a1a1d264da5b7dacec9209a59fd2a',
     ...     '45c5dcbe62075d366b87fa375fb919c7a8ede24eba0a3a094df491aef55184ca',
     ...     '170938fa8cd0d26e796d0b407eaa2d40db8a8c0cb660f68bc0df2cc65ffc3990',
     ...     'd0d6241f43a27980da30ce66250bea94d852b77f5413a8e031a5bb545e4be80e',
@@ -122,12 +136,19 @@ def build_merkle_path_for_coinbase(merkle_leaves: List[bytes], _partial_path: Li
     ...     'b244488bd9bd57fb33ea1c3872d510b64abdce2245e17a6607653e0b17628c7a',
     ...     'efb48aaeb133cca84af2d2fb9c13399db1f9f1fdb85b4210a936c545cd3124e7',
     ...     '232aaff768a2653db16fbe84504ff7d59396eb08663d2f5dda1d1587ce297df8'
-    ... ]])]
+    ... ]]
+    >>> [i.hex() for i in build_merkle_path_for_coinbase(tx_list)]
     ['45c5dcbe62075d366b87fa375fb919c7a8ede24eba0a3a094df491aef55184ca', \
 '6caec8ea3732c953fa195320bb26d2e9f630be5edf384a48e42e26ae7198f844', \
 '188c78ef10ce002f2fc3cf8f445d4d1aa12d5f3ce32420e565c9d3cc4d64d8a2', \
 '67ce1464dc89e67dd30acf8adf74c7ec37fa9f14040b7ecd9127391af1b25f2a', \
 'ee017b11d10898f3b19194f43d9b5b9cf443b8e992797e49f4edd603fee060c7']
+    """
+    return _build_merkle_path_for_coinbase([b''] + merkle_leaves)
+
+
+def _build_merkle_path_for_coinbase(merkle_leaves: List[bytes], _partial_path: List[bytes] = []) -> List[bytes]:
+    """ Internal implementation of `build_merkle_path_for_coinbase`, assumes first `merkle_leave` is the coinbase.
     """
     merkle_leaves = merkle_leaves[:]  # copy to preserve original
     _partial_path = _partial_path[:]  # copy to preserve original
@@ -142,7 +163,7 @@ def build_merkle_path_for_coinbase(merkle_leaves: List[bytes], _partial_path: Li
         len_merkle_leaves += 1
     _partial_path.append(merkle_leaves[1])  # to trace the coinbase (1st tx) we always get its pair (2nd tx)
     iter_leaves = iter(merkle_leaves[:])
-    return build_merkle_path_for_coinbase(
+    return _build_merkle_path_for_coinbase(
         [sha256d_hash(_merkle_concat(l, r)) for l, r in zip(iter_leaves, iter_leaves)],
         _partial_path=_partial_path
     )
@@ -297,7 +318,7 @@ class BitcoinTransactionInput(NamedTuple):
         return bool(self.script_witness)
 
     @classmethod
-    def from_dict(cls, params: dict) -> 'BitcoinTransactionInput':
+    def from_dict(cls, params: Dict) -> 'BitcoinTransactionInput':
         r""" Convert from dict of the properties returned from Bitcoin RPC.
 
         Examples:
@@ -357,7 +378,7 @@ class BitcoinTransactionOutput(NamedTuple):
         return struct.pack('<Q', self.value) + encode_bytearray(self.script_pubkey)
 
     @classmethod
-    def from_dict(cls, params: dict) -> 'BitcoinTransactionOutput':
+    def from_dict(cls, params: Dict) -> 'BitcoinTransactionOutput':
         r""" Convert from dict of the properties returned from Bitcoin RPC.
 
         Examples:
@@ -437,6 +458,11 @@ class BitcoinTransaction(NamedTuple):
         data.extend(struct.pack('<I', self.lock_time))
         return bytes(data)
 
+    def to_raw(self) -> BitcoinRawTransaction:
+        """ Convert this transaction into a raw transaction that holds hash, txid and serialized data bytes.
+        """
+        return BitcoinRawTransaction(self.hash, self.txid, bytes(self))
+
     @property
     def tx_witnesses(self) -> List[List[bytes]]:
         """ List of witnesses list: each input yields a list.
@@ -456,7 +482,7 @@ class BitcoinTransaction(NamedTuple):
         return sha256d_hash(self._to_bytes(skip_segwit=True))
 
     @classmethod
-    def from_dict(cls, params: dict) -> 'BitcoinTransaction':
+    def from_dict(cls, params: Dict) -> 'BitcoinTransaction':
         r""" Convert from dict of the properties returned from Bitcoin RPC.
 
         Examples:
@@ -695,7 +721,7 @@ class BitcoinTransaction(NamedTuple):
 @SupportsBytes.register
 class BitcoinBlock(NamedTuple):
     header: BitcoinBlockHeader
-    transactions: List[BitcoinTransaction]
+    transactions: Sequence[Union[BitcoinRawTransaction, BitcoinTransaction]]
 
     def __bytes__(self) -> bytes:
         return bytes(self.header) + encode_list([bytes(t) for t in self.transactions])

@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from hathor.client import HathorClientStub
 from hathor.merged_mining import MergedMiningCoordinator
@@ -1402,6 +1402,9 @@ class BitcoinRPCStub(IBitcoinRPC):
         }
         await asyncio.sleep(self.response_delay)
         return stub
+
+    async def verify_block_proposal(self, *, block: bytes) -> Optional[str]:
+        return None
 
     async def submit_block(self, block: bytes) -> str:
         stub = 'high-hash'
