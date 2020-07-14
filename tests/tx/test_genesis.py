@@ -11,7 +11,7 @@ def get_genesis_output():
     from hathor.transaction.scripts import P2PKH
     if settings.NETWORK_NAME == 'mainnet':
         address = 'HJB2yxxsHtudGGy3jmVeadwMfRi2zNCKKD'
-    elif settings.NETWORK_NAME == 'testnet-echo':
+    elif settings.NETWORK_NAME.startswith('testnet'):
         address = 'WdmDUMp8KvzhWB7KLgguA2wBiKsh4Ha8eX'
     elif settings.NETWORK_NAME == 'unittests':
         address = 'HVayMofEDh4XGsaQJeRJKhutYxYodYNop6'

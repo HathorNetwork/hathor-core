@@ -43,8 +43,8 @@ tests-simulation:
 
 .PHONY: tests-genesis
 tests-genesis:
-	export HATHOR_TEST_CONFIG_FILE=hathor.conf.mainnet; pytest tests/tx/test_genesis.py
-	export HATHOR_TEST_CONFIG_FILE=hathor.conf.testnet; pytest tests/tx/test_genesis.py
+	HATHOR_TEST_CONFIG_FILE=hathor.conf.mainnet pytest tests/tx/test_genesis.py
+	HATHOR_TEST_CONFIG_FILE=hathor.conf.testnet pytest tests/tx/test_genesis.py
 
 .PHONY: tests
 tests: tests-cli tests-lib tests-genesis
