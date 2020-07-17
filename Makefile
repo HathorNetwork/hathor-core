@@ -41,8 +41,13 @@ tests-lib:
 tests-simulation:
 	pytest --durations=10 --cov=hathor --cov-report=term -p no:warnings $(tests_simulation)
 
+.PHONY: tests-genesis
+tests-genesis:
+	HATHOR_TEST_CONFIG_FILE=hathor.conf.mainnet pytest tests/tx/test_genesis.py
+	HATHOR_TEST_CONFIG_FILE=hathor.conf.testnet pytest tests/tx/test_genesis.py
+
 .PHONY: tests
-tests: tests-cli tests-lib
+tests: tests-cli tests-lib tests-genesis
 
 .PHONY: tests-full
 tests-full:
