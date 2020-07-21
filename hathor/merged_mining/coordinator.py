@@ -1133,7 +1133,7 @@ class MergedMiningCoordinator:
         self.sequential_xnonce1 = sequential_xnonce1
         self._next_xnonce1 = 0
         self.job_count = 0
-        self.update_bitcoin_block_task: Optional[Periodic] = None
+        self.update_bitcoin_block_task: Optional[asyncio.Task] = None
         self.update_hathor_block_task: Optional[asyncio.Task] = None
         self.started_at = 0.0
         self.strip_all_transactions = False
@@ -1177,49 +1177,56 @@ class MergedMiningCoordinator:
     async def start(self) -> None:
         """ Starts the coordinator and subscribes for new blocks on the both networks in order to update miner jobs.
         """
-        self.started_at = time.time()
-        self.update_bitcoin_block_task = Periodic(self.update_bitcoin_block, self.BITCOIN_UPDATE_INTERVAL)
-        await self.update_bitcoin_block_task.start()
         loop = asyncio.get_event_loop()
+        self.started_at = time.time()
+        self.update_bitcoin_block_task = loop.create_task(self.update_bitcoin_block())
         self.update_hathor_block_task = loop.create_task(self.update_hathor_block())
 
     async def stop(self) -> None:
         """ Stops the client, interrupting mining processes, stoping supervisor loop, and sending finished jobs.
         """
         assert self.update_bitcoin_block_task is not None
-        await self.update_bitcoin_block_task.stop()
+        self.update_bitcoin_block_task.cancel()
         assert self.update_hathor_block_task is not None
         self.update_hathor_block_task.cancel()
         try:
-            await self.update_hathor_block_task
+            await asyncio.gather(
+                self.update_bitcoin_block_task,
+                self.update_hathor_block_task,
+            )
         except Exception:
             # XXX: ignore cancelled error, not clear what class it will be, depends on the event loop implementation
             #      it's probably not too important to nail down the exact exception
             self.log.warn('exception stopping Hathor task', exc_info=True)
 
     async def update_bitcoin_block(self) -> None:
-        """ Method periodically called to update the bitcoin block template.
+        """ Task that continuously polls block templates from bitcoin.get_block_template
         """
-        self.log.debug('get Bitcoin block template')
-        try:
-            data = await self.bitcoin_rpc.get_block_template()
-        except Exception:
-            self.log.warn('failed to get Bitcoin block template', exc_info=True)
-            return
-        self.last_bitcoin_block_received = time.time()
-        if self.strip_all_transactions:
-            strip_transactions(data, lambda t: True)
-            data.pop('default_witness_commitment', None)
-        elif self.strip_segwit_transactions:
-            strip_transactions(data, lambda t: BitcoinTransaction.from_dict(t).include_witness)
-            data.pop('default_witness_commitment', None)
-        data_log = data.copy()
-        data_log['len(transactions)'] = len(data_log['transactions'])
-        del data_log['transactions']
-        # self.log.debug('bitcoin.getblocktemplate response', res=data_log)
-        self.bitcoin_coord_job = BitcoinCoordJob.from_dict(data)
-        self.log.debug('new Bitcoin block template', height=self.bitcoin_coord_job.height)
-        await self.update_merged_block()
+        backoff = 1
+        longpoll_id = None
+        while True:
+            self.log.debug('get Bitcoin block template')
+            try:
+                data = await self.bitcoin_rpc.get_block_template(longpoll_id=longpoll_id)
+            except Exception:
+                self.log.exception('failed to get Bitcoin Block Template', exc_info=True)
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, self.MAX_RECONNECT_BACKOFF)
+                continue
+            else:
+                backoff = 1
+                longpoll_id = data.get('longpollid')
+                self.last_bitcoin_block_received = time.time()
+                data_log = data.copy()
+                data_log['len(transactions)'] = len(data_log['transactions'])
+                del data_log['transactions']
+                self.log.debug('bitcoin.getblocktemplate response', res=data_log)
+                self.bitcoin_coord_job = BitcoinCoordJob.from_dict(data)
+                self.log.debug('new Bitcoin block template', height=self.bitcoin_coord_job.height)
+                await self.update_merged_block()
+                if longpoll_id is None:
+                    self.log.warn('no longpoll_id received, sleep instead')
+                    await asyncio.sleep(self.BITCOIN_UPDATE_INTERVAL)
 
     def update_bitcoin_submitted(self, height: int) -> None:
         """ Used to remember the last height submitted, for use when discarding late winning shares.
