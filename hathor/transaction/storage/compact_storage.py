@@ -6,7 +6,7 @@ import re
 from typing import TYPE_CHECKING, Any, Dict, Iterator, Optional
 
 from hathor.conf import HathorSettings
-from hathor.transaction.storage.exceptions import AttributeDoesNotExist, TransactionDoesNotExist
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
 from hathor.transaction.transaction_metadata import TransactionMetadata
 
