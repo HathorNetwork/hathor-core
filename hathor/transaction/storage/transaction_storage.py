@@ -575,7 +575,7 @@ class TransactionStorage(ABC):
         """ Get value from storage
         """
         # XXX Some storages (e.g. memory storage) don't need this attribute
-        return
+        return None
 
     def start_full_verification(self) -> None:
         """ Save full verification on storage

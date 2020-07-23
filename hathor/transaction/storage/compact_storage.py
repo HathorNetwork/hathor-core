@@ -182,7 +182,7 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
     def add_value(self, key: str, value: str) -> None:
         filepath = os.path.join(self.attributes_path, key)
         with open(filepath, 'w') as json_file:
-            json_file.write(json.dumps(value))
+            json_file.write(value)
 
     def remove_value(self, key: str) -> None:
         filepath = os.path.join(self.attributes_path, key)
@@ -193,7 +193,8 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
 
     def get_value(self, key: str) -> Optional[str]:
         filepath = os.path.join(self.attributes_path, key)
-        try:
-            return self.load_from_json(filepath, AttributeDoesNotExist())
-        except AttributeDoesNotExist:
+        if os.path.isfile(filepath):
+            with open(filepath, 'r') as json_file:
+                return json_file.read()
+        else:
             return None
