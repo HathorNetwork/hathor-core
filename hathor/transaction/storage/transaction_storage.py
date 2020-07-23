@@ -8,6 +8,7 @@ from weakref import WeakValueDictionary
 from intervaltree.interval import Interval
 from twisted.internet.defer import Deferred, inlineCallbacks, succeed
 
+from hathor.conf import HathorSettings
 from hathor.indexes import IndexesManager, TokensIndex, TransactionsIndex, WalletIndex
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction.block import Block
@@ -15,6 +16,8 @@ from hathor.transaction.storage.exceptions import TransactionDoesNotExist, Trans
 from hathor.transaction.transaction import BaseTransaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.util import skip_warning
+
+settings = HathorSettings()
 
 
 class AllTipsCache(NamedTuple):
@@ -555,24 +558,40 @@ class TransactionStorage(ABC):
         """
         raise NotImplementedError
 
-    def enable_full_verification(self) -> None:
-        """ Save on storage that the full node is initializing with a full verification
+    def add_value(self, key: str, value: str) -> None:
+        """ Save value on storage
+            Need to be a string to support all storages, including rocksdb, that needs bytes
         """
         # XXX Some storages (e.g. memory storage) don't need this attribute
         return
 
-    def disable_full_verification(self) -> None:
+    def remove_value(self, key: str) -> None:
+        """ Remove value from storage
+        """
+        # XXX Some storages (e.g. memory storage) don't need this attribute
+        return
+
+    def get_value(self, key: str) -> Optional[str]:
+        """ Get value from storage
+        """
+        # XXX Some storages (e.g. memory storage) don't need this attribute
+        return
+
+    def start_full_verification(self) -> None:
+        """ Save full verification on storage
+        """
+        self.add_value(settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE, '1')
+
+    def finish_full_verification(self) -> None:
         """ Remove from storage that the full node is initializing with a full verification
         """
-        # XXX Some storages (e.g. memory storage) don't need this attribute
-        return
+        self.remove_value(settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE)
 
-    def running_full_verification_active(self) -> bool:
+    def is_running_full_verification(self) -> bool:
         """ Return if the full node is initializing with a full verification
             or was running a full verification and was stopped in the middle
         """
-        # XXX Some storages (e.g. memory storage) don't need this attribute
-        return False
+        return self.get_value(settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE) == '1'
 
 
 class TransactionStorageAsyncFromSync(TransactionStorage):

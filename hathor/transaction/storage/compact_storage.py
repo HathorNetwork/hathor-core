@@ -179,22 +179,21 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
         ]
         return len(files)
 
-    def enable_full_verification(self) -> None:
-        filepath = os.path.join(self.attributes_path, settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE)
+    def add_value(self, key: str, value: str) -> None:
+        filepath = os.path.join(self.attributes_path, key)
         with open(filepath, 'w') as json_file:
-            json_file.write(json.dumps(True))
+            json_file.write(json.dumps(value))
 
-    def disable_full_verification(self) -> None:
-        filepath = os.path.join(self.attributes_path, settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE)
+    def remove_value(self, key: str) -> None:
+        filepath = os.path.join(self.attributes_path, key)
         try:
             os.unlink(filepath)
         except FileNotFoundError:
             pass
 
-    def running_full_verification_active(self) -> bool:
-        filepath = os.path.join(self.attributes_path, settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE)
+    def get_value(self, key: str) -> Optional[str]:
+        filepath = os.path.join(self.attributes_path, key)
         try:
-            self.load_from_json(filepath, AttributeDoesNotExist())
-            return True
+            return self.load_from_json(filepath, AttributeDoesNotExist())
         except AttributeDoesNotExist:
-            return False
+            return None

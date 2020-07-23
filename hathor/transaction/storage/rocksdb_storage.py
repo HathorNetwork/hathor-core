@@ -3,14 +3,11 @@ from typing import TYPE_CHECKING, Iterator, Optional
 
 import rocksdb
 
-from hathor.conf import HathorSettings
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
-
-settings = HathorSettings()
 
 
 class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
@@ -117,15 +114,15 @@ class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncF
         keys_count = sum(1 for _ in keys)
         return keys_count
 
-    def enable_full_verification(self) -> None:
-        self.attributes_db.put(settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE.encode('utf-8'), b'true')
+    def add_value(self, key: str, value: str) -> None:
+        self.attributes_db.put(key.encode('utf-8'), value.encode('utf-8'))
 
-    def disable_full_verification(self) -> None:
-        self.attributes_db.delete(settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE.encode('utf-8'))
+    def remove_value(self, key: str) -> None:
+        self.attributes_db.delete(key.encode('utf-8'))
 
-    def running_full_verification_active(self) -> bool:
-        data = self.attributes_db.get(settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE.encode('utf-8'))
+    def get_value(self, key: str) -> Optional[str]:
+        data = self.attributes_db.get(key.encode('utf-8'))
         if data is None:
-            return False
+            return None
         else:
-            return True
+            return data.decode()

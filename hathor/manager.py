@@ -187,12 +187,12 @@ class HathorManager:
         # this is required because if we stop the initilization in the middle, the metadata
         # saved on the storage is not reliable anymore, only if we finish it
         if self._full_verification:
-            self.tx_storage.enable_full_verification()
+            self.tx_storage.start_full_verification()
         else:
             # If it's a fast initialization and the last time a full initialization stopped in the middle
             # we can't allow the full node to continue, so we need to remove the storage and do a full sync
             # or execute an initialization with full verification
-            if self.tx_storage.running_full_verification_active():
+            if self.tx_storage.is_running_full_verification():
                 self.log.error(
                     'Error initializing node. The last time you started your node you did a full verification '
                     'that was stopped in the middle. The storage is not reliable anymore because of that, so '
@@ -209,7 +209,7 @@ class HathorManager:
         # Initialize manager's components.
         self._initialize_components()
         if self._full_verification:
-            self.tx_storage.disable_full_verification()
+            self.tx_storage.finish_full_verification()
         self.tx_storage.enable_lock()
         # Metric starts to capture data
         self.metrics.start()

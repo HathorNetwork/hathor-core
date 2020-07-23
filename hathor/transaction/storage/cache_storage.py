@@ -229,11 +229,11 @@ class TransactionCacheStorage(BaseTransactionStorage):
         res = yield self.store.get_count_tx_blocks_deferred()
         return res
 
-    def enable_full_verification(self) -> None:
-        self.store.enable_full_verification()
+    def add_value(self, key: str, value: str) -> None:
+        self.store.add_value(key, value)
 
-    def disable_full_verification(self) -> None:
-        self.store.disable_full_verification()
+    def remove_value(self, key: str) -> None:
+        self.store.remove_value(key)
 
-    def running_full_verification_active(self) -> bool:
-        return self.store.running_full_verification_active()
+    def get_value(self, key: str) -> Optional[str]:
+        return self.store.get_value(key)

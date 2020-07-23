@@ -1,9 +1,8 @@
 import json
 import os
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
-from hathor.conf import HathorSettings
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import (
     AttributeDoesNotExist,
@@ -15,8 +14,6 @@ from hathor.transaction.transaction_metadata import TransactionMetadata
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
-
-settings = HathorSettings()
 
 
 class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
@@ -167,21 +164,20 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         assert len(files) % 2 == 0
         return len(files) // 2
 
-    def enable_full_verification(self) -> None:
-        filepath = os.path.join(self.attributes_path, settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE)
-        self.save_to_json(filepath, True)
+    def add_value(self, key: str, value: str) -> None:
+        filepath = os.path.join(self.attributes_path, key)
+        self.save_to_json(filepath, value)
 
-    def disable_full_verification(self) -> None:
-        filepath = os.path.join(self.attributes_path, settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE)
+    def remove_value(self, key: str) -> None:
+        filepath = os.path.join(self.attributes_path, key)
         try:
             os.unlink(filepath)
         except FileNotFoundError:
             pass
 
-    def running_full_verification_active(self) -> bool:
-        filepath = os.path.join(self.attributes_path, settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE)
+    def get_value(self, key: str) -> Optional[str]:
+        filepath = os.path.join(self.attributes_path, key)
         try:
-            self.load_from_json(filepath, AttributeDoesNotExist())
-            return True
+            return self.load_from_json(filepath, AttributeDoesNotExist())
         except AttributeDoesNotExist:
-            return False
+            return None

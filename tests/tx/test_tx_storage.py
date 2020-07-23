@@ -383,11 +383,11 @@ class _BaseTransactionStorageTest:
                     and isinstance(self.tx_storage.store, storages_to_test)
                 )
             ):
-                self.assertFalse(self.tx_storage.running_full_verification_active())
-                self.tx_storage.enable_full_verification()
-                self.assertTrue(self.tx_storage.running_full_verification_active())
-                self.tx_storage.disable_full_verification()
-                self.assertFalse(self.tx_storage.running_full_verification_active())
+                self.assertFalse(self.tx_storage.is_running_full_verification())
+                self.tx_storage.start_full_verification()
+                self.assertTrue(self.tx_storage.is_running_full_verification())
+                self.tx_storage.finish_full_verification()
+                self.assertFalse(self.tx_storage.is_running_full_verification())
 
     class _RemoteStorageTest(_TransactionStorageTest):
         def setUp(self, tx_storage, reactor=None):
