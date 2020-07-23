@@ -49,9 +49,10 @@ class RunNode:
         parser.add_argument('--recursion-limit', type=int, help='Set python recursion limit')
         parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
         parser.add_argument('--min-block-weight', type=int, help='Minimum weight for blocks')
-        parser.add_argument('--full-verification', action='store_true',
-                            help='Execute all transactions/blocks validations when initializing the node. '
-                                 'This will break your storage if you stop midway.')
+        parser.add_argument('--x-fast-init-beta', action='store_true',
+                            help='Execute a fast initialization, which skips some transaction verifications. '
+                            'This is still a beta feature because there are some issues when using both '
+                            'initializations.')
         return parser
 
     def prepare(self, args: Namespace) -> None:
@@ -189,7 +190,7 @@ class RunNode:
             if self.wallet:
                 self.wallet.test_mode = True
 
-        if args.full_verification:
+        if not args.x_fast_init_beta:
             self.manager._full_verification = True
 
         for description in args.listen:
