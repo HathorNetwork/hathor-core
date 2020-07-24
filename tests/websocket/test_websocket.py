@@ -66,9 +66,7 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
         self.factory._schedule_and_send_metric()
         value = self._decode_value(self.transport.value())
-        keys = [
-            'transactions', 'blocks', 'best_block_height', 'hash_rate', 'peers', 'type', 'time'
-        ]
+        keys = ['transactions', 'blocks', 'best_block_height', 'hash_rate', 'peers', 'type', 'time']
         self.assertEqual(len(value), len(keys))
         for key in keys:
             self.assertTrue(key in value)
