@@ -51,8 +51,8 @@ class RunNode:
         parser.add_argument('--min-block-weight', type=int, help='Minimum weight for blocks')
         parser.add_argument('--x-fast-init-beta', action='store_true',
                             help='Execute a fast initialization, which skips some transaction verifications. '
-                            'This is still a beta feature because there are some issues when using both '
-                            'initializations.')
+                            'This is still a beta feature because there might be some issues if there is a sudden'
+                            'crash on the full node.')
         return parser
 
     def prepare(self, args: Namespace) -> None:
