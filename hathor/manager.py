@@ -423,14 +423,15 @@ class HathorManager:
             tx = cast(Block, tx)
             assert tx.hash is not None  # XXX: it appears that after casting this assert "casting" is lost
 
-            # Validate minimum block difficulty
-            block_weight = self.calculate_block_difficulty(tx)
-            if tx.weight < block_weight - settings.WEIGHT_TOL:
-                raise InvalidNewTransaction(
-                    'Invalid new block {}: weight ({}) is smaller than the minimum weight ({})'.format(
-                        tx.hash.hex(), tx.weight, block_weight
+            if self.state != self.NodeState.INITIALIZING:
+                # Validate minimum block difficulty
+                block_weight = self.calculate_block_difficulty(tx)
+                if tx.weight < block_weight - settings.WEIGHT_TOL:
+                    raise InvalidNewTransaction(
+                        'Invalid new block {}: weight ({}) is smaller than the minimum weight ({})'.format(
+                            tx.hash.hex(), tx.weight, block_weight
+                        )
                     )
-                )
 
             parent_block = tx.get_block_parent()
             tokens_issued_per_block = self.get_tokens_issued_per_block(parent_block.get_metadata().height + 1)
