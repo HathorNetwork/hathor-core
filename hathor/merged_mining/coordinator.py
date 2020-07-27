@@ -106,10 +106,10 @@ def parse_login_with_addresses(login: str) -> Tuple[bytes, bytes, Optional[str]]
 
     >>> out = parse_login_with_addresses('HC7w4j7mPet49BBN5a2An3XUiPvK6C1TL7.1Mtb6rphrRq6kUdxpzQCUXZBaMbNpM3ZCN')
     >>> out[0].hex(), out[1].hex(), out[2]
-    ('76a9143d6dbcbf6e67b2cbcc3225994756a56a5e2d3a2788ac', '76a9e52432216dabf32d60a02894ec871293baaa1b1288ac', None)
+    ('76a9143d6dbcbf6e67b2cbcc3225994756a56a5e2d3a2788ac', '76a914e52432216dabf32d60a02894ec871293baaa1b1288ac', None)
     >>> out = parse_login_with_addresses('HC7w4j7mPet49BBN5a2An3XUiPvK6C1TL7.1Mtb6rphrRq6kUdxpzQCUXZBaMbNpM3ZCN.foo')
     >>> out[0].hex(), out[1].hex(), out[2]
-    ('76a9143d6dbcbf6e67b2cbcc3225994756a56a5e2d3a2788ac', '76a9e52432216dabf32d60a02894ec871293baaa1b1288ac', 'foo')
+    ('76a9143d6dbcbf6e67b2cbcc3225994756a56a5e2d3a2788ac', '76a914e52432216dabf32d60a02894ec871293baaa1b1288ac', 'foo')
     """
     from hathor.transaction.scripts import create_output_script as create_output_script_htr
     from hathor.merged_mining.bitcoin import create_output_script as create_output_script_btc
