@@ -15,7 +15,6 @@ limitations under the License.
 """
 
 import base64
-import json
 import struct
 from collections import OrderedDict
 from math import inf
@@ -34,6 +33,7 @@ from hathor.p2p.plugin import Plugin
 from hathor.transaction import BaseTransaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.util import json_dumps, json_loads
 
 settings = HathorSettings()
 logger = get_logger()
@@ -488,7 +488,7 @@ class NodeSyncTimestamp(Plugin):
         """ Send a GET-NEXT message.
         """
         # XXX: is `timestamp = None` actually valid?
-        payload = json.dumps(dict(
+        payload = json_dumps(dict(
             timestamp=timestamp,
             offset=offset,
         ))
@@ -497,7 +497,7 @@ class NodeSyncTimestamp(Plugin):
     def handle_get_next(self, payload: str) -> None:
         """ Handle a received GET-NEXT message.
         """
-        data = json.loads(payload)
+        data = json_loads(payload)
         args = GetNextPayload(**data)
         self.send_next(args.timestamp, args.offset)
 
@@ -527,12 +527,12 @@ class NodeSyncTimestamp(Plugin):
             'next_offset': next_offset,
             'hashes': hashes,
         }
-        self.send_message(ProtocolMessages.NEXT, json.dumps(data))
+        self.send_message(ProtocolMessages.NEXT, json_dumps(data))
 
     def handle_next(self, payload: str) -> None:
         """ Handle a received NEXT messages.
         """
-        data = json.loads(payload)
+        data = json_loads(payload)
         data['hashes'] = [bytes.fromhex(h) for h in data['hashes']]
         args = NextPayload(**data)
 
@@ -547,7 +547,7 @@ class NodeSyncTimestamp(Plugin):
         if timestamp is None:
             self.send_message(ProtocolMessages.GET_TIPS)
         else:
-            payload = json.dumps(dict(
+            payload = json_dumps(dict(
                 timestamp=timestamp,
                 include_hashes=include_hashes,
                 offset=offset,
@@ -560,7 +560,7 @@ class NodeSyncTimestamp(Plugin):
         if not payload:
             self.send_tips()
         else:
-            data = json.loads(payload)
+            data = json_loads(payload)
             args = GetTipsPayload(**data)
             self.send_tips(args.timestamp, args.include_hashes, args.offset)
 
@@ -596,12 +596,12 @@ class NodeSyncTimestamp(Plugin):
             'has_more': has_more,
         }
 
-        self.send_message(ProtocolMessages.TIPS, json.dumps(data))
+        self.send_message(ProtocolMessages.TIPS, json_dumps(data))
 
     def handle_tips(self, payload: str) -> None:
         """ Handle a received TIPS messages.
         """
-        data = json.loads(payload)
+        data = json_loads(payload)
         data['merkle_tree'] = bytes.fromhex(data['merkle_tree'])
         data['hashes'] = [bytes.fromhex(h) for h in data['hashes']]
         args = TipsPayload(**data)

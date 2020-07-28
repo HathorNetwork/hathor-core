@@ -5,6 +5,7 @@ from twisted.web.http import Request
 
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.util import json_dumpb
 
 
 def set_cors(request: Request, method: str) -> None:
@@ -36,8 +37,7 @@ def get_missing_params_msg(param_name):
     :param param_name: the missing parameter
     :type param_name: str
     """
-    import json
-    return json.dumps({'success': False, 'message': 'Missing parameter: {}'.format(param_name)}).encode('utf-8')
+    return json_dumpb({'success': False, 'message': 'Missing parameter: {}'.format(param_name)})
 
 
 def parse_get_arguments(args: Dict[bytes, bytes], expected_args: List[str]) -> Dict[str, Any]:

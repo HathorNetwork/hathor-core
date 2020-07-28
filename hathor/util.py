@@ -15,11 +15,12 @@ limitations under the License.
 """
 
 import math
+import json
 import warnings
 from collections import OrderedDict
 from enum import Enum
 from functools import partial, wraps
-from typing import Any, Callable, Deque, Dict, Iterable, Iterator, Tuple, TypeVar, cast
+from typing import Any, Callable, Deque, Dict, Iterable, Iterator, List, Mapping, Sequence, Tuple, TypeVar, Union, cast
 
 from structlog import get_logger
 from twisted.internet.interfaces import IReactorCore
@@ -32,6 +33,19 @@ settings = HathorSettings()
 
 
 T = TypeVar('T')
+
+# This type is supposed to represent any dict that can be de/serialized to/from JSON
+# See: https://github.com/python/typing/issues/182 for a more thorough discussion on the current typing limitations.
+JsonPlainValue = Union[str, int, float, bool, None]
+# _JsonType_0 = Union[JsonPlainValue, Dict[str, Any], List[Any]]
+# _JsonType_1 = Union[JsonPlainValue, Dict[str, _JsonType_0], List[_JsonType_0]]
+# _JsonType_2 = Union[JsonPlainValue, Dict[str, _JsonType_1], List[_JsonType_1]]
+# _JsonType_3 = Union[JsonPlainValue, Dict[str, _JsonType_2], List[_JsonType_2]]
+# JsonType = Union[JsonPlainValue, Dict[str, _JsonType_3], List[_JsonType_3]]
+JsonType = Union[JsonPlainValue, Mapping[str, Any], Sequence[Any]]
+JsonList = List[JsonType]
+JsonDict = Dict[str, JsonType]
+JsonContainer = Union[JsonList, JsonDict]
 
 
 def _get_tokens_issued_per_block(height: int) -> int:
@@ -255,18 +269,33 @@ class MaxSizeOrderedDict(OrderedDict):
                 self.popitem(False)
 
 
-def json_loadb(raw: bytes) -> Dict:
+def json_loadb(raw: bytes) -> JsonType:
     """Compact loading raw as UTF-8 encoded bytes to a Python object."""
-    import json
     # XXX: from Python3.6 onwards, json.loads can take bytes
     #      See: https://docs.python.org/3/library/json.html#json.loads
-    return json.loads(raw)
+    return cast(JsonType, json.loads(raw))
 
 
-def json_dumpb(obj: object) -> bytes:
+def json_loadb_dict(raw: bytes) -> JsonDict:
+    value = json_loadb(raw)
+    if not isinstance(value, dict):
+        raise ValueError('expected JSON object, got {}'.format(repr(value)))
+    return value
+
+
+def json_dumpb(obj: JsonType) -> bytes:
     """Compact formating obj as JSON to UTF-8 encoded bytes."""
-    import json
-    return json.dumps(obj, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
+    return json_dumps(obj).encode('utf-8')
+
+
+def json_loads(raw: str) -> JsonType:
+    """Compact loading string to a Python object."""
+    return json_loadb(raw.encode('utf-8'))
+
+
+def json_dumps(obj: JsonType) -> str:
+    """Compact formating obj as JSON to string."""
+    return json.dumps(obj, separators=(',', ':'))
 
 
 def api_catch_exceptions(func: Callable[..., bytes]) -> Callable[..., bytes]:

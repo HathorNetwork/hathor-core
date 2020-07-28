@@ -1,9 +1,14 @@
-import json
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.util import json_dumpb
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager
 
 
 @register_resource
@@ -14,15 +19,14 @@ class LockWalletResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         # Important to have the manager so we can know the wallet
         self.manager = manager
 
-    def render_POST(self, request):
+    def render_POST(self, request: Request) -> bytes:
         """ Lock the wallet
 
-            :return: Boolean if the user locked the wallet with success
-            :rtype: string (json) Dict['success', bool]
+        Returns boolean if the user locked the wallet with success.
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
@@ -30,9 +34,9 @@ class LockWalletResource(resource.Resource):
         self.manager.wallet.lock()
 
         ret = {'success': True}
-        return json.dumps(ret, indent=4).encode('utf-8')
+        return json_dumpb(ret)
 
-    def render_OPTIONS(self, request):
+    def render_OPTIONS(self, request: Request) -> int:
         return render_options(request)
 
 

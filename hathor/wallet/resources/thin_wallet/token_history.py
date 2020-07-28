@@ -1,4 +1,4 @@
-import json
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
 from twisted.web.http import Request
@@ -6,6 +6,10 @@ from twisted.web.http import Request
 from hathor.api_util import get_missing_params_msg, parse_get_arguments, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
+from hathor.util import json_dumpb
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager
 
 settings = HathorSettings()
 
@@ -20,7 +24,7 @@ class TokenHistoryResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         self.manager = manager
 
     def render_GET(self, request: Request) -> bytes:
@@ -40,7 +44,7 @@ class TokenHistoryResource(resource.Resource):
 
         if not self.manager.tx_storage.tokens_index:
             request.setResponseCode(503)
-            return json.dumps({'success': False}).encode('utf-8')
+            return json_dumpb({'success': False})
 
         parsed = parse_get_arguments(request.args, ARGS)
         if not parsed['success']:
@@ -52,15 +56,15 @@ class TokenHistoryResource(resource.Resource):
         try:
             token_uid = bytes.fromhex(parsed['args']['id'])
         except (ValueError, AttributeError):
-            return json.dumps({'success': False, 'message': 'Invalid token id'}).encode('utf-8')
+            return json_dumpb({'success': False, 'message': 'Invalid token id'})
 
         try:
             count = min(int(parsed['args']['count']), settings.MAX_TX_COUNT)
         except ValueError:
-            return json.dumps({
+            return json_dumpb({
                 'success': False,
                 'message': 'Invalid \'count\' parameter, expected an int'
-            }).encode('utf-8')
+            })
 
         if b'hash' in request.args:
             parsed = parse_get_arguments(request.args, ['timestamp', 'page', 'hash'])
@@ -70,25 +74,25 @@ class TokenHistoryResource(resource.Resource):
             try:
                 hash_bytes = bytes.fromhex(parsed['args']['hash'])
             except ValueError:
-                return json.dumps({
+                return json_dumpb({
                     'success': False,
                     'message': 'Invalid \'hash\' parameter, could not decode hexadecimal'
-                }).encode('utf-8')
+                })
 
             page = parsed['args']['page']
             if page != 'previous' and page != 'next':
-                return json.dumps({
+                return json_dumpb({
                     'success': False,
                     'message': 'Invalid \'page\' parameter, expected \'previous\' or \'next\''
-                }).encode('utf-8')
+                })
 
             try:
                 ref_timestamp = int(parsed['args']['timestamp'])
             except ValueError:
-                return json.dumps({
+                return json_dumpb({
                     'success': False,
                     'message': 'Invalid \'timestamp\' parameter, expected an int'
-                }).encode('utf-8')
+                })
 
             if page == 'previous':
                 elements, has_more = self.manager.tx_storage.tokens_index.get_newer_transactions(
@@ -107,7 +111,7 @@ class TokenHistoryResource(resource.Resource):
             'transactions': serialized,
             'has_more': has_more,
         }
-        return json.dumps(data).encode('utf-8')
+        return json_dumpb(data)
 
 
 TokenHistoryResource.openapi = {

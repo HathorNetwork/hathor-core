@@ -14,12 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from hathor import protos
 from hathor.transaction.aux_pow import BitcoinAuxPow
 from hathor.transaction.base_transaction import TxOutput, TxVersion
 from hathor.transaction.block import Block
+from hathor.util import JsonDict
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -100,7 +101,7 @@ class MergeMinedBlock(Block):
             return dummy_bytes
         return bytes(self.aux_pow)
 
-    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
+    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> JsonDict:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         del json['nonce']
         json['aux_pow'] = bytes(self.aux_pow).hex() if self.aux_pow else None

@@ -7,6 +7,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from hathor.crypto.util import get_address_b58_from_public_key, get_private_key_bytes, get_private_key_from_bytes
+from hathor.util import JsonDict
 from hathor.wallet.exceptions import IncorrectPassword, WalletLocked
 
 
@@ -66,7 +67,7 @@ class KeyPair:
                 raise IncorrectPassword
         return self._cache_priv_key_unlock
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> JsonDict:
         return {
             'privKey': self.get_private_key_b64(),
             'address': self.address,

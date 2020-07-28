@@ -1,5 +1,4 @@
-import json
-from typing import Any, Dict
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
 from twisted.web.http import Request
@@ -7,6 +6,10 @@ from twisted.web.http import Request
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
+from hathor.util import JsonDict, json_dumpb
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager  # noqa: F401
 
 settings = HathorSettings()
 
@@ -19,10 +22,10 @@ class TokenResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         self.manager = manager
 
-    def get_one_token_data(self, token_uid: bytes) -> Dict[str, Any]:
+    def get_one_token_data(self, token_uid: bytes) -> JsonDict:
         # Get one token data specified in id
         try:
             token_info = self.manager.tx_storage.tokens_index.get_token_info(token_uid)
@@ -57,7 +60,7 @@ class TokenResource(resource.Resource):
         }
         return data
 
-    def get_list_token_data(self) -> Dict[str, Any]:
+    def get_list_token_data(self) -> JsonDict:
         # XXX We should change this in the future so we don't return all tokens in one request
         # XXX Right now, the way we have the tokens index is not easy to do it but in the future
         # XXX when the number of tokens grow we should refactor this resource
@@ -107,20 +110,20 @@ class TokenResource(resource.Resource):
 
         if not self.manager.tx_storage.tokens_index:
             request.setResponseCode(503)
-            return json.dumps({'success': False}).encode('utf-8')
+            return json_dumpb({'success': False})
 
         if b'id' in request.args:
             try:
                 token_uid_str = request.args[b'id'][0].decode('utf-8')
                 token_uid = bytes.fromhex(token_uid_str)
             except (ValueError, AttributeError):
-                return json.dumps({'success': False, 'message': 'Invalid token id'}).encode('utf-8')
+                return json_dumpb({'success': False, 'message': 'Invalid token id'})
 
             data = self.get_one_token_data(token_uid)
         else:
             data = self.get_list_token_data()
 
-        return json.dumps(data).encode('utf-8')
+        return json_dumpb(data)
 
 
 TokenResource.openapi = {

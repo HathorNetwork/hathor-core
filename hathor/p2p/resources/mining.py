@@ -2,13 +2,19 @@ import base64
 import binascii
 import json
 import struct
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
 from hathor.transaction import Block
+from hathor.util import json_dumpb, json_loadb_dict
 from hathor.wallet.exceptions import InvalidAddress
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager  # noqa: F401
 
 # TODO: deprecate these calls to eventually remove them on v2
 
@@ -22,10 +28,10 @@ class MiningResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         self.manager = manager
 
-    def render_POST(self, request):
+    def render_POST(self, request: Request) -> bytes:
         """ POST request /mining/
             Expects a parameter 'block_bytes' that is the block in bytes
             Create the block object from the bytes and propagate it
@@ -33,8 +39,9 @@ class MiningResource(resource.Resource):
             :rtype: bytes
         """
         try:
-            post_data = json.loads(request.content.read().decode('utf-8'))
+            post_data = json_loadb_dict(request.content.read())
             block_bytes_str = post_data['block_bytes']
+            assert isinstance(block_bytes_str, str)
             block_bytes = base64.b64decode(block_bytes_str)
             block = Block.create_from_struct(block_bytes, storage=self.manager.tx_storage)
         except (AttributeError, KeyError, ValueError, json.JSONDecodeError, binascii.Error, struct.error):
@@ -51,7 +58,7 @@ class MiningResource(resource.Resource):
             return b'1'
         return b'0'
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         """ GET request /mining/
             Generates a new block to be mined with correct parents
             Returns a json with a list of parents hash and the block in bytes
@@ -62,7 +69,7 @@ class MiningResource(resource.Resource):
 
         if not self.manager.can_start_mining():
             request.setResponseCode(503)
-            return json.dumps({'reason': 'Node still syncing'}).encode('utf-8')
+            return json_dumpb({'reason': 'Node still syncing'})
 
         address = None
 
@@ -71,7 +78,7 @@ class MiningResource(resource.Resource):
             try:
                 address = decode_address(address_txt)  # bytes
             except InvalidAddress:
-                return json.dumps({'success': False, 'message': 'Invalid address'}).encode('utf-8')
+                return json_dumpb({'success': False, 'message': 'Invalid address'})
 
         block = self.manager.generate_mining_block(address=address)
         block_bytes = block.get_struct()
@@ -80,7 +87,7 @@ class MiningResource(resource.Resource):
             'parents': [x.hex() for x in block.parents],
             'block_bytes': base64.b64encode(block_bytes).decode('utf-8'),
         }
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 MiningResource.openapi = {

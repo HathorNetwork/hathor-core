@@ -43,7 +43,7 @@ from hathor.transaction.exceptions import (
 )
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import int_to_bytes, unpack, unpack_len
-from hathor.util import classproperty
+from hathor.util import JsonDict, classproperty
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -759,10 +759,10 @@ class BaseTransaction(ABC):
         assert self.storage is not None
         return self.storage.get_transaction(input_tx.tx_id)
 
-    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
+    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> JsonDict:
         """ Creates a json serializable Dict object from self
         """
-        data: Dict[str, Any] = {}
+        data: JsonDict = {}
         data['hash'] = self.hash_hex or None
         data['nonce'] = self.nonce
         data['timestamp'] = self.timestamp
@@ -775,7 +775,7 @@ class BaseTransaction(ABC):
 
         data['inputs'] = []
         for tx_input in self.inputs:
-            data_input: Dict[str, Any] = {}
+            data_input: JsonDict = {}
             data_input['tx_id'] = tx_input.tx_id.hex()
             data_input['index'] = tx_input.index
             data_input['data'] = base64.b64encode(tx_input.data).decode('utf-8')
@@ -790,11 +790,11 @@ class BaseTransaction(ABC):
 
         return data
 
-    def to_json_extended(self) -> Dict[str, Any]:
+    def to_json_extended(self) -> JsonDict:
         assert self.hash is not None
         assert self.storage is not None
 
-        def serialize_output(tx: BaseTransaction, tx_out: TxOutput) -> Dict[str, Any]:
+        def serialize_output(tx: BaseTransaction, tx_out: TxOutput) -> JsonDict:
             data = tx_out.to_json(decode_script=True)
             data['token'] = tx.get_token_uid(tx_out.get_token_index()).hex()
             data['decoded'].pop('token_data', None)
@@ -802,7 +802,7 @@ class BaseTransaction(ABC):
             return data
 
         meta = self.get_metadata()
-        ret: Dict[str, Any] = {
+        ret: JsonDict = {
             'tx_id': self.hash_hex,
             'version': int(self.version),
             'weight': self.weight,
@@ -942,10 +942,8 @@ class TxInput:
         txin = cls(input_tx_id, input_index, input_data)
         return txin, buf
 
-    def to_human_readable(self) -> Dict[str, Any]:
+    def to_human_readable(self) -> JsonDict:
         """Returns dict of Input information, ready to be serialized
-
-        :rtype: Dict
         """
         return {
             'tx_id': self.tx_id.hex(),  # string
@@ -1065,7 +1063,7 @@ class TxOutput:
         """Whether this utxo can melt tokens"""
         return self.is_token_authority() and ((self.value & self.TOKEN_MELT_MASK) > 0)
 
-    def to_human_readable(self) -> Dict[str, Any]:
+    def to_human_readable(self) -> JsonDict:
         """Checks what kind of script this is and returns it in human readable form
         """
         from hathor.transaction.scripts import parse_address_script, NanoContractMatchValues
@@ -1110,8 +1108,8 @@ class TxOutput:
             token_data=self.token_data,
         )
 
-    def to_json(self, *, decode_script: bool = False) -> Dict[str, Any]:
-        data: Dict[str, Any] = {}
+    def to_json(self, *, decode_script: bool = False) -> JsonDict:
+        data: JsonDict = {}
         data['value'] = self.value
         data['token_data'] = self.token_data
         data['script'] = base64.b64encode(self.script).decode('utf-8')

@@ -18,7 +18,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 from hathor import protos
-from hathor.util import practically_equal
+from hathor.util import JsonDict, practically_equal
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction  # noqa: F401
@@ -173,12 +173,12 @@ class TransactionMetadata:
 
         return True
 
-    def to_json(self) -> Dict[str, Any]:
-        data: Dict[str, Any] = {}
+    def to_json(self) -> JsonDict:
+        data: JsonDict = {}
         data['hash'] = self.hash and self.hash.hex()
-        data['spent_outputs'] = []
+        data['spent_outputs'] = spent_outputs = []
         for idx, hashes in self.spent_outputs.items():
-            data['spent_outputs'].append([idx, [h_bytes.hex() for h_bytes in hashes]])
+            spent_outputs.append([idx, [h_bytes.hex() for h_bytes in hashes]])
         data['received_by'] = list(self.received_by)
         data['children'] = [x.hex() for x in self.children]
         data['conflict_with'] = [x.hex() for x in self.conflict_with] if self.conflict_with else []
@@ -194,9 +194,12 @@ class TransactionMetadata:
         return data
 
     @classmethod
-    def create_from_json(cls, data: Dict[str, Any]) -> 'TransactionMetadata':
+    def create_from_json(cls, data: JsonDict) -> 'TransactionMetadata':
         meta = cls()
-        meta.hash = bytes.fromhex(data['hash']) if data['hash'] else None
+        hash_ = data['hash']
+        assert isinstance(hash_, (str, None))
+        meta.hash = bytes.fromhex(hash_) if hash_ is not None else None
+        assert isinstance(list, data['spent_outputs'])
         for idx, hashes in data['spent_outputs']:
             for h_hex in hashes:
                 meta.spent_outputs[idx].append(bytes.fromhex(h_hex))
@@ -204,21 +207,29 @@ class TransactionMetadata:
         meta.children = [bytes.fromhex(h) for h in data['children']]
 
         if 'conflict_with' in data:
-            meta.conflict_with = [bytes.fromhex(h) for h in data['conflict_with']] if data['conflict_with'] else None
+            conflict_with = data['conflitc_with']
+            assert isinstance(conflict_with, list)
+            meta.conflict_with = [bytes.fromhex(h) for h in conflict_with]
         else:
             meta.conflict_with = None
 
         if 'voided_by' in data:
-            meta.voided_by = set(bytes.fromhex(h) for h in data['voided_by']) if data['voided_by'] else None
+            voided_by = data['voided_by']
+            assert isinstance(voided_by, list)
+            meta.voided_by = set(bytes.fromhex(h) for h in voided_by)
         else:
             meta.voided_by = None
 
         if 'twins' in data:
-            meta.twins = [bytes.fromhex(h) for h in data['twins']]
+            twins = data['twins']
+            assert isinstance(twins, list)
+            meta.twins = [bytes.fromhex(h) for h in twins]
         else:
             meta.twins = []
 
-        meta.accumulated_weight = data['accumulated_weight']
+        accumulated_weight = data['accumulated_weight']
+        assert isinstance(accumulated_weight, float)
+        meta.accumulated_weight = accumulated_weight
         meta.score = data.get('score', 0)
         meta.height = data.get('height', 0)  # XXX: should we calculate the height if it's not defined?
 

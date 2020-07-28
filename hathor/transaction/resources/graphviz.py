@@ -1,8 +1,8 @@
-import json
 from enum import Enum
 from typing import TYPE_CHECKING, Union
 
 from twisted.internet import threads
+from twisted.python.failure import Failure
 from twisted.web import resource
 from twisted.web.http import Request
 
@@ -10,9 +10,10 @@ from hathor.api_util import set_cors, validate_tx_hash
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.graphviz import GraphvizVisualizer
+from hathor.util import json_dumpb
 
 if TYPE_CHECKING:
-    from hathor.manager import HathorManager  # noqa: F401
+    from hathor.manager import HathorManager
 
 settings = HathorSettings()
 
@@ -47,7 +48,7 @@ class _BaseGraphvizResource(resource.Resource):
         self.manager = manager
         self.format: FileFormat = FileFormat(format)
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         deferred = threads.deferToThread(self._render_GET_thread, request)
         deferred.addCallback(self._cb_tx_resolve, request)
         deferred.addErrback(self._err_tx_resolve, request)
@@ -55,13 +56,13 @@ class _BaseGraphvizResource(resource.Resource):
         from twisted.web.server import NOT_DONE_YET
         return NOT_DONE_YET
 
-    def _cb_tx_resolve(self, result, request):
+    def _cb_tx_resolve(self, result: bytes, request: Request) -> None:
         """ Called when `_render_GET_thread` finishes
         """
         request.write(result)
         request.finish()
 
-    def _err_tx_resolve(self, reason, request):
+    def _err_tx_resolve(self, reason: Failure, request: Request) -> None:
         """ Called when an error occur in `_render_GET_thread`
         """
         request.processingFailed(reason)
@@ -220,7 +221,7 @@ class GraphvizNeighboursResource(_BaseGraphvizResource):
         tx_hex = request.args[b'tx'][0].decode('utf-8')
         success, message = validate_tx_hash(tx_hex, tx_storage)
         if not success:
-            return json.dumps({'success': False, 'message': message}, indent=4).encode('utf-8')
+            return json_dumpb({'success': False, 'message': message})
 
         graph_type = request.args[b'graph_type'][0].decode('utf-8')
         max_level = min(int(request.args[b'max_level'][0]), settings.MAX_GRAPH_LEVEL)

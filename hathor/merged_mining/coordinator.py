@@ -22,7 +22,7 @@ import asyncio
 import random
 import time
 from itertools import count
-from typing import Any, Callable, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple, Union
+from typing import Callable, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple, Union
 from uuid import uuid4
 
 import aiohttp
@@ -60,7 +60,7 @@ from hathor.stratum.stratum import (
 )
 from hathor.transaction import BitcoinAuxPow, MergeMinedBlock as HathorBlock
 from hathor.transaction.exceptions import ScriptError, TxValidationError
-from hathor.util import MaxSizeOrderedDict, ichunks
+from hathor.util import JsonContainer, JsonDict, JsonList, JsonPlainValue, JsonType, MaxSizeOrderedDict, ichunks
 
 logger = get_logger()
 settings = HathorSettings()
@@ -76,7 +76,7 @@ class HathorCoordJob(NamedTuple):
     block: HathorBlock
     height: Optional[int]
 
-    def to_dict(self) -> Dict[Any, Any]:
+    def to_dict(self) -> JsonDict:
         d = self.block.to_json()
         d['height'] = self.height
         return d
@@ -136,7 +136,7 @@ class SingleMinerWork(NamedTuple):
     timestamp: Optional[int] = None
 
     @classmethod
-    def from_stratum_params(cls, xnonce1: bytes, params: List) -> 'SingleMinerWork':
+    def from_stratum_params(cls, xnonce1: bytes, params: JsonList) -> 'SingleMinerWork':
         """ Parse params received from Stratum and instantiate work accordingly.
         """
         from hathor.merged_mining.bitcoin import read_uint32
@@ -181,7 +181,7 @@ class SingleMinerJob(NamedTuple):
     bitcoin_height: int = 0
     hathor_height: Optional[int] = None
 
-    def to_stratum_params(self) -> List:
+    def to_stratum_params(self) -> JsonList:
         """ Assemble the parameters the way a Stratum client typically expects.
         """
         return [
@@ -317,7 +317,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
             return 0.0
         return time.time() - self.subscribed_at
 
-    def status(self) -> Dict[Any, Any]:
+    def status(self) -> JsonDict:
         """ Build status dict with useful metrics for use in MM Status API.
         """
         return {
@@ -392,7 +392,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         assert isinstance(data, dict)
         self.json_received(data)
 
-    def json_received(self, data: Dict[Any, Any]) -> None:
+    def json_received(self, data: JsonDict) -> None:
         """ Process JSON and forward to the appropriate handle, usually `handle_request`.
         """
         msgid = data.get('id')
@@ -413,16 +413,16 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
                 'error': 'Could not identify message as request, result or error.'
             })
 
-    def send_request(self, method: str, params: Union[None, List, Dict], msgid: Union[str, int, None] = None) -> None:
+    def send_request(self, method: str, params: JsonContainer, msgid: JsonPlainValue = None) -> None:
         """ Sends a JSON-RPC 2.0 request.
         """
-        data: Dict[str, Any] = {'method': method, 'params': params}
+        data: JsonDict = {'method': method, 'params': params}
         # XXX: keeping the same msgid type the client sent
         data['id'] = msgid
         self.log.debug('send request', data=data)
         self.send_json(data)
 
-    def send_result(self, result: Any, msgid: Optional[str]) -> None:
+    def send_result(self, result: JsonType, msgid: Optional[str]) -> None:
         """ Sends a JSON-RPC 2.0 result.
         """
         data = {'result': result, 'error': None}
@@ -431,7 +431,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         self.log.debug('send result', data=data)
         return self.send_json(data)
 
-    def send_error(self, error: Dict, msgid: Optional[str] = None, data: Any = None) -> None:
+    def send_error(self, error: JsonDict, msgid: Optional[str] = None, data: JsonType = None) -> None:
         """ Sends a JSON-RPC 2.0 error.
         """
         message = {'error': error, 'data': data}
@@ -444,7 +444,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         if error['code'] <= UNRECOVERABLE_ERROR_CODE_MAX and self.transport is not None:
             self.transport.close()
 
-    def send_json(self, json: Dict) -> None:
+    def send_json(self, json: JsonDict) -> None:
         """ Encodes a JSON and send it through the LineReceiver interface.
         """
         from hathor.util import json_dumpb
@@ -455,51 +455,42 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         except TypeError:
             self.log.error('failed to encode', json=json)
 
-    def handle_request(self, method: str, params: Optional[Union[List, Dict]], msgid: Optional[str]) -> None:
+    def handle_request(self, method: str, params: Optional[JsonContainer], msgid: Optional[str]) -> None:
         """ Handles subscribe and submit requests.
-
-        :param method: JSON-RPC 2.0 request method
-        :type method: str
-
-        :param params: JSON-RPC 2.0 request params
-        :type params: Optional[Union[List, Dict]]
-
-        :param msgid: JSON-RPC 2.0 message id
-        :type msgid: Optional[str]
         """
         self.log.debug('handle request', method=method, params=params)
 
         if method in {'subscribe', 'mining.subscribe', 'login'}:
-            assert isinstance(params, List)
+            assert isinstance(params, JsonList)
             return self.handle_subscribe(params, msgid)
         if method in {'authorize', 'mining.authorize'}:
-            assert isinstance(params, List)
+            assert isinstance(params, JsonList)
             return self.handle_authorize(params, msgid)
         if method in {'submit', 'mining.submit'}:
-            assert isinstance(params, List)
+            assert isinstance(params, JsonList)
             return self.handle_submit(params, msgid)
         if method in {'configure', 'mining.configure'}:
-            assert isinstance(params, List)
+            assert isinstance(params, JsonList)
             return self.handle_configure(params, msgid)
         if method in {'multi_version', 'mining.multi_version'}:
-            assert isinstance(params, List)
+            assert isinstance(params, JsonList)
             return self.handle_multi_version(params, msgid)
         if method == 'mining.extranonce.subscribe':
             return self.handle_extranonce_subscribe(msgid)
 
         self.send_error(METHOD_NOT_FOUND, msgid, data={'method': method, 'supported_methods': ['submit', 'subscribe']})
 
-    def handle_result(self, result: Any, msgid: Optional[str]) -> None:
+    def handle_result(self, result: JsonType, msgid: Optional[str]) -> None:
         """ Logs any result since there are not supposed to be any.
         """
         self.log.debug('handle result', msgid=msgid, result=result)
 
-    def handle_error(self, error: Dict, data: Any, msgid: Optional[str]) -> None:
+    def handle_error(self, error: JsonDict, data: JsonType, msgid: Optional[str]) -> None:
         """ Logs any errors since there are not supposed to be any.
         """
         self.log.error('handle error', msgid=msgid, error=error)
 
-    def handle_authorize(self, params: List, msgid: Optional[str]) -> None:
+    def handle_authorize(self, params: JsonList, msgid: Optional[str]) -> None:
         """ Handles authorize request by always authorizing even if the request is invalid.
         """
         if self.coordinator.address_from_login:
@@ -531,7 +522,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         self.job_request()
         self.start_estimator()
 
-    def handle_configure(self, params: List, msgid: Optional[str]) -> None:
+    def handle_configure(self, params: JsonList, msgid: Optional[str]) -> None:
         """ Handles stratum-extensions configuration
 
         See: https://github.com/slushpool/stratumprotocol/blob/master/stratum-extensions.mediawiki
@@ -546,7 +537,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
 
         self.send_result(res, msgid)
 
-    def handle_subscribe(self, params: List[str], msgid: Optional[str]) -> None:
+    def handle_subscribe(self, params: JsonList, msgid: Optional[str]) -> None:
         """ Handles subscribe request by answering it and triggering a job request.
 
         :param msgid: JSON-RPC 2.0 message id
@@ -578,7 +569,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         if self._authorized:
             self.set_difficulty(self.initial_difficulty)
 
-    def handle_multi_version(self, params: List[Any], msgid: Optional[str]) -> None:
+    def handle_multi_version(self, params: JsonList, msgid: Optional[str]) -> None:
         """ Handles multi_version requests
         """
         self.send_result(True, msgid)
@@ -588,7 +579,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         """
         self.send_result(True, msgid)
 
-    def handle_submit(self, params: List[Any], msgid: Optional[str]) -> None:
+    def handle_submit(self, params: JsonList, msgid: Optional[str]) -> None:
         """ Handles submit request by validating and propagating the result
 
         - params: rpc_user, job_id, xnonce2, time, nonce
@@ -915,7 +906,7 @@ class BitcoinCoordJob(NamedTuple):
             bytes.fromhex(segwit_commitment) if segwit_commitment is not None else None,
         )
 
-    def to_dict(self) -> Dict[Any, Any]:
+    def to_dict(self) -> JsonDict:
         """ Convert back to a simplified dict format similar to Bitcoin's, used by MM Status API.
         """
         return {
@@ -1348,7 +1339,7 @@ class MergedMiningCoordinator:
             self.update_jobs()
             self.log.debug('merged job updated')
 
-    def status(self) -> Dict[Any, Any]:
+    def status(self) -> JsonDict:
         """ Build status dict with useful metrics for use in MM Status API.
         """
         miners = [p.status() for p in self.miner_protocols.values()]

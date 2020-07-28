@@ -1,9 +1,14 @@
-import json
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.util import json_dumpb
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager
 
 
 @register_resource
@@ -14,11 +19,11 @@ class AddressResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         """ GET request for /wallet/address/
             Expects a parameter 'new' (boolean) that says if we should create a new address
             Returns the address (new or old)
@@ -44,7 +49,7 @@ class AddressResource(resource.Resource):
         data = {
             'address': address,
         }
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 AddressResource.openapi = {

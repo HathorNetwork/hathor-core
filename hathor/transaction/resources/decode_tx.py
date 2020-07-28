@@ -1,12 +1,14 @@
-import json
 import struct
 
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import get_missing_params_msg, parse_get_arguments, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.manager import HathorManager
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.resources.transaction import get_tx_extra_data
+from hathor.util import json_dumpb
 
 ARGS = ['hex_tx']
 
@@ -19,16 +21,14 @@ class DecodeTxResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: HathorManager):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
-    def render_GET(self, request):
-        """ Get request /decode_tx/ that returns the tx decoded, if success
+    def render_GET(self, request: Request) -> bytes:
+        """ Get request /decode_tx/ that returns the tx decoded, if success.
 
-            Expects 'hex_tx' as GET parameter
-
-            :rtype: string (json)
+        Expects 'hex_tx' as GET parameter.
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
@@ -47,7 +47,7 @@ class DecodeTxResource(resource.Resource):
         except struct.error:
             data = {'success': False, 'message': 'Could not decode transaction'}
 
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 DecodeTxResource.openapi = {

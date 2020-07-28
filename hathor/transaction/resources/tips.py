@@ -1,9 +1,9 @@
-import json
-
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.util import json_dumpb
 
 
 @register_resource
@@ -18,7 +18,7 @@ class TipsResource(resource.Resource):
     def __init__(self, manager):
         self.manager = manager
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         """ Get request to /tips/ that return a list of tips hashes
 
             'timestamp' is an optional parameter to be used in the get_tx_tips method
@@ -33,14 +33,14 @@ class TipsResource(resource.Resource):
             try:
                 timestamp = int(request.args[b'timestamp'][0])
             except ValueError:
-                return json.dumps({
+                return json_dumpb({
                     'success': False,
                     'message': 'Invalid timestamp parameter, expecting an integer'
-                }).encode('utf-8')
+                })
 
         tx_tips = self.manager.tx_storage.get_tx_tips(timestamp)
         ret = {'success': True, 'tips': [tip.data.hex() for tip in tx_tips]}
-        return json.dumps(ret).encode('utf-8')
+        return json_dumpb(ret)
 
 
 TipsResource.openapi = {

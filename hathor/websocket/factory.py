@@ -1,4 +1,3 @@
-import json
 from collections import defaultdict, deque
 from typing import Any, DefaultDict, Deque, Dict, Optional, Set
 
@@ -10,6 +9,7 @@ from hathor.indexes import WalletIndex
 from hathor.metrics import Metrics
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.pubsub import HathorEvents
+from hathor.util import JsonDict, json_dumpb, json_loadb
 from hathor.websocket.protocol import HathorAdminWebsocketProtocol
 
 settings = HathorSettings()
@@ -79,7 +79,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         # Limit the send message rate for specific type of data
         self.rate_limiter = RateLimiter(reactor=reactor)
         # Stores the buffer of messages that exceeded the rate limit and will be sent
-        self.buffer_deques: Dict[str, Deque[Dict[str, Any]]] = {}
+        self.buffer_deques: Dict[str, Deque[JsonDict]] = {}
 
         self.metrics = metrics
         self.wallet_index = wallet_index
@@ -181,19 +181,19 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         else:
             raise ValueError('Should never have entered here! We dont know this event')
 
-    def execute_send(self, data: Dict[str, Any], connections: Set[HathorAdminWebsocketProtocol]) -> None:
+    def execute_send(self, data: JsonDict, connections: Set[HathorAdminWebsocketProtocol]) -> None:
         """ Send data in ws message for the connections
         """
-        payload = json.dumps(data).encode('utf-8')
+        payload = json_dumpb(data)
         for c in connections:
             c.sendMessage(payload, False)
 
-    def broadcast_message(self, data: Dict[str, Any]) -> None:
+    def broadcast_message(self, data: JsonDict) -> None:
         """ Broadcast the update message to the connections
         """
         self.execute_send(data, self.connections)
 
-    def send_message(self, data: Dict[str, Any]) -> None:
+    def send_message(self, data: JsonDict) -> None:
         """ Check if should broadcast the message to all connections or send directly to some connections only
         """
         if data['type'] in ADDRESS_EVENTS:
@@ -205,12 +205,10 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
 
     def send_or_enqueue(self, data):
         """ Try to broadcast the message, or enqueue it when rate limit is exceeded and we've been throttled.
-            Enqueued messages are automatically sent after a while if they are not discarded first.
-            A message is discarded when new messages arrive and the queue buffer is full.
-            Rate limits change according to the message type, which is obtained from data['type'].
 
-            :param data: message to be sent
-            :type data: Dict[string, X] -> X can be different types, depending on the type of message
+        Enqueued messages are automatically sent after a while if they are not discarded first.
+        A message is discarded when new messages arrive and the queue buffer is full.
+        Rate limits change according to the message type, which is obtained from data['type'].
         """
         if data['type'] in CONTROLLED_TYPES:
             # This type is controlled, so I need to check the deque
@@ -224,11 +222,9 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             self.send_message(data)
 
     def enqueue_for_later(self, data):
-        """ Add this date to the correct deque to be processed later
-            If this deque is not programed to be called later yet, we call it
+        """ Add this date to the correct deque to be processed later.
 
-            :param data: message to be sent
-            :type data: Dict[string, X] -> X can be different types, depending on the type of message
+        If this deque is not programed to be called later yet, we call it.
         """
         # Add data to deque
         # We always add the new messages in the end
@@ -260,7 +256,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
 
     def handle_message(self, connection: HathorAdminWebsocketProtocol, data: bytes) -> None:
         """ General message handler, detects type and deletages to specific handler."""
-        message = json.loads(data)
+        message = json_loadb(data)
         # we only handle ping messages for now
         if message['type'] == 'ping':
             self._handle_ping(connection, message)
@@ -269,37 +265,37 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         elif message['type'] == 'unsubscribe_address':
             self._handle_unsubscribe_address(connection, message)
 
-    def _handle_ping(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
+    def _handle_ping(self, connection: HathorAdminWebsocketProtocol, message: JsonDict) -> None:
         """ Handler for ping message, should respond with a simple {"type": "pong"}"""
-        payload = json.dumps({'type': 'pong'}).encode('utf-8')
+        payload = json_dumpb({'type': 'pong'})
         connection.sendMessage(payload, False)
 
-    def _handle_subscribe_address(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
+    def _handle_subscribe_address(self, connection: HathorAdminWebsocketProtocol, message: JsonDict) -> None:
         """ Handler for subscription to an address, consideirs subscription limits."""
         addr: str = message['address']
         subs: Set[str] = connection.subscribed_to
         if len(subs) >= settings.WS_MAX_SUBS_ADDRS_CONN:
-            payload = json.dumps({'message': 'Reached maximum number of subscribed '
+            payload = json_dumpb({'message': 'Reached maximum number of subscribed '
                                              f'addresses ({settings.WS_MAX_SUBS_ADDRS_CONN}).',
-                                  'type': 'subscribe_address', 'success': False}).encode('utf-8')
+                                  'type': 'subscribe_address', 'success': False})
         elif self.wallet_index and _count_empty(subs, self.wallet_index) >= settings.WS_MAX_SUBS_ADDRS_EMPTY:
-            payload = json.dumps({'message': 'Reached maximum number of subscribed '
+            payload = json_dumpb({'message': 'Reached maximum number of subscribed '
                                              f'addresses without output ({settings.WS_MAX_SUBS_ADDRS_EMPTY}).',
-                                  'type': 'subscribe_address', 'success': False}).encode('utf-8')
+                                  'type': 'subscribe_address', 'success': False})
         else:
             self.address_connections[addr].add(connection)
             connection.subscribed_to.add(addr)
-            payload = json.dumps({'type': 'subscribe_address', 'success': True}).encode('utf-8')
+            payload = json_dumpb({'type': 'subscribe_address', 'success': True})
         connection.sendMessage(payload, False)
 
-    def _handle_unsubscribe_address(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
+    def _handle_unsubscribe_address(self, connection: HathorAdminWebsocketProtocol, message: JsonDict) -> None:
         """ Handler for unsubscribing from an address, also removes address connection set if it ends up empty."""
         addr = message['address']
         if addr in self.address_connections and connection in self.address_connections[addr]:
             connection.subscribed_to.remove(addr)
             self._remove_connection_from_address_dict(connection, addr)
             # Reply back to the client
-            payload = json.dumps({'type': 'unsubscribe_address', 'success': True}).encode('utf-8')
+            payload = json_dumpb({'type': 'unsubscribe_address', 'success': True})
             connection.sendMessage(payload, False)
 
     def _remove_connection_from_address_dict(self, connection: HathorAdminWebsocketProtocol, address: str) -> None:

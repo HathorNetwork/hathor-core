@@ -1,4 +1,3 @@
-import json
 import os
 import re
 from typing import TYPE_CHECKING, Optional
@@ -11,6 +10,7 @@ from hathor.transaction.storage.exceptions import (
 )
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
 from hathor.transaction.transaction_metadata import TransactionMetadata
+from hathor.util import json_dumpb, json_loadb
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
@@ -88,13 +88,13 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         return os.path.isfile(filepath)
 
     def save_to_json(self, filepath, data):
-        with open(filepath, 'w') as json_file:
-            json_file.write(json.dumps(data, indent=4))
+        with open(filepath, 'wb') as json_file:
+            json_file.write(json_dumpb(data))
 
     def load_from_json(self, filepath, error):
         if os.path.isfile(filepath):
-            with open(filepath, 'r') as json_file:
-                dict_data = json.loads(json_file.read())
+            with open(filepath, 'rb') as json_file:
+                dict_data = json_loadb(json_file.read())
                 return dict_data
         else:
             raise error

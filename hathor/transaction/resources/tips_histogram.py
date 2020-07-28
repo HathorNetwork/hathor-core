@@ -1,9 +1,14 @@
-import json
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import parse_get_arguments, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.util import json_dumpb
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager
 
 ARGS = ['begin', 'end']
 
@@ -17,10 +22,10 @@ class TipsHistogramResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         self.manager = manager
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         """ Get request to /tips-histogram/ that return the number of tips between two timestamp
             We expect two GET parameters: 'begin' and 'end'
 
@@ -34,10 +39,10 @@ class TipsHistogramResource(resource.Resource):
 
         parsed = parse_get_arguments(request.args, ARGS)
         if not parsed['success']:
-            return json.dumps({
+            return json_dumpb({
                 'success': False,
                 'message': 'Missing parameter: {}'.format(parsed['missing'])
-            }).encode('utf-8')
+            })
 
         args = parsed['args']
 
@@ -45,25 +50,25 @@ class TipsHistogramResource(resource.Resource):
         try:
             begin = int(args['begin'])
         except ValueError:
-            return json.dumps({
+            return json_dumpb({
                 'success': False,
                 'message': 'Invalid parameter, cannot convert to int: begin'
-            }).encode('utf-8')
+            })
 
         try:
             end = int(args['end'])
         except ValueError:
-            return json.dumps({
+            return json_dumpb({
                 'success': False,
                 'message': 'Invalid parameter, cannot convert to int: end'
-            }).encode('utf-8')
+            })
 
         v = []
         for timestamp in range(begin, end + 1):
             tx_tips = self.manager.tx_storage.get_tx_tips(timestamp)
             v.append((timestamp, len(tx_tips)))
 
-        return json.dumps({'success': True, 'tips': v}).encode('utf-8')
+        return json_dumpb({'success': True, 'tips': v})
 
 
 TipsHistogramResource.openapi = {

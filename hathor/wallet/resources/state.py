@@ -1,9 +1,14 @@
-import json
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.util import json_dumpb
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager
 
 
 @register_resource
@@ -15,11 +20,11 @@ class StateWalletResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         # Important to have the manager so we can know the wallet
         self.manager = manager
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         """ GET request for /wallet/state/
             Returns a boolean saying if the wallet is locked
             'is_locked': True|False
@@ -31,7 +36,7 @@ class StateWalletResource(resource.Resource):
 
         data = {'is_locked': self.manager.wallet.is_locked(), 'type': self.manager.wallet.type.value}
 
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 StateWalletResource.openapi = {

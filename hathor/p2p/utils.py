@@ -1,5 +1,5 @@
 import datetime
-from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Generator, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
 import requests
@@ -13,6 +13,7 @@ from twisted.internet.defer import inlineCallbacks
 from hathor.conf import HathorSettings
 from hathor.p2p.peer_discovery import DNSPeerDiscovery
 from hathor.transaction.genesis import GENESIS_HASH
+from hathor.util import JsonDict
 
 if TYPE_CHECKING:
     from cryptography.hazmat.backends.openssl.rsa import _RSAPrivateKey
@@ -65,13 +66,13 @@ def get_genesis_short_hash() -> str:
     return GENESIS_HASH.hex()[:7]
 
 
-def get_settings_hello_dict() -> Dict[str, Any]:
+def get_settings_hello_dict() -> JsonDict:
     """ Return a dict of settings values that must be validated in the hello state
     """
     settings_dict = {}
     for key in settings.P2P_SETTINGS_HASH_FIELDS:
         value = getattr(settings, key)
-        # We are going to json.dumps this dict, so we can't have bytes here
+        # We are going to json_dumps this dict, so we can't have bytes here
         if type(value) == bytes:
             value = value.hex()
         settings_dict[key] = value

@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
 from itertools import count
-from typing import Any, Callable, Dict, Iterator, List, Optional, Union, cast
+from typing import Any, Callable, Iterator, List, Optional, Union, cast
 
 from aiohttp import BasicAuth, ClientSession
 from structlog import get_logger
+
+from hathor.util import JsonDict
 
 logger = get_logger()
 
@@ -18,7 +20,7 @@ class IBitcoinRPC(ABC):
     @abstractmethod
     async def get_block_template(self, *, rules: List[str] = ['segwit'], longpoll_id: Optional[str],
                                  capabilities: List[str] = ['coinbasetxn', 'workid', 'coinbase/append', 'longpoll'],
-                                 ) -> Dict:
+                                 ) -> JsonDict:
         """ Method for the [GetBlockTemplate call](https://bitcoin.org/en/developer-reference#getblocktemplate).
         """
         raise NotImplementedError
@@ -100,7 +102,7 @@ class BitcoinRPC(IBitcoinRPC):
           `{"id": 0, "method": "getblocktemplate", "params": {"template_request": {"capabilities": ["coinbasetxn"]}}}`
         """
         assert bool(args) + bool(kwargs) < 2, 'Use at most one of: args or kwargs, but not both'
-        req_data: Dict = {'method': method}
+        req_data: JsonDict = {'method': method}
         if self._iter_id:
             req_data['id'] = str(next(self._iter_id))
         params = args or kwargs or None
@@ -125,12 +127,12 @@ class BitcoinRPC(IBitcoinRPC):
 
     async def get_block_template(self, *, rules: List[str] = ['segwit'], longpoll_id: Optional[str],
                                  capabilities: List[str] = ['coinbasetxn', 'workid', 'coinbase/append', 'longpoll'],
-                                 ) -> Dict:
-        data: Dict[str, Any] = {'capabilities': capabilities, 'rules': rules}
+                                 ) -> JsonDict:
+        data: JsonDict = {'capabilities': capabilities, 'rules': rules}
         if longpoll_id is not None:
             data['longpollid'] = longpoll_id
         res = await self._rpc_request('getblocktemplate', data)
-        return cast(Dict[str, Any], res)
+        return cast(JsonDict, res)
 
     async def verify_block_proposal(self, *, block: bytes) -> Optional[str]:
         res = await self._rpc_request('getblocktemplate', {'mode': 'proposal', 'data': block.hex()})

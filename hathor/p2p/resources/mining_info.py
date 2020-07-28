@@ -1,13 +1,17 @@
-import json
 from math import log
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.difficulty import Weight
-from hathor.util import get_mined_tokens
+from hathor.util import get_mined_tokens, json_dumpb
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager  # noqa: F401
 
 settings = HathorSettings()
 
@@ -20,10 +24,10 @@ class MiningInfoResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         self.manager = manager
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         """ GET request /getmininginfo/
 
             :rtype: string (json)
@@ -32,7 +36,7 @@ class MiningInfoResource(resource.Resource):
         set_cors(request, 'GET')
 
         if not self.manager.can_start_mining():
-            return json.dumps({'success': False, 'message': 'Node still syncing'}).encode('utf-8')
+            return json_dumpb({'success': False, 'message': 'Node still syncing'})
 
         # We can use any address.
         burn_address = bytes.fromhex(
@@ -55,7 +59,7 @@ class MiningInfoResource(resource.Resource):
             'mined_tokens': mined_tokens,
             'success': True,
         }
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 MiningInfoResource.openapi = {

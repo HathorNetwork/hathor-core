@@ -1,9 +1,14 @@
-import json
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.util import json_dumpb
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager
 
 
 @register_resource
@@ -14,11 +19,11 @@ class TxParentsResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         """ GET request for /tx_parents/
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
@@ -35,7 +40,7 @@ class TxParentsResource(resource.Resource):
                 'success': True,
                 'tx_parents': [x.hex() for x in tx_parents],
             }
-        return json.dumps(data).encode('utf-8')
+        return json_dumpb(data)
 
 
 TxParentsResource.openapi = {

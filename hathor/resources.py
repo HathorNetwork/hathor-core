@@ -1,12 +1,15 @@
-import json
 import os
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
 from twisted.web.http import Request
 
 from hathor.api_util import render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.manager import HathorManager
+from hathor.util import json_dumpb, json_loadb
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager
 
 
 @register_resource
@@ -17,7 +20,7 @@ class ProfilerResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager: HathorManager) -> None:
+    def __init__(self, manager: 'HathorManager') -> None:
         # Important to have the manager so we can know the wallet
         self.manager = manager
 
@@ -29,20 +32,19 @@ class ProfilerResource(resource.Resource):
         else:
             raise Exception('Unable to generate dump filename')
 
-    def render_POST(self, request):
+    def render_POST(self, request: Request) -> bytes:
         """ POST request for /profiler/
-            We expect 'start' or 'stop' as request args and, in the case of stop, also an optional parameter 'filepath'
-            'start': bool to represent it should start the profiler
-            'stop': bool to represent it should stop the profiler
-            'filepath': str of the file path where to save the profiler file
 
-            :rtype: string (json)
+        We expect 'start' or 'stop' as request args and, in the case of stop, also an optional parameter 'filepath'
+        'start': bool to represent it should start the profiler
+        'stop': bool to represent it should stop the profiler
+        'filepath': str of the file path where to save the profiler file
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
 
         data_read = request.content.read()
-        post_data = json.loads(data_read.decode('utf-8')) if data_read else {}
+        post_data = json_loadb(data_read) if data_read else {}
         ret = {'success': True}
 
         if 'start' in post_data:
@@ -60,7 +62,7 @@ class ProfilerResource(resource.Resource):
         else:
             ret['success'] = False
 
-        return json.dumps(ret, indent=4).encode('utf-8')
+        return json_dumpb(ret)
 
     def render_OPTIONS(self, request: Request) -> int:
         return render_options(request)

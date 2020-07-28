@@ -1,10 +1,15 @@
-import json
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
+from hathor.util import json_dumpb
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager
 
 settings = HathorSettings()
 
@@ -17,11 +22,11 @@ class BalanceResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         """ GET request for /wallet/balance/
             Returns the int balance of the wallet
 
@@ -34,7 +39,7 @@ class BalanceResource(resource.Resource):
             return {'success': False, 'message': 'No wallet started on node'}
 
         data = {'success': True, 'balance': self.manager.wallet.balance[settings.HATHOR_TOKEN_UID]._asdict()}
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 BalanceResource.openapi = {

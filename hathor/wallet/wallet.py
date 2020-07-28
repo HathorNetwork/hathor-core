@@ -1,5 +1,4 @@
 import hashlib
-import json
 import os
 from typing import Any, Dict, Optional, Tuple
 
@@ -9,6 +8,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.pubsub import HathorEvents
+from hathor.util import json_dumpb, json_loadb
 from hathor.wallet import BaseWallet
 from hathor.wallet.exceptions import OutOfUnusedAddresses
 from hathor.wallet.keypair import KeyPair
@@ -67,8 +67,8 @@ class Wallet(BaseWallet):
         :rtype: None
         """
         new_keys = {}
-        with open(self.filepath, 'r') as json_file:
-            json_data = json.loads(json_file.read())
+        with open(self.filepath, 'rb') as json_file:
+            json_data = json_loadb(json_file.read())
             for data in json_data:
                 keypair = KeyPair.from_json(data)
                 assert keypair.address is not None
@@ -93,8 +93,8 @@ class Wallet(BaseWallet):
         self.flush_schedule = None
         self.last_flush_time = self.reactor.seconds()
         data = [keypair.to_json() for keypair in self.keys.values()]
-        with open(self.filepath, 'w') as json_file:
-            json_file.write(json.dumps(data, indent=4))
+        with open(self.filepath, 'wb') as json_file:
+            json_file.write(json_dumpb(data))
         self.log.info('keys successfully written to disk')
 
     def unlock(self, password: bytes) -> None:

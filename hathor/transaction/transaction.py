@@ -16,7 +16,7 @@ limitations under the License.
 
 from collections import namedtuple
 from struct import pack
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
 from hathor import protos
 from hathor.conf import HathorSettings
@@ -36,6 +36,7 @@ from hathor.transaction.exceptions import (
     TooManyInputs,
 )
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount, unpack, unpack_len
+from hathor.util import JsonDict
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -242,7 +243,7 @@ class Transaction(BaseTransaction):
             return settings.HATHOR_TOKEN_UID
         return self.tokens[index - 1]
 
-    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
+    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> JsonDict:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['tokens'] = [h.hex() for h in self.tokens]
         return json
