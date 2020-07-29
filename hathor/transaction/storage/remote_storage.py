@@ -8,8 +8,6 @@ from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.logger import Logger
 
 from hathor import protos
-print('#### ')
-print(protos)
 from hathor.exception import HathorError
 from hathor.indexes import TransactionIndexElement, TransactionsIndex
 from hathor.transaction import Block
@@ -608,7 +606,7 @@ class TransactionRemoteStorage(TransactionStorage):
             key=key,
             value=value
         )
-        result = self._stub.AddValue(request)
+        result = self._stub.AddValue(request)  # noqa: F841
 
     @convert_grpc_exceptions
     def remove_value(self, key: str) -> None:
@@ -616,7 +614,7 @@ class TransactionRemoteStorage(TransactionStorage):
         request = protos.RemoveValueRequest(
             key=key,
         )
-        result = self._stub.RemoveValue(request)
+        result = self._stub.RemoveValue(request)  # noqa: F841
 
     @convert_grpc_exceptions
     def get_value(self, key: str) -> Optional[str]:

@@ -1,4 +1,4 @@
-from typing import Dict, Iterator, Optional, TypeVar
+from typing import Any, Dict, Iterator, Optional, TypeVar
 
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
