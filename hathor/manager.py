@@ -195,17 +195,18 @@ class HathorManager:
             if self.tx_storage.is_running_full_verification():
                 self.log.error(
                     'Error initializing node. The last time you started your node you did a full verification '
-                    'that was stopped in the middle. The storage is not reliable anymore because of that, so '
+                    'that was stopped in the middle. The storage is not reliable anymore and, because of that, '
                     'you must initialize with a full verification again or remove your storage and do a full sync.'
                 )
                 sys.exit()
 
             # If self.tx_storage.is_running_manager() is True, the last time the node was running it had a sudden crash
-            # because of that, we must run a full verification because some storage data might be wrong
+            # because of that, we must run a full verification because some storage data might be wrong.
+            # The metadata is the only piece of the storage that may be wrong, not the blocks and transactions.
             if self.tx_storage.is_running_manager():
                 self.log.error(
                     'Error initializing node. The last time you executed your full node it wasn\'t stopped correctly. '
-                    'The storage is not reliable anymore because of that, so you must run a full verification '
+                    'The storage is not reliable anymore and, because of that, so you must run a full verification '
                     'or remove your storage and do a full sync.'
                 )
                 sys.exit()
@@ -220,6 +221,8 @@ class HathorManager:
         # Initialize manager's components.
         self._initialize_components()
         if self._full_verification:
+            # Before calling self._initialize_components() I start 'full verification' mode and after that I need to
+            # finish it. It's just to know if the full node has stopped a full initialization in the middle
             self.tx_storage.finish_full_verification()
         self.tx_storage.enable_lock()
 
