@@ -374,6 +374,28 @@ class _BaseTransactionStorageTest:
             self.tx_storage.finish_full_verification()
             self.assertFalse(self.tx_storage.is_running_full_verification())
 
+        def test_key_value_attribute(self):
+            attr = 'test'
+            val = 'a'
+
+            # Try to get a key that does not exist
+            self.assertIsNone(self.tx_storage.get_value(attr))
+
+            # Try to remove this key that does not exist
+            self.tx_storage.remove_value(attr)
+
+            # Add the key/value
+            self.tx_storage.add_value(attr, val)
+
+            # Get correct value
+            self.assertEqual(self.tx_storage.get_value(attr), val)
+
+            # Remove the key
+            self.tx_storage.remove_value(attr)
+
+            # Key should not exist again
+            self.assertIsNone(self.tx_storage.get_value(attr))
+
     class _RemoteStorageTest(_TransactionStorageTest):
         def setUp(self, tx_storage, reactor=None):
             tx_storage, self._server = start_remote_storage(tx_storage=tx_storage)
