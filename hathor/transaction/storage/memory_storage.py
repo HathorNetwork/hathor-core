@@ -1,4 +1,4 @@
-from typing import Dict, Iterator, TypeVar
+from typing import Dict, Iterator, Optional, TypeVar
 
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
@@ -17,6 +17,8 @@ class TransactionMemoryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         """
         self.transactions: Dict[bytes, BaseTransaction] = {}
         self.metadata: Dict[bytes, TransactionMetadata] = {}
+        # Store custom key/value attributes
+        self.attributes: Dict[str, Any] = {}
         self._clone_if_needed = _clone_if_needed
         super().__init__(with_index=with_index)
 
@@ -65,3 +67,12 @@ class TransactionMemoryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
 
     def get_count_tx_blocks(self) -> int:
         return len(self.transactions)
+
+    def add_value(self, key: str, value: str) -> None:
+        self.attributes[key] = value
+
+    def remove_value(self, key: str) -> None:
+        self.attributes.pop(key, None)
+
+    def get_value(self, key: str) -> Optional[str]:
+        return self.attributes.get(key)

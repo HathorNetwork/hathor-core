@@ -8,6 +8,8 @@ from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.logger import Logger
 
 from hathor import protos
+print('#### ')
+print(protos)
 from hathor.exception import HathorError
 from hathor.indexes import TransactionIndexElement, TransactionsIndex
 from hathor.transaction import Block
@@ -599,6 +601,32 @@ class TransactionRemoteStorage(TransactionStorage):
         all_sorted.update(tx_list)
         return all_sorted
 
+    @convert_grpc_exceptions
+    def add_value(self, key: str, value: str) -> None:
+        self._check_connection()
+        request = protos.AddValueRequest(
+            key=key,
+            value=value
+        )
+        result = self._stub.AddValue(request)
+
+    @convert_grpc_exceptions
+    def remove_value(self, key: str) -> None:
+        self._check_connection()
+        request = protos.RemoveValueRequest(
+            key=key,
+        )
+        result = self._stub.RemoveValue(request)
+
+    @convert_grpc_exceptions
+    def get_value(self, key: str) -> Optional[str]:
+        self._check_connection()
+        request = protos.GetValueRequest(
+            key=key
+        )
+        result = self._stub.GetValue(request)
+        return result.value
+
 
 class TransactionStorageServicer(protos.TransactionStorageServicer):
     log = Logger()
@@ -799,6 +827,30 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         txs_index = self.storage.get_all_sorted_txs(timestamp, count, offset)
         for tx_element in txs_index[:]:
             yield protos.Transaction(timestamp=tx_element.timestamp, hash=tx_element.hash)
+
+    @convert_hathor_exceptions
+    def AddValue(self, request: protos.AddValueRequest, context: _Context) -> protos.Empty:
+        key = request.key
+        value = request.value
+
+        self.storage.add_value(key, value)
+        return protos.Empty()
+
+    @convert_hathor_exceptions
+    def RemoveValue(self, request: protos.RemoveValueRequest, context: _Context) -> protos.Empty:
+        key = request.key
+        self.storage.remove_value(key)
+        return protos.Empty()
+
+    @convert_hathor_exceptions
+    def GetValue(self, request: protos.GetValueRequest, context: _Context) -> protos.GetValueResponse:
+        key = request.key
+        value = self.storage.get_value(key)
+
+        if value:
+            return protos.GetValueResponse(value=value)
+        else:
+            return protos.GetValueResponse()
 
 
 def create_transaction_storage_server(server: grpc.Server, tx_storage: TransactionStorage,
