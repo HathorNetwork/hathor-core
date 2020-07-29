@@ -68,6 +68,9 @@ class TransactionStorage(ABC):
         # Initialize cache for genesis transactions.
         self._genesis_cache: Dict[bytes, BaseTransaction] = {}
 
+        # Key storage attribute to save if the full node is running a full verification
+        self._running_full_verification_attribute: str = 'running_full_verification'
+
     def _save_or_verify_genesis(self) -> None:
         """Save all genesis in the storage."""
         for tx in self._get_genesis_from_settings():
@@ -562,36 +565,33 @@ class TransactionStorage(ABC):
         """ Save value on storage
             Need to be a string to support all storages, including rocksdb, that needs bytes
         """
-        # XXX Some storages (e.g. memory storage) don't need this attribute
-        return
+        raise NotImplementedError
 
     def remove_value(self, key: str) -> None:
         """ Remove value from storage
         """
-        # XXX Some storages (e.g. memory storage) don't need this attribute
-        return
+        raise NotImplementedError
 
     def get_value(self, key: str) -> Optional[str]:
         """ Get value from storage
         """
-        # XXX Some storages (e.g. memory storage) don't need this attribute
-        return None
+        raise NotImplementedError
 
     def start_full_verification(self) -> None:
         """ Save full verification on storage
         """
-        self.add_value(settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE, '1')
+        self.add_value(self._running_full_verification_attribute, '1')
 
     def finish_full_verification(self) -> None:
         """ Remove from storage that the full node is initializing with a full verification
         """
-        self.remove_value(settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE)
+        self.remove_value(self._running_full_verification_attribute)
 
     def is_running_full_verification(self) -> bool:
         """ Return if the full node is initializing with a full verification
             or was running a full verification and was stopped in the middle
         """
-        return self.get_value(settings.RUNNING_FULL_VERIFICATION_ATTRIBUTE) == '1'
+        return self.get_value(self._running_full_verification_attribute) == '1'
 
 
 class TransactionStorageAsyncFromSync(TransactionStorage):

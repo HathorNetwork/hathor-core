@@ -247,6 +247,3 @@ class HathorSettings(NamedTuple):
 
     # Amount in which tx min weight reaches the middle point between the minimum and maximum weight
     MIN_TX_WEIGHT_K: int = 100
-
-    # Key storage attribute to save if the full node is running a full verification
-    RUNNING_FULL_VERIFICATION_ATTRIBUTE: str = 'running_full_verification'
