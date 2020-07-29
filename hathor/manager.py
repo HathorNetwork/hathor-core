@@ -199,10 +199,21 @@ class HathorManager:
                     'you must initialize with a full verification again or remove your storage and do a full sync.'
                 )
                 sys.exit()
+
+            if self.tx_storage.is_running_manager():
+                self.log.error(
+                    'Error initializing node. The last time you executed your full node it wasn\'t stopped correctly. '
+                    'The storage is not reliable anymore because of that, so you must run a full verification '
+                    'or remove your storage and do a full sync.'
+                )
+                sys.exit()
+
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
         self.connections.start()
         self.pow_thread_pool.start()
+        # Start running
+        self.tx_storage.start_running_manager()
 
         # Disable get transaction lock when initializing components
         self.tx_storage.disable_lock()
@@ -232,6 +243,7 @@ class HathorManager:
         waits = []
 
         self.log.info('Stopping HathorManager...')
+        self.tx_storage.stop_running_manager()
         self.connections.stop()
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
         if self.pow_thread_pool.started:

@@ -71,6 +71,9 @@ class TransactionStorage(ABC):
         # Key storage attribute to save if the full node is running a full verification
         self._running_full_verification_attribute: str = 'running_full_verification'
 
+        # Key storage attribute to save if the manager is running
+        self._manager_running_attribute: str = 'manager_running'
+
     def _save_or_verify_genesis(self) -> None:
         """Save all genesis in the storage."""
         for tx in self._get_genesis_from_settings():
@@ -592,6 +595,21 @@ class TransactionStorage(ABC):
             or was running a full verification and was stopped in the middle
         """
         return self.get_value(self._running_full_verification_attribute) == '1'
+
+    def start_running_manager(self) -> None:
+        """ Save on storage that manager is running
+        """
+        self.add_value(self._manager_running_attribute, '1')
+
+    def stop_running_manager(self) -> None:
+        """ Remove from storage that manager is running
+        """
+        self.remove_value(self._manager_running_attribute)
+
+    def is_running_manager(self) -> bool:
+        """ Return if the manager is running or was running and a sudden crash stopped the full node
+        """
+        return self.get_value(self._manager_running_attribute) == '1'
 
 
 class TransactionStorageAsyncFromSync(TransactionStorage):
