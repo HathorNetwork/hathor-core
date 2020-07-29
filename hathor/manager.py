@@ -279,12 +279,19 @@ class HathorManager:
                 cnt2 = cnt
             cnt += 1
 
+            # It's safe to skip block weight verification during initialization because
+            # we trust the difficulty stored in metadata
             skip_block_weight_verification = True
             if block_count % settings.QUANTITY_BLOCKS_SKIP_WEIGHT_VERIFICATION == 0:
                 skip_block_weight_verification = False
 
             try:
-                assert self.on_new_tx(tx, quiet=True, fails_silently=False, skip_block_weight_verification=skip_block_weight_verification)
+                assert self.on_new_tx(
+                    tx,
+                    quiet=True,
+                    fails_silently=False,
+                    skip_block_weight_verification=skip_block_weight_verification
+                )
             except (InvalidNewTransaction, TxValidationError):
                 pretty_json = json.dumps(tx.to_json(), indent=4)
                 self.log.error('An unexpected error occurred when initializing {tx.hash_hex}\n'
