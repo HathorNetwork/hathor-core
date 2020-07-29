@@ -200,6 +200,8 @@ class HathorManager:
                 )
                 sys.exit()
 
+            # If self.tx_storage.is_running_manager() is True, the last time the node was running it had a sudden crash
+            # because of that, we must run a full verification because some storage data might be wrong
             if self.tx_storage.is_running_manager():
                 self.log.error(
                     'Error initializing node. The last time you executed your full node it wasn\'t stopped correctly. '
@@ -212,8 +214,6 @@ class HathorManager:
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
         self.connections.start()
         self.pow_thread_pool.start()
-        # Start running
-        self.tx_storage.start_running_manager()
 
         # Disable get transaction lock when initializing components
         self.tx_storage.disable_lock()
@@ -222,6 +222,7 @@ class HathorManager:
         if self._full_verification:
             self.tx_storage.finish_full_verification()
         self.tx_storage.enable_lock()
+
         # Metric starts to capture data
         self.metrics.start()
 
@@ -238,6 +239,9 @@ class HathorManager:
 
         if self.stratum_factory:
             self.stratum_factory.start()
+
+        # Start running
+        self.tx_storage.start_running_manager()
 
     def stop(self) -> Deferred:
         waits = []
