@@ -623,6 +623,9 @@ class TransactionRemoteStorage(TransactionStorage):
             key=key
         )
         result = self._stub.GetValue(request)
+        if not result.value:
+            return None
+
         return result.value
 
 
