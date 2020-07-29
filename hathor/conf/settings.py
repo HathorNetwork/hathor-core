@@ -247,3 +247,6 @@ class HathorSettings(NamedTuple):
 
     # Amount in which tx min weight reaches the middle point between the minimum and maximum weight
     MIN_TX_WEIGHT_K: int = 100
+
+    # Quantity of blocks without a weight verification when doing a full verification
+    QUANTITY_BLOCKS_SKIP_WEIGHT_VERIFICATION: int = 1000

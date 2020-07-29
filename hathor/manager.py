@@ -260,6 +260,8 @@ class HathorManager:
         cnt = 0
         cnt2 = 0
 
+        block_count = 0
+
         # self.start_profiler()
         for tx in self.tx_storage._topological_sort():
             assert tx.hash is not None
@@ -277,13 +279,20 @@ class HathorManager:
                 cnt2 = cnt
             cnt += 1
 
+            skip_block_weight_verification = True
+            if block_count % settings.QUANTITY_BLOCKS_SKIP_WEIGHT_VERIFICATION == 0:
+                skip_block_weight_verification = False
+
             try:
-                assert self.on_new_tx(tx, quiet=True, fails_silently=False)
+                assert self.on_new_tx(tx, quiet=True, fails_silently=False, skip_block_weight_verification=skip_block_weight_verification)
             except (InvalidNewTransaction, TxValidationError):
                 pretty_json = json.dumps(tx.to_json(), indent=4)
                 self.log.error('An unexpected error occurred when initializing {tx.hash_hex}\n'
                                '{pretty_json}', tx=tx, pretty_json=pretty_json)
                 raise
+
+            if tx.is_block:
+                block_count += 1
 
             if time.time() - t2 > 1:
                 self.log.warn('Warning: {} took {} seconds to be processed.'.format(tx.hash.hex(), time.time() - t2))
@@ -398,7 +407,7 @@ class HathorManager:
         """Return the number of tokens issued (aka reward) per block of a given height."""
         return hathor.util._get_tokens_issued_per_block(height)
 
-    def validate_new_tx(self, tx: BaseTransaction) -> bool:
+    def validate_new_tx(self, tx: BaseTransaction, skip_block_weight_verification: bool = False) -> bool:
         """ Process incoming transaction during initialization.
         These transactions came only from storage.
         """
@@ -423,7 +432,7 @@ class HathorManager:
             tx = cast(Block, tx)
             assert tx.hash is not None  # XXX: it appears that after casting this assert "casting" is lost
 
-            if self.state != self.NodeState.INITIALIZING:
+            if not skip_block_weight_verification:
                 # Validate minimum block difficulty
                 block_weight = self.calculate_block_difficulty(tx)
                 if tx.weight < block_weight - settings.WEIGHT_TOL:
@@ -470,7 +479,8 @@ class HathorManager:
         return self.on_new_tx(tx, fails_silently=fails_silently)
 
     def on_new_tx(self, tx: BaseTransaction, *, conn: Optional[HathorProtocol] = None,
-                  quiet: bool = False, fails_silently: bool = True, propagate_to_peers: bool = True) -> bool:
+                  quiet: bool = False, fails_silently: bool = True, propagate_to_peers: bool = True,
+                  skip_block_weight_verification: bool = False) -> bool:
         """This method is called when any transaction arrive.
 
         If `fails_silently` is False, it may raise either InvalidNewTransaction or TxValidationError.
@@ -487,7 +497,7 @@ class HathorManager:
                 return False
 
         try:
-            assert self.validate_new_tx(tx) is True
+            assert self.validate_new_tx(tx, skip_block_weight_verification=skip_block_weight_verification) is True
         except (InvalidNewTransaction, TxValidationError) as e:
             # Discard invalid Transaction/block.
             self.log.debug('Transaction/Block discarded', tx=tx, exc=e)
