@@ -282,7 +282,7 @@ class HathorManager:
             # It's safe to skip block weight verification during initialization because
             # we trust the difficulty stored in metadata
             skip_block_weight_verification = True
-            if block_count % settings.QUANTITY_BLOCKS_SKIP_WEIGHT_VERIFICATION == 0:
+            if block_count % settings.VERIFY_WEIGHT_EVERY_N_BLOCKS == 0:
                 skip_block_weight_verification = False
 
             try:
