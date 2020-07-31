@@ -151,7 +151,7 @@ class BasicTransaction(unittest.TestCase):
         # Testing without cloning
         self.cache_storage._clone_if_needed = False
 
-        block_parents = [tx.hash for tx in self.genesis]
+        block_parents = [block.hash for block in self.genesis_blocks] + [tx.hash for tx in self.genesis_txs]
         output = TxOutput(200, bytes.fromhex('1e393a5ce2ff1c98d4ff6892f2175100f2dad049'))
         obj = Block(timestamp=MIN_TIMESTAMP, weight=12, outputs=[output], parents=block_parents, nonce=100781,
                     storage=self.cache_storage)

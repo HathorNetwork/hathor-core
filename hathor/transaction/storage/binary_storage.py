@@ -1,13 +1,16 @@
 import json
 import os
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionMetadataDoesNotExist
+from hathor.transaction.storage.exceptions import (
+    AttributeDoesNotExist,
+    TransactionDoesNotExist,
+    TransactionMetadataDoesNotExist,
+)
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
 from hathor.transaction.transaction_metadata import TransactionMetadata
-from hathor.util import deprecated, skip_warning
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
@@ -15,17 +18,19 @@ if TYPE_CHECKING:
 
 class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
     def __init__(self, path='./', with_index=True):
-        os.makedirs(path, exist_ok=True)
-        self.path = path
+        self.tx_path = os.path.join(path, 'tx')
+        os.makedirs(self.tx_path, exist_ok=True)
 
         filename_pattern = r'^tx_([\dabcdef]{64})\.bin$'
         self.re_pattern = re.compile(filename_pattern)
 
+        self.attributes_path = os.path.join(path, 'attributes')
+        os.makedirs(self.attributes_path, exist_ok=True)
+
         super().__init__(with_index=with_index)
 
-    @deprecated('Use remove_transaction_deferred instead')
     def remove_transaction(self, tx):
-        skip_warning(super().remove_transaction)(tx)
+        super().remove_transaction(tx)
         filepath = self.generate_filepath(tx.hash)
         metadata_filepath = self.generate_metadata_filepath(tx.hash)
         self._remove_from_weakref(tx)
@@ -40,9 +45,8 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         except FileNotFoundError:
             pass
 
-    @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx, *, only_metadata=False):
-        skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
+        super().save_transaction(tx, only_metadata=only_metadata)
         self._save_transaction(tx, only_metadata=only_metadata)
         self._save_to_weakref(tx)
 
@@ -65,7 +69,7 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
 
     def generate_filepath(self, hash_bytes):
         filename = 'tx_{}.bin'.format(hash_bytes.hex())
-        filepath = os.path.join(self.path, filename)
+        filepath = os.path.join(self.tx_path, filename)
         return filepath
 
     def serialize_metadata(self, metadata):
@@ -76,10 +80,9 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
 
     def generate_metadata_filepath(self, hash_bytes):
         filename = 'tx_{}_metadata.json'.format(hash_bytes.hex())
-        filepath = os.path.join(self.path, filename)
+        filepath = os.path.join(self.tx_path, filename)
         return filepath
 
-    @deprecated('Use transaction_exists_deferred instead')
     def transaction_exists(self, hash_bytes):
         filepath = self.generate_filepath(hash_bytes)
         return os.path.isfile(filepath)
@@ -111,7 +114,6 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         filepath = self.generate_filepath(hash_bytes)
         return self._load_transaction_from_filepath(filepath)
 
-    @deprecated('Use get_transaction_deferred instead')
     def _get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
         tx = self.get_transaction_from_weakref(hash_bytes)
         if tx is not None:
@@ -132,25 +134,50 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         data = self.load_from_json(filepath, TransactionMetadataDoesNotExist)
         return self.load_metadata(data)
 
-    @deprecated('Use get_all_transactions_deferred instead')
     def get_all_transactions(self):
-        path = self.path
+        path = self.tx_path
+
+        def get_tx(hash_bytes, path):
+            tx = self.get_transaction_from_weakref(hash_bytes)
+            if tx is None:
+                # TODO Return a proxy that will load the transaction only when it is used.
+                tx = self._load_transaction_from_filepath(path)
+                self._save_to_weakref(tx)
+            return tx
+
         with os.scandir(path) as it:
             for f in it:
                 match = self.re_pattern.match(f.name)
                 if match:
                     hash_bytes = bytes.fromhex(match.groups()[0])
                     lock = self._get_lock(hash_bytes)
-                    with lock:
-                        tx = self.get_transaction_from_weakref(hash_bytes)
-                        if tx is None:
-                            # TODO Return a proxy that will load the transaction only when it is used.
-                            tx = self._load_transaction_from_filepath(f.path)
-                            self._save_to_weakref(tx)
+
+                    if lock:
+                        with lock:
+                            tx = get_tx(hash_bytes, f.path)
+                    else:
+                        tx = get_tx(hash_bytes, f.path)
                     yield tx
 
-    @deprecated('Use get_count_tx_blocks_deferred instead')
     def get_count_tx_blocks(self):
-        files = os.listdir(self.path)
+        files = os.listdir(self.tx_path)
         assert len(files) % 2 == 0
         return len(files) // 2
+
+    def add_value(self, key: str, value: str) -> None:
+        filepath = os.path.join(self.attributes_path, key)
+        self.save_to_json(filepath, value)
+
+    def remove_value(self, key: str) -> None:
+        filepath = os.path.join(self.attributes_path, key)
+        try:
+            os.unlink(filepath)
+        except FileNotFoundError:
+            pass
+
+    def get_value(self, key: str) -> Optional[str]:
+        filepath = os.path.join(self.attributes_path, key)
+        try:
+            return self.load_from_json(filepath, AttributeDoesNotExist())
+        except AttributeDoesNotExist:
+            return None

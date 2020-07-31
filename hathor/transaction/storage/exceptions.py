@@ -11,3 +11,7 @@ class TransactionMetadataDoesNotExist(HathorError):
 
 class TransactionIsNotABlock(HathorError):
     """You are trying to get a block transaction but it's not a Block type"""
+
+
+class AttributeDoesNotExist(HathorError):
+    """You are trying to get a storage attribute that does not exist"""

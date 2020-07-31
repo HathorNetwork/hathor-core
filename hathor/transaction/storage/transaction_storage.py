@@ -2,19 +2,22 @@ import hashlib
 from abc import ABC, abstractmethod, abstractproperty
 from collections import deque
 from threading import Lock
-from typing import Any, Dict, Generator, Iterator, List, NamedTuple, Optional, Set, Tuple
+from typing import Any, Dict, Generator, Iterator, List, NamedTuple, Optional, Set, Tuple, cast
 from weakref import WeakValueDictionary
 
 from intervaltree.interval import Interval
 from twisted.internet.defer import Deferred, inlineCallbacks, succeed
 
+from hathor.conf import HathorSettings
 from hathor.indexes import IndexesManager, TokensIndex, TransactionsIndex, WalletIndex
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction.block import Block
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
 from hathor.transaction.transaction import BaseTransaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
-from hathor.util import deprecated, skip_warning
+from hathor.util import skip_warning
+
+settings = HathorSettings()
 
 
 class AllTipsCache(NamedTuple):
@@ -52,7 +55,10 @@ class TransactionStorage(ABC):
 
         # Cache for the best block tips
         # This cache is updated in the consensus algorithm.
-        self._best_block_tips = []
+        self._best_block_tips = None
+
+        # If should create lock when getting a transaction
+        self._should_lock = False
 
         # Cache for the latest timestamp of all tips with merkle tree precalculated to be used on the sync algorithm
         # This cache is invalidated every time a new tx or block is added to the cache and
@@ -62,10 +68,17 @@ class TransactionStorage(ABC):
         # Initialize cache for genesis transactions.
         self._genesis_cache: Dict[bytes, BaseTransaction] = {}
 
+        # Key storage attribute to save if the full node is running a full verification
+        self._running_full_verification_attribute: str = 'running_full_verification'
+
+        # Key storage attribute to save if the manager is running
+        self._manager_running_attribute: str = 'manager_running'
+
     def _save_or_verify_genesis(self) -> None:
         """Save all genesis in the storage."""
         for tx in self._get_genesis_from_settings():
             try:
+                assert tx.hash is not None
                 tx2 = self.get_transaction(tx.hash)
                 assert tx == tx2
             except TransactionDoesNotExist:
@@ -117,7 +130,6 @@ class TransactionStorage(ABC):
         self._tx_weakref_disabled = True
 
     @abstractmethod
-    @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self: 'TransactionStorage', tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         # XXX: although this method is abstract (because a subclass must implement it) the implementer
         #      should call the base implementation for correctly interacting with the index
@@ -137,7 +149,6 @@ class TransactionStorage(ABC):
             self._add_to_cache(tx)
 
     @abstractmethod
-    @deprecated('Use remove_transaction_deferred instead')
     def remove_transaction(self, tx: BaseTransaction) -> None:
         """Remove the tx.
 
@@ -156,7 +167,6 @@ class TransactionStorage(ABC):
                 self.wallet_index.remove_tx(tx)
 
     @abstractmethod
-    @deprecated('Use transaction_exists_deferred instead')
     def transaction_exists(self, hash_bytes: bytes) -> bool:
         """Returns `True` if transaction with hash `hash_bytes` exists.
 
@@ -165,7 +175,6 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    @deprecated('Use get_transaction_deferred instead')
     def _get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
         """Returns the transaction with hash `hash_bytes`.
 
@@ -173,9 +182,22 @@ class TransactionStorage(ABC):
         """
         raise NotImplementedError
 
-    def _get_lock(self, hash_bytes: bytes) -> Lock:
+    def disable_lock(self) -> None:
+        """ Turn off lock
+        """
+        self._should_lock = False
+
+    def enable_lock(self) -> None:
+        """ Turn on lock
+        """
+        self._should_lock = True
+
+    def _get_lock(self, hash_bytes: bytes) -> Optional[Lock]:
         """ Get lock for tx hash in the weakref dictionary
         """
+        if not self._should_lock:
+            return None
+
         with self._weakref_lock:
             lock = self._weakref_lock_per_hash.get(hash_bytes, None)
             if lock is None:
@@ -183,18 +205,20 @@ class TransactionStorage(ABC):
                 self._weakref_lock_per_hash[hash_bytes] = lock
         return lock
 
-    @deprecated('Use get_transaction_deferred instead')
     def get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
         """Acquire the lock and get the transaction with hash `hash_bytes`.
 
         :param hash_bytes: Hash in bytes that will be checked.
         """
-        lock = self._get_lock(hash_bytes)
-        with lock:
+        if self._should_lock:
+            lock = self._get_lock(hash_bytes)
+            assert lock is not None
+            with lock:
+                tx = self._get_transaction(hash_bytes)
+        else:
             tx = self._get_transaction(hash_bytes)
         return tx
 
-    @deprecated('Use get_metadata_deferred instead')
     def get_metadata(self, hash_bytes: bytes) -> Optional[TransactionMetadata]:
         """Returns the transaction metadata with hash `hash_bytes`.
 
@@ -208,7 +232,6 @@ class TransactionStorage(ABC):
             return None
 
     @abstractmethod
-    @deprecated('Use get_all_transactions_deferred instead')
     def get_all_transactions(self) -> Iterator[BaseTransaction]:
         # TODO: verify the following claim:
         """Return all transactions that are not blocks.
@@ -218,7 +241,6 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    @deprecated('Use get_count_tx_blocks_deferred instead')
     def get_count_tx_blocks(self) -> int:
         # TODO: verify the following claim:
         """Return the number of transactions/blocks stored.
@@ -328,13 +350,14 @@ class TransactionStorage(ABC):
         When more than one block is returned, it means that there are multiple best chains and
         you can choose any of them.
         """
-        if timestamp is None and not skip_cache:
+        if timestamp is None and not skip_cache and self._best_block_tips is not None:
             return self._best_block_tips
-        best_score = 0
+        best_score = 0.0
         best_tip_blocks = []  # List[bytes(hash)]
         tip_blocks = [x.data for x in self.get_block_tips(timestamp)]
         for block_hash in tip_blocks:
             meta = self.get_metadata(block_hash)
+            assert meta is not None
             if meta.voided_by and meta.voided_by != set([block_hash]):
                 # If anyone but the block itself is voiding this block, then it must be skipped.
                 continue
@@ -347,7 +370,7 @@ class TransactionStorage(ABC):
 
     def get_weight_best_block(self) -> float:
         heads = [self.get_transaction(h) for h in self.get_best_block_tips()]
-        highest_weight = 0
+        highest_weight = 0.0
         for head in heads:
             if head.weight > highest_weight:
                 highest_weight = head.weight
@@ -541,6 +564,53 @@ class TransactionStorage(ABC):
         """
         raise NotImplementedError
 
+    def add_value(self, key: str, value: str) -> None:
+        """ Save value on storage
+            Need to be a string to support all storages, including rocksdb, that needs bytes
+        """
+        raise NotImplementedError
+
+    def remove_value(self, key: str) -> None:
+        """ Remove value from storage
+        """
+        raise NotImplementedError
+
+    def get_value(self, key: str) -> Optional[str]:
+        """ Get value from storage
+        """
+        raise NotImplementedError
+
+    def start_full_verification(self) -> None:
+        """ Save full verification on storage
+        """
+        self.add_value(self._running_full_verification_attribute, '1')
+
+    def finish_full_verification(self) -> None:
+        """ Remove from storage that the full node is initializing with a full verification
+        """
+        self.remove_value(self._running_full_verification_attribute)
+
+    def is_running_full_verification(self) -> bool:
+        """ Return if the full node is initializing with a full verification
+            or was running a full verification and was stopped in the middle
+        """
+        return self.get_value(self._running_full_verification_attribute) == '1'
+
+    def start_running_manager(self) -> None:
+        """ Save on storage that manager is running
+        """
+        self.add_value(self._manager_running_attribute, '1')
+
+    def stop_running_manager(self) -> None:
+        """ Remove from storage that manager is running
+        """
+        self.remove_value(self._manager_running_attribute)
+
+    def is_running_manager(self) -> bool:
+        """ Return if the manager is running or was running and a sudden crash stopped the full node
+        """
+        return self.get_value(self._manager_running_attribute) == '1'
+
 
 class TransactionStorageAsyncFromSync(TransactionStorage):
     """Implement async interface from sync interface, for legacy implementations."""
@@ -578,9 +648,6 @@ class BaseTransactionStorage(TransactionStorage):
 
         # Either save or verify all genesis.
         self._save_or_verify_genesis()
-
-        # Set initial value for _best_block_tips cache.
-        self._best_block_tips = [x.hash for x in self.get_all_genesis() if x.is_block]
 
     @property
     def latest_timestamp(self) -> int:
@@ -646,6 +713,7 @@ class BaseTransactionStorage(TransactionStorage):
         # This `for` is for assert only. How to skip it when running with `-O` parameter?
         for interval in tips:
             meta = self.get_metadata(interval.data)
+            assert meta is not None
             assert not meta.voided_by
 
         return tips
@@ -673,7 +741,7 @@ class BaseTransactionStorage(TransactionStorage):
             raise NotImplementedError
         assert self.block_index is not None
         block_hashes, has_more = self.block_index.get_newest(count)
-        blocks = [self.get_transaction(block_hash) for block_hash in block_hashes]
+        blocks = [cast(Block, self.get_transaction(block_hash)) for block_hash in block_hashes]
         return blocks, has_more
 
     def get_newest_txs(self, count: int) -> Tuple[List[BaseTransaction], bool]:
@@ -689,7 +757,7 @@ class BaseTransactionStorage(TransactionStorage):
             raise NotImplementedError
         assert self.block_index is not None
         block_hashes, has_more = self.block_index.get_older(timestamp, hash_bytes, count)
-        blocks = [self.get_transaction(block_hash) for block_hash in block_hashes]
+        blocks = [cast(Block, self.get_transaction(block_hash)) for block_hash in block_hashes]
         return blocks, has_more
 
     def get_newer_blocks_after(self, timestamp: int, hash_bytes: bytes,
