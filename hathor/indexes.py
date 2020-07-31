@@ -387,7 +387,6 @@ class WalletIndex:
 
         for txin in tx.inputs:
             tx2 = tx.storage.get_transaction(txin.tx_id)
-            assert len(tx.outputs) >= txin.index + 1
             txout = tx2.outputs[txin.index]
             add_address_from_output(txout)
 
