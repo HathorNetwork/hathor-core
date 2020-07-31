@@ -56,6 +56,7 @@ class TestCase(unittest.TestCase):
         )
         manager.avg_time_between_blocks = 0.0001
         manager.test_mode = TestMode.TEST_ALL_WEIGHT
+        manager._full_verification = True
         manager.start()
         self.run_to_completion()
         return manager

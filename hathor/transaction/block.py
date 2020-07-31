@@ -138,7 +138,9 @@ class Block(BaseTransaction):
         """Return the parent block.
         """
         assert self.storage is not None
-        return self.storage.get_transaction(self.get_block_parent_hash())
+        block_parent = self.storage.get_transaction(self.get_block_parent_hash())
+        assert isinstance(block_parent, Block)
+        return block_parent
 
     def get_funds_fields_from_struct(self, buf: bytes) -> bytes:
         """ Gets all funds fields for a block from a buffer.

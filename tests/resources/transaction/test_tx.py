@@ -240,5 +240,5 @@ class RemoteStorageTransactionTest(TransactionTest):
         super().setUp()
 
     def tearDown(self):
-        self._server.stop(0).wait()
         super().tearDown()
+        self._server.stop(0).wait()

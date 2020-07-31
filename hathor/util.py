@@ -275,6 +275,7 @@ def api_catch_exceptions(func: Callable[..., bytes]) -> Callable[..., bytes]:
     """
     from hathor.exception import HathorError
     from twisted.web.http import Request
+
     @wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
