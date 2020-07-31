@@ -61,6 +61,7 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
             tx2 = tx.storage.get_transaction(tx_in.tx_id)
             tx2_out = tx2.outputs[tx_in.index]
             output = tx2_out.to_json(decode_script=True)
+            assert tx2.hash is not None
             output['tx_id'] = tx2.hash.hex()
             output['index'] = tx_in.index
 
@@ -83,12 +84,12 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
     serialized['inputs'] = inputs
 
     detailed_tokens = []
-    for token_uid in serialized['tokens']:
+    for token_uid_hex in serialized['tokens']:
         assert tx.storage is not None
         tokens_index = tx.storage.tokens_index
         assert tokens_index is not None
-        token_info = tokens_index.get_token_info(bytes.fromhex(token_uid))
-        detailed_tokens.append({'uid': token_uid, 'name': token_info.name, 'symbol': token_info.symbol})
+        token_info = tokens_index.get_token_info(bytes.fromhex(token_uid_hex))
+        detailed_tokens.append({'uid': token_uid_hex, 'name': token_info.name, 'symbol': token_info.symbol})
 
     serialized['tokens'] = detailed_tokens
 

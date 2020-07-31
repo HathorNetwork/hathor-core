@@ -149,7 +149,7 @@ class BaseTransaction(ABC):
     HASH_NONCE_SIZE = 16
     HEX_BASE = 16
 
-    _metadata: TransactionMetadata
+    _metadata: Optional[TransactionMetadata]
 
     def __init__(self,
                  nonce: int = 0,
@@ -448,6 +448,7 @@ class BaseTransaction(ABC):
         for parent_hash in self.parents:
             try:
                 parent = self.storage.get_transaction(parent_hash)
+                assert parent.hash is not None
                 if self.timestamp <= parent.timestamp:
                     raise TimestampError('tx={} timestamp={}, parent={} timestamp={}'.format(
                         self.hash.hex(),
@@ -822,6 +823,7 @@ class BaseTransaction(ABC):
             tx2 = self.storage.get_transaction(tx_in.tx_id)
             tx2_out = tx2.outputs[tx_in.index]
             output = serialize_output(tx2, tx2_out)
+            assert tx2.hash is not None
             output['tx_id'] = tx2.hash.hex()
             output['index'] = tx_in.index
             ret['inputs'].append(output)
@@ -869,6 +871,7 @@ class BaseTransaction(ABC):
         """
         new_tx = self.create_from_struct(self.get_struct())
         if hasattr(self, '_metadata'):
+            assert self._metadata is not None  # FIXME: is this actually true or do we have to check if not None
             new_tx._metadata = self._metadata.clone()
         new_tx.storage = self.storage
         return new_tx

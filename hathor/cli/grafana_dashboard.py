@@ -35,6 +35,7 @@ TEXT_FILE = os.path.join(json_path, 'text.json')
 # Folder where all charts files are stored
 CHARTS_FOLDER = os.path.join(json_path, 'charts')
 
+
 # For what types of hosts should the chart be used
 @enum_flag_all_none
 class HostType(Flag):

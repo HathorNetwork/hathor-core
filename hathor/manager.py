@@ -17,6 +17,7 @@ limitations under the License.
 import datetime
 import json
 import random
+import sys
 import time
 from enum import Enum, IntFlag
 from math import log
@@ -173,18 +174,60 @@ class HathorManager:
         # List of addresses to listen for new connections (eg: [tcp:8000])
         self.listen_addresses: List[str] = []
 
+        # Full verification execute all validations for transactions and blocks when initializing the node
+        # Can be activated on the command line with --full-verification
+        self._full_verification = False
+
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
         """
         self.log.info('Starting HathorManager...')
         self.log.info('Network: {network}', network=self.network)
+        # If it's a full verification, we save on the storage that we are starting it
+        # this is required because if we stop the initilization in the middle, the metadata
+        # saved on the storage is not reliable anymore, only if we finish it
+        if self._full_verification:
+            self.tx_storage.start_full_verification()
+        else:
+            # If it's a fast initialization and the last time a full initialization stopped in the middle
+            # we can't allow the full node to continue, so we need to remove the storage and do a full sync
+            # or execute an initialization with full verification
+            if self.tx_storage.is_running_full_verification():
+                self.log.error(
+                    'Error initializing node. The last time you started your node you did a full verification '
+                    'that was stopped in the middle. The storage is not reliable anymore and, because of that, '
+                    'you must initialize with a full verification again or remove your storage and do a full sync.'
+                )
+                sys.exit()
+
+            # If self.tx_storage.is_running_manager() is True, the last time the node was running it had a sudden crash
+            # because of that, we must run a full verification because some storage data might be wrong.
+            # The metadata is the only piece of the storage that may be wrong, not the blocks and transactions.
+            if self.tx_storage.is_running_manager():
+                self.log.error(
+                    'Error initializing node. The last time you executed your full node it wasn\'t stopped correctly. '
+                    'The storage is not reliable anymore and, because of that, so you must run a full verification '
+                    'or remove your storage and do a full sync.'
+                )
+                sys.exit()
+
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
         self.connections.start()
         self.pow_thread_pool.start()
 
+        # Disable get transaction lock when initializing components
+        self.tx_storage.disable_lock()
         # Initialize manager's components.
         self._initialize_components()
+        if self._full_verification:
+            # Before calling self._initialize_components() I start 'full verification' mode and after that I need to
+            # finish it. It's just to know if the full node has stopped a full initialization in the middle
+            self.tx_storage.finish_full_verification()
+        self.tx_storage.enable_lock()
+
+        # Metric starts to capture data
+        self.metrics.start()
 
         for description in self.listen_addresses:
             self.listen(description, ssl=self.ssl)
@@ -194,19 +237,20 @@ class HathorManager:
 
         self.start_time = time.time()
 
-        # Metric starts to capture data
-        self.metrics.start()
-
         if self.wallet:
             self.wallet.start()
 
         if self.stratum_factory:
             self.stratum_factory.start()
 
+        # Start running
+        self.tx_storage.start_running_manager()
+
     def stop(self) -> Deferred:
         waits = []
 
         self.log.info('Stopping HathorManager...')
+        self.tx_storage.stop_running_manager()
         self.connections.stop()
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
         if self.pow_thread_pool.started:
@@ -372,6 +416,7 @@ class HathorManager:
             timestamp = max(self.tx_storage.latest_timestamp, self.reactor.seconds())
 
         parent_block = self.tx_storage.get_transaction(random.choice(tip_blocks))
+        assert timestamp is not None
         if not parent_block.is_genesis and timestamp - parent_block.timestamp > settings.MAX_DISTANCE_BETWEEN_BLOCKS:
             timestamp = parent_block.timestamp + settings.MAX_DISTANCE_BETWEEN_BLOCKS
 
@@ -381,6 +426,7 @@ class HathorManager:
         assert len(tip_blocks) >= 1
         assert len(tip_txs) == 2
 
+        assert parent_block.hash is not None
         parents = [parent_block.hash] + tip_txs
 
         parents_tx = [self.tx_storage.get_transaction(x) for x in parents]
@@ -503,30 +549,40 @@ class HathorManager:
                 self.log.debug('on_new_tx(): Already have transaction {}'.format(tx.hash.hex()))
                 return False
 
-        try:
-            assert self.validate_new_tx(tx, skip_block_weight_verification=skip_block_weight_verification) is True
-        except (InvalidNewTransaction, TxValidationError) as e:
-            # Discard invalid Transaction/block.
-            self.log.debug('Transaction/Block discarded', tx=tx, exc=e)
-            if not fails_silently:
-                raise
-            return False
+        if self.state != self.NodeState.INITIALIZING or self._full_verification:
+            try:
+                assert self.validate_new_tx(tx, skip_block_weight_verification=skip_block_weight_verification) is True
+            except (InvalidNewTransaction, TxValidationError) as e:
+                # Discard invalid Transaction/block.
+                self.log.debug('Transaction/Block discarded', tx=tx, exc=e)
+                if not fails_silently:
+                    raise
+                return False
 
         if self.state != self.NodeState.INITIALIZING:
             self.tx_storage.save_transaction(tx)
         else:
-            tx.reset_metadata()
             self.tx_storage._add_to_cache(tx)
+            if self._full_verification:
+                tx.reset_metadata()
+            else:
+                # When doing a fast init, we don't update the consensus, so we must trust the data on the metadata
+                # For transactions, we don't store them on the tips index if they are voided
+                # We have to execute _add_to_cache before because _del_from_cache does not remove from all indexes
+                metadata = tx.get_metadata()
+                if not tx.is_block and metadata.voided_by:
+                    self.tx_storage._del_from_cache(tx)
 
-        try:
-            tx.update_initial_metadata()
-            self.consensus_algorithm.update(tx)
-        except Exception:
-            pretty_json = json.dumps(tx.to_json(), indent=4)
-            self.log.error('An unexpected error occurred when processing {tx.hash_hex}\n'
-                           '{pretty_json}', tx=tx, pretty_json=pretty_json)
-            self.tx_storage.remove_transaction(tx)
-            raise
+        if self.state != self.NodeState.INITIALIZING or self._full_verification:
+            try:
+                tx.update_initial_metadata()
+                self.consensus_algorithm.update(tx)
+            except Exception:
+                pretty_json = json.dumps(tx.to_json(), indent=4)
+                self.log.error('An unexpected error occurred when processing {tx.hash_hex}\n'
+                               '{pretty_json}', tx=tx, pretty_json=pretty_json)
+                self.tx_storage.remove_transaction(tx)
+                raise
 
         if not quiet:
             ts_date = datetime.datetime.fromtimestamp(tx.timestamp)
