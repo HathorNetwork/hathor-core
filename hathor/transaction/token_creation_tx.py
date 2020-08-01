@@ -232,6 +232,13 @@ class TokenCreationTransaction(Transaction):
         json['tokens'] = []
         return json
 
+    def to_json_extended(self) -> Dict[str, Any]:
+        json = super().to_json_extended()
+        json['token_name'] = self.token_name
+        json['token_symbol'] = self.token_symbol
+        json['tokens'] = []
+        return json
+
     def verify(self) -> None:
         """ Run all validations as regular transactions plus validation on token info.
 
