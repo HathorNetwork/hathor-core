@@ -381,7 +381,6 @@ class WalletIndex:
         def add_address_from_output(output: 'TxOutput') -> None:
             script_type_out = parse_address_script(output.script)
             if script_type_out:
-                assert tx.hash is not None
                 address = script_type_out.address
                 addresses.add(address)
 
