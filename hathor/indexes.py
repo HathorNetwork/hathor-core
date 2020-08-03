@@ -29,6 +29,7 @@ from hathor.transaction.scripts import parse_address_script
 
 if TYPE_CHECKING:  # pragma: no cover
     from hathor.pubsub import PubSubManager, EventArguments  # noqa: F401
+    from hathor.transaction import TxOutput  # noqa: F401
 
 
 class TransactionIndexElement(NamedTuple):
@@ -376,21 +377,21 @@ class WalletIndex:
         """
         assert tx.storage is not None
         addresses: Set[str] = set()
-        for txin in tx.inputs:
-            tx2 = tx.storage.get_transaction(txin.tx_id)
-            for txout in tx2.outputs:
-                script_type_out = parse_address_script(txout.script)
-                if script_type_out:
-                    assert tx.hash is not None
-                    address = script_type_out.address
-                    addresses.add(address)
 
-        for txout in tx.outputs:
-            script_type_out = parse_address_script(txout.script)
+        def add_address_from_output(output: 'TxOutput') -> None:
+            script_type_out = parse_address_script(output.script)
             if script_type_out:
-                assert tx.hash is not None
                 address = script_type_out.address
                 addresses.add(address)
+
+        for txin in tx.inputs:
+            tx2 = tx.storage.get_transaction(txin.tx_id)
+            txout = tx2.outputs[txin.index]
+            add_address_from_output(txout)
+
+        for txout in tx.outputs:
+            add_address_from_output(txout)
+
         return addresses
 
     def publish_tx(self, tx: BaseTransaction, *, addresses: Optional[Iterable[str]] = None) -> None:
