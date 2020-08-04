@@ -1,7 +1,9 @@
-from typing import Set
+from typing import Set, Union
 
 from autobahn.twisted.websocket import WebSocketServerProtocol
-from twisted.logger import Logger
+from structlog import get_logger
+
+logger = get_logger()
 
 
 class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
@@ -10,23 +12,24 @@ class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
         We save a set of connections that we have opened so we
         can send the data update to the clients
     """
-    log = Logger()
 
     def __init__(self, factory):
+        self.log = logger.new()
         self.factory = factory
         self.subscribed_to: Set[str] = set()
         super().__init__()
 
     def onConnect(self, request):
-        self.log.info('Client connecting: {request.peer}', request=request)
+        self.log.info('connect', request=request)
 
     def onOpen(self) -> None:
         self.factory.connections.add(self)
-        self.log.info('WebSocket connection open.')
+        self.log.info('connection opened')
 
     def onClose(self, wasClean, code, reason):
         self.factory.connection_closed(self)
-        self.log.info('Websocket closed: {reason}', reason=reason)
+        self.log.info('connection closed', reason=reason)
 
-    def onMessage(self, payload: bytes, isBinary: bool) -> None:
+    def onMessage(self, payload: Union[bytes, str], isBinary: bool) -> None:
+        self.log.debug('new message', payload=payload.hex() if isinstance(payload, bytes) else payload)
         self.factory.handle_message(self, payload)

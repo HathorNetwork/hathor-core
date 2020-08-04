@@ -17,8 +17,6 @@ limitations under the License.
 from struct import error as StructError, pack
 from typing import Any, Dict, List, Optional, Tuple
 
-from twisted.logger import Logger
-
 from hathor import protos
 from hathor.conf import HathorSettings
 from hathor.transaction import Transaction, TxInput, TxOutput, TxVersion
@@ -41,8 +39,6 @@ TOKEN_INFO_VERSION = 1
 
 
 class TokenCreationTransaction(Transaction):
-    log = Logger()
-
     def __init__(self,
                  nonce: int = 0,
                  timestamp: Optional[int] = None,

@@ -1,14 +1,11 @@
 from itertools import chain
-from typing import TYPE_CHECKING, Iterable, List, Optional, Set, cast
+from typing import Iterable, List, Optional, Set, cast
 
 from structlog import get_logger
 
 from hathor.conf import HathorSettings
-from hathor.transaction import Block, Transaction, sum_weights
+from hathor.transaction import BaseTransaction, Block, Transaction, TxInput, sum_weights
 from hathor.util import classproperty
-
-if TYPE_CHECKING:
-    from hathor.transaction import BaseTransaction, TxInput  # noqa: F401
 
 logger = get_logger()
 settings = HathorSettings()
@@ -46,7 +43,7 @@ class ConsensusAlgorithm:
         self.block_algorithm = BlockConsensusAlgorithm(self)
         self.transaction_algorithm = TransactionConsensusAlgorithm(self)
 
-    def update(self, base: 'BaseTransaction') -> None:
+    def update(self, base: BaseTransaction) -> None:
         from hathor.transaction import Block, Transaction
         if isinstance(base, Transaction):
             self.transaction_algorithm.update_consensus(base)
@@ -70,10 +67,10 @@ class BlockConsensusAlgorithm:
         """
         return _base_transaction_log
 
-    def update_consensus(self, block: 'Block') -> None:
+    def update_consensus(self, block: Block) -> None:
         self.update_voided_info(block)
 
-    def update_voided_info(self, block: 'Block') -> None:
+    def update_voided_info(self, block: Block) -> None:
         """ This method is called only once when a new block arrives.
 
         The blockchain part of the DAG is a tree with the genesis block as the root.
@@ -230,7 +227,7 @@ class BlockConsensusAlgorithm:
         #     v = storage.get_best_block_tips(skip_cache=True)
         #     assert v == storage._best_block_tips
 
-    def union_voided_by_from_parents(self, block: 'Block') -> Set[bytes]:
+    def union_voided_by_from_parents(self, block: Block) -> Set[bytes]:
         """Return the union of the voided_by of block's parents.
 
         It does not include the hash of blocks because the hash of blocks
@@ -254,7 +251,7 @@ class BlockConsensusAlgorithm:
                 voided_by.update(voided_by2)
         return voided_by
 
-    def update_voided_by_from_parents(self, block: 'Block') -> bool:
+    def update_voided_by_from_parents(self, block: Block) -> bool:
         """Update block's metadata voided_by from parents.
         Return True if the block is voided and False otherwise."""
         assert block.storage is not None
@@ -270,7 +267,7 @@ class BlockConsensusAlgorithm:
             return True
         return False
 
-    def add_voided_by_to_multiple_chains(self, block: 'Block', heads: List['Block']) -> None:
+    def add_voided_by_to_multiple_chains(self, block: Block, heads: List[Block]) -> None:
         # We need to go through all side chains because there may be non-voided blocks
         # that must be voided.
         # For instance, imagine two chains with intersection with both heads voided.
@@ -289,7 +286,7 @@ class BlockConsensusAlgorithm:
                 # chain because the head may be voided with part of the tail non-voided.
                 head = head.get_block_parent()
 
-    def update_score_and_mark_as_the_best_chain_if_possible(self, block: 'Block') -> None:
+    def update_score_and_mark_as_the_best_chain_if_possible(self, block: Block) -> None:
         """Update block's score and mark it as best chain if it is a valid consensus.
         If it is not, the block will be voided and the block with highest score will be set as
         best chain.
@@ -302,6 +299,7 @@ class BlockConsensusAlgorithm:
             storage = block.storage
             heads = [cast(Block, storage.get_transaction(h)) for h in storage.get_best_block_tips()]
             best_score = 0.0
+            best_heads: List[Block]
             for head in heads:
                 head_meta = head.get_metadata(force_reload=True)
                 if head_meta.score <= best_score - settings.WEIGHT_TOL:
@@ -320,13 +318,13 @@ class BlockConsensusAlgorithm:
             if len(best_heads) == 1:
                 self.update_score_and_mark_as_the_best_chain_if_possible(best_heads[0])
 
-    def update_score_and_mark_as_the_best_chain(self, block: 'Block') -> None:
+    def update_score_and_mark_as_the_best_chain(self, block: Block) -> None:
         """ Update score and mark the chain as the best chain.
         Thus, transactions' first_block will point to the blocks in the chain.
         """
         self.calculate_score(block, mark_as_best_chain=True)
 
-    def remove_voided_by_from_chain(self, block: 'Block') -> None:
+    def remove_voided_by_from_chain(self, block: Block) -> None:
         """ Remove voided_by from the chain. Now, it is the best chain.
 
         The blocks are visited from right to left (most recent to least recent).
@@ -338,7 +336,7 @@ class BlockConsensusAlgorithm:
                 break
             block = block.get_block_parent()
 
-    def _find_first_parent_in_best_chain(self, block: 'Block') -> 'BaseTransaction':
+    def _find_first_parent_in_best_chain(self, block: Block) -> BaseTransaction:
         """ Find the first block in the side chain that is not voided, i.e., the block where the fork started.
 
         In the simple schema below, the best chain's blocks are O's, the side chain's blocks are I's, and the first
@@ -363,7 +361,7 @@ class BlockConsensusAlgorithm:
             parent_hash = parent.get_block_parent_hash()
         return parent
 
-    def mark_as_voided(self, block: 'Block', *, skip_remove_first_block_markers: bool = False) -> None:
+    def mark_as_voided(self, block: Block, *, skip_remove_first_block_markers: bool = False) -> None:
         """ Mark a block as voided. By default, it will remove the first block markers from
         `meta.first_block` of the transactions that point to it.
         """
@@ -371,7 +369,7 @@ class BlockConsensusAlgorithm:
             self.remove_first_block_markers(block)
         self.add_voided_by(block)
 
-    def add_voided_by(self, block: 'Block', voided_hash: Optional[bytes] = None) -> bool:
+    def add_voided_by(self, block: Block, voided_hash: Optional[bytes] = None) -> bool:
         """ Add a new hash in its `meta.voided_by`. If `voided_hash` is None, it includes
         the block's own hash.
         """
@@ -390,7 +388,7 @@ class BlockConsensusAlgorithm:
         if voided_hash in meta.voided_by:
             return False
 
-        self.log.debug('add_voided_by block={} voided_hash={}'.format(block.hash.hex(), voided_hash.hex()))
+        self.log.debug('add_voided_by', block=block.hash_hex, voided_hash=voided_hash.hex())
 
         meta.voided_by.add(voided_hash)
         storage.save_transaction(block, only_metadata=True)
@@ -402,7 +400,7 @@ class BlockConsensusAlgorithm:
             self.consensus.transaction_algorithm.add_voided_by(tx, voided_hash)
         return True
 
-    def remove_voided_by(self, block: 'Block', voided_hash: Optional[bytes] = None) -> bool:
+    def remove_voided_by(self, block: Block, voided_hash: Optional[bytes] = None) -> bool:
         """ Remove a hash from its `meta.voided_by`. If `voided_hash` is None, it removes
         the block's own hash.
         """
@@ -420,7 +418,7 @@ class BlockConsensusAlgorithm:
         if voided_hash not in meta.voided_by:
             return False
 
-        self.log.debug('remove_voided_by block={} voided_hash={}'.format(block.hash.hex(), voided_hash.hex()))
+        self.log.debug('remove_voided_by', block=block.hash_hex, voided_hash=voided_hash.hex())
 
         meta.voided_by.remove(voided_hash)
         if not meta.voided_by:
@@ -434,7 +432,7 @@ class BlockConsensusAlgorithm:
             self.consensus.transaction_algorithm.remove_voided_by(tx, voided_hash)
         return True
 
-    def remove_first_block_markers(self, block: 'Block') -> None:
+    def remove_first_block_markers(self, block: Block) -> None:
         """ Remove all `meta.first_block` pointing to this block.
         """
         assert block.storage is not None
@@ -455,7 +453,7 @@ class BlockConsensusAlgorithm:
             meta.first_block = None
             storage.save_transaction(tx, only_metadata=True)
 
-    def _score_block_dfs(self, block: 'BaseTransaction', used: Set[bytes],
+    def _score_block_dfs(self, block: BaseTransaction, used: Set[bytes],
                          mark_as_best_chain: bool, newest_timestamp: int) -> float:
         """ Internal method to run a DFS. It is used by `calculate_score()`.
         """
@@ -518,7 +516,7 @@ class BlockConsensusAlgorithm:
 
         return score
 
-    def calculate_score(self, block: 'Block', *, mark_as_best_chain: bool = False) -> float:
+    def calculate_score(self, block: Block, *, mark_as_best_chain: bool = False) -> float:
         """ Calculate block's score, which is the accumulated work of the verified transactions and blocks.
 
         :param: mark_as_best_chain: If `True`, the transactions' will point `meta.first_block` to
@@ -553,18 +551,18 @@ class TransactionConsensusAlgorithm:
         """
         return _base_transaction_log
 
-    def update_consensus(self, tx: 'Transaction') -> None:
+    def update_consensus(self, tx: Transaction) -> None:
         self.mark_inputs_as_used(tx)
         self.update_voided_info(tx)
         self.set_conflict_twins(tx)
 
-    def mark_inputs_as_used(self, tx: 'Transaction') -> None:
+    def mark_inputs_as_used(self, tx: Transaction) -> None:
         """ Mark all its inputs as used
         """
         for txin in tx.inputs:
             self.mark_input_as_used(tx, txin)
 
-    def mark_input_as_used(self, tx: 'Transaction', txin: 'TxInput') -> None:
+    def mark_input_as_used(self, tx: Transaction, txin: TxInput) -> None:
         """ Mark a given input as used
         """
         assert tx.hash is not None
@@ -603,7 +601,7 @@ class TransactionConsensusAlgorithm:
         spent_by.append(tx.hash)
         tx.storage.save_transaction(spent_tx, only_metadata=True)
 
-    def set_conflict_twins(self, tx: 'Transaction') -> None:
+    def set_conflict_twins(self, tx: Transaction) -> None:
         """ Get all transactions that conflict with self
             and check if they are also a twin of self
         """
@@ -616,7 +614,7 @@ class TransactionConsensusAlgorithm:
         conflict_txs = [tx.storage.get_transaction(h) for h in meta.conflict_with]
         self.check_twins(tx, conflict_txs)
 
-    def check_twins(self, tx: 'Transaction', transactions: Iterable['BaseTransaction']) -> None:
+    def check_twins(self, tx: Transaction, transactions: Iterable[BaseTransaction]) -> None:
         """ Check if the tx has any twins in transactions list
             A twin tx is a tx that has the same inputs and outputs
             We add all the hashes of the twin txs in the metadata
@@ -673,7 +671,7 @@ class TransactionConsensusAlgorithm:
 
         tx.storage.save_transaction(tx, only_metadata=True)
 
-    def update_voided_info(self, tx: 'Transaction') -> None:
+    def update_voided_info(self, tx: Transaction) -> None:
         """ This method should be called only once when the transactions is added to the DAG.
         """
         assert tx.hash is not None
@@ -729,7 +727,7 @@ class TransactionConsensusAlgorithm:
         if meta.voided_by == {tx.hash}:
             self.check_conflicts(tx)
 
-    def check_conflicts(self, tx: 'Transaction') -> None:
+    def check_conflicts(self, tx: Transaction) -> None:
         """ Check which transaction is the winner of a conflict, the remaining are voided.
 
         The verification is made for each input, and `self` is only marked as winner if it
@@ -737,14 +735,14 @@ class TransactionConsensusAlgorithm:
         """
         assert tx.hash is not None
         assert tx.storage is not None
-        self.log.debug('tx.check_conflicts {}'.format(tx.hash.hex()))
+        self.log.debug('tx.check_conflicts', tx=tx.hash_hex)
 
         meta = tx.get_metadata()
         if meta.voided_by != {tx.hash}:
             return
 
         # Filter the possible candidates to compare to tx.
-        candidates: List['Transaction'] = []
+        candidates: List[Transaction] = []
         for h in meta.conflict_with or []:
             conflict_tx = cast(Transaction, tx.storage.get_transaction(h))
             conflict_tx_meta = conflict_tx.get_metadata()
@@ -788,17 +786,17 @@ class TransactionConsensusAlgorithm:
             # If it is not a tie, we won. \o/
             self.mark_as_winner(tx)
 
-    def mark_as_winner(self, tx: 'Transaction') -> None:
+    def mark_as_winner(self, tx: Transaction) -> None:
         """ Mark a transaction as winner when it has a conflict and its aggregated weight
         is the greatest one.
         """
         assert tx.hash is not None
-        self.log.debug('tx.mark_as_winner {}'.format(tx.hash.hex()))
+        self.log.debug('tx.mark_as_winner', tx=tx.hash_hex)
         meta = tx.get_metadata()
         assert bool(meta.conflict_with)  # FIXME: this looks like a runtime guarantee, MUST NOT be an assert
         self.remove_voided_by(tx, tx.hash)
 
-    def remove_voided_by(self, tx: 'Transaction', voided_hash: bytes) -> bool:
+    def remove_voided_by(self, tx: Transaction, voided_hash: bytes) -> bool:
         """ Remove a hash from `meta.voided_by` and its descendants (both from verification DAG
         and funds tree).
         """
@@ -813,10 +811,10 @@ class TransactionConsensusAlgorithm:
         if voided_hash not in meta.voided_by:
             return False
 
-        self.log.debug('remove_voided_by tx={} voided_hash={}'.format(tx.hash.hex(), voided_hash.hex()))
+        self.log.debug('remove_voided_by', tx=tx.hash_hex, voided_hash=voided_hash.hex())
 
         bfs = BFSWalk(tx.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
-        check_list: List['BaseTransaction'] = []
+        check_list: List[BaseTransaction] = []
         for tx2 in bfs.run(tx, skip_root=False):
             assert tx2.storage is not None
 
@@ -840,12 +838,12 @@ class TransactionConsensusAlgorithm:
                 self.check_conflicts(tx2)
         return True
 
-    def mark_as_voided(self, tx: 'Transaction') -> None:
+    def mark_as_voided(self, tx: Transaction) -> None:
         """ Mark a transaction as voided when it has a conflict and its aggregated weight
         is NOT the greatest one.
         """
         assert tx.hash is not None
-        self.log.debug('tx.mark_as_voided {}'.format(tx.hash.hex()))
+        self.log.debug('tx.mark_as_voided', tx=tx.hash_hex)
         meta = tx.get_metadata()
         assert bool(meta.conflict_with)
         if meta.voided_by:
@@ -853,7 +851,7 @@ class TransactionConsensusAlgorithm:
             return
         self.add_voided_by(tx, tx.hash)
 
-    def add_voided_by(self, tx: 'Transaction', voided_hash: bytes) -> bool:
+    def add_voided_by(self, tx: Transaction, voided_hash: bytes) -> bool:
         """ Add a hash from `meta.voided_by` and its descendants (both from verification DAG
         and funds tree).
         """
@@ -864,11 +862,11 @@ class TransactionConsensusAlgorithm:
         if meta.voided_by and voided_hash in meta.voided_by:
             return False
 
-        self.log.debug('add_voided_by tx={} voided_hash={}'.format(tx.hash.hex(), voided_hash.hex()))
+        self.log.debug('add_voided_by', tx=tx.hash_hex, voided_hash=voided_hash.hex())
 
         from hathor.transaction.storage.traversal import BFSWalk
         bfs = BFSWalk(tx.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
-        check_list: List['Transaction'] = []
+        check_list: List[Transaction] = []
         for tx2 in bfs.run(tx, skip_root=False):
             assert tx2.storage is not None
             assert tx2.hash is not None

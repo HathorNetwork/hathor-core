@@ -62,7 +62,7 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
             tx2_out = tx2.outputs[tx_in.index]
             output = tx2_out.to_json(decode_script=True)
             assert tx2.hash is not None
-            output['tx_id'] = tx2.hash.hex()
+            output['tx_id'] = tx2.hash_hex
             output['index'] = tx_in.index
 
             # We need to get the token_data from the current tx, and not the tx being spent

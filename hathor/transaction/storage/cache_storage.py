@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING, Any, Generator, Iterator, Optional, Set
 
 from twisted.internet import threads
 from twisted.internet.defer import Deferred, inlineCallbacks, succeed
-from twisted.logger import Logger
 
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
@@ -15,7 +14,6 @@ if TYPE_CHECKING:
 class TransactionCacheStorage(BaseTransactionStorage):
     """Caching storage to be used 'on top' of other storages.
     """
-    log = Logger()
 
     cache: 'OrderedDict[bytes, BaseTransaction]'
     dirty_txs: Set[bytes]
@@ -85,7 +83,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self.flush_deferred = None
 
     def _err_flush_thread(self, reason: Any) -> None:
-        self.log.error('Error flushing transactions: {reason}', reason=reason)
+        self.log.error('error flushing transactions', reason=reason)
         self.reactor.callLater(self.interval, self._start_flush_thread)
         self.flush_deferred = None
 

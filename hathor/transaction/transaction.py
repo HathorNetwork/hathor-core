@@ -18,8 +18,6 @@ from collections import namedtuple
 from struct import pack
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 
-from twisted.logger import Logger
-
 from hathor import protos
 from hathor.conf import HathorSettings
 from hathor.transaction import MAX_NUM_INPUTS, BaseTransaction, Block, TxInput, TxOutput, TxVersion
@@ -54,7 +52,6 @@ TokenInfo = namedtuple('TokenInfo', 'amount can_mint can_melt')
 
 
 class Transaction(BaseTransaction):
-    log = Logger()
 
     SERIALIZATION_NONCE_SIZE = 4
 

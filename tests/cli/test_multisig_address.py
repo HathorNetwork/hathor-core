@@ -22,16 +22,16 @@ class MultisigAddressTest(unittest.TestCase):
         # Last element is always empty string
         output.pop()
 
-        self.assertEqual(len(output), pubkey_count * 10 + 11)
+        self.assertEqual(len(output), pubkey_count * 11 + 11)
 
         def get_data(output, index):
             return output[index].split(':')[1].strip()
 
-        pubkey1 = get_data(output, 6)
-        pubkey2 = get_data(output, 16)
-        pubkey3 = get_data(output, 26)
-        redeem_script = get_data(output, 32)
-        address = get_data(output, 37)
+        pubkey1 = get_data(output, 7)
+        pubkey2 = get_data(output, 18)
+        pubkey3 = get_data(output, 29)
+        redeem_script = get_data(output, 35)
+        address = get_data(output, 40)
 
         # Generate address from given pubkeys
         args = self.parser.parse_args(['2', '--public_keys', '{},{},{}'.format(pubkey1, pubkey2, pubkey3)])

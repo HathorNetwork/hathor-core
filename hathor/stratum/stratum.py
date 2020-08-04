@@ -176,7 +176,7 @@ class JSONRPC(LineReceiver, ABC):
         :type line: bytes
 
         """
-        self.log.debug('LINE RECEIVED {line}', line=line)
+        self.log.debug('line received', line=line)
         try:
             data = json_loadb(line)
         except JSONDecodeError:
@@ -305,8 +305,8 @@ class JSONRPC(LineReceiver, ABC):
         """
         try:
             message = json_dumpb(json)
+            self.log.debug('send line', line=message)
             self.sendLine(message)
-            self.log.debug('LINE SENT {line}', line=message)
         except TypeError:
             self.log.error('failed to encode', json=json)
 
@@ -369,10 +369,11 @@ class StratumProtocol(JSONRPC):
         self.miner_id = uuid4()
         self.connection_start_time = self.factory.get_current_timestamp()
         self.log = self.log.bind(miner_id=self.miner_id, conn_at=self.connection_start_time, address=self.address)
-        self.log.debug('New connection')
+        self.log.debug('new connection')
 
     def connectionLost(self, reason: Failure = None) -> None:
-        self.log.info('Miner exited')
+        if self.subscribed:
+            self.log.info('miner disconnected')
         assert self.miner_id is not None
         self.factory.miner_protocols.pop(self.miner_id, None)
 
@@ -442,7 +443,7 @@ class StratumProtocol(JSONRPC):
             self.log.debug('merged_mining=True implies mine_txs=False')
             self.mine_txs = False
         self.factory.miner_protocols[self.miner_id] = self
-        self.log.info('Miner subscribed', address=self.miner_address, mine_txs=self.mine_txs,
+        self.log.info('miner subscribed', address=self.miner_address, mine_txs=self.mine_txs,
                       merged_mining=self.merged_mining)
         self.send_result('ok', msgid)
         self.subscribed = True
@@ -500,13 +501,12 @@ class StratumProtocol(JSONRPC):
         tx.update_hash()
         assert tx.hash is not None
 
-        self.log.debug('Miner submitted nonce, will validate it',
-                       block=tx, block_base=block_base.hex(), block_base_hash=block_base_hash.hex())
+        self.log.debug('share received', block=tx, block_base=block_base.hex(), block_base_hash=block_base_hash.hex())
 
         try:
             tx.verify_pow(job.weight)
         except PowError:
-            self.log.error('Invalid share weight', job_weight=job.weight, tx=tx)
+            self.log.error('bad share, discard', job_weight=job.weight, tx=tx)
             return self.send_error(INVALID_SOLUTION, msgid, {
                 'hash': tx.hash.hex(),
                 'target': int(tx.get_target()).to_bytes(32, 'big').hex()
@@ -523,8 +523,10 @@ class StratumProtocol(JSONRPC):
             tx.verify_pow()
         except PowError:
             # Transaction pow was not enough, but the share was succesfully submited
-            self.log.info('Insufficient weight, keep searching', tx=tx)
+            self.log.info('high hash, keep mining', tx=tx)
             return
+        else:
+            self.log.info('low hash, new block candidate', tx=tx)
 
         if isinstance(tx, Block):
             try:
@@ -535,11 +537,11 @@ class StratumProtocol(JSONRPC):
                 self.blocks_found += 1
             except (InvalidNewTransaction, TxValidationError) as e:
                 # Block propagation failed, but the share was succesfully submited
-                self.log.warn('Block propagation failed.', block=tx, error=e)
+                self.log.warn('block propagation failed', block=tx, error=e)
             else:
-                self.log.info('New block found.', block=tx)
+                self.log.info('new block found', block=tx)
         elif isinstance(tx, Transaction):
-            self.log.info('Transaction mined.', tx=tx)
+            self.log.info('transaction mined', tx=tx)
             funds_hash = tx.get_funds_hash()
             if funds_hash in self.factory.mining_tx_pool:
                 self.factory.mined_txs[funds_hash] = tx
@@ -754,10 +756,10 @@ class StratumFactory(Factory):
         """
         Puts the transaction in a queue of transactions to be mined via Stratum protocol.
         """
-        self.log.info('Mining transaction {tx}', tx=tx)
+        self.log.info('mine transaction', tx=tx)
         tx_hash = tx.get_funds_hash()
         if tx_hash in self.mining_tx_pool:
-            self.log.warn('Tried to mine a transaction twice or a twin.')
+            self.log.warn('tried to mine a transaction twice or a twin')
             return
         self.mining_tx_pool[tx_hash] = tx
         self.tx_queue.append(tx_hash)
@@ -928,5 +930,5 @@ def supervisor_job(client: StratumClient) -> None:
         data = client.queue.get()
         assert isinstance(data, MinerSubmit)
         if data.job_id == client.job['job_id']:
-            client.log.info('Submiting job: {}'.format(data))
+            client.log.info('submit job', job=data)
             client.send_request('submit', data._asdict(), client._next_id())

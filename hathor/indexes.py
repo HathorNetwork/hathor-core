@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, DefaultDict, Dict, Iterable, List, NamedTuple,
 
 from intervaltree import Interval, IntervalTree
 from sortedcontainers import SortedKeyList
-from twisted.logger import Logger
+from structlog import get_logger
 
 from hathor.pubsub import HathorEvents
 from hathor.transaction import BaseTransaction, Transaction
@@ -30,6 +30,8 @@ from hathor.transaction.scripts import parse_address_script
 if TYPE_CHECKING:  # pragma: no cover
     from hathor.pubsub import PubSubManager, EventArguments  # noqa: F401
     from hathor.transaction import TxOutput  # noqa: F401
+
+logger = get_logger()
 
 
 class TransactionIndexElement(NamedTuple):
@@ -109,8 +111,6 @@ class TipsIndex:
     TODO Use an interval tree stored in disk, possibly using a B-tree.
     """
 
-    log = Logger()
-
     # An interval tree used to know the tips at any timestamp.
     # The intervals are in the form (begin, end), where begin is the timestamp
     # of the transaction, and end is the smallest timestamp of the tx's children.
@@ -121,6 +121,7 @@ class TipsIndex:
     tx_last_interval: Dict[bytes, Interval]
 
     def __init__(self) -> None:
+        self.log = logger.new()
         self.tree = IntervalTree()
         self.tx_last_interval = {}  # Dict[bytes(hash), Interval]
 

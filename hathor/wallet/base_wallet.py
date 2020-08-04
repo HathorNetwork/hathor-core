@@ -5,9 +5,9 @@ from itertools import chain
 from math import inf
 from typing import TYPE_CHECKING, Any, DefaultDict, Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
 
+from structlog import get_logger
 from twisted.internet.interfaces import IDelayedCall, IReactorCore
 from twisted.internet.task import Clock
-from twisted.logger import Logger
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from pycoin.key.Key import Key
 
 settings = HathorSettings()
+logger = get_logger()
 
 # check interval for maybe_spent_txs
 UTXO_CHECK_INTERVAL = 10
@@ -55,8 +56,6 @@ class WalletBalanceUpdate(NamedTuple):
 
 
 class BaseWallet:
-    log = Logger()
-
     reactor: IReactorCore
     keys: Dict[str, Any]
 
@@ -83,6 +82,8 @@ class BaseWallet:
         :param reactor: Twisted reactor that handles the time now
         :type reactor: :py:class:`twisted.internet.Reactor`
         """
+        self.log = logger.new()
+
         # Dict[token_id, Dict[Tuple[tx_id, index], UnspentTx]]
         self.unspent_txs: DefaultDict[bytes, Dict[Tuple[bytes, int], UnspentTx]] = defaultdict(dict)
 

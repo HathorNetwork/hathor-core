@@ -6,6 +6,7 @@ from typing import Any, Dict, Generator, Iterator, List, NamedTuple, Optional, S
 from weakref import WeakValueDictionary
 
 from intervaltree.interval import Interval
+from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks, succeed
 
 from hathor.conf import HathorSettings
@@ -37,6 +38,7 @@ class TransactionStorage(ABC):
     block_index: Optional[IndexesManager]
     tx_index: Optional[IndexesManager]
     all_index: Optional[IndexesManager]
+    log = get_logger()
 
     def __init__(self):
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
@@ -59,6 +61,9 @@ class TransactionStorage(ABC):
 
         # If should create lock when getting a transaction
         self._should_lock = False
+
+        # Provide local logger
+        self.log = self.log.new()
 
         # Cache for the latest timestamp of all tips with merkle tree precalculated to be used on the sync algorithm
         # This cache is invalidated every time a new tx or block is added to the cache and

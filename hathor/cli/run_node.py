@@ -6,10 +6,12 @@ from argparse import ArgumentParser, Namespace
 from typing import Any, Dict, List
 
 from autobahn.twisted.resource import WebSocketResource
+from structlog import get_logger
 from twisted.internet import reactor
 from twisted.web import server
 from twisted.web.resource import Resource
 
+logger = get_logger()
 LOGGING_CAPTURE_STDOUT = True
 
 
@@ -72,6 +74,7 @@ class RunNode:
         from hathor.wallet import HDWallet, Wallet
 
         settings = HathorSettings()
+        log = logger.new()
 
         if args.recursion_limit:
             sys.setrecursionlimit(args.recursion_limit)
@@ -84,12 +87,11 @@ class RunNode:
             data = json.load(open(args.peer, 'r'))
             peer_id = PeerId.create_from_json(data)
 
-        print('Hathor v{} (genesis {})'.format(hathor.__version__, genesis.GENESIS_HASH.hex()[:7]))
-        print('My peer id is', peer_id.id)
+        log.info('hathor-core v{version}', version=hathor.__version__, genesis=genesis.GENESIS_HASH.hex()[:7],
+                 my_peer_id=str(peer_id.id))
 
         def create_wallet():
             if args.wallet == 'hd':
-                print('Using HDWallet')
                 kwargs = {
                     'words': args.words,
                 }
@@ -121,32 +123,29 @@ class RunNode:
 
         tx_storage: TransactionStorage
         if args.data:
-            wallet_dir = args.data
-            print('Using Wallet at {}'.format(wallet_dir))
             if args.rocksdb_storage:
                 from hathor.transaction.storage import TransactionRocksDBStorage
                 tx_storage = TransactionRocksDBStorage(path=args.data, with_index=(not args.cache))
-                print('Using TransactionRocksDBStorage at {}'.format(args.data))
             else:
                 tx_storage = TransactionCompactStorage(path=args.data, with_index=(not args.cache))
-                print('Using TransactionCompactStorage at {}'.format(args.data))
+            log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
             if args.cache:
                 tx_storage = TransactionCacheStorage(tx_storage, reactor)
                 if args.cache_size:
                     tx_storage.capacity = args.cache_size
                 if args.cache_interval:
                     tx_storage.interval = args.cache_interval
-                print('Using TransactionCacheStorage, capacity {}, interval {}s'.format(
-                    tx_storage.capacity, tx_storage.interval))
+                log.info('with cache', capacity=tx_storage.capacity, interval=tx_storage.interval)
                 tx_storage.start()
         else:
             # if using MemoryStorage, no need to have cache
             tx_storage = TransactionMemoryStorage()
-            print('Using TransactionMemoryStorage')
+            log.info('with storage', storage_class=type(tx_storage).__name__)
         self.tx_storage = tx_storage
 
         if args.wallet:
             self.wallet = create_wallet()
+            log.info('with wallet', wallet=self.wallet, path=args.data)
         else:
             self.wallet = None
 
