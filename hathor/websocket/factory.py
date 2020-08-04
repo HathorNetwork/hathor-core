@@ -286,6 +286,8 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             self._handle_unsubscribe_address(connection, message)
         elif message['type'] == 'subscribe':
             self._handle_subscribe(connection, message)
+        elif message['type'] == 'unsubscribe':
+            self._handle_unsubscribe(connection, message)
 
     def _handle_ping(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
         """ Handler for ping message, should respond with a simple {"type": "pong"}"""
@@ -345,6 +347,20 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
                 self.subscribed_connections[ws_message].add(connection)
         # Reply back as subscribed success
         payload = json.dumps({'type': 'subscribed', 'messages': ws_messages, 'success': True}).encode('utf-8')
+        connection.sendMessage(payload, False)
+
+    def _handle_unsubscribe(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
+        """ Handler for unsubscribe to ws messages."""
+        ws_messages: Optional[List[str]] = message.get('messages')
+        if ws_messages is None:
+            # No messages key
+            return
+        for ws_message in ws_messages:
+            if connection in self.subscribed_connections[ws_message]:
+                # Remove connection from set, if exists
+                self.subscribed_connections[ws_message].remove(connection)
+        # Reply back as unsubscribed success
+        payload = json.dumps({'type': 'unsubscribed', 'messages': ws_messages, 'success': True}).encode('utf-8')
         connection.sendMessage(payload, False)
 
     def connection_closed(self, connection: HathorAdminWebsocketProtocol) -> None:

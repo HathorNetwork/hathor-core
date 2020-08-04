@@ -221,3 +221,44 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
         data = response.json_value()
         self.assertEqual(data['connections'], 1)
         self.assertEqual(data['subscribed_addresses'], 2)
+
+    def test_message_subscription(self):
+        self.assertEqual(len(self.factory.subscribed_connections), 0)
+        self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
+
+        # First clean the transport to make sure the value comes from this execution
+        self.transport.clear()
+
+        # Subscribe to 'dashboard:metrics' message
+        message = 'dashboard:metrics'
+        payload = json.dumps({'type': 'subscribe', 'messages': [message]}).encode('utf-8')
+        self.protocol.onMessage(payload, True)
+        self.assertEqual(len(self.factory.subscribed_connections), 1)
+        self.assertEqual(len(self.factory.subscribed_connections[message]), 1)
+        self.assertEqual(list(self.factory.subscribed_connections[message])[0], self.protocol)
+
+        # Check return ws message
+        self.run_to_completion()
+        value = self._decode_value(self.transport.value())
+        self.assertEqual(value['type'], 'subscribed')
+        self.assertEqual(value['messages'], [message])
+        self.assertEqual(value['success'], True)
+
+        # First clean the transport to make sure the value comes from this execution
+        self.transport.clear()
+
+        # Unsubscribe to 'dashboard:metrics' message
+        payload = json.dumps({'type': 'unsubscribe', 'messages': [message]}).encode('utf-8')
+        self.protocol.onMessage(payload, True)
+        self.assertEqual(len(self.factory.subscribed_connections[message]), 0)
+
+        # Check return ws message
+        self.run_to_completion()
+        value = self._decode_value(self.transport.value())
+        self.assertEqual(value['type'], 'unsubscribed')
+        self.assertEqual(value['messages'], [message])
+        self.assertEqual(value['success'], True)
+
+        # Call unsubscribe again after was already unsubscribed
+        payload = json.dumps({'type': 'unsubscribe', 'messages': [message]}).encode('utf-8')
+        self.protocol.onMessage(payload, True)
