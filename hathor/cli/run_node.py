@@ -6,10 +6,12 @@ from argparse import ArgumentParser, Namespace
 from typing import Any, Dict, List
 
 from autobahn.twisted.resource import WebSocketResource
+from structlog import get_logger
 from twisted.internet import reactor
 from twisted.web import server
 from twisted.web.resource import Resource
 
+logger = get_logger()
 LOGGING_CAPTURE_STDOUT = True
 
 
@@ -49,6 +51,10 @@ class RunNode:
         parser.add_argument('--recursion-limit', type=int, help='Set python recursion limit')
         parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
         parser.add_argument('--min-block-weight', type=int, help='Minimum weight for blocks')
+        parser.add_argument('--x-fast-init-beta', action='store_true',
+                            help='Execute a fast initialization, which skips some transaction verifications. '
+                            'This is still a beta feature as it may cause issues when restarting the full node '
+                            'after a crash.')
         return parser
 
     def prepare(self, args: Namespace) -> None:
@@ -68,6 +74,7 @@ class RunNode:
         from hathor.wallet import HDWallet, Wallet
 
         settings = HathorSettings()
+        log = logger.new()
 
         if args.recursion_limit:
             sys.setrecursionlimit(args.recursion_limit)
@@ -80,12 +87,11 @@ class RunNode:
             data = json.load(open(args.peer, 'r'))
             peer_id = PeerId.create_from_json(data)
 
-        print('Hathor v{} (genesis {})'.format(hathor.__version__, genesis.GENESIS_HASH.hex()[:7]))
-        print('My peer id is', peer_id.id)
+        log.info('hathor-core v{version}', version=hathor.__version__, genesis=genesis.GENESIS_HASH.hex()[:7],
+                 my_peer_id=str(peer_id.id))
 
         def create_wallet():
             if args.wallet == 'hd':
-                print('Using HDWallet')
                 kwargs = {
                     'words': args.words,
                 }
@@ -117,34 +123,29 @@ class RunNode:
 
         tx_storage: TransactionStorage
         if args.data:
-            wallet_dir = args.data
-            print('Using Wallet at {}'.format(wallet_dir))
             if args.rocksdb_storage:
                 from hathor.transaction.storage import TransactionRocksDBStorage
-                tx_dir = os.path.join(args.data, 'tx.db')
-                tx_storage = TransactionRocksDBStorage(path=tx_dir, with_index=(not args.cache))
-                print('Using TransactionRocksDBStorage at {}'.format(tx_dir))
+                tx_storage = TransactionRocksDBStorage(path=args.data, with_index=(not args.cache))
             else:
-                tx_dir = os.path.join(args.data, 'tx')
-                tx_storage = TransactionCompactStorage(path=tx_dir, with_index=(not args.cache))
-                print('Using TransactionCompactStorage at {}'.format(tx_dir))
+                tx_storage = TransactionCompactStorage(path=args.data, with_index=(not args.cache))
+            log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
             if args.cache:
                 tx_storage = TransactionCacheStorage(tx_storage, reactor)
                 if args.cache_size:
                     tx_storage.capacity = args.cache_size
                 if args.cache_interval:
                     tx_storage.interval = args.cache_interval
-                print('Using TransactionCacheStorage, capacity {}, interval {}s'.format(
-                    tx_storage.capacity, tx_storage.interval))
+                log.info('with cache', capacity=tx_storage.capacity, interval=tx_storage.interval)
                 tx_storage.start()
         else:
             # if using MemoryStorage, no need to have cache
             tx_storage = TransactionMemoryStorage()
-            print('Using TransactionMemoryStorage')
+            log.info('with storage', storage_class=type(tx_storage).__name__)
         self.tx_storage = tx_storage
 
         if args.wallet:
             self.wallet = create_wallet()
+            log.info('with wallet', wallet=self.wallet, path=args.data)
         else:
             self.wallet = None
 
@@ -188,6 +189,9 @@ class RunNode:
             if self.wallet:
                 self.wallet.test_mode = True
 
+        if not args.x_fast_init_beta:
+            self.manager._full_verification = True
+
         for description in args.listen:
             self.manager.add_listen_address(description)
 
@@ -206,7 +210,6 @@ class RunNode:
             DashboardTransactionResource,
             DecodeTxResource,
             GetBlockTemplateResource,
-            GraphvizLegacyResource,
             GraphvizFullResource,
             GraphvizNeighboursResource,
             PushTxResource,
@@ -263,7 +266,7 @@ class RunNode:
             wallet_resource.putChild(b'nano-contract', contracts_resource)
             p2p_resource = Resource()
             root.putChild(b'p2p', p2p_resource)
-            graphviz = GraphvizLegacyResource(self.manager)
+            graphviz = Resource()
             # XXX: reach the resource through /graphviz/ too, previously it was a leaf so this wasn't a problem
             graphviz.putChild(b'', graphviz)
             for fmt in ['dot', 'pdf', 'png', 'jpg']:

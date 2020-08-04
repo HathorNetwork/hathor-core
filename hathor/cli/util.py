@@ -1,4 +1,10 @@
 from argparse import ArgumentParser
+from collections import OrderedDict
+from datetime import datetime
+from enum import Flag
+from functools import reduce
+from operator import or_
+from typing import Type
 
 import configargparse
 
@@ -7,14 +13,23 @@ def create_parser() -> ArgumentParser:
     return configargparse.ArgumentParser(auto_env_var_prefix='hathor_')
 
 
-def setup_logging(debug: bool = False, capture_stdout: bool = True, *, _test_logging: bool = False) -> None:
+def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_logging: bool = False) -> None:
+    import logging
     import logging.config
 
     import colorama
     import structlog
     import twisted
+    from twisted.logger import LogLevel
 
-    logger = structlog.get_logger()
+    # Mappings to Python's logging module
+    twisted_to_logging_level = {
+        LogLevel.debug: logging.DEBUG,
+        LogLevel.info: logging.INFO,
+        LogLevel.warn: logging.WARNING,
+        LogLevel.error: logging.ERROR,
+        LogLevel.critical: logging.CRITICAL,
+    }
 
     # common timestamper for structlog loggers and foreign (stdlib and twisted) loggers
     timestamper = structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S")
@@ -106,6 +121,13 @@ def setup_logging(debug: bool = False, capture_stdout: bool = True, *, _test_log
 
             return sio.getvalue()
 
+        def _repr(self, val):
+            if isinstance(val, datetime):
+                return str(val)
+            else:
+                return super()._repr(val)
+
+    # See: https://docs.python.org/3/library/logging.config.html#configuration-dictionary-schema
     logging.config.dictConfig({
             'version': 1,
             'disable_existing_loggers': False,
@@ -135,11 +157,15 @@ def setup_logging(debug: bool = False, capture_stdout: bool = True, *, _test_log
                 # },
             },
             'loggers': {
+                # set twisted verbosity one level lower than hathor's
+                'twisted': {
+                    'handlers': ['default'],
+                    'level': 'INFO' if debug else 'WARN',
+                    'propagate': False,
+                },
                 '': {
-                    # 'handlers': ['default', 'file'],
                     'handlers': ['default'],
                     'level': 'DEBUG' if debug else 'INFO',
-                    'propagate': True,
                 },
             }
     })
@@ -160,19 +186,48 @@ def setup_logging(debug: bool = False, capture_stdout: bool = True, *, _test_log
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
-            # structlog.twisted.JSONRenderer(),
         ],
-        context_class=dict,
+        context_class=OrderedDict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
     )
 
-    twisted.python.log.startLoggingWithObserver(twisted.logger.STDLibLogObserver(), setStdout=capture_stdout)
+    twisted_logger = structlog.get_logger('twisted')
+
+    def twisted_structlog_observer(event):
+        try:
+            level = twisted_to_logging_level.get(event.get('log_level'), logging.INFO)
+            kwargs = {}
+            msg = ''
+            if not msg and 'log_format' in event:
+                msg = event['log_format'].format(**event)
+            if not msg and 'format' in event:
+                msg = event['format'] % event
+            failure = event.get('log_failure')
+            if failure is not None:
+                kwargs['exc_info'] = (failure.type, failure.value, failure.getTracebackObject())
+            twisted_logger.log(level, msg, **kwargs)
+        except Exception as e:
+            print('error when logging event', e)
+
+    # start logging to std logger so structlog can catch it
+    twisted.python.log.startLoggingWithObserver(twisted_structlog_observer, setStdout=capture_stdout)
 
     if _test_logging:
+        logger = structlog.get_logger()
         logger.debug('Test: debug.')
         logger.info('Test: info.')
         logger.warning('Test: warning.')
         logger.error('Test error.')
         logger.critical('Test: critical.')
+
+
+# adapted from https://stackoverflow.com/a/42253518/947511
+def enum_flag_all_none(enumeration: Type[Flag]) -> Type[Flag]:
+    """Add NONE and ALL pseudo-members to enum.Flag classes"""
+    none_mbr = enumeration(0)
+    all_mbr = enumeration(reduce(or_, enumeration))
+    enumeration._member_map_['NONE'] = none_mbr  # type: ignore
+    enumeration._member_map_['ALL'] = all_mbr  # type: ignore
+    return enumeration

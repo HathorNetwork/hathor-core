@@ -14,12 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import math
 import warnings
 from collections import OrderedDict
-from enum import Enum, Flag
-from functools import partial, reduce, wraps
-from operator import or_
-from typing import Any, Callable, Deque, Dict, Iterable, Iterator, Tuple, Type, TypeVar, cast
+from enum import Enum
+from functools import partial, wraps
+from typing import Any, Callable, Deque, Dict, Iterable, Iterator, Tuple, TypeVar, cast
 
 from structlog import get_logger
 from twisted.internet.interfaces import IReactorCore
@@ -275,20 +275,26 @@ def api_catch_exceptions(func: Callable[..., bytes]) -> Callable[..., bytes]:
     Useful for annotating API methods and reduce error handling boilerplate.
     """
     from hathor.exception import HathorError
+    from twisted.web.http import Request
+
     @wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return func(*args, **kwargs)
         except HathorError as e:
+            request = args[1]
+            assert isinstance(request, Request)
+            request.setResponseCode(getattr(e, 'status_code', 500))
             return json_dumpb({'error': str(e)})
     return wrapper
 
 
-# adapted from https://stackoverflow.com/a/42253518/947511
-def enum_flag_all_none(enumeration: Type[Flag]) -> Type[Flag]:
-    """Add NONE and ALL pseudo-members to enum.Flag classes"""
-    none_mbr = enumeration(0)
-    all_mbr = enumeration(reduce(or_, enumeration))
-    enumeration._member_map_['NONE'] = none_mbr  # type: ignore
-    enumeration._member_map_['ALL'] = all_mbr  # type: ignore
-    return enumeration
+class LogDuration(float):
+    def __str__(x):
+        if x >= 1:
+            return f'~{math.trunc(x)}s'
+        elif x >= 0.001:
+            return f'~{math.trunc(x * 1000)}ms'
+        else:
+            return '<1ms'
+    __repr__ = __str__

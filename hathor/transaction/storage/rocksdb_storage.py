@@ -1,10 +1,10 @@
+import os
 from typing import TYPE_CHECKING, Iterator, Optional
 
 import rocksdb
 
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
-from hathor.util import deprecated, skip_warning
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
@@ -16,9 +16,13 @@ class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncF
     It uses Protobuf serialization internally.
     """
 
-    def __init__(self, path='./storage.db', with_index=True):
+    def __init__(self, path='./', with_index=True):
+        tx_dir = os.path.join(path, 'tx.db')
+        self._db = rocksdb.DB(tx_dir, rocksdb.Options(create_if_missing=True))
+
+        attributes_dir = os.path.join(path, 'attributes.db')
+        self.attributes_db = rocksdb.DB(attributes_dir, rocksdb.Options(create_if_missing=True))
         super().__init__(with_index=with_index)
-        self._db = rocksdb.DB(path, rocksdb.Options(create_if_missing=True))
 
     def _load_from_bytes(self, data: bytes) -> 'BaseTransaction':
         from hathor import protos
@@ -32,45 +36,29 @@ class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncF
         tx_proto = tx.to_proto()
         return tx_proto.SerializeToString()
 
-    @deprecated('Use remove_transaction_deferred instead')
     def remove_transaction(self, tx: 'BaseTransaction') -> None:
-        skip_warning(super().remove_transaction)(tx)
+        super().remove_transaction(tx)
         self._db.delete(tx.hash)
         self._remove_from_weakref(tx)
 
-    @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
-        skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
-        if tx.is_genesis:
-            return
+        super().save_transaction(tx, only_metadata=only_metadata)
         self._save_transaction(tx, only_metadata=only_metadata)
         self._save_to_weakref(tx)
 
     def _save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
-        # genesis txs and metadata are kept in memory
-        if tx.is_genesis:
-            return
         data = self._tx_to_bytes(tx)
         key = tx.hash
         self._db.put(key, data)
 
-    @deprecated('Use transaction_exists_deferred instead')
     def transaction_exists(self, hash_bytes: bytes) -> bool:
-        genesis = self.get_genesis(hash_bytes)
-        if genesis:
-            return True
         may_exist, _ = self._db.key_may_exist(hash_bytes)
         if not may_exist:
             return False
         tx_exists = self._get_transaction_from_db(hash_bytes) is not None
         return tx_exists
 
-    @deprecated('Use get_transaction_deferred instead')
     def _get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
-        genesis = self.get_genesis(hash_bytes)
-        if genesis:
-            return genesis
-
         tx = self.get_transaction_from_weakref(hash_bytes)
         if tx is not None:
             return tx
@@ -92,34 +80,49 @@ class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncF
         tx = self._load_from_bytes(data)
         return tx
 
-    @deprecated('Use get_all_transactions_deferred instead')
     def get_all_transactions(self) -> Iterator['BaseTransaction']:
         tx: Optional['BaseTransaction']
 
-        for tx in self.get_all_genesis():
-            yield tx
-
         items = self._db.iteritems()
         items.seek_to_first()
+
+        def get_tx(hash_bytes, data):
+            tx = self.get_transaction_from_weakref(hash_bytes)
+            if tx is None:
+                tx = self._load_from_bytes(data)
+                assert tx.hash == hash_bytes
+                self._save_to_weakref(tx)
+            return tx
+
         for key, data in items:
             hash_bytes = key
 
             lock = self._get_lock(hash_bytes)
-            with lock:
-                tx = self.get_transaction_from_weakref(hash_bytes)
-                if tx is None:
-                    tx = self._load_from_bytes(data)
-                    assert tx.hash == hash_bytes
-                    self._save_to_weakref(tx)
+            if lock:
+                with lock:
+                    tx = get_tx(hash_bytes, data)
+            else:
+                tx = get_tx(hash_bytes, data)
 
             assert tx is not None
             yield tx
 
-    @deprecated('Use get_count_tx_blocks_deferred instead')
     def get_count_tx_blocks(self) -> int:
-        genesis_len = len(self.get_all_genesis())
         # XXX: there may be a more efficient way, see: https://stackoverflow.com/a/25775882
         keys = self._db.iterkeys()
         keys.seek_to_first()
         keys_count = sum(1 for _ in keys)
-        return genesis_len + keys_count
+        return keys_count
+
+    def add_value(self, key: str, value: str) -> None:
+        self.attributes_db.put(key.encode('utf-8'), value.encode('utf-8'))
+
+    def remove_value(self, key: str) -> None:
+        self.attributes_db.delete(key.encode('utf-8'))
+
+    def get_value(self, key: str) -> Optional[str]:
+        data = self.attributes_db.get(key.encode('utf-8'))
+        if data is None:
+            return None
+        else:
+            return data.decode()

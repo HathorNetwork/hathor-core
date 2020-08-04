@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, Generator, Iterator, List
 import grpc
 from grpc._server import _Context
 from intervaltree import Interval
+from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
-from twisted.logger import Logger
 
 from hathor import protos
 from hathor.exception import HathorError
@@ -13,10 +13,11 @@ from hathor.indexes import TransactionIndexElement, TransactionsIndex
 from hathor.transaction import Block
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import AllTipsCache, TransactionStorage
-from hathor.util import deprecated, skip_warning
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction  # noqa: F401
+
+logger = get_logger()
 
 
 class RemoteCommunicationError(HathorError):
@@ -96,28 +97,25 @@ def convert_hathor_exceptions_generator(func: Callable) -> Callable:
 class TransactionRemoteStorage(TransactionStorage):
     """Connects to a Storage API Server at given port and exposes standard storage interface.
     """
-    log = Logger()
 
     def __init__(self, with_index=None):
         super().__init__()
         self._channel = None
-        self._genesis_cache: Dict[bytes, BaseTransaction] = None
         self.with_index = with_index
         # Set initial value for _best_block_tips cache.
-        self._best_block_tips = [x.hash for x in self.get_all_genesis() if x.is_block]
-
-    def _create_genesis_cache(self) -> None:
-        from hathor.transaction.genesis import get_genesis_transactions
-        self._genesis_cache = {}
-        for genesis in get_genesis_transactions(self):
-            assert genesis.hash is not None
-            self._genesis_cache[genesis.hash] = genesis
+        self._best_block_tips = []
 
     def connect_to(self, port: int) -> None:
         if self._channel:
             self._channel.close()
         self._channel = grpc.insecure_channel('127.0.0.1:{}'.format(port))
         self._stub = protos.TransactionStorageStub(self._channel)
+
+        # Initialize genesis.
+        self._save_or_verify_genesis()
+
+        # Set initial value for _best_block_tips cache.
+        self._best_block_tips = [x.hash for x in self.get_all_genesis() if x.is_block]
 
     def _check_connection(self) -> None:
         """raise error if not connected"""
@@ -127,7 +125,6 @@ class TransactionRemoteStorage(TransactionStorage):
 
     # TransactionStorageSync interface implementation:
 
-    @deprecated('Use remove_transaction_deferred instead')
     @convert_grpc_exceptions
     def remove_transaction(self, tx: 'BaseTransaction') -> None:
         self._check_connection()
@@ -138,14 +135,9 @@ class TransactionRemoteStorage(TransactionStorage):
         assert result.removed
         self._remove_from_weakref(tx)
 
-    @deprecated('Use save_transaction_deferred instead')
     @convert_grpc_exceptions
     def save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
         self._check_connection()
-
-        # genesis txs and metadata are kept in memory
-        if tx.is_genesis and not only_metadata:
-            return
 
         tx_proto = tx.to_proto()
         request = protos.SaveRequest(transaction=tx_proto, only_metadata=only_metadata)
@@ -153,7 +145,6 @@ class TransactionRemoteStorage(TransactionStorage):
         assert result.saved
         self._save_to_weakref(tx)
 
-    @deprecated('Use transaction_exists_deferred instead')
     @convert_grpc_exceptions
     def transaction_exists(self, hash_bytes: bytes) -> bool:
         self._check_connection()
@@ -161,7 +152,6 @@ class TransactionRemoteStorage(TransactionStorage):
         result = self._stub.Exists(request)
         return result.exists
 
-    @deprecated('Use get_transaction_deferred instead')
     @convert_grpc_exceptions
     def _get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
         tx = self.get_transaction_from_weakref(hash_bytes)
@@ -177,29 +167,10 @@ class TransactionRemoteStorage(TransactionStorage):
         self._save_to_weakref(tx)
         return tx
 
-    @deprecated('Use get_all_transactions_deferred instead')
     @convert_grpc_exceptions_generator
     def get_all_transactions(self) -> Iterator['BaseTransaction']:
-        from hathor.transaction import tx_or_block_from_proto
-        self._check_connection()
-        request = protos.ListRequest()
-        result = self._stub.List(request)
-        for list_item in result:
-            if not list_item.HasField('transaction'):
-                break
-            tx_proto = list_item.transaction
-            tx = tx_or_block_from_proto(tx_proto, storage=self)
-            assert tx.hash is not None
-            lock = self._get_lock(tx.hash)
-            with lock:
-                tx2 = self.get_transaction_from_weakref(tx.hash)
-                if tx2:
-                    tx = tx2
-                else:
-                    self._save_to_weakref(tx)
-            yield tx
+        yield from self._call_list_request_generators()
 
-    @deprecated('Use get_count_tx_blocks_deferred instead')
     @convert_grpc_exceptions
     def get_count_tx_blocks(self) -> int:
         self._check_connection()
@@ -493,21 +464,43 @@ class TransactionRemoteStorage(TransactionStorage):
         pass
 
     @convert_grpc_exceptions_generator
-    def _call_list_request_generators(self, kwargs):
+    def _call_list_request_generators(self, kwargs: Optional[Dict[str, Any]] = None) -> Iterator['BaseTransaction']:
         """ Execute a call for the ListRequest and yield the blocks or txs
 
             :param kwargs: Parameters to be sent to ListRequest
             :type kwargs: Dict[str,]
         """
         from hathor.transaction import tx_or_block_from_proto
+
+        def get_tx(tx):
+            tx2 = self.get_transaction_from_weakref(tx.hash)
+            if tx2:
+                tx = tx2
+            else:
+                self._save_to_weakref(tx)
+            return tx
+
         self._check_connection()
-        request = protos.ListRequest(**kwargs)
+        if kwargs:
+            request = protos.ListRequest(**kwargs)
+        else:
+            request = protos.ListRequest()
+
         result = self._stub.List(request)
         for list_item in result:
             if not list_item.HasField('transaction'):
                 break
             tx_proto = list_item.transaction
-            yield tx_or_block_from_proto(tx_proto, storage=self)
+            tx = tx_or_block_from_proto(tx_proto, storage=self)
+            assert tx.hash is not None
+            lock = self._get_lock(tx.hash)
+
+            if lock:
+                with lock:
+                    tx = get_tx(tx)
+            else:
+                tx = get_tx(tx)
+            yield tx
 
     @convert_grpc_exceptions_generator
     def _topological_sort(self):
@@ -528,7 +521,6 @@ class TransactionRemoteStorage(TransactionStorage):
                                        relax_assert=relax_assert)
         result = self._stub.MarkAs(request)  # noqa: F841
 
-    # @deprecated('Use get_block_count_deferred instead')
     @convert_grpc_exceptions
     def get_block_count(self) -> int:
         self._check_connection()
@@ -536,7 +528,6 @@ class TransactionRemoteStorage(TransactionStorage):
         result = self._stub.Count(request)
         return result.count
 
-    # @deprecated('Use get_tx_count_deferred instead')
     @convert_grpc_exceptions
     def get_tx_count(self) -> int:
         self._check_connection()
@@ -545,13 +536,11 @@ class TransactionRemoteStorage(TransactionStorage):
         return result.count
 
     def get_genesis(self, hash_bytes: bytes) -> Optional['BaseTransaction']:
-        if not self._genesis_cache:
-            self._create_genesis_cache()
+        assert self._genesis_cache is not None
         return self._genesis_cache.get(hash_bytes, None)
 
     def get_all_genesis(self) -> Set['BaseTransaction']:
-        if not self._genesis_cache:
-            self._create_genesis_cache()
+        assert self._genesis_cache is not None
         return set(self._genesis_cache.values())
 
     @convert_grpc_exceptions
@@ -611,11 +600,40 @@ class TransactionRemoteStorage(TransactionStorage):
         all_sorted.update(tx_list)
         return all_sorted
 
+    @convert_grpc_exceptions
+    def add_value(self, key: str, value: str) -> None:
+        self._check_connection()
+        request = protos.AddValueRequest(
+            key=key,
+            value=value
+        )
+        result = self._stub.AddValue(request)  # noqa: F841
+
+    @convert_grpc_exceptions
+    def remove_value(self, key: str) -> None:
+        self._check_connection()
+        request = protos.RemoveValueRequest(
+            key=key,
+        )
+        result = self._stub.RemoveValue(request)  # noqa: F841
+
+    @convert_grpc_exceptions
+    def get_value(self, key: str) -> Optional[str]:
+        self._check_connection()
+        request = protos.GetValueRequest(
+            key=key
+        )
+        result = self._stub.GetValue(request)
+        if not result.value:
+            return None
+
+        return result.value
+
 
 class TransactionStorageServicer(protos.TransactionStorageServicer):
-    log = Logger()
 
     def __init__(self, tx_storage):
+        self.log = logger.new()
         self.storage = tx_storage
         # We must always disable weakref because it will run remotely, which means
         # each call will create a new instance of the block/transaction during the
@@ -625,7 +643,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
     @convert_hathor_exceptions
     def Exists(self, request: protos.ExistsRequest, context: _Context) -> protos.ExistsResponse:
         hash_bytes = request.hash
-        exists = skip_warning(self.storage.transaction_exists)(hash_bytes)
+        exists = self.storage.transaction_exists(hash_bytes)
         return protos.ExistsResponse(exists=exists)
 
     @convert_hathor_exceptions
@@ -633,7 +651,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         hash_bytes = request.hash
         exclude_metadata = request.exclude_metadata
 
-        tx = skip_warning(self.storage.get_transaction)(hash_bytes)
+        tx = self.storage.get_transaction(hash_bytes)
 
         if exclude_metadata:
             del tx._metadata
@@ -652,7 +670,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         result = protos.SaveResponse(saved=False)
 
         tx = tx_or_block_from_proto(tx_proto, storage=self.storage)
-        skip_warning(self.storage.save_transaction)(tx, only_metadata=only_metadata)
+        self.storage.save_transaction(tx, only_metadata=only_metadata)
         result.saved = True
 
         return result
@@ -666,7 +684,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         result = protos.RemoveResponse(removed=False)
 
         tx = tx_or_block_from_proto(tx_proto, storage=self.storage)
-        skip_warning(self.storage.remove_transaction)(tx)
+        self.storage.remove_transaction(tx)
         result.removed = True
 
         return result
@@ -675,11 +693,11 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
     def Count(self, request: protos.CountRequest, context: _Context) -> protos.CountResponse:
         tx_type = request.tx_type
         if tx_type == protos.ANY_TYPE:
-            count = skip_warning(self.storage.get_count_tx_blocks)()
+            count = self.storage.get_count_tx_blocks()
         elif tx_type == protos.TRANSACTION_TYPE:
-            count = skip_warning(self.storage.get_tx_count)()
+            count = self.storage.get_tx_count()
         elif tx_type == protos.BLOCK_TYPE:
-            count = skip_warning(self.storage.get_block_count)()
+            count = self.storage.get_block_count()
         else:
             raise ValueError('invalid tx_type %s' % (tx_type,))
         return protos.CountResponse(count=count)
@@ -750,7 +768,7 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
                 raise ValueError('invalid tx_type %s' % (request.tx_type,))
         elif request.time_filter == protos.NO_FILTER:
             if request.order_by == protos.ANY_ORDER:
-                tx_iter = skip_warning(self.storage.get_all_transactions)()
+                tx_iter = self.storage.get_all_transactions()
             elif request.order_by == protos.TOPOLOGICAL_ORDER:
                 tx_iter = self.storage._topological_sort()
             else:
@@ -811,6 +829,30 @@ class TransactionStorageServicer(protos.TransactionStorageServicer):
         txs_index = self.storage.get_all_sorted_txs(timestamp, count, offset)
         for tx_element in txs_index[:]:
             yield protos.Transaction(timestamp=tx_element.timestamp, hash=tx_element.hash)
+
+    @convert_hathor_exceptions
+    def AddValue(self, request: protos.AddValueRequest, context: _Context) -> protos.Empty:
+        key = request.key
+        value = request.value
+
+        self.storage.add_value(key, value)
+        return protos.Empty()
+
+    @convert_hathor_exceptions
+    def RemoveValue(self, request: protos.RemoveValueRequest, context: _Context) -> protos.Empty:
+        key = request.key
+        self.storage.remove_value(key)
+        return protos.Empty()
+
+    @convert_hathor_exceptions
+    def GetValue(self, request: protos.GetValueRequest, context: _Context) -> protos.GetValueResponse:
+        key = request.key
+        value = self.storage.get_value(key)
+
+        if value:
+            return protos.GetValueResponse(value=value)
+        else:
+            return protos.GetValueResponse()
 
 
 def create_transaction_storage_server(server: grpc.Server, tx_storage: TransactionStorage,

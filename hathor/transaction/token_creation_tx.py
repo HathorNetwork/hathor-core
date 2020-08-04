@@ -17,8 +17,6 @@ limitations under the License.
 from struct import error as StructError, pack
 from typing import Any, Dict, List, Optional, Tuple
 
-from twisted.logger import Logger
-
 from hathor import protos
 from hathor.conf import HathorSettings
 from hathor.transaction import Transaction, TxInput, TxOutput, TxVersion
@@ -41,8 +39,6 @@ TOKEN_INFO_VERSION = 1
 
 
 class TokenCreationTransaction(Transaction):
-    log = Logger()
-
     def __init__(self,
                  nonce: int = 0,
                  timestamp: Optional[int] = None,
@@ -227,6 +223,13 @@ class TokenCreationTransaction(Transaction):
 
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
+        json['token_name'] = self.token_name
+        json['token_symbol'] = self.token_symbol
+        json['tokens'] = []
+        return json
+
+    def to_json_extended(self) -> Dict[str, Any]:
+        json = super().to_json_extended()
         json['token_name'] = self.token_name
         json['token_symbol'] = self.token_symbol
         json['tokens'] = []

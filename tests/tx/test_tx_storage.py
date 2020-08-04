@@ -44,7 +44,10 @@ class _BaseTransactionStorageTest:
                 self.reactor = reactor
             self.reactor.advance(time.time())
             self.tx_storage = tx_storage
+            assert tx_storage.first_timestamp > 0
+
             tx_storage._manually_initialize()
+
             self.genesis = self.tx_storage.get_all_genesis()
             self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
             self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
@@ -83,8 +86,29 @@ class _BaseTransactionStorageTest:
             # Disable weakref to test the internal methods. Otherwise, most methods return objects from weakref.
             self.tx_storage._disable_weakref()
 
+            self.tx_storage.enable_lock()
+
         def tearDown(self):
             shutil.rmtree(self.tmpdir)
+
+        def test_genesis_ref(self):
+            # Enable weakref to this test only.
+            self.tx_storage._enable_weakref()
+
+            genesis_set = set(self.tx_storage.get_all_genesis())
+            for tx in genesis_set:
+                tx2 = self.tx_storage.get_transaction(tx.hash)
+                self.assertTrue(tx is tx2)
+
+            from hathor.transaction.genesis import _get_genesis_transactions_unsafe
+            genesis_from_settings = _get_genesis_transactions_unsafe(None)
+            for tx in genesis_from_settings:
+                tx2 = self.tx_storage.get_transaction(tx.hash)
+                self.assertTrue(tx is not tx2)
+                for tx3 in genesis_set:
+                    self.assertTrue(tx is not tx3)
+                    if tx2 == tx3:
+                        self.assertTrue(tx2 is tx3)
 
         def test_genesis(self):
             self.assertEqual(1, len(self.genesis_blocks))
@@ -96,6 +120,13 @@ class _BaseTransactionStorageTest:
                 tx2 = self.tx_storage.get_transaction(tx.hash)
                 self.assertEqual(tx, tx2)
                 self.assertTrue(self.tx_storage.transaction_exists(tx.hash))
+
+        def test_get_empty_merklee_tree(self):
+            # We use `first_timestamp - 1` to ensure that the merkle tree will be empty.
+            self.tx_storage.get_merkle_tree(self.tx_storage.first_timestamp - 1)
+
+        def test_first_timestamp(self):
+            self.assertEqual(self.tx_storage.first_timestamp, min(x.timestamp for x in self.genesis))
 
         def test_storage_basic(self):
             self.assertEqual(1, self.tx_storage.get_block_count())
@@ -336,6 +367,35 @@ class _BaseTransactionStorageTest:
             yield gatherResults(deferreds)
             self.tx_storage._disable_weakref()
 
+        def test_full_verification_attribute(self):
+            self.assertFalse(self.tx_storage.is_running_full_verification())
+            self.tx_storage.start_full_verification()
+            self.assertTrue(self.tx_storage.is_running_full_verification())
+            self.tx_storage.finish_full_verification()
+            self.assertFalse(self.tx_storage.is_running_full_verification())
+
+        def test_key_value_attribute(self):
+            attr = 'test'
+            val = 'a'
+
+            # Try to get a key that does not exist
+            self.assertIsNone(self.tx_storage.get_value(attr))
+
+            # Try to remove this key that does not exist
+            self.tx_storage.remove_value(attr)
+
+            # Add the key/value
+            self.tx_storage.add_value(attr, val)
+
+            # Get correct value
+            self.assertEqual(self.tx_storage.get_value(attr), val)
+
+            # Remove the key
+            self.tx_storage.remove_value(attr)
+
+            # Key should not exist again
+            self.assertIsNone(self.tx_storage.get_value(attr))
+
     class _RemoteStorageTest(_TransactionStorageTest):
         def setUp(self, tx_storage, reactor=None):
             tx_storage, self._server = start_remote_storage(tx_storage=tx_storage)
@@ -375,7 +435,8 @@ class TransactionCompactStorageTest(_BaseTransactionStorageTest._TransactionStor
 
     def test_subfolders(self):
         # test we have the subfolders under the main tx folder
-        subfolders = os.listdir(self.directory)
+        subfolders_path = os.path.join(self.directory, 'tx')
+        subfolders = os.listdir(subfolders_path)
         self.assertEqual(settings.STORAGE_SUBFOLDERS, len(subfolders))
 
     def tearDown(self):

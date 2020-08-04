@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, DefaultDict, Dict, Iterable, List, NamedTuple,
 
 from intervaltree import Interval, IntervalTree
 from sortedcontainers import SortedKeyList
-from twisted.logger import Logger
+from structlog import get_logger
 
 from hathor.pubsub import HathorEvents
 from hathor.transaction import BaseTransaction, Transaction
@@ -29,6 +29,9 @@ from hathor.transaction.scripts import parse_address_script
 
 if TYPE_CHECKING:  # pragma: no cover
     from hathor.pubsub import PubSubManager, EventArguments  # noqa: F401
+    from hathor.transaction import TxOutput  # noqa: F401
+
+logger = get_logger()
 
 
 class TransactionIndexElement(NamedTuple):
@@ -47,13 +50,15 @@ class IndexesManager:
         self.tips_index = TipsIndex()
         self.txs_index = TransactionsIndex()
 
-    def add_tx(self, tx: BaseTransaction) -> None:
+    def add_tx(self, tx: BaseTransaction) -> bool:
         """ Add a transaction to the indexes
 
         :param tx: Transaction to be added
         """
-        self.tips_index.add_tx(tx)
-        self.txs_index.add_tx(tx)
+        r1 = self.tips_index.add_tx(tx)
+        r2 = self.txs_index.add_tx(tx)
+        assert r1 == r2
+        return r1
 
     def del_tx(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
         """ Delete a transaction from the indexes
@@ -106,8 +111,6 @@ class TipsIndex:
     TODO Use an interval tree stored in disk, possibly using a B-tree.
     """
 
-    log = Logger()
-
     # An interval tree used to know the tips at any timestamp.
     # The intervals are in the form (begin, end), where begin is the timestamp
     # of the transaction, and end is the smallest timestamp of the tx's children.
@@ -118,10 +121,11 @@ class TipsIndex:
     tx_last_interval: Dict[bytes, Interval]
 
     def __init__(self) -> None:
+        self.log = logger.new()
         self.tree = IntervalTree()
         self.tx_last_interval = {}  # Dict[bytes(hash), Interval]
 
-    def add_tx(self, tx: BaseTransaction) -> None:
+    def add_tx(self, tx: BaseTransaction) -> bool:
         """ Add a new transaction to the index
 
         :param tx: Transaction to be added
@@ -129,7 +133,7 @@ class TipsIndex:
         assert tx.hash is not None
         assert tx.storage is not None
         if tx.hash in self.tx_last_interval:
-            return
+            return False
 
         # Fix the end of the interval of its parents.
         for parent_hash in tx.parents:
@@ -155,6 +159,7 @@ class TipsIndex:
         interval = Interval(tx.timestamp, min_timestamp, tx.hash)
         self.tree.add(interval)
         self.tx_last_interval[tx.hash] = interval
+        return True
 
     def del_tx(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
         """ Remove a transaction from the index.
@@ -274,7 +279,7 @@ class TransactionsIndex:
         """
         self.transactions.update(values)
 
-    def add_tx(self, tx: BaseTransaction) -> None:
+    def add_tx(self, tx: BaseTransaction) -> bool:
         """ Add a transaction to the index
 
         :param tx: Transaction to be added
@@ -284,8 +289,9 @@ class TransactionsIndex:
         # http://www.grantjenks.com/docs/sortedcontainers/sortedlist.html#sortedcontainers.SortedList.__contains__
         element = TransactionIndexElement(tx.timestamp, tx.hash)
         if element in self.transactions:
-            return
+            return False
         self.transactions.add(element)
+        return True
 
     def del_tx(self, tx: BaseTransaction) -> None:
         """ Delete a transaction from the index
@@ -372,21 +378,21 @@ class WalletIndex:
         """
         assert tx.storage is not None
         addresses: Set[str] = set()
-        for txin in tx.inputs:
-            tx2 = tx.storage.get_transaction(txin.tx_id)
-            for txout in tx2.outputs:
-                script_type_out = parse_address_script(txout.script)
-                if script_type_out:
-                    assert tx.hash is not None
-                    address = script_type_out.address
-                    addresses.add(address)
 
-        for txout in tx.outputs:
-            script_type_out = parse_address_script(txout.script)
+        def add_address_from_output(output: 'TxOutput') -> None:
+            script_type_out = parse_address_script(output.script)
             if script_type_out:
-                assert tx.hash is not None
                 address = script_type_out.address
                 addresses.add(address)
+
+        for txin in tx.inputs:
+            tx2 = tx.storage.get_transaction(txin.tx_id)
+            txout = tx2.outputs[txin.index]
+            add_address_from_output(txout)
+
+        for txout in tx.outputs:
+            add_address_from_output(txout)
+
         return addresses
 
     def publish_tx(self, tx: BaseTransaction, *, addresses: Optional[Iterable[str]] = None) -> None:

@@ -15,8 +15,8 @@ limitations under the License.
 """
 
 import datetime
-import json
 import random
+import sys
 import time
 from enum import Enum, IntFlag
 from math import log
@@ -139,7 +139,7 @@ class HathorManager:
         self.metrics = Metrics(
             pubsub=self.pubsub,
             avg_time_between_blocks=self.avg_time_between_blocks,
-            tx_storage=tx_storage,
+            tx_storage=self.tx_storage,
             reactor=self.reactor,
         )
 
@@ -173,18 +173,59 @@ class HathorManager:
         # List of addresses to listen for new connections (eg: [tcp:8000])
         self.listen_addresses: List[str] = []
 
+        # Full verification execute all validations for transactions and blocks when initializing the node
+        # Can be activated on the command line with --full-verification
+        self._full_verification = False
+
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
         """
-        self.log.info('Starting HathorManager...')
-        self.log.info('Network: {network}', network=self.network)
+        self.log.info('start manager', network=self.network)
+        # If it's a full verification, we save on the storage that we are starting it
+        # this is required because if we stop the initilization in the middle, the metadata
+        # saved on the storage is not reliable anymore, only if we finish it
+        if self._full_verification:
+            self.tx_storage.start_full_verification()
+        else:
+            # If it's a fast initialization and the last time a full initialization stopped in the middle
+            # we can't allow the full node to continue, so we need to remove the storage and do a full sync
+            # or execute an initialization with full verification
+            if self.tx_storage.is_running_full_verification():
+                self.log.error(
+                    'Error initializing node. The last time you started your node you did a full verification '
+                    'that was stopped in the middle. The storage is not reliable anymore and, because of that, '
+                    'you must initialize with a full verification again or remove your storage and do a full sync.'
+                )
+                sys.exit()
+
+            # If self.tx_storage.is_running_manager() is True, the last time the node was running it had a sudden crash
+            # because of that, we must run a full verification because some storage data might be wrong.
+            # The metadata is the only piece of the storage that may be wrong, not the blocks and transactions.
+            if self.tx_storage.is_running_manager():
+                self.log.error(
+                    'Error initializing node. The last time you executed your full node it wasn\'t stopped correctly. '
+                    'The storage is not reliable anymore and, because of that, so you must run a full verification '
+                    'or remove your storage and do a full sync.'
+                )
+                sys.exit()
+
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
         self.connections.start()
         self.pow_thread_pool.start()
 
+        # Disable get transaction lock when initializing components
+        self.tx_storage.disable_lock()
         # Initialize manager's components.
         self._initialize_components()
+        if self._full_verification:
+            # Before calling self._initialize_components() I start 'full verification' mode and after that I need to
+            # finish it. It's just to know if the full node has stopped a full initialization in the middle
+            self.tx_storage.finish_full_verification()
+        self.tx_storage.enable_lock()
+
+        # Metric starts to capture data
+        self.metrics.start()
 
         for description in self.listen_addresses:
             self.listen(description, ssl=self.ssl)
@@ -194,19 +235,20 @@ class HathorManager:
 
         self.start_time = time.time()
 
-        # Metric starts to capture data
-        self.metrics.start()
-
         if self.wallet:
             self.wallet.start()
 
         if self.stratum_factory:
             self.stratum_factory.start()
 
+        # Start running
+        self.tx_storage.start_running_manager()
+
     def stop(self) -> Deferred:
         waits = []
 
-        self.log.info('Stopping HathorManager...')
+        self.log.info('stop manager')
+        self.tx_storage.stop_running_manager()
         self.connections.stop()
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
         if self.pow_thread_pool.started:
@@ -252,48 +294,58 @@ class HathorManager:
 
         This method runs through all transactions, verifying them and updating our wallet.
         """
-        self.log.info('Initializing node...')
+        self.log.info('initialize')
         if self.wallet:
             self.wallet._manually_initialize()
         t0 = time.time()
         t1 = t0
         cnt = 0
+        cnt2 = 0
+
+        block_count = 0
 
         # self.start_profiler()
         for tx in self.tx_storage._topological_sort():
             assert tx.hash is not None
 
             t2 = time.time()
-            if t2 - t1 > 5:
+            dt = hathor.util.LogDuration(t2 - t1)
+            dcnt = cnt - cnt2
+            if dt > 30:
                 ts_date = datetime.datetime.fromtimestamp(self.tx_storage.latest_timestamp)
-                self.log.info(
-                    'Verifying transations in storage... avg={avg:.4f} tx/s total={total} (latest timedate: {ts})',
-                    avg=cnt / (t2 - t0),
-                    total=cnt,
-                    ts=ts_date,
-                )
+                self.log.info('load transactions...', tx_rate=dcnt / dt, tx_new=dcnt, dt=dt,
+                              total=cnt, latest_ts=ts_date)
                 t1 = t2
+                cnt2 = cnt
             cnt += 1
 
+            # It's safe to skip block weight verification during initialization because
+            # we trust the difficulty stored in metadata
+            skip_block_weight_verification = True
+            if block_count % settings.VERIFY_WEIGHT_EVERY_N_BLOCKS == 0:
+                skip_block_weight_verification = False
+
             try:
-                assert self.on_new_tx(tx, quiet=True, fails_silently=False)
+                assert self.on_new_tx(
+                    tx,
+                    quiet=True,
+                    fails_silently=False,
+                    skip_block_weight_verification=skip_block_weight_verification
+                )
             except (InvalidNewTransaction, TxValidationError):
-                pretty_json = json.dumps(tx.to_json(), indent=4)
-                self.log.error('An unexpected error occurred when initializing {tx.hash_hex}\n'
-                               '{pretty_json}', tx=tx, pretty_json=pretty_json)
+                self.log.error('unexpected error when initializing', tx=tx, exc_info=True)
                 raise
 
+            if tx.is_block:
+                block_count += 1
+
             if time.time() - t2 > 1:
-                self.log.warn('Warning: {} took {} seconds to be processed.'.format(tx.hash.hex(), time.time() - t2))
+                dt = hathor.util.LogDuration(time.time() - t2)
+                self.log.warn('tx took too long to load', tx=tx.hash_hex, dt=dt)
 
         # self.stop_profiler(save_to='profiles/initializing.prof')
         self.state = self.NodeState.READY
-        self.log.info(
-            'Node successfully initialized (total={total}, avg={avg:.2f} tx/s in {dt} seconds).',
-            total=cnt,
-            avg=cnt / (t2 - t0),
-            dt=t2 - t0,
-        )
+        self.log.info('ready', tx_count=cnt, tx_rate=cnt / (t2 - t0), total_dt=t2 - t0)
 
     def add_listen_address(self, addr: str) -> None:
         self.listen_addresses.append(addr)
@@ -352,18 +404,23 @@ class HathorManager:
         # We must update it after choosing the parent block, so we may benefit from cache.
         if timestamp is None:
             timestamp = max(self.tx_storage.latest_timestamp, self.reactor.seconds())
+        assert timestamp is not None
 
         parent_block = self.tx_storage.get_transaction(random.choice(tip_blocks))
+        assert parent_block.timestamp is not None
+        assert parent_block.hash is not None
+        assert timestamp is not None
+
         if not parent_block.is_genesis and timestamp - parent_block.timestamp > settings.MAX_DISTANCE_BETWEEN_BLOCKS:
             timestamp = parent_block.timestamp + settings.MAX_DISTANCE_BETWEEN_BLOCKS
 
-        assert timestamp is not None
         tip_txs = self.get_new_tx_parents(timestamp - 1)
 
         assert len(tip_blocks) >= 1
         assert len(tip_txs) == 2
 
-        parents = [parent_block.hash] + tip_txs
+        assert parent_block.hash is not None
+        parents: List[bytes] = [parent_block.hash] + tip_txs
 
         parents_tx = [self.tx_storage.get_transaction(x) for x in parents]
 
@@ -396,7 +453,7 @@ class HathorManager:
         """Return the number of tokens issued (aka reward) per block of a given height."""
         return hathor.util._get_tokens_issued_per_block(height)
 
-    def validate_new_tx(self, tx: BaseTransaction) -> bool:
+    def validate_new_tx(self, tx: BaseTransaction, skip_block_weight_verification: bool = False) -> bool:
         """ Process incoming transaction during initialization.
         These transactions came only from storage.
         """
@@ -408,11 +465,11 @@ class HathorManager:
 
         else:
             if tx.is_genesis:
-                raise InvalidNewTransaction('Genesis? {}'.format(tx.hash.hex()))
+                raise InvalidNewTransaction('Genesis? {}'.format(tx.hash_hex))
 
         if tx.timestamp - self.reactor.seconds() > settings.MAX_FUTURE_TIMESTAMP_ALLOWED:
             raise InvalidNewTransaction('Ignoring transaction in the future {} (timestamp={})'.format(
-                tx.hash.hex(), tx.timestamp))
+                tx.hash_hex, tx.timestamp))
 
         # Verify transaction and raises an TxValidationError if tx is not valid.
         tx.verify()
@@ -421,14 +478,15 @@ class HathorManager:
             tx = cast(Block, tx)
             assert tx.hash is not None  # XXX: it appears that after casting this assert "casting" is lost
 
-            # Validate minimum block difficulty
-            block_weight = self.calculate_block_difficulty(tx)
-            if tx.weight < block_weight - settings.WEIGHT_TOL:
-                raise InvalidNewTransaction(
-                    'Invalid new block {}: weight ({}) is smaller than the minimum weight ({})'.format(
-                        tx.hash.hex(), tx.weight, block_weight
+            if not skip_block_weight_verification:
+                # Validate minimum block difficulty
+                block_weight = self.calculate_block_difficulty(tx)
+                if tx.weight < block_weight - settings.WEIGHT_TOL:
+                    raise InvalidNewTransaction(
+                        'Invalid new block {}: weight ({}) is smaller than the minimum weight ({})'.format(
+                            tx.hash.hex(), tx.weight, block_weight
+                        )
                     )
-                )
 
             parent_block = tx.get_block_parent()
             tokens_issued_per_block = self.get_tokens_issued_per_block(parent_block.get_metadata().height + 1)
@@ -448,7 +506,7 @@ class HathorManager:
             if tx.weight < min_tx_weight - settings.WEIGHT_TOL:
                 raise InvalidNewTransaction(
                     'Invalid new tx {}: weight ({}) is smaller than the minimum weight ({})'.format(
-                        tx.hash.hex(), tx.weight, min_tx_weight
+                        tx.hash_hex, tx.weight, min_tx_weight
                     )
                 )
 
@@ -467,7 +525,8 @@ class HathorManager:
         return self.on_new_tx(tx, fails_silently=fails_silently)
 
     def on_new_tx(self, tx: BaseTransaction, *, conn: Optional[HathorProtocol] = None,
-                  quiet: bool = False, fails_silently: bool = True, propagate_to_peers: bool = True) -> bool:
+                  quiet: bool = False, fails_silently: bool = True, propagate_to_peers: bool = True,
+                  skip_block_weight_verification: bool = False) -> bool:
         """This method is called when any transaction arrive.
 
         If `fails_silently` is False, it may raise either InvalidNewTransaction or TxValidationError.
@@ -479,43 +538,49 @@ class HathorManager:
         if self.state != self.NodeState.INITIALIZING:
             if self.tx_storage.transaction_exists(tx.hash):
                 if not fails_silently:
-                    raise InvalidNewTransaction('Transaction already exists {}'.format(tx.hash.hex()))
-                self.log.debug('on_new_tx(): Already have transaction {}'.format(tx.hash.hex()))
+                    raise InvalidNewTransaction('Transaction already exists {}'.format(tx.hash_hex))
+                self.log.debug('on_new_tx(): Transaction already exists', tx=tx.hash_hex)
                 return False
 
-        try:
-            assert self.validate_new_tx(tx) is True
-        except (InvalidNewTransaction, TxValidationError) as e:
-            # Discard invalid Transaction/block.
-            self.log.debug('Transaction/Block discarded', tx=tx, exc=e)
-            if not fails_silently:
-                raise
-            return False
+        if self.state != self.NodeState.INITIALIZING or self._full_verification:
+            try:
+                assert self.validate_new_tx(tx, skip_block_weight_verification=skip_block_weight_verification) is True
+            except (InvalidNewTransaction, TxValidationError):
+                # Discard invalid Transaction/block.
+                self.log.debug('tx/block discarded', tx=tx, exc_info=True)
+                if not fails_silently:
+                    raise
+                return False
 
         if self.state != self.NodeState.INITIALIZING:
             self.tx_storage.save_transaction(tx)
         else:
-            tx.reset_metadata()
             self.tx_storage._add_to_cache(tx)
+            if self._full_verification:
+                tx.reset_metadata()
+            else:
+                # When doing a fast init, we don't update the consensus, so we must trust the data on the metadata
+                # For transactions, we don't store them on the tips index if they are voided
+                # We have to execute _add_to_cache before because _del_from_cache does not remove from all indexes
+                metadata = tx.get_metadata()
+                if not tx.is_block and metadata.voided_by:
+                    self.tx_storage._del_from_cache(tx)
 
-        try:
-            tx.update_initial_metadata()
-            self.consensus_algorithm.update(tx)
-        except Exception:
-            pretty_json = json.dumps(tx.to_json(), indent=4)
-            self.log.error('An unexpected error occurred when processing {tx.hash_hex}\n'
-                           '{pretty_json}', tx=tx, pretty_json=pretty_json)
-            self.tx_storage.remove_transaction(tx)
-            raise
+        if self.state != self.NodeState.INITIALIZING or self._full_verification:
+            try:
+                tx.update_initial_metadata()
+                self.consensus_algorithm.update(tx)
+            except Exception:
+                self.log.exception('unexpected error when processing tx', tx=tx)
+                self.tx_storage.remove_transaction(tx)
+                raise
 
         if not quiet:
             ts_date = datetime.datetime.fromtimestamp(tx.timestamp)
             if tx.is_block:
-                self.log.info('New block found',
-                              tag='new_block', tx=tx, ts_date=ts_date, time_from_now=tx.get_time_from_now())
+                self.log.info('new block', tx=tx, ts_date=ts_date, time_from_now=tx.get_time_from_now())
             else:
-                self.log.info('New transaction found',
-                              tag='new_tx', tx=tx, ts_date=ts_date, time_from_now=tx.get_time_from_now())
+                self.log.info('new tx', tx=tx, ts_date=ts_date, time_from_now=tx.get_time_from_now())
 
         if propagate_to_peers:
             # Propagate to our peers.

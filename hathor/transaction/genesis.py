@@ -62,10 +62,19 @@ def _get_genesis_hash() -> bytes:
 GENESIS_HASH = _get_genesis_hash()
 
 
-def get_genesis_transactions(tx_storage: Optional[TransactionStorage]) -> List[BaseTransaction]:
+def _get_genesis_transactions_unsafe(tx_storage: Optional[TransactionStorage]) -> List[BaseTransaction]:
+    """You shouldn't get genesis directly. Please, get it from your storage instead."""
     genesis = []
     for tx in GENESIS:
         tx2 = tx.clone()
         tx2.storage = tx_storage
         genesis.append(tx2)
     return genesis
+
+
+def is_genesis(hash_bytes: bytes) -> bool:
+    """Check whether hash is from a genesis transaction."""
+    for tx in GENESIS:
+        if hash_bytes == tx.hash:
+            return True
+    return False

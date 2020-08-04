@@ -1,21 +1,22 @@
 from typing import TYPE_CHECKING, Callable, Dict, Optional
 
-from twisted.logger import Logger
+from structlog import get_logger
 
 from hathor.p2p.messages import ProtocolMessages
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
 
+logger = get_logger()
+
 
 class BaseState:
-    log = Logger()
-
     protocol: 'HathorProtocol'
     base_cmd_map: Dict[ProtocolMessages, Callable[[str], None]]
     cmd_map: Dict[ProtocolMessages, Callable[[str], None]]
 
     def __init__(self, protocol: 'HathorProtocol'):
+        self.log = logger.new()
         self.protocol = protocol
         self.base_cmd_map = {
             ProtocolMessages.ERROR: self.handle_error,
@@ -30,7 +31,7 @@ class BaseState:
         self.protocol.handle_error(payload)
 
     def handle_throttle(self, payload: str) -> None:
-        self.log.info('Got throttled: {payload}', payload=payload)
+        self.log.info('throttled', payload=payload)
 
     def send_message(self, cmd: ProtocolMessages, payload: Optional[str] = None) -> None:
         self.protocol.send_message(cmd, payload)

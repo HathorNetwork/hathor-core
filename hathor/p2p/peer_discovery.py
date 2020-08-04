@@ -3,12 +3,14 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Callable, Generator, List, Set, Tuple
 
 import twisted.names.client
+from structlog import get_logger
 from twisted.internet import defer
 from twisted.internet.defer import inlineCallbacks
-from twisted.logger import Logger
 
 if TYPE_CHECKING:
     from twisted.names.dns import RRHeader  # noqa: F401
+
+logger = get_logger()
 
 
 class PeerDiscovery(ABC):
@@ -28,13 +30,13 @@ class PeerDiscovery(ABC):
 class BootstrapPeerDiscovery(PeerDiscovery):
     """ It implements a bootstrap peer discovery, which receives a static list of peers.
     """
-    log = Logger()
 
     def __init__(self, descriptions: List[str]):
         """
         :param descriptions: Descriptions of peers to connect to.
         """
         super().__init__()
+        self.log = logger.new()
         self.descriptions = descriptions
 
     def discover_and_connect(self, connect_to: Callable[[str], None]) -> Any:
@@ -45,13 +47,13 @@ class BootstrapPeerDiscovery(PeerDiscovery):
 class DNSPeerDiscovery(PeerDiscovery):
     """ It implements a DNS peer discovery, which looks for peers in A, AAA, and TXT records.
     """
-    log = Logger()
 
     def __init__(self, hosts: List[str], default_port: int = 40403, test_mode: int = 0):
         """
         :param hosts: List of hosts to be queried
         :param default_port: Port number which will be used to connect when only IP address is available.
         """
+        self.log = logger.new()
         self.hosts = hosts
         self.default_port = default_port
         self.test_mode = test_mode
@@ -92,7 +94,7 @@ class DNSPeerDiscovery(PeerDiscovery):
     def errback(self, result):
         """ Return an empty list if any error occur.
         """
-        self.log.error('{result}', result=result)
+        self.log.error('errback', result=result)
         return []
 
     def dns_seed_lookup_text(
@@ -107,7 +109,7 @@ class DNSPeerDiscovery(PeerDiscovery):
         for record in answers:
             for txt in record.payload.data:
                 txt = txt.decode('utf-8')
-                self.log.info('Seed DNS TXT: {txt!r} found', txt=txt)
+                self.log.info('seed DNS TXT found', endpoint=txt)
                 ret.append(txt)
         return ret
 
@@ -124,6 +126,6 @@ class DNSPeerDiscovery(PeerDiscovery):
             address = record.payload.address
             host = socket.inet_ntoa(address)
             txt = 'tcp://{}:{}'.format(host, self.default_port)
-            self.log.info('Seed DNS A: {host!r} found, connecting to {txt!r}', host=host, txt=txt)
+            self.log.info('seed DNS A found', endpoint=txt)
             ret.append(txt)
         return ret
