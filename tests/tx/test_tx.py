@@ -24,7 +24,7 @@ from hathor.transaction.exceptions import (
     TransactionDataError,
     WeightError,
 )
-from hathor.transaction.scripts import P2PKH
+from hathor.transaction.scripts import P2PKH, parse_address_script
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.transaction.util import int_to_bytes
 from hathor.wallet import Wallet
@@ -48,7 +48,7 @@ class BasicTransaction(unittest.TestCase):
         self.genesis_public_key = self.genesis_private_key.public_key()
 
         # this makes sure we can spend the genesis outputs
-        self.manager = self.create_peer('testnet', tx_storage=self.tx_storage, unlock_wallet=True)
+        self.manager = self.create_peer('testnet', tx_storage=self.tx_storage, unlock_wallet=True, wallet_index=True)
         blocks = add_blocks_unlock_reward(self.manager)
         self.last_block = blocks[-1]
 
@@ -740,6 +740,85 @@ class BasicTransaction(unittest.TestCase):
         tx.timestamp = blocks[-1].timestamp + 1
         tx.resolve()
         tx.verify()
+
+    def test_wallet_index(self):
+        # First transaction: send tokens to output with address=address_b58
+        parents = [tx.hash for tx in self.genesis_txs]
+        genesis_block = self.genesis_blocks[0]
+
+        value = genesis_block.outputs[0].value
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+        output = TxOutput(value, script)
+
+        address_b58 = parse_address_script(script).address
+        # Get how many transactions wallet index already has for this address
+        wallet_index_count = len(self.tx_storage.wallet_index.index[address_b58])
+
+        _input = TxInput(genesis_block.hash, 0, b'')
+        tx = Transaction(weight=1, inputs=[_input], outputs=[output], parents=parents,
+                         storage=self.tx_storage, timestamp=self.last_block.timestamp + 1)
+
+        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        _input.data = P2PKH.create_input_data(public_bytes, signature)
+
+        tx.resolve()
+        self.manager.propagate_tx(tx)
+
+        # This transaction has an output to address_b58, so we need one more element on the index
+        self.assertEqual(len(self.tx_storage.wallet_index.index[address_b58]), wallet_index_count + 1)
+
+        # Second transaction: spend tokens from output with address=address_b58 and
+        # send tokens to 2 outputs, one with address=address_b58 and another one
+        # with address=new_address_b58, which is an address of a random wallet
+        new_address_b58 = self.get_address(0)
+        new_address = decode_address(new_address_b58)
+
+        output1 = TxOutput(value - 100, script)
+        script2 = P2PKH.create_output_script(new_address)
+        output2 = TxOutput(100, script2)
+
+        input1 = TxInput(tx.hash, 0, b'')
+        tx2 = Transaction(weight=1, inputs=[input1], outputs=[output1, output2], parents=parents,
+                          storage=self.tx_storage, timestamp=self.last_block.timestamp + 2)
+
+        data_to_sign = tx2.get_sighash_all(clear_input_data=True)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        input1.data = P2PKH.create_input_data(public_bytes, signature)
+
+        tx2.resolve()
+        self.manager.propagate_tx(tx2)
+
+        # tx2 has two outputs, for address_b58 and new_address_b58
+        # So we must have one more element on address_b58 index and only one on new_address_b58
+        self.assertEqual(len(self.tx_storage.wallet_index.index[address_b58]), wallet_index_count + 2)
+        self.assertEqual(len(self.tx_storage.wallet_index.index[new_address_b58]), 1)
+
+        # Third transaction: spend tokens from output with address=address_b58 and send
+        # tokens to a new address = output3_address_b58, which is from a random wallet
+        output3_address_b58 = self.get_address(1)
+        output3_address = decode_address(output3_address_b58)
+        script3 = P2PKH.create_output_script(output3_address)
+        output3 = TxOutput(value-100, script3)
+
+        input2 = TxInput(tx2.hash, 0, b'')
+        tx3 = Transaction(weight=1, inputs=[input2], outputs=[output3], parents=parents,
+                          storage=self.tx_storage, timestamp=self.last_block.timestamp + 3)
+
+        data_to_sign = tx3.get_sighash_all(clear_input_data=True)
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        input2.data = P2PKH.create_input_data(public_bytes, signature)
+
+        tx3.resolve()
+        self.manager.propagate_tx(tx3)
+
+        # tx3 has one output, for another new address (output3_address_b58) and it's spending an output of address_b58
+        # So address_b58 index must have one more element and output3_address_b58 should have one element also
+        # new_address_b58 was not spent neither received tokens, so didn't change
+        self.assertEqual(len(self.tx_storage.wallet_index.index[address_b58]), wallet_index_count + 3)
+        self.assertEqual(len(self.tx_storage.wallet_index.index[output3_address_b58]), 1)
+        self.assertEqual(len(self.tx_storage.wallet_index.index[new_address_b58]), 1)
 
 
 if __name__ == '__main__':

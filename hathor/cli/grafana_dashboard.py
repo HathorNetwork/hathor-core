@@ -5,7 +5,7 @@ from argparse import ArgumentParser, Namespace
 from enum import Flag, auto
 from typing import Any, Callable, Dict, List, Optional
 
-from hathor.util import enum_flag_all_none
+from hathor.cli.util import enum_flag_all_none
 
 # Path of this file
 dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -34,6 +34,7 @@ TEXT_FILE = os.path.join(json_path, 'text.json')
 
 # Folder where all charts files are stored
 CHARTS_FOLDER = os.path.join(json_path, 'charts')
+
 
 # For what types of hosts should the chart be used
 @enum_flag_all_none

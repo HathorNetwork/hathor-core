@@ -19,13 +19,19 @@ class IBitcoinRPC(ABC):
     async def get_block_template(self, *, rules: List[str] = ['segwit'],
                                  capabilities: List[str] = ['coinbasetxn', 'workid', 'coinbase/append'],
                                  ) -> Dict[Any, Any]:
-        """ Method for the [GetBlockTemplate call](https://bitcoin.org/en/developer-reference#getblocktemplate).
+        """ Method for the [GetBlockTemplate call](https://developer.bitcoin.org/reference/rpc/getblocktemplate.html).
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def verify_block_proposal(self, *, block: bytes) -> Optional[str]:
+        """ Method for the [GetBlockTemplate call](https://developer.bitcoin.org/reference/rpc/getblocktemplate.html).
         """
         raise NotImplementedError
 
     @abstractmethod
     async def submit_block(self, block: bytes) -> Optional[str]:
-        """ Method for the [SubmitBlock call](https://bitcoin.org/en/developer-reference#submitblock).
+        """ Method for the [SubmitBlock call](https://developer.bitcoin.org/reference/rpc/submitblock.html).
         """
         raise NotImplementedError
 
@@ -103,7 +109,7 @@ class BitcoinRPC(IBitcoinRPC):
         headers = {
             'Content-Type': 'text/plain',
         }
-        self.log.debug('send request', data=req_data)
+        # self.log.debug('send request', data=req_data)
         async with self.session.post(self._url, json=req_data, headers=headers) as resp:
             self.log.debug('receive response', resp=resp)
             if resp.status != 200:
@@ -121,6 +127,10 @@ class BitcoinRPC(IBitcoinRPC):
                                  capabilities: List[str] = ['coinbasetxn', 'workid', 'coinbase/append']) -> Dict:
         res = await self._rpc_request('getblocktemplate', {'capabilities': capabilities, 'rules': rules})
         return cast(Dict[Any, Any], res)
+
+    async def verify_block_proposal(self, *, block: bytes) -> Optional[str]:
+        res = await self._rpc_request('getblocktemplate', {'mode': 'proposal', 'data': block.hex()})
+        return cast(Optional[str], res)
 
     async def submit_block(self, block: bytes) -> Optional[str]:
         res = await self._rpc_request('submitblock', block.hex())

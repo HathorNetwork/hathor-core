@@ -20,6 +20,7 @@ import struct
 from collections import OrderedDict
 from math import inf
 from typing import TYPE_CHECKING, Callable, Dict, Iterator, List, Optional, Tuple, Union, cast
+from weakref import WeakSet
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
@@ -183,7 +184,6 @@ class NodeSyncTimestamp(Plugin):
         :param reactor: Reactor to schedule later calls. (default=twisted.internet.reactor)
         :type reactor: Reactor
         """
-        self.log = logger.new()
         self.protocol = protocol
         self.manager = protocol.node
 
@@ -217,6 +217,9 @@ class NodeSyncTimestamp(Plugin):
         # Indicate whether the synchronization is running.
         self.is_running: bool = False
 
+        # Create logger with context
+        self.log = logger.new(peer_id_short=self.short_peer_id)
+
     def get_status(self):
         """ Return the status of the sync.
         """
@@ -229,8 +232,8 @@ class NodeSyncTimestamp(Plugin):
     def short_peer_id(self) -> str:
         """ Returns the id of the peer (only 7 first chars)
         """
-        assert self.protocol.peer is not None
-        assert self.protocol.peer.id is not None
+        if self.protocol.peer is None or self.protocol.peer.id is None:
+            return ''
         return self.protocol.peer.id[:7]
 
     def get_cmd_dict(self) -> Dict[ProtocolMessages, Callable[[str], None]]:
@@ -354,23 +357,20 @@ class NodeSyncTimestamp(Plugin):
 
         :param next_timestamp: Timestamp to start the sync
         """
-        self.log.debug('sync-{p} Sync starting at {next_timestamp}', p=self.short_peer_id,
-                       next_timestamp=next_timestamp)
+        self.log.debug('sync start', ts=next_timestamp)
         assert next_timestamp < inf
-        pending = []
+        pending: WeakSet[Deferred] = WeakSet()
         next_offset = 0
         while True:
             payload = cast(NextPayload, (yield self.get_peer_next(next_timestamp, offset=next_offset)))
-            self.log.debug('sync-{p} NextPayload ts={ts} next_ts={nts} next_offset={noff} hashes={hs}',
-                           p=self.short_peer_id, ts=payload.timestamp, nts=payload.next_timestamp,
-                           noff=payload.next_offset, hs=len(payload.hashes))
+            self.log.debug('next payload', ts=payload.timestamp, next_ts=payload.next_timestamp,
+                           next_offset=payload.next_offset, hashes=len(payload.hashes))
             count = 0
             for h in payload.hashes:
                 if not self.manager.tx_storage.transaction_exists(h):
-                    pending.append(self.get_data(h))
+                    pending.add(self.get_data(h))
                     count += 1
-            self.log.debug('sync-{p} next_ts={ts} count={c} pending={pen}', p=self.short_peer_id,
-                           ts=next_timestamp, c=count, pen=len(pending))
+            self.log.debug('...', next_ts=next_timestamp, count=count, pending=len(pending))
             if next_timestamp != payload.next_timestamp and count == 0:
                 break
             next_timestamp = payload.next_timestamp
@@ -388,7 +388,7 @@ class NodeSyncTimestamp(Plugin):
 
         It uses an exponential search followed by a binary search.
         """
-        # self.log.debug('Running find_synced_timestamp...')
+        self.log.debug('find synced timestamp')
         tips = cast(TipsPayload, (yield self.get_peer_tips()))
         if self.peer_timestamp:
             # Peer's timestamp cannot go backwards.
@@ -408,6 +408,7 @@ class NodeSyncTimestamp(Plugin):
             if cur <= self.manager.tx_storage.first_timestamp:
                 raise Exception('We cannot go before genesis. Is it an attacker?!')
             prev_cur = cur
+            assert self.manager.tx_storage.first_timestamp > 0
             cur = max(cur - step, self.manager.tx_storage.first_timestamp)
             tips = cast(TipsPayload, (yield self.get_peer_tips(cur)))
             local_merkle_tree, _ = self.manager.tx_storage.get_merkle_tree(cur)
@@ -441,8 +442,7 @@ class NodeSyncTimestamp(Plugin):
             return None
 
         assert low + 1 == high
-        self.log.debug('sync-{log_source.short_peer_id} Synced at {log_source.synced_timestamp} \
-                       (latest timestamp {log_source.peer_timestamp})', log_source=self)
+        self.log.debug('synced', latest_ts=self.peer_timestamp, synced_at=self.synced_timestamp)
         return self.synced_timestamp + 1
 
     @inlineCallbacks
@@ -450,7 +450,7 @@ class NodeSyncTimestamp(Plugin):
         """ Run the next step to keep nodes synced.
         """
         next_timestamp = yield self.find_synced_timestamp()
-        self.log.debug('sync-{p} _next_step next_timestamp={ts}', p=self.short_peer_id, ts=next_timestamp)
+        self.log.debug('_next_step', next_timestamp=next_timestamp)
         if next_timestamp is None:
             return
 
@@ -462,14 +462,14 @@ class NodeSyncTimestamp(Plugin):
         """
         if self.is_running:
             # Already running...
-            # self.log.debug('Already running: {log_source.is_running}')
+            self.log.debug('already running')
             return
 
         try:
             self.is_running = True
             yield self._next_step()
-        except Exception as e:
-            self.log.warn('Exception: {e!r}', e=e)
+        except Exception:
+            self.log.warn('_next_step error', exc_info=True)
             raise
         else:
             if self.call_later_id and self.call_later_id.active():
@@ -620,7 +620,7 @@ class NodeSyncTimestamp(Plugin):
         """ Handle a received GET-DATA message.
         """
         hash_hex = payload
-        # self.log.debug('handle_get_data {hash_hex}', hash_hex=hash_hex)
+        # self.log.debug('handle_get_data', payload=hash_hex)
         try:
             tx = self.protocol.node.tx_storage.get_transaction(bytes.fromhex(hash_hex))
             self.send_data(tx)
@@ -639,7 +639,7 @@ class NodeSyncTimestamp(Plugin):
     def send_data(self, tx: BaseTransaction) -> None:
         """ Send a DATA message.
         """
-        # self.log.debug('Sending {tx.hash_hex}...', tx=tx)
+        self.log.debug('send tx', tx=tx.hash_hex)
         payload = base64.b64encode(tx.get_struct()).decode('ascii')
         self.send_message(ProtocolMessages.DATA, payload)
 
@@ -730,4 +730,4 @@ class NodeSyncTimestamp(Plugin):
             We need this errback because otherwise the sync crashes when the deferred is canceled.
             We should just log a warning because it will continue the sync and will try to get this tx again.
         """
-        self.log.warn('sync-{p} failed to download tx hash={h}', p=self.short_peer_id, h=hash_bytes.hex())
+        self.log.warn('failed to download tx', tx=hash_bytes.hex(), reason=reason)

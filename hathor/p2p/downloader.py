@@ -18,9 +18,9 @@ from collections import deque
 from functools import partial
 from typing import TYPE_CHECKING, Any, Deque, Dict, List, Optional
 
+from structlog import get_logger
 from twisted.internet import defer
 from twisted.internet.defer import Deferred
-from twisted.logger import Logger
 
 from hathor.conf import HathorSettings
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
@@ -31,6 +31,8 @@ if TYPE_CHECKING:
     from hathor.p2p.node_sync import NodeSyncTimestamp  # noqa: F401
     from hathor.transaction import BaseTransaction  # noqa: F401
     from hathor.manager import HathorManager  # noqa: F401
+
+logger = get_logger()
 
 
 class TxDetails:
@@ -100,7 +102,6 @@ class Downloader:
     TODO: Should we have a flag to sync only the best blockchain? Or to sync the
     best blockchain first?
     """
-    log = Logger()
 
     # All transactions that must be downloaded.
     pending_transactions: Dict[bytes, TxDetails]
@@ -119,6 +120,7 @@ class Downloader:
     window_size: int
 
     def __init__(self, manager: 'HathorManager', window_size: int = 100):
+        self.log = logger.new()
         self.manager = manager
 
         self.pending_transactions = {}
@@ -135,9 +137,7 @@ class Downloader:
             # In the node_sync code we already handle this case but in a race condition situation
             # we might get here but it's not common
             tx = self.manager.tx_storage.get_transaction(tx_id)
-            self.log.debug(
-                'Downloader: requesting to download a tx that is already in the storage. Tx {}'.format(tx_id.hex())
-            )
+            self.log.debug('requesting to download a tx that is already in the storage', tx=tx_id.hex())
             return defer.succeed(tx)
         except TransactionDoesNotExist:
             # This tx does not exist in our storage
@@ -205,14 +205,12 @@ class Downloader:
         """ This is called when a new transaction arrives.
         """
         assert tx.hash is not None
-        self.log.debug('Downloader: on_new_tx {}'.format(tx.hash.hex()))
+        self.log.debug('new tx', tx=tx.hash_hex)
 
         details = self.pending_transactions.get(tx.hash, None)
         if not details:
             # Something is wrong! It should never happen.
-            self.log.warn(
-                'Downloader: new transaction arrived but tx detail does not exist. Tx {}'.format(tx.hash.hex())
-            )
+            self.log.warn('new tx arrived but tx detail does not exist', tx=tx.hash_hex)
             return
 
         assert len(self.downloading_deque) > 0
@@ -252,7 +250,7 @@ class Downloader:
         """ Retry a failed download
             It will try up to settings.GET_DATA_RETRIES per connection
         """
-        self.log.warn('Downloader: retry tx {}'.format(tx_id.hex()))
+        self.log.warn('retry tx', tx=tx_id.hex())
 
         details = self.pending_transactions.get(tx_id, None)
 
@@ -279,9 +277,7 @@ class Downloader:
     def _remove_pending_tx(self, tx_id: bytes) -> None:
         """ Cancel tx deferred and remove it from the pending dict and download deque
         """
-        self.log.warn(
-            'Downloader: No new connections available to download the transaction. Tx {}'.format(tx_id.hex())
-        )
+        self.log.warn('no new connections available to download the tx from', tx=tx_id.hex())
         # remove this tx_id from pending_transactions and cancel the deferred
         details = self.pending_transactions.pop(tx_id)
         details.deferred.cancel()

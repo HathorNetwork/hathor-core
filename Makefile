@@ -35,14 +35,19 @@ tests-doctests:
 
 .PHONY: tests-lib
 tests-lib:
-	pytest --durations=10 $(pytest_flags) --doctest-modules hathor --cov-fail-under=85 $(tests_lib)
+	pytest --durations=10 $(pytest_flags) --doctest-modules hathor --cov-fail-under=84 $(tests_lib)
 
 .PHONY: tests-simulation
 tests-simulation:
 	pytest --durations=10 --cov=hathor --cov-report=term -p no:warnings $(tests_simulation)
 
+.PHONY: tests-genesis
+tests-genesis:
+	HATHOR_TEST_CONFIG_FILE=hathor.conf.mainnet pytest tests/tx/test_genesis.py
+	HATHOR_TEST_CONFIG_FILE=hathor.conf.testnet pytest tests/tx/test_genesis.py
+
 .PHONY: tests
-tests: tests-cli tests-lib
+tests: tests-cli tests-lib tests-genesis
 
 .PHONY: tests-full
 tests-full:

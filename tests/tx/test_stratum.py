@@ -19,7 +19,6 @@ from hathor.stratum import (
     StratumFactory,
 )
 from hathor.transaction.block import Block
-from hathor.transaction.genesis import get_genesis_transactions
 from tests import unittest
 
 
@@ -218,7 +217,8 @@ class TestStratumJob(StratumTestBase):
 class StratumClientTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        self.block = get_genesis_transactions(None)[0]
+        from hathor.transaction.genesis import _get_genesis_transactions_unsafe
+        self.block = next(x for x in _get_genesis_transactions_unsafe(None) if x.is_block)
         self.transport = StringTransportWithDisconnection()
         self.protocol = StratumClient()
         self.protocol.makeConnection(self.transport)

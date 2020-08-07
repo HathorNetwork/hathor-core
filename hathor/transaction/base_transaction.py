@@ -149,7 +149,7 @@ class BaseTransaction(ABC):
     HASH_NONCE_SIZE = 16
     HEX_BASE = 16
 
-    _metadata: TransactionMetadata
+    _metadata: Optional[TransactionMetadata]
 
     def __init__(self,
                  nonce: int = 0,
@@ -346,18 +346,8 @@ class BaseTransaction(ABC):
         """
         if self.hash is None:
             return False
-        if self.storage:
-            genesis = self.storage.get_genesis(self.hash)
-            if genesis:
-                return True
-            else:
-                return False
-        else:
-            from hathor.transaction.genesis import get_genesis_transactions
-            for genesis in get_genesis_transactions(self.storage):
-                if self == genesis:
-                    return True
-            return False
+        from hathor.transaction.genesis import is_genesis
+        return is_genesis(self.hash)
 
     @abstractmethod
     def get_funds_fields_from_struct(self, buf: bytes) -> bytes:
@@ -458,11 +448,12 @@ class BaseTransaction(ABC):
         for parent_hash in self.parents:
             try:
                 parent = self.storage.get_transaction(parent_hash)
+                assert parent.hash is not None
                 if self.timestamp <= parent.timestamp:
                     raise TimestampError('tx={} timestamp={}, parent={} timestamp={}'.format(
-                        self.hash.hex(),
+                        self.hash_hex,
                         self.timestamp,
-                        parent.hash.hex(),
+                        parent.hash_hex,
                         parent.timestamp,
                     ))
 
@@ -484,15 +475,15 @@ class BaseTransaction(ABC):
                 else:
                     if min_timestamp and parent.timestamp < min_timestamp:
                         raise TimestampError('tx={} timestamp={}, parent={} timestamp={}, min_timestamp={}'.format(
-                            self.hash.hex(),
+                            self.hash_hex,
                             self.timestamp,
-                            parent.hash.hex(),
+                            parent.hash_hex,
                             parent.timestamp,
                             min_timestamp
                         ))
                     my_parents_txs += 1
             except TransactionDoesNotExist:
-                raise ParentDoesNotExist('tx={} parent={}'.format(self.hash.hex(), parent_hash.hex()))
+                raise ParentDoesNotExist('tx={} parent={}'.format(self.hash_hex, parent_hash.hex()))
 
         # check for correct number of parents
         if self.is_block:
@@ -514,7 +505,7 @@ class BaseTransaction(ABC):
         :raises PowError: when the hash is equal or greater than the target
         """
         assert self.hash is not None
-        numeric_hash = int(self.hash.hex(), self.HEX_BASE)
+        numeric_hash = int(self.hash_hex, self.HEX_BASE)
         minimum_target = self.get_target(override_weight)
         if numeric_hash >= minimum_target:
             raise PowError(f'Transaction has invalid data ({numeric_hash} < {minimum_target})')
@@ -772,7 +763,7 @@ class BaseTransaction(ABC):
         """ Creates a json serializable Dict object from self
         """
         data: Dict[str, Any] = {}
-        data['hash'] = self.hash and self.hash.hex()
+        data['hash'] = self.hash_hex or None
         data['nonce'] = self.nonce
         data['timestamp'] = self.timestamp
         data['version'] = int(self.version)
@@ -812,7 +803,7 @@ class BaseTransaction(ABC):
 
         meta = self.get_metadata()
         ret: Dict[str, Any] = {
-            'tx_id': self.hash.hex(),
+            'tx_id': self.hash_hex,
             'version': int(self.version),
             'weight': self.weight,
             'timestamp': self.timestamp,
@@ -832,7 +823,8 @@ class BaseTransaction(ABC):
             tx2 = self.storage.get_transaction(tx_in.tx_id)
             tx2_out = tx2.outputs[tx_in.index]
             output = serialize_output(tx2, tx2_out)
-            output['tx_id'] = tx2.hash.hex()
+            assert tx2.hash is not None
+            output['tx_id'] = tx2.hash_hex
             output['index'] = tx_in.index
             ret['inputs'].append(output)
 
@@ -879,6 +871,7 @@ class BaseTransaction(ABC):
         """
         new_tx = self.create_from_struct(self.get_struct())
         if hasattr(self, '_metadata'):
+            assert self._metadata is not None  # FIXME: is this actually true or do we have to check if not None
             new_tx._metadata = self._metadata.clone()
         new_tx.storage = self.storage
         return new_tx

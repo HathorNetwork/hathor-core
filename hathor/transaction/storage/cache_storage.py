@@ -1,13 +1,11 @@
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Any, Generator, Iterator, Set
+from typing import TYPE_CHECKING, Any, Generator, Iterator, Optional, Set
 
 from twisted.internet import threads
 from twisted.internet.defer import Deferred, inlineCallbacks, succeed
-from twisted.logger import Logger
 
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
-from hathor.util import deprecated, skip_warning
 
 if TYPE_CHECKING:
     from twisted.internet import Reactor
@@ -16,7 +14,6 @@ if TYPE_CHECKING:
 class TransactionCacheStorage(BaseTransactionStorage):
     """Caching storage to be used 'on top' of other storages.
     """
-    log = Logger()
 
     cache: 'OrderedDict[bytes, BaseTransaction]'
     dirty_txs: Set[bytes]
@@ -51,8 +48,10 @@ class TransactionCacheStorage(BaseTransactionStorage):
         # dirty_txs has the txs that have been modified but are not persisted yet
         self.dirty_txs = set()  # Set[bytes(hash)]
         self.stats = dict(hit=0, miss=0)
+
+        # we need to use only one weakref dict, so we must first initialize super, and then
+        # attribute the same weakref for both.
         super().__init__()
-        # we need to use only one weakref dict
         self._tx_weakref = store._tx_weakref
 
     def _clone(self, x: BaseTransaction) -> BaseTransaction:
@@ -84,7 +83,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self.flush_deferred = None
 
     def _err_flush_thread(self, reason: Any) -> None:
-        self.log.error('Error flushing transactions: {reason}', reason=reason)
+        self.log.error('error flushing transactions', reason=reason)
         self.reactor.callLater(self.interval, self._start_flush_thread)
         self.flush_deferred = None
 
@@ -97,23 +96,24 @@ class TransactionCacheStorage(BaseTransactionStorage):
             if tx_hash in self.cache:
                 tx = self._clone(self.cache[tx_hash])
                 self.dirty_txs.discard(tx_hash)
-                skip_warning(self.store._save_transaction)(tx)
+                self.store._save_transaction(tx)
 
-    @deprecated('Use remove_transaction_deferred instead')
     def remove_transaction(self, tx: BaseTransaction) -> None:
         assert tx.hash is not None
-        skip_warning(super().remove_transaction)(tx)
+        super().remove_transaction(tx)
         self.cache.pop(tx.hash, None)
         self.dirty_txs.discard(tx.hash)
         self._remove_from_weakref(tx)
 
-    @deprecated('Use save_transaction_deferred instead')
     def save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         self._save_transaction(tx)
         self._save_to_weakref(tx)
 
         # call super which adds to index if needed
-        skip_warning(super().save_transaction)(tx, only_metadata=only_metadata)
+        super().save_transaction(tx, only_metadata=only_metadata)
+
+    def get_all_genesis(self) -> Set[BaseTransaction]:
+        return self.store.get_all_genesis()
 
     def _save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         """Saves the transaction without modifying TimestampIndex entries (in superclass)."""
@@ -135,51 +135,50 @@ class TransactionCacheStorage(BaseTransactionStorage):
                 if removed_tx.hash in self.dirty_txs:
                     # write to disk so we don't lose the last update
                     self.dirty_txs.discard(removed_tx.hash)
-                    skip_warning(self.store.save_transaction)(removed_tx)
+                    self.store.save_transaction(removed_tx)
             self.cache[tx.hash] = self._clone(tx)
         else:
             # Tx might have been updated
             self.cache[tx.hash] = self._clone(tx)
             self.cache.move_to_end(tx.hash, last=True)
 
-    @deprecated('Use transaction_exists_deferred instead')
     def transaction_exists(self, hash_bytes: bytes) -> bool:
         if hash_bytes in self.cache:
             return True
-        return skip_warning(self.store.transaction_exists)(hash_bytes)
+        return self.store.transaction_exists(hash_bytes)
 
-    @deprecated('Use get_transaction_deferred instead')
     def _get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
+        tx: Optional[BaseTransaction]
         if hash_bytes in self.cache:
             tx = self._clone(self.cache[hash_bytes])
             self.cache.move_to_end(hash_bytes, last=True)
             self.stats['hit'] += 1
         else:
-            tx = skip_warning(self.store.get_transaction)(hash_bytes)
-            tx.storage = self
+            tx = self.get_transaction_from_weakref(hash_bytes)
+            if tx is not None:
+                self.stats['hit'] += 1
+            else:
+                tx = self.store.get_transaction(hash_bytes)
+                tx.storage = self
+                self.stats['miss'] += 1
             self._update_cache(tx)
-            self.stats['miss'] += 1
         self._save_to_weakref(tx)
+        assert tx is not None
         return tx
 
-    @deprecated('Use get_all_transactions_deferred instead')
     def get_all_transactions(self):
         self._flush_to_storage(self.dirty_txs.copy())
-        for tx in skip_warning(self.store.get_all_transactions)():
+        for tx in self.store.get_all_transactions():
             tx.storage = self
             self._save_to_weakref(tx)
             yield tx
 
-    @deprecated('Use get_count_tx_blocks_deferred instead')
     def get_count_tx_blocks(self) -> int:
         self._flush_to_storage(self.dirty_txs.copy())
-        return skip_warning(self.store.get_count_tx_blocks)()
+        return self.store.get_count_tx_blocks()
 
     @inlineCallbacks
     def save_transaction_deferred(self, tx: BaseTransaction, *, only_metadata: bool = False) -> Iterator[Deferred]:
-        if tx.is_genesis and only_metadata:
-            return
-
         # TODO: yield self._save_transaction_deferred
         self._save_transaction(tx)
 
@@ -227,3 +226,12 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self._flush_to_storage(self.dirty_txs.copy())
         res = yield self.store.get_count_tx_blocks_deferred()
         return res
+
+    def add_value(self, key: str, value: str) -> None:
+        self.store.add_value(key, value)
+
+    def remove_value(self, key: str) -> None:
+        self.store.remove_value(key)
+
+    def get_value(self, key: str) -> Optional[str]:
+        return self.store.get_value(key)
