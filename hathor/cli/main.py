@@ -41,7 +41,6 @@ class CliManager:
         from . import tx_generator
         from . import wallet
         from . import generate_valid_words
-        from . import grafana_dashboard
         from . import twin_tx
         from . import shell
         from . import multisig_address
@@ -67,8 +66,6 @@ class CliManager:
         self.add_cmd('tests', 'gen_twin_tx', twin_tx, 'Generate a twin transaction from a transaction hash')
         self.add_cmd('wallet', 'gen_kp_wallet', wallet, 'Generate a new KeyPair wallet')
         self.add_cmd('wallet', 'gen_hd_words', generate_valid_words, 'Generate random words for HD wallet')
-        self.add_cmd('grafana', 'grafana_dashboard', grafana_dashboard,
-                     'Generate a Grafana Dashboard with all nodes and metrics')
         self.add_cmd('oracle', 'oracle-create-key', oracle_create_key, 'Create an oracle private/public key')
         self.add_cmd('oracle', 'oracle-get-pubkey', oracle_get_pubkey,
                      'Read an oracle private key and output public key hash')
