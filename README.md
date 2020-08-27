@@ -98,21 +98,22 @@ Generate Sphinx docs:
 The output will be written to `docs/_build/html/`.
 
 
-How to create a full-node in Ubuntu 16.04
+How to create a full-node in Ubuntu 20.04
 ------
 
 First, install all packages:
 
+    sudo add-apt-repository ppa:deadsnakes/ppa
     sudo apt update
-    sudo apt install --assume-yes python3 python3-dev python3-pip build-essential
-    sudo apt install --assume-yes supervisor  # optional
-    pip3 install -U pipenv
+    sudo apt install python3.6 python3.6-dev python3.6-pip build-essential 
+    sudo apt install supervisor  # optional    
 
 Then, install `hathor-python`:
 
     git clone git@gitlab.com:HathorNetwork/hathor-python.git
     cd hathor-python/
-    pipenv sync
+    pip install -U pipenv     
+    pipenv sync -d
 
 Generate grpc/protobuf modules:
 
