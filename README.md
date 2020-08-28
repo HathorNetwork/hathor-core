@@ -112,16 +112,16 @@ Then, install `hathor-python`:
 
     git clone git@gitlab.com:HathorNetwork/hathor-python.git
     cd hathor-python/
-    python3.6 -m pip install -U pipenv     
-    python3.6 -m pipenv sync -d
+    pip install -U pipenv     
+    pipenv sync -d
 
 Generate grpc/protobuf modules:
 
-    python3.6 -m pipenv run make protos
+    pipenv run make protos
 
 Then, generate your `peer_id.json`:
 
-    python3.6 -m pipenv run hathor-cli gen_peer_id > peer_id.json
+    pipenv run hathor-cli gen_peer_id > peer_id.json
 
 Finally, you can run your node.
 
@@ -132,7 +132,7 @@ Daemonizing with Supervisor
 Create a `run_hathord` with execution permission:
 
     #!/bin/bash
-    exec python3.6 -m pipenv run hathor-cli run_node --hostname <YOUR_HOSTNAME_OR_PUBLIC_IP_ADDRESS> --listen tcp:40403 --status 8001 --testnet --peer peer_id.json
+    exec pipenv run hathor-cli run_node --hostname <YOUR_HOSTNAME_OR_PUBLIC_IP_ADDRESS> --listen tcp:40403 --status 8001 --testnet --peer peer_id.json
 
 There follows a configuration template to Supervisor:
 
