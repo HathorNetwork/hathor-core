@@ -105,26 +105,23 @@ First, install all packages:
 
     sudo add-apt-repository ppa:deadsnakes/ppa
     sudo apt update
-    sudo apt install --assume-yes python3.6 python3.6-dev python3.6-pip build-essential virtualenv
-    sudo apt install --assume-yes supervisor  # optional    
+    sudo apt install python3.6 python3.6-dev python3.6-pip build-essential 
+    sudo apt install supervisor  # optional    
 
 Then, install `hathor-python`:
 
     git clone git@gitlab.com:HathorNetwork/hathor-python.git
     cd hathor-python/
-    virtualenv -p /usr/bin/python3.6 venv
-    source venv/bin/activate
-    pip install -U pipenv grpcio_tools mypy-protobuf
-    pip install --upgrade protobuf 
-    pipenv sync
+    python3.6 -m pip install -U pipenv     
+    python3.6 -m pipenv sync -d
 
 Generate grpc/protobuf modules:
 
-    pipenv run make protos
+    python3.6 -m pipenv run make protos
 
 Then, generate your `peer_id.json`:
 
-    pipenv run hathor-cli gen_peer_id > peer_id.json
+    python3.6 -m pipenv run hathor-cli gen_peer_id > peer_id.json
 
 Finally, you can run your node.
 
@@ -135,7 +132,7 @@ Daemonizing with Supervisor
 Create a `run_hathord` with execution permission:
 
     #!/bin/bash
-    exec pipenv run hathor-cli run_node --hostname <YOUR_HOSTNAME_OR_PUBLIC_IP_ADDRESS> --listen tcp:40403 --status 8001 --testnet --peer peer_id.json
+    exec python3.6 -m pipenv run hathor-cli run_node --hostname <YOUR_HOSTNAME_OR_PUBLIC_IP_ADDRESS> --listen tcp:40403 --status 8001 --testnet --peer peer_id.json
 
 There follows a configuration template to Supervisor:
 
