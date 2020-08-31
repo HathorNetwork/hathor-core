@@ -445,7 +445,7 @@ class WalletIndex:
         """
         return sorted(self.index[address])
 
-    def is_address_empty(seld, address: str) -> bool:
+    def is_address_empty(self, address: str) -> bool:
         return not bool(self.index[address])
 
 
