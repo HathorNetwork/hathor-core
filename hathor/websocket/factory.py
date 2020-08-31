@@ -322,4 +322,4 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
 
 def _count_empty(addresses: Set[str], wallet_index: WalletIndex) -> int:
     """ Count how many of the addresses given are empty (have no outputs)."""
-    return sum(1 for addr in addresses if not wallet_index.get_from_address(addr))
+    return sum(1 for addr in addresses if wallet_index.is_address_empty(addr))

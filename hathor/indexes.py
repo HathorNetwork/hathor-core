@@ -445,6 +445,9 @@ class WalletIndex:
         """
         return sorted(self.index[address])
 
+    def is_address_empty(seld, address: str) -> bool:
+        return not bool(self.index[address])
+
 
 class TokensIndex:
     """ Index of tokens by token uid
