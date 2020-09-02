@@ -1,9 +1,0 @@
-{
-    "title": "CPU System Load (5m avg)",
-    "type": "percent",
-    "params": {
-        "query": "avg(node_load5{{instance='{0}',job='{1}'}}) /  count(count(node_cpu_seconds_total{{instance='{0}',job='{1}'}}) by (cpu)) * 100",
-        "description": "Busy state of all CPU cores together (5 min average)"
-    },
-    "height": 3
-}
