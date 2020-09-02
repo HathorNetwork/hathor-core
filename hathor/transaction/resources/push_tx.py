@@ -1,4 +1,5 @@
 import struct
+from typing import Any, Dict, cast
 
 from twisted.web import resource
 from twisted.web.http import Request
@@ -26,7 +27,7 @@ class PushTxResource(resource.Resource):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
-    def handle_push_tx(self, params: object) -> bytes:
+    def handle_push_tx(self, params: Dict[str, Any]) -> bytes:
         try:
             tx_bytes = bytes.fromhex(params['hex_tx'])
             tx = tx_or_block_from_bytes(tx_bytes)
@@ -102,6 +103,9 @@ class PushTxResource(resource.Resource):
         set_cors(request, 'POST')
 
         data = json_loadb(request.content.read())
+
+        # Need to do that because json_loadb returns an object, which is not compatible with Dict[str, Any]
+        data = cast(Dict[str, Any], data)
         return self.handle_push_tx(data)
 
     def render_OPTIONS(self, request: Request) -> int:
