@@ -1,5 +1,4 @@
 import struct
-from typing import Any, Dict
 
 from twisted.web import resource
 from twisted.web.http import Request
@@ -7,6 +6,7 @@ from twisted.web.http import Request
 from hathor.api_util import parse_get_arguments, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.exception import InvalidNewTransaction
+from hathor.transaction import Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.exceptions import TxValidationError
 from hathor.util import json_dumpb, json_loadb
@@ -26,7 +26,7 @@ class PushTxResource(resource.Resource):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
-    def handle_push_tx(self, params: Dict[str, Any]) -> bytes:
+    def handle_push_tx(self, params: object) -> bytes:
         try:
             tx_bytes = bytes.fromhex(params['hex_tx'])
             tx = tx_or_block_from_bytes(tx_bytes)
@@ -49,6 +49,7 @@ class PushTxResource(resource.Resource):
             else:
                 tx.storage = self.manager.tx_storage
                 # If this tx is a double spending, don't even try to propagate in the network
+                assert isinstance(tx, Transaction)
                 is_double_spending = tx.is_double_spending()
                 if is_double_spending:
                     data = {
