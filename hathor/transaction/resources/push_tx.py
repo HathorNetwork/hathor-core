@@ -1,7 +1,8 @@
-import json
 import struct
+from typing import Any, Dict
 
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import parse_get_arguments, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
@@ -25,9 +26,9 @@ class PushTxResource(resource.Resource):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
-    def handle_push_tx(self, data):
+    def handle_push_tx(self, params: Dict[str, Any]) -> bytes:
         try:
-            tx_bytes = bytes.fromhex(data['hex_tx'])
+            tx_bytes = bytes.fromhex(params['hex_tx'])
             tx = tx_or_block_from_bytes(tx_bytes)
         except ValueError:
             data = {'success': False, 'message': 'Invalid hexadecimal data', 'can_force': False}
@@ -58,7 +59,7 @@ class PushTxResource(resource.Resource):
                 else:
                     success, message = tx.validate_tx_error()
 
-                    if success or data['force']:
+                    if success or params['force']:
                         message = ''
                         try:
                             success = self.manager.propagate_tx(tx, fails_silently=False)
@@ -73,7 +74,7 @@ class PushTxResource(resource.Resource):
 
         return json_dumpb(data)
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         """ GET request for /push_tx/
             Expects 'hex_tx' as args parameter that is the hex representation of the whole tx
 
@@ -93,7 +94,7 @@ class PushTxResource(resource.Resource):
 
         return self.handle_push_tx(data)
 
-    def render_POST(self, request):
+    def render_POST(self, request: Request) -> bytes:
         """ POST request for /push_tx/
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
@@ -102,7 +103,7 @@ class PushTxResource(resource.Resource):
         data = json_loadb(request.content.read())
         return self.handle_push_tx(data)
 
-    def render_OPTIONS(self, request):
+    def render_OPTIONS(self, request: Request) -> int:
         return render_options(request)
 
 
