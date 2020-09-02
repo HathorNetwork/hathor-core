@@ -22,7 +22,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         self.web_history = StubSite(HistoryResource(self.manager))
 
     @inlineCallbacks
-    def test_get(self):
+    def test_push_tx(self):
         # Mining new block
         response_mining = yield self.web_mining.get('mining')
         data_mining = response_mining.json_value()
@@ -85,7 +85,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data['success'])
 
         # force
-        response = yield self.web.get('push_tx', {b'hex_tx': bytes(tx.get_struct().hex(), 'utf-8'), b'force': b'true'})
+        response = yield self.web.post('push_tx', {'hex_tx': tx.get_struct().hex(), 'force': True})
         data = response.json_value()
         self.assertFalse(data['success'])
 
@@ -102,7 +102,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
 
         # Token creation tx
         tx2 = create_tokens(self.manager, address, mint_amount=100, propagate=False)
-        response = yield self.web.get('push_tx', {b'hex_tx': bytes(tx2.get_struct().hex(), 'utf-8')})
+        response = yield self.web.post('push_tx', {'hex_tx': tx2.get_struct().hex()})
         data = response.json_value()
         self.assertTrue(data['success'])
 
@@ -114,6 +114,6 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data['success'])
 
         # Invalid hex
-        response = yield self.web.get('push_tx', {b'hex_tx': b'XXXX'})
+        response = yield self.web.post('push_tx', {'hex_tx': 'XXXX'})
         data = response.json_value()
         self.assertFalse(data['success'])
