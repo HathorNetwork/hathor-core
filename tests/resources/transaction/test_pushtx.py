@@ -22,7 +22,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         self.web_history = StubSite(HistoryResource(self.manager))
 
     @inlineCallbacks
-    def _run_push_tx_test(self, is_post):
+    def _run_push_tx_test(self, is_post: bool):
         # Mining new block
         response_mining = yield self.web_mining.get('mining')
         data_mining = response_mining.json_value()
@@ -126,7 +126,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         self.assertTrue(data['success'])
 
     @inlineCallbacks
-    def _run_invalid_params_test(self, is_post):
+    def _run_invalid_params_test(self, is_post: bool):
         push_tx_fn = self.web.post if is_post else self.web.get
         hex_param = 'hex_tx' if is_post else b'hex_tx'
 
