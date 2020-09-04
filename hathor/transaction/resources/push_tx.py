@@ -109,11 +109,12 @@ class PushTxResource(resource.Resource):
 
         data = json_loadb(request.content.read())
 
+        # Need to do that because json_loadb returns an object, which is not compatible with Dict[str, Any]
+        data = cast(Dict[str, Any], data)
+
         if 'hex_tx' not in data:
             return error_ret
 
-        # Need to do that because json_loadb returns an object, which is not compatible with Dict[str, Any]
-        data = cast(Dict[str, Any], data)
         return self.handle_push_tx(data)
 
     def render_OPTIONS(self, request: Request) -> int:
