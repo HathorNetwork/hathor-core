@@ -102,7 +102,15 @@ class PushTxResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
 
+        error_ret = json_dumpb({'success': False, 'message': 'Missing hexadecimal data', 'can_force': False})
+        body_content = request.content.read()
+        if not body_content:
+            return error_ret
+
         data = json_loadb(request.content.read())
+
+        if 'hex_tx' not in data:
+            return error_ret
 
         # Need to do that because json_loadb returns an object, which is not compatible with Dict[str, Any]
         data = cast(Dict[str, Any], data)

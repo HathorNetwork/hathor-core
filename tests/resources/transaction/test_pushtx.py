@@ -22,7 +22,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         self.web_history = StubSite(HistoryResource(self.manager))
 
     @inlineCallbacks
-    def test_push_tx(self):
+    def _run_push_tx_test(self, is_post):
         # Mining new block
         response_mining = yield self.web_mining.get('mining')
         data_mining = response_mining.json_value()
@@ -56,7 +56,14 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
         tx.resolve()
 
-        response = yield self.web.get('push_tx', {b'hex_tx': bytes(tx.get_struct().hex(), 'utf-8')})
+        push_tx_fn = self.web.post if is_post else self.web.get
+        hex_param = 'hex_tx' if is_post else b'hex_tx'
+        force_param = 'force' if is_post else b'force'
+
+        tx_hex = tx.get_struct().hex()
+        hex_data = tx_hex if is_post else bytes(tx_hex, 'utf-8')
+
+        response = yield push_tx_fn('push_tx', {hex_param: hex_data})
         data = response.json_value()
         self.assertTrue(data['success'])
 
@@ -67,7 +74,10 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         # modify tx so it will be a double spending, then rejected
         tx.weight += 0.1
         tx.resolve()
-        response_success = yield self.web.get('push_tx', {b'hex_tx': bytes(tx.get_struct().hex(), 'utf-8')})
+
+        tx_hex = tx.get_struct().hex()
+        hex_data = tx_hex if is_post else bytes(tx_hex, 'utf-8')
+        response_success = yield push_tx_fn('push_tx', {hex_param: hex_data})
         data_success = response_success.json_value()
         self.assertFalse(data_success['success'])
 
@@ -80,40 +90,70 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         public_key_bytes, signature_bytes = self.manager.wallet.get_input_aux_data(data_to_sign, private_key)
         tx.inputs[0].data = P2PKH.create_input_data(public_key_bytes, signature_bytes)
 
-        response = yield self.web.get('push_tx', {b'hex_tx': bytes(tx.get_struct().hex(), 'utf-8')})
+        tx_hex = tx.get_struct().hex()
+        hex_data = tx_hex if is_post else bytes(tx_hex, 'utf-8')
+        response = yield push_tx_fn('push_tx', {hex_param: hex_data})
         data = response.json_value()
         self.assertFalse(data['success'])
 
         # force
-        response = yield self.web.post('push_tx', {'hex_tx': tx.get_struct().hex(), 'force': True})
+        tx_hex = tx.get_struct().hex()
+        hex_data = tx_hex if is_post else bytes(tx_hex, 'utf-8')
+        response = yield push_tx_fn('push_tx', {hex_param: hex_data, force_param: True if is_post else b'true'})
         data = response.json_value()
         self.assertFalse(data['success'])
 
         # Invalid tx (don't have inputs)
         genesis_tx = next(x for x in self.manager.tx_storage.get_all_genesis() if x.is_transaction)
-        response_genesis = yield self.web.get('push_tx', {b'hex_tx': bytes(genesis_tx.get_struct().hex(), 'utf-8')})
+        genesis_hex = genesis_tx.get_struct().hex()
+        hex_data = genesis_hex if is_post else bytes(genesis_hex, 'utf-8')
+        response_genesis = yield push_tx_fn('push_tx', {hex_param: hex_data})
         data_genesis = response_genesis.json_value()
         self.assertFalse(data_genesis['success'])
 
         # Invalid tx hex
-        response_error2 = yield self.web.get('push_tx', {b'hex_tx': b'a12c'})
+        invalid_hex_data = 'a12c' if is_post else b'a12c'
+        response_error2 = yield push_tx_fn('push_tx', {hex_param: invalid_hex_data})
         data_error2 = response_error2.json_value()
         self.assertFalse(data_error2['success'])
 
         # Token creation tx
         tx2 = create_tokens(self.manager, address, mint_amount=100, propagate=False)
-        response = yield self.web.post('push_tx', {'hex_tx': tx2.get_struct().hex()})
+        tx2_hex = tx2.get_struct().hex()
+        hex_data = tx2_hex if is_post else bytes(tx2_hex, 'utf-8')
+        response = yield push_tx_fn('push_tx', {hex_param: hex_data})
         data = response.json_value()
         self.assertTrue(data['success'])
 
     @inlineCallbacks
-    def test_invalid_params(self):
+    def _run_invalid_params_test(self, is_post):
+        push_tx_fn = self.web.post if is_post else self.web.get
+        hex_param = 'hex_tx' if is_post else b'hex_tx'
+
         # Missing hex
-        response = yield self.web.get('push_tx')
+        response = yield push_tx_fn('push_tx')
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # Missing hex 2
+        response = yield push_tx_fn('push_tx', {})
         data = response.json_value()
         self.assertFalse(data['success'])
 
         # Invalid hex
-        response = yield self.web.post('push_tx', {'hex_tx': 'XXXX'})
+        invalid_hex_data = 'XXXX' if is_post else b'XXXX'
+        response = yield push_tx_fn('push_tx', {hex_param: invalid_hex_data})
         data = response.json_value()
         self.assertFalse(data['success'])
+
+    def test_push_tx_get(self):
+        self._run_push_tx_test(False)
+
+    def test_push_tx_post(self):
+        self._run_push_tx_test(True)
+
+    def test_invalid_params_get(self):
+        self._run_invalid_params_test(False)
+
+    def test_invalid_params_post(self):
+        self._run_invalid_params_test(True)
