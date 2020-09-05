@@ -107,7 +107,7 @@ class PushTxResource(resource.Resource):
         if not body_content:
             return error_ret
 
-        data = json_loadb(request.content.read())
+        data = json_loadb(body_content)
 
         # Need to do that because json_loadb returns an object, which is not compatible with Dict[str, Any]
         data = cast(Dict[str, Any], data)
