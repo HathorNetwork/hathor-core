@@ -64,7 +64,7 @@ class BasicTransaction(unittest.TestCase):
         output = TxOutput(value, script)
         tx = Transaction(inputs=[_input], outputs=[output], storage=self.tx_storage)
 
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx.get_sighash_all()
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
@@ -91,7 +91,7 @@ class BasicTransaction(unittest.TestCase):
         tx = Transaction(inputs=[_input], outputs=[output], storage=self.tx_storage,
                          timestamp=self.last_block.timestamp + 1)
 
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx.get_sighash_all()
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, private_key_random)
         data_wrong = P2PKH.create_input_data(public_bytes, signature)
         _input.data = data_wrong
@@ -140,7 +140,7 @@ class BasicTransaction(unittest.TestCase):
 
         tx = Transaction(nonce=100, inputs=[_input], outputs=[output], parents=parents, storage=self.tx_storage)
 
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx.get_sighash_all()
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
 
@@ -231,7 +231,7 @@ class BasicTransaction(unittest.TestCase):
         tx = Transaction(weight=1, inputs=[_input], outputs=[output], parents=parents,
                          storage=self.tx_storage, timestamp=self.last_block.timestamp + 1)
 
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx.get_sighash_all()
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
 
@@ -304,7 +304,7 @@ class BasicTransaction(unittest.TestCase):
         _input = TxInput(genesis_block.hash, len(genesis_block.outputs) + 1, b'')
         tx = Transaction(weight=1, inputs=[_input], outputs=[output], parents=parents, storage=self.tx_storage)
 
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx.get_sighash_all()
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         data = P2PKH.create_input_data(public_bytes, signature)
         tx.inputs[0].data = data
@@ -345,7 +345,7 @@ class BasicTransaction(unittest.TestCase):
         tx = Transaction(weight=1, inputs=[_input, _input], outputs=outputs, parents=parents,
                          storage=self.tx_storage, timestamp=self.last_block.timestamp + 1)
 
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx.get_sighash_all()
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
@@ -367,7 +367,7 @@ class BasicTransaction(unittest.TestCase):
         tx = Transaction(weight=1, inputs=[_input], outputs=[output], parents=parents,
                          storage=self.tx_storage, timestamp=self.last_block.timestamp + 1)
 
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx.get_sighash_all()
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
@@ -388,7 +388,7 @@ class BasicTransaction(unittest.TestCase):
         tx = Transaction(inputs=[_input], outputs=[output], parents=parents, storage=self.tx_storage)
         tx.weight = float('NaN')
 
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx.get_sighash_all()
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
@@ -411,7 +411,7 @@ class BasicTransaction(unittest.TestCase):
         tx = Transaction(inputs=[_input], outputs=[output], parents=parents, storage=self.tx_storage)
         tx.weight = float('inf')
 
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx.get_sighash_all()
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
@@ -434,7 +434,7 @@ class BasicTransaction(unittest.TestCase):
         tx = Transaction(weight=1, inputs=[_input], outputs=[output], parents=parents,
                          storage=self.tx_storage, timestamp=self.last_block.timestamp + 1)
 
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx.get_sighash_all()
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
@@ -524,9 +524,6 @@ class BasicTransaction(unittest.TestCase):
         tx2.weight = 100
         with self.assertRaises(PowError):
             tx2.verify_pow()
-
-        # Get sighashall is different with and without data
-        self.assertNotEqual(tx.get_sighash_all(), tx.get_sighash_all(clear_input_data=False))
 
         # Verify parent timestamps
         tx2.verify_parents()
@@ -695,7 +692,7 @@ class BasicTransaction(unittest.TestCase):
             parents=manager.get_new_tx_parents(),
             storage=manager.tx_storage,
         )
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx.get_sighash_all()
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         input_.data = P2PKH.create_input_data(public_bytes, signature)
         tx.resolve()
@@ -759,7 +756,7 @@ class BasicTransaction(unittest.TestCase):
         tx = Transaction(weight=1, inputs=[_input], outputs=[output], parents=parents,
                          storage=self.tx_storage, timestamp=self.last_block.timestamp + 1)
 
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx.get_sighash_all()
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
@@ -783,7 +780,7 @@ class BasicTransaction(unittest.TestCase):
         tx2 = Transaction(weight=1, inputs=[input1], outputs=[output1, output2], parents=parents,
                           storage=self.tx_storage, timestamp=self.last_block.timestamp + 2)
 
-        data_to_sign = tx2.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx2.get_sighash_all()
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         input1.data = P2PKH.create_input_data(public_bytes, signature)
 
@@ -806,7 +803,7 @@ class BasicTransaction(unittest.TestCase):
         tx3 = Transaction(weight=1, inputs=[input2], outputs=[output3], parents=parents,
                           storage=self.tx_storage, timestamp=self.last_block.timestamp + 3)
 
-        data_to_sign = tx3.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx3.get_sighash_all()
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         input2.data = P2PKH.create_input_data(public_bytes, signature)
 
@@ -819,6 +816,34 @@ class BasicTransaction(unittest.TestCase):
         self.assertEqual(len(self.tx_storage.wallet_index.index[address_b58]), wallet_index_count + 3)
         self.assertEqual(len(self.tx_storage.wallet_index.index[output3_address_b58]), 1)
         self.assertEqual(len(self.tx_storage.wallet_index.index[new_address_b58]), 1)
+
+    def test_sighash_cache(self):
+        from unittest import mock
+
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+        output = TxOutput(5, script)
+        tx = Transaction(outputs=[output], storage=self.tx_storage)
+
+        with mock.patch('hathor.transaction.transaction.bytearray') as mocked:
+            for _ in range(10):
+                tx.get_sighash_all()
+
+            mocked.assert_called_once()
+
+    def test_sighash_data_cache(self):
+        from unittest import mock
+
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+        output = TxOutput(5, script)
+        tx = Transaction(outputs=[output], storage=self.tx_storage)
+
+        with mock.patch('hathor.transaction.transaction.hashlib') as mocked:
+            for _ in range(10):
+                tx.get_sighash_all_data()
+
+            mocked.sha256.assert_called_once()
 
 
 if __name__ == '__main__':

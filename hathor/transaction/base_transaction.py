@@ -34,6 +34,7 @@ from hathor.transaction.exceptions import (
     DuplicatedParents,
     IncorrectParents,
     InvalidOutputValue,
+    InvalidToken,
     ParentDoesNotExist,
     PowError,
     TimestampError,
@@ -515,6 +516,25 @@ class BaseTransaction(ABC):
         if len(self.outputs) > MAX_NUM_OUTPUTS:
             raise TooManyOutputs('Maximum number of outputs exceeded')
 
+    def verify_outputs(self) -> None:
+        """Verify there are no hathor authority UTXOs and outputs are all positive
+
+        :raises InvalidToken: when there's a hathor authority utxo
+        :raises InvalidOutputValue: output has negative value
+        :raises TooManyOutputs: when there are too many outputs
+        """
+        self.verify_number_of_outputs()
+        for index, output in enumerate(self.outputs):
+            # no hathor authority UTXO
+            if (output.get_token_index() == 0) and output.is_token_authority():
+                raise InvalidToken('Cannot have authority UTXO for hathor tokens: {}'.format(
+                    output.to_human_readable()))
+
+            # output value must be positive
+            if output.value <= 0:
+                raise InvalidOutputValue('Output value must be a positive integer. Value: {} and index: {}'.format(
+                    output.value, index))
+
     def resolve(self, update_time: bool = True) -> bool:
         """Run a CPU mining looking for the nonce that solves the proof-of-work
 
@@ -916,20 +936,17 @@ class TxInput:
         ret += self.data
         return ret
 
-    def get_sighash_bytes(self, clear_data: bool) -> bytes:
-        """Return a serialization of the input for the sighash
+    def get_sighash_bytes(self) -> bytes:
+        """Return a serialization of the input for the sighash. It always clears the input data.
 
         :return: Serialization of the input
         :rtype: bytes
         """
-        if not clear_data:
-            return bytes(self)
-        else:
-            ret = bytearray()
-            ret += self.tx_id
-            ret += int_to_bytes(self.index, 1)
-            ret += int_to_bytes(0, 2)
-            return bytes(ret)
+        ret = bytearray()
+        ret += self.tx_id
+        ret += int_to_bytes(self.index, 1)
+        ret += int_to_bytes(0, 2)
+        return bytes(ret)
 
     @classmethod
     def create_from_bytes(cls, buf: bytes) -> Tuple['TxInput', bytes]:

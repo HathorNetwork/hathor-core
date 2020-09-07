@@ -418,7 +418,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
             storage=self.manager.tx_storage,
             timestamp=int(self.manager.reactor.seconds())
         )
-        data_to_sign = tx2.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx2.get_sighash_all()
         public_bytes, signature = self.manager.wallet.get_input_aux_data(
                                       data_to_sign,
                                       self.manager.wallet.get_private_key(address_b58)

@@ -16,7 +16,6 @@ limitations under the License.
 
 import base64
 import datetime
-import hashlib
 import re
 import struct
 from enum import IntEnum
@@ -917,10 +916,8 @@ def op_checksig(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     assert isinstance(pubkey, bytes)
     assert isinstance(signature, bytes)
     public_key = get_public_key_from_bytes_compressed(pubkey)
-    data_to_sign = extras.tx.get_sighash_all()
-    hashed_data = hashlib.sha256(data_to_sign).digest()
     try:
-        public_key.verify(signature, hashed_data, ec.ECDSA(hashes.SHA256()))
+        public_key.verify(signature, extras.tx.get_sighash_all_data(), ec.ECDSA(hashes.SHA256()))
         # valid, push true to stack
         stack.append(1)
     except InvalidSignature:

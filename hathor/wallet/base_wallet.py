@@ -224,7 +224,7 @@ class BaseWallet:
             tx_inputs.append(TxInput(wtxin.tx_id, wtxin.index, b''))
 
         tx = cls(inputs=tx_inputs, outputs=tx_outputs, tokens=tokens, timestamp=timestamp)
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx.get_sighash_all()
 
         for txin, privkey in zip(tx.inputs, private_keys):
             public_key_bytes, signature = self.get_input_aux_data(data_to_sign, privkey)
@@ -403,7 +403,7 @@ class BaseWallet:
         :return: there's no return. This function modifies the tx given to it
         :rtype: None
         """
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx.get_sighash_all()
 
         for _input, address58 in self.match_inputs(tx.inputs, tx_storage):
             if address58:
