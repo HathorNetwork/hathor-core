@@ -194,6 +194,63 @@ PushTxResource.openapi = {
                     }
                 }
             }
+        },
+        'get': {
+            'tags': ['transaction'],
+            'operationId': 'push_tx',
+            'summary': 'Push transaction to the network',
+            'parameters': [
+                {
+                    'name': 'hex_tx',
+                    'in': 'query',
+                    'description': 'Transaction to be pushed in hexadecimal',
+                    'required': True,
+                    'schema': {
+                        'type': 'string'
+                    }
+                }
+            ],
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success',
+                                    'value': {
+                                        'success': True
+                                    }
+                                },
+                                'error1': {
+                                    'summary': 'Transaction invalid',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'This transaction is invalid.',
+                                        'can_force': False
+                                    }
+                                },
+                                'error2': {
+                                    'summary': 'Error propagating transaction',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Error message',
+                                        'can_force': True
+                                    }
+                                },
+                                'error3': {
+                                    'summary': 'Double spending error',
+                                    'value': {
+                                        'success': False,
+                                        'message': ('Invalid transaction. At least one of your inputs has'
+                                                    'already been spent.')
+                                    }
+                                },
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
