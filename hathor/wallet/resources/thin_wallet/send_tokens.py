@@ -1,4 +1,3 @@
-import json
 import struct
 from functools import partial
 from typing import TYPE_CHECKING, Any, Optional
@@ -17,8 +16,10 @@ from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.exceptions import TxValidationError
+from hathor.util import json_dumpb, json_loadb
 
 if TYPE_CHECKING:
+    from hathor.manager import HathorManager
     from hathor.transaction import BaseTransaction
 
 settings = HathorSettings()
@@ -36,7 +37,7 @@ class SendTokensResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
         self.sleep_seconds = 0
@@ -62,7 +63,7 @@ class SendTokensResource(resource.Resource):
             )
 
         try:
-            post_data = json.loads(request.content.read().decode('utf-8'))
+            post_data = json_loadb(request.content.read())
         except AttributeError:
             return self.return_POST(
                 False,
@@ -285,9 +286,9 @@ class SendTokensResource(resource.Resource):
         if tx:
             ret['tx'] = tx.to_json()
 
-        return json.dumps(ret, indent=4).encode('utf-8')
+        return json_dumpb(ret)
 
-    def render_OPTIONS(self, request):
+    def render_OPTIONS(self, request) -> int:
         return render_options(request)
 
 

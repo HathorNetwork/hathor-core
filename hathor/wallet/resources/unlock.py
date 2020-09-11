@@ -1,11 +1,15 @@
-import json
-from typing import Any, Dict
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.util import JsonDict, json_dumpb, json_loadb
 from hathor.wallet.exceptions import IncorrectPassword, InvalidWords
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager
 
 
 @register_resource
@@ -16,11 +20,11 @@ class UnlockWalletResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         # Important to have the manager so we can know the wallet
         self.manager = manager
 
-    def render_POST(self, request):
+    def render_POST(self, request: Request) -> bytes:
         """ Tries to unlock the wallet
             One parameter is expected in request.args
 
@@ -32,7 +36,7 @@ class UnlockWalletResource(resource.Resource):
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
-        post_data = json.loads(request.content.read().decode('utf-8'))
+        post_data = json_loadb(request.content.read())
 
         if 'password' in post_data:
             # Wallet keypair
@@ -46,8 +50,8 @@ class UnlockWalletResource(resource.Resource):
         if 'words' in data:
             words = data['words']
 
-        passphrase = bytes(data['passphrase'], 'utf-8')
-        ret: Dict[str, Any] = {'success': True}
+        passphrase = data['passphrase'].encode('utf-8')
+        ret: JsonDict = {'success': True}
 
         try:
             ret_words = self.manager.wallet.unlock(self.manager.tx_storage, words, passphrase)
@@ -58,11 +62,11 @@ class UnlockWalletResource(resource.Resource):
             ret['success'] = False
             ret['message'] = 'Invalid words'
 
-        return json.dumps(ret, indent=4).encode('utf-8')
+        return json_dumpb(ret)
 
     def unlock_wallet_keypair(self, data):
-        password = bytes(data['password'], 'utf-8')
-        ret: Dict[str, Any] = {}
+        password = data['password'].encode('utf-8')
+        ret: JsonDict = {}
         success = True
 
         try:
@@ -72,9 +76,9 @@ class UnlockWalletResource(resource.Resource):
             ret['message'] = 'Invalid password'
 
         ret['success'] = success
-        return json.dumps(ret, indent=4).encode('utf-8')
+        return json_dumpb(ret)
 
-    def render_OPTIONS(self, request):
+    def render_OPTIONS(self, request) -> int:
         return render_options(request)
 
 

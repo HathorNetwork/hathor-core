@@ -1,10 +1,15 @@
-import json
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import get_missing_params_msg, parse_get_arguments, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
+from hathor.util import json_dumpb
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager
 
 settings = HathorSettings()
 
@@ -20,11 +25,11 @@ class DashboardTransactionResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         """ Get request to /dashboard-tx/ that return a list of blocks and tx
             We expect two GET parameters: 'block' and 'tx'
 
@@ -44,18 +49,18 @@ class DashboardTransactionResource(resource.Resource):
         try:
             block_count = int(parsed['args']['block'])
         except ValueError:
-            return json.dumps({
+            return json_dumpb({
                 'success': False,
                 'message': 'Invalid parameter, cannot convert to int: block'
-            }).encode('utf-8')
+            })
 
         try:
             tx_count = int(parsed['args']['tx'])
         except ValueError:
-            return json.dumps({
+            return json_dumpb({
                 'success': False,
                 'message': 'Invalid parameter, cannot convert to int: tx'
-            }).encode('utf-8')
+            })
 
         # Restrict counts
         block_count = min(block_count, settings.MAX_DASHBOARD_COUNT)
@@ -73,7 +78,7 @@ class DashboardTransactionResource(resource.Resource):
             'blocks': serialized_blocks,
         }
 
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 DashboardTransactionResource.openapi = {

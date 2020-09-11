@@ -2,6 +2,7 @@ import enum
 
 from structlog import get_logger
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
@@ -40,7 +41,7 @@ class GetBlockTemplateResource(resource.Resource):
         self.log = logger.new()
 
     @api_catch_exceptions
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         """ GET request for /get_block_template/
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
@@ -92,7 +93,7 @@ class SubmitBlockResource(resource.Resource):
         self.log = logger.new()
 
     @api_catch_exceptions
-    def render_POST(self, request):
+    def render_POST(self, request: Request) -> bytes:
         """ POST request for /submit_block/
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')

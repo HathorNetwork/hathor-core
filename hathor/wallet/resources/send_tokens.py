@@ -1,5 +1,4 @@
-import json
-from typing import Any, Dict, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 from twisted.internet import threads
 from twisted.web import resource
@@ -11,8 +10,12 @@ from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TxValidationError
+from hathor.util import JsonDict, json_dumpb, json_loadb
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, InvalidAddress, PrivateKeyNotFound
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager
 
 
 @register_resource
@@ -23,11 +26,11 @@ class SendTokensResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
-    def render_POST(self, request):
+    def render_POST(self, request: Request) -> bytes:
         """ POST request for /wallet/send_tokens/
             We expect 'data' as request args
             'data': stringified json with an array of inputs and array of outputs
@@ -39,7 +42,7 @@ class SendTokensResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
 
-        post_data = json.loads(request.content.read().decode('utf-8'))
+        post_data = json_loadb(request.content.read())
         data = post_data['data']
 
         outputs = []
@@ -99,7 +102,7 @@ class SendTokensResource(resource.Resource):
         from twisted.web.server import NOT_DONE_YET
         return NOT_DONE_YET
 
-    def _render_POST_thread(self, values: Dict[str, Any], request: Request) -> Union[bytes, Transaction]:
+    def _render_POST_thread(self, values: JsonDict, request: Request) -> Union[bytes, Transaction]:
         tx = self.manager.wallet.prepare_transaction(Transaction, values['inputs'],
                                                      values['outputs'], values['timestamp'])
         tx.storage = values['storage']
@@ -112,7 +115,7 @@ class SendTokensResource(resource.Resource):
         tx.verify()
         return tx
 
-    def _cb_tx_resolve(self, tx, request):
+    def _cb_tx_resolve(self, tx, request: Request) -> None:
         """ Called when `_render_POST_thread` finishes
         """
         message = ''
@@ -127,7 +130,7 @@ class SendTokensResource(resource.Resource):
         request.write(result)
         request.finish()
 
-    def _err_tx_resolve(self, reason, request):
+    def _err_tx_resolve(self, reason, request: Request) -> None:
         """ Called when an error occur in `_render_POST_thread`
         """
         message = ''
@@ -154,9 +157,9 @@ class SendTokensResource(resource.Resource):
         }
         if tx:
             ret['tx'] = tx.to_json()
-        return json.dumps(ret, indent=4).encode('utf-8')
+        return json_dumpb(ret)
 
-    def render_OPTIONS(self, request):
+    def render_OPTIONS(self, request: Request) -> int:
         return render_options(request)
 
 

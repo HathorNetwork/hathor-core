@@ -1,6 +1,5 @@
-import json
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Dict
 
 from twisted.web import resource
 from twisted.web.http import Request
@@ -10,9 +9,11 @@ from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.transaction.scripts import parse_address_script
+from hathor.util import JsonDict, json_dumpb
 from hathor.wallet.exceptions import InvalidAddress
 
 if TYPE_CHECKING:
+    from hathor.manager import HathorManager  # noqa: F401
     from hathor.transaction import TxOutput
 
 settings = HathorSettings()
@@ -41,7 +42,7 @@ class AddressBalanceResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         self.manager = manager
 
     def has_address(self, output: 'TxOutput', requested_address: str) -> bool:
@@ -70,7 +71,7 @@ class AddressBalanceResource(resource.Resource):
 
         if not wallet_index or not tokens_index:
             request.setResponseCode(503)
-            return json.dumps({'success': False}, indent=4).encode('utf-8')
+            return json_dumpb({'success': False})
 
         if b'address' in request.args:
             requested_address = request.args[b'address'][0].decode('utf-8')
@@ -81,10 +82,10 @@ class AddressBalanceResource(resource.Resource):
             # Check if address is valid
             decode_address(requested_address)
         except InvalidAddress:
-            return json.dumps({
+            return json_dumpb({
                 'success': False,
                 'message': 'Invalid \'address\' parameter'
-            }).encode('utf-8')
+            })
 
         tokens_data: Dict[bytes, TokenData] = defaultdict(TokenData)
         tx_hashes = wallet_index.get_from_address(requested_address)
@@ -107,7 +108,7 @@ class AddressBalanceResource(resource.Resource):
                         token_uid = tx.get_token_uid(tx_output.get_token_index())
                         tokens_data[token_uid].received += tx_output.value
 
-        return_tokens_data: Dict[str, Dict[str, Any]] = {}
+        return_tokens_data: JsonDict = {}
         for token_uid in tokens_data.keys():
             if token_uid == settings.HATHOR_TOKEN_UID:
                 tokens_data[token_uid].name = settings.HATHOR_TOKEN_NAME
@@ -129,7 +130,7 @@ class AddressBalanceResource(resource.Resource):
             'total_transactions': len(tx_hashes),
             'tokens_data': return_tokens_data
         }
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 AddressBalanceResource.openapi = {

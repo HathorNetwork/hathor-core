@@ -1,11 +1,16 @@
-import json
 import time
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
+from twisted.web.http import Request
 
 import hathor
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.util import json_dumpb
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager  # noqa: F401
 
 
 @register_resource
@@ -17,10 +22,10 @@ class StatusResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         self.manager = manager
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
@@ -35,7 +40,7 @@ class StatusResource(resource.Resource):
             remote = conn.transport.getPeer()
             handshaking_peers.append({
                 'address': '{}:{}'.format(remote.host, remote.port),
-                'state': conn.state.state_name,
+                'state': conn.state.state_name if conn.state is not None else None,
                 'uptime': time.time() - conn.connection_time,
                 'app_version': conn.app_version,
             })
@@ -47,15 +52,15 @@ class StatusResource(resource.Resource):
             for name, plugin in conn.state.plugins.items():
                 status[name] = plugin.get_status()
             connected_peers.append({
-                'id': conn.peer.id,
+                'id': conn.peer.id if conn.peer is not None else None,
                 'app_version': conn.app_version,
                 'uptime': time.time() - conn.connection_time,
                 'address': '{}:{}'.format(remote.host, remote.port),
-                'state': conn.state.state_name,
+                'state': conn.state.state_name if conn.state is not None else None,
                 # 'received_bytes': conn.received_bytes,
                 'last_message': time.time() - conn.last_message,
                 'plugins': status,
-                'warning_flags': [flag.value for flag in conn.warning_flags],
+                'warning_flags': [flag.value if flag is not None else None for flag in conn.warning_flags],
             })
 
         known_peers = []
@@ -63,7 +68,7 @@ class StatusResource(resource.Resource):
             known_peers.append({
                 'id': peer.id,
                 'entrypoints': peer.entrypoints,
-                'flags': [flag.value for flag in peer.flags],
+                'flags': [flag.value if flag is not None else None for flag in peer.flags],
             })
 
         app = 'Hathor v{}'.format(hathor.__version__)
@@ -71,7 +76,7 @@ class StatusResource(resource.Resource):
             'server': {
                 'id': self.manager.connections.my_peer.id,
                 'app_version': app,
-                'state': self.manager.state.value,
+                'state': self.manager.state.value if self.manager.state is not None else None,
                 'network': self.manager.network,
                 'uptime': time.time() - self.manager.start_time,
                 'entrypoints': self.manager.connections.my_peer.entrypoints,
@@ -87,7 +92,7 @@ class StatusResource(resource.Resource):
                 'latest_timestamp': self.manager.tx_storage.latest_timestamp,
             }
         }
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 StatusResource.openapi = {

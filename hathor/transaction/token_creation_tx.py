@@ -15,7 +15,7 @@ limitations under the License.
 """
 
 from struct import error as StructError, pack
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from hathor import protos
 from hathor.conf import HathorSettings
@@ -24,6 +24,7 @@ from hathor.transaction.exceptions import InvalidToken, TransactionDataError
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
 from hathor.transaction.transaction import TokenInfo
 from hathor.transaction.util import clean_token_string, int_to_bytes, unpack, unpack_len
+from hathor.util import JsonDict
 
 settings = HathorSettings()
 
@@ -221,7 +222,7 @@ class TokenCreationTransaction(Transaction):
 
         return decoded_name, decoded_symbol, buf
 
-    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
+    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> JsonDict:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['token_name'] = self.token_name
         json['token_symbol'] = self.token_symbol

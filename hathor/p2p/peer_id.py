@@ -1,8 +1,7 @@
 import base64
 import hashlib
-import json
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Generator, List, Optional, Set
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
@@ -15,6 +14,7 @@ from twisted.internet.ssl import Certificate, CertificateOptions, TLSVersion, tr
 
 from hathor.conf import HathorSettings
 from hathor.p2p.utils import connection_string_to_host, discover_dns, generate_certificate
+from hathor.util import JsonDict, json_dumpb
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
@@ -142,7 +142,7 @@ class PeerId:
             return True
 
     @classmethod
-    def create_from_json(cls, data: Dict[str, Any]) -> 'PeerId':
+    def create_from_json(cls, data: JsonDict) -> 'PeerId':
         """ Create a new PeerId from a JSON.
 
         It is used both to load a PeerId from disk and to create a PeerId
@@ -190,7 +190,7 @@ class PeerId:
             if public_der1 != public_der2:
                 raise InvalidPeerIdException('private/public pair does not match')
 
-    def to_json(self, include_private_key: bool = False) -> Dict[str, Any]:
+    def to_json(self, include_private_key: bool = False) -> JsonDict:
         """ Return a JSON serialization of the object.
 
         By default, it will not include the private key. If you would like to add
@@ -220,9 +220,8 @@ class PeerId:
         """ Save the object to a JSON file.
         """
         data = self.to_json(include_private_key=True)
-        fp = open(path, 'w')
-        json.dump(data, fp, indent=4)
-        fp.close()
+        with open(path, 'wb') as f:
+            f.write(json_dumpb(data))
 
     def update_retry_timestamp(self, now: int) -> None:
         """ Updates timestamp for next retry.

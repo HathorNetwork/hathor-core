@@ -1,10 +1,10 @@
-import json
-
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.manager import HathorManager
+from hathor.util import json_dumpb
 
 
 @register_resource
@@ -19,7 +19,7 @@ class MiningStatsResource(resource.Resource):
     def __init__(self, manager: HathorManager):
         self.manager = manager
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         """ GET request for /miners/
             Returns statistics about connected miners
 
@@ -30,9 +30,9 @@ class MiningStatsResource(resource.Resource):
 
         if not self.manager.stratum_factory:
             request.setResponseCode(503)
-            return json.dumps({'success': False}, indent=4).encode('utf-8')
+            return json_dumpb({'success': False})
 
-        return json.dumps(self.manager.stratum_factory.get_stats_resource()).encode('utf-8')
+        return json_dumpb(self.manager.stratum_factory.get_stats_resource())
 
 
 MiningStatsResource.openapi = {

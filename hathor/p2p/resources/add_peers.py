@@ -1,10 +1,16 @@
 import json
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.p2p.peer_discovery import BootstrapPeerDiscovery
+from hathor.util import json_dumpb, json_loadb
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager  # noqa: F401
 
 
 @register_resource
@@ -15,10 +21,10 @@ class AddPeersResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         self.manager = manager
 
-    def render_POST(self, request):
+    def render_POST(self, request: Request) -> bytes:
         """ Add p2p peers
             It expects a list of peers, in the format protocol://host:port (tcp://172.121.212.12:40403)
         """
@@ -26,15 +32,15 @@ class AddPeersResource(resource.Resource):
         set_cors(request, 'POST')
 
         try:
-            peers = json.loads(request.content.read().decode('utf-8'))
+            peers = json_loadb(request.content.read())
         except (json.JSONDecodeError, AttributeError):
-            return json.dumps({'success': False, 'message': 'Invalid format for post data'}).encode('utf-8')
+            return json_dumpb({'success': False, 'message': 'Invalid format for post data'})
 
         if not isinstance(peers, list):
-            return json.dumps({
+            return json_dumpb({
                 'success': False,
                 'message': 'Invalid format for post data. It was expected a list of strings.'
-            }).encode('utf-8')
+            })
 
         known_peers = self.manager.connections.peer_storage.values()
 
@@ -59,9 +65,9 @@ class AddPeersResource(resource.Resource):
         pd.discover_and_connect(self.manager.connections.connect_to)
 
         ret = {'success': True, 'peers': filtered_peers}
-        return json.dumps(ret, indent=4).encode('utf-8')
+        return json_dumpb(ret)
 
-    def render_OPTIONS(self, request):
+    def render_OPTIONS(self, request: Request) -> int:
         return render_options(request)
 
 

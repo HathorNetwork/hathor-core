@@ -1,14 +1,14 @@
 import base64
 import glob
-import json
 import os
 import re
-from typing import TYPE_CHECKING, Any, Dict, Iterator, Optional
+from typing import TYPE_CHECKING, Iterator, Optional
 
 from hathor.conf import HathorSettings
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
 from hathor.transaction.transaction_metadata import TransactionMetadata
+from hathor.util import JsonDict, json_dumpb, json_loadb
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
@@ -85,19 +85,19 @@ class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncF
         filepath = self.generate_filepath(hash_bytes)
         return os.path.isfile(filepath)
 
-    def save_to_json(self, filepath: str, data: Dict[str, Any]) -> None:
-        with open(filepath, 'w') as json_file:
-            json_file.write(json.dumps(data))
+    def save_to_json(self, filepath: str, data: JsonDict) -> None:
+        with open(filepath, 'wb') as json_file:
+            json_file.write(json_dumpb(data))
 
-    def load_from_json(self, filepath: str, error: Exception) -> Dict[str, Any]:
+    def load_from_json(self, filepath: str, error: Exception) -> JsonDict:
         if os.path.isfile(filepath):
-            with open(filepath, 'r') as json_file:
-                dict_data = json.loads(json_file.read())
+            with open(filepath, 'rb') as json_file:
+                dict_data = json_loadb(json_file.read())
                 return dict_data
         else:
             raise error
 
-    def load(self, data: Dict[str, Any]) -> 'BaseTransaction':
+    def load(self, data: JsonDict) -> 'BaseTransaction':
         from hathor.transaction.aux_pow import BitcoinAuxPow
         from hathor.transaction.base_transaction import TxOutput, TxInput, TxVersion
 

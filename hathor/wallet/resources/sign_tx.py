@@ -1,12 +1,17 @@
-import json
 import re
 import struct
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.transaction import Transaction
+from hathor.util import json_dumpb
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager  # noqa: F401
 
 
 @register_resource
@@ -18,10 +23,10 @@ class SignTxResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         self.manager = manager
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         """ Get request /decode_tx/ that returns the signed tx, if success
 
             Expects 'hex_tx' as GET parameter
@@ -62,7 +67,7 @@ class SignTxResource(resource.Resource):
 
         else:
             data = {'success': False, 'message': 'Transaction invalid'}
-        return json.dumps(data).encode('utf-8')
+        return json_dumpb(data)
 
 
 SignTxResource.openapi = {

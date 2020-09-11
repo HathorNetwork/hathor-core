@@ -1,4 +1,3 @@
-import json
 from typing import TYPE_CHECKING
 
 from twisted.web import resource
@@ -9,9 +8,11 @@ from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.transaction.scripts import parse_address_script
+from hathor.util import json_dumpb
 from hathor.wallet.exceptions import InvalidAddress
 
 if TYPE_CHECKING:
+    from hathor.manager import HathorManager  # noqa: F401
     from hathor.transaction import BaseTransaction
 
 settings = HathorSettings()
@@ -25,7 +26,7 @@ class AddressSearchResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         self.manager = manager
 
     def has_token_and_address(self, tx: 'BaseTransaction', address: str, token: bytes) -> bool:
@@ -75,7 +76,7 @@ class AddressSearchResource(resource.Resource):
 
         if not wallet_index:
             request.setResponseCode(503)
-            return json.dumps({'success': False}, indent=4).encode('utf-8')
+            return json_dumpb({'success': False}, indent=4)
 
         if b'address' not in request.args:
             return get_missing_params_msg('address')
@@ -88,18 +89,18 @@ class AddressSearchResource(resource.Resource):
             # Check if address is valid
             decode_address(address)
         except InvalidAddress:
-            return json.dumps({
+            return json_dumpb({
                 'success': False,
                 'message': 'Invalid \'address\' parameter'
-            }).encode('utf-8')
+            })
 
         try:
             count = min(int(request.args[b'count'][0]), settings.MAX_TX_COUNT)
         except ValueError:
-            return json.dumps({
+            return json_dumpb({
                 'success': False,
                 'message': 'Invalid \'count\' parameter, expected an int'
-            }).encode('utf-8')
+            })
 
         token_uid_bytes = None
         if b'token' in request.args:
@@ -109,10 +110,10 @@ class AddressSearchResource(resource.Resource):
             try:
                 token_uid_bytes = bytes.fromhex(token_uid)
             except ValueError:
-                return json.dumps({
+                return json_dumpb({
                     'success': False,
                     'message': 'Token uid is not a valid hexadecimal value.'
-                }).encode('utf-8')
+                })
 
         hashes = wallet_index.get_from_address(address)
         # XXX To do a timestamp sorting, so the pagination works better
@@ -136,10 +137,10 @@ class AddressSearchResource(resource.Resource):
             page = request.args[b'page'][0].decode('utf-8')
             if page != 'previous' and page != 'next':
                 # Invalid value for page parameter
-                return json.dumps({
+                return json_dumpb({
                     'success': False,
                     'message': 'Invalid value for \'page\' parameter',
-                }, indent=4).encode('utf-8')
+                }, indent=4)
 
             ref_hash = request.args[b'hash'][0].decode('utf-8')
             # Index where the reference hash is
@@ -148,10 +149,10 @@ class AddressSearchResource(resource.Resource):
                     break
             else:
                 # ref_hash is not in the list
-                return json.dumps({
+                return json_dumpb({
                     'success': False,
                     'message': 'Invalid hash {}'.format(ref_hash)
-                }, indent=4).encode('utf-8')
+                }, indent=4)
 
             if page == 'next':
                 # User clicked on 'Next' button, so the ref_hash is the last hash of the list
@@ -179,7 +180,7 @@ class AddressSearchResource(resource.Resource):
             'has_more': has_more,
             'total': len(sorted_transactions),
         }
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data, indent=4)
 
 
 AddressSearchResource.openapi = {

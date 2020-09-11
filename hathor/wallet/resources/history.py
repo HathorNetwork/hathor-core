@@ -1,10 +1,15 @@
-import json
 import math
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.util import json_dumpb
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager
 
 
 @register_resource
@@ -15,10 +20,10 @@ class HistoryResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         self.manager = manager
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         """ GET request for /wallet/history/
             Expects 'page' and 'count' as request args
             'page' is the pagination number
@@ -45,7 +50,7 @@ class HistoryResource(resource.Resource):
             history.append(history_dict)
 
         data = {'history': history, 'total_pages': math.ceil(total / count)}
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 HistoryResource.openapi = {

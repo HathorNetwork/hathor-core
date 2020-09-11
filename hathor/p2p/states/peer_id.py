@@ -1,4 +1,3 @@
-import json
 from typing import TYPE_CHECKING, Any, Generator
 
 from twisted.internet.defer import inlineCallbacks
@@ -6,6 +5,7 @@ from twisted.internet.defer import inlineCallbacks
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.states.base import BaseState
+from hathor.util import json_dumps, json_loads
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
@@ -54,7 +54,7 @@ class PeerIdState(BaseState):
             'pubKey': my_peer.get_public_key(),
             'entrypoints': my_peer.entrypoints,
         }
-        self.send_message(ProtocolMessages.PEER_ID, json.dumps(hello))
+        self.send_message(ProtocolMessages.PEER_ID, json_dumps(hello))
 
     @inlineCallbacks
     def handle_peer_id(self, payload: str) -> Generator[Any, Any, None]:
@@ -63,7 +63,7 @@ class PeerIdState(BaseState):
         is considered established and ready to communicate.
         """
         protocol = self.protocol
-        data = json.loads(payload)
+        data = json_loads(payload)
 
         peer = PeerId.create_from_json(data)
         peer.validate()

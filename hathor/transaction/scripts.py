@@ -47,6 +47,7 @@ from hathor.transaction.exceptions import (
     TimeLocked,
     VerifyFailed,
 )
+from hathor.util import JsonDict
 
 settings = HathorSettings()
 
@@ -211,8 +212,8 @@ class P2PKH:
         self.address = address
         self.timelock = timelock
 
-    def to_human_readable(self) -> Dict[str, Any]:
-        ret: Dict[str, Any] = {}
+    def to_human_readable(self) -> JsonDict:
+        ret: JsonDict = {}
         ret['type'] = 'P2PKH'
         ret['address'] = self.address
         ret['timelock'] = self.timelock
@@ -304,13 +305,10 @@ class MultiSig:
         self.address = address
         self.timelock = timelock
 
-    def to_human_readable(self) -> Dict[str, Any]:
-        """ Decode MultiSig class to dict with its type and data
-
-            :return: Dict with MultiSig info
-            :rtype: Dict[str:]
+    def to_human_readable(self) -> JsonDict:
+        """ Decode MultiSig class to dict with its type and data.
         """
-        ret: Dict[str, Any] = {}
+        ret: JsonDict = {}
         ret['type'] = 'MultiSig'
         ret['address'] = self.address
         ret['timelock'] = self.timelock
@@ -442,8 +440,8 @@ class NanoContractMatchValues:
         self.value_dict = value_dict  # Dict[bytes, int]
         self.fallback_pubkey_hash = fallback_pubkey_hash
 
-    def to_human_readable(self) -> Dict[str, Any]:
-        ret: Dict[str, Any] = {}
+    def to_human_readable(self) -> JsonDict:
+        ret: JsonDict = {}
         ret['type'] = 'NanoContractMatchValues'
         ret['oracle_pubkey_hash'] = base64.b64encode(self.oracle_pubkey_hash).decode('utf-8')
         ret['min_timestamp'] = self.min_timestamp

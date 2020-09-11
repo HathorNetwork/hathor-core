@@ -33,6 +33,7 @@ from hathor.mining import BlockTemplate
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.transaction import BaseTransaction, Block, TransactionMetadata
 from hathor.transaction.storage import TransactionStorage
+from hathor.util import JsonDict
 
 logger = get_logger()
 
@@ -66,7 +67,7 @@ class IHathorClient(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def status(self) -> Dict[str, Any]:
+    async def status(self) -> JsonDict:
         """Get the parsed dict returned from `/v1a/status`, format described in `hathor.p2p.resources.status`"""
         raise NotImplementedError
 
@@ -131,7 +132,7 @@ class HathorClient(IHathorClient):
             major, minor, patch = ver.split('.')
             return (int(major), int(minor), int(patch))
 
-    async def status(self) -> Dict[str, Any]:
+    async def status(self) -> JsonDict:
         async with self.session.get(self._get_url('status')) as resp:
             return await resp.json()
 
@@ -289,7 +290,7 @@ class HathorClientStub(IHathorClient):
         major, minor, patch = __version__.split('.')
         return (int(major), int(minor), int(patch))
 
-    async def status(self) -> Dict[str, Any]:
+    async def status(self) -> JsonDict:
         return {}
 
     async def get_block_template(self, address: Optional[str] = None, merged_mining: bool = False) -> Block:
@@ -344,7 +345,7 @@ class MiningChannelStub(IMiningChannel):
             return None
 
 
-def create_tx_from_dict(data: Dict[str, Any], update_hash: bool = False,
+def create_tx_from_dict(data: JsonDict, update_hash: bool = False,
                         storage: Optional[TransactionStorage] = None) -> BaseTransaction:
     import base64
 

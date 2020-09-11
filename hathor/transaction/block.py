@@ -16,13 +16,14 @@ limitations under the License.
 
 import base64
 from struct import pack
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from hathor import protos
 from hathor.conf import HathorSettings
 from hathor.transaction import BaseTransaction, TxOutput, TxVersion
 from hathor.transaction.exceptions import BlockWithInputs, BlockWithTokensError, TransactionDataError
 from hathor.transaction.util import int_to_bytes, unpack, unpack_len
+from hathor.util import JsonDict
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -215,13 +216,13 @@ class Block(BaseTransaction):
         return settings.HATHOR_TOKEN_UID
 
     # TODO: maybe introduce convention on serialization methods names (e.g. to_json vs get_struct)
-    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
+    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> JsonDict:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['tokens'] = []
         json['data'] = base64.b64encode(self.data).decode('utf-8')
         return json
 
-    def to_json_extended(self) -> Dict[str, Any]:
+    def to_json_extended(self) -> JsonDict:
         json = super().to_json_extended()
         json['height'] = self.get_metadata().height
 

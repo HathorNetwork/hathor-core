@@ -1,5 +1,4 @@
-import json
-from typing import Set
+from typing import TYPE_CHECKING, Set
 
 from twisted.web import resource
 from twisted.web.http import Request
@@ -8,7 +7,11 @@ from hathor.api_util import get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
+from hathor.util import json_dumpb
 from hathor.wallet.exceptions import InvalidAddress
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager  # noqa: F401
 
 settings = HathorSettings()
 
@@ -21,7 +24,7 @@ class AddressHistoryResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         self.manager = manager
 
     def render_GET(self, request: Request) -> bytes:
@@ -77,7 +80,7 @@ class AddressHistoryResource(resource.Resource):
 
         if not self.manager.tx_storage.wallet_index:
             request.setResponseCode(503)
-            return json.dumps({'success': False}, indent=4).encode('utf-8')
+            return json_dumpb({'success': False})
 
         paginate = b'paginate' in request.args and request.args[b'paginate'][0].decode('utf-8') == 'true'
 
@@ -103,10 +106,10 @@ class AddressHistoryResource(resource.Resource):
                 ref_hash_bytes = bytes.fromhex(ref_hash)
             except ValueError:
                 # ref_hash is an invalid hex value
-                return json.dumps({
+                return json_dumpb({
                     'success': False,
                     'message': 'Invalid hash {}'.format(ref_hash)
-                }, indent=4).encode('utf-8')
+                })
 
         # Pagination variables
         has_more = False
@@ -128,10 +131,10 @@ class AddressHistoryResource(resource.Resource):
             try:
                 decode_address(address)
             except InvalidAddress:
-                return json.dumps({
+                return json_dumpb({
                     'success': False,
                     'message': 'The address {} is invalid'.format(address)
-                }).encode('utf-8')
+                })
 
             hashes = self.manager.tx_storage.wallet_index.get_sorted_from_address(address)
             start_index = 0
@@ -143,10 +146,10 @@ class AddressHistoryResource(resource.Resource):
                     start_index = hashes.index(ref_hash_bytes)
                 except ValueError:
                     # ref_hash is not in the list
-                    return json.dumps({
+                    return json_dumpb({
                         'success': False,
                         'message': 'Hash {} is not a transaction from the address {}.'.format(ref_hash, address)
-                    }, indent=4).encode('utf-8')
+                    })
 
             # Slice the hashes array from the start_index
             to_iterate = hashes[start_index:]
@@ -192,7 +195,7 @@ class AddressHistoryResource(resource.Resource):
             'first_hash': first_hash,
             'first_address': first_address
         }
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
     def deprecated_resource(self, request: Request) -> bytes:
         """ This resource is deprecated. It's here only to keep
@@ -209,10 +212,10 @@ class AddressHistoryResource(resource.Resource):
             try:
                 decode_address(address)
             except InvalidAddress:
-                return json.dumps({
+                return json_dumpb({
                     'success': False,
                     'message': 'The address {} is invalid'.format(address)
-                }).encode('utf-8')
+                })
 
             for tx_hash in self.manager.tx_storage.wallet_index.get_from_address(address):
                 tx = self.manager.tx_storage.get_transaction(tx_hash)
@@ -221,7 +224,7 @@ class AddressHistoryResource(resource.Resource):
                     history.append(tx.to_json_extended())
 
         data = {'history': history}
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 AddressHistoryResource.openapi = {

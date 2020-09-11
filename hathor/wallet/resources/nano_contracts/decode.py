@@ -1,13 +1,18 @@
-import json
 import re
 import struct
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.transaction import Transaction
 from hathor.transaction.scripts import NanoContractMatchValues
+from hathor.util import json_dumpb
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager  # noqa: F401
 
 
 @register_resource
@@ -18,10 +23,10 @@ class NanoContractDecodeResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         self.manager = manager
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         """ Get request /wallet/nano-contract/decode/ that returns the tx decoded, if success
 
         Expects 'hex_tx' as GET parameter
@@ -44,7 +49,7 @@ class NanoContractDecodeResource(resource.Resource):
                 tx = Transaction.create_from_struct(tx_bytes)
             except struct.error:
                 data = {'success': False, 'message': 'Invalid transaction'}
-                return json.dumps(data).encode('utf-8')
+                return json_dumpb(data)
 
             outputs = []
             nano_contract = None
@@ -71,7 +76,7 @@ class NanoContractDecodeResource(resource.Resource):
             }
         else:
             data = {'success': False, 'message': 'Invalid transaction'}
-        return json.dumps(data).encode('utf-8')
+        return json_dumpb(data)
 
 
 NanoContractDecodeResource.openapi = {

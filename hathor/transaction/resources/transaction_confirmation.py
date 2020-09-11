@@ -1,11 +1,15 @@
-import json
 from math import log
-from typing import Any, Dict
+from typing import TYPE_CHECKING
 
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import get_missing_params_msg, set_cors, validate_tx_hash
 from hathor.cli.openapi_files.register import register_resource
+from hathor.util import JsonDict, json_dumpb
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager
 
 
 @register_resource
@@ -16,7 +20,7 @@ class TransactionAccWeightResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager'):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
@@ -32,7 +36,7 @@ class TransactionAccWeightResource(resource.Resource):
             return {'success': False, 'message': 'not allowed on blocks'}
 
         meta = tx.get_metadata()
-        data: Dict[str, Any] = {'success': True}
+        data: JsonDict = {'success': True}
 
         if meta.first_block:
             block = self.manager.tx_storage.get_transaction(meta.first_block)
@@ -49,7 +53,7 @@ class TransactionAccWeightResource(resource.Resource):
             data['confirmation_level'] = 0
         return data
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         """ Get request /transaction_acc_weight/ that returns the acc_weight data of a tx
 
             Expects 'id' (hash) as GET parameter of the tx we will return the data
@@ -65,7 +69,7 @@ class TransactionAccWeightResource(resource.Resource):
         requested_hash = request.args[b'id'][0].decode('utf-8')
         data = self._render_GET_data(requested_hash)
 
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 TransactionAccWeightResource.openapi = {

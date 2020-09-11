@@ -1,20 +1,19 @@
-import json
-from typing import Any, Dict
-
 from twisted.web import resource
+from twisted.web.http import Request
 
 from hathor.api_util import get_missing_params_msg, parse_get_arguments, set_cors, validate_tx_hash
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.transaction.base_transaction import BaseTransaction, TxVersion
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
+from hathor.util import JsonDict, json_dumpb
 
 settings = HathorSettings()
 
 GET_LIST_ARGS = ['count', 'type']
 
 
-def update_serialized_tokens_array(tx: BaseTransaction, serialized: Dict[str, Any]) -> None:
+def update_serialized_tokens_array(tx: BaseTransaction, serialized: JsonDict) -> None:
     """ A token creation tx to_json does not add its hash to the array of tokens
         We manually have to add it here to make it equal to the other transactions
     """
@@ -24,7 +23,7 @@ def update_serialized_tokens_array(tx: BaseTransaction, serialized: Dict[str, An
         serialized['tokens'] = [h.hex() for h in tx.tokens]
 
 
-def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
+def get_tx_extra_data(tx: BaseTransaction) -> JsonDict:
     """ Get the data of a tx to be returned to the frontend
         Returns success, tx serializes, metadata and spent outputs
     """
@@ -113,7 +112,7 @@ class TransactionResource(resource.Resource):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         """ Get request /transaction/ that returns list of tx or a single one
 
             If receive 'id' (hash) as GET parameter we return the tx with this hash
@@ -138,16 +137,17 @@ class TransactionResource(resource.Resource):
 
         return data
 
-    def get_one_tx(self, request):
+    def get_one_tx(self, request: Request) -> bytes:
         """ Get 'id' (hash) from request.args
             Returns the tx with this hash or {'success': False} if hash is invalid or tx does not exist
         """
         if not self.manager.tx_storage.tokens_index:
             request.setResponseCode(503)
-            return json.dumps({'success': False}).encode('utf-8')
+            return json_dumpb({'success': False})
 
         requested_hash = request.args[b'id'][0].decode('utf-8')
         success, message = validate_tx_hash(requested_hash, self.manager.tx_storage)
+        data: JsonDict
         if not success:
             data = {'success': False, 'message': message}
         else:
@@ -156,9 +156,9 @@ class TransactionResource(resource.Resource):
             tx.storage = self.manager.tx_storage
             data = get_tx_extra_data(tx)
 
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
-    def get_list_tx(self, request):
+    def get_list_tx(self, request: Request) -> bytes:
         """ Get parameter from request.args and return list of blocks/txs
 
             'type': 'block' or 'tx', to indicate if we should return a list of blocks or tx
@@ -184,7 +184,7 @@ class TransactionResource(resource.Resource):
             error = {'success': False, 'message': 'Invalid \'type\' parameter, expected \'block\' or \'tx\''}
 
         if error:
-            return json.dumps(error).encode('utf-8')
+            return json_dumpb(error)
 
         ref_hash = None
         page = ''
@@ -198,17 +198,17 @@ class TransactionResource(resource.Resource):
             try:
                 ref_timestamp = int(parsed['args']['timestamp'])
             except ValueError:
-                return json.dumps({
+                return json_dumpb({
                     'success': False,
                     'message': 'Invalid \'timestamp\' parameter, expected an integer'
-                }).encode('utf-8')
+                })
 
             page = parsed['args']['page']
             if page != 'previous' and page != 'next':
-                return json.dumps({
+                return json_dumpb({
                     'success': False,
                     'message': 'Invalid \'page\' parameter, expected \'previous\' or \'next\''
-                }).encode('utf-8')
+                })
 
             if type_tx == 'block':
                 if page == 'previous':
@@ -234,7 +234,7 @@ class TransactionResource(resource.Resource):
         serialized = [element.to_json_extended() for element in elements]
 
         data = {'transactions': serialized, 'has_more': has_more}
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 TransactionResource.openapi = {
