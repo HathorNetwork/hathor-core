@@ -16,10 +16,10 @@ class RPCFailure(Exception):
 
 class IBitcoinRPC(ABC):
     @abstractmethod
-    async def get_block_template(self, *, rules: List[str] = ['segwit'],
-                                 capabilities: List[str] = ['coinbasetxn', 'workid', 'coinbase/append'],
-                                 ) -> Dict[Any, Any]:
-        """ Method for the [GetBlockTemplate call](https://developer.bitcoin.org/reference/rpc/getblocktemplate.html).
+    async def get_block_template(self, *, rules: List[str] = ['segwit'], longpoll_id: Optional[str],
+                                 capabilities: List[str] = ['coinbasetxn', 'workid', 'coinbase/append', 'longpoll'],
+                                 ) -> Dict:
+        """ Method for the [GetBlockTemplate call](https://bitcoin.org/en/developer-reference#getblocktemplate).
         """
         raise NotImplementedError
 
@@ -123,10 +123,14 @@ class BitcoinRPC(IBitcoinRPC):
                 raise RPCFailure(res_data['error']['message'], res_data['error']['code'])
             return res_data['result']
 
-    async def get_block_template(self, *, rules: List[str] = ['segwit'],
-                                 capabilities: List[str] = ['coinbasetxn', 'workid', 'coinbase/append']) -> Dict:
-        res = await self._rpc_request('getblocktemplate', {'capabilities': capabilities, 'rules': rules})
-        return cast(Dict[Any, Any], res)
+    async def get_block_template(self, *, rules: List[str] = ['segwit'], longpoll_id: Optional[str],
+                                 capabilities: List[str] = ['coinbasetxn', 'workid', 'coinbase/append', 'longpoll'],
+                                 ) -> Dict:
+        data: Dict[str, Any] = {'capabilities': capabilities, 'rules': rules}
+        if longpoll_id is not None:
+            data['longpollid'] = longpoll_id
+        res = await self._rpc_request('getblocktemplate', data)
+        return cast(Dict[str, Any], res)
 
     async def verify_block_proposal(self, *, block: bytes) -> Optional[str]:
         res = await self._rpc_request('getblocktemplate', {'mode': 'proposal', 'data': block.hex()})
