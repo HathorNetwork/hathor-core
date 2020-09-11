@@ -1008,12 +1008,23 @@ class TxOutput:
         self.script = script  # bytes
         self.token_data = token_data  # int
 
+    def __eq__(self, other):
+        return (
+            self.value == other.value and
+            self.script == other.script and
+            self.token_data == other.token_data
+        )
+
     def __repr__(self) -> str:
         return str(self)
 
     def __str__(self) -> str:
-        value_str = bin(self.value) if self.is_token_authority else str(self.value)
-        return ('TxOutput(token_data=%s, value=%s)' % (bin(self.token_data), value_str))
+        cls_name = type(self).__name__
+        value_str = hex(self.value) if self.is_token_authority else str(self.value)
+        if self.token_data:
+            return f'{cls_name}(token_data={bin(self.token_data)}, value={value_str}, script={self.script.hex()})'
+        else:
+            return f'{cls_name}(value={value_str}, script={self.script.hex()})'
 
     def __bytes__(self) -> bytes:
         """Returns a byte representation of the output

@@ -1,3 +1,4 @@
+from hathor.conf import HathorSettings
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
 from tests.utils import (
@@ -7,6 +8,8 @@ from tests.utils import (
     add_new_double_spending,
     add_new_transactions,
 )
+
+settings = HathorSettings()
 
 
 class ConsensusTestCase(unittest.TestCase):
@@ -47,8 +50,8 @@ class ConsensusTestCase(unittest.TestCase):
 
         # This block verifies the conflicting transaction and has a high weight.
         # So, it will be executed and previous blocks and transactions will be voided.
-        b0 = manager.generate_mining_block()
-        b0.parents = [blocks[-1].hash, conflicting_tx.hash, conflicting_tx.parents[0]]
+        tb0 = manager.make_custom_block_template(blocks[-1].hash, [conflicting_tx.hash, conflicting_tx.parents[0]])
+        b0 = tb0.generate_mining_block(storage=manager.tx_storage)
         b0.weight = 10
         b0.resolve()
         b0.verify()
@@ -164,9 +167,8 @@ class ConsensusTestCase(unittest.TestCase):
         blocks2 = add_new_blocks(manager, 2, advance_clock=15)
 
         # This block verifies the conflicting transaction and has a high weight.
-        b0 = manager.generate_mining_block()
-        b0.parents = [blocks[-1].hash, conflicting_tx.hash, conflicting_tx.parents[0]]
-        # b0.parents = [b0.parents[0], conflicting_tx.hash, conflicting_tx.parents[0]]
+        tb0 = manager.make_custom_block_template(blocks[-1].hash, [conflicting_tx.hash, conflicting_tx.parents[0]])
+        b0 = tb0.generate_mining_block(storage=manager.tx_storage)
         b0.weight = 10
         b0.resolve()
         b0.verify()
