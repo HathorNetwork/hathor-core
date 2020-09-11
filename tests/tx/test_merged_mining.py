@@ -37,7 +37,9 @@ class TestMergedMining(unittest.TestCase):
 
         bitcoin_rpc = BitcoinRPCStub()
         hathor_client = HathorClientStub(self.manager)
-        self.coordinator = MergedMiningCoordinator(bitcoin_rpc=bitcoin_rpc, hathor_client=hathor_client,
+        self.coordinator = MergedMiningCoordinator(bitcoin_rpc=bitcoin_rpc,
+                                                   digibyte_rpc=None,
+                                                   hathor_client=hathor_client,
                                                    payback_address_bitcoin='n4VQ5YdHf7hLQ2gWQYYrcxoE5B7nWuDFNF',
                                                    payback_address_hathor=address)
         await as_deferred(self.coordinator.start())
@@ -1410,3 +1412,7 @@ class BitcoinRPCStub(IBitcoinRPC):
         stub = 'high-hash'
         await asyncio.sleep(self.response_delay)
         return stub
+
+    async def validate_address(self, address: str) -> Dict:
+        await asyncio.sleep(self.response_delay)
+        return {'isvalid': True, 'address': address, 'scriptPubKey': 'f00b42', 'iswitness': False}

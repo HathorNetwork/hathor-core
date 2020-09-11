@@ -4,12 +4,12 @@ from typing import Any, Dict, List, Optional, cast
 from hathor.merged_mining.jsonrpc import Jsonrpc
 
 
-class IBitcoinRPC(ABC):
+class IDigibyteRPC(ABC):
     @abstractmethod
-    async def get_block_template(self, *, rules: List[str] = ['segwit'], longpoll_id: Optional[str],
-                                 capabilities: List[str] = ['coinbasetxn', 'workid', 'coinbase/append', 'longpoll'],
-                                 ) -> Dict:
-        """ Method for the [GetBlockTemplate call](https://bitcoin.org/en/developer-reference#getblocktemplate).
+    async def get_block_template(self, *, rules: List[str] = ['segwit'], algo: str = 'sha256d',
+                                 longpoll_id: Optional[str],
+                                 capabilities: List[str] = ['coinbasetxn', 'workid', 'longpoll']) -> Dict:
+        """ Method for the [GetBlockTemplate call](https://developer.bitcoin.org/reference/rpc/getblocktemplate.html).
         """
         raise NotImplementedError
 
@@ -32,22 +32,23 @@ class IBitcoinRPC(ABC):
         raise NotImplementedError
 
 
-class BitcoinRPC(IBitcoinRPC, Jsonrpc):
-    """ Class for making calls to Bitcoin's RPC.
+class DigibyteRPC(IDigibyteRPC, Jsonrpc):
+    """ Class for making calls to Digibyte's RPC.
 
     References:
 
-    - https://bitcoin.org/en/developer-reference#remote-procedure-calls-rpcs
+    - https://digibyte.io/docs/integrationguide.pdf
+    - https://github.com/DigiByte-Core/digibyte/blob/master/src/rpc/mining.cpp
     """
 
-    async def get_block_template(self, *, rules: List[str] = ['segwit'], longpoll_id: Optional[str],
-                                 capabilities: List[str] = ['coinbasetxn', 'workid', 'coinbase/append', 'longpoll'],
-                                 ) -> Dict:
-        data: Dict[str, Any] = {'capabilities': capabilities, 'rules': rules}
+    async def get_block_template(self, *, rules: List[str] = ['segwit'], algo: str = 'sha256d',
+                                 longpoll_id: Optional[str],
+                                 capabilities: List[str] = ['coinbasetxn', 'workid', 'longpoll']) -> Dict:
+        data: Dict[str, Any] = {'capabilities': capabilities, 'algo': algo, "rules": rules}
         if longpoll_id is not None:
             data['longpollid'] = longpoll_id
         res = await self._rpc_request('getblocktemplate', data)
-        return cast(Dict[str, Any], res)
+        return cast(Dict[Any, Any], res)
 
     async def verify_block_proposal(self, *, block: bytes) -> Optional[str]:
         res = await self._rpc_request('getblocktemplate', {'mode': 'proposal', 'data': block.hex()})

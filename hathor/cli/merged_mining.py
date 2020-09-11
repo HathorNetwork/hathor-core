@@ -1,6 +1,6 @@
 import asyncio
 from argparse import ArgumentParser, Namespace
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from aiohttp import web
 from structlog import get_logger
@@ -16,9 +16,14 @@ def create_parser() -> ArgumentParser:
     parser.add_argument('--debug-listen', help='Port to listen for Debug API', type=int, required=False)
     parser.add_argument('--hathor-api', help='Endpoint of the Hathor API (without version)', type=str, required=True)
     parser.add_argument('--hathor-address', help='Hathor address to send funds to', type=str, required=False)
-    parser.add_argument('--bitcoin-rpc', help='Endpoint of the Bitcoin RPC', type=str, required=True)
+    parent_chain = parser.add_mutually_exclusive_group()
+    parent_chain.add_argument('--bitcoin-rpc', help='Endpoint of the Bitcoin RPC', type=str, required=False)
     parser.add_argument('--bitcoin-address', help='Bitcoin address to send funds to', type=str, required=False)
+    parent_chain.add_argument('--digibyte-rpc', help='Endpoint of the DigiByte RPC', type=str, required=False)
+    parser.add_argument('--digibyte-address', help='DigiByte address to send funds to', type=str, required=False)
     parser.add_argument('--min-diff', help='Minimum difficulty to set for jobs', type=int, required=False)
+    parser.add_argument('--const-diff', help='Constant difficulty, the initially estimated diff or min diff will not'
+                                             'be updated', action='store_true')
     return parser
 
 
@@ -27,23 +32,36 @@ def execute(args: Namespace) -> None:
     from hathor.merged_mining import MergedMiningCoordinator
     from hathor.merged_mining.bitcoin_rpc import BitcoinRPC
     from hathor.merged_mining.debug_api import make_app as make_debug_app
+    from hathor.merged_mining.digibyte_rpc import DigibyteRPC
     from hathor.merged_mining.status_api import make_app as make_status_app
 
     loop = asyncio.get_event_loop()
 
-    bitcoin_rpc = BitcoinRPC(args.bitcoin_rpc)
+    kwargs: Dict[str, Any] = {}
+    has_parent_address = False
+    if args.bitcoin_rpc:
+        kwargs['bitcoin_rpc'] = bitcoin_rpc = BitcoinRPC(args.bitcoin_rpc)
+        kwargs['payback_address_bitcoin'] = args.bitcoin_address
+        has_parent_address = bool(args.bitcoin_address)
+        logger.info('start Bitcoin RPC', url=args.bitcoin_rpc)
+        loop.run_until_complete(bitcoin_rpc.start())
+    elif args.digibyte_rpc:
+        kwargs['digibyte_rpc'] = digibyte_rpc = DigibyteRPC(args.digibyte_rpc)
+        kwargs['payback_address_digibyte'] = args.digibyte_address
+        has_parent_address = bool(args.digibyte_address)
+        logger.info('start DigiByte RPC', url=args.digibyte_rpc)
+        loop.run_until_complete(digibyte_rpc.start())
+    else:
+        raise ValueError('should have at least one parent chain')
     hathor_client = HathorClient(args.hathor_api)
-    # TODO: validate addresses?
     merged_mining = MergedMiningCoordinator(
-        bitcoin_rpc=bitcoin_rpc,
         hathor_client=hathor_client,
         payback_address_hathor=args.hathor_address,
-        payback_address_bitcoin=args.bitcoin_address,
-        address_from_login=not (args.hathor_address and args.bitcoin_address),
+        address_from_login=not (args.hathor_address and has_parent_address),
         min_difficulty=args.min_diff,
+        constant_difficulty=args.const_diff,
+        **kwargs,
     )
-    logger.info('start Bitcoin RPC', url=args.bitcoin_rpc)
-    loop.run_until_complete(bitcoin_rpc.start())
     logger.info('start Hathor Client', url=args.hathor_api)
     loop.run_until_complete(hathor_client.start())
     logger.info('start Merged Mining Server', listen=f'0.0.0.0:{args.port}')
@@ -75,7 +93,10 @@ def execute(args: Namespace) -> None:
     loop.run_until_complete(mm_server.wait_closed())
     loop.run_until_complete(merged_mining.stop())
     loop.run_until_complete(hathor_client.stop())
-    loop.run_until_complete(bitcoin_rpc.stop())
+    if args.bitcoin_rpc:
+        loop.run_until_complete(bitcoin_rpc.stop())
+    elif args.digibyte_rpc:
+        loop.run_until_complete(digibyte_rpc.stop())
     loop.close()
     logger.info('bye')
 
