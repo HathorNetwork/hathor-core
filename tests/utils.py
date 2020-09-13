@@ -45,7 +45,6 @@ def resolve_block_bytes(block_bytes):
         :rtype: bytes
     """
     from hathor.transaction import Block
-    import base64
     block_bytes = base64.b64decode(block_bytes)
     block = Block.create_from_struct(block_bytes)
     block.resolve()
