@@ -145,7 +145,7 @@ def generate_nginx_config(openapi: Dict[str, Any], *, out_file: TextIO, rate_k: 
             name = f'global{path_key}__{i}'  # must match [a-z][a-z0-9_]*
             size = '32k'  # min is 32k which is enough
             rate = _scale_rate_limit(rate_limit['rate'], rate_k)
-            zone = RateLimitZone(name, 'global', size, rate)
+            zone = RateLimitZone(name, '$global_key', size, rate)
             limit_rate_zones.append(zone)
             # limit, for location level `limit_req`
             burst = rate_limit.get('burst')
@@ -158,7 +158,7 @@ def generate_nginx_config(openapi: Dict[str, Any], *, out_file: TextIO, rate_k: 
             # zone, for top level `limit_req_zone`
             size = '10m'
             rate = _scale_rate_limit(rate_limit['rate'], rate_k)
-            zone = RateLimitZone(name, '$binary_remote_addr', size, rate)
+            zone = RateLimitZone(name, '$per_ip_key', size, rate)
             limit_rate_zones.append(zone)
             # limit, for location level `limit_req`
             burst = rate_limit.get('burst')
@@ -186,10 +186,28 @@ def generate_nginx_config(openapi: Dict[str, Any], *, out_file: TextIO, rate_k: 
 
 server_tokens off;
 
-limit_conn_zone global zone=global__ws:32k;
-limit_conn_zone $binary_remote_addr zone=per_ip__ws:10m;
-limit_conn_zone global zone=global__mining_ws:32k;
-limit_conn_zone $binary_remote_addr zone=per_ip__mining_ws:10m;
+geo $should_limit {{
+    default 1;
+    # Whitelist ELB IPs:
+    10.0.0.0/8 0;
+    172.16.0.0/12 0;
+    192.168.0.0/16 0;
+}}
+
+map $should_limit $per_ip_key {{
+    0 "";
+    1 $binary_remote_addr;
+}}
+
+map $should_limit $global_key {{
+    0 "";
+    1 "global";
+}}
+
+limit_conn_zone $global_key zone=global__ws:32k;
+limit_conn_zone $per_ip_key zone=per_ip__ws:10m;
+limit_conn_zone $global_key zone=global__mining_ws:32k;
+limit_conn_zone $per_ip_key zone=per_ip__mining_ws:10m;
 '''
 
     server_open = f'''
