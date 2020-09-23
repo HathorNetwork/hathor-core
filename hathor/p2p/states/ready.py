@@ -1,5 +1,5 @@
 import json
-from typing import TYPE_CHECKING, Dict, Iterable
+from typing import TYPE_CHECKING, Dict, Iterable, cast
 
 from twisted.internet.task import LoopingCall
 
@@ -65,8 +65,8 @@ class ReadyState(BaseState):
         for plugin in self.plugins.values():
             plugin.stop()
 
-    def get_sync_plugin(self) -> Plugin:
-        return self.plugins[self.SYNC_PLUGIN_NAME]
+    def get_sync_plugin(self) -> NodeSyncTimestamp:
+        return cast(NodeSyncTimestamp, self.plugins[self.SYNC_PLUGIN_NAME])
 
     def send_tx_to_peer(self, tx: BaseTransaction) -> None:
         self.plugins[self.SYNC_PLUGIN_NAME].send_tx_to_peer_if_possible(tx)

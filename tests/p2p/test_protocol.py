@@ -17,17 +17,15 @@ class HathorProtocolTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.network = 'testnet'
-
         self.peer_id1 = PeerId()
         self.peer_id2 = PeerId()
         self.manager1 = self.create_peer(self.network, peer_id=self.peer_id1)
         self.manager2 = self.create_peer(self.network, peer_id=self.peer_id2)
-
-        self.conn1 = FakeConnection(self.manager1, self.manager2)
+        self.conn = FakeConnection(self.manager1, self.manager2)
 
     def assertIsConnected(self, conn=None):
         if conn is None:
-            conn = self.conn1
+            conn = self.conn
         self.assertFalse(conn.tr1.disconnecting)
         self.assertFalse(conn.tr2.disconnecting)
 
@@ -57,105 +55,113 @@ class HathorProtocolTestCase(unittest.TestCase):
         self.assertIn(expected, result_list)
 
     def test_on_connect(self):
-        self._check_result_only_cmd(self.conn1.tr1.value(), b'HELLO')
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'HELLO')
 
     def test_invalid_command(self):
-        self._send_cmd(self.conn1.proto1, 'INVALID-CMD')
-        self.conn1.proto1.state.handle_error('')
-        self.assertTrue(self.conn1.tr1.disconnecting)
+        self._send_cmd(self.conn.proto1, 'INVALID-CMD')
+        self.conn.proto1.state.handle_error('')
+        self.assertTrue(self.conn.tr1.disconnecting)
 
     def test_rate_limit(self):
         hits = 1
         window = 60
-        self.conn1.proto1.ratelimit.set_limit(HathorProtocol.RateLimitKeys.GLOBAL, hits, window)
-        # First will be ignored
-        self._send_cmd(self.conn1.proto1, 'HELLO')
-        # Second will reach limit
-        self._send_cmd(self.conn1.proto1, 'HELLO')
+
+        self.conn.proto1.ratelimit.set_limit(HathorProtocol.RateLimitKeys.GLOBAL, hits, window)
+        # first will be OK and reach the hits limit per window
+        self.conn.run_one_step()  # HELLO
+        # second will fail and be throttled
+        self.conn.run_one_step()  # PEER-ID
 
         self._check_cmd_and_value(
-            self.conn1.tr1.value(),
-            (b'THROTTLE', 'global At most {} hits every {} seconds'.format(hits, window).encode('utf-8')))
+            self.conn.peek_tr1_value(),
+            (b'THROTTLE', 'global At most {} hits every {} seconds'.format(hits, window).encode('utf-8')),
+        )
 
-        self.conn1.proto1.state.handle_throttle(b'')
+        self.conn.proto1.state.handle_throttle(b'')
 
         # Test empty disconnect
-        self.conn1.proto1.state = None
-        self.conn1.proto1.connections = None
-        self.conn1.proto1.on_disconnect(Failure(Exception()))
+        self.conn.proto1.state = None
+        self.conn.proto1.connections = None
+        self.conn.proto1.on_disconnect(Failure(Exception()))
 
     def test_invalid_size(self):
-        self.conn1.tr1.clear()
+        self.conn.tr1.clear()
         # Creating big payload
         big_payload = '['
         for x in range(65536):
             big_payload = '{}{}'.format(big_payload, x)
         big_payload = '{}]'.format(big_payload)
-        self._send_cmd(self.conn1.proto1, 'HELLO', big_payload)
-        self.assertTrue(self.conn1.tr1.disconnecting)
+        self._send_cmd(self.conn.proto1, 'HELLO', big_payload)
+        self.assertTrue(self.conn.tr1.disconnecting)
 
     def test_invalid_payload(self):
-        self.conn1.run_one_step()
-        self.conn1.run_one_step()
-        self.conn1.run_one_step()
+        self.conn.run_one_step()  # HELLO
+        self.conn.run_one_step()  # PEER-ID
+        self.conn.run_one_step()  # READY
         with self.assertRaises(json.decoder.JSONDecodeError):
-            self._send_cmd(self.conn1.proto1, 'PEERS', 'abc')
+            self._send_cmd(self.conn.proto1, 'PEERS', 'abc')
 
     def test_invalid_hello1(self):
-        self.conn1.tr1.clear()
-        self._send_cmd(self.conn1.proto1, 'HELLO')
-        self._check_result_only_cmd(self.conn1.tr1.value(), b'ERROR')
-        self.assertTrue(self.conn1.tr1.disconnecting)
+        self.conn.tr1.clear()
+        self._send_cmd(self.conn.proto1, 'HELLO')
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'ERROR')
+        self.assertTrue(self.conn.tr1.disconnecting)
 
     def test_invalid_hello2(self):
-        self.conn1.tr1.clear()
-        self._send_cmd(self.conn1.proto1, 'HELLO', 'invalid_payload')
-        self._check_result_only_cmd(self.conn1.tr1.value(), b'ERROR')
-        self.assertTrue(self.conn1.tr1.disconnecting)
+        self.conn.tr1.clear()
+        self._send_cmd(self.conn.proto1, 'HELLO', 'invalid_payload')
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'ERROR')
+        self.assertTrue(self.conn.tr1.disconnecting)
 
     def test_invalid_hello3(self):
-        self.conn1.tr1.clear()
-        self._send_cmd(self.conn1.proto1, 'HELLO', '{}')
-        self._check_result_only_cmd(self.conn1.tr1.value(), b'ERROR')
-        self.assertTrue(self.conn1.tr1.disconnecting)
+        self.conn.tr1.clear()
+        self._send_cmd(self.conn.proto1, 'HELLO', '{}')
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'ERROR')
+        self.assertTrue(self.conn.tr1.disconnecting)
 
     def test_invalid_hello4(self):
-        self.conn1.tr1.clear()
+        self.conn.tr1.clear()
         self._send_cmd(
-            self.conn1.proto1,
+            self.conn.proto1,
             'HELLO',
             '{"app": 0, "remote_address": 1, "network": 2, "genesis_hash": "123", "settings_hash": "456"}'
         )
-        self._check_result_only_cmd(self.conn1.tr1.value(), b'ERROR')
-        self.assertTrue(self.conn1.tr1.disconnecting)
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'ERROR')
+        self.assertTrue(self.conn.tr1.disconnecting)
 
     def test_invalid_hello5(self):
         # hello with clocks too far apart
-        self.conn1.tr1.clear()
-        data = self.conn1.proto2.state._get_hello_data()
+        self.conn.tr1.clear()
+        data = self.conn.proto2.state._get_hello_data()
         data['timestamp'] = data['timestamp'] + settings.MAX_FUTURE_TIMESTAMP_ALLOWED/2 + 1
         self._send_cmd(
-            self.conn1.proto1,
+            self.conn.proto1,
             'HELLO',
             json.dumps(data)
         )
-        self._check_result_only_cmd(self.conn1.tr1.value(), b'ERROR')
-        self.assertTrue(self.conn1.tr1.disconnecting)
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'ERROR')
+        self.assertTrue(self.conn.tr1.disconnecting)
 
     def test_valid_hello(self):
-        self.conn1.run_one_step()
-        self._check_result_only_cmd(self.conn1.tr1.value(), b'PEER-ID')
-        self._check_result_only_cmd(self.conn1.tr2.value(), b'PEER-ID')
-        self.assertFalse(self.conn1.tr1.disconnecting)
-        self.assertFalse(self.conn1.tr2.disconnecting)
+        self.conn.run_one_step()  # HELLO
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'PEER-ID')
+        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'PEER-ID')
+        self.assertFalse(self.conn.tr1.disconnecting)
+        self.assertFalse(self.conn.tr2.disconnecting)
 
     @inlineCallbacks
     def test_invalid_peer_id(self):
-        self.conn1.run_one_step()
+        self.conn.run_one_step()  # HELLO
+        self.conn.run_one_step()  # PEER-ID
+        self.conn.run_one_step()  # READY
+        self.conn.run_one_step()  # GET-PEERS
+        self.conn.run_one_step()  # GET-TIPS
+        self.conn.run_one_step()  # PEERS
+        self.conn.run_one_step()  # TIPS
         invalid_payload = {'id': '123', 'entrypoints': ['tcp://localhost:1234']}
-        yield self._send_cmd(self.conn1.proto1, 'PEER-ID', json.dumps(invalid_payload))
-        self._check_result_only_cmd(self.conn1.tr1.value(), b'ERROR')
-        self.assertTrue(self.conn1.tr1.disconnecting)
+        yield self._send_cmd(self.conn.proto1, 'PEER-ID', json.dumps(invalid_payload))
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'ERROR')
+        self.assertTrue(self.conn.tr1.disconnecting)
         # When a DNS request is made to twisted client, it starts a callLater to check the resolv file every minute
         # https://github.com/twisted/twisted/blob/59f8266c286e2b073ddb05c70317ac20693f2b0c/src/twisted/names/client.py#L147  # noqa
         # So we need to stop this call manually, otherwise the reactor would be unclean with a pending call
@@ -166,9 +172,9 @@ class HathorProtocolTestCase(unittest.TestCase):
     def test_invalid_same_peer_id(self):
         manager3 = self.create_peer(self.network, peer_id=self.peer_id1)
         conn = FakeConnection(self.manager1, manager3)
-        conn.run_one_step()
-        conn.run_one_step()
-        self._check_result_only_cmd(conn.tr1.value(), b'ERROR')
+        conn.run_one_step()  # HELLO
+        conn.run_one_step()  # PEER-ID
+        self._check_result_only_cmd(conn.peek_tr1_value(), b'ERROR')
         self.assertTrue(conn.tr1.disconnecting)
 
     def test_invalid_same_peer_id2(self):
@@ -178,25 +184,40 @@ class HathorProtocolTestCase(unittest.TestCase):
         manager3 = self.create_peer(self.network, peer_id=self.peer_id2)
         conn = FakeConnection(manager3, self.manager1)
         # HELLO
-        self.conn1.run_one_step()
+        self.assertEqual(self.conn.peek_tr1_value().split()[0], b'HELLO')
+        self.assertEqual(self.conn.peek_tr2_value().split()[0], b'HELLO')
+        self.assertEqual(conn.peek_tr1_value().split()[0],      b'HELLO')
+        self.assertEqual(conn.peek_tr2_value().split()[0],      b'HELLO')
+        self.conn.run_one_step()
         conn.run_one_step()
         # PEER-ID
-        self.conn1.run_one_step()
+        self.assertEqual(self.conn.peek_tr1_value().split()[0], b'PEER-ID')
+        self.assertEqual(self.conn.peek_tr2_value().split()[0], b'PEER-ID')
+        self.assertEqual(conn.peek_tr1_value().split()[0],      b'PEER-ID')
+        self.assertEqual(conn.peek_tr2_value().split()[0],      b'PEER-ID')
+        self.conn.run_one_step()
         conn.run_one_step()
         # READY
-        self.conn1.run_one_step()
+        self.assertEqual(self.conn.peek_tr1_value().split()[0], b'READY')
+        self.assertEqual(self.conn.peek_tr2_value().split()[0], b'READY')
+        self.assertEqual(conn.peek_tr1_value().split()[0],      b'READY')
+        self.assertEqual(conn.peek_tr2_value().split()[0],      b'READY')
+        self.conn.run_one_step()
         conn.run_one_step()
+        # continue until messages stop
+        self.conn.run_until_complete()
+        conn.run_until_complete()
         self.run_to_completion()
         # one of the peers will close the connection. We don't know which on, as it depends
         # on the peer ids
-        conn1_value = self.conn1.tr1.value() + self.conn1.tr2.value()
+        conn1_value = self.conn.peek_tr1_value() + self.conn.peek_tr2_value()
         if b'ERROR' in conn1_value:
-            conn_dead = self.conn1
+            conn_dead = self.conn
             conn_alive = conn
         else:
             conn_dead = conn
-            conn_alive = self.conn1
-        self._check_result_only_cmd(conn_dead.tr1.value() + conn_dead.tr2.value(), b'ERROR')
+            conn_alive = self.conn
+        self._check_result_only_cmd(conn_dead.peek_tr1_value() + conn_dead.peek_tr2_value(), b'ERROR')
         # at this point, the connection must be closing as the error was detected on READY state
         self.assertIn(True, [conn_dead.tr1.disconnecting, conn_dead.tr2.disconnecting])
         # check connected_peers
@@ -209,88 +230,111 @@ class HathorProtocolTestCase(unittest.TestCase):
     def test_invalid_different_network(self):
         manager3 = self.create_peer(network='mainnet')
         conn = FakeConnection(self.manager1, manager3)
-        conn.run_one_step()
-        self._check_result_only_cmd(conn.tr1.value(), b'ERROR')
+        conn.run_one_step()  # HELLO
+        self._check_result_only_cmd(conn.peek_tr1_value(), b'ERROR')
         self.assertTrue(conn.tr1.disconnecting)
-        conn.run_one_step()
+        conn.run_one_step()  # ERROR
 
     def test_valid_hello_and_peer_id(self):
-        self.conn1.run_one_step()
-        self.conn1.run_one_step()
-        # Originally, only a GET-PEERS message would be received, but now it is receiving two messages in a row.
-        # self._check_result_only_cmd(self.tr1.value(), b'GET-PEERS')
-        # self._check_result_only_cmd(self.tr2.value(), b'GET-PEERS')
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'HELLO')
+        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'HELLO')
+        self.conn.run_one_step()  # HELLO
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'PEER-ID')
+        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'PEER-ID')
+        self.conn.run_one_step()  # PEER-ID
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'READY')
+        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'READY')
+        self.conn.run_one_step()  # READY
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'GET-PEERS')
+        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'GET-PEERS')
+        self.conn.run_one_step()  # GET-PEERS
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'GET-TIPS')
+        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'GET-TIPS')
+        self.conn.run_one_step()  # GET-TIPS
         self.assertIsConnected()
-        self.conn1.run_one_step()
-        self.conn1.run_one_step()
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'PEERS')
+        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'PEERS')
+        self.conn.run_one_step()  # PEERS
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'TIPS')
+        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'TIPS')
+        self.conn.run_one_step()  # TIPS
         self.assertIsConnected()
 
     def test_send_ping(self):
-        self.conn1.run_one_step()
-        self.conn1.run_one_step()
-        self.conn1.run_one_step()
-        # Originally, only a GET-PEERS message would be received, but now it is receiving two messages in a row.
-        # self._check_result_only_cmd(self.tr1.value(), b'GET-PEERS')
-        # self._check_result_only_cmd(self.tr2.value(), b'GET-PEERS')
+        self.conn.run_one_step()  # HELLO
+        self.conn.run_one_step()  # PEER-ID
+        self.conn.run_one_step()  # READY
+        self.conn.run_one_step()  # GET-PEERS
+        self.conn.run_one_step()  # GET-TIPS
+        self.conn.run_one_step()  # PEERS
+        self.conn.run_one_step()  # TIPS
         self.assertIsConnected()
         self.clock.advance(5)
-        self.assertTrue(b'PING\r\n' in self.conn1.tr1.value())
-        self.assertTrue(b'PING\r\n' in self.conn1.tr2.value())
-        self.conn1.run_one_step()
-        self.assertTrue(b'PONG\r\n' in self.conn1.tr1.value())
-        self.assertTrue(b'PONG\r\n' in self.conn1.tr2.value())
-        while b'PONG\r\n' in self.conn1.tr1.value():
-            self.conn1.run_one_step()
-        self.assertEqual(self.clock.seconds(), self.conn1.proto1.last_message)
+        self.assertEqual(b'PING\r\n', self.conn.peek_tr1_value())
+        self.assertEqual(b'PING\r\n', self.conn.peek_tr2_value())
+        self.conn.run_one_step()  # PING
+        self.conn.run_one_step()  # GET-TIPS
+        self.assertEqual(b'PONG\r\n', self.conn.peek_tr1_value())
+        self.assertEqual(b'PONG\r\n', self.conn.peek_tr2_value())
+        while b'PONG\r\n' in self.conn.peek_tr1_value():
+            self.conn.run_one_step()
+        self.assertEqual(self.clock.seconds(), self.conn.proto1.last_message)
 
     def test_send_invalid_unicode(self):
         # \xff is an invalid unicode.
-        self.conn1.proto1.dataReceived(b'\xff\r\n')
-        self.assertTrue(self.conn1.tr1.disconnecting)
+        self.conn.proto1.dataReceived(b'\xff\r\n')
+        self.assertTrue(self.conn.tr1.disconnecting)
 
     def test_on_disconnect(self):
-        self.assertIn(self.conn1.proto1, self.manager1.connections.handshaking_peers)
-        self.conn1.disconnect(Failure(Exception('testing')))
-        self.assertNotIn(self.conn1.proto1, self.manager1.connections.handshaking_peers)
+        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.conn.disconnect(Failure(Exception('testing')))
+        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
 
     def test_on_disconnect_after_hello(self):
-        self.conn1.run_one_step()
-        self.assertIn(self.conn1.proto1, self.manager1.connections.handshaking_peers)
-        self.conn1.disconnect(Failure(Exception('testing')))
-        self.assertNotIn(self.conn1.proto1, self.manager1.connections.handshaking_peers)
+        self.conn.run_one_step()  # HELLO
+        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.conn.disconnect(Failure(Exception('testing')))
+        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
 
     def test_on_disconnect_after_peer_id(self):
-        self.conn1.run_one_step()
-        self.assertIn(self.conn1.proto1, self.manager1.connections.handshaking_peers)
+        self.conn.run_one_step()  # HELLO
+        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
         # The peer READY now depends on a message exchange from both peers, so we need one more step
-        self.conn1.run_one_step()
-        self.conn1.run_one_step()
-        self.assertIn(self.conn1.proto1, self.manager1.connections.connected_peers.values())
-        self.assertNotIn(self.conn1.proto1, self.manager1.connections.handshaking_peers)
-        self.conn1.disconnect(Failure(Exception('testing')))
-        self.assertNotIn(self.conn1.proto1, self.manager1.connections.connected_peers.values())
+        self.conn.run_one_step()  # PEER-ID
+        self.conn.run_one_step()  # READY
+        self.assertIn(self.conn.proto1, self.manager1.connections.connected_peers.values())
+        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.conn.disconnect(Failure(Exception('testing')))
+        self.assertNotIn(self.conn.proto1, self.manager1.connections.connected_peers.values())
 
     def test_two_connections(self):
-        self.conn1.run_one_step()  # HELLO
-        self.conn1.run_one_step()  # PEER-ID
-        self.conn1.run_one_step()  # GET-PEERS
-        self.conn1.run_one_step()  # GET-TIPS
+        self.conn.run_one_step()  # HELLO
+        self.conn.run_one_step()  # PEER-ID
+        self.conn.run_one_step()  # READY
+        self.conn.run_one_step()  # GET-PEERS
+        self.conn.run_one_step()  # GET-TIPS
 
         manager3 = self.create_peer(self.network)
         conn = FakeConnection(self.manager1, manager3)
         conn.run_one_step()  # HELLO
         conn.run_one_step()  # PEER-ID
+        conn.run_one_step()  # READY
+        conn.run_one_step()  # GET-PEERS
 
-        self._check_result_only_cmd(self.conn1.tr1.value(), b'PEERS')
-        self.conn1.run_one_step()
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'PEERS')
+        self.conn.run_one_step()
 
     @inlineCallbacks
     def test_get_data(self):
-        self.conn1.run_one_step()
-        self.conn1.run_one_step()
-        self.conn1.run_one_step()
+        self.conn.run_one_step()  # HELLO
+        self.conn.run_one_step()  # PEER-ID
+        self.conn.run_one_step()  # READY
+        self.conn.run_one_step()  # GET-PEERS
+        self.conn.run_one_step()  # GET-TIPS
+        self.conn.run_one_step()  # PEERS
+        self.conn.run_one_step()  # TIPS
         self.assertIsConnected()
         missing_tx = '00000000228dfcd5dec1c9c6263f6430a5b4316bb9e3decb9441a6414bfd8697'
-        yield self._send_cmd(self.conn1.proto1, 'GET-DATA', missing_tx)
-        self._check_result_only_cmd(self.conn1.tr1.value(), b'NOT-FOUND')
-        self.conn1.run_one_step()
+        yield self._send_cmd(self.conn.proto1, 'GET-DATA', missing_tx)
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'NOT-FOUND')
+        self.conn.run_one_step()
