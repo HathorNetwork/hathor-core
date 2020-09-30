@@ -166,17 +166,20 @@ class TokenCreationTransaction(Transaction):
 
         return struct_bytes
 
-    def get_sighash_all(self, clear_input_data: bool = True) -> bytes:
+    def get_sighash_all(self) -> bytes:
         """ Returns a serialization of the inputs and outputs without including any other field
 
         :return: Serialization of the inputs, outputs and tokens
         :rtype: bytes
         """
+        if self._sighash_cache:
+            return self._sighash_cache
+
         struct_bytes = pack(_SIGHASH_ALL_FORMAT_STRING, self.version, len(self.inputs), len(self.outputs))
 
         tx_inputs = []
         for tx_input in self.inputs:
-            tx_inputs.append(tx_input.get_sighash_bytes(clear_input_data))
+            tx_inputs.append(tx_input.get_sighash_bytes())
         struct_bytes += b''.join(tx_inputs)
 
         tx_outputs = []
@@ -185,6 +188,7 @@ class TokenCreationTransaction(Transaction):
         struct_bytes += b''.join(tx_outputs)
 
         struct_bytes += self.serialize_token_info()
+        self._sighash_cache = struct_bytes
 
         return struct_bytes
 

@@ -18,7 +18,8 @@ class TokenTest(unittest.TestCase):
         super().setUp()
         self.manager = self.create_peer('testnet', unlock_wallet=True, wallet_index=True)
 
-        self.genesis = self.manager.tx_storage.get_all_genesis()
+        self.genesis = list(self.manager.tx_storage.get_all_genesis())
+        self.genesis.sort(key=lambda t: t.timestamp)
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
 
@@ -63,7 +64,7 @@ class TokenTest(unittest.TestCase):
         tx = Transaction(weight=1, inputs=[_input], outputs=[output], parents=parents, storage=self.manager.tx_storage)
 
         # no token uids in list
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx.get_sighash_all()
         public_bytes, signature = self.manager.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         tx.resolve()
@@ -73,7 +74,7 @@ class TokenTest(unittest.TestCase):
         # with 1 token uid in list
         tx.tokens = [bytes.fromhex('0023be91834c973d6a6ddd1a0ae411807b7c8ef2a015afb5177ee64b666ce602')]
         output.token_data = 2
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx.get_sighash_all()
         public_bytes, signature = self.manager.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         tx.resolve()
@@ -83,7 +84,7 @@ class TokenTest(unittest.TestCase):
         # try hathor authority UTXO
         output = TxOutput(value, script, 0b10000000)
         tx.outputs = [output]
-        data_to_sign = tx.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx.get_sighash_all()
         public_bytes, signature = self.manager.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         tx.resolve()
@@ -104,7 +105,7 @@ class TokenTest(unittest.TestCase):
         token_output = TxOutput(utxo.value, script, 1)
         tx2 = Transaction(weight=1, inputs=[_input1], outputs=[token_output], parents=parents, tokens=[token_uid],
                           storage=self.manager.tx_storage, timestamp=int(self.clock.seconds()))
-        data_to_sign = tx2.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx2.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         tx2.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         tx2.resolve()
@@ -114,7 +115,7 @@ class TokenTest(unittest.TestCase):
         token_output = TxOutput(utxo.value - 1, script, 1)
         tx3 = Transaction(weight=1, inputs=[_input1], outputs=[token_output], parents=parents, tokens=[token_uid],
                           storage=self.manager.tx_storage, timestamp=int(self.clock.seconds()))
-        data_to_sign = tx3.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx3.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         tx3.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         tx3.resolve()
@@ -145,7 +146,7 @@ class TokenTest(unittest.TestCase):
             storage=self.manager.tx_storage,
             timestamp=int(self.clock.seconds())
         )
-        data_to_sign = tx2.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx2.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         data = P2PKH.create_input_data(public_bytes, signature)
         tx2.inputs[0].data = data
@@ -179,7 +180,7 @@ class TokenTest(unittest.TestCase):
             storage=self.manager.tx_storage,
             timestamp=int(self.clock.seconds())
         )
-        data_to_sign = tx3.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx3.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         data = P2PKH.create_input_data(public_bytes, signature)
         tx3.inputs[0].data = data
@@ -204,7 +205,7 @@ class TokenTest(unittest.TestCase):
             storage=self.manager.tx_storage,
             timestamp=int(self.clock.seconds())
         )
-        data_to_sign = tx4.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx4.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         data = P2PKH.create_input_data(public_bytes, signature)
         tx4.inputs[0].data = data
@@ -218,7 +219,7 @@ class TokenTest(unittest.TestCase):
         token_output = TxOutput(10000000, script, 1)
         tx5 = Transaction(weight=1, inputs=[_input1], outputs=[token_output], parents=parents, tokens=[token_uid],
                           storage=self.manager.tx_storage, timestamp=int(self.clock.seconds()))
-        data_to_sign = tx5.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx5.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         tx5.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         tx5.resolve()
@@ -250,7 +251,7 @@ class TokenTest(unittest.TestCase):
             storage=self.manager.tx_storage,
             timestamp=int(self.clock.seconds())
         )
-        data_to_sign = tx2.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx2.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         data = P2PKH.create_input_data(public_bytes, signature)
         tx2.inputs[0].data = data
@@ -287,7 +288,7 @@ class TokenTest(unittest.TestCase):
             storage=self.manager.tx_storage,
             timestamp=int(self.clock.seconds())
         )
-        data_to_sign = tx3.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx3.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         data = P2PKH.create_input_data(public_bytes, signature)
         tx3.inputs[0].data = data
@@ -302,7 +303,7 @@ class TokenTest(unittest.TestCase):
         token_output = TxOutput(tx.outputs[0].value - 1, script, 1)
         tx4 = Transaction(weight=1, inputs=[_input1, _input2], outputs=[token_output], parents=parents,
                           tokens=[token_uid], storage=self.manager.tx_storage, timestamp=int(self.clock.seconds()))
-        data_to_sign = tx4.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx4.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         data = P2PKH.create_input_data(public_bytes, signature)
         tx4.inputs[0].data = data
@@ -323,7 +324,7 @@ class TokenTest(unittest.TestCase):
         token_output = TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001)
         tx2 = Transaction(weight=1, inputs=[_input1], outputs=[token_output], parents=parents, tokens=[token_uid],
                           storage=self.manager.tx_storage, timestamp=int(self.clock.seconds()))
-        data_to_sign = tx2.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx2.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         tx2.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         tx2.resolve()
@@ -335,7 +336,7 @@ class TokenTest(unittest.TestCase):
         token_output = TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001)
         tx3 = Transaction(weight=1, inputs=[_input1], outputs=[token_output], parents=parents, tokens=[token_uid],
                           storage=self.manager.tx_storage, timestamp=int(self.clock.seconds()))
-        data_to_sign = tx3.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx3.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         tx3.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         tx3.resolve()
@@ -384,7 +385,7 @@ class TokenTest(unittest.TestCase):
         )
         # sign inputs
         wallet = self.manager.wallet
-        data_to_sign = tx2.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx2.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         data = P2PKH.create_input_data(public_bytes, signature)
         tx2.inputs[0].data = data
@@ -426,7 +427,7 @@ class TokenTest(unittest.TestCase):
         def update_tx(tx):
             """ sighash_all data changes with token name or symbol, so we have to compute signature again
             """
-            data_to_sign = tx.get_sighash_all(clear_input_data=True)
+            data_to_sign = tx.get_sighash_all()
             public_bytes, signature = self.manager.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
             tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
             tx.resolve()
@@ -517,7 +518,7 @@ class TokenTest(unittest.TestCase):
             storage=self.manager.tx_storage,
             timestamp=int(self.clock.seconds())
         )
-        data_to_sign = tx2.get_sighash_all(clear_input_data=True)
+        data_to_sign = tx2.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         data = P2PKH.create_input_data(public_bytes, signature)
         tx2.inputs[0].data = data
@@ -560,6 +561,24 @@ class TokenTest(unittest.TestCase):
 
         with self.assertRaises(StructError):
             TokenCreationTransaction.deserialize_token_info(bytes3)
+
+    def test_block_with_htr_authority(self):
+        parents = [tx.hash for tx in self.genesis]
+
+        output_script = P2PKH.create_output_script(self.address)
+        output = TxOutput(0b11, output_script, 0b10000000)
+        self.assertTrue(output.is_token_authority())
+
+        block = Block(
+            nonce=100,
+            outputs=[output],
+            parents=parents,
+            weight=1,  # low weight so we don't waste time with PoW
+            storage=self.manager.tx_storage)
+
+        block.resolve()
+        with self.assertRaises(InvalidToken):
+            block.verify()
 
 
 if __name__ == '__main__':

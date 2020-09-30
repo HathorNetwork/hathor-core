@@ -233,7 +233,7 @@ class Block(BaseTransaction):
             raise BlockWithInputs('number of inputs {}'.format(len(inputs)))
 
     def verify_outputs(self) -> None:
-        self.verify_number_of_outputs()
+        super().verify_outputs()
         for output in self.outputs:
             if output.get_token_index() > 0:
                 raise BlockWithTokensError('in output: {}'.format(output.to_human_readable()))

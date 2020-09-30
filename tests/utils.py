@@ -705,7 +705,7 @@ def create_tokens(manager: 'HathorManager', address_b58: str = None, mint_amount
         token_symbol=token_symbol,
         timestamp=timestamp
     )
-    data_to_sign = tx.get_sighash_all(clear_input_data=True)
+    data_to_sign = tx.get_sighash_all()
     if use_genesis:
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, genesis_private_key)
     else:

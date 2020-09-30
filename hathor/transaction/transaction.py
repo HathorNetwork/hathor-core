@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import hashlib
 from collections import namedtuple
 from struct import pack
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
@@ -27,7 +28,6 @@ from hathor.transaction.exceptions import (
     InexistentInput,
     InputOutputMismatch,
     InvalidInputData,
-    InvalidOutputValue,
     InvalidToken,
     NoInputError,
     RewardLocked,
@@ -74,8 +74,8 @@ class Transaction(BaseTransaction):
                          or [], outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.tokens = tokens or []
         self._height_cache: Optional[int] = None
-        self._sighash_cache1: Optional[bytes] = None
-        self._sighash_cache2: Optional[bytes] = None
+        self._sighash_cache: Optional[bytes] = None
+        self._sighash_data_cache: Optional[bytes] = None
 
     @property
     def is_block(self) -> bool:
@@ -192,7 +192,7 @@ class Transaction(BaseTransaction):
 
         return struct_bytes
 
-    def get_sighash_all(self, clear_input_data: bool = True) -> bytes:
+    def get_sighash_all(self) -> bytes:
         """Return a serialization of the inputs, outputs and tokens without including any other field
 
         :return: Serialization of the inputs, outputs and tokens
@@ -201,11 +201,8 @@ class Transaction(BaseTransaction):
         # This method does not depend on the input itself, however we call it for each one to sign it.
         # For transactions that have many inputs there is a significant decrease on the verify time
         # when using this cache, so we call this method only once.
-        # We need two caches because the returned value is different depending on clear_input_data value (True/False)
-        if clear_input_data and self._sighash_cache1:
-            return self._sighash_cache1
-        elif not clear_input_data and self._sighash_cache2:
-            return self._sighash_cache2
+        if self._sighash_cache:
+            return self._sighash_cache
 
         struct_bytes = bytearray(pack(_SIGHASH_ALL_FORMAT_STRING, self.version, len(self.tokens), len(self.inputs),
                                  len(self.outputs)))
@@ -214,17 +211,21 @@ class Transaction(BaseTransaction):
             struct_bytes += token_uid
 
         for tx_input in self.inputs:
-            struct_bytes += tx_input.get_sighash_bytes(clear_input_data)
+            struct_bytes += tx_input.get_sighash_bytes()
 
         for tx_output in self.outputs:
             struct_bytes += bytes(tx_output)
 
         ret = bytes(struct_bytes)
-        if clear_input_data:
-            self._sighash_cache1 = ret
-        else:
-            self._sighash_cache2 = ret
+        self._sighash_cache = ret
         return ret
+
+    def get_sighash_all_data(self) -> bytes:
+        """Return the sha256 hash of sighash_all"""
+        if self._sighash_data_cache is None:
+            self._sighash_data_cache = hashlib.sha256(self.get_sighash_all()).digest()
+
+        return self._sighash_data_cache
 
     def get_token_uid(self, index: int) -> bytes:
         """Returns the token uid with corresponding index from the tx token uid list.
@@ -272,7 +273,6 @@ class Transaction(BaseTransaction):
         """
         self.verify_pow()
         self.verify_number_of_inputs()
-        self.verify_number_of_outputs()
         self.verify_outputs()
 
     def verify_number_of_inputs(self) -> None:
@@ -285,25 +285,15 @@ class Transaction(BaseTransaction):
                 raise NoInputError('Transaction must have at least one input')
 
     def verify_outputs(self) -> None:
-        """Verify outputs reference an existing token uid in the tx list and there are no hathor
-        authority UTXOs
+        """Verify outputs reference an existing token uid in the tokens list
 
-        :raises InvalidToken: output references non existent token uid or when there's a hathor authority utxo
+        :raises InvalidToken: output references non existent token uid
         """
-        for index, output in enumerate(self.outputs):
+        super().verify_outputs()
+        for output in self.outputs:
             # check index is valid
             if output.get_token_index() > len(self.tokens):
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
-
-            # no hathor authority UTXO
-            if (output.get_token_index() == 0) and output.is_token_authority():
-                raise InvalidToken('Cannot have authority UTXO for hathor tokens: {}'.format(
-                    output.to_human_readable()))
-
-            # output value must be positive
-            if output.value <= 0:
-                raise InvalidOutputValue('Output value must be a positive integer. Value: {} and index: {}'.format(
-                    output.value, index))
 
     def get_token_info_from_inputs(self) -> Dict[bytes, TokenInfo]:
         """Sum up all tokens present in the inputs and their properties (amount, can_mint, can_melt)
