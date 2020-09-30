@@ -20,7 +20,7 @@ import sys
 import time
 from enum import Enum, IntFlag
 from math import log
-from typing import Any, List, Optional, Type, Union, cast
+from typing import Any, Iterator, List, NamedTuple, Optional, Union, cast
 
 from structlog import get_logger
 from twisted.internet import defer
@@ -33,12 +33,13 @@ from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.exception import InvalidNewTransaction
 from hathor.indexes import TokensIndex, WalletIndex
+from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.stratum import StratumFactory
-from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, TxOutput, sum_weights
+from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion, sum_weights
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.wallet import BaseWallet
@@ -371,6 +372,25 @@ class HathorManager:
             timestamp, [x.hex() for x in self.tx_storage.get_tx_tips(timestamp - 1)])
         return [x.data for x in ret]
 
+    def generate_parent_txs(self, timestamp: float) -> 'ParentTxs':
+        """Select which transactions will be confirmed by a new block.
+
+        This method tries to return a stable result, such that for a given timestamp and storage state it will always
+        return the same.
+        """
+        can_include_intervals = sorted(self.tx_storage.get_tx_tips(timestamp - 1))
+        assert can_include_intervals, 'tips cannot be empty'
+        max_timestamp = max(int(i.begin) for i in can_include_intervals)
+        must_include: List[bytes] = []
+        assert len(can_include_intervals) > 0, f'invalid timestamp "{timestamp}", no tips found"'
+        if len(can_include_intervals) < 2:
+            # If there is only one tip, let's randomly choose one of its parents.
+            must_include_interval = can_include_intervals[0]
+            must_include = [must_include_interval.data]
+            can_include_intervals = sorted(self.tx_storage.get_tx_tips(must_include_interval.begin - 1))
+        can_include = [i.data for i in can_include_intervals]
+        return ParentTxs(max_timestamp, can_include, must_include)
+
     def allow_mining_without_peers(self) -> None:
         """Allow mining without being synced to at least one peer.
         It should be used only for debugging purposes.
@@ -384,7 +404,118 @@ class HathorManager:
             return True
         return self.connections.has_synced_peer()
 
-    def generate_mining_block(self, timestamp: Optional[float] = None,
+    def get_block_templates(self, parent_block_hash: Optional[bytes] = None,
+                            timestamp: Optional[int] = None) -> BlockTemplates:
+        """ Cached version of `make_block_templates`, cache is invalidated when latest_timestamp changes."""
+        if parent_block_hash is not None:
+            return BlockTemplates([self.make_block_template(parent_block_hash, timestamp)], storage=self.tx_storage)
+        return BlockTemplates(self.make_block_templates(timestamp), storage=self.tx_storage)
+        # FIXME: the following caching scheme breaks tests:
+        # cached_timestamp: Optional[int]
+        # cached_block_template: BlockTemplates
+        # cached_timestamp, cached_block_template = getattr(self, '_block_templates_cache', (None, None))
+        # if cached_timestamp == self.tx_storage.latest_timestamp:
+        #     return cached_block_template
+        # block_templates = BlockTemplates(self.make_block_templates(), storage=self.tx_storage)
+        # setattr(self, '_block_templates_cache', (self.tx_storage.latest_timestamp, block_templates))
+        # return block_templates
+
+    def make_block_templates(self, timestamp: Optional[int] = None) -> Iterator[BlockTemplate]:
+        """ Makes block templates for all possible best tips as of the latest timestamp.
+
+        Each block template has all the necessary info to build a block to be mined without requiring further
+        information from the blockchain state. Which is ideal for use by external mining servers.
+        """
+        for parent_block_hash in self.tx_storage.get_best_block_tips():
+            yield self.make_block_template(parent_block_hash, timestamp)
+
+    def make_block_template(self, parent_block_hash: bytes, timestamp: Optional[int] = None) -> BlockTemplate:
+        """ Makes a block template using the given parent block.
+        """
+        parent_block = self.tx_storage.get_transaction(parent_block_hash)
+        assert isinstance(parent_block, Block)
+        parent_txs = self.generate_parent_txs(parent_block.timestamp + settings.MAX_DISTANCE_BETWEEN_BLOCKS)
+        if timestamp is None:
+            current_timestamp = int(max(self.tx_storage.latest_timestamp, self.reactor.seconds()))
+        else:
+            current_timestamp = timestamp
+        return self._make_block_template(parent_block, parent_txs, current_timestamp)
+
+    def make_custom_block_template(self, parent_block_hash: bytes, parent_tx_hashes: List[bytes],
+                                   timestamp: Optional[int] = None) -> BlockTemplate:
+        """ Makes a block template using the given parent block and txs.
+        """
+        parent_block = self.tx_storage.get_transaction(parent_block_hash)
+        assert isinstance(parent_block, Block)
+        # gather the actual txs to query their timestamps
+        parent_tx_list: List[Transaction] = []
+        for tx_hash in parent_tx_hashes:
+            tx = self.tx_storage.get_transaction(tx_hash)
+            assert isinstance(tx, Transaction)
+            parent_tx_list.append(tx)
+        max_timestamp = max(tx.timestamp for tx in parent_tx_list)
+        parent_txs = ParentTxs(max_timestamp, parent_tx_hashes, [])
+        if timestamp is None:
+            current_timestamp = int(max(self.tx_storage.latest_timestamp, self.reactor.seconds()))
+        else:
+            current_timestamp = timestamp
+        return self._make_block_template(parent_block, parent_txs, current_timestamp)
+
+    def _make_block_template(self, parent_block: Block, parent_txs: 'ParentTxs', current_timestamp: int,
+                             with_weight_decay: bool = False) -> BlockTemplate:
+        """ Further implementation of making block template, used by make_block_template and make_custom_block_template
+        """
+        assert parent_block.hash is not None
+        # the absolute minimum would be the previous timestamp + 1
+        timestamp_abs_min = parent_block.timestamp + 1
+        # and absolute maximum limited by max time between blocks
+        if not parent_block.is_genesis:
+            timestamp_abs_max = parent_block.timestamp + settings.MAX_DISTANCE_BETWEEN_BLOCKS - 1
+        else:
+            timestamp_abs_max = 0xffffffff
+        assert timestamp_abs_max > timestamp_abs_min
+        # actual minimum depends on the timestamps of the parent txs
+        # it has to be at least the max timestamp of parents + 1
+        timestamp_min = max(timestamp_abs_min, parent_txs.max_timestamp + 1)
+        assert timestamp_min <= timestamp_abs_max
+        # when we have weight decay, the max timestamp will be when the next decay happens
+        if with_weight_decay and settings.WEIGHT_DECAY_ENABLED:
+            # we either have passed the first decay or not, the range will vary depending on that
+            if timestamp_min > timestamp_abs_min + settings.WEIGHT_DECAY_ACTIVATE_DISTANCE:
+                timestamp_max_decay = timestamp_min + settings.WEIGHT_DECAY_WINDOW_SIZE
+            else:
+                timestamp_max_decay = timestamp_abs_min + settings.WEIGHT_DECAY_ACTIVATE_DISTANCE
+            timestamp_max = min(timestamp_abs_max, timestamp_max_decay)
+        else:
+            timestamp_max = timestamp_abs_max
+        timestamp = min(max(current_timestamp, timestamp_min), timestamp_max)
+        weight = self.calculate_next_weight(parent_block, timestamp)
+        parent_block_metadata = parent_block.get_metadata()
+        height = parent_block_metadata.height + 1
+        parents = [parent_block.hash] + parent_txs.must_include
+        parents_any = parent_txs.can_include
+        # simplify representation when you only have one to choose from
+        if len(parents) + len(parents_any) == 3:
+            parents.extend(sorted(parents_any))
+            parents_any = []
+        assert len(parents) + len(parents_any) >= 3, 'There should be enough parents to choose from'
+        assert 1 <= len(parents) <= 3, 'Impossible number of parents'
+        if __debug__ and len(parents) == 3:
+            assert len(parents_any) == 0, 'Extra parents to choose from that cannot be chosen'
+        return BlockTemplate(
+            versions={TxVersion.REGULAR_BLOCK.value, TxVersion.MERGE_MINED_BLOCK.value},
+            reward=self.get_tokens_issued_per_block(height),
+            weight=weight,
+            timestamp_now=current_timestamp,
+            timestamp_min=timestamp_min,
+            timestamp_max=timestamp_max,
+            parents=parents,
+            parents_any=parents_any,
+            height=height,
+            score=sum_weights(parent_block_metadata.score, weight),
+        )
+
+    def generate_mining_block(self, timestamp: Optional[int] = None,
                               parent_block_hash: Optional[bytes] = None,
                               data: bytes = b'', address: Optional[bytes] = None,
                               merge_mined: bool = False) -> Union[Block, MergeMinedBlock]:
@@ -394,60 +525,17 @@ class HathorManager:
         :return: A block ready to be mined
         :rtype: :py:class:`hathor.transaction.Block`
         """
-        from hathor.transaction.scripts import create_output_script
-
-        if parent_block_hash is None:
-            tip_blocks = self.tx_storage.get_best_block_tips(timestamp)
-        else:
-            tip_blocks = [parent_block_hash]
-
-        # We must update it after choosing the parent block, so we may benefit from cache.
-        if timestamp is None:
-            timestamp = max(self.tx_storage.latest_timestamp, self.reactor.seconds())
-        assert timestamp is not None
-
-        parent_block = self.tx_storage.get_transaction(random.choice(tip_blocks))
-        assert parent_block.timestamp is not None
-        assert parent_block.hash is not None
-        assert timestamp is not None
-
-        if not parent_block.is_genesis and timestamp - parent_block.timestamp > settings.MAX_DISTANCE_BETWEEN_BLOCKS:
-            timestamp = parent_block.timestamp + settings.MAX_DISTANCE_BETWEEN_BLOCKS
-
-        tip_txs = self.get_new_tx_parents(timestamp - 1)
-
-        assert len(tip_blocks) >= 1
-        assert len(tip_txs) == 2
-
-        assert parent_block.hash is not None
-        parents: List[bytes] = [parent_block.hash] + tip_txs
-
-        parents_tx = [self.tx_storage.get_transaction(x) for x in parents]
-
-        timestamp1 = int(timestamp)
-        timestamp2 = max(x.timestamp for x in parents_tx) + 1
-
         if address is None:
             if self.wallet is None:
                 raise ValueError('No wallet available and no mining address given')
             address = self.wallet.get_unused_address_bytes(mark_as_used=False)
         assert address is not None
-
-        height = parent_block.get_metadata().height + 1
-        amount = self.get_tokens_issued_per_block(height)
-        output_script = create_output_script(address) if address else b''
-        tx_outputs = [TxOutput(amount, output_script)]
-
-        cls: Union[Type['Block'], Type['MergeMinedBlock']]
-        if merge_mined:
-            cls = MergeMinedBlock
-        else:
-            cls = Block
-        blk = cls(outputs=tx_outputs, parents=parents, storage=self.tx_storage, data=data)
-        blk.timestamp = max(timestamp1, timestamp2)
-        blk.weight = self.calculate_block_difficulty(blk)
-        blk.get_metadata(use_storage=False)
-        return blk
+        block = self.get_block_templates(parent_block_hash, timestamp).generate_mining_block(
+            merge_mined=merge_mined,
+            address=address,
+            data=data,
+        )
+        return block
 
     def get_tokens_issued_per_block(self, height: int) -> int:
         """Return the number of tokens issued (aka reward) per block of a given height."""
@@ -609,22 +697,27 @@ class HathorManager:
         return n_windows * settings.WEIGHT_DECAY_AMOUNT
 
     def calculate_block_difficulty(self, block: Block) -> float:
-        """ Calculate block difficulty according to the ascendents of `block`, aka DAA/difficulty adjustment algorithm
+        """ Calculate block weight according to the ascendents of `block`, using calculate_next_weight."""
+        # In test mode we don't validate the block difficulty
+        if self.test_mode & TestMode.TEST_BLOCK_WEIGHT:
+            return 1.0
+        if block.is_genesis:
+            return self.min_block_weight
+        return self.calculate_next_weight(block.get_block_parent(), block.timestamp)
+
+    def calculate_next_weight(self, parent_block: Block, timestamp: int) -> float:
+        """ Calculate the next block weight, aka DAA/difficulty adjustment algorithm.
 
         The algorithm used is described in [RFC 22](https://gitlab.com/HathorNetwork/rfcs/merge_requests/22).
 
-        The new difficulty must not be less than `self.min_block_weight`.
+        The weight must not be less than `self.min_block_weight`.
         """
         # In test mode we don't validate the block difficulty
         if self.test_mode & TestMode.TEST_BLOCK_WEIGHT:
             return 1.0
 
-        if block.is_genesis:
-            return self.min_block_weight
-
-        root = block
-        parent = root.get_block_parent()
-        N = min(2 * settings.BLOCK_DIFFICULTY_N_BLOCKS, parent.get_metadata().height - 1)
+        root = parent_block
+        N = min(2 * settings.BLOCK_DIFFICULTY_N_BLOCKS, parent_block.get_metadata().height - 1)
         K = N // 2
         T = self.avg_time_between_blocks
         S = 5
@@ -633,10 +726,10 @@ class HathorManager:
 
         blocks: List[Block] = []
         while len(blocks) < N + 1:
+            blocks.append(root)
             root = root.get_block_parent()
             assert isinstance(root, Block)
             assert root is not None
-            blocks.append(root)
 
         # TODO: revise if this assertion can be safely removed
         assert blocks == sorted(blocks, key=lambda tx: -tx.timestamp)
@@ -669,7 +762,7 @@ class HathorManager:
         weight = logsum_weights - log(sum_solvetimes, 2) + log(T, 2)
 
         # Apply weight decay
-        weight -= self.get_weight_decay_amount(block.timestamp - parent.timestamp)
+        weight -= self.get_weight_decay_amount(timestamp - parent_block.timestamp)
 
         # Apply minimum weight
         if weight < self.min_block_weight:
@@ -722,3 +815,13 @@ class HathorManager:
             proto, _, _ = description.partition(':')
             address = '{}://{}:{}'.format(proto, self.hostname, endpoint._port)
             self.my_peer.entrypoints.append(address)
+
+
+class ParentTxs(NamedTuple):
+    """ Tuple where the `must_include` hash, when present (at most 1), must be included in a pair, and a list of hashes
+    where any of them can be included. This is done in order to make sure that when there is only one tx tip, it is
+    included.
+    """
+    max_timestamp: int
+    can_include: List[bytes]
+    must_include: List[bytes]

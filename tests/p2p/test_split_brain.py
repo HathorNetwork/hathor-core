@@ -81,9 +81,14 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         conn.run_one_step()  # HELLO
         conn.run_one_step()  # PEER-ID
+        conn.run_one_step()  # READY
+        conn.run_one_step()  # GET-PEERS
+        conn.run_one_step()  # GET-TIPS
+        conn.run_one_step()  # PEERS
+        conn.run_one_step()  # TIPS
 
         empty_counter = 0
-        for i in range(1000):
+        for i in range(2000):
             if conn.is_empty():
                 empty_counter += 1
                 if empty_counter > 10:

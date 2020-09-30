@@ -119,6 +119,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data_error3['success'])
 
         add_new_blocks(self.manager, 1, advance_clock=1)
+        add_new_blocks(self.manager, 1, advance_clock=1)  # XXX: adding extra block, not sure why this is needed
         add_blocks_unlock_reward(self.manager)
 
         # Sending token with timelock

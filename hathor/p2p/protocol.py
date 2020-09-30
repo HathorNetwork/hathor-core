@@ -235,19 +235,21 @@ class HathorProtocol:
                 self.log.warn('recv_message processing error', exc_info=True)
                 raise
         else:
-            self.send_error('Invalid Command: {}'.format(cmd))
+            self.send_error_and_close_connection('Invalid Command: {}'.format(cmd))
 
         return None
 
     def send_error(self, msg: str) -> None:
         """ Send an error message to the peer.
         """
+        self.log.warn('protocol error', msg=msg)
         self.send_message(ProtocolMessages.ERROR, msg)
 
     def send_error_and_close_connection(self, msg: str) -> None:
         """ Send an ERROR message to the peer, and then closes the connection.
         """
         self.send_error(msg)
+        self.log.warn('close connection due to previous error')
         # from twisted docs: "If a producer is being used with the transport, loseConnection will only close
         # the connection once the producer is unregistered." We call on_exit to make sure any producers (like
         # the one from node_sync) are unregistered

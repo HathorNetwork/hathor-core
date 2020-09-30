@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from hathor.client import HathorClientStub
 from hathor.merged_mining import MergedMiningCoordinator
@@ -49,9 +49,9 @@ class BitcoinRPCStub(IBitcoinRPC):
     def __init__(self, response_delay: float = 0.01):
         self.response_delay = response_delay
 
-    async def get_block_template(self, *, rules: List[str] = ['segwit'],
-                                 capabilities: List[str] = ['coinbasetxn', 'workid', 'coinbase/append'],
-                                 ) -> Dict[Any, Any]:
+    async def get_block_template(self, *, rules: List[str] = ['segwit'], longpoll_id: Optional[str],
+                                 capabilities: List[str] = ['coinbasetxn', 'workid', 'coinbase/append', 'longpoll'],
+                                 ) -> Dict:
         stub = {
             'capabilities': ['proposal'],
             'version': 536870912,

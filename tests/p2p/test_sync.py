@@ -97,12 +97,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         conn.run_one_step()  # HELLO
         conn.run_one_step()  # PEER-ID
-
-        for _ in range(100):
-            if not conn.tr1.value() and not conn.tr2.value():
-                break
-            conn.run_one_step()
-            self.clock.advance(0.1)
+        conn.run_one_step()  # READY
 
         node_sync = conn.proto1.state.get_sync_plugin()
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
@@ -117,7 +112,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         conn = FakeConnection(self.manager1, manager2)
 
         for _ in range(10000):
-            if not conn.tr1.value() and not conn.tr2.value():
+            if conn.is_empty():
                 break
             conn.run_one_step(debug=True)
             self.clock.advance(0.1)
@@ -137,10 +132,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         conn = FakeConnection(self.manager1, manager2)
 
-        for idx in range(1000):
-            if not conn.tr1.value() and not conn.tr2.value():
-                break
-            conn.run_one_step()
+        while not conn.is_empty():
+            conn.run_one_step(debug=True)
             self.clock.advance(0.1)
 
         node_sync = conn.proto1.state.get_sync_plugin()
