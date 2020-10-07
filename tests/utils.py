@@ -3,6 +3,7 @@ import random
 import subprocess
 import time
 import urllib.parse
+from collections import deque
 from concurrent import futures
 from typing import TYPE_CHECKING, List
 
@@ -228,56 +229,110 @@ class FakeConnection:
         self.latency = latency
         self.is_connected = True
 
-        self.proto1 = manager1.server_factory.buildProtocol(('127.0.0.1', 0))
-        self.proto2 = manager2.client_factory.buildProtocol(('127.0.0.1', 0))
+        self._proto1 = manager1.server_factory.buildProtocol(('127.0.0.1', 0))
+        self._proto2 = manager2.client_factory.buildProtocol(('127.0.0.1', 0))
 
-        self.tr1 = HathorStringTransport(self.proto2.my_peer)
-        self.tr2 = HathorStringTransport(self.proto1.my_peer)
+        self.tr1 = HathorStringTransport(self._proto2.my_peer)
+        self.tr2 = HathorStringTransport(self._proto1.my_peer)
 
-        self.proto1.makeConnection(self.tr1)
-        self.proto2.makeConnection(self.tr2)
+        self._do_buffering = True
+        self._buf1 = deque()
+        self._buf2 = deque()
+
+        self._proto1.makeConnection(self.tr1)
+        self._proto2.makeConnection(self.tr2)
+
+    @property
+    def proto1(self):
+        return self._proto1
+
+    @property
+    def proto2(self):
+        return self._proto2
 
     def run_one_step(self, debug=False, force=False):
-        if not self.is_connected:
-            raise Exception()
+        assert self.is_connected, 'not connected'
 
-        line1 = self.tr1.value()
-        line2 = self.tr2.value()
+        if debug:
+            print('[do step]')
 
-        self.tr1.clear()
-        self.tr2.clear()
-
-        if self.latency > 0:
-            if line1:
-                self.manager1.reactor.callLater(self.latency, self.deliver_message, self.proto2, line1)
-            if line2:
-                self.manager2.reactor.callLater(self.latency, self.deliver_message, self.proto1, line2)
-
+        if self._do_buffering:
+            if not self._buf1:
+                self._buf1.extend(self.tr1.value().splitlines(keepends=True))
+                self.tr1.clear()
+            if not self._buf2:
+                self._buf2.extend(self.tr2.value().splitlines(keepends=True))
+                self.tr2.clear()
+            if self._buf1:
+                line1 = self._buf1.popleft()
+            else:
+                line1 = b''
+            if self._buf2:
+                line2 = self._buf2.popleft()
+            else:
+                line2 = b''
         else:
-            if line1:
-                self.proto2.dataReceived(line1)
+            line1 = self.tr1.value()
+            self.tr1.clear()
+            line2 = self.tr2.value()
+            self.tr2.clear()
+
+        if line1:
+            if self.latency > 0:
+                self.manager1.reactor.callLater(self.latency, self._deliver_message, self._proto2, line1, debug)
+                if debug:
+                    print('[1->2] delayed by', self.latency)
+            else:
+                self._proto2.dataReceived(line1)
                 if debug:
                     print('[1->2]', line1)
 
-            if line2:
-                self.proto1.dataReceived(line2)
+        if line2:
+            if self.latency > 0:
+                self.manager2.reactor.callLater(self.latency, self._deliver_message, self._proto1, line2, debug)
+                if debug:
+                    print('[1->2] delayed by', self.latency)
+            else:
+                self._proto1.dataReceived(line2)
                 if debug:
                     print('[2->1]', line2)
 
         return True
 
-    def deliver_message(self, proto, data):
+    def run_until_complete(self, debug=False, force=False):
+        while not self.is_empty():
+            self.run_one_step(debug=debug, force=force)
+
+    def _deliver_message(self, proto, data, debug=False):
         proto.dataReceived(data)
 
     def disconnect(self, reason):
         self.tr1.loseConnection()
-        self.proto1.connectionLost(reason)
+        self._proto1.connectionLost(reason)
         self.tr2.loseConnection()
-        self.proto2.connectionLost(reason)
+        self._proto2.connectionLost(reason)
         self.is_connected = False
 
     def is_empty(self):
+        if self._do_buffering and (self._buf1 or self._buf2):
+            return False
         return not self.tr1.value() and not self.tr2.value()
+
+    def peek_tr1_value(self):
+        if self._do_buffering and self._buf1:
+            return self._buf1[0]
+        value = self.tr1.value()
+        if not value:
+            return b''
+        return value.splitlines(keepends=True)[0]
+
+    def peek_tr2_value(self):
+        if self._do_buffering and self._buf2:
+            return self._buf2[0]
+        value = self.tr2.value()
+        if not value:
+            return b''
+        return value.splitlines(keepends=True)[0]
 
 
 class Simulator:
@@ -650,7 +705,7 @@ def create_tokens(manager: 'HathorManager', address_b58: str = None, mint_amount
         token_symbol=token_symbol,
         timestamp=timestamp
     )
-    data_to_sign = tx.get_sighash_all(clear_input_data=True)
+    data_to_sign = tx.get_sighash_all()
     if use_genesis:
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, genesis_private_key)
     else:

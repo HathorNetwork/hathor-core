@@ -195,7 +195,12 @@ class NodeSyncTimestamp(Plugin):
         self.call_later_id: Optional[IDelayedCall] = None
         self.call_later_interval: int = 1  # seconds
 
+        # Timestamp of the peer's latest block (according to the peer itself)
         self.peer_timestamp: int = 0
+
+        # Latest timestamp in which we're synced.
+        # This number may decrease if a new transaction/block arrives in a timestamp smaller than it.
+        self.synced_timestamp: int = 0
 
         self.send_data_queue: SendDataPush = SendDataPush(self)
 
@@ -205,10 +210,6 @@ class NodeSyncTimestamp(Plugin):
 
         # Latest deferred waiting for a reply.
         self.deferred_by_key: Dict[str, Deferred] = {}
-
-        # Latest timestamp in which we're synced.
-        # This number may decrease if a new transaction/block arrives in a timestamp smaller than it.
-        self.synced_timestamp: int = 0
 
         # Maximum difference between our latest timestamp and synced timestamp to consider
         # that the peer is synced (in seconds).
@@ -264,8 +265,18 @@ class NodeSyncTimestamp(Plugin):
         if self.call_later_id and self.call_later_id.active():
             self.call_later_id.cancel()
 
+    # XXX[jansegre]: maybe we should rename this to `out_of_sync` and invert the condition, would be easier to
+    #                understand its usage on `send_tx_to_peer_if_possible` IMO
     def is_synced(self) -> bool:
-        """ Return True if we are synced.
+        """ Test whether we have sent (or received) txs in storage to/from the remote peer up a certain threshold.
+
+        When `True` we will send any new tx to the remote peer, since we're confident it can process it. When `False`
+        we will have to explicitly check if we have synced up to the parents of the new tx to determine if we will send
+        it.
+
+        This condition is used to decide if we will send a new tx to that peer, but this isn't the only requirement.
+        See the `send_tx_to_peer_if_possible` method for the exact process and to understand why this condition has to
+        be this way.
         """
         return self.manager.tx_storage.latest_timestamp - self.synced_timestamp <= self.sync_threshold
 

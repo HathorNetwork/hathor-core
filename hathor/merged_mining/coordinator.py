@@ -19,17 +19,16 @@ Asyncio with async/await is much more ergonomic and less cumbersome than twisted
 """
 
 import asyncio
-import pickle
 import random
 import time
 from itertools import count
-from tempfile import NamedTemporaryFile
 from typing import Any, Callable, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple, Union
 from uuid import uuid4
 
+import aiohttp
 from structlog import get_logger
 
-from hathor.client import IHathorClient
+from hathor.client import IHathorClient, IMiningChannel
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.difficulty import Hash, PDiff, Target, Weight
@@ -283,7 +282,6 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         self._current_difficulty = PDiff(1)
         self.payback_script_bitcoin: Optional[bytes] = None
         self.payback_script_hathor: Optional[bytes] = None
-        self.dump_bad_jobs = False
         self.worker_name: Optional[str] = None
         self.login: Optional[str] = None
         # used to estimate the miner's hashrate, items are a tuple (timestamp, logwork)
@@ -672,16 +670,16 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
                 self.log.debug('share is too late, skip Hathor submit')
                 return
         try:
-            res = await self.coordinator.hathor_client.submit_block(block)
+            assert self.coordinator.hathor_mining is not None
+            res = await self.coordinator.hathor_mining.submit(block)
         except Exception:
             self.log.warn('submit to Hathor failed', exc_info=True)
             return
-        self.log.debug('hathor_client.submit_block', res=res)
+        self.log.debug('hathor_mining.submit', res=res)
         if job.hathor_height is not None:
             self.coordinator.update_hathor_submitted(job.hathor_height)
         if res:
             self.log.info('new Hathor block found!!!', hash=block.hash.hex())
-            await self.coordinator.update_hathor_block()
 
     async def submit_to_bitcoin(self, job: SingleMinerJob, work: SingleMinerWork) -> None:
         """ Submit work to Bitcoin RPC.
@@ -709,21 +707,12 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         if res is None:
             self.log.info('new Bitcoin block found!!!', hash=bitcoin_block.header.hash.hex())
             await self.coordinator.update_bitcoin_block()
-        elif res == 'high-hash':
-            self.log.debug('high hash for Bitcoin, keep searching.')
-        elif res.startswith('bad-') or res == 'rejected':
-            if self.dump_bad_jobs:
-                f = NamedTemporaryFile(dir='.', prefix='dump-', suffix='.pickle', delete=False)
-                pickle.dump({
-                    'job': job,
-                    'work': work,
-                }, f)
-                f.close()
-                self.log.warn('block rejected from Bitcoin', code=res, dump_file=f.name)
-            else:
-                self.log.warn('block rejected from Bitcoin', code=res)
         else:
-            self.log.info('other result from Bitcoin', res=res)
+            # Known reasons:
+            # - high-hash: PoW not enough, shouldn't happen because we check the difficulty before sending
+            # - bad-*: invalid block data
+            # - unexpected-witness: transaction has inputs with witness but isn't marked as containing witnesses
+            self.log.error('block rejected from Bitcoin', reason=res)
 
     def set_difficulty(self, diff: float) -> None:
         """ Sends the difficulty to the connected client, applies for all future "mining.notify" until it is set again.
@@ -1111,12 +1100,12 @@ class MergedMiningCoordinator:
     """
 
     BITCOIN_UPDATE_INTERVAL = 10.0
-    HATHOR_UPDATE_INTERVAL = 3.0
     # very arbitrary, max times since last submit that we consider sending a new winning share
     BITCOIN_MAX_FUTURE_SUBMIT_SECONDS = 30.0
     HATHOR_MAX_FUTURE_SUBMIT_SECONDS = 30.0
     XNONCE1_SIZE = 2
     MAX_XNONCE1 = 2**XNONCE1_SIZE - 1
+    MAX_RECONNECT_BACKOFF = 30
 
     def __init__(self,  bitcoin_rpc: IBitcoinRPC, hathor_client: IHathorClient,
                  payback_address_bitcoin: Optional[str], payback_address_hathor: Optional[str],
@@ -1125,6 +1114,7 @@ class MergedMiningCoordinator:
         self.log = logger.new()
         self.bitcoin_rpc = bitcoin_rpc
         self.hathor_client = hathor_client
+        self.hathor_mining: Optional[IMiningChannel] = None
         self.address_from_login = address_from_login
         self.jobs: Set[SingleMinerJob] = set()
         self.miner_protocols: Dict[str, MergedMiningStratumProtocol] = {}
@@ -1143,8 +1133,8 @@ class MergedMiningCoordinator:
         self.sequential_xnonce1 = sequential_xnonce1
         self._next_xnonce1 = 0
         self.job_count = 0
-        self.update_bitcoin_block_task: Optional[Periodic] = None
-        self.update_hathor_block_task: Optional[Periodic] = None
+        self.update_bitcoin_block_task: Optional[asyncio.Task] = None
+        self.update_hathor_block_task: Optional[asyncio.Task] = None
         self.started_at = 0.0
         self.strip_all_transactions = False
         self.strip_segwit_transactions = False
@@ -1187,43 +1177,56 @@ class MergedMiningCoordinator:
     async def start(self) -> None:
         """ Starts the coordinator and subscribes for new blocks on the both networks in order to update miner jobs.
         """
+        loop = asyncio.get_event_loop()
         self.started_at = time.time()
-        self.update_bitcoin_block_task = Periodic(self.update_bitcoin_block, self.BITCOIN_UPDATE_INTERVAL)
-        await self.update_bitcoin_block_task.start()
-        self.update_hathor_block_task = Periodic(self.update_hathor_block, self.HATHOR_UPDATE_INTERVAL)
-        await self.update_hathor_block_task.start()
+        self.update_bitcoin_block_task = loop.create_task(self.update_bitcoin_block())
+        self.update_hathor_block_task = loop.create_task(self.update_hathor_block())
 
     async def stop(self) -> None:
         """ Stops the client, interrupting mining processes, stoping supervisor loop, and sending finished jobs.
         """
         assert self.update_bitcoin_block_task is not None
-        await self.update_bitcoin_block_task.stop()
+        self.update_bitcoin_block_task.cancel()
         assert self.update_hathor_block_task is not None
-        await self.update_hathor_block_task.stop()
+        self.update_hathor_block_task.cancel()
+        try:
+            await asyncio.gather(
+                self.update_bitcoin_block_task,
+                self.update_hathor_block_task,
+            )
+        except Exception:
+            # XXX: ignore cancelled error, not clear what class it will be, depends on the event loop implementation
+            #      it's probably not too important to nail down the exact exception
+            self.log.warn('exception stopping Hathor task', exc_info=True)
 
     async def update_bitcoin_block(self) -> None:
-        """ Method periodically called to update the bitcoin block template.
+        """ Task that continuously polls block templates from bitcoin.get_block_template
         """
-        self.log.debug('get Bitcoin block template')
-        try:
-            data = await self.bitcoin_rpc.get_block_template()
-        except Exception:
-            self.log.warn('failed to get Bitcoin block template', exc_info=True)
-            return
-        self.last_bitcoin_block_received = time.time()
-        if self.strip_all_transactions:
-            strip_transactions(data, lambda t: True)
-            data.pop('default_witness_commitment', None)
-        elif self.strip_segwit_transactions:
-            strip_transactions(data, lambda t: BitcoinTransaction.from_dict(t).include_witness)
-            data.pop('default_witness_commitment', None)
-        data_log = data.copy()
-        data_log['len(transactions)'] = len(data_log['transactions'])
-        del data_log['transactions']
-        # self.log.debug('bitcoin.getblocktemplate response', res=data_log)
-        self.bitcoin_coord_job = BitcoinCoordJob.from_dict(data)
-        self.log.debug('new Bitcoin block template', height=self.bitcoin_coord_job.height)
-        await self.update_merged_block()
+        backoff = 1
+        longpoll_id = None
+        while True:
+            self.log.debug('get Bitcoin block template')
+            try:
+                data = await self.bitcoin_rpc.get_block_template(longpoll_id=longpoll_id)
+            except Exception:
+                self.log.exception('failed to get Bitcoin Block Template', exc_info=True)
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, self.MAX_RECONNECT_BACKOFF)
+                continue
+            else:
+                backoff = 1
+                longpoll_id = data.get('longpollid')
+                self.last_bitcoin_block_received = time.time()
+                data_log = data.copy()
+                data_log['len(transactions)'] = len(data_log['transactions'])
+                del data_log['transactions']
+                self.log.debug('bitcoin.getblocktemplate response', res=data_log)
+                self.bitcoin_coord_job = BitcoinCoordJob.from_dict(data)
+                self.log.debug('new Bitcoin block template', height=self.bitcoin_coord_job.height)
+                await self.update_merged_block()
+                if longpoll_id is None:
+                    self.log.warn('no longpoll_id received, sleep instead')
+                    await asyncio.sleep(self.BITCOIN_UPDATE_INTERVAL)
 
     def update_bitcoin_submitted(self, height: int) -> None:
         """ Used to remember the last height submitted, for use when discarding late winning shares.
@@ -1262,22 +1265,37 @@ class MergedMiningCoordinator:
         return height < self.last_hathor_height_submitted
 
     async def update_hathor_block(self) -> None:
-        """ Method periodically called to update the hathor block template.
+        """ Task that continuously reconnects to the mining WS and waits for fresh block templates to update jobs.
         """
-        self.log.debug('get Hathor block template')
-        try:
-            block = await self.hathor_client.get_block_template(merged_mining=True,
-                                                                address=self.payback_address_hathor)
-            height = block.get_metadata(use_storage=False).height or None
-        except Exception:
-            self.log.warn('failed to get Hathor block template', exc_info=True)
-            return
-        assert isinstance(block, HathorBlock)
-        self.last_hathor_block_received = time.time()
-        # self.log.debug('hathor.get_block_template response', block=block, height=height)
-        self.hathor_coord_job = HathorCoordJob(block, height)
-        self.log.debug('new Hathor block template', height=height, weight=block.weight)
-        await self.update_merged_block()
+        backoff = 1
+        while True:
+            self.log.debug('connect to Hathor mining')
+            try:
+                self.hathor_mining = await self.hathor_client.mining()
+                backoff = 1
+                await self._update_hathor_block(self.hathor_mining)
+            except aiohttp.ClientError:
+                self.log.warn('lost connection with Hathor', exc_info=True)
+            else:
+                self.log.warn('lost connection with Hathor')
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, self.MAX_RECONNECT_BACKOFF)
+
+    async def _update_hathor_block(self, mining: IMiningChannel) -> None:
+        async for block_templates in mining:
+            self.log.debug('got Hathor block template')
+            # TODO: maybe hang on to all templates
+            block_template = random.choice(block_templates)
+            address_str = self.payback_address_hathor
+            address = decode_address(address_str) if address_str is not None else None
+            block = block_template.generate_mining_block(merge_mined=True, address=address)
+            height = block_template.height
+            assert isinstance(block, HathorBlock)
+            self.last_hathor_block_received = time.time()
+            # self.log.debug('hathor.get_block_template response', block=block, height=height)
+            self.hathor_coord_job = HathorCoordJob(block, height)
+            self.log.debug('new Hathor block template', height=height, weight=block.weight)
+            self.update_merged_block()
 
     def is_next_job_clean(self) -> bool:
         """ Used to determine if the current job must be immediatly stopped in favor of the next job.

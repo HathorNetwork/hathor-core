@@ -1,13 +1,59 @@
+# Copyright 2019 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+""" Module that contains a Python API for interacting with a portion of the HTTP/WS APIs
+"""
+
+import asyncio
+import random
+import string
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Set, Tuple
+from typing import Any, AsyncIterator, Dict, List, Optional, Set, Tuple, Union
 from urllib.parse import urljoin
 
-from aiohttp import ClientSession
+from aiohttp import ClientSession, ClientWebSocketResponse
 from multidict import MultiDict
+from structlog import get_logger
 
 from hathor.crypto.util import decode_address
+from hathor.exception import HathorError
+from hathor.manager import HathorManager
+from hathor.mining import BlockTemplate
+from hathor.pubsub import EventArguments, HathorEvents
 from hathor.transaction import BaseTransaction, Block, TransactionMetadata
 from hathor.transaction.storage import TransactionStorage
+
+logger = get_logger()
+
+
+class APIError(HathorError):
+    pass
+
+
+class JsonRpcError(HathorError):
+    def __init__(self, code: int, message: Optional[str] = None, data: Optional[Dict] = None):
+        self.code = code
+        self.message = message
+        self.data = data
+        super().__init__(message if message is not None else str(code))
+
+
+class IMiningChannel(AsyncIterator[List[BlockTemplate]]):
+    @abstractmethod
+    async def submit(self, block: Block) -> Optional[BlockTemplate]:
+        """Submit a mined block, when valid get a follow up template that uses the given block as parent."""
+        raise NotImplementedError
 
 
 class IHathorClient(ABC):
@@ -32,6 +78,11 @@ class IHathorClient(ABC):
     @abstractmethod
     async def submit_block(self, block: Block) -> bool:
         """Submit a freshly mined block to the network"""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def mining(self) -> IMiningChannel:
+        """Channel to receive a stream of block templates and submit blocks using `/v1a/mining_ws`"""
         raise NotImplementedError
 
 
@@ -112,12 +163,125 @@ class HathorClient(IHathorClient):
             resp.raise_for_status()
             return (await resp.json())['result']
 
+    async def mining(self) -> 'MiningChannel':
+        ws = await self.session.ws_connect(self._get_url('mining_ws'))
+        return MiningChannel(ws)
+
+
+class MiningChannel(IMiningChannel):
+    _ws: ClientWebSocketResponse
+    _requests: Dict[str, asyncio.Future]
+    _queue: asyncio.Future
+    _task: asyncio.Task
+
+    def __init__(self, ws: ClientWebSocketResponse):
+        self.loop = asyncio.get_event_loop()
+        self.log = logger.new()
+        self._ws = ws
+        self._requests = {}
+        self._queue = self.loop.create_future()
+        self._task = self.loop.create_task(self.__task())
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        try:
+            return await self._queue
+        finally:
+            self._queue = self.loop.create_future()
+
+    async def __task(self) -> None:
+        async for msg in self._ws:
+            try:
+                data = msg.json()
+            except Exception as e:
+                self.log.error('invalid message', msg=msg, exc_info=True)
+                if self._queue.done():
+                    self._queue = self.loop.create_future()
+                self._queue.set_exception(e)
+                break
+            if 'method' in data:
+                self._handle_request(data)
+            else:
+                self._handle_response(data)
+
+    def _handle_request(self, data: Dict) -> None:
+        # only request accepted is a 'mining.notify' notification
+        if data['method'] != 'mining.notify':
+            self.log.warn('unknown method received', data=data)
+            return
+        block_templates = [BlockTemplate.from_dict(d) for d in data.get('params', [])]
+        if self._queue.done():
+            self._queue = self.loop.create_future()
+        self._queue.set_result(block_templates)
+
+    def _handle_response(self, data: Dict) -> None:
+        _id = data.get('id')
+        id: Optional[str] = str(_id) if _id else None
+        error = data.get('error')
+        result = data.get('result')
+        if id is None:
+            if not error:
+                self.log.warn('result without id', data=data)
+            else:
+                self.log.warn('error response', error=error)
+            return
+        request = self._requests.get(id)
+        if not request:
+            self.log.warn('invalid response id', data=data)
+            return
+        if request.done():
+            self.log.warn('duplicate response', data=data)
+            return
+        if error:
+            if result:
+                self.log.warn('both error and result set', data=data)
+            request.set_exception(JsonRpcError(**error))
+        else:
+            request.set_result(result)
+
+    async def close(self) -> None:
+        self._task.cancel()
+        self._queue.cancel()
+        await self._task
+        await self._ws.close()
+
+    async def submit(self, block: Block) -> Optional[BlockTemplate]:
+        resp: Union[bool, Dict] = await self._do_request('mining.submit', {
+            'hexdata': bytes(block).hex(),
+        })
+        if resp:
+            assert isinstance(resp, Dict)
+            error = resp.get('error')
+            if error:
+                raise APIError(error)
+            return BlockTemplate.from_dict(resp['result'])
+        return None
+
+    async def _do_request(self, method: str, params: Union[Dict, List]) -> Any:
+        while True:
+            id = ''.join(random.choices(string.printable, k=10))
+            if id not in self._requests:
+                break
+        future = self._requests[id] = self.loop.create_future()
+        await self._ws.send_json({
+            'method': method,
+            'params': params,
+            'id': id,
+        })
+        try:
+            resp = await future
+        finally:
+            del self._requests[id]
+        return resp
+
 
 class HathorClientStub(IHathorClient):
     """ Dummy implementation that directly uses a manager instead of the HTTP API. Useful for tests.
     """
 
-    def __init__(self, manager):
+    def __init__(self, manager: HathorManager):
         self.manager = manager
 
     async def version(self) -> Tuple[int, int, int]:
@@ -129,11 +293,55 @@ class HathorClientStub(IHathorClient):
         return {}
 
     async def get_block_template(self, address: Optional[str] = None, merged_mining: bool = False) -> Block:
-        baddress = address and decode_address(address)
+        baddress = decode_address(address) if address is not None else None
         return self.manager.generate_mining_block(address=baddress, merge_mined=merged_mining)
 
     async def submit_block(self, block: Block) -> bool:
         return self.manager.propagate_tx(block)
+
+    async def mining(self) -> IMiningChannel:
+        return MiningChannelStub(self.manager)
+
+
+class MiningChannelStub(IMiningChannel):
+    manager: HathorManager
+    _queue: asyncio.Future
+
+    def __init__(self, manager: HathorManager):
+        self.manager = manager
+        self._reset_queue()
+        event = HathorEvents.NETWORK_NEW_TX_ACCEPTED
+        self._on_new_tx(event, EventArguments())  # call once to get an initial value
+        manager.pubsub.subscribe(event, self._on_new_tx)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        try:
+            return await self._queue
+        finally:
+            self._reset_queue()
+
+    def _reset_queue(self) -> None:
+        # SPSC queue with no buffer, using asyncio.Future as bridge from pubsub callback
+        loop = asyncio.get_event_loop()
+        self._queue = loop.create_future()
+
+    def _on_new_tx(self, key: HathorEvents, args: EventArguments) -> None:
+        if self._queue.done():
+            self._reset_queue()
+        try:
+            self._queue.set_result(self.manager.get_block_templates())
+        except Exception as e:
+            self._queue.set_exception(e)
+
+    async def submit(self, block: Block) -> Optional[BlockTemplate]:
+        if await self.submit(block):
+            assert block.hash is not None
+            return self.manager.make_block_template(block.hash)
+        else:
+            return None
 
 
 def create_tx_from_dict(data: Dict[str, Any], update_hash: bool = False,

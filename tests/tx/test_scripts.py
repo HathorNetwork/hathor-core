@@ -209,6 +209,28 @@ class BasicTransaction(unittest.TestCase):
         op_checksig(stack, log=[], extras=extras)
         self.assertEqual(1, stack.pop())
 
+    def test_checksig_cache(self):
+        block = self.genesis_blocks[0]
+
+        from hathor.transaction import Transaction, TxInput, TxOutput
+        txin = TxInput(tx_id=block.hash, index=0, data=b'')
+        txout = TxOutput(value=block.outputs[0].value, script=b'')
+        tx = Transaction(inputs=[txin], outputs=[txout])
+
+        import hashlib
+        data_to_sign = tx.get_sighash_all()
+        hashed_data = hashlib.sha256(data_to_sign).digest()
+        signature = self.genesis_private_key.sign(hashed_data, ec.ECDSA(hashes.SHA256()))
+        pubkey_bytes = get_public_key_bytes_compressed(self.genesis_public_key)
+
+        extras = ScriptExtras(tx=tx, txin=None, spent_tx=None)
+
+        stack = [signature, pubkey_bytes]
+        self.assertIsNone(tx._sighash_data_cache)
+        op_checksig(stack, log=[], extras=extras)
+        self.assertIsNotNone(tx._sighash_data_cache)
+        self.assertEqual(1, stack.pop())
+
     def test_hash160(self):
         with self.assertRaises(MissingStackItems):
             op_hash160([], log=[], extras=None)

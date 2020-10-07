@@ -83,7 +83,7 @@ def generate_signature(tx: Transaction, private_key_bytes: bytes, password: Opti
         :rtype: bytes
     """
     private_key = get_private_key_from_bytes(private_key_bytes, password=password)
-    data_to_sign = tx.get_sighash_all(clear_input_data=True)
+    data_to_sign = tx.get_sighash_all()
     hashed_data = hashlib.sha256(data_to_sign).digest()
     signature = private_key.sign(hashed_data, ec.ECDSA(hashes.SHA256()))
     return signature
