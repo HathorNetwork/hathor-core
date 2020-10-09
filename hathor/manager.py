@@ -532,7 +532,7 @@ class HathorManager:
         assert address is not None
         block = self.get_block_templates(parent_block_hash, timestamp).generate_mining_block(
             merge_mined=merge_mined,
-            address=address,
+            address=address or None,  # XXX: because we allow b'' for explicit empty output script
             data=data,
         )
         return block
