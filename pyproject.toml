@@ -43,6 +43,7 @@ pytest = "<4.6"
 pytest-cov = "<2.8"
 mypy-protobuf = "<1.11"
 grpcio-tools = "<1.22"
+flaky = "<3.8"
 
 [tool.poetry.dependencies]
 python = "~3.6"
