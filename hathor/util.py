@@ -19,7 +19,7 @@ import warnings
 from collections import OrderedDict
 from enum import Enum
 from functools import partial, wraps
-from typing import Any, Callable, Deque, Dict, Iterable, Iterator, Tuple, TypeVar, cast
+from typing import Any, Callable, Deque, Dict, Iterable, Iterator, Optional, Tuple, TypeVar, cast
 
 from structlog import get_logger
 from twisted.internet.interfaces import IReactorCore
@@ -286,9 +286,9 @@ def api_catch_exceptions(func: Callable[..., bytes]) -> Callable[..., bytes]:
         except HathorError as e:
             self = args[0] if len(args) > 0 else None
             if isinstance(self, Resource):
-                request = args[1] if len(args) > 1 else None
-                assert isinstance(request, Request)
-                request.setResponseCode(getattr(e, 'status_code', 500))
+                request = cast(Optional[Request], args[1] if len(args) > 1 else None)
+                if request is not None:
+                    request.setResponseCode(getattr(e, 'status_code', 500))
                 return json_dumpb({'error': str(e)})
             elif isinstance(self, WebSocketAdapterProtocol):
                 self.sendClose(reason=json_dumpb({'error': str(e)}))
