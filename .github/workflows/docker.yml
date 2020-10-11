@@ -104,7 +104,7 @@ jobs:
         key: ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-${{ github.head_ref || github.ref }}-${{ github.sha }}
         restore-keys: |
           ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-${{ github.head_ref || github.ref }}-
-          ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-${{ github.base_ref }}-
+          ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-refs/heads/dev-
     - name: Set up QEMU  # arm64 is not available natively
       uses: docker/setup-qemu-action@v1
       with:

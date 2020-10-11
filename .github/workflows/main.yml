@@ -74,4 +74,4 @@ jobs:
       continue-on-error: ${{ matrix.tier > 1 }}
     - name: Upload coverage
       uses: codecov/codecov-action@v1
-      if: github.event_name == 'pull_request' && matrix.python == 3.6 && matrix.os == 'ubuntu-latest'
+      if: matrix.python == 3.6 && matrix.os == 'ubuntu-latest'
