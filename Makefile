@@ -1,4 +1,4 @@
-py_sources = hathor/ tests/ tools/ $(wildcard *.py)
+py_sources = hathor/ tests/
 
 .PHONY: all
 all: check tests
@@ -56,16 +56,16 @@ tests-full:
 # checking:
 
 .PHONY: mypy
-mypy: ./hathor
-	mypy $(mypy_flags) $^
+mypy:
+	mypy $(mypy_flags) ./hathor
 
 .PHONY: flake8
-flake8: $(py_sources)
-	flake8 $^
+flake8:
+	flake8 $(py_sources)
 
 .PHONY: isort-check
-isort-check: $(py_sources)
-	isort -ac -rc --check-only $^
+isort-check:
+	isort -ac -rc --check-only $(py_sources)
 
 .PHONY: check
 check: flake8 isort-check mypy
@@ -76,22 +76,31 @@ check: flake8 isort-check mypy
 fmt: yapf isort
 
 .PHONY: yapf
-yapf: $(py_sources)
-	yapf -rip $^ -e \*_pb2.py,\*_pb2_grpc.py
+yapf:
+	yapf -rip $(py_sources) -e \*_pb2.py,\*_pb2_grpc.py
 
 .PHONY: isort
-isort: $(py_sources)
-	isort -ac -rc $^
+isort:
+	isort -ac -rc $(py_sources)
 
 # generation:
 
 proto_dir = ./hathor/protos
 proto_srcs = $(wildcard $(proto_dir)/*.proto)
 proto_outputs = $(patsubst %.proto,%_pb2.py,$(proto_srcs)) $(patsubst %.proto,%_pb2_grpc.py,$(proto_srcs)) $(patsubst %.proto,%_pb2.pyi,$(proto_srcs))
+GRPC_TOOLS_VERSION = "$(shell python -m grpc_tools.protoc --version 2>/dev/null || true)"
+#ifdef GRPC_TOOLS_VERSION
+ifneq ($(GRPC_TOOLS_VERSION),"")
+	protoc := python -m grpc_tools.protoc
+else
+	protoc := protoc
+endif
 
-# all proto_srcs are added as deps so we a change on any of them triggers all to be rebuilt
-%_pb2.pyi %_pb2.py %_pb2_grpc.py: %.proto $(proto_srcs)
-	python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. --mypy_out=. $<
+# all proto_srcs are added as deps so when a change on any of them triggers all to be rebuilt
+%_pb2.pyi %_pb2.py: %.proto $(proto_srcs)
+	$(protoc) -I. --python_out=. --mypy_out=. $<
+%_pb2_grpc.py: %.proto $(proto_srcs)
+	$(protoc) -I. --grpc_python_out=. $< || true
 
 .PHONY: protos
 protos: $(proto_outputs)
@@ -107,32 +116,42 @@ clean-pyc:
 	find hathor tests -name \*.pyc -delete
 	find hathor tests -name __pycache__ -delete
 
+.PHONY: clean-caches
+clean-caches:
+	rm -rf .coverage .mypy_cache .pytest_cache coverage.xml coverage_html_report
+
 .PHONY: clean
-clean: clean-pyc clean-protos
+clean: clean-pyc clean-protos clean-caches
 
 # docker:
 
 docker_dir := .
 ifdef GITHUB_REF
-	docker_tag := $(GITHUB_REF)
+	docker_subtag := $(GITHUB_REF)
 else
 ifneq ($(wildcard .git/.*),)
-	docker_tag := $(shell git describe --tags --dirty)
+	docker_subtag := $(shell git describe --tags --dirty)
 else
-	docker_tag := $(shell date +'%y%m%d%H%M%S')
+	docker_subtag := $(shell date +'%y%m%d%H%M%S')
 endif
+endif
+docker_tag := hathor-core:$(docker_subtag)
+docker_build_arg :=
+docker_build_flags :=
+ifneq ($(docker_build_arg),)
+	docker_build_flags +=  --build-arg $(docker_build_arg)
 endif
 
 .PHONY: docker
 docker: $(docker_dir)/Dockerfile $(proto_outputs)
-	docker build -t fullnode:$(docker_tag) $(docker_dir)
+	docker build$(docker_build_flags) -t $(docker_tag) $(docker_dir)
 
 .PHONY: docker-push
 docker-push: docker
-	docker tag fullnode:$(docker_tag) hathornetwork/hathor-core:$(docker_tag)
-	docker push hathornetwork/hathor-core:$(docker_tag)
+	docker tag $(docker_tag) hathornetwork/hathor-core:$(docker_subtag)
+	docker push hathornetwork/hathor-core:$(docker_subtag)
 
 .PHONY: docker-push
 docker-push-aws: docker
-	docker tag fullnode:$(docker_tag) 769498303037.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_tag)
-	docker push 769498303037.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_tag)
+	docker tag $(docker_tag) 769498303037.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_subtag)
+	docker push 769498303037.dkr.ecr.us-east-1.amazonaws.com/fullnode:$(docker_subtag)

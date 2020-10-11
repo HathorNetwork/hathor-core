@@ -4,6 +4,7 @@ from time import sleep
 from typing import Optional
 from uuid import uuid4
 
+import pytest
 from twisted.test.proto_helpers import MemoryReactorClock, StringTransportWithDisconnection
 
 from hathor.stratum import (
@@ -233,6 +234,7 @@ class StratumClientTest(unittest.TestCase):
         super().tearDown()
         self.protocol.stop()
 
+    @pytest.mark.skip(reason='hangs on some systems')
     def test_n_core_mining(self):
         self.protocol.start(self.clock)
         self.protocol.handle_request('job', self.job_request_params, None)

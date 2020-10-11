@@ -1,0 +1,11 @@
+codecov:
+  # https://docs.codecov.io/docs/commit-status
+  status:
+    project:
+      default:
+        # minimum coverage ratio that the commit must meet to be considered a success
+        target: 82%
+        if_ci_failed: error
+        only_pulls: true
+github_checks:
+  annotations: false

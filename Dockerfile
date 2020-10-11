@@ -1,70 +1,37 @@
-# based on Linux Alpine, official Python build, used for building
-FROM python:3.6-alpine3.11 as stage1
+# before changing these variables, make sure the tag $PYTHON_VERSION-alpine$ALPINE_VERSION exists first
+# list of valid tags hese: https://hub.docker.com/_/python
+ARG PYTHON_VERSION=3.6
+ARG ALPINE_VERSION=3.12
 
-# required build deps
-RUN apk add openssl-dev libffi-dev g++ git
-
-# install pipenv
-RUN pip install --no-cache-dir pipenv
-
-WORKDIR /usr/src/app/
-COPY Pipfile* ./
-
-RUN apk add --no-cache zlib zlib-dev bzip2 bzip2-dev snappy snappy-dev lz4 lz4-dev
-RUN apk add --no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing rocksdb-dev
-
-ENV PIPENV_COLORBLIND=1 \
-    PIPENV_YES=1 \
-    PIPENV_DONT_LOAD_ENV=1 \
-    PIPENV_DONT_USE_PYENV=1 \
-    PIPENV_HIDE_EMOJIS=1 \
-    PIPENV_MAX_RETRIES=1 \
-    PIPENV_VENV_IN_PROJECT=1
-RUN pipenv run pip install "setuptools<43"
-RUN pipenv --bare install --ignore-pipfile --deploy
-RUN pipenv run pip install "cython<0.30"
-RUN pipenv run pip install python-rocksdb==0.7.0
-
-# based on Linux Alpine, official Python build, used for compiling protos
-FROM python:3.6-alpine3.11 as stage2
-
-# required build deps
-RUN apk add openssl-dev libffi-dev g++ git
-
-# install pipenv
-RUN pip install --no-cache-dir pipenv
-
-WORKDIR /usr/src/app/
-COPY Pipfile* ./
-
-RUN apk add --no-cache g++ make
-
-ENV PIPENV_COLORBLIND=1 \
-    PIPENV_YES=1 \
-    PIPENV_DONT_LOAD_ENV=1 \
-    PIPENV_DONT_USE_PYENV=1 \
-    PIPENV_HIDE_EMOJIS=1 \
-    PIPENV_MAX_RETRIES=1 \
-    PIPENV_VENV_IN_PROJECT=1
-COPY --from=stage1 /usr/src/app/.venv /usr/src/app/.venv/
-RUN pipenv --bare install --ignore-pipfile --deploy --dev
-
-COPY Makefile ./
-COPY hathor/protos ./hathor/protos/
-RUN pipenv run make protos
-
-# based on Linux Alpine, official Python build, final image
-FROM python:3.6-alpine3.11
-
-# required runtime deps
-RUN apk --no-cache add openssl libffi libstdc++ graphviz
-RUN apk add --no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing rocksdb
-COPY --from=stage1 /usr/src/app/.venv/lib/python3.6/site-packages /usr/local/lib/python3.6/site-packages
-COPY --from=stage2 /usr/src/app/hathor/protos/*.py /usr/src/app/hathor/protos/
-
-# install hathor
-WORKDIR /usr/src/app/
+# stage-0: install all python deps, build and install package, everything will be available on .venv
+FROM python:$PYTHON_VERSION-alpine$ALPINE_VERSION as stage-0
+# install runtime first deps to speedup the dev deps and because layers will be reused on stage-1
+RUN apk add --no-cache openssl libffi libstdc++ graphviz
+RUN apk add --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing rocksdb
+# dev deps for this build start here
+RUN apk add openssl-dev libffi-dev build-base git
+RUN apk add --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing rocksdb-dev
+RUN pip install --no-cache-dir poetry
+# monkeypatch poetry to disable parallel execution that on resource limited hosts (like GitHub runners) can
+# hang (ReadTimeout) downloads while heavy jobs (packages that need compiling) are running in parallel
+RUN sed -i '/__init__/s/parallel=True/parallel=False/' /usr/local/lib/python*/site-packages/poetry/installation/executor.py
+ENV POETRY_VIRTUALENVS_IN_PROJECT=true
+WORKDIR /app/
+COPY pyproject.toml poetry.lock  ./
+# rocksdb takes the longest to build and install, we pre-install it separetely to help slow hosts get
+# through `poetry install` without timing-out (which is the case for arm64 that runs on qemu on github-runner)
+RUN poetry run pip install 'python-rocksdb==0.7.0'
+RUN poetry install -n -E rocksdb --no-root --no-dev
 COPY hathor ./hathor
+COPY README.md .
+RUN poetry build -n -f wheel
+RUN poetry run pip install --compile --no-deps --quiet --no-input dist/*.whl
 
+# finally: use production .venv from before
+# lean and mean: this image should be about ~50MB, would be about ~470MB if using the whole stage-1
+FROM python:$PYTHON_VERSION-alpine$ALPINE_VERSION
+RUN apk add --no-cache openssl libffi libstdc++ graphviz
+RUN apk add --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing rocksdb
+COPY --from=stage-0 /app/.venv/lib/ /usr/local/lib/
 EXPOSE 40403 8080
 ENTRYPOINT ["python", "-m", "hathor"]
