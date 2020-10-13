@@ -51,7 +51,11 @@ class SendTokensResource(resource.Resource):
 
             value = int(output['value'])
             timelock = output.get('timelock')
-            outputs.append(WalletOutputInfo(address=address, value=value, timelock=timelock))
+            token_uid = output.get('token_uid')
+            if token_uid:
+                outputs.append(WalletOutputInfo(address=address, value=value, timelock=timelock, token_uid=token_uid))
+            else:
+                outputs.append(WalletOutputInfo(address=address, value=value, timelock=timelock))
 
         timestamp = None
         if 'timestamp' in data:

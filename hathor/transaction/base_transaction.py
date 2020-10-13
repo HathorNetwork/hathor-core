@@ -434,7 +434,6 @@ class BaseTransaction(ABC):
         """
         from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
-        assert self.hash is not None
         assert self.storage is not None
 
         # check if parents are duplicated
@@ -959,6 +958,15 @@ class TxInput:
         txin = cls(input_tx_id, input_index, input_data)
         return txin, buf
 
+    @classmethod
+    def create_from_dict(cls, data: Dict) -> 'TxInput':
+        """ Creates a TxInput from a human readable dict."""
+        return cls(
+            bytes.fromhex(data['tx_id']),
+            int(data['index']),
+            base64.b64decode(data['data']) if data.get('data') else b'',
+        )
+
     def to_human_readable(self) -> Dict[str, Any]:
         """Returns dict of Input information, ready to be serialized
 
@@ -967,8 +975,7 @@ class TxInput:
         return {
             'tx_id': self.tx_id.hex(),  # string
             'index': self.index,  # int
-            'data':
-                base64.b64encode(self.data).decode('utf-8')  # string
+            'data': base64.b64encode(self.data).decode('utf-8')  # string
         }
 
     @classmethod

@@ -18,6 +18,7 @@ import base64
 import datetime
 import re
 import struct
+from abc import ABC, abstractmethod
 from enum import IntEnum
 from typing import Any, Callable, Dict, List, NamedTuple, Optional, Pattern, Type, Union
 
@@ -27,6 +28,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import (
+    decode_address,
     get_address_b58_from_bytes,
     get_address_b58_from_public_key_hash,
     get_address_b58_from_redeem_script_hash,
@@ -152,10 +154,9 @@ class Opcode(IntEnum):
 
 
 class HathorScript:
-    """This class is supposes to being a helper creating the scripts. It abstracts
-    some of the corner cases when building the script.
+    """This class is supposed to be help build scripts abstracting some corner cases.
 
-    For eg, when pushing data to the stack, we may or may not have to use OP_PUSHDATA.
+    For example, when pushing data to the stack, we may or may not have to use OP_PUSHDATA.
     This is the sequence we have to add to the script:
     - len(data) <= 75: [len(data) data]
     - len(data) > 75: [OP_PUSHDATA1 len(data) data]
@@ -185,7 +186,38 @@ class HathorScript:
             self.data += (bytes([Opcode.OP_PUSHDATA1]) + bytes([len(data)]) + data)
 
 
-class P2PKH:
+class BaseScript(ABC):
+    """
+    This class holds common methods for different script types to help abstracting the script type.
+    """
+
+    @abstractmethod
+    def to_human_readable(self) -> Dict[str, Any]:
+        """Return a nice dict for using on informational json APIs."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_type(self) -> str:
+        """Get script type name"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_script(self) -> bytes:
+        """Get or build script"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_address(self) -> Optional[str]:
+        """Get address for this script, not all valid recognizable scripts have addresses."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_timelock(self) -> Optional[int]:
+        """Get timelock for this script, completely optional."""
+        raise NotImplementedError
+
+
+class P2PKH(BaseScript):
     re_match = re_compile('^(?:(DATA_4) OP_GREATERTHAN_TIMESTAMP)? '
                           'OP_DUP OP_HASH160 (DATA_20) OP_EQUALVERIFY OP_CHECKSIG$')
 
@@ -212,10 +244,22 @@ class P2PKH:
 
     def to_human_readable(self) -> Dict[str, Any]:
         ret: Dict[str, Any] = {}
-        ret['type'] = 'P2PKH'
+        ret['type'] = self.get_type()
         ret['address'] = self.address
         ret['timelock'] = self.timelock
         return ret
+
+    def get_type(self) -> str:
+        return 'P2PKH'
+
+    def get_script(self) -> bytes:
+        return P2PKH.create_output_script(decode_address(self.address), self.timelock)
+
+    def get_address(self) -> Optional[str]:
+        return self.address
+
+    def get_timelock(self) -> Optional[int]:
+        return self.timelock
 
     @classmethod
     def create_output_script(cls, address: bytes, timelock: Optional[Any] = None) -> bytes:
@@ -279,8 +323,7 @@ class P2PKH:
         return None
 
 
-# TODO: `IAddress` class for defining the common interface of `Union[MultiSig, P2PKH]`
-class MultiSig:
+class MultiSig(BaseScript):
     re_match = re_compile('^(?:(DATA_4) OP_GREATERTHAN_TIMESTAMP)? ' 'OP_HASH160 (DATA_20) OP_EQUAL$')
 
     def __init__(self, address: str, timelock: Optional[Any] = None) -> None:
@@ -310,10 +353,22 @@ class MultiSig:
             :rtype: Dict[str:]
         """
         ret: Dict[str, Any] = {}
-        ret['type'] = 'MultiSig'
+        ret['type'] = self.get_type()
         ret['address'] = self.address
         ret['timelock'] = self.timelock
         return ret
+
+    def get_type(self) -> str:
+        return 'MultiSig'
+
+    def get_script(self) -> bytes:
+        return MultiSig.create_output_script(decode_address(self.address), self.timelock)
+
+    def get_address(self) -> Optional[str]:
+        return self.address
+
+    def get_timelock(self) -> Optional[int]:
+        return self.timelock
 
     @classmethod
     def create_output_script(cls, address: bytes, timelock: Optional[Any] = None) -> bytes:
@@ -409,6 +464,7 @@ class MultiSig:
         return input_data[:last_pos] + redeem_script
 
 
+# XXX: does it make sense to make this BaseScript too?
 class NanoContractMatchValues:
     re_match = re_compile('^OP_DUP OP_HASH160 (DATA_20) OP_EQUALVERIFY OP_CHECKDATASIG OP_0 (BLOCK) OP_DATA_STREQUAL '
                           'OP_1 (NUMBER) OP_DATA_GREATERTHAN OP_2 (BLOCK) OP_DATA_MATCH_VALUE OP_FIND_P2PKH$')
@@ -491,7 +547,7 @@ class NanoContractMatchValues:
         return s.data
 
     @classmethod
-    def create_input_data(cls, data, oracle_sig, oracle_pubkey):
+    def create_input_data(cls, data: bytes, oracle_sig: bytes, oracle_pubkey: bytes) -> bytes:
         """
         :param data: data from the oracle
         :type data: bytes
@@ -576,6 +632,18 @@ class NanoContractMatchValues:
         return None
 
 
+def create_base_script(address: str, timelock: Optional[Any] = None) -> BaseScript:
+    """ Verifies if address is P2PKH or Multisig and return the corresponding BaseScript implementation.
+    """
+    baddress = decode_address(address)
+    if baddress[0] == binary_to_int(settings.P2PKH_VERSION_BYTE):
+        return P2PKH(address, timelock)
+    elif baddress[0] == binary_to_int(settings.MULTISIG_VERSION_BYTE):
+        return MultiSig(address, timelock)
+    else:
+        raise ScriptError('The address is not valid')
+
+
 def create_output_script(address: bytes, timelock: Optional[Any] = None) -> bytes:
     """ Verifies if address is P2PKH or Multisig and create correct output script
 
@@ -589,6 +657,7 @@ def create_output_script(address: bytes, timelock: Optional[Any] = None) -> byte
 
         :rtype: bytes
     """
+    # XXX: if the address class can somehow be simplified create_base_script could be used here
     if address[0] == binary_to_int(settings.P2PKH_VERSION_BYTE):
         return P2PKH.create_output_script(address, timelock)
     elif address[0] == binary_to_int(settings.MULTISIG_VERSION_BYTE):

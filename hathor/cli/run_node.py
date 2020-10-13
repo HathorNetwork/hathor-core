@@ -207,6 +207,7 @@ class RunNode:
         from hathor.prometheus import PrometheusMetricsExporter
         from hathor.resources import ProfilerResource
         from hathor.transaction.resources import (
+            CreateTxResource,
             DashboardTransactionResource,
             DecodeTxResource,
             GetBlockTemplateResource,
@@ -219,6 +220,7 @@ class RunNode:
             TransactionAccWeightResource,
             TransactionResource,
             TxParentsResource,
+            ValidateAddressResource,
         )
         from hathor.version_resource import VersionResource
         from hathor.wallet.resources import (
@@ -278,9 +280,9 @@ class RunNode:
             resources = (
                 (b'status', StatusResource(self.manager), root),
                 (b'version', VersionResource(self.manager), root),
-                (b'mining', MiningResource(self.manager), root),
-                (b'getmininginfo', MiningInfoResource(self.manager), root),
+                (b'create_tx', CreateTxResource(self.manager), root),
                 (b'decode_tx', DecodeTxResource(self.manager), root),
+                (b'validate_address', ValidateAddressResource(self.manager), root),
                 (b'push_tx', PushTxResource(self.manager), root),
                 (b'graphviz', graphviz, root),
                 (b'tips-histogram', TipsHistogramResource(self.manager), root),
@@ -290,6 +292,8 @@ class RunNode:
                 (b'dashboard_tx', DashboardTransactionResource(self.manager), root),
                 (b'profiler', ProfilerResource(self.manager), root),
                 # mining
+                (b'mining', MiningResource(self.manager), root),
+                (b'getmininginfo', MiningInfoResource(self.manager), root),
                 (b'get_block_template', GetBlockTemplateResource(self.manager), root),
                 (b'submit_block', SubmitBlockResource(self.manager), root),
                 (b'tx_parents', TxParentsResource(self.manager), root),

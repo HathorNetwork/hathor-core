@@ -268,6 +268,15 @@ class Transaction(BaseTransaction):
         self.verify_parents()
         self.verify_sum()
 
+    def verify_unsigned_skip_pow(self) -> None:
+        """ Same as .verify but skipping pow and signature verification."""
+        self.verify_number_of_inputs()
+        self.verify_number_of_outputs()
+        self.verify_outputs()
+        self.verify_inputs(skip_script=True)  # need to run verify_inputs first to check if all inputs exist
+        self.verify_parents()
+        self.verify_sum()
+
     def verify_without_storage(self) -> None:
         """ Run all verifications that do not need a storage.
         """
@@ -408,7 +417,7 @@ class Transaction(BaseTransaction):
         self.update_token_info_from_outputs(token_dict)
         self.check_authorities_and_deposit(token_dict)
 
-    def verify_inputs(self) -> None:
+    def verify_inputs(self, *, skip_script: bool = False) -> None:
         """Verify inputs signatures and ownership and all inputs actually exist"""
         from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
@@ -435,7 +444,8 @@ class Transaction(BaseTransaction):
                 assert isinstance(spent_tx, Block)
                 self.verify_spent_reward(spent_tx)
 
-            self.verify_script(input_tx, spent_tx)
+            if not skip_script:
+                self.verify_script(input_tx, spent_tx)
 
             # check if any other input in this tx is spending the same output
             key = (input_tx.tx_id, input_tx.index)
