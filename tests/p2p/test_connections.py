@@ -20,7 +20,7 @@ class ConnectionsTest(unittest.TestCase):
 
     def test_manager_connections(self):
         tx_storage = TransactionMemoryStorage()
-        tmpdir = tempfile.mkdtemp(dir='/tmp/')
+        tmpdir = tempfile.mkdtemp()
         wallet = Wallet(directory=tmpdir)
         wallet.unlock(b'teste')
         manager = HathorManager(self.clock, tx_storage=tx_storage, wallet=wallet)

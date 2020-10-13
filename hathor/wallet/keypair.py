@@ -2,7 +2,6 @@ import base64
 from typing import Any, Dict, Optional
 
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.backends.openssl.ec import _EllipticCurvePrivateKey
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
@@ -24,7 +23,7 @@ class KeyPair:
         self.private_key_bytes = private_key_bytes
         self.address = address
         self.used = used
-        self._cache_priv_key_unlock = None
+        self._cache_priv_key_unlock: Optional[ec.EllipticCurvePrivateKeyWithSerialization] = None
 
     def __eq__(self, other: object) -> bool:
         """Override the default Equals behavior"""
@@ -45,7 +44,7 @@ class KeyPair:
         """
         self._cache_priv_key_unlock = None
 
-    def get_private_key(self, password: bytes) -> _EllipticCurvePrivateKey:
+    def get_private_key(self, password: bytes) -> ec.EllipticCurvePrivateKeyWithSerialization:
         """
         :param password: password to decode private key
         :type password: bytes
@@ -58,13 +57,17 @@ class KeyPair:
         """
         if not password:
             raise WalletLocked
-        if self._cache_priv_key_unlock is None:
+        priv_key: ec.EllipticCurvePrivateKeyWithSerialization
+        if self._cache_priv_key_unlock is not None:
+            priv_key = self._cache_priv_key_unlock
+        else:
             try:
                 assert self.private_key_bytes is not None
-                self._cache_priv_key_unlock = get_private_key_from_bytes(self.private_key_bytes, password=password)
+                priv_key = self._cache_priv_key_unlock = get_private_key_from_bytes(self.private_key_bytes,
+                                                                                    password=password)
             except ValueError:
                 raise IncorrectPassword
-        return self._cache_priv_key_unlock
+        return priv_key
 
     def to_json(self) -> Dict[str, Any]:
         return {
@@ -89,6 +92,7 @@ class KeyPair:
             raise WalletLocked
 
         new_key = ec.generate_private_key(ec.SECP256K1(), default_backend())
+        assert isinstance(new_key, ec.EllipticCurvePrivateKeyWithSerialization)
         private_key_bytes = get_private_key_bytes(new_key,
                                                   encryption_algorithm=serialization.BestAvailableEncryption(password))
         address = get_address_b58_from_public_key(new_key.public_key())

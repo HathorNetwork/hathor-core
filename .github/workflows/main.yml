@@ -4,7 +4,6 @@ on:
     branches:
     - master
     - dev
-    - 'experimental/**'
     tags:
     - v*
   pull_request:
@@ -19,10 +18,24 @@ jobs:
       matrix:
         python:
         - 3.6
+        - 3.7
         os:
         - ubuntu-latest
         - macos-latest
         tier: [1]
+        include:
+        - os: ubuntu-latest
+          python: 3.8
+          tier: 1
+        - os: macos-latest
+          python: 3.8
+          tier: 1
+        - os: windows-latest
+          python: 3.6
+          tier: 2
+        - os: windows-latest
+          python: 3.7
+          tier: 2
     steps:
     - name: Checkout
       uses: actions/checkout@v2
@@ -65,7 +78,7 @@ jobs:
         # this key is setup such that every branch has its cache and new branches can reuse dev's cache, but not the other way around
         key: ${{ runner.os }}-py${{ matrix.python }}-mypy-${{ github.head_ref || github.ref }}
         restore-keys: |
-          ${{ runner.os }}-py${{ matrix.python }}-mypy-dev
+          ${{ runner.os }}-py${{ matrix.python }}-mypy-refs/heads/dev-
           ${{ runner.os }}-py${{ matrix.python }}-mypy-
     - name: Run linters
       run: poetry run make check

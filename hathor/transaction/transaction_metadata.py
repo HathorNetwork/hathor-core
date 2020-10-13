@@ -21,8 +21,9 @@ from hathor import protos
 from hathor.util import practically_equal
 
 if TYPE_CHECKING:
-    from hathor.transaction import BaseTransaction  # noqa: F401
     from weakref import ReferenceType  # noqa: F401
+
+    from hathor.transaction import BaseTransaction  # noqa: F401
 
 
 class TransactionMetadata:

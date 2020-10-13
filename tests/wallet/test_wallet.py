@@ -25,7 +25,7 @@ PASSWORD = b'passwd'
 class BasicWallet(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        self.directory = tempfile.mkdtemp(dir='/tmp/')
+        self.directory = tempfile.mkdtemp()
         self.storage = TransactionMemoryStorage()
         self.manager = self.create_peer('testnet', unlock_wallet=True)
         # read genesis keys

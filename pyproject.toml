@@ -36,17 +36,17 @@ hathor-cli = 'hathor.cli.main:main'
 [tool.poetry.dev-dependencies]
 numpy = "<1.17"
 flake8 = "<3.8"
-isort = "<4.4"
+isort = {version = "<5.6", extras = ["colors"]}
 yapf = "<0.28"
-mypy = "<0.702"
-pytest = "<4.6"
+mypy = "<0.790"
+pytest = "<6.1"
 pytest-cov = "<2.8"
-mypy-protobuf = "<1.11"
+mypy-protobuf = "<1.24"
 grpcio-tools = "<1.22"
 flaky = "<3.8"
 
 [tool.poetry.dependencies]
-python = "~3.6"
+python = ">=3.6,<4"
 twisted = "<19.3"
 autobahn = "<19.6"
 base58 = "<1.1"
@@ -56,9 +56,9 @@ cryptography = "<2.10"
 graphviz = "<0.11"
 grpcio = {version = "<1.22", optional = true}
 ipython = "<7.6"
-mnemonic = "<0.19"
-prometheus_client = "<0.7"
-protobuf = "<3.9"
+mnemonic = "<0.20"
+prometheus_client = "<0.9"
+protobuf = "<3.12"
 pyopenssl = "<19.2"
 pycoin = "<=0.90.20200322"
 pywin32 = {version = "<228", markers = "sys_platform == 'win32'"}
@@ -74,6 +74,15 @@ aiohttp = "<3.7"
 [tool.poetry.extras]
 rocksdb = ["cython", "python-rocksdb"]
 grpc = ["grpcio", "grpcio-tools"]
+
+[tool.isort]
+combine_as_imports = true
+default_section = "THIRDPARTY"
+include_trailing_comma = true
+known_first_party = "hathor,tests"
+line_length = 119
+multi_line_output = 3
+skip_glob = "*_pb2.py,*_pb2_grpc.py,*.pyi"
 
 [build-system]
 requires = ["poetry-core"]

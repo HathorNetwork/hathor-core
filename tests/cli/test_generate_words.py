@@ -1,6 +1,8 @@
 from contextlib import redirect_stdout
 from io import StringIO
 
+from structlog.testing import capture_logs
+
 from hathor.cli.generate_valid_words import create_parser, execute
 from tests import unittest
 
@@ -12,12 +14,11 @@ class GenerateWordsTest(unittest.TestCase):
         # Default generation of words (24 words in english)
         args = parser.parse_args([])
         f = StringIO()
-        with redirect_stdout(f):
-            execute(args)
+        with capture_logs():
+            with redirect_stdout(f):
+                execute(args)
         # Transforming prints str in array
-        output = f.getvalue().split('\n')
-        # Last element is always empty string
-        output.pop()
+        output = f.getvalue().strip().splitlines()
 
         self.assertEqual(len(output[0].split(' ')), 24)
 
@@ -25,12 +26,11 @@ class GenerateWordsTest(unittest.TestCase):
         params = ['--count', '18']
         args = parser.parse_args(params)
         f = StringIO()
-        with redirect_stdout(f):
-            execute(args)
+        with capture_logs():
+            with redirect_stdout(f):
+                execute(args)
         # Transforming prints str in array
-        output = f.getvalue().split('\n')
-        # Last element is always empty string
-        output.pop()
+        output = f.getvalue().strip().splitlines()
 
         self.assertEqual(len(output[0].split(' ')), 18)
 
@@ -38,12 +38,11 @@ class GenerateWordsTest(unittest.TestCase):
         params = ['--count', '18', '--language', 'japanese']
         args = parser.parse_args(params)
         f = StringIO()
-        with redirect_stdout(f):
-            execute(args)
+        with capture_logs():
+            with redirect_stdout(f):
+                execute(args)
         # Transforming prints str in array
-        output = f.getvalue().split('\n')
-        # Last element is always empty string
-        output.pop()
+        output = f.getvalue().strip().splitlines()
 
         # In japanese is more than 18 when I split by space
         self.assertNotEqual(len(output[0].split(' ')), 18)

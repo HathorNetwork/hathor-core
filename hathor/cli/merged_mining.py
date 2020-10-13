@@ -25,9 +25,9 @@ def create_parser() -> ArgumentParser:
 def execute(args: Namespace) -> None:
     from hathor.client import HathorClient
     from hathor.merged_mining import MergedMiningCoordinator
-    from hathor.merged_mining.status_api import make_app as make_status_app
-    from hathor.merged_mining.debug_api import make_app as make_debug_app
     from hathor.merged_mining.bitcoin_rpc import BitcoinRPC
+    from hathor.merged_mining.debug_api import make_app as make_debug_app
+    from hathor.merged_mining.status_api import make_app as make_status_app
 
     loop = asyncio.get_event_loop()
 

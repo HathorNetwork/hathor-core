@@ -411,7 +411,7 @@ class TestScripts(unittest.TestCase):
         genesis_address = get_address_from_public_key(self.genesis_public_key)
         out_genesis = P2PKH.create_output_script(genesis_address)
 
-        from hathor.transaction import Transaction, TxOutput, TxInput
+        from hathor.transaction import Transaction, TxInput, TxOutput
         spent_tx = Transaction(outputs=[TxOutput(1, b'nano_contract_code')])
         txin = TxInput(b'dont_care', 0, b'data')
 

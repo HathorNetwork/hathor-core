@@ -42,8 +42,8 @@ class PeerId:
 
     id: Optional[str]
     entrypoints: List[str]
-    private_key: Optional['rsa._RSAPrivateKey']
-    public_key: Optional['rsa._RSAPublicKey']
+    private_key: Optional[rsa.RSAPrivateKeyWithSerialization]
+    public_key: Optional[rsa.RSAPublicKey]
     certificate: Optional[x509.Certificate]
     retry_timestamp: int    # should only try connecting to this peer after this timestamp
     retry_interval: int     # how long to wait for next connection retry. It will double for each failure
@@ -182,6 +182,7 @@ class PeerId:
                 raise InvalidPeerIdException('id does not match public key')
 
         if self.private_key:
+            assert self.public_key is not None
             public_der1 = self.public_key.public_bytes(encoding=serialization.Encoding.DER,
                                                        format=serialization.PublicFormat.SubjectPublicKeyInfo)
             public_key = self.private_key.public_key()

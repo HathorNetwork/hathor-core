@@ -33,24 +33,26 @@ class CliManager:
         self.groups: Dict[str, List[str]] = defaultdict(list)
         self.longest_cmd: int = 0
 
-        from . import mining
-        from . import merged_mining
-        from . import stratum_mining
-        from . import peer_id
-        from . import run_node
-        from . import tx_generator
-        from . import wallet
-        from . import generate_valid_words
-        from . import twin_tx
-        from . import shell
-        from . import multisig_address
-        from . import multisig_spend
-        from . import multisig_signature
-        from . import nginx_config
-        from . import oracle_create_key
-        from . import oracle_get_pubkey
-        from . import oracle_encode_data
-        from . import openapi_json
+        from . import (
+            generate_valid_words,
+            merged_mining,
+            mining,
+            multisig_address,
+            multisig_signature,
+            multisig_spend,
+            nginx_config,
+            openapi_json,
+            oracle_create_key,
+            oracle_encode_data,
+            oracle_get_pubkey,
+            peer_id,
+            run_node,
+            shell,
+            stratum_mining,
+            twin_tx,
+            tx_generator,
+            wallet,
+        )
 
         self.add_cmd('mining', 'run_miner', mining, 'Run a mining process (running node required)')
         self.add_cmd('mining', 'run_merged_mining', merged_mining,

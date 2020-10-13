@@ -1,7 +1,9 @@
 import json
-import unittest as ut
 from contextlib import redirect_stdout
 from io import StringIO
+
+import pytest
+from structlog.testing import capture_logs
 
 from hathor.cli.twin_tx import create_parser, execute
 from hathor.conf import HathorSettings
@@ -39,13 +41,12 @@ class TwinTxTest(unittest.TestCase):
         args = self.parser.parse_args(params)
 
         f = StringIO()
-        with redirect_stdout(f):
-            execute(args)
+        with capture_logs():
+            with redirect_stdout(f):
+                execute(args)
 
         # Transforming prints str in array
-        output = f.getvalue().split('\n')
-        # Last element is always empty string
-        output.pop()
+        output = f.getvalue().strip().splitlines()
 
         twin_tx = Transaction.create_from_struct(bytes.fromhex(output[0]))
         # Parents are the same but in different order
@@ -70,7 +71,7 @@ class TwinTxTest(unittest.TestCase):
         meta2 = twin_tx.get_metadata()
         self.assertFalse(meta == meta2)
 
-    @ut.skip
+    @pytest.mark.skip(reason='broken?')
     def test_twin_different(self):
         server = run_server()
 
@@ -95,13 +96,12 @@ class TwinTxTest(unittest.TestCase):
         args = self.parser.parse_args(params)
 
         f = StringIO()
-        with redirect_stdout(f):
-            execute(args)
+        with capture_logs():
+            with redirect_stdout(f):
+                execute(args)
 
         # Transforming prints str in array
-        output = f.getvalue().split('\n')
-        # Last element is always empty string
-        output.pop()
+        output = f.getvalue().strip().splitlines()
 
         twin_tx = Transaction.create_from_struct(bytes.fromhex(output[0]))
         # Parents are differents
@@ -121,13 +121,12 @@ class TwinTxTest(unittest.TestCase):
         args = self.parser.parse_args(params)
 
         f = StringIO()
-        with redirect_stdout(f):
-            execute(args)
+        with capture_logs():
+            with redirect_stdout(f):
+                execute(args)
 
         # Transforming prints str in array
-        output = f.getvalue().split('\n')
-        # Last element is always empty string
-        output.pop()
+        output = f.getvalue().strip().splitlines()
 
         human = output[0].replace("'", '"')
         tx_data = json.loads(human)
@@ -147,13 +146,12 @@ class TwinTxTest(unittest.TestCase):
         args = self.parser.parse_args(params)
 
         f = StringIO()
-        with redirect_stdout(f):
-            execute(args)
+        with capture_logs():
+            with redirect_stdout(f):
+                execute(args)
 
         # Transforming prints str in array
-        output = f.getvalue().split('\n')
-        # Last element is always empty string
-        output.pop()
+        output = f.getvalue().strip().splitlines()
 
         self.assertEqual('Error getting transaction from bytes', output[0])
 
@@ -162,12 +160,11 @@ class TwinTxTest(unittest.TestCase):
         args = self.parser.parse_args([])
 
         f = StringIO()
-        with redirect_stdout(f):
-            execute(args)
+        with capture_logs():
+            with redirect_stdout(f):
+                execute(args)
 
         # Transforming prints str in array
-        output = f.getvalue().split('\n')
-        # Last element is always empty string
-        output.pop()
+        output = f.getvalue().strip().splitlines()
 
         self.assertEqual('The command expects raw_tx or hash and url as parameters', output[0])

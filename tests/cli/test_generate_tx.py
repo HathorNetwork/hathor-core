@@ -1,4 +1,4 @@
-from unittest import skip
+import pytest
 
 import hathor.util
 from tests import unittest
@@ -12,7 +12,7 @@ class GenerateTxTest(unittest.TestCase):
     def tearDown(self):
         self.process.terminate()
 
-    @skip('broken')
+    @pytest.mark.skip(reason='broken')
     def test_generate_many_tx_blocks(self):
         # Check number of txs (for now we have only the genesis)
         tx_payload = {b'count': 20, b'type': b'tx'}
@@ -41,7 +41,7 @@ class GenerateTxTest(unittest.TestCase):
         response = request_server('transaction', 'GET', data=tx_payload)
         self.assertEqual(len(response['transactions']), last_len_tx + 4)
 
-    @skip('broken')
+    @pytest.mark.skip(reason='broken')
     def test_generate_tx(self):
         # Check balance
         response_balance = request_server('wallet/balance/', 'GET')

@@ -200,6 +200,7 @@ class BasicTransaction(unittest.TestCase):
     def test_block_outputs(self):
         from hathor.transaction import MAX_NUM_OUTPUTS
         from hathor.transaction.exceptions import TooManyOutputs
+
         # a block should have no more than MAX_NUM_OUTPUTS outputs
         parents = [tx.hash for tx in self.genesis]
 
@@ -565,7 +566,7 @@ class BasicTransaction(unittest.TestCase):
         assert cloned_block == block
 
     def test_block_data(self):
-        def add_block_with_data(data: bytes = b''):
+        def add_block_with_data(data: bytes = b'') -> None:
             add_new_blocks(self.manager, 1, advance_clock=1, block_data=data)[0]
 
         add_block_with_data()
@@ -575,8 +576,12 @@ class BasicTransaction(unittest.TestCase):
             add_block_with_data(101*b'a')
 
     def test_output_serialization(self):
-        from hathor.transaction.base_transaction import bytes_to_output_value, output_value_to_bytes, \
-                                                        _MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE
+        from hathor.transaction.base_transaction import (
+            _MAX_OUTPUT_VALUE_32,
+            MAX_OUTPUT_VALUE,
+            bytes_to_output_value,
+            output_value_to_bytes,
+        )
         max_32 = output_value_to_bytes(_MAX_OUTPUT_VALUE_32)
         self.assertEqual(len(max_32), 4)
         value, buf = bytes_to_output_value(max_32)
@@ -594,6 +599,7 @@ class BasicTransaction(unittest.TestCase):
 
     def test_output_value(self):
         from hathor.transaction.base_transaction import bytes_to_output_value
+
         # first test using a small output value with 8 bytes. It should fail
         parents = [tx.hash for tx in self.genesis_txs]
         outputs = [TxOutput(1, b'')]
@@ -653,6 +659,7 @@ class BasicTransaction(unittest.TestCase):
 
     def test_tx_version(self):
         from hathor.transaction.base_transaction import TxVersion
+
         # test the 1st byte of version field is ignored
         version = TxVersion(0xFF00)
         self.assertEqual(version.get_cls(), Block)
@@ -700,6 +707,7 @@ class BasicTransaction(unittest.TestCase):
 
     def test_reward_lock(self):
         from hathor.transaction.exceptions import RewardLocked
+
         # add block with a reward we can spend
         reward_block = self.manager.generate_mining_block(address=get_address_from_public_key(self.genesis_public_key))
         reward_block.resolve()
@@ -716,6 +724,7 @@ class BasicTransaction(unittest.TestCase):
 
     def test_reward_lock_timestamp(self):
         from hathor.transaction.exceptions import RewardLocked
+
         # add block with a reward we can spend
         reward_block = self.manager.generate_mining_block(address=get_address_from_public_key(self.genesis_public_key))
         reward_block.resolve()

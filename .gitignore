@@ -17,6 +17,7 @@ cover/
 extras/docker/_build/
 extras/docker/envvars
 
-build/
-dist/
+/build/
+/dist/
+/requirements.txt
 *.egg-info

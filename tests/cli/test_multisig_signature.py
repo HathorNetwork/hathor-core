@@ -6,6 +6,7 @@ from io import StringIO
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
+from structlog.testing import capture_logs
 
 from hathor.cli.multisig_signature import create_parser, execute
 from hathor.wallet import Wallet
@@ -45,12 +46,11 @@ class SignatureTest(unittest.TestCase):
         # Generate signature to validate
         args = parser.parse_args([tx.get_struct().hex(), private_key_hex])
         f = StringIO()
-        with redirect_stdout(f):
-            execute(args, '123')
+        with capture_logs():
+            with redirect_stdout(f):
+                execute(args, '123')
         # Transforming prints str in array
-        output = f.getvalue().split('\n')
-        # Last element is always empty string
-        output.pop()
+        output = f.getvalue().strip().splitlines()
 
         signature = bytes.fromhex(output[0].split(':')[1].strip())
 

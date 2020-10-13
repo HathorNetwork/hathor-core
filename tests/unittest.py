@@ -2,6 +2,8 @@ import random
 import shutil
 import tempfile
 import time
+from typing import Optional
+from unittest import main as ut_main
 
 import numpy.random
 from structlog import get_logger
@@ -14,6 +16,7 @@ from hathor.p2p.peer_id import PeerId
 from hathor.wallet import Wallet
 
 logger = get_logger()
+main = ut_main
 
 
 class TestCase(unittest.TestCase):
@@ -30,7 +33,7 @@ class TestCase(unittest.TestCase):
         """ Generate a Wallet with a number of keypairs for testing
             :rtype: Wallet
         """
-        tmpdir = tempfile.mkdtemp(dir='/tmp/')
+        tmpdir = tempfile.mkdtemp()
         self.tmpdirs.append(tmpdir)
 
         wallet = Wallet(directory=tmpdir)
@@ -191,7 +194,7 @@ class TestCase(unittest.TestCase):
         if required_to_quiesce and active:
             self.fail('Reactor was still active when it was required to be quiescent.')
 
-    def get_address(self, index: int) -> str:
+    def get_address(self, index: int) -> Optional[str]:
         """ Generate a fixed HD Wallet and return an address
         """
         from hathor.wallet import HDWallet

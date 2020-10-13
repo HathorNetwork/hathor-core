@@ -1,20 +1,19 @@
 # before changing these variables, make sure the tag $PYTHON_VERSION-alpine$ALPINE_VERSION exists first
-# list of valid tags hese: https://hub.docker.com/_/python
+# list of valid tags hese: https://hub.docker.com/_/pypy
 ARG PYTHON_VERSION=3.6
-ARG ALPINE_VERSION=3.12
+ARG DEBIAN_VERSION=slim-buster
 
-# stage-0: install all python deps, build and install package, everything will be available on .venv
-FROM python:$PYTHON_VERSION-alpine$ALPINE_VERSION as stage-0
+# stage-0: copy pyproject.toml/poetry.lock and install the production set of dependencies
+FROM pypy:$PYTHON_VERSION-$DEBIAN_VERSION as stage-0
 # install runtime first deps to speedup the dev deps and because layers will be reused on stage-1
-RUN apk add --no-cache openssl libffi graphviz
-RUN apk add --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing rocksdb
+RUN apt-get -qy update
+RUN apt-get -qy install libssl1.1 graphviz librocksdb5.17
 # dev deps for this build start here
-RUN apk add openssl-dev libffi-dev build-base
-RUN apk add --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing rocksdb-dev
+RUN apt-get -qy install libssl-dev libffi-dev build-essential zlib1g-dev libbz2-dev libsnappy-dev liblz4-dev librocksdb-dev
 # install all deps in a virtualenv so we can just copy it over to the final image
 ENV VIRTUAL_ENV=/app/.venv
 WORKDIR /app/
-RUN python -m venv $VIRTUAL_ENV
+RUN pypy -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN pip --no-input --no-cache-dir install --upgrade "pip<21" wheel
 COPY requirements.txt ./requirements.txt
@@ -25,10 +24,9 @@ RUN pip --no-input --no-cache-dir install --compile --no-deps `ls -1 dist/hathor
 
 # finally: use production .venv from before
 # lean and mean: this image should be about ~50MB, would be about ~470MB if using the whole stage-1
-FROM python:$PYTHON_VERSION-alpine$ALPINE_VERSION
-#RUN apk add --no-cache openssl libffi libstdc++ graphviz
-RUN apk add --no-cache openssl libffi graphviz
-RUN apk add --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing rocksdb
-COPY --from=stage-0 /app/.venv/lib/ /usr/local/lib/
+FROM pypy:$PYTHON_VERSION-$DEBIAN_VERSION
+RUN apt-get -qy update
+RUN apt-get -qy install libssl1.1 graphviz librocksdb5.17
+COPY --from=stage-0 /app/.venv/site-packages/ /opt/pypy/site-packages/
 EXPOSE 40403 8080
-ENTRYPOINT ["python", "-m", "hathor"]
+ENTRYPOINT ["pypy", "-m", "hathor"]

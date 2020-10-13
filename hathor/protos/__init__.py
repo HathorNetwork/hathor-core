@@ -49,11 +49,15 @@ from hathor.protos.transaction_storage_pb2 import (
     SaveResponse,
     SortedTxsRequest,
 )
-from hathor.protos.transaction_storage_pb2_grpc import (
-    TransactionStorageServicer,
-    TransactionStorageStub,
-    add_TransactionStorageServicer_to_server,
-)
+
+try:
+    from hathor.protos.transaction_storage_pb2_grpc import (
+        TransactionStorageServicer,
+        TransactionStorageStub,
+        add_TransactionStorageServicer_to_server,
+    )
+except ImportError:
+    pass
 
 __all__ = [
     'BaseTransaction',

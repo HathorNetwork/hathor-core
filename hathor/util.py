@@ -176,7 +176,7 @@ def abbrev(data: bytes, max_len: int = 256, gap: bytes = b' [...] ') -> bytes:
 def ichunks(array: bytes, chunk_size: int) -> Iterator[bytes]:
     """ Split and yield chunks of the given size.
     """
-    from itertools import islice, takewhile, repeat
+    from itertools import islice, repeat, takewhile
     idata = iter(array)
     return takewhile(bool, (bytes(islice(idata, chunk_size)) for _ in repeat(None)))
 
@@ -258,6 +258,7 @@ class MaxSizeOrderedDict(OrderedDict):
 def json_loadb(raw: bytes) -> Dict:
     """Compact loading raw as UTF-8 encoded bytes to a Python object."""
     import json
+
     # XXX: from Python3.6 onwards, json.loads can take bytes
     #      See: https://docs.python.org/3/library/json.html#json.loads
     return json.loads(raw)
@@ -274,10 +275,11 @@ def api_catch_exceptions(func: Callable[..., bytes]) -> Callable[..., bytes]:
 
     Useful for annotating API methods and reduce error handling boilerplate.
     """
-    from hathor.exception import HathorError
+    from autobahn.twisted.websocket import WebSocketAdapterProtocol
     from twisted.web.http import Request
     from twisted.web.resource import Resource
-    from autobahn.twisted.websocket import WebSocketAdapterProtocol
+
+    from hathor.exception import HathorError
 
     @wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:

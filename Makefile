@@ -57,7 +57,7 @@ tests-full:
 
 .PHONY: mypy
 mypy:
-	mypy $(mypy_flags) ./hathor
+	mypy $(mypy_flags) ./hathor ./tests
 
 .PHONY: flake8
 flake8:
@@ -65,7 +65,7 @@ flake8:
 
 .PHONY: isort-check
 isort-check:
-	isort -ac -rc --check-only $(py_sources)
+	isort --ac --check-only $(py_sources)
 
 .PHONY: check
 check: flake8 isort-check mypy
@@ -81,7 +81,7 @@ yapf:
 
 .PHONY: isort
 isort:
-	isort -ac -rc $(py_sources)
+	isort --ac $(py_sources)
 
 # generation:
 
@@ -120,8 +120,27 @@ clean-pyc:
 clean-caches:
 	rm -rf .coverage .mypy_cache .pytest_cache coverage.xml coverage_html_report
 
+.PHONY: clean-dist
+clean-dist:
+	rm -rf ./dist
+	rm -f requirements.txt
+
 .PHONY: clean
-clean: clean-pyc clean-protos clean-caches
+clean: clean-pyc clean-protos clean-caches clean-dist
+
+# building:
+
+requirements.txt:
+	poetry export -o requirements.txt -E rocksdb
+
+version := $(shell poetry version -s)
+wheel_file := "dist/hathor-$(version)-py3-none-any.whl"
+
+$(wheel_file): protos
+	poetry build -f wheel
+
+.PHONY: build
+build: requirements.txt $(wheel_file)
 
 # docker:
 
@@ -143,8 +162,12 @@ ifneq ($(docker_build_arg),)
 endif
 
 .PHONY: docker
-docker: $(docker_dir)/Dockerfile $(proto_outputs)
+docker: $(docker_dir)/Dockerfile $(proto_outputs) requirements.txt $(wheel_file)
 	docker build$(docker_build_flags) -t $(docker_tag) $(docker_dir)
+
+.PHONY: docker-pypy
+docker-pypy: $(docker_dir)/Dockerfile.pypy $(proto_outputs) requirements.txt $(wheel_file)
+	docker build$(docker_build_flags) -f Dockerfile.pypy -t $(docker_tag) $(docker_dir)
 
 .PHONY: docker-push
 docker-push: docker

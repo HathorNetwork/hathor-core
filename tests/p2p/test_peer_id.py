@@ -193,6 +193,7 @@ class PeerIdTest(unittest.TestCase):
         class FakeTransport:
             def getPeerCertificate(self):
                 from OpenSSL import crypto
+
                 # we use a new peer here just to save the trouble of manually creating a certificate
                 random_peer = PeerId('testnet')
                 return crypto.X509.from_cryptography(random_peer.get_certificate())

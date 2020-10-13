@@ -538,7 +538,7 @@ class Target(int):
 
 class BDiff(float):
     def __repr__(self):
-        return f'BDiff({self})'
+        return f'BDiff({float(self)})'
 
     def to_u256(self) -> U256:
         """ Convert to U256
@@ -651,7 +651,7 @@ class BDiff(float):
 
 class PDiff(float):
     def __repr__(self):
-        return f'PDiff({self})'
+        return f'PDiff({float(self)})'
 
     def to_u256(self) -> U256:
         """ Convert to U256
@@ -764,7 +764,7 @@ class PDiff(float):
 
 class Weight(float):
     def __repr__(self):
-        return f'Weight({self})'
+        return f'Weight({float(self)})'
 
     def logsum(self, other: 'Weight') -> 'Weight':
         """ Make a "logarithmic sum" on base 2.

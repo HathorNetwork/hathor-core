@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List
 from hathor.util import ReactorThread
 
 if TYPE_CHECKING:
-    from twisted.internet.interfaces import IReactorCore    # noqa: F401
+    from twisted.internet.interfaces import IReactorCore  # noqa: F401
 
 
 class HathorEvents(Enum):
