@@ -126,7 +126,9 @@ jobs:
     - name: Generate protobuf files
       run: poetry run make protos
     - name: Build source package
-      run: poetry build -f wheel
+      run: |
+        rm hathor/protos/.gitignore
+        poetry build -f wheel
     - name: Generate requirements
       run: |
         poetry remove -D grpcio-tools --dry-run  # workaround for Poetry bug
