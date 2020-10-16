@@ -21,6 +21,9 @@ class HathorSettings(NamedTuple):
     # Initial bootstrap servers
     BOOTSTRAP_DNS: List[str] = []
 
+    # enable peer whitelist
+    ENABLE_PEER_WHITELIST: bool = False
+
     DECIMAL_PLACES: int = DECIMAL_PLACES
 
     # Genesis pre-mined tokens

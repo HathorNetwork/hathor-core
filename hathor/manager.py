@@ -826,12 +826,18 @@ class HathorManager:
             self.my_peer.entrypoints.append(address)
 
     def add_peer_to_whitelist(self, peer_id):
+        if not settings.ENABLE_PEER_WHITELIST:
+            return
+
         if peer_id in self.peers_whitelist:
             self.log.info('peer already in whitelist', peer_id=peer_id)
         else:
             self.peers_whitelist.append(peer_id)
 
     def remove_peer_from_whitelist_and_disconnect(self, peer_id: str) -> None:
+        if not settings.ENABLE_PEER_WHITELIST:
+            return
+
         if peer_id in self.peers_whitelist:
             self.peers_whitelist.remove(peer_id)
             # disconnect from node

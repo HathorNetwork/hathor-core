@@ -355,5 +355,6 @@ class ConnectionsManager:
     def drop_connection_by_peer_id(self, peer_id: str) -> None:
         """ Drop a connection by peer id
         """
-        protocol = self.connected_peers[peer_id]
-        self.drop_connection(protocol)
+        protocol = self.connected_peers.get(peer_id)
+        if protocol:
+            self.drop_connection(protocol)
