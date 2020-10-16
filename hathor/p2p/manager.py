@@ -235,7 +235,7 @@ class ConnectionsManager:
         from twisted.web.client import Agent, readBody
         from twisted.web.http_headers import Headers
         assert settings.WHITELIST_URL is not None
-        self.log.debug('update whitelist')
+        self.log.info('update whitelist')
         agent = Agent(self.reactor)
         d = agent.request(
             b'GET',
@@ -243,13 +243,22 @@ class ConnectionsManager:
             Headers({'User-Agent': ['hathor-core']}),
             None)
         d.addCallback(readBody)
+        d.addErrback(self._update_whitelist_err)
         d.addCallback(self._update_whitelist_cb)
 
+    def _update_whitelist_err(self, *args, **kwargs) -> None:
+        self.log.error('update whitelist failed', args=args, kwargs=kwargs)
+
     def _update_whitelist_cb(self, body: bytes) -> None:
-        text = body.decode()
+        self.log.info('update whitelist got response')
+        try:
+            text = body.decode()
+            new_whitelist = parse_whitelist(text)
+        except Exception:
+            self.log.exception('failed to parse whitelist')
+            return
         manager = self.downloader.manager  # XXX: maybe refactor later
         current_whitelist = set(manager.peers_whitelist)
-        new_whitelist = parse_whitelist(text)
         peers_to_add = new_whitelist - current_whitelist
         if peers_to_add:
             self.log.info('add new peers to whitelist', peers=peers_to_add)

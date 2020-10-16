@@ -143,20 +143,28 @@ def parse_whitelist(text: str) -> Set[str]:
 
     Example:
 
-    parse_whitelist('''# node1
+    parse_whitelist('''hathor-whitelist
+# node1
  2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
 
 2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
 
 # node3
-2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
+G2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
 2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
 ''')
     {'2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367'}
 
     """
     lines = text.splitlines()
+    header = lines.pop(0)
+    if header != 'hathor-whitelist':
+        raise ValueError('invalid header')
     stripped_lines = (line.strip() for line in lines)
     nonblank_lines = filter(lambda line: line and not line.startswith('#'), stripped_lines)
     peerids = {line.split()[0] for line in nonblank_lines}
+    for peerid in peerids:
+        bpeerid = bytes.fromhex(peerid)
+        if len(bpeerid) != 32:
+            raise ValueError('invalid peerid size')
     return peerids
