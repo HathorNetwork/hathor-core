@@ -109,7 +109,7 @@ class SubmitBlockResource(resource.Resource):
             self.log.debug('cannot propagate Block, node syncing', data=data)
             raise APIError('Node syncing')
 
-        res = self.manager.propagate_tx(tx)
+        res = self.manager.submit_block(tx)
 
         return json_dumpb({'result': res})
 

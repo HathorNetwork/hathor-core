@@ -169,7 +169,7 @@ class MiningWebsocketProtocol(JsonRpcWebsocketServerProtocol):
         if not tx.is_block:
             self.log.warn('expected Block, received Transaction', data=hexdata)
             return False
-        res = self.factory.manager.propagate_tx(tx)
+        res = self.factory.manager.submit_block(tx)
         if res and optimistic:
             return self.manager.make_block_template(tx.hash).to_dict()
         return res

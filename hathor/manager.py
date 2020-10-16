@@ -607,6 +607,15 @@ class HathorManager:
 
         return True
 
+    def submit_block(self, blk: Block, fails_silently: bool = True) -> bool:
+        """Used by submit block from all mining APIs.
+        """
+        tips = self.tx_storage.get_best_block_tips()
+        parent_hash = blk.get_block_parent_hash()
+        if parent_hash not in tips:
+            return False
+        return self.propagate_tx(blk, fails_silently=fails_silently)
+
     def propagate_tx(self, tx: BaseTransaction, fails_silently: bool = True) -> bool:
         """Push a new transaction to the network. It is used by both the wallet and the mining modules.
 
