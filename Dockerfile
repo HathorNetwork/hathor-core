@@ -19,8 +19,6 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN pip --no-input --no-cache-dir install --upgrade "pip<21" wheel
 COPY requirements.txt ./requirements.txt
 RUN pip --no-input --no-cache-dir install --compile --require-hashes -r requirements.txt
-COPY dist ./dist
-RUN pip --no-input --no-cache-dir install --compile --no-deps dist/hathor-*.whl
 
 # finally: use production .venv from before
 # lean and mean: this image should be about ~50MB, would be about ~470MB if using the whole stage-1
@@ -28,5 +26,7 @@ FROM python:$PYTHON_VERSION-alpine$ALPINE_VERSION
 RUN apk add --no-cache openssl libffi graphviz
 RUN apk add --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing rocksdb
 COPY --from=stage-0 /app/.venv/lib/ /usr/local/lib/
+COPY dist ./dist
+RUN pip --no-input --no-cache-dir install --compile --no-deps dist/hathor-*.whl && rm -rf ./dist
 EXPOSE 40403 8080
 ENTRYPOINT ["python", "-m", "hathor"]

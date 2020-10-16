@@ -3,12 +3,15 @@ from typing import TYPE_CHECKING, Any, Generator
 
 from twisted.internet.defer import inlineCallbacks
 
+from hathor.conf import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.states.base import BaseState
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
+
+settings = HathorSettings()
 
 
 class PeerIdState(BaseState):
@@ -72,6 +75,11 @@ class PeerIdState(BaseState):
         # If the connection URL had a peer-id parameter we need to check it's the same
         if protocol.expected_peer_id and peer.id != protocol.expected_peer_id:
             protocol.send_error_and_close_connection('Peer id different from the requested one.')
+            return
+
+        # is it on the whitelist?
+        if settings.ENABLE_PEER_WHITELIST and peer.id not in protocol.node.peers_whitelist:
+            protocol.send_error_and_close_connection('Blocked. Get in touch with Hathor team.')
             return
 
         if peer.id == protocol.my_peer.id:

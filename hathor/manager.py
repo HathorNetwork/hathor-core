@@ -183,6 +183,9 @@ class HathorManager:
         # Can be activated on the command line with --full-verification
         self._full_verification = False
 
+        # List of whitelisted peers
+        self.peers_whitelist: List[str] = []
+
         # List of capabilities of the peer
         if capabilities is not None:
             self.capabilities = capabilities
@@ -851,6 +854,24 @@ class HathorManager:
             proto, _, _ = description.partition(':')
             address = '{}://{}:{}'.format(proto, self.hostname, endpoint._port)
             self.my_peer.entrypoints.append(address)
+
+    def add_peer_to_whitelist(self, peer_id):
+        if not settings.ENABLE_PEER_WHITELIST:
+            return
+
+        if peer_id in self.peers_whitelist:
+            self.log.info('peer already in whitelist', peer_id=peer_id)
+        else:
+            self.peers_whitelist.append(peer_id)
+
+    def remove_peer_from_whitelist_and_disconnect(self, peer_id: str) -> None:
+        if not settings.ENABLE_PEER_WHITELIST:
+            return
+
+        if peer_id in self.peers_whitelist:
+            self.peers_whitelist.remove(peer_id)
+            # disconnect from node
+            self.connections.drop_connection_by_peer_id(peer_id)
 
 
 class ParentTxs(NamedTuple):

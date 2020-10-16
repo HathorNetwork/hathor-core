@@ -137,7 +137,9 @@ version := $(shell poetry version -s)
 wheel_file := "dist/hathor-$(version)-py3-none-any.whl"
 
 $(wheel_file): protos
+	rm -f hathor/protos/.gitignore
 	poetry build -f wheel
+	git checkout hathor/protos/.gitignore
 
 .PHONY: build
 build: requirements.txt $(wheel_file)
