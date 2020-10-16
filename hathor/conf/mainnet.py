@@ -6,6 +6,7 @@ SETTINGS = HathorSettings(
     NETWORK_NAME='mainnet',
     BOOTSTRAP_DNS=['mainnet.hathor.network'],
     ENABLE_PEER_WHITELIST=True,
+    WHITELIST_URL='https://hathor-public-files.s3.amazonaws.com/whitelist_peer_ids',
     # Genesis stuff
     # output addr: HJB2yxxsHtudGGy3jmVeadwMfRi2zNCKKD
     GENESIS_OUTPUT_SCRIPT=bytes.fromhex('76a9147fd4ae0e4fb2d2854e76d359029d8078bb99649e88ac'),
