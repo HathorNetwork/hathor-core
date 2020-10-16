@@ -13,7 +13,7 @@ from twisted.web import server
 from twisted.web.resource import Resource
 
 logger = get_logger()
-LOGGING_CAPTURE_STDOUT = True
+# LOGGING_CAPTURE_STDOUT = True
 
 
 class RunNode:
