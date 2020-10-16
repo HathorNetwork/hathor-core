@@ -1,5 +1,5 @@
 import datetime
-from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Set, Tuple
 from urllib.parse import parse_qs, urlparse
 
 import requests
@@ -136,3 +136,27 @@ def generate_certificate(private_key: '_RSAPrivateKey', ca_file: str, ca_pkey_fi
     )
 
     return certificate
+
+
+def parse_whitelist(text: str) -> Set[str]:
+    """ Parses the list of whitelist peer ids
+
+    Example:
+
+    parse_whitelist('''# node1
+ 2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
+
+2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
+
+# node3
+2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
+2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
+''')
+    {'2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367'}
+
+    """
+    lines = text.splitlines()
+    stripped_lines = (line.strip() for line in lines)
+    nonblank_lines = filter(lambda line: line and not line.startswith('#'), stripped_lines)
+    peerids = {line.split()[0] for line in nonblank_lines}
+    return peerids
