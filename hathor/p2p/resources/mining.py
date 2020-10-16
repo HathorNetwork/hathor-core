@@ -46,7 +46,7 @@ class MiningResource(resource.Resource):
             # binascii.Error: incorrect base64 data
             return b'0'
 
-        ret = self.manager.propagate_tx(block)
+        ret = self.manager.submit_block(block)
         if ret:
             return b'1'
         return b'0'

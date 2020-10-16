@@ -79,6 +79,9 @@ class TransactionStorage(ABC):
         # Key storage attribute to save if the manager is running
         self._manager_running_attribute: str = 'manager_running'
 
+        # Key storage attribute to save if the node has clean db
+        self._clean_db_attribute: str = 'clean_db'
+
     def _save_or_verify_genesis(self) -> None:
         """Save all genesis in the storage."""
         for tx in self._get_genesis_from_settings():
@@ -615,6 +618,16 @@ class TransactionStorage(ABC):
         """ Return if the manager is running or was running and a sudden crash stopped the full node
         """
         return self.get_value(self._manager_running_attribute) == '1'
+
+    def set_db_clean(self) -> None:
+        """ Save on storage that the db has clean data (without voided blocks/txs)
+        """
+        self.add_value(self._clean_db_attribute, '1')
+
+    def is_db_clean(self) -> bool:
+        """ Return if the node has a clean db (without voided blocks/txs)
+        """
+        return self.get_value(self._clean_db_attribute) == '1'
 
 
 class TransactionStorageAsyncFromSync(TransactionStorage):

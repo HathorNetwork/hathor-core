@@ -297,7 +297,7 @@ class HathorClientStub(IHathorClient):
         return self.manager.generate_mining_block(address=baddress, merge_mined=merged_mining)
 
     async def submit_block(self, block: Block) -> bool:
-        return self.manager.propagate_tx(block)
+        return self.manager.submit_block(block)
 
     async def mining(self) -> IMiningChannel:
         return MiningChannelStub(self.manager)
