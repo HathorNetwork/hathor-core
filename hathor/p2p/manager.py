@@ -101,7 +101,8 @@ class ConnectionsManager:
 
     def start(self) -> None:
         self.lc_reconnect.start(5)
-        self.wl_reconnect.start(30)
+        if settings.ENABLE_PEER_WHITELIST:
+            self.wl_reconnect.start(30)
 
     def stop(self) -> None:
         if self.lc_reconnect.running:
