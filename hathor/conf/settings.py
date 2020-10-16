@@ -251,3 +251,6 @@ class HathorSettings(NamedTuple):
     # When the node is being initialized (with a full verification) we don't verify
     # the difficulty of all blocks, we execute the validation every N blocks only
     VERIFY_WEIGHT_EVERY_N_BLOCKS: int = 1000
+
+    # Where to download whitelist from
+    WHITELIST_URL: Optional[str] = None
