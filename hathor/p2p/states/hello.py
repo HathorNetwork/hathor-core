@@ -36,7 +36,7 @@ class HelloState(BaseState):
             'genesis_short_hash': get_genesis_short_hash(),
             'timestamp': protocol.node.reactor.seconds(),
             'settings_dict': get_settings_hello_dict(),
-            'capabilities': [],
+            'capabilities': protocol.node.capabilities,
         }
 
     def on_enter(self) -> None:
@@ -66,6 +66,11 @@ class HelloState(BaseState):
         if not set(data).issuperset(required_fields):
             # If data does not contain all required fields
             protocol.send_error_and_close_connection('Invalid payload.')
+            return
+
+        if settings.CAPABILITY_WHITELIST not in data['capabilities']:
+            # If peer is not sending whitelist capability we must close the connection
+            protocol.send_error_and_close_connection('Must have whitelist capability.')
             return
 
         if data['app'] != self._app():

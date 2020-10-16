@@ -42,7 +42,8 @@ class TestCase(unittest.TestCase):
         wallet.lock()
         return wallet
 
-    def create_peer(self, network, peer_id=None, wallet=None, tx_storage=None, unlock_wallet=True, wallet_index=False):
+    def create_peer(self, network, peer_id=None, wallet=None, tx_storage=None, unlock_wallet=True, wallet_index=False,
+                    capabilities=None):
         if peer_id is None:
             peer_id = PeerId()
         if not wallet:
@@ -55,7 +56,8 @@ class TestCase(unittest.TestCase):
             network=network,
             wallet=wallet,
             tx_storage=tx_storage,
-            wallet_index=wallet_index
+            wallet_index=wallet_index,
+            capabilities=capabilities,
         )
         manager.avg_time_between_blocks = 0.0001
         manager.test_mode = TestMode.TEST_ALL_WEIGHT

@@ -71,7 +71,8 @@ class HathorManager:
                  hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
                  peer_storage: Optional[Any] = None, default_port: int = 40403, wallet_index: bool = False,
-                 stratum_port: Optional[int] = None, min_block_weight: Optional[int] = None, ssl: bool = True) -> None:
+                 stratum_port: Optional[int] = None, min_block_weight: Optional[int] = None, ssl: bool = True,
+                 capabilities: Optional[List[str]] = None) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node. If not given, a new one is created.
@@ -181,6 +182,12 @@ class HathorManager:
         # Full verification execute all validations for transactions and blocks when initializing the node
         # Can be activated on the command line with --full-verification
         self._full_verification = False
+
+        # List of capabilities of the peer
+        if capabilities is not None:
+            self.capabilities = capabilities
+        else:
+            self.capabilities = [settings.CAPABILITY_WHITELIST]
 
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
@@ -308,6 +315,19 @@ class HathorManager:
         cnt2 = 0
 
         block_count = 0
+
+        if self.tx_storage.get_count_tx_blocks() > 3 and not self.tx_storage.is_db_clean():
+            # If has more than 3 txs on storage (the genesis txs that are always on storage by default)
+            # and the db is not clean (the db has old data before we cleaned the voided txs/blocks)
+            # then we can't move forward and ask the user to remove the old db
+            self.log.error(
+                'Error initializing the node. You can\'t use an old database right now. '
+                'Please remove your database or start your full node again with an empty data folder.'
+            )
+            sys.exit()
+
+        # If has reached this line, the db is clean, so we add this attribute to it
+        self.tx_storage.set_db_clean()
 
         # self.start_profiler()
         for tx in self.tx_storage._topological_sort():
