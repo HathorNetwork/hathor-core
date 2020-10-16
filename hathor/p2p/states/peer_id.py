@@ -74,6 +74,11 @@ class PeerIdState(BaseState):
             protocol.send_error_and_close_connection('Peer id different from the requested one.')
             return
 
+        # is it on the whitelist?
+        if peer.id not in protocol.node.peers_whitelist:
+            protocol.send_error_and_close_connection('Blocked. Get in touch with Hathor team.')
+            return
+
         if peer.id == protocol.my_peer.id:
             protocol.send_error_and_close_connection('Are you my clone?!')
             return

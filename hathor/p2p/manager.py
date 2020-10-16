@@ -158,7 +158,7 @@ class ConnectionsManager:
             # connected twice to same peer
             self.log.warn('duplicate connection to peer', protocol=protocol)
             conn = self.get_connection_to_drop(protocol)
-            self.reactor.callLater(0, self.drop_duplicate_connection, conn)
+            self.reactor.callLater(0, self.drop_connection, conn)
             if conn == protocol:
                 # the new connection is being dropped, so don't save it to connected_peers
                 return
@@ -345,9 +345,15 @@ class ConnectionsManager:
             else:
                 return other_connection
 
-    def drop_duplicate_connection(self, protocol: HathorProtocol) -> None:
+    def drop_connection(self, protocol: HathorProtocol) -> None:
         """ Drop a connection
         """
         assert protocol.peer is not None
         self.log.debug('dropping connection', peer_id=protocol.peer.id, protocol=type(protocol).__name__)
-        protocol.send_error_and_close_connection('Connection already established')
+        protocol.send_error_and_close_connection('Connection droped')
+
+    def drop_connection_by_peer_id(self, peer_id: str) -> None:
+        """ Drop a connection by peer id
+        """
+        protocol = self.connected_peers[peer_id]
+        self.drop_connection(protocol)
