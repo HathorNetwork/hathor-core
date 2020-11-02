@@ -68,7 +68,7 @@ class MultiSigSpendTest(unittest.TestCase):
         block_reward = blocks_tokens[0]
         outputs = [WalletOutputInfo(address=self.multisig_address, value=block_reward, timelock=None)]
 
-        tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+        tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
         tx1.weight = 10
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())

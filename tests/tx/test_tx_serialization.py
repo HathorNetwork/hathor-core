@@ -25,7 +25,7 @@ class _Base:
                 WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None)
             ]
 
-            self.tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+            self.tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.tx_storage)
             self.tx1.weight = 10
             self.tx1.parents = self.manager.get_new_tx_parents()
             self.tx1.timestamp = int(self.clock.seconds())

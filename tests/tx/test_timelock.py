@@ -35,7 +35,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
                 timelock=None)
         ]
 
-        tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+        tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
         tx1.weight = 10
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
@@ -125,7 +125,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
                 timelock=int(self.clock.seconds()) + 10)
         ]
 
-        tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+        tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
         tx1.weight = 10
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
@@ -139,11 +139,11 @@ class TimelockTransactionTestCase(unittest.TestCase):
         outputs = [WalletOutputInfo(address=decode_address(address), value=blocks_tokens[0], timelock=None)]
 
         with self.assertRaises(InsufficientFunds):
-            self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+            self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
 
         self.clock.advance(10)
 
-        tx2 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+        tx2 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
         tx2.weight = 10
         tx2.parents = self.manager.get_new_tx_parents()
         tx2.timestamp = int(self.clock.seconds())

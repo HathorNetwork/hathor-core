@@ -31,7 +31,7 @@ class SendTokensResource(resource.Resource):
         """ POST request for /wallet/send_tokens/
             We expect 'data' as request args
             'data': stringified json with an array of inputs and array of outputs
-            If inputs array is empty we use 'prepare_transaction_compute_inputs', that calculate the inputs
+            If inputs array is empty we use 'prepare_compute_inputs', that calculate the inputs
             We return success (bool)
 
             :rtype: string (json)
@@ -66,7 +66,8 @@ class SendTokensResource(resource.Resource):
 
         if len(data['inputs']) == 0:
             try:
-                inputs, outputs = self.manager.wallet.prepare_compute_inputs(outputs, timestamp)
+                inputs, outputs = self.manager.wallet.prepare_compute_inputs(outputs, self.manager.tx_storage,
+                                                                             timestamp)
             except InsufficientFunds as e:
                 return self.return_POST(False, 'Insufficient funds, {}'.format(str(e)))
         else:

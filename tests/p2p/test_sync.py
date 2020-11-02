@@ -32,7 +32,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         outputs.append(
             WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None))
 
-        tx = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+        tx = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager1.tx_storage)
         tx.timestamp = int(self.clock.seconds())
         tx.storage = self.manager1.tx_storage
         tx.weight = 10

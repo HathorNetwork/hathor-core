@@ -100,7 +100,7 @@ def gen_new_tx(manager, address, value, verify=True):
     outputs = []
     outputs.append(WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None))
 
-    tx = manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+    tx = manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, manager.tx_storage)
     tx.storage = manager.tx_storage
 
     max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)

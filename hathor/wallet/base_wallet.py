@@ -317,8 +317,10 @@ class BaseWallet:
 
         return new_inputs
 
-    def prepare_transaction_compute_inputs(self, cls: ABCMeta, outputs: List[WalletOutputInfo],
-                                           timestamp: Optional[int] = None) -> Transaction:
+    def prepare_transaction_compute_inputs(
+        self, cls: ABCMeta, outputs: List[WalletOutputInfo],
+        tx_storage: 'TransactionStorage', timestamp: Optional[int] = None
+    ) -> Transaction:
         """Calculates the inputs given the outputs and uses prepare_transaction() to prepare
         transaction. Handles change.
 
@@ -331,11 +333,11 @@ class BaseWallet:
         :param timestamp: the tx timestamp
         :type timestamp: int
         """
-        inputs, outputs = self.prepare_compute_inputs(outputs, timestamp)
+        inputs, outputs = self.prepare_compute_inputs(outputs, tx_storage, timestamp)
         return self.prepare_transaction(cls, inputs, outputs, timestamp)
 
     def prepare_compute_inputs(
-        self, outputs: List[WalletOutputInfo], timestamp: Optional[int] = None
+        self, outputs: List[WalletOutputInfo], tx_storage: 'TransactionStorage', timestamp: Optional[int] = None
     ) -> Tuple[List[WalletInputInfo], List[WalletOutputInfo]]:
         """Calculates the inputs given the outputs. Handles change.
 
@@ -355,7 +357,7 @@ class BaseWallet:
             max_spent_ts = timestamp - 1
         tx_inputs = []
         for token_uid, amount in token_dict.items():
-            inputs, total_inputs_amount = self.get_inputs_from_amount(amount, token_uid, max_spent_ts)
+            inputs, total_inputs_amount = self.get_inputs_from_amount(amount, tx_storage, token_uid, max_spent_ts)
             change_tx = self.handle_change_tx(total_inputs_amount, amount, token_uid)
             if change_tx:
                 # change is usually the first output
@@ -433,8 +435,10 @@ class BaseWallet:
             return new_output
         return None
 
-    def get_inputs_from_amount(self, amount: int, token_uid: bytes = settings.HATHOR_TOKEN_UID,
-                               max_ts: Optional[int] = None) -> Tuple[List[WalletInputInfo], int]:
+    def get_inputs_from_amount(
+        self, amount: int, tx_storage: 'TransactionStorage',
+        token_uid: bytes = settings.HATHOR_TOKEN_UID, max_ts: Optional[int] = None
+    ) -> Tuple[List[WalletInputInfo], int]:
         """Creates inputs from our pool of unspent tx given a value
 
         This is a very simple algorithm, so it does not try to find the best combination
@@ -458,6 +462,8 @@ class BaseWallet:
         for utxo in utxos.values():
             if (max_ts is not None and utxo.timestamp > max_ts) or utxo.test_used:
                 continue
+            if not self.can_spend_block(tx_storage, utxo.tx_id):
+                continue
             if not utxo.is_locked(self.reactor) and not utxo.is_token_authority():
                 # I can only use the outputs that are not locked and are not an authority utxo
                 inputs_tx.append(WalletInputInfo(utxo.tx_id, utxo.index, self.get_private_key(utxo.address)))
@@ -478,6 +484,13 @@ class BaseWallet:
             self.maybe_spent_txs[token_uid][(_input.tx_id, _input.index)] = utxo
 
         return inputs_tx, total_inputs_amount
+
+    def can_spend_block(self, tx_storage: 'TransactionStorage', tx_id: bytes) -> bool:
+        tx = tx_storage.get_transaction(tx_id)
+        if tx.is_block:
+            if tx_storage.get_height_best_block() - tx.get_metadata().height < settings.REWARD_SPEND_MIN_BLOCKS:
+                return False
+        return True
 
     def on_new_tx(self, tx: BaseTransaction) -> None:
         """Checks the inputs and outputs of a transaction for matching keys.
