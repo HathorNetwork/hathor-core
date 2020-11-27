@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, List
 
 import numpy.random
 
+from hathor import daa
 from hathor.conf import HathorSettings
 from hathor.transaction.exceptions import RewardLocked
 from hathor.wallet.exceptions import InsufficientFunds
@@ -93,7 +94,7 @@ class RandomTransactionGenerator:
             self.delayedcall = self.clock.callLater(0, self.schedule_next_transaction)
             return
 
-        tx.weight = self.manager.minimum_tx_weight(tx)
+        tx.weight = daa.minimum_tx_weight(tx)
         tx.update_hash()
 
         geometric_p = 2**(-tx.weight)

@@ -20,6 +20,7 @@ from twisted.web import resource
 
 from hathor.api_util import get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.daa import minimum_tx_weight
 from hathor.transaction import Transaction
 
 
@@ -67,7 +68,7 @@ class SignTxResource(resource.Resource):
                 if prepare_to_send:
                     tx.parents = self.manager.get_new_tx_parents()
                     tx.update_timestamp(int(self.manager.reactor.seconds()))
-                    tx.weight = self.manager.minimum_tx_weight(tx)
+                    tx.weight = minimum_tx_weight(tx)
                     tx.resolve()
 
                 data = {'hex_tx': tx.get_struct().hex(), 'success': True}
