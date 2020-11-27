@@ -318,8 +318,11 @@ class HathorManager:
         t1 = t0
         cnt = 0
         cnt2 = 0
+        t2 = t0
+        h = 0
 
         block_count = 0
+        tx_count = 0
 
         if self.tx_storage.get_count_tx_blocks() > 3 and not self.tx_storage.is_db_clean():
             # If has more than 3 txs on storage (the genesis txs that are always on storage by default)
@@ -335,17 +338,25 @@ class HathorManager:
         self.tx_storage.set_db_clean()
 
         # self.start_profiler()
+
+        self.log.debug('load blocks and transactions')
         for tx in self.tx_storage._topological_sort():
             assert tx.hash is not None
+
+            tx_meta = tx.get_metadata()
 
             t2 = time.time()
             dt = hathor.util.LogDuration(t2 - t1)
             dcnt = cnt - cnt2
             tx_rate = '?' if dt == 0 else dcnt / dt
+            h = max(h, tx_meta.height)
             if dt > 30:
                 ts_date = datetime.datetime.fromtimestamp(self.tx_storage.latest_timestamp)
-                self.log.info('load transactions...', tx_rate=tx_rate, tx_new=dcnt, dt=dt,
-                              total=cnt, latest_ts=ts_date)
+                if h == 0:
+                    self.log.debug('start loading transactions...')
+                else:
+                    self.log.info('load transactions...', tx_rate=tx_rate, tx_new=dcnt, dt=dt,
+                                  total=cnt, latest_ts=ts_date, height=h)
                 t1 = t2
                 cnt2 = cnt
             cnt += 1
@@ -374,11 +385,13 @@ class HathorManager:
                 dt = hathor.util.LogDuration(time.time() - t2)
                 self.log.warn('tx took too long to load', tx=tx.hash_hex, dt=dt)
 
+        self.log.debug('done loading transactions')
+
         # self.stop_profiler(save_to='profiles/initializing.prof')
         self.state = self.NodeState.READY
         tdt = hathor.util.LogDuration(t2 - t0)
         tx_rate = '?' if tdt == 0 else cnt / tdt
-        self.log.info('ready', tx_count=cnt, tx_rate=tx_rate, total_dt=tdt)
+        self.log.info('ready', tx_count=cnt, tx_rate=tx_rate, total_dt=tdt, height=h, blocks=block_count, txs=tx_count)
 
     def add_listen_address(self, addr: str) -> None:
         self.listen_addresses.append(addr)

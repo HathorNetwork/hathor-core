@@ -90,7 +90,6 @@ class MergeMinedBlock(Block):
 
     def calculate_hash(self) -> bytes:
         assert self.aux_pow is not None
-        self.log.debug('calculate hash from AuxPOW')
         return self.aux_pow.calculate_hash(self.get_base_hash())
 
     def get_struct_nonce(self) -> bytes:

@@ -215,9 +215,9 @@ def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_lo
             level = twisted_to_logging_level.get(event.get('log_level'), logging.INFO)
             kwargs = {}
             msg = ''
-            if not msg and 'log_format' in event:
+            if not msg and event.get('log_format', None):
                 msg = event['log_format'].format(**event)
-            if not msg and 'format' in event:
+            if not msg and event.get('format', None):
                 msg = event['format'] % event
             failure = event.get('log_failure')
             if failure is not None:
