@@ -97,7 +97,7 @@ class PeerIdState(BaseState):
 
         # is it on the whitelist?
         if settings.ENABLE_PEER_WHITELIST and peer.id not in protocol.node.peers_whitelist:
-            protocol.send_error_and_close_connection('Blocked. Get in touch with Hathor team.')
+            protocol.send_error_and_close_connection('Blocked (id={}). Get in touch with Hathor team.'.format(peer.id))
             return
 
         if peer.id == protocol.my_peer.id:

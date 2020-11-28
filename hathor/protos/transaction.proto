@@ -94,4 +94,5 @@ message Metadata {
   double score = 8;
   bytes first_block = 9;
   uint64 height = 10;
+  uint32 validation = 11;
 }

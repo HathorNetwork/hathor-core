@@ -16,11 +16,17 @@ import base64
 from struct import pack
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from hathor import protos
+from hathor import daa, protos
 from hathor.conf import HathorSettings
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, TxOutput, TxVersion
-from hathor.transaction.exceptions import BlockWithInputs, BlockWithTokensError, TransactionDataError
+from hathor.transaction.exceptions import (
+    BlockWithInputs,
+    BlockWithTokensError,
+    InvalidBlockReward,
+    TransactionDataError,
+    WeightError,
+)
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 
 if TYPE_CHECKING:
@@ -130,6 +136,38 @@ class Block(BaseTransaction):
         parent_block = self.get_block_parent()
         return parent_block.get_metadata().height + 1
 
+    def get_next_block_best_chain_hash(self) -> Optional[bytes]:
+        """Return the hash of the next (child/left-to-right) block in the best blockchain.
+        """
+        assert self.storage is not None
+        meta = self.get_metadata()
+        assert not meta.voided_by
+
+        candidates = []
+        for h in meta.children:
+            blk = self.storage.get_transaction(h)
+            assert blk.is_block
+            blk_meta = blk.get_metadata()
+            if blk_meta.voided_by:
+                continue
+            candidates.append(h)
+
+        if len(candidates) == 0:
+            return None
+        assert len(candidates) == 1
+        return candidates[0]
+
+    def get_next_block_best_chain(self) -> Optional['Block']:
+        """Return the next (child/left-to-right)block in the best blockchain.
+        """
+        assert self.storage is not None
+        h = self.get_next_block_best_chain_hash()
+        if h is None:
+            return None
+        tx = self.storage.get_transaction(h)
+        assert isinstance(tx, Block)
+        return tx
+
     def get_block_parent_hash(self) -> bytes:
         """ Return the hash of the parent block.
         """
@@ -234,6 +272,39 @@ class Block(BaseTransaction):
         json['height'] = self.get_metadata().height
 
         return json
+
+    def has_basic_block_parent(self) -> bool:
+        """Whether all block parent is in storage and is at least basic-valid."""
+        assert self.storage is not None
+        parent_block_hash = self.parents[0]
+        if not self.storage.transaction_exists(parent_block_hash):
+            return False
+        metadata = self.storage.get_metadata(parent_block_hash)
+        assert metadata is not None
+        return metadata.validation.is_at_least_basic()
+
+    def verify_basic(self, skip_block_weight_verification: bool = False) -> None:
+        """Partially run validations, the ones that need parents/inputs are skipped."""
+        if not skip_block_weight_verification:
+            self.verify_weight()
+        self.verify_reward()
+
+    def verify_weight(self) -> None:
+        """Validate minimum block difficulty."""
+        block_weight = daa.calculate_block_difficulty(self)
+        if self.weight < block_weight - settings.WEIGHT_TOL:
+            raise WeightError(f'Invalid new block {self.hash_hex}: weight ({self.weight}) is '
+                              f'smaller than the minimum weight ({block_weight})')
+
+    def verify_reward(self) -> None:
+        """Validate reward amount."""
+        parent_block = self.get_block_parent()
+        tokens_issued_per_block = daa.get_tokens_issued_per_block(parent_block.get_metadata().height + 1)
+        if self.sum_outputs != tokens_issued_per_block:
+            raise InvalidBlockReward(
+                f'Invalid number of issued tokens tag=invalid_issued_tokens tx.hash={self.hash_hex} '
+                f'issued={self.sum_outputs} allowed={tokens_issued_per_block}'
+            )
 
     def verify_no_inputs(self) -> None:
         inputs = getattr(self, 'inputs', None)

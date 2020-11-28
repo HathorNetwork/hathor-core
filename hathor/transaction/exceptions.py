@@ -98,6 +98,10 @@ class WeightError(TxValidationError):
     """Transaction not using correct weight"""
 
 
+class InvalidBlockReward(TxValidationError):
+    """Wrong amount of issued tokens"""
+
+
 class DuplicatedParents(TxValidationError):
     """Transaction has duplicated parents"""
 

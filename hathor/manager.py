@@ -17,7 +17,7 @@ import random
 import sys
 import time
 from enum import Enum
-from typing import Any, Iterator, List, NamedTuple, Optional, Union, cast
+from typing import Any, Iterator, List, NamedTuple, Optional, Tuple, Union
 
 from structlog import get_logger
 from twisted.internet import defer
@@ -27,6 +27,7 @@ from twisted.python.threadpool import ThreadPool
 
 import hathor.util
 from hathor import daa
+from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.exception import InvalidNewTransaction
@@ -65,7 +66,7 @@ class HathorManager:
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
                  peer_storage: Optional[Any] = None, default_port: int = 40403, wallet_index: bool = False,
                  stratum_port: Optional[int] = None, ssl: bool = True,
-                 capabilities: Optional[List[str]] = None) -> None:
+                 capabilities: Optional[List[str]] = None, checkpoints: Optional[List[Checkpoint]] = None) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node. If not given, a new one is created.
@@ -119,6 +120,15 @@ class HathorManager:
         self.is_started: bool = False
 
         self.cpu = cpu
+
+        # XXX: first checkpoint must be genesis (height=0)
+        self.checkpoints: List[Checkpoint] = checkpoints or []
+        self.checkpoints_ready: List[bool] = [False] * len(self.checkpoints)
+        if not self.checkpoints or self.checkpoints[0].height > 0:
+            self.checkpoints.insert(0, Checkpoint(0, settings.GENESIS_BLOCK_HASH))
+            self.checkpoints_ready.insert(0, True)
+        else:
+            self.checkpoints_ready[0] = True
 
         # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
         self.pubsub = pubsub or PubSubManager(self.reactor)
@@ -178,7 +188,7 @@ class HathorManager:
         if capabilities is not None:
             self.capabilities = capabilities
         else:
-            self.capabilities = [settings.CAPABILITY_WHITELIST]
+            self.capabilities = [settings.CAPABILITY_WHITELIST, settings.CAPABILITY_SYNC_V2]
 
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
@@ -417,12 +427,14 @@ class HathorManager:
             timestamp, [x.hex() for x in self.tx_storage.get_tx_tips(timestamp - 1)])
         return [x.data for x in ret]
 
-    def generate_parent_txs(self, timestamp: float) -> 'ParentTxs':
+    def generate_parent_txs(self, timestamp: Optional[float]) -> 'ParentTxs':
         """Select which transactions will be confirmed by a new block.
 
         This method tries to return a stable result, such that for a given timestamp and storage state it will always
         return the same.
         """
+        if timestamp is None:
+            timestamp = self.reactor.seconds()
         can_include_intervals = sorted(self.tx_storage.get_tx_tips(timestamp - 1))
         assert can_include_intervals, 'tips cannot be empty'
         max_timestamp = max(int(i.begin) for i in can_include_intervals)
@@ -605,45 +617,11 @@ class HathorManager:
             raise InvalidNewTransaction('Ignoring transaction in the future {} (timestamp={}, now={})'.format(
                 tx.hash_hex, tx.timestamp, now))
 
-        # Verify transaction and raises an TxValidationError if tx is not valid.
-        tx.verify()
+        if self.state != self.NodeState.INITIALIZING and not tx.can_validate_full():
+            raise InvalidNewTransaction('Cannot validate, missing dependency')
 
-        if tx.is_block:
-            tx = cast(Block, tx)
-            assert tx.hash is not None  # XXX: it appears that after casting this assert "casting" is lost
-
-            if not skip_block_weight_verification:
-                # Validate minimum block difficulty
-                block_weight = daa.calculate_block_difficulty(tx)
-                if tx.weight < block_weight - settings.WEIGHT_TOL:
-                    raise InvalidNewTransaction(
-                        'Invalid new block {}: weight ({}) is smaller than the minimum weight ({})'.format(
-                            tx.hash.hex(), tx.weight, block_weight
-                        )
-                    )
-
-            parent_block = tx.get_block_parent()
-            tokens_issued_per_block = daa.get_tokens_issued_per_block(parent_block.get_metadata().height + 1)
-            if tx.sum_outputs != tokens_issued_per_block:
-                raise InvalidNewTransaction(
-                    'Invalid number of issued tokens tag=invalid_issued_tokens'
-                    ' tx.hash={tx.hash_hex} issued={tx.sum_outputs} allowed={allowed}'.format(
-                        tx=tx,
-                        allowed=tokens_issued_per_block,
-                    )
-                )
-        else:
-            assert tx.hash is not None  # XXX: it appears that after casting this assert "casting" is lost
-            assert isinstance(tx, Transaction)
-
-            # Validate minimum tx difficulty
-            min_tx_weight = daa.minimum_tx_weight(tx)
-            if tx.weight < min_tx_weight - settings.WEIGHT_TOL:
-                raise InvalidNewTransaction(
-                    'Invalid new tx {}: weight ({}) is smaller than the minimum weight ({})'.format(
-                        tx.hash_hex, tx.weight, min_tx_weight
-                    )
-                )
+        # validate transaction, raises a TxValidationError if tx is not valid
+        tx.validate_full()
 
         return True
 
@@ -776,3 +754,17 @@ class ParentTxs(NamedTuple):
     max_timestamp: int
     can_include: List[bytes]
     must_include: List[bytes]
+
+    def get_random_parents(self) -> Tuple[bytes, bytes]:
+        """ Get parents from self.parents plus a random choice from self.parents_any to make it 3 in total.
+
+        Using tuple as return type to make it explicit that the length is always 2.
+        """
+        assert len(self.must_include) <= 1
+        fill = [x for _, x in sorted(random.sample(list(enumerate(self.can_include)), 2 - len(self.must_include)))]
+        p1, p2 = self.must_include[:] + fill
+        return p1, p2
+
+    def get_all_tips(self) -> List[bytes]:
+        """All generated "tips", can_include + must_include."""
+        return self.must_include + self.can_include
