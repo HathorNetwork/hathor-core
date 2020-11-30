@@ -54,8 +54,9 @@ class TransactionOldRocksDBStorage(BaseTransactionStorage):
         self._db.delete(tx.hash)
         self._remove_from_weakref(tx)
 
-    def save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
-        super().save_transaction(tx, only_metadata=only_metadata)
+    def save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False,
+                         add_to_indexes: bool = False) -> None:
+        super().save_transaction(tx, only_metadata=only_metadata, add_to_indexes=add_to_indexes)
         self._save_transaction(tx, only_metadata=only_metadata)
         self._save_to_weakref(tx)
 

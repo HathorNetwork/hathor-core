@@ -119,12 +119,13 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self.dirty_txs.discard(tx.hash)
         self._remove_from_weakref(tx)
 
-    def save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
+    def save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False,
+                         add_to_indexes: bool = False) -> None:
         self._save_transaction(tx)
         self._save_to_weakref(tx)
 
         # call super which adds to index if needed
-        super().save_transaction(tx, only_metadata=only_metadata)
+        super().save_transaction(tx, only_metadata=only_metadata, add_to_indexes=add_to_indexes)
 
     def get_all_genesis(self) -> Set[BaseTransaction]:
         return self.store.get_all_genesis()

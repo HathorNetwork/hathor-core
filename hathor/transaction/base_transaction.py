@@ -331,15 +331,21 @@ class BaseTransaction(ABC):
         minutes, seconds = divmod(seconds, 60)
         return '{} days, {:02d}:{:02d}:{:02d}'.format(dt.days, hours, minutes, seconds)
 
-    def get_parents(self) -> Iterator['BaseTransaction']:
+    def get_parents(self, *, existing_only: bool = False) -> Iterator['BaseTransaction']:
         """Return an iterator of the parents
 
         :return: An iterator of the parents
         :rtype: Iter[BaseTransaction]
         """
+        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+
         for parent_hash in self.parents:
             assert self.storage is not None
-            yield self.storage.get_transaction(parent_hash)
+            try:
+                yield self.storage.get_transaction(parent_hash)
+            except TransactionDoesNotExist:
+                if not existing_only:
+                    raise
 
     @property
     def is_genesis(self) -> bool:
@@ -442,6 +448,9 @@ class BaseTransaction(ABC):
         """ Check if this transaction is ready to be fully validated, either all deps are full-valid or one is invalid.
         """
         assert self.storage is not None
+        assert self.hash is not None
+        if self.is_genesis:
+            return True
         deps = self.get_all_dependencies()
         all_exist = True
         all_valid = True
@@ -855,10 +864,11 @@ class BaseTransaction(ABC):
         assert self.hash is not None
         assert self.storage is not None
 
-        for parent in self.get_parents():
+        for parent in self.get_parents(existing_only=True):
             metadata = parent.get_metadata()
-            metadata.children.append(self.hash)
-            self.storage.save_transaction(parent, only_metadata=True)
+            if self.hash not in metadata.children:
+                metadata.children.append(self.hash)
+                self.storage.save_transaction(parent, only_metadata=True)
 
     def update_timestamp(self, now: int) -> None:
         """Update this tx's timestamp
