@@ -22,6 +22,7 @@ SETTINGS = HathorSettings(
     BOOTSTRAP_DNS=['mainnet.hathor.network'],
     ENABLE_PEER_WHITELIST=True,
     WHITELIST_URL='https://hathor-public-files.s3.amazonaws.com/whitelist_peer_ids',
+    TX_MINING_URL='https://txmining.mainnet.hathor.network/',
     # Genesis stuff
     # output addr: HJB2yxxsHtudGGy3jmVeadwMfRi2zNCKKD
     GENESIS_OUTPUT_SCRIPT=bytes.fromhex('76a9147fd4ae0e4fb2d2854e76d359029d8078bb99649e88ac'),
@@ -47,5 +48,5 @@ SETTINGS = HathorSettings(
         cp(1_200_000, bytes.fromhex('000000000000000091ddabd35a0c3984609e2892b72b14d38d23d58e1fa87c91')),
         cp(1_300_000, bytes.fromhex('00000000000000000244794568649ac43e0abd4b53b1a583b6cc8e243e65f582')),
         cp(1_400_000, bytes.fromhex('000000000000000011a65b1c3cba2b94ad05525ac2ec60f315bb7b204c8160c7')),
-    ]
+    ],
 )

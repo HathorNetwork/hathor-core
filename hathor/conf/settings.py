@@ -317,3 +317,6 @@ class HathorSettings(NamedTuple):
 
     # Block checkpoints
     CHECKPOINTS: List[Checkpoint] = []
+
+    # tx mining service
+    TX_MINING_URL: Optional[str] = None

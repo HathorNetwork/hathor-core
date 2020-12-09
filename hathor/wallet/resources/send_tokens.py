@@ -13,14 +13,21 @@
 # limitations under the License.
 
 import json
-from typing import Any, Dict, Optional, Union
+from json.decoder import JSONDecodeError
+from typing import Optional
 
-from twisted.internet import threads
+from structlog import get_logger
+from twisted.internet.defer import inlineCallbacks, succeed
+from twisted.internet.task import deferLater
 from twisted.web import resource
-from twisted.web.http import Request
+from twisted.web.client import Agent, HTTPConnectionPool, readBody
+from twisted.web.http_headers import Headers
+from twisted.web.iweb import IBodyProducer
+from zope.interface import implementer
 
 from hathor.api_util import render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.daa import minimum_tx_weight
 from hathor.exception import InvalidNewTransaction
@@ -28,6 +35,26 @@ from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TxValidationError
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, InvalidAddress, PrivateKeyNotFound
+
+settings = HathorSettings()
+logger = get_logger()
+
+
+@implementer(IBodyProducer)
+class BytesProducer(object):
+    def __init__(self, body):
+        self.body = body
+        self.length = len(body)
+
+    def startProducing(self, consumer):
+        consumer.write(self.body)
+        return succeed(None)
+
+    def pauseProducing(self):
+        pass
+
+    def stopProducing(self):
+        pass
 
 
 @register_resource
@@ -41,21 +68,23 @@ class SendTokensResource(resource.Resource):
     def __init__(self, manager):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
+        self.log = logger.new()
+
+    # non blocking sleep
+    def sleep(self, secs):
+        return deferLater(self.manager.reactor, secs, lambda: None)
 
     def render_POST(self, request):
-        """ POST request for /wallet/send_tokens/
-            We expect 'data' as request args
-            'data': stringified json with an array of inputs and array of outputs
-            If inputs array is empty we use 'prepare_compute_inputs', that calculate the inputs
-            We return success (bool)
-
-            :rtype: string (json)
-        """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
 
-        post_data = json.loads(request.content.read().decode('utf-8'))
-        data = post_data['data']
+        try:
+            data = json.loads(request.content.read().decode('utf-8'))
+        except JSONDecodeError:
+            return self.return_POST(False, 'Invalid json')
+
+        if 'outputs' not in data:
+            return self.return_POST(False, 'Missing outputs')
 
         outputs = []
         for output in data['outputs']:
@@ -78,6 +107,14 @@ class SendTokensResource(resource.Resource):
                 timestamp = data['timestamp']
             else:
                 timestamp = int(self.manager.reactor.seconds())
+
+        propagate = True
+        if 'propagate' in data:
+            propagate = data['propagate']
+
+        inputs = []
+        if 'inputs' in data:
+            inputs = data['inputs']
 
         if len(data['inputs']) == 0:
             try:
@@ -103,59 +140,113 @@ class SendTokensResource(resource.Resource):
             timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
         parents = self.manager.get_new_tx_parents(timestamp)
 
-        values = {
-            'inputs': inputs,
-            'outputs': outputs,
-            'storage': storage,
-            'weight': data.get('weight'),
-            'parents': parents,
-            'timestamp': timestamp,
-        }
-
-        deferred = threads.deferToThread(self._render_POST_thread, values, request)
-        deferred.addCallback(self._cb_tx_resolve, request)
-        deferred.addErrback(self._err_tx_resolve, request)
-
-        from twisted.web.server import NOT_DONE_YET
-        return NOT_DONE_YET
-
-    def _render_POST_thread(self, values: Dict[str, Any], request: Request) -> Union[bytes, Transaction]:
-        tx = self.manager.wallet.prepare_transaction(Transaction, values['inputs'],
-                                                     values['outputs'], values['timestamp'])
-        tx.storage = values['storage']
-        tx.parents = values['parents']
-        weight = values['weight']
+        tx = self.manager.wallet.prepare_transaction(Transaction, inputs, outputs, timestamp)
+        tx.storage = storage
+        tx.parents = parents
+        weight = data.get('weight')
         if weight is None:
             weight = minimum_tx_weight(tx)
         tx.weight = weight
-        tx.resolve()
-        tx.verify()
-        return tx
 
-    def _cb_tx_resolve(self, tx, request):
-        """ Called when `_render_POST_thread` finishes
-        """
-        message = ''
+        # transaction is complete, now resolve proof-of-work
+        if tx.weight < 3:
+            tx.resolve()
+            tx.verify()
+            return self._cb_tx_resolve(tx, propagate)
+        else:
+            self._render_POST(request, tx, propagate)
+            from twisted.web.server import NOT_DONE_YET
+            return NOT_DONE_YET
+
+    @inlineCallbacks
+    def _render_POST(self, request, tx, propagate):
         try:
-            success = self.manager.propagate_tx(tx, fails_silently=False)
-        except (InvalidNewTransaction, TxValidationError) as e:
-            success = False
-            message = str(e)
+            agent = self._create_agent()
+            # submit job for mining
+            job_id = yield self._submit_job(agent, tx)
 
-        result = self.return_POST(success, message, tx=tx)
+            # get status
+            step = 0
+            while True:
+                response = yield self._get_job_status(agent, job_id)
+                step += 1
+                if step >= 5 or response['status'] != 'mining':
+                    break
+                yield self.sleep(3)
+            status = response['status']
+            self.log.info('send_tokens', job_id=job_id, status=status)
+        except Exception as e:
+            self.log.error('error on send_tokens', exception=e)
+            return self._err_tx_resolve(None, request)
+
+        if status == 'done':
+            tx.nonce = int(response['tx']['nonce'], base=16)
+            tx.timestamp = response['tx']['timestamp']
+            tx.update_hash()
+            result = self._cb_tx_resolve(tx, propagate)
+        else:
+            result = self._err_tx_resolve(None, request)
 
         request.write(result)
         request.finish()
+
+    def _create_agent(self):
+        pool = HTTPConnectionPool(self.manager.reactor)
+        return Agent(self.manager.reactor, pool=pool)
+
+    @inlineCallbacks
+    def _submit_job(self, agent, tx):
+        body = json.dumps({
+            'propagate': False,
+            'add_parents': False,
+            'tx': bytes(tx).hex(),
+        })
+        data = yield agent.request(
+            b'POST',
+            '{}submit-job'.format(settings.TX_MINING_URL).encode(),
+            Headers({'User-Agent': ['hathor-core']}),
+            BytesProducer(body.encode())).addCallback(readBody)
+        self.log.debug('send_tokens', data=data.decode())
+        response = json.loads(data.decode())
+        job_id = response['job_id']
+        self.log.info('send_tokens', job_id=job_id)
+        return job_id
+
+    @inlineCallbacks
+    def _get_job_status(self, agent, job_id):
+        data = yield agent.request(
+            b'GET',
+            '{}job-status?job-id={}'.format(settings.TX_MINING_URL, job_id).encode(),
+            Headers({'User-Agent': ['hathor-core']}),
+            None).addCallback(readBody)
+        response = json.loads(data.decode())
+        return response
+
+    def _cb_tx_resolve(self, tx, propagate):
+        """ Called when `_render_POST_thread` finishes
+        """
+        message = ''
+        if propagate:
+            try:
+                success = self.manager.propagate_tx(tx, fails_silently=False)
+            except (InvalidNewTransaction, TxValidationError) as e:
+                success = False
+                message = str(e)
+        else:
+            success = True
+            self.log.info('tx created, do not propagate', tx=tx.hash_hex)
+
+        self.log.info('send_tokens', tx=tx.hash_hex)
+        return self.return_POST(success, message, tx=tx)
 
     def _err_tx_resolve(self, reason, request):
         """ Called when an error occur in `_render_POST_thread`
         """
         message = ''
+        self.log.warn('tx mining timeout')
         if hasattr(reason, 'value'):
             message = str(reason.value)
-        result = self.return_POST(False, message)
-        request.write(result)
-        request.finish()
+        return self.return_POST(False, message)
 
     def return_POST(self, success: bool, message: str, tx: Optional[Transaction] = None) -> bytes:
         """ Auxiliar method to return result of POST method
@@ -174,6 +265,7 @@ class SendTokensResource(resource.Resource):
         }
         if tx:
             ret['tx'] = tx.to_json()
+            ret['tx_hex'] = bytes(tx).hex()
         return json.dumps(ret, indent=4).encode('utf-8')
 
     def render_OPTIONS(self, request):
@@ -199,26 +291,25 @@ SendTokensResource.openapi = {
                             'data': {
                                 'summary': 'Data to create transactions',
                                 'value': {
-                                    'data': {
-                                        'outputs': [
-                                            {
-                                                'address': '15VZc2jy1L3LGFweZeKVbWMsTzfKFJLpsN',
-                                                'value': 1000
-                                            },
-                                            {
-                                                'address': '1C5xEjewerH4zTWPC6wqzhoEkMhiHEHPZ8',
-                                                'value': 800
-                                            }
-                                        ],
-                                        'inputs': [
-                                            {
-                                                'tx_id': ('00000257054251161adff5899a451ae9'
-                                                          '74ac62ca44a7a31179eec5750b0ea406'),
-                                                'index': 0
-                                            }
-                                        ],
-                                        'timestamp': 1549667726
-                                    }
+                                    'outputs': [
+                                        {
+                                            'address': '15VZc2jy1L3LGFweZeKVbWMsTzfKFJLpsN',
+                                            'value': 1000
+                                        },
+                                        {
+                                            'address': '1C5xEjewerH4zTWPC6wqzhoEkMhiHEHPZ8',
+                                            'value': 800
+                                        }
+                                    ],
+                                    'inputs': [
+                                        {
+                                            'tx_id': ('00000257054251161adff5899a451ae9'
+                                                      '74ac62ca44a7a31179eec5750b0ea406'),
+                                            'index': 0
+                                        }
+                                    ],
+                                    'propagate': True,
+                                    'timestamp': 1549667726
                                 }
                             }
                         }
@@ -267,7 +358,15 @@ SendTokensResource.openapi = {
                                                 }
                                             ],
                                             'tokens': []
-                                        }
+                                        },
+                                        'tx_hex': '000100010113c990cfca448ea3750eeed4723cf4752944773b6815d51fba9e1d0'
+                                                  '4d772b4cf00006b4830460221009b1dbcaf226cf5578e7f8050438abd25861f6f'
+                                                  '4fb49b2d3fb92960faa8438e3a022100bbf2e439a19597e99ef3f39a5a3aba026'
+                                                  '74ffcdf25108d4bde8012c223f114422103897881129e706c7561feaecd9cc8c5'
+                                                  '11f8dbd1b578e0cfe2993049f5cf05ee6a00004e2000001976a9148362a4406c9'
+                                                  '76579057b1b98fbdca03e30d9e04688ac3ff00000000000005fd14af50249519c'
+                                                  '7995b84ba6a547485302c04b4ae8bd1771bb102d23e75d9e28ab5d739c71b8dc0'
+                                                  'd1334a6731f7152459c713204d7ebcf15d442b68ea0171462063bbe8200000002'
                                     }
                                 },
                                 'error1': {
