@@ -48,10 +48,10 @@ jobs:
           VERSION=pr-${{ github.event.number }}
         fi
         BASE_VERSION=$VERSION
-        DOCKERFILE=Dockerfile
+        DOCKERFILE=Dockerfile.github
         SUFFIX=python${{ matrix.python-version }}
         if [[ "${{ matrix.python-impl }}" == "pypy" ]]; then
-          DOCKERFILE=Dockerfile.pypy
+          DOCKERFILE=Dockerfile.github-pypy
           SUFFIX=pypy${{ matrix.python-version }}
         fi
         VERSION="${VERSION}-${SUFFIX}"
