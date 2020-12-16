@@ -10,6 +10,10 @@
 
 ## Running a full-node
 
+**Disclaimer**
+
+At the moment, our mainnet is running on a whitelist basis while the team finishes an upgrade on the p2p protocol. This means only authorized nodes will be able to connect. For testing purposes, you can connect to the testnet (using the `--testnet` parameter). If you want to connect to the mainnet, you have to [use a peer-id](#using-a-peer-id) and send this id to a team member. You can get in touch with us through [our channels](https://hathor.network/community/), preferrably Discord or Telegram.
+
 ### Using Docker
 
 The easiest way to run a full-node is to use our Docker image. If you don't have Docker installed, check out [this
@@ -171,6 +175,14 @@ make latexpdf
 ```
 
 The output will be written to `docs/_build/html/`.
+
+
+Generate API docs:
+
+```
+hathor-cli generate_openapi_json
+redoc-cli bundle hathor/cli/openapi_files/openapi.json --output index.html
+```
 
 [open-issue]: https://github.com/HathorNetwork/hathor-core/issues/new
 [create-pr]: https://github.com/HathorNetwork/hathor-core/compare
