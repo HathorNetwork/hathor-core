@@ -27,9 +27,9 @@ jobs:
         - os: ubuntu-latest
           python: 3.8
           tier: 1
-        - os: macos-latest
-          python: 3.8
-          tier: 1
+        # - os: macos-latest
+        #   python: 3.8
+        #   tier: 1
         - os: windows-latest
           python: 3.6
           tier: 2
