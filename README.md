@@ -150,6 +150,8 @@ Then, you can use this id in any server or client through the `--peer` parameter
 hathor-cli run_node --listen tcp:8000 --peer peer_id.json
 ```
 
+The ID of your peer will be in the key `id` inside the generated json (`peer_id.json`), e.g. `"id": "6357b155b0867790bd92d1afe3a9afe3f91312d1ea985f908cac0f64cbc9d5b2"`.
+
 ## Common development commands
 
 Assuming virtualenv is active, otherwise prefix `make` commands with `poetry run`.
