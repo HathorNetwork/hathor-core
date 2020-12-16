@@ -21,8 +21,9 @@ class HathorCapabilitiesTestCase(unittest.TestCase):
             conn.run_one_step(debug=True)
             self.clock.advance(0.1)
 
-        self.assertNotEqual(conn._proto1.state.state_name, 'READY')
-        self.assertNotEqual(conn._proto2.state.state_name, 'READY')
+        # Even if we don't have the capability we must connect because the whitelist url conf is None
+        self.assertEqual(conn._proto1.state.state_name, 'READY')
+        self.assertEqual(conn._proto2.state.state_name, 'READY')
 
         manager3 = self.create_peer(network, capabilities=[settings.CAPABILITY_WHITELIST])
         manager4 = self.create_peer(network, capabilities=[settings.CAPABILITY_WHITELIST])

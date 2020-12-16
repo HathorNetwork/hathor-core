@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from typing import TYPE_CHECKING, Dict, Optional, Set, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Set, Union
 
 from structlog import get_logger
 from twisted.internet import endpoints
@@ -246,7 +246,7 @@ class ConnectionsManager:
         d.addErrback(self._update_whitelist_err)
         d.addCallback(self._update_whitelist_cb)
 
-    def _update_whitelist_err(self, *args, **kwargs) -> None:
+    def _update_whitelist_err(self, *args: Any, **kwargs: Any) -> None:
         self.log.error('update whitelist failed', args=args, kwargs=kwargs)
 
     def _update_whitelist_cb(self, body: bytes) -> None:

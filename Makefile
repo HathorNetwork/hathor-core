@@ -165,11 +165,11 @@ endif
 
 .PHONY: docker
 docker: $(docker_dir)/Dockerfile $(proto_outputs) requirements.txt $(wheel_file)
-	docker build$(docker_build_flags) -t $(docker_tag) $(docker_dir)
+	docker build$(docker_build_flags) -f Dockerfile.github -t $(docker_tag) $(docker_dir)
 
 .PHONY: docker-pypy
 docker-pypy: $(docker_dir)/Dockerfile.pypy $(proto_outputs) requirements.txt $(wheel_file)
-	docker build$(docker_build_flags) -f Dockerfile.pypy -t $(docker_tag) $(docker_dir)
+	docker build$(docker_build_flags) -f Dockerfile.github-pypy -t $(docker_tag) $(docker_dir)
 
 .PHONY: docker-push
 docker-push: docker
