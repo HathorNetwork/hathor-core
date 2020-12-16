@@ -84,7 +84,10 @@ class NanoContractMatchValueResource(resource.Resource):
         tx_outputs = []
         tx_outputs.append(TxOutput(decoded_params.total_value, nano_contract.create_output_script()))
 
-        inputs, total_inputs_amount = self.manager.wallet.get_inputs_from_amount(decoded_params.input_value)
+        inputs, total_inputs_amount = self.manager.wallet.get_inputs_from_amount(
+            decoded_params.input_value,
+            self.manager.tx_storage
+        )
         change_tx = self.manager.wallet.handle_change_tx(total_inputs_amount, decoded_params.input_value)
         if change_tx:
             tx_outputs.append(TxOutput(change_tx.value, P2PKH.create_output_script(change_tx.address)))
@@ -188,7 +191,10 @@ class NanoContractMatchValueResource(resource.Resource):
 
         tx.outputs = tx_outputs
 
-        inputs, total_inputs_amount = self.manager.wallet.get_inputs_from_amount(decoded_params.input_value)
+        inputs, total_inputs_amount = self.manager.wallet.get_inputs_from_amount(
+            decoded_params.input_value,
+            self.manager.tx_storage
+        )
         change_tx = self.manager.wallet.handle_change_tx(total_inputs_amount, decoded_params.input_value)
         if change_tx:
             tx.outputs.append(TxOutput(change_tx.value, P2PKH.create_output_script(change_tx.address)))

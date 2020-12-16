@@ -3,7 +3,7 @@ from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletOutputInfo
 from tests import unittest
-from tests.utils import add_new_blocks
+from tests.utils import add_blocks_unlock_reward, add_new_blocks
 
 
 class _Base:
@@ -17,6 +17,7 @@ class _Base:
 
             data = b'This is a test block.'
             self.blocks = add_new_blocks(self.manager, 3, advance_clock=15, block_data=data)
+            add_blocks_unlock_reward(self.manager)
 
             address = self.get_address(0)
             value = 100
