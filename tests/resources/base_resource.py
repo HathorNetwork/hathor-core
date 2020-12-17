@@ -1,11 +1,10 @@
-import json
-
 from twisted.internet.defer import succeed
 from twisted.web import server
 from twisted.web.test.requesthelper import DummyRequest
 
 from hathor.manager import HathorManager, TestMode
 from hathor.p2p.peer_id import PeerId
+from hathor.util import json_dumpb, json_loadb
 from tests import unittest
 
 
@@ -64,7 +63,7 @@ class TestDummyRequest(DummyRequest):
             self.addArg(k, v)
 
     def json_value(self):
-        return json.loads(self.written[0].decode('utf-8'))
+        return json_loadb(self.written[0])
 
 
 class StubSite(server.Site):
@@ -85,7 +84,7 @@ class StubSite(server.Site):
         # body content
         if (method == 'POST' or method == 'PUT') and body:
             # Creating post content exactly the same as twisted resource
-            request.content.setvalue(bytes(json.dumps(body), 'utf-8'))
+            request.content.setvalue(json_dumpb(body))
 
         resource = self.getResourceFor(request)
         result = resource.render(request)

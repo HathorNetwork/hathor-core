@@ -100,6 +100,7 @@ class TokenCreationTransaction(Transaction):
         )
         if transaction_proto.HasField('metadata'):
             from hathor.transaction import TransactionMetadata
+
             # make sure hash is not empty
             tx.hash = tx.hash or tx.calculate_hash()
             tx._metadata = TransactionMetadata.create_from_proto(tx.hash, transaction_proto.metadata)

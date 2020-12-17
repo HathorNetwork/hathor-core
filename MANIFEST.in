@@ -1,3 +1,0 @@
-include MANIFEST.in
-graft hathor
-graft docs

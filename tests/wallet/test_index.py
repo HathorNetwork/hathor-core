@@ -25,7 +25,7 @@ class TwinTransactionTestCase(unittest.TestCase):
             WalletOutputInfo(address=decode_address(address), value=int(value2), timelock=None)
         ]
 
-        tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+        tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
         tx1.weight = 10
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())

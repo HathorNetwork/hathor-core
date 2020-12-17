@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from typing import TYPE_CHECKING, Dict, Optional, Set, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Set, Union
 
 from structlog import get_logger
 from twisted.internet import endpoints
@@ -24,21 +24,23 @@ from twisted.internet.interfaces import IStreamClientEndpoint, IStreamServerEndp
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
 
+from hathor.conf import HathorSettings
 from hathor.p2p.downloader import Downloader
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import PeerStorage
 from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.states.ready import ReadyState
-from hathor.p2p.utils import description_to_connection_string
+from hathor.p2p.utils import description_to_connection_string, parse_whitelist
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
-    from hathor.p2p.node_sync import NodeSyncTimestamp  # noqa: F401
     from hathor.p2p.factory import HathorClientFactory, HathorServerFactory  # noqa: F401
+    from hathor.p2p.node_sync import NodeSyncTimestamp  # noqa: F401
 
 logger = get_logger()
+settings = HathorSettings()
 
 
 class ConnectionsManager:
@@ -87,6 +89,11 @@ class ConnectionsManager:
         self.lc_reconnect = LoopingCall(self.reconnect_to_all)
         self.lc_reconnect.clock = self.reactor
 
+        # A timer to try to reconnect to the disconnect known peers.
+        if settings.ENABLE_PEER_WHITELIST:
+            self.wl_reconnect = LoopingCall(self.update_whitelist)
+            self.wl_reconnect.clock = self.reactor
+
         # Pubsub object to publish events
         self.pubsub = pubsub
 
@@ -94,6 +101,8 @@ class ConnectionsManager:
 
     def start(self) -> None:
         self.lc_reconnect.start(5)
+        if settings.ENABLE_PEER_WHITELIST:
+            self.wl_reconnect.start(30)
 
     def stop(self) -> None:
         if self.lc_reconnect.running:
@@ -158,7 +167,7 @@ class ConnectionsManager:
             # connected twice to same peer
             self.log.warn('duplicate connection to peer', protocol=protocol)
             conn = self.get_connection_to_drop(protocol)
-            self.reactor.callLater(0, self.drop_duplicate_connection, conn)
+            self.reactor.callLater(0, self.drop_connection, conn)
             if conn == protocol:
                 # the new connection is being dropped, so don't save it to connected_peers
                 return
@@ -221,6 +230,45 @@ class ConnectionsManager:
         now = int(self.reactor.seconds())
         for peer in self.peer_storage.values():
             self.connect_to_if_not_connected(peer, now)
+
+    def update_whitelist(self) -> Deferred:
+        from twisted.web.client import Agent, readBody
+        from twisted.web.http_headers import Headers
+        assert settings.WHITELIST_URL is not None
+        self.log.info('update whitelist')
+        agent = Agent(self.reactor)
+        d = agent.request(
+            b'GET',
+            settings.WHITELIST_URL.encode(),
+            Headers({'User-Agent': ['hathor-core']}),
+            None)
+        d.addCallback(readBody)
+        d.addErrback(self._update_whitelist_err)
+        d.addCallback(self._update_whitelist_cb)
+
+    def _update_whitelist_err(self, *args: Any, **kwargs: Any) -> None:
+        self.log.error('update whitelist failed', args=args, kwargs=kwargs)
+
+    def _update_whitelist_cb(self, body: bytes) -> None:
+        self.log.info('update whitelist got response')
+        try:
+            text = body.decode()
+            new_whitelist = parse_whitelist(text)
+        except Exception:
+            self.log.exception('failed to parse whitelist')
+            return
+        manager = self.downloader.manager  # XXX: maybe refactor later
+        current_whitelist = set(manager.peers_whitelist)
+        peers_to_add = new_whitelist - current_whitelist
+        if peers_to_add:
+            self.log.info('add new peers to whitelist', peers=peers_to_add)
+        peers_to_remove = current_whitelist - new_whitelist
+        if peers_to_remove:
+            self.log.info('remove peers peers from whitelist', peers=peers_to_remove)
+        for peer_id in peers_to_add:
+            manager.add_peer_to_whitelist(peer_id)
+        for peer_id in peers_to_remove:
+            manager.remove_peer_from_whitelist_and_disconnect(peer_id)
 
     def connect_to_if_not_connected(self, peer: PeerId, now: int) -> None:
         """ Attempts to connect if it is not connected to the peer.
@@ -345,9 +393,16 @@ class ConnectionsManager:
             else:
                 return other_connection
 
-    def drop_duplicate_connection(self, protocol: HathorProtocol) -> None:
+    def drop_connection(self, protocol: HathorProtocol) -> None:
         """ Drop a connection
         """
         assert protocol.peer is not None
         self.log.debug('dropping connection', peer_id=protocol.peer.id, protocol=type(protocol).__name__)
-        protocol.send_error_and_close_connection('Connection already established')
+        protocol.send_error_and_close_connection('Connection droped')
+
+    def drop_connection_by_peer_id(self, peer_id: str) -> None:
+        """ Drop a connection by peer id
+        """
+        protocol = self.connected_peers.get(peer_id)
+        if protocol:
+            self.drop_connection(protocol)

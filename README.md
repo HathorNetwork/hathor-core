@@ -3,12 +3,16 @@
 [![Mainnet](https://img.shields.io/badge/mainnet-live-success)](https://explorer.hathor.network/)
 [![Version](https://img.shields.io/github/v/release/HathorNetwork/hathor-core)](https://github.com/HathorNetwork/hathor-core/releases/latest)
 [![Testing](https://img.shields.io/github/workflow/status/HathorNetwork/hathor-core/tests?label=tests&logo=github)](https://github.com/HathorNetwork/hathor-core/actions?query=workflow%3Atests+branch%3Amaster)
-[![Docker Hub](https://img.shields.io/docker/cloud/build/hathornetwork/hathor-core?logo=docker)](https://hub.docker.com/repository/docker/hathornetwork/hathor-core)
+[![Ｄocker](https://img.shields.io/github/workflow/status/HathorNetwork/hathor-core/docker?label=build&logo=docker)](https://hub.docker.com/repository/docker/hathornetwork/hathor-core)
 [![Codecov](https://img.shields.io/codecov/c/github/HathorNetwork/hathor-core?logo=codecov)](https://codecov.io/gh/hathornetwork/hathor-core)
 [![Discord](https://img.shields.io/discord/566500848570466316?logo=discord)](https://discord.com/invite/35mFEhk)
 [![License](https://img.shields.io/github/license/HathorNetwork/hathor-core)](./LICENSE.txt)
 
 ## Running a full-node
+
+**Disclaimer**
+
+At the moment, our mainnet is running on a whitelist basis. This means only authorized nodes will be able to connect. For testing purposes, you can connect to the testnet (using the `--testnet` parameter). If you want to connect to the mainnet, you have to [use a peer-id](#using-a-peer-id) and send this id to a team member. You can get in touch with us through [our channels](https://hathor.network/community/), preferrably Discord or Telegram.
 
 ### Using Docker
 
@@ -39,43 +43,76 @@ First, you need to have Python 3.6 installed. If you don't, we recommend you to 
   sudo add-apt-repository ppa:deadsnakes/ppa
   sudo apt update
   sudo apt install python3.6 python3.6-dev python3.6-pip build-essential
-  pip install -U pipenv
+  pip install -U poetry
+  ```
+
+  optionally install RocksDB lib:
+
+  ```
+  sudo apt install librocksdb-dev
   ```
 - on macOS:
 
+  first intall `pyenv`, keep in mind that you might need to restart your shell or init `pyenv` after installing:
+
   ```
   brew install pyenv
-  pyenv install 3.6.10
-  pyenv local 3.6.10
-  pip install -U pipenv
+  ```
+
+  then Python 3.6 (you could check the latest 3.6.x version with `pyenv install --list`):
+
+  ```
+  pyenv install 3.6.11
+  pyenv local 3.6.11
+  pip install -U poetry
+  ```
+
+  optionally install RocksDB lib:
+
+  ```
+  sudo apt install librocksdb-dev
   ```
 - on Windows 10 (using [winget](https://github.com/microsoft/winget-cli)):
 
   ```
   winget install python-3.6
-  pip install -U pipenv
+  pip install -U poetry
   ```
 
-### Clone the project and install pipenv dependencies
+  currently it isn't possible to use RocksDB, if you're interested, [please open an issue][open-issue] or if you were
+  able to do this [please create a pull-request with the required steps][create-pr].
+
+### Clone the project and install poetry dependencies
 
 ```
 git clone git@github.com:HathorNetwork/hathor-core.git && cd hathor-core
-pipenv sync -d
+```
+
+```
+poetry install
+```
+
+*Optionally* if you've installed the RocksDB lib:
+
+```
+poetry install -E rocksdb
 ```
 
 Generate protobuf modules:
 
 ```
-pipenv run make protos
+poetry run make protos
 ```
 
 ### Running the full-node
 
 ```
-pipenv run ./hathor-cli run_node --status 8080
+poetry run hathor-cli run_node --status 8080
 ```
 
 ## Additional considerations
+
+(Assume `poetry shell`, otherwise prefix commands with `poetry run`)
 
 ### Data persistence
 
@@ -84,7 +121,7 @@ blocks and transactions again. You can use a persistent storaged by passing a di
 using parameter `--data`.
 
 ```
-pipenv run ./hathor-cli run_node --status 8080 --data /data
+hathor-cli run_node --status 8080 --data /data
 ```
 
 #### With Docker
@@ -104,7 +141,7 @@ docker run -v ~/hathor-data:/data:consistent ... run_node ... --data /data
 It's optional, but generally recommended, first generate a peer-id file:
 
 ```
-pipenv run ./hathor-cli gen_peer_id > peer_id.json
+hathor-cli gen_peer_id > peer_id.json
 ```
 
 Then, you can use this id in any server or client through the `--peer` parameter. For instance:
@@ -113,9 +150,11 @@ Then, you can use this id in any server or client through the `--peer` parameter
 hathor-cli run_node --listen tcp:8000 --peer peer_id.json
 ```
 
+The ID of your peer will be in the key `id` inside the generated json (`peer_id.json`), e.g. `"id": "6357b155b0867790bd92d1afe3a9afe3f91312d1ea985f908cac0f64cbc9d5b2"`.
+
 ## Common development commands
 
-Assuming virtualenv is active, otherwise prefix `make` commands with `pipenv run`.
+Assuming virtualenv is active, otherwise prefix `make` commands with `poetry run`.
 
 Check if code seems alright:
 
@@ -138,3 +177,14 @@ make latexpdf
 ```
 
 The output will be written to `docs/_build/html/`.
+
+
+Generate API docs:
+
+```
+hathor-cli generate_openapi_json
+redoc-cli bundle hathor/cli/openapi_files/openapi.json --output index.html
+```
+
+[open-issue]: https://github.com/HathorNetwork/hathor-core/issues/new
+[create-pr]: https://github.com/HathorNetwork/hathor-core/compare

@@ -31,7 +31,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         add_blocks_unlock_reward(self.manager)
 
-        self.tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+        self.tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs,
+                                                                          self.manager.tx_storage)
         self.tx1.weight = 10
         self.tx1.parents = self.manager.get_new_tx_parents()
         self.tx1.timestamp = int(self.clock.seconds())
@@ -264,7 +265,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
             WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None)
         ]
 
-        tx3 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+        tx3 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
         tx3.weight = 10
         tx3.parents = [self.tx1.hash, self.tx1.parents[0]]
         tx3.timestamp = int(self.clock.seconds())
@@ -334,7 +335,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
             WalletOutputInfo(address=decode_address(wallet_address), value=500, timelock=None)
         ]
 
-        tx2 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs2)
+        tx2 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs2, self.manager.tx_storage)
         tx2.weight = 10
         tx2.parents = self.manager.get_new_tx_parents()
         tx2.timestamp = int(self.clock.seconds())
@@ -345,7 +346,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         outputs3 = [
             WalletOutputInfo(address=decode_address(wallet_address), value=self.blocks_tokens[0], timelock=None)
         ]
-        tx3 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs3)
+        tx3 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs3, self.manager.tx_storage)
         tx3.weight = 10
         tx3.parents = self.manager.get_new_tx_parents()
         tx3.timestamp = int(self.clock.seconds())

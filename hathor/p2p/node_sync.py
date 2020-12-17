@@ -39,8 +39,9 @@ settings = HathorSettings()
 logger = get_logger()
 
 if TYPE_CHECKING:
-    from hathor.p2p.protocol import HathorProtocol  # noqa: F401
     from twisted.python.failure import Failure  # noqa: F401
+
+    from hathor.p2p.protocol import HathorProtocol  # noqa: F401
 
 
 def _get_deps(tx: BaseTransaction) -> Iterator[bytes]:
@@ -582,10 +583,9 @@ class NodeSyncTimestamp(Plugin):
             timestamp = self.manager.tx_storage.latest_timestamp
 
         # All tips
-        intervals = self.manager.tx_storage.get_all_tips(timestamp)
-
-        if len(intervals) == 0:
-            raise Exception('No tips for timestamp {}'.format(timestamp))
+        # intervals = self.manager.tx_storage.get_all_tips(timestamp)
+        # if len(intervals) == 0:
+        #     raise Exception('No tips for timestamp {}'.format(timestamp))
 
         # Calculate list of hashes to be sent
         merkle_tree, hashes = self.manager.tx_storage.get_merkle_tree(timestamp)
@@ -600,7 +600,7 @@ class NodeSyncTimestamp(Plugin):
                 has_more = True
 
         data = {
-            'length': len(intervals),
+            'length': 0,  # len(intervals),
             'timestamp': timestamp,
             'merkle_tree': merkle_tree.hex(),
             'hashes': [h.hex() for h in hashes],

@@ -19,7 +19,6 @@ import datetime
 import hashlib
 import time
 import weakref
-from _hashlib import HASH
 from abc import ABC, abstractclassmethod, abstractmethod
 from enum import IntEnum
 from math import inf, isfinite, log
@@ -47,6 +46,8 @@ from hathor.transaction.util import int_to_bytes, unpack, unpack_len
 from hathor.util import classproperty
 
 if TYPE_CHECKING:
+    from _hashlib import HASH
+
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 logger = get_logger()
@@ -434,7 +435,6 @@ class BaseTransaction(ABC):
         """
         from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
-        assert self.hash is not None
         assert self.storage is not None
 
         # check if parents are duplicated
@@ -580,7 +580,7 @@ class BaseTransaction(ABC):
         """
         return self.get_funds_hash() + self.get_graph_hash()
 
-    def calculate_hash1(self) -> HASH:
+    def calculate_hash1(self) -> 'HASH':
         """Return the sha256 of the transaction without including the `nonce`
 
         :return: A partial hash of the transaction
@@ -590,7 +590,7 @@ class BaseTransaction(ABC):
         calculate_hash1.update(self.get_header_without_nonce())
         return calculate_hash1
 
-    def calculate_hash2(self, part1: HASH) -> bytes:
+    def calculate_hash2(self, part1: 'HASH') -> bytes:
         """Return the hash of the transaction, starting from a partial hash
 
         The hash of the transactions is the `sha256(sha256(bytes(tx))`.
@@ -959,6 +959,15 @@ class TxInput:
         txin = cls(input_tx_id, input_index, input_data)
         return txin, buf
 
+    @classmethod
+    def create_from_dict(cls, data: Dict) -> 'TxInput':
+        """ Creates a TxInput from a human readable dict."""
+        return cls(
+            bytes.fromhex(data['tx_id']),
+            int(data['index']),
+            base64.b64decode(data['data']) if data.get('data') else b'',
+        )
+
     def to_human_readable(self) -> Dict[str, Any]:
         """Returns dict of Input information, ready to be serialized
 
@@ -967,8 +976,7 @@ class TxInput:
         return {
             'tx_id': self.tx_id.hex(),  # string
             'index': self.index,  # int
-            'data':
-                base64.b64encode(self.data).decode('utf-8')  # string
+            'data': base64.b64encode(self.data).decode('utf-8')  # string
         }
 
     @classmethod
@@ -1085,7 +1093,7 @@ class TxOutput:
     def to_human_readable(self) -> Dict[str, Any]:
         """Checks what kind of script this is and returns it in human readable form
         """
-        from hathor.transaction.scripts import parse_address_script, NanoContractMatchValues
+        from hathor.transaction.scripts import NanoContractMatchValues, parse_address_script
 
         script_type = parse_address_script(self.script)
         if script_type:

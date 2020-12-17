@@ -3,7 +3,8 @@ from hashlib import sha256
 from itertools import count
 from json import JSONDecodeError
 from math import log
-from multiprocessing import Array, Process, Queue as MQueue, Value  # type: ignore
+from multiprocessing import Process, Queue as MQueue
+from multiprocessing.sharedctypes import Array, Value
 from os import cpu_count
 from string import hexdigits
 from time import sleep
@@ -533,7 +534,7 @@ class StratumProtocol(JSONRPC):
                 # We only propagate blocks here in stratum
                 # For tx we need to propagate in the resource,
                 # so we can get the possible errors
-                self.manager.propagate_tx(tx, fails_silently=False)
+                self.manager.submit_block(tx, fails_silently=False)
                 self.blocks_found += 1
             except (InvalidNewTransaction, TxValidationError) as e:
                 # Block propagation failed, but the share was succesfully submited
@@ -903,7 +904,7 @@ def miner_job(index: int, process_num: int, job_data: MinerJob, signal: Value, q
             sleep(StratumClient.NAP_DURATION)
         return (
             job_data.job_id[:],  # current_job
-            2**(256 - job_data.weight.value) - 1,  # target
+            int(2**(256 - job_data.weight.value)) - 1,  # target
             sha256(bytes(job_data.data[:job_data.data_size.value])),  # midstate
             int(index * (1 << (8 * job_data.nonce_size.value)) / process_num),  # start_nonce
             job_data.nonce_size.value  # nonce_size

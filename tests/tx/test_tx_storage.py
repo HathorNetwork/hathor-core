@@ -4,6 +4,7 @@ import tempfile
 import time
 from itertools import chain
 
+import pytest
 from twisted.internet.defer import gatherResults, inlineCallbacks
 from twisted.internet.task import Clock
 from twisted.internet.threads import deferToThread
@@ -32,6 +33,13 @@ from tests.utils import (
     start_remote_storage,
 )
 
+try:
+    import rocksdb  # noqa: F401
+except ImportError:
+    HAS_ROCKSDB = False
+else:
+    HAS_ROCKSDB = True
+
 settings = HathorSettings()
 
 
@@ -53,7 +61,7 @@ class _BaseTransactionStorageTest:
             self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
 
             from hathor.manager import HathorManager
-            self.tmpdir = tempfile.mkdtemp(dir='/tmp/')
+            self.tmpdir = tempfile.mkdtemp()
             wallet = Wallet(directory=self.tmpdir)
             wallet.unlock(b'teste')
             self.manager = HathorManager(self.reactor, tx_storage=self.tx_storage, wallet=wallet)
@@ -507,6 +515,7 @@ class RemoteCacheMemoryStorageTest(_BaseTransactionStorageTest._RemoteStorageTes
         super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
 
 
+@pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
 class TransactionRocksDBStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
     def setUp(self):
         self.directory = tempfile.mkdtemp()

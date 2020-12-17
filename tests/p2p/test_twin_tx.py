@@ -30,7 +30,7 @@ class TwinTransactionTestCase(unittest.TestCase):
             WalletOutputInfo(address=decode_address(address), value=int(value3), timelock=None)
         ]
 
-        tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+        tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
         tx1.weight = 10
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
@@ -43,7 +43,7 @@ class TwinTransactionTestCase(unittest.TestCase):
         self.assertNotEqual(tx1.hash, tx2.hash)
 
         # The same as tx1 but with one input different, so it's not a twin
-        tx3 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs2)
+        tx3 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs2, self.manager.tx_storage)
         tx3.inputs = tx1.inputs
         tx3.weight = tx1.weight
         tx3.parents = tx1.parents

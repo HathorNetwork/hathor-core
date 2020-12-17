@@ -297,7 +297,7 @@ class HathorClientStub(IHathorClient):
         return self.manager.generate_mining_block(address=baddress, merge_mined=merged_mining)
 
     async def submit_block(self, block: Block) -> bool:
-        return self.manager.propagate_tx(block)
+        return self.manager.submit_block(block)
 
     async def mining(self) -> IMiningChannel:
         return MiningChannelStub(self.manager)
@@ -349,7 +349,7 @@ def create_tx_from_dict(data: Dict[str, Any], update_hash: bool = False,
     import base64
 
     from hathor.transaction.aux_pow import BitcoinAuxPow
-    from hathor.transaction.base_transaction import TxOutput, TxInput, TxVersion
+    from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 
     hash_bytes = bytes.fromhex(data['hash']) if 'hash' in data else None
     if 'data' in data:

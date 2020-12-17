@@ -47,17 +47,6 @@ from hathor.merged_mining.bitcoin import (
 )
 from hathor.merged_mining.bitcoin_rpc import IBitcoinRPC
 from hathor.merged_mining.util import Periodic
-from hathor.stratum.stratum import (
-    DUPLICATE_SOLUTION,
-    INVALID_PARAMS,
-    INVALID_REQUEST,
-    INVALID_SOLUTION,
-    JOB_NOT_FOUND,
-    METHOD_NOT_FOUND,
-    NODE_SYNCING,
-    PARSE_ERROR,
-    UNRECOVERABLE_ERROR_CODE_MAX,
-)
 from hathor.transaction import BitcoinAuxPow, MergeMinedBlock as HathorBlock
 from hathor.transaction.exceptions import ScriptError, TxValidationError
 from hathor.util import MaxSizeOrderedDict, ichunks
@@ -68,6 +57,22 @@ settings = HathorSettings()
 
 MAGIC_NUMBER = b'Hath'  # bytes.fromhex('48617468') or 0x68746148.to_bytes(4, 'little')
 NICEHASH_MIN_DIFF = 500_000  # as per https://www.nicehash.com/pool-operators
+
+UNRECOVERABLE_ERROR_CODE_MAX = -32600
+
+PARSE_ERROR = {'code': -32700, 'message': 'Parse error'}
+# INTERNAL_ERROR = {'code': -32603, 'message': 'Internal error'}
+INVALID_PARAMS = {'code': -32602, 'message': 'Invalid params'}
+METHOD_NOT_FOUND = {'code': -32601, 'message': 'Method not found'}
+INVALID_REQUEST = {'code': -32600, 'message': 'Invalid Request'}
+
+NODE_SYNCING = {'code': 10, 'message': 'Node syncing'}
+# INVALID_ADDRESS = {'code': 22, 'message': 'Address to send mined funds is invalid'}
+INVALID_SOLUTION = {'code': 30, 'message': 'Invalid solution'}
+# STALE_JOB = {'code': 31, 'message': 'Stale job submitted'}
+JOB_NOT_FOUND = {'code': 32, 'message': 'Job not found'}
+# PROPAGATION_FAILED = {'code': 33, 'message': 'Solution propagation failed'}
+DUPLICATE_SOLUTION = {'code': 34, 'message': 'Solution already submitted'}
 
 
 class HathorCoordJob(NamedTuple):
@@ -112,11 +117,12 @@ def parse_login_with_addresses(login: str) -> Tuple[bytes, bytes, Optional[str]]
     >>> out[0].hex(), out[1].hex(), out[2]
     ('76a9143d6dbcbf6e67b2cbcc3225994756a56a5e2d3a2788ac', '76a914e52432216dabf32d60a02894ec871293baaa1b1288ac', 'foo')
     """
-    from hathor.transaction.scripts import create_output_script as create_output_script_htr
     from hathor.merged_mining.bitcoin import create_output_script as create_output_script_btc
+    from hathor.transaction.scripts import create_output_script as create_output_script_htr
     parts = login.split('.', maxsplit=2)
     if len(parts) < 2:
-        raise ValueError('Expected `{HTR_ADDR}.{BTC_ADDR}` or `{HTR_ADDR}.{BTC_ADDR}.{WORKER}` got "{}"'.format(login))
+        raise ValueError(
+            'Expected `{{HTR_ADDR}}.{{BTC_ADDR}}` or `{{HTR_ADDR}}.{{BTC_ADDR}}.{{WORKER}}` got "{}"'.format(login))
     payback_address_hathor = parts[0]
     payback_address_bitcoin = parts[1]
     payback_script_hathor = create_output_script_htr(decode_address(payback_address_hathor))
@@ -1194,6 +1200,8 @@ class MergedMiningCoordinator:
                 self.update_bitcoin_block_task,
                 self.update_hathor_block_task,
             )
+        except asyncio.CancelledError:
+            pass
         except Exception:
             # XXX: ignore cancelled error, not clear what class it will be, depends on the event loop implementation
             #      it's probably not too important to nail down the exact exception

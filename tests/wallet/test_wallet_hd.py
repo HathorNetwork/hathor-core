@@ -5,7 +5,7 @@ from hathor.wallet import HDWallet
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InsufficientFunds
 from tests import unittest
-from tests.utils import add_new_block
+from tests.utils import add_blocks_unlock_reward, add_new_block
 
 settings = HathorSettings()
 
@@ -33,9 +33,10 @@ class WalletHD(unittest.TestCase):
         self.assertEqual(self.wallet.balance[settings.HATHOR_TOKEN_UID], WalletBalance(0, self.BLOCK_TOKENS))
 
         # create transaction spending this value, but sending to same wallet
+        add_blocks_unlock_reward(self.manager)
         new_address2 = self.wallet.get_unused_address()
         out = WalletOutputInfo(decode_address(new_address2), self.TOKENS, timelock=None)
-        tx1 = self.wallet.prepare_transaction_compute_inputs(Transaction, outputs=[out])
+        tx1 = self.wallet.prepare_transaction_compute_inputs(Transaction, [out], self.tx_storage)
         tx1.update_hash()
         tx1.verify_script(tx1.inputs[0], block)
         tx1.storage = self.tx_storage
@@ -72,11 +73,12 @@ class WalletHD(unittest.TestCase):
             self.wallet.get_unused_address(**kwargs)
 
     def test_insuficient_funds(self):
+        add_blocks_unlock_reward(self.manager)
         # create transaction spending some value
         new_address = self.wallet.get_unused_address()
         out = WalletOutputInfo(decode_address(new_address), self.TOKENS, timelock=None)
         with self.assertRaises(InsufficientFunds):
-            self.wallet.prepare_transaction_compute_inputs(Transaction, outputs=[out])
+            self.wallet.prepare_transaction_compute_inputs(Transaction, [out], self.tx_storage)
 
     def test_lock(self):
         # Test locking and unlocking wallet

@@ -5,7 +5,7 @@ import time
 import urllib.parse
 from collections import deque
 from concurrent import futures
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Deque, List, Optional, cast
 
 import grpc
 import numpy.random
@@ -18,6 +18,7 @@ from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_private_key_from_bytes
 from hathor.manager import HathorEvents, HathorManager
 from hathor.p2p.utils import generate_certificate
+from hathor.pubsub import EventArguments
 from hathor.transaction import Transaction, TxInput, TxOutput, genesis
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import (
@@ -45,7 +46,6 @@ def resolve_block_bytes(block_bytes):
         :rtype: bytes
     """
     from hathor.transaction import Block
-    import base64
     block_bytes = base64.b64decode(block_bytes)
     block = Block.create_from_struct(block_bytes)
     block.resolve()
@@ -65,13 +65,15 @@ def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = 
 
     from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
     value = spent_txout.value
-    private_key = manager.wallet.get_private_key(p2pkh.address)
+    wallet = manager.wallet
+    assert wallet is not None
+    private_key = wallet.get_private_key(p2pkh.address)
     inputs = [WalletInputInfo(tx_id=txin.tx_id, index=txin.index, private_key=private_key)]
 
-    address = manager.wallet.get_unused_address(mark_as_used=True)
+    address = wallet.get_unused_address(mark_as_used=True)
     outputs = [WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None)]
 
-    tx2 = manager.wallet.prepare_transaction(Transaction, inputs, outputs, manager.tx_storage)
+    tx2 = wallet.prepare_transaction(Transaction, inputs, outputs)
     tx2.storage = manager.tx_storage
     tx2.weight = 1
     tx2.timestamp = max(tx.timestamp + 1, int(manager.reactor.seconds()))
@@ -98,7 +100,7 @@ def gen_new_tx(manager, address, value, verify=True):
     outputs = []
     outputs.append(WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None))
 
-    tx = manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+    tx = manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, manager.tx_storage)
     tx.storage = manager.tx_storage
 
     max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
@@ -219,7 +221,7 @@ class HathorStringTransport(proto_helpers.StringTransport):
 
 
 class FakeConnection:
-    def __init__(self, manager1, manager2, *, latency: float = 0):
+    def __init__(self, manager1: HathorManager, manager2: HathorManager, *, latency: float = 0):
         """
         :param: latency: Latency between nodes in seconds
         """
@@ -236,8 +238,8 @@ class FakeConnection:
         self.tr2 = HathorStringTransport(self._proto1.my_peer)
 
         self._do_buffering = True
-        self._buf1 = deque()
-        self._buf2 = deque()
+        self._buf1: Deque[str] = deque()
+        self._buf2: Deque[str] = deque()
 
         self._proto1.makeConnection(self.tr1)
         self._proto2.makeConnection(self.tr2)
@@ -338,12 +340,12 @@ class FakeConnection:
 class Simulator:
     def __init__(self, clock: Clock):
         self.clock = clock
-        self.connections = []
+        self.connections: List[FakeConnection] = []
 
-    def add_connection(self, conn: FakeConnection):
+    def add_connection(self, conn: FakeConnection) -> None:
         self.connections.append(conn)
 
-    def run(self, interval: float, step: float = 0.25, status_interval: float = 60.0):
+    def run(self, interval: float, step: float = 0.25, status_interval: float = 60.0) -> None:
         initial = self.clock.seconds()
         latest_time = self.clock.seconds()
         t0 = time.time()
@@ -392,11 +394,11 @@ class MinerSimulator:
             self.delayedcall = None
         self.manager.pubsub.unsubscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, self.on_new_tx)
 
-    def on_new_tx(self, key: HathorEvents, args):
+    def on_new_tx(self, key: HathorEvents, args: EventArguments) -> None:
         """ Called when a new tx or block is received. It updates the current mining to the
         new block.
         """
-        tx = args.tx
+        tx = args.tx  # type: ignore
         if not tx.is_block:
             return
         if not self.block:
@@ -622,9 +624,9 @@ def get_genesis_key():
     return get_private_key_from_bytes(private_key_bytes)
 
 
-def create_tokens(manager: 'HathorManager', address_b58: str = None, mint_amount: int = 300,
+def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, mint_amount: int = 300,
                   token_name: str = 'TestCoin', token_symbol: str = 'TTC', propagate: bool = True,
-                  use_genesis: bool = True):
+                  use_genesis: bool = True) -> TokenCreationTransaction:
     """Creates a new token and propagates a tx with the following UTXOs:
     0. some tokens (already mint some tokens so they can be transferred);
     1. mint authority;
@@ -649,6 +651,7 @@ def create_tokens(manager: 'HathorManager', address_b58: str = None, mint_amount
     :return: the propagated transaction so others can spend their outputs
     """
     wallet = manager.wallet
+    assert wallet is not None
 
     if address_b58 is None:
         address_b58 = wallet.get_unused_address(mark_as_used=True)
@@ -662,10 +665,14 @@ def create_tokens(manager: 'HathorManager', address_b58: str = None, mint_amount
     genesis_block = genesis_blocks[0]
     genesis_private_key = get_genesis_key()
 
+    change_output: Optional[TxOutput]
+    parents: List[bytes]
     if use_genesis:
-        deposit_input = [TxInput(genesis_block.hash, 0, b'')]
+        genesis_hash = genesis_block.hash
+        assert genesis_hash is not None
+        deposit_input = [TxInput(genesis_hash, 0, b'')]
         change_output = TxOutput(genesis_block.outputs[0].value - deposit_amount, script, 0)
-        parents = [tx.hash for tx in genesis_txs]
+        parents = [cast(bytes, tx.hash) for tx in genesis_txs]
         timestamp = int(manager.reactor.seconds())
     else:
         total_reward = 0

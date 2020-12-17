@@ -52,6 +52,7 @@ def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_lo
     class ConsoleRenderer(structlog.dev.ConsoleRenderer):
         def __call__(self, _, __, event_dict):
             from io import StringIO
+
             from structlog.dev import _pad
 
             sio = StringIO()

@@ -28,7 +28,7 @@
                     }
                 }
             },
-            "Output": {
+            "AddressOutput": {
                 "type": "object",
                 "required": ["address", "value"],
                 "properties": {
@@ -37,13 +37,36 @@
                         "description": "Destination address in base58"
                     },
                     "value": {
-                        "type": "int",
+                        "type": "integer",
                         "description": "Value to be sent to the address (without decimal places, e.g. if you want to send 10.02 the value must be 1002)"
                     },
                     "timelock": {
-                        "type": "int",
+                        "type": "integer",
                         "description": "Timestamp until when the output is locked"
+                    },
+                    "token_uid": {
+                        "type": "string",
+                        "description": "Hex encoded token uid, ommit for HTR"
                     }
+                }
+            },
+            "ScriptOutput": {
+                "type": "object",
+                "required": ["script", "value"],
+                "properties": {
+                    "script": {
+                        "type": "string",
+                        "description": "Output script in base64"
+                    },
+                    "value": {
+                        "type": "integer",
+                        "description": "Value to be sent to the address (without decimal places, e.g. if you want to send 10.02 the value must be 1002)"
+                    },
+                    "token_uid": {
+                        "type": "string",
+                        "description": "Hex encoded token uid, ommit for HTR"
+                    }
+
                 }
             },
             "Input": {
@@ -55,9 +78,44 @@
                         "description": "Hash in hex of the spending transaction"
                     },
                     "index": {
-                        "type": "int",
+                        "type": "integer",
                         "description": "Index of the output is being spent"
                     }
+                }
+            },
+            "TxInput": {
+                "type": "object",
+                "properties": {
+                    "tx_id": {
+                        "type": "string",
+                        "description": "Hash in hex of the spending transaction"
+                    },
+                    "index": {
+                        "type": "integer",
+                        "description": "Index of the output is being spent"
+                    },
+                    "data": {
+                        "type": "string",
+                        "description": "Data appended to input for verifying utxo, aka signature"
+                    }
+                }
+            },
+            "TxOutput": {
+                "type": "object",
+                "properties": {
+                    "script": {
+                        "type": "string",
+                        "description": "Output script in base64"
+                    },
+                    "value": {
+                        "type": "integer",
+                        "description": "Value to be sent to the address (without decimal places, e.g. if you want to send 10.02 the value must be 1002)"
+                    },
+                    "token_data": {
+                        "type": "integer",
+                        "description": "Index selecting token_uid from list"
+                    }
+
                 }
             },
             "SendToken": {
@@ -72,7 +130,7 @@
                                 "type": "array",
                                 "description": "List of outputs to send the tokens",
                                 "items": {
-                                    "$ref": "#/components/schemas/Output"
+                                    "$ref": "#/components/schemas/AddressOutput"
                                 }
                             },
                             "inputs": {
@@ -83,7 +141,7 @@
                                 }
                             },
                             "timestamp": {
-                                "type": "int",
+                                "type": "integer",
                                 "description": "The timestamp for the transaction. If sent without the inputs, server will chose inputs whose timestamp is smaller than the given value (so the tx is valid). If user sends timestamp=0, server will use current time."
                             }
                         }
@@ -129,7 +187,7 @@
                         "description": "Winning address in base58"
                     },
                     "value": {
-                        "type": "int",
+                        "type": "integer",
                         "description": "Total value of the nano contract (without decimal places)"
                     }
                 }
@@ -143,7 +201,7 @@
                         "description": "Destination address of the bet in base58"
                     },
                     "value": {
-                        "type": "int",
+                        "type": "integer",
                         "description": "Value of the bet"
                     }
                 }
@@ -172,11 +230,11 @@
                         "description": "Id of the oracle of this nano contract"
                     },
                     "total_value": {
-                        "type": "int",
+                        "type": "integer",
                         "description": "Total value of the nano contract"
                     },
                     "input_value": {
-                        "type": "int",
+                        "type": "integer",
                         "description": "Amount this wallet should stake in the nano contract"
                     }
                 }
@@ -197,7 +255,7 @@
                         }
                     },
                     "input_value": {
-                        "type": "int",
+                        "type": "integer",
                         "description": "New amount this wallet should stake in the nano contract"
                     }
                 }

@@ -1,5 +1,6 @@
 import random
 
+import pytest
 from mnemonic import Mnemonic
 
 from hathor.graphviz import GraphvizVisualizer
@@ -46,6 +47,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         wallet.unlock(words=words, tx_storage=manager.tx_storage)
         return manager
 
+    # retry the test once if it fails, see: https://github.com/box/flaky
+    @pytest.mark.flaky
     def test_split_brain(self):
         debug_pdf = False
 

@@ -19,9 +19,12 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.scripts import (
     P2PKH,
     HathorScript,
+    MultiSig,
     Opcode,
     ScriptExtras,
     binary_to_int,
+    create_base_script,
+    create_output_script,
     evaluate_final_stack,
     get_data_value,
     get_pushdata,
@@ -49,7 +52,7 @@ from tests import unittest
 from tests.utils import get_genesis_key
 
 
-class BasicTransaction(unittest.TestCase):
+class TestScripts(unittest.TestCase):
     def setUp(self):
         super().setUp()
         tx_storage = TransactionMemoryStorage()
@@ -408,7 +411,7 @@ class BasicTransaction(unittest.TestCase):
         genesis_address = get_address_from_public_key(self.genesis_public_key)
         out_genesis = P2PKH.create_output_script(genesis_address)
 
-        from hathor.transaction import Transaction, TxOutput, TxInput
+        from hathor.transaction import Transaction, TxInput, TxOutput
         spent_tx = Transaction(outputs=[TxOutput(1, b'nano_contract_code')])
         txin = TxInput(b'dont_care', 0, b'data')
 
@@ -639,6 +642,41 @@ class BasicTransaction(unittest.TestCase):
         s.insert(0, len(s))
         s.insert(0, Opcode.OP_PUSHDATA1)
         self.assertEqual(100, len(get_pushdata(s)))
+
+    def test_p2pkh_base_script(self):
+        import base58
+
+        addrs = [
+            'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199A',
+            'HGov979VaeyMQ92ubYcnVooP6qPzUJU8Ro',
+        ]
+
+        for addr in addrs:
+            script = create_base_script(addr)
+            self.assertIsInstance(script, P2PKH)
+            self.assertEqual(script.get_type(), 'P2PKH')
+            self.assertEqual(script.get_address(), addr)
+            self.assertEqual(script.get_timelock(), None)
+            baddress = base58.b58decode(addr)
+            script2 = create_output_script(baddress)
+            self.assertEqual(script2, script.get_script())
+
+    def test_multisig_base_script(self):
+        import base58
+
+        addrs = [
+            'hJBjKVU5HqfbNbikgfdhDmmBe9TMwx9Eft',
+        ]
+
+        for addr in addrs:
+            script = create_base_script(addr)
+            self.assertIsInstance(script, MultiSig)
+            self.assertEqual(script.get_type(), 'MultiSig')
+            self.assertEqual(script.get_address(), addr)
+            self.assertEqual(script.get_timelock(), None)
+            baddress = base58.b58decode(addr)
+            script2 = create_output_script(baddress)
+            self.assertEqual(script2, script.get_script())
 
 
 if __name__ == '__main__':

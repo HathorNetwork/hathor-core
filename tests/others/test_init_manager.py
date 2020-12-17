@@ -14,7 +14,7 @@ class ModifiedTransactionMemoryStorage(TransactionMemoryStorage):
         super().__init__(*args, **kwargs)
         self._first_tx = None
 
-    def set_first_tx(self, tx: BaseTransaction):
+    def set_first_tx(self, tx: BaseTransaction) -> None:
         self._first_tx = tx
 
     def get_all_transactions(self) -> Iterator[BaseTransaction]:

@@ -1,6 +1,7 @@
 import getpass
 import json
 import os
+import platform
 import sys
 from argparse import ArgumentParser, Namespace
 from typing import Any, Dict, List
@@ -12,7 +13,7 @@ from twisted.web import server
 from twisted.web.resource import Resource
 
 logger = get_logger()
-LOGGING_CAPTURE_STDOUT = True
+# LOGGING_CAPTURE_STDOUT = True
 
 
 class RunNode:
@@ -66,10 +67,11 @@ class RunNode:
         from hathor.p2p.utils import discover_hostname
         from hathor.transaction import genesis
         from hathor.transaction.storage import (
-            TransactionStorage,
             TransactionCacheStorage,
             TransactionCompactStorage,
             TransactionMemoryStorage,
+            TransactionRocksDBStorage,
+            TransactionStorage,
         )
         from hathor.wallet import HDWallet, Wallet
 
@@ -87,8 +89,10 @@ class RunNode:
             data = json.load(open(args.peer, 'r'))
             peer_id = PeerId.create_from_json(data)
 
-        log.info('hathor-core v{version}', version=hathor.__version__, genesis=genesis.GENESIS_HASH.hex()[:7],
-                 my_peer_id=str(peer_id.id))
+        python = f'{platform.python_version()}-{platform.python_implementation()}'
+
+        log.info('hathor-core v{hathor}', hathor=hathor.__version__, genesis=genesis.GENESIS_HASH.hex()[:7],
+                 my_peer_id=str(peer_id.id), python=python, platform=platform.platform())
 
         def create_wallet():
             if args.wallet == 'hd':
@@ -124,7 +128,6 @@ class RunNode:
         tx_storage: TransactionStorage
         if args.data:
             if args.rocksdb_storage:
-                from hathor.transaction.storage import TransactionRocksDBStorage
                 tx_storage = TransactionRocksDBStorage(path=args.data, with_index=(not args.cache))
             else:
                 tx_storage = TransactionCompactStorage(path=args.data, with_index=(not args.cache))
@@ -203,10 +206,12 @@ class RunNode:
 
     def register_resources(self, args: Namespace) -> None:
         from hathor.conf import HathorSettings
+        from hathor.mining.ws import MiningWebsocketFactory
         from hathor.p2p.resources import AddPeersResource, MiningInfoResource, MiningResource, StatusResource
         from hathor.prometheus import PrometheusMetricsExporter
         from hathor.resources import ProfilerResource
         from hathor.transaction.resources import (
+            CreateTxResource,
             DashboardTransactionResource,
             DecodeTxResource,
             GetBlockTemplateResource,
@@ -219,6 +224,7 @@ class RunNode:
             TransactionAccWeightResource,
             TransactionResource,
             TxParentsResource,
+            ValidateAddressResource,
         )
         from hathor.version_resource import VersionResource
         from hathor.wallet.resources import (
@@ -231,17 +237,20 @@ class RunNode:
             StateWalletResource,
             UnlockWalletResource,
         )
-        from hathor.wallet.resources.thin_wallet import (AddressBalanceResource, AddressHistoryResource,
-                                                         AddressSearchResource, SendTokensResource as
-                                                         SendTokensThinResource, TokenHistoryResource, TokenResource)
         from hathor.wallet.resources.nano_contracts import (
             NanoContractDecodeResource,
             NanoContractExecuteResource,
             NanoContractMatchValueResource,
         )
+        from hathor.wallet.resources.thin_wallet import (
+            AddressBalanceResource,
+            AddressHistoryResource,
+            AddressSearchResource,
+            SendTokensResource as SendTokensThinResource,
+            TokenHistoryResource,
+            TokenResource,
+        )
         from hathor.websocket import HathorAdminWebsocketFactory, WebsocketStatsResource
-        from hathor.mining.ws import MiningWebsocketFactory
-        from hathor.stratum.resources import MiningStatsResource
 
         settings = HathorSettings()
 
@@ -278,9 +287,9 @@ class RunNode:
             resources = (
                 (b'status', StatusResource(self.manager), root),
                 (b'version', VersionResource(self.manager), root),
-                (b'mining', MiningResource(self.manager), root),
-                (b'getmininginfo', MiningInfoResource(self.manager), root),
+                (b'create_tx', CreateTxResource(self.manager), root),
                 (b'decode_tx', DecodeTxResource(self.manager), root),
+                (b'validate_address', ValidateAddressResource(self.manager), root),
                 (b'push_tx', PushTxResource(self.manager), root),
                 (b'graphviz', graphviz, root),
                 (b'tips-histogram', TipsHistogramResource(self.manager), root),
@@ -290,6 +299,8 @@ class RunNode:
                 (b'dashboard_tx', DashboardTransactionResource(self.manager), root),
                 (b'profiler', ProfilerResource(self.manager), root),
                 # mining
+                (b'mining', MiningResource(self.manager), root),
+                (b'getmininginfo', MiningInfoResource(self.manager), root),
                 (b'get_block_template', GetBlockTemplateResource(self.manager), root),
                 (b'submit_block', SubmitBlockResource(self.manager), root),
                 (b'tx_parents', TxParentsResource(self.manager), root),
@@ -311,6 +322,7 @@ class RunNode:
                 parent.putChild(url_path, resource)
 
             if self.manager.stratum_factory is not None:
+                from hathor.stratum.resources import MiningStatsResource
                 root.putChild(b'miners', MiningStatsResource(self.manager))
 
             if self.wallet and args.wallet_enable_api:

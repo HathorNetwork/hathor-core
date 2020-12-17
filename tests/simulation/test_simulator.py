@@ -1,10 +1,11 @@
 import random
+from typing import Optional
 
 from mnemonic import Mnemonic
 
 from hathor.manager import TestMode
 from hathor.transaction import BaseTransaction
-from hathor.transaction.genesis import get_genesis_transactions
+from hathor.transaction.genesis import _get_genesis_transactions_unsafe
 from hathor.wallet import HDWallet
 from tests import unittest
 from tests.clock import HeapClock
@@ -14,7 +15,7 @@ from tests.utils import FakeConnection, MinerSimulator, RandomTransactionGenerat
 
 
 class HathorSimulatorTestCase(unittest.TestCase):
-    seed_config = None
+    seed_config: Optional[int] = None
 
     def setUp(self):
         super().setUp()
@@ -26,7 +27,7 @@ class HathorSimulatorTestCase(unittest.TestCase):
         print('Simulation seed config:', self.random_seed)
         print('-'*30)
 
-        def verify_pow(self) -> None:
+        def verify_pow(self: BaseTransaction) -> None:
             assert self.hash is not None
 
         self.old_verify_pow = BaseTransaction.verify_pow
@@ -34,7 +35,7 @@ class HathorSimulatorTestCase(unittest.TestCase):
 
         self.network = 'testnet'
 
-        first_timestamp = min(tx.timestamp for tx in get_genesis_transactions(None))
+        first_timestamp = min(tx.timestamp for tx in _get_genesis_transactions_unsafe(None))
         self.clock.advance(first_timestamp + random.randint(3600, 120*24*3600))
 
     def tearDown(self):

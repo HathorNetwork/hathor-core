@@ -7,7 +7,6 @@ from cryptography.hazmat.primitives import serialization
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key, get_private_key_bytes
 from hathor.transaction import Transaction, TxInput
-from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet import Wallet
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InsufficientFunds, InvalidAddress, OutOfUnusedAddresses, WalletLocked
@@ -25,9 +24,9 @@ PASSWORD = b'passwd'
 class BasicWallet(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        self.directory = tempfile.mkdtemp(dir='/tmp/')
-        self.storage = TransactionMemoryStorage()
+        self.directory = tempfile.mkdtemp()
         self.manager = self.create_peer('testnet', unlock_wallet=True)
+        self.storage = self.manager.tx_storage
         # read genesis keys
         self.genesis_private_key = get_genesis_key()
         self.genesis_public_key = self.genesis_private_key.public_key()
@@ -77,9 +76,10 @@ class BasicWallet(unittest.TestCase):
         self.assertEqual(w.balance[settings.HATHOR_TOKEN_UID], WalletBalance(0, genesis_value))
 
         # create transaction spending this value, but sending to same wallet
+        add_blocks_unlock_reward(self.manager)
         new_address = w.get_unused_address()
         out = WalletOutputInfo(decode_address(new_address), 100, timelock=None)
-        tx1 = w.prepare_transaction_compute_inputs(Transaction, outputs=[out])
+        tx1 = w.prepare_transaction_compute_inputs(Transaction, [out], self.storage)
         tx1.storage = self.storage
         tx1.update_hash()
         self.storage.save_transaction(tx1)
@@ -147,7 +147,7 @@ class BasicWallet(unittest.TestCase):
         new_address = w.get_unused_address()
         out = WalletOutputInfo(decode_address(new_address), 100, timelock=None)
         with self.assertRaises(InsufficientFunds):
-            w.prepare_transaction_compute_inputs(Transaction, outputs=[out])
+            w.prepare_transaction_compute_inputs(Transaction, [out], self.storage)
 
     def test_invalid_address(self):
         w = Wallet(directory=self.directory)
@@ -196,7 +196,8 @@ class BasicWallet(unittest.TestCase):
         # token tx
         token_out = WalletOutputInfo(address, tokens_created - 20, None, token_uid.hex())
 
-        tx2 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, [hathor_out, token_out])
+        tx2 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, [hathor_out, token_out],
+                                                                     self.storage)
         tx2.storage = self.manager.tx_storage
         tx2.timestamp = tx.timestamp + 1
         tx2.parents = self.manager.get_new_tx_parents()
@@ -229,7 +230,11 @@ class BasicWallet(unittest.TestCase):
         new_address = w.get_unused_address()
         out = WalletOutputInfo(decode_address(new_address), 1, timelock=None)
         with self.assertRaises(InsufficientFunds):
-            w.prepare_transaction_compute_inputs(Transaction, outputs=[out], timestamp=block.timestamp)
+            w.prepare_transaction_compute_inputs(Transaction, [out], self.storage, timestamp=block.timestamp)
+
+        # now it should work
+        add_blocks_unlock_reward(self.manager)
+        w.prepare_transaction_compute_inputs(Transaction, [out], self.storage)
 
     def test_maybe_spent_txs(self):
         add_new_block(self.manager, advance_clock=15)
@@ -237,7 +242,7 @@ class BasicWallet(unittest.TestCase):
         w = self.manager.wallet
         new_address = w.get_unused_address()
         out = WalletOutputInfo(decode_address(new_address), 1, timelock=None)
-        tx1 = w.prepare_transaction_compute_inputs(Transaction, outputs=[out])
+        tx1 = w.prepare_transaction_compute_inputs(Transaction, [out], self.storage)
         self.assertEqual(len(tx1.inputs), 1)
         _input = tx1.inputs[0]
         key = (_input.tx_id, _input.index)
@@ -248,7 +253,7 @@ class BasicWallet(unittest.TestCase):
         self.assertEqual(0, len(w.maybe_spent_txs[settings.HATHOR_TOKEN_UID]))
 
         # when we receive the new tx it will remove from maybe_spent
-        tx2 = w.prepare_transaction_compute_inputs(Transaction, outputs=[out])
+        tx2 = w.prepare_transaction_compute_inputs(Transaction, [out], self.storage)
         tx2.storage = self.manager.tx_storage
         tx2.timestamp = max(tx2.get_spent_tx(txin).timestamp for txin in tx2.inputs) + 1
         tx2.parents = self.manager.get_new_tx_parents(tx2.timestamp)

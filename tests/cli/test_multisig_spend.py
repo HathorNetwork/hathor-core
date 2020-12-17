@@ -1,6 +1,8 @@
 from contextlib import redirect_stdout
 from io import StringIO
 
+from structlog.testing import capture_logs
+
 from hathor.cli.multisig_spend import create_parser, execute
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
@@ -66,7 +68,7 @@ class MultiSigSpendTest(unittest.TestCase):
         block_reward = blocks_tokens[0]
         outputs = [WalletOutputInfo(address=self.multisig_address, value=block_reward, timelock=None)]
 
-        tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+        tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
         tx1.weight = 10
         tx1.parents = self.manager.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
@@ -106,12 +108,11 @@ class MultiSigSpendTest(unittest.TestCase):
             self.redeem_script.hex()
         ])
         f = StringIO()
-        with redirect_stdout(f):
-            execute(args)
+        with capture_logs():
+            with redirect_stdout(f):
+                execute(args)
         # Transforming prints str in array
-        output = f.getvalue().split('\n')
-        # Last element is always empty string
-        output.pop()
+        output = f.getvalue().strip().splitlines()
 
         tx_raw = output[0].split(':')[1].strip()
 

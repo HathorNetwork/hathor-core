@@ -38,7 +38,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         outputs.append(
             WalletOutputInfo(address=decode_address(address), value=value, timelock=None))
 
-        tx1 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+        tx1 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager1.tx_storage)
         tx1.weight = 10
         tx1.parents = self.manager1.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
@@ -116,7 +116,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         add_blocks_unlock_reward(self.manager1)
 
         from hathor.transaction import Transaction
-        from hathor.wallet.base_wallet import WalletOutputInfo, WalletInputInfo
+        from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 
         # ---
         # tx1 and tx4 spends the same output (double spending)
@@ -139,7 +139,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         value = 100
         outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         self.clock.advance(1)
-        tx1 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+        tx1 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager1.tx_storage)
         tx1.weight = 5
         tx1.parents = self.manager1.get_new_tx_parents()
         tx1.timestamp = int(self.clock.seconds())
@@ -195,7 +195,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         value = 500
         outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
         self.clock.advance(1)
-        tx3 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs)
+        tx3 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager1.tx_storage)
         self.assertNotEqual(tx3.inputs[0].tx_id, tx1.hash)
         self.assertNotEqual(tx3.inputs[0].tx_id, tx2.hash)
         tx3.weight = 5

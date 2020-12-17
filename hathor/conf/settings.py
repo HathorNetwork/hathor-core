@@ -21,6 +21,9 @@ class HathorSettings(NamedTuple):
     # Initial bootstrap servers
     BOOTSTRAP_DNS: List[str] = []
 
+    # enable peer whitelist
+    ENABLE_PEER_WHITELIST: bool = False
+
     DECIMAL_PLACES: int = DECIMAL_PLACES
 
     # Genesis pre-mined tokens
@@ -251,3 +254,9 @@ class HathorSettings(NamedTuple):
     # When the node is being initialized (with a full verification) we don't verify
     # the difficulty of all blocks, we execute the validation every N blocks only
     VERIFY_WEIGHT_EVERY_N_BLOCKS: int = 1000
+
+    # Name of whitelist capability
+    CAPABILITY_WHITELIST: str = 'whitelist'
+
+    # Where to download whitelist from
+    WHITELIST_URL: Optional[str] = None
