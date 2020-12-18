@@ -228,6 +228,7 @@ class RunNode:
         )
         from hathor.version_resource import VersionResource
         from hathor.wallet.resources import (
+            AddressesResource,
             AddressResource,
             BalanceResource,
             HistoryResource,
@@ -331,6 +332,7 @@ class RunNode:
                     (b'balance', BalanceResource(self.manager), wallet_resource),
                     (b'history', HistoryResource(self.manager), wallet_resource),
                     (b'address', AddressResource(self.manager), wallet_resource),
+                    (b'addresses', AddressesResource(self.manager), wallet_resource),
                     (b'send_tokens', SendTokensResource(self.manager), wallet_resource),
                     (b'sign_tx', SignTxResource(self.manager), wallet_resource),
                     (b'unlock', UnlockWalletResource(self.manager), wallet_resource),

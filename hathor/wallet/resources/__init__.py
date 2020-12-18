@@ -1,4 +1,5 @@
 from hathor.wallet.resources.address import AddressResource
+from hathor.wallet.resources.addresses import AddressesResource
 from hathor.wallet.resources.balance import BalanceResource
 from hathor.wallet.resources.history import HistoryResource
 from hathor.wallet.resources.lock import LockWalletResource
@@ -11,6 +12,7 @@ __all__ = [
     'BalanceResource',
     'HistoryResource',
     'AddressResource',
+    'AddressesResource',
     'SendTokensResource',
     'UnlockWalletResource',
     'LockWalletResource',

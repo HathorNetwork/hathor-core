@@ -1,5 +1,5 @@
 import hashlib
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from mnemonic import Mnemonic
 
@@ -199,6 +199,14 @@ class HDWallet(BaseWallet):
 
         # Last shared index should be at least the index after the received one
         self.last_shared_index = max(self.last_shared_index, received_key.child_index() + 1)
+
+    def get_all_addresses(self) -> List[str]:
+        addresses = []
+        for index in range(self.last_shared_index + 1):
+            key = self.get_key_at_index(index)
+            addresses.append(self.get_address(key))
+
+        return addresses
 
     def get_unused_address(self, mark_as_used: bool = True) -> str:
         """ Return an address that is not used yet
