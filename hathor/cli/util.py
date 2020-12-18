@@ -13,7 +13,6 @@ def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_lo
     import logging
     import logging.config
 
-    import colorama
     import structlog
     import twisted
     from twisted.logger import LogLevel
@@ -36,17 +35,6 @@ def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_lo
         structlog.stdlib.add_logger_name,
         timestamper,
     ]
-
-    level_styles = {
-        'critical': colorama.Style.BRIGHT + colorama.Fore.RED,
-        'exception': colorama.Fore.RED,
-        'error': colorama.Fore.RED,
-        # 'warn': colorama.Fore.YELLOW,
-        'warning': colorama.Fore.YELLOW,
-        'info': colorama.Fore.GREEN,
-        'debug': colorama.Style.BRIGHT + colorama.Fore.CYAN,
-        'notset': colorama.Back.RED,
-    }
 
     # docs at http://www.structlog.org/en/stable/api.html#structlog.dev.ConsoleRenderer
     class ConsoleRenderer(structlog.dev.ConsoleRenderer):
@@ -118,6 +106,22 @@ def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_lo
 
             return sio.getvalue()
 
+        @staticmethod
+        def get_default_level_styles(colors=True):
+            import colorama
+            if not colors:
+                return structlog.dev.ConsoleRenderer.get_default_level_styles(False)
+            return {
+                'critical': colorama.Style.BRIGHT + colorama.Fore.RED,
+                'exception': colorama.Fore.RED,
+                'error': colorama.Fore.RED,
+                'warn': colorama.Fore.YELLOW,
+                'warning': colorama.Fore.YELLOW,
+                'info': colorama.Fore.GREEN,
+                'debug': colorama.Style.BRIGHT + colorama.Fore.CYAN,
+                'notset': colorama.Back.RED,
+            }
+
         def _repr(self, val):
             if isinstance(val, datetime):
                 return str(val)
@@ -136,7 +140,7 @@ def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_lo
                 },
                 'colored': {
                     '()': structlog.stdlib.ProcessorFormatter,
-                    'processor': ConsoleRenderer(colors=True, level_styles=level_styles),
+                    'processor': ConsoleRenderer(colors=True),
                     'foreign_pre_chain': pre_chain,
                 },
             },

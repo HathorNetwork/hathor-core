@@ -162,7 +162,7 @@ def _build_merkle_path_for_coinbase(merkle_leaves: List[bytes], _partial_path: L
     _partial_path.append(merkle_leaves[1])  # to trace the coinbase (1st tx) we always get its pair (2nd tx)
     iter_leaves = iter(merkle_leaves[:])
     return _build_merkle_path_for_coinbase(
-        [sha256d_hash(_merkle_concat(l, r)) for l, r in zip(iter_leaves, iter_leaves)],
+        [sha256d_hash(_merkle_concat(a, b)) for a, b in zip(iter_leaves, iter_leaves)],
         _partial_path=_partial_path
     )
 
@@ -199,7 +199,7 @@ def build_merkle_root(merkle_leaves: List[bytes]) -> bytes:
         merkle_leaves.append(merkle_leaves[-1])
         len_merkle_leaves += 1
     iter_leaves = iter(merkle_leaves)
-    return build_merkle_root([sha256d_hash(_merkle_concat(l, r)) for l, r in zip(iter_leaves, iter_leaves)])
+    return build_merkle_root([sha256d_hash(_merkle_concat(a, b)) for a, b in zip(iter_leaves, iter_leaves)])
 
 
 def build_merkle_root_from_path(merkle_path: List[bytes]) -> bytes:

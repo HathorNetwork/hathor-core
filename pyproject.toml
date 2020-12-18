@@ -24,6 +24,8 @@ repository = "https://github.com/HathorNetwork/hathor-core/"
 # https://pypi.org/classifiers/
 classifiers = [
     "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
     "Operating System :: OS Independent",
     "License :: OSI Approved :: Apache Software License",
     "Private :: Do Not Upload",
@@ -34,44 +36,45 @@ exclude = ["tests", "tests.*"]
 hathor-cli = 'hathor.cli.main:main'
 
 [tool.poetry.dev-dependencies]
-numpy = "<1.17"
-flake8 = "<3.8"
-isort = {version = "<5.6", extras = ["colors"]}
-yapf = "<0.28"
-mypy = "<0.790"
-pytest = "<6.1"
-pytest-cov = "<2.8"
-mypy-protobuf = "<1.24"
-grpcio-tools = "<1.22"
-flaky = "<3.8"
+numpy = "~1.19.5"
+flake8 = "~3.8.4"
+isort = {version = "~5.7.0", extras = ["colors"]}
+yapf = "^0.30"
+mypy = "^0.790"
+pytest = "~6.2.1"
+pytest-cov = "~2.11.0"
+mypy-protobuf = "~1.23"
+grpcio-tools = "~1.34.1"
+flaky = "~3.7.0"
 
 [tool.poetry.dependencies]
 python = ">=3.6,<4"
-twisted = "<19.3"
-autobahn = "<19.6"
-base58 = "<1.1"
-colorama = "<0.5"
-configargparse = "<0.15"
-cryptography = "<2.10"
-graphviz = "<0.11"
-grpcio = {version = "<1.22", optional = true}
-ipython = "<7.6"
-mnemonic = "<0.20"
-prometheus_client = "<0.9"
-protobuf = "<3.12"
-pyopenssl = "<19.2"
+twisted = "~20.3.0"
+autobahn = "~20.12.3"
+base58 = "~2.1.0"
+colorama = "~0.4.4"
+configargparse = "~1.2.3"
+cryptography = "~3.3.1"
+graphviz = "~0.16"
+grpcio = {version = "~1.34.1", optional = true}
+ipython = "<7.17"  # 7.17 drops Python 3.6 compatibility
+jedi = "<0.18"  # indirect dependency restriction (0.18 breaks ipython)
+mnemonic = "~0.19"
+prometheus_client = "~0.9.0"
+protobuf = "~3.14.0"
+pyopenssl = "~20.0.1"
 pycoin = "<=0.90.20200322"
-pywin32 = {version = "<228", markers = "sys_platform == 'win32'"}
-requests = "<2.23"
-service-identity = "<18.2"
-pexpect = "<4.8"
-intervaltree = "<3.1"
-structlog = "<20.2"
-cython = {version = "<0.30", optional = true}
+pywin32 = {version = "300", markers = "sys_platform == 'win32'"}
+requests = "~2.25.1"
+service_identity = "~18.1.0"
+pexpect = "~4.8.0"
+intervaltree = "~3.1.0"
+structlog = "~20.2.0"
 python-rocksdb = {version = "^0.7.0", optional = true}
-aiohttp = "<3.7"
-# appaently we need to add these
+aiohttp = "~3.7.3"
 idna = "~2.10"
+# move the following to "build-system.requires" when this poetry pr is merged and released: https://github.com/python-poetry/poetry/pull/2794
+cython = {version = "<0.30", optional = true}
 
 [tool.poetry.extras]
 rocksdb = ["cython", "python-rocksdb"]
