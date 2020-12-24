@@ -1,5 +1,5 @@
 import json
-from typing import Set
+from typing import List, Optional, Set
 
 from twisted.web import resource
 from twisted.web.http import Request
@@ -23,6 +23,27 @@ class AddressHistoryResource(resource.Resource):
 
     def __init__(self, manager):
         self.manager = manager
+
+    def render_POST(self, request: Request) -> bytes:
+        """ POST request for /thin_wallet/address_history/
+
+            It has the same behaviour as the GET request but when using the GET
+            we have a limit of addresses to put as query param, otherwise we end up
+            reaching the HTTP content length limit
+        """
+        request.setHeader(b'content-type', b'application/json; charset=utf-8')
+        set_cors(request, 'POST')
+
+        if not self.manager.tx_storage.wallet_index:
+            request.setResponseCode(503)
+            return json.dumps({'success': False}, indent=4).encode('utf-8')
+
+        post_data = json.loads(request.content.read().decode('utf-8'))
+
+        if 'addresses' not in post_data:
+            return get_missing_params_msg('addresses')
+
+        return self.get_address_history(post_data.get('addresses'), post_data.get('hash'))
 
     def render_GET(self, request: Request) -> bytes:
         """ GET request for /thin_wallet/address_history/
@@ -83,22 +104,24 @@ class AddressHistoryResource(resource.Resource):
 
         if paginate:
             # New resource
-            return self.new_resource(request)
+            if b'addresses[]' not in request.args:
+                return get_missing_params_msg('addresses[]')
+
+            addresses = request.args[b'addresses[]']
+
+            ref_hash = None
+            if b'hash' in request.args:
+                # If hash parameter is in the request, it must be a valid hex
+                ref_hash = request.args[b'hash'][0].decode('utf-8')
+
+            return self.get_address_history([address.decode('utf-8') for address in addresses], ref_hash)
         else:
             # Old and deprecated resource
             return self.deprecated_resource(request)
 
-    def new_resource(self, request: Request) -> bytes:
-        if b'addresses[]' not in request.args:
-            return get_missing_params_msg('addresses[]')
-
-        addresses = request.args[b'addresses[]']
-
+    def get_address_history(self, addresses: List[str], ref_hash: Optional[str]) -> bytes:
         ref_hash_bytes = None
-        ref_hash = None
-        if b'hash' in request.args:
-            # If hash parameter is in the request, it must be a valid hex
-            ref_hash = request.args[b'hash'][0].decode('utf-8')
+        if ref_hash:
             try:
                 ref_hash_bytes = bytes.fromhex(ref_hash)
             except ValueError:
@@ -123,8 +146,7 @@ class AddressHistoryResource(resource.Resource):
         # I've done some tests with 10k txs in one address and the request
         # returned in less than 50ms, so we will move forward with it for now
         # but this could be improved in the future
-        for idx, address_to_decode in enumerate(addresses):
-            address = address_to_decode.decode('utf-8')
+        for idx, address in enumerate(addresses):
             try:
                 decode_address(address)
             except InvalidAddress:
