@@ -1,5 +1,5 @@
 import json
-from typing import List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 from twisted.web import resource
 from twisted.web.http import Request
@@ -24,6 +24,7 @@ class AddressHistoryResource(resource.Resource):
     def __init__(self, manager):
         self.manager = manager
 
+    # TODO add openapi docs for this API
     def render_POST(self, request: Request) -> bytes:
         """ POST request for /thin_wallet/address_history/
 
@@ -207,7 +208,7 @@ class AddressHistoryResource(resource.Resource):
                 first_address = address
                 break
 
-        data = {
+        data: Dict[str, Any] = {
             'success': True,
             'history': history,
             'has_more': has_more,
