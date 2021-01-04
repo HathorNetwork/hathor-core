@@ -66,6 +66,9 @@ class _ValidateAddressResource(resource.Resource):
 ValidateAddressResource.openapi = {
     '/validate_address/{address}': {
         'x-visibility': 'public',
+        'x-path-params-regex': {
+            'address': '.*',
+        },
         'x-rate-limit': {
             'global': [
                 {
