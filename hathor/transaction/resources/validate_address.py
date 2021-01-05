@@ -35,6 +35,9 @@ class _ValidateAddressResource(resource.Resource):
         super().__init__()
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
+        if isinstance(address, bytes):
+            address = address.decode('ascii')
+        assert isinstance(address, str)
         self.address = address
 
     @api_catch_exceptions
