@@ -52,7 +52,9 @@ class RequestBody(object):
 
 class TestDummyRequest(DummyRequest):
     def __init__(self, method, url, args=None, headers=None):
-        DummyRequest.__init__(self, url.split('/'))
+        slash = b'/' if isinstance(url, bytes) else '/'
+        path = url.split(slash)
+        DummyRequest.__init__(self, path)
         self.method = method
         self.headers = headers or {}
         self.content = RequestBody()
