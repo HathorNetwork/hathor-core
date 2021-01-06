@@ -282,6 +282,9 @@ class HathorManager:
         return defer.DeferredList(waits)
 
     def do_discovery(self) -> None:
+        """
+        Do a discovery and connect on all discovery strategies.
+        """
         for peer_discovery in self.peer_discoveries:
             peer_discovery.discover_and_connect(self.connections.connect_to)
 

@@ -227,6 +227,7 @@ class ConnectionsManager:
 
         TODO(epnichols): Should we always connect to *all*? Should there be a max #?
         """
+        # when we have no connected peers left, run the discovery process again
         if len(self.connected_peers) < 1:
             # XXX: accessing manager through downloader because there is no other reference
             self.downloader.manager.do_discovery()
