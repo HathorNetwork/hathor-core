@@ -245,8 +245,7 @@ class HathorManager:
         for description in self.listen_addresses:
             self.listen(description, ssl=self.ssl)
 
-        for peer_discovery in self.peer_discoveries:
-            peer_discovery.discover_and_connect(self.connections.connect_to)
+        self.do_discovery()
 
         self.start_time = time.time()
 
@@ -281,6 +280,10 @@ class HathorManager:
                 waits.append(wait_stratum)
 
         return defer.DeferredList(waits)
+
+    def do_discovery(self) -> None:
+        for peer_discovery in self.peer_discoveries:
+            peer_discovery.discover_and_connect(self.connections.connect_to)
 
     def start_profiler(self) -> None:
         """

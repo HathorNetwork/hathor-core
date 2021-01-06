@@ -225,8 +225,11 @@ class ConnectionsManager:
         """ It is called by the `lc_reconnect` timer and tries to connect to all known
         peers.
 
-        TODO(epnichols): Should we always conect to *all*? Should there be a max #?
+        TODO(epnichols): Should we always connect to *all*? Should there be a max #?
         """
+        if len(self.connected_peers) < 1:
+            # XXX: accessing manager through downloader because there is no other reference
+            self.downloader.manager.do_discovery()
         now = int(self.reactor.seconds())
         for peer in self.peer_storage.values():
             self.connect_to_if_not_connected(peer, now)
