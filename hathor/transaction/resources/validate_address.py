@@ -1,9 +1,11 @@
 import base64
+from typing import Union
 
 from twisted.web import resource
 
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.manager import HathorManager
 from hathor.transaction.scripts import create_base_script
 from hathor.util import api_catch_exceptions, json_dumpb
 
@@ -31,7 +33,7 @@ class _ValidateAddressResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager, address):
+    def __init__(self, manager: HathorManager, address: Union[str, bytes]):
         super().__init__()
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
