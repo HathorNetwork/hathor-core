@@ -228,6 +228,9 @@ server {{
     set_real_ip_from 10.0.0.0/8;
     set_real_ip_from 172.16.0.0/12;
     set_real_ip_from 192.168.0.0/16;
+    # Trust CloudFront
+    # See: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/LocationsOfEdgeServers.html
+    include set_real_ip_from_cloudfront;
 
 
     client_max_body_size 10M;

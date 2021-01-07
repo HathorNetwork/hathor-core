@@ -21,20 +21,20 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_simple(self):
-        address = 'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199A'
+        address = b'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199A'
         response_success = yield self.web.get(address)
         data_success = response_success.json_value()
         self.assertEqual(data_success, {
            'valid': True,
            'script': 'dqkUr6YAVWv0Ps6bjgSGuqMb1GqCw6+IrA==',
-           'address': address,
+           'address': address.decode('ascii'),
            'type': 'p2pkh',
         })
 
     @inlineCallbacks
     def test_invalid_network(self):
         # this address is valid on the testnet
-        response_success = yield self.web.get('WTPcVyGjo9tSet8QAH7qudW2LwtkgubZGU')
+        response_success = yield self.web.get(b'WTPcVyGjo9tSet8QAH7qudW2LwtkgubZGU')
         data_success = response_success.json_value()
         self.assertEqual(data_success, {
            'valid': False,
@@ -44,7 +44,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_wrong_size(self):
-        address = 'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199Aa'
+        address = b'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199Aa'
         response_success = yield self.web.get(address)
         data_success = response_success.json_value()
         self.assertEqual(data_success, {
@@ -56,7 +56,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
     @inlineCallbacks
     def test_gibberish(self):
         # this isn't remotely what an address looks like
-        response_success = yield self.web.get('ahl8sfyoiuh23$%!!dfads')
+        response_success = yield self.web.get(b'ahl8sfyoiuh23$%!!dfads')
         data_success = response_success.json_value()
         self.assertEqual(data_success, {
            'valid': False,
