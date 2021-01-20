@@ -1027,7 +1027,8 @@ class TxOutput:
         assert isinstance(value, int), 'value is %s, type %s' % (str(value), type(value))
         assert isinstance(script, bytes), 'script is %s, type %s' % (str(script), type(script))
         assert isinstance(token_data, int), 'token_data is %s, type %s' % (str(token_data), type(token_data))
-        assert value <= MAX_OUTPUT_VALUE and value > 0
+        if value <= 0 or value > MAX_OUTPUT_VALUE:
+            raise InvalidOutputValue
 
         self.value = value  # int
         self.script = script  # bytes
