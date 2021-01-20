@@ -444,7 +444,7 @@ class BaseTransaction(ABC):
 
         my_parents_txs = 0      # number of tx parents
         my_parents_blocks = 0   # number of block parents
-        min_timestamp = None
+        min_timestamp: Optional[int] = None
 
         for parent_hash in self.parents:
             try:
