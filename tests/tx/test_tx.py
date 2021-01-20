@@ -654,7 +654,7 @@ class BasicTransaction(unittest.TestCase):
             bytes_to_output_value(invalid_output)
 
         # Can't instantiate an output with negative value
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(InvalidOutputValue):
             TxOutput(-1, script)
 
     def test_tx_version(self):
