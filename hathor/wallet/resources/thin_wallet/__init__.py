@@ -1,6 +1,8 @@
 from hathor.wallet.resources.thin_wallet.address_balance import AddressBalanceResource
 from hathor.wallet.resources.thin_wallet.address_history import AddressHistoryResource
 from hathor.wallet.resources.thin_wallet.address_search import AddressSearchResource
+from hathor.wallet.resources.thin_wallet.address_search import AddressSearchResource
+from hathor.wallet.resources.thin_wallet.richest_addresses import RichestAddressesResource
 from hathor.wallet.resources.thin_wallet.send_tokens import SendTokensResource
 from hathor.wallet.resources.thin_wallet.token_history import TokenHistoryResource
 from hathor.wallet.resources.thin_wallet.tokens import TokenResource
@@ -9,6 +11,7 @@ __all__ = [
     'AddressBalanceResource',
     'AddressHistoryResource',
     'AddressSearchResource',
+    'RichestAddressesResource',
     'SendTokensResource',
     'TokenResource',
     'TokenHistoryResource',
