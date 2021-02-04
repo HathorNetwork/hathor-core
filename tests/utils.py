@@ -215,6 +215,7 @@ def run_server(hostname='localhost', listen=8005, status=8085, bootstrap=None, t
     """
     command = ' '.join([
         'python -m hathor run_node',
+        '--memory-storage',
         '--wallet hd',
         '--wallet-enable-api',
         '--hostname {}'.format(hostname),

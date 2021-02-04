@@ -334,18 +334,7 @@ class HathorManager:
         block_count = 0
         tx_count = 0
 
-        if self.tx_storage.get_count_tx_blocks() > 3 and not self.tx_storage.is_db_clean():
-            # If has more than 3 txs on storage (the genesis txs that are always on storage by default)
-            # and the db is not clean (the db has old data before we cleaned the voided txs/blocks)
-            # then we can't move forward and ask the user to remove the old db
-            self.log.error(
-                'Error initializing the node. You can\'t use an old database right now. '
-                'Please remove your database or start your full node again with an empty data folder.'
-            )
-            sys.exit()
-
-        # If has reached this line, the db is clean, so we add this attribute to it
-        self.tx_storage.set_db_clean()
+        self.tx_storage.pre_init()
 
         # self.start_profiler()
 
