@@ -334,18 +334,22 @@ class HathorManager:
         block_count = 0
         tx_count = 0
 
-        if self.tx_storage.get_count_tx_blocks() > 3 and not self.tx_storage.is_db_clean():
-            # If has more than 3 txs on storage (the genesis txs that are always on storage by default)
-            # and the db is not clean (the db has old data before we cleaned the voided txs/blocks)
-            # then we can't move forward and ask the user to remove the old db
-            self.log.error(
-                'Error initializing the node. You can\'t use an old database right now. '
-                'Please remove your database or start your full node again with an empty data folder.'
-            )
-            sys.exit()
+        if not self.tx_storage.is_empty():
+            if not self.tx_storage.is_v2_compatible():
+                if self.tx_storage.is_db_clean():
+                    self._migrate_db_to_v2()
+                else:
+                    # If has more than 3 txs on storage (the genesis txs that are always on storage by default)
+                    # and the db is not clean (the db has old data before we cleaned the voided txs/blocks)
+                    # then we can't move forward and ask the user to remove the old db
+                    self.log.error(
+                        'Error initializing the node. You can\'t use an old database right now. '
+                        'Please remove your database or start your full node again with an empty data folder.'
+                    )
+                    sys.exit()
 
-        # If has reached this line, the db is clean, so we add this attribute to it
-        self.tx_storage.set_db_clean()
+        # If has reached this line, the db is v2 compatible, so we add this attribute to it
+        self.tx_storage.set_v2_compatible()
 
         # self.start_profiler()
 
@@ -402,6 +406,25 @@ class HathorManager:
         tdt = hathor.util.LogDuration(t2 - t0)
         tx_rate = '?' if tdt == 0 else cnt / tdt
         self.log.info('ready', tx_count=cnt, tx_rate=tx_rate, total_dt=tdt, height=h, blocks=block_count, txs=tx_count)
+
+    def _migrate_db_to_v2(self) -> None:
+        """Internal method, do not run without understanding how to use it.
+
+        Effectively migrates the database to be compatible with the stateful validation that sync-v2 expects.
+
+        This method does not update the compatibility parameter.
+        """
+
+        from hathor.transaction.transaction_metadata import ValidationState
+
+        self.log.info('migrating database to work with sync-v2')
+        for tx in self.tx_storage.get_all_transactions():
+            tx_meta = tx.get_metadata()
+            if tx_meta.validation.is_fully_connected():
+                continue
+            assert tx_meta.validation.is_initial(), 'Expected either INITIAL or FULL validation.'
+            tx_meta.validation = ValidationState.FULL
+            self.tx_storage.save_transaction(tx, only_metadata=True)
 
     def add_listen_address(self, addr: str) -> None:
         self.listen_addresses.append(addr)

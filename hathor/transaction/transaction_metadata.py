@@ -59,6 +59,10 @@ class ValidationState(IntEnum):
     CHECKPOINT_FULL = 4  # besides being checkpoint valid, it is fully connected
     INVALID = -1  # not valid, this does not mean not best chain, orphan chains can be valid
 
+    def is_initial(self) -> bool:
+        """Short-hand property"""
+        return self is ValidationState.INITIAL
+
     def is_at_least_basic(self) -> bool:
         """Until a validation is final, it is possible to change its state when more information is available."""
         return self >= ValidationState.BASIC

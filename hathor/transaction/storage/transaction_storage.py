@@ -93,8 +93,12 @@ class TransactionStorage(ABC):
         # Key storage attribute to save if the manager is running
         self._manager_running_attribute: str = 'manager_running'
 
-        # Key storage attribute to save if the node has clean db
-        self._clean_db_attribute: str = 'clean_db'
+        # Key storage attribute to save the current compatibility version of the database
+        self._db_version_attribute: str = 'clean_db'  # XXX: name is weird, but it's for backwards compatibility
+
+    def is_empty(self) -> bool:
+        """True when only genesis is present, useful for checking for a fresh database."""
+        return self.get_count_tx_blocks() <= 3
 
     def _save_or_verify_genesis(self) -> None:
         """Save all genesis in the storage."""
@@ -256,7 +260,7 @@ class TransactionStorage(ABC):
     @abstractmethod
     def get_all_transactions(self) -> Iterator[BaseTransaction]:
         # TODO: verify the following claim:
-        """Return all transactions that are not blocks.
+        """Return all transactions, including blocks.
 
         :rtype :py:class:`typing.Iterable[hathor.transaction.BaseTransaction]`
         """
@@ -342,7 +346,7 @@ class TransactionStorage(ABC):
     def get_all_transactions_deferred(self) -> Iterator[BaseTransaction]:
         # TODO: find an `async generator` type
         # TODO: verify the following claim:
-        """Return all transactions that are not blocks.
+        """Return all transactions, including blocks.
 
         :rtype :py:class:`twisted.internet.defer.Deferred[typing.Iterable[hathor.transaction.BaseTransaction]]`
         """
@@ -633,15 +637,21 @@ class TransactionStorage(ABC):
         """
         return self.get_value(self._manager_running_attribute) == '1'
 
-    def set_db_clean(self) -> None:
-        """ Save on storage that the db has clean data (without voided blocks/txs)
-        """
-        self.add_value(self._clean_db_attribute, '1')
-
+    # XXX: exists for legacy compatibility
     def is_db_clean(self) -> bool:
         """ Return if the node has a clean db (without voided blocks/txs)
         """
-        return self.get_value(self._clean_db_attribute) == '1'
+        return self.get_value(self._db_version_attribute) == '1'
+
+    def set_v2_compatible(self) -> None:
+        """ Save on storage that the db has clean data (without voided blocks/txs)
+        """
+        self.add_value(self._db_version_attribute, '2')
+
+    def is_v2_compatible(self) -> bool:
+        """ Return if the node is v2 compatible (i.e. has validation state)
+        """
+        return self.get_value(self._db_version_attribute) == '2'
 
 
 class TransactionStorageAsyncFromSync(TransactionStorage):
