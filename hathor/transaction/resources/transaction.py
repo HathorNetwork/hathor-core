@@ -67,17 +67,21 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
 
             # We need to get the token_data from the current tx, and not the tx being spent
             token_uid = tx2.get_token_uid(tx2_out.get_token_index())
-            for out in tx.outputs:
-                out_token_uid = tx.get_token_uid(out.get_token_index())
-                if out_token_uid == token_uid:
-                    output['decoded']['token_data'] = out.token_data
-                    break
+            if token_uid == settings.HATHOR_TOKEN_UID:
+                # If it's an HTR output, the token_data is 0
+                output['decoded']['token_data'] = 0
             else:
-                # This is the case when the token from the input does not appear in the outputs
-                # This case can happen when we have a full melt, so all tokens from the inputs are destroyed
-                # So we manually add this token to the array and set the token_data properly
-                serialized['tokens'].append(token_uid.hex())
-                output['decoded']['token_data'] = len(serialized['tokens'])
+                for out in tx.outputs:
+                    out_token_uid = tx.get_token_uid(out.get_token_index())
+                    if out_token_uid == token_uid:
+                        output['decoded']['token_data'] = out.token_data
+                        break
+                else:
+                    # This is the case when the token from the input does not appear in the outputs
+                    # This case can happen when we have a full melt, so all tokens from the inputs are destroyed
+                    # So we manually add this token to the array and set the token_data properly
+                    serialized['tokens'].append(token_uid.hex())
+                    output['decoded']['token_data'] = len(serialized['tokens'])
 
             inputs.append(output)
 
