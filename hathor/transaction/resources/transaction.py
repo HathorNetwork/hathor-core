@@ -77,14 +77,18 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
                     # If we find the uid in the serialized tokens
                     # we set the token_data as the array index plus 1
                     if token_uid.hex() == uid:
-                        output['decoded']['token_data'] = idx + 1
+                        token_data = idx + 1
+                        output['decoded']['token_data'] = token_data
+                        token_uid_map[token_uid] = token_data
                         break
                 else:
                     # This is the case when the token from the input does not appear in the outputs
                     # This case can happen when we have a full melt, so all tokens from the inputs are destroyed
                     # So we manually add this token to the array and set the token_data properly
                     serialized['tokens'].append(token_uid.hex())
-                    output['decoded']['token_data'] = len(serialized['tokens'])
+                    token_data = len(serialized['tokens'])
+                    output['decoded']['token_data'] = token_data
+                    token_uid_map[token_uid] = token_data
 
             inputs.append(output)
 
