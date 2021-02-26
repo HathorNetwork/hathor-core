@@ -416,7 +416,8 @@ class HathorManager:
                 else:
                     # TODO: deal with invalid tx
                     if not tx_meta.validation.is_final():
-                        assert tx_meta.validation.is_at_least_basic(), f'invalid: {tx.hash_hex}'
+                        if not tx_meta.validation.is_checkpoint():
+                            assert tx_meta.validation.is_at_least_basic(), f'invalid: {tx.hash_hex}'
                         self.tx_storage.add_needed_deps(tx)
                     elif tx.is_transaction and tx_meta.first_block is None and not tx_meta.voided_by:
                         self.tx_storage.update_tx_tips(tx)
@@ -435,7 +436,7 @@ class HathorManager:
                 # this works because blocks on the best chain are iterated from lower to higher height
                 assert tx.hash is not None
                 assert tx_meta.validation.is_at_least_basic()
-                if not tx_meta.voided_by:
+                if not tx_meta.voided_by and tx_meta.validation.is_fully_connected():
                     # XXX: this might not be needed when making a full init because the consensus should already have
                     self.tx_storage.add_new_to_block_height_index(tx_meta.height, tx.hash)
 
@@ -733,7 +734,8 @@ class HathorManager:
     @cpu.profiler('on_new_tx')
     def on_new_tx(self, tx: BaseTransaction, *, conn: Optional[HathorProtocol] = None,
                   quiet: bool = False, fails_silently: bool = True, propagate_to_peers: bool = True,
-                  skip_block_weight_verification: bool = False, partial: bool = False) -> bool:
+                  skip_block_weight_verification: bool = False, sync_checkpoints: bool = False,
+                  partial: bool = False) -> bool:
         """ New method for adding transactions or blocks that steps the validation state machine.
         """
         assert tx.hash is not None
@@ -772,9 +774,9 @@ class HathorManager:
             if isinstance(tx, Transaction) and self.tx_storage.is_tx_needed(tx.hash):
                 tx._height_cache = self.tx_storage.needed_index_height(tx.hash)
 
-            if not metadata.validation.is_valid():
+            if not metadata.validation.is_fully_connected():
                 try:
-                    tx.validate_full()
+                    tx.validate_full(sync_checkpoints=sync_checkpoints)
                 except HathorError as e:
                     if not fails_silently:
                         raise InvalidNewTransaction('full validation failed') from e
@@ -795,7 +797,20 @@ class HathorManager:
                 self.log.warn('on_new_tx(): consensus update failed', tx=tx.hash_hex)
                 return False
             else:
+                assert tx.validate_full(skip_block_weight_verification=True)
                 self.tx_fully_validated(tx)
+        elif sync_checkpoints:
+            metadata.children = self.tx_storage.children_from_deps(tx.hash)
+            try:
+                tx.validate_checkpoint(self.checkpoints)
+            except HathorError:
+                if not fails_silently:
+                    raise InvalidNewTransaction('checkpoint validation failed')
+                self.log.warn('on_new_tx(): checkpoint validation failed', tx=tx.hash_hex, exc_info=True)
+                return False
+            self.tx_storage.save_transaction(tx)
+            self.tx_storage.add_to_deps_index(tx.hash, tx.get_all_dependencies())
+            self.tx_storage.add_needed_deps(tx)
         else:
             if isinstance(tx, Block) and not tx.has_basic_block_parent():
                 if not fails_silently:

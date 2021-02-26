@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 from typing import TYPE_CHECKING, Any, Dict, Iterable, Optional, Set, Union
 
 from numpy.random import Generator as Rng
@@ -353,6 +354,11 @@ class ConnectionsManager:
         # When using twisted endpoints we can't have // in the connection string
         endpoint_url = connection_string.replace('//', '')
         endpoint = endpoints.clientFromString(self.reactor, endpoint_url)
+
+        # XXX: only connect to localhost
+        if os.environ.get('HATHOR_LOCALHOST_ONLY'):
+            if ('127.0.0.1' not in endpoint_url) and ('localhost' not in endpoint_url):
+                return
 
         if use_ssl:
             certificate_options = self.my_peer.get_certificate_options()

@@ -93,6 +93,7 @@ class ProtocolMessages(Enum):
     # Sync-v2 messages
 
     GET_NEXT_BLOCKS = 'GET-NEXT-BLOCKS'
+    GET_PREV_BLOCKS = 'GET-PREV-BLOCKS'
     BLOCKS = 'BLOCKS'
     BLOCKS_END = 'BLOCKS-END'
 
