@@ -130,6 +130,10 @@ class BlockWithTokensError(BlockError):
     """Block has tokens other than hathor"""
 
 
+class CheckpointError(BlockError):
+    """Block hash does not match checkpoint hash for its height"""
+
+
 class ScriptError(HathorError):
     """Base class for script evaluation errors"""
 

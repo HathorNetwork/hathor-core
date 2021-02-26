@@ -220,6 +220,15 @@ class TransactionStorage(ABC):
         """Get all txs that depend on the given tx (i.e. its reverse depdendencies)."""
         return frozenset(self._rev_dep_index.get(tx, set()))
 
+    def children_from_deps(self, tx: bytes) -> List[bytes]:
+        """Return the hashes of all reverse dependencies that are children of the given tx.
+
+        That is, they depend on `tx` because they are children of `tx`, and not because `tx` is an input. This is
+        useful for pre-filling the children metadata, which would otherwise only be updated when
+        `update_initial_metadata` is called on the child-tx.
+        """
+        return [not_none(rev.hash) for rev in map(self.get_transaction, self.get_rev_deps(tx)) if tx in rev.parents]
+
     # needed-txs-index methods:
 
     def has_needed_tx(self) -> bool:
@@ -280,16 +289,16 @@ class TransactionStorage(ABC):
         new_score = not_none(meta).score
         cur_score = not_none(self.get_metadata(next(iter(self._parent_blocks_index)))).score
         if isclose(new_score, cur_score):
-            self.log.debug('same score: new competing parent block', block=block.hex())
+            self.log.debug('same score: new competing block', block=block.hex(), height=meta.height, score=meta.score)
             if block not in self._parent_blocks_index:
                 self._parent_blocks_index.append(block)
         elif new_score > cur_score and not meta.voided_by:
             # If it's a high score, then I can't add one that is voided
-            self.log.debug('high score: new best parent block', block=block.hex())
+            self.log.debug('high score: new best block', block=block.hex(), height=meta.height, score=meta.score)
             self._parent_blocks_index.clear()
             self._parent_blocks_index.append(block)
         else:
-            self.log.debug('low score: skip parent block', block=block.hex())
+            self.log.debug('low score: skip block', block=block.hex(), height=meta.height, score=meta.score)
 
     # tx-tips-index methods:
 
@@ -513,8 +522,8 @@ class TransactionStorage(ABC):
         if tx.hash in self._rev_dep_index:
             self._update_validation(tx.hash, meta.validation)
 
-        # XXX: we can only add to cache and publish txs that are complete, having the parents and all inputs
-        if not meta.validation.is_valid():
+        # XXX: we can only add to cache and publish txs that are fully connected (which also implies it's valid)
+        if not meta.validation.is_fully_connected():
             return
 
         if self.pubsub:

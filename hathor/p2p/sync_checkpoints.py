@@ -13,11 +13,13 @@
 # limitations under the License.
 
 from itertools import chain
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from structlog import get_logger
 
 from hathor.checkpoint import Checkpoint
+from hathor.transaction.block import Block
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
@@ -49,8 +51,14 @@ class SyncCheckpoint:
         # All checkpoints that still need to sync
         self.checkpoints_to_sync: List[Checkpoint] = []
 
+        # Previous checkpoints map
+        self.previous_checkpoints: Dict[Checkpoint, Checkpoint] = {}
+
         # The peer that is syncing (the one we are downloading the blocks from)
         self.peer_syncing = None
+
+        # If set to true next run_sync_transactions will be skipped
+        self.should_skip_sync_tx = False
 
         # Create logger with context
         self.log = logger.new()
@@ -64,6 +72,13 @@ class SyncCheckpoint:
         bestblock = self.manager.tx_storage.get_best_block()
         meta = bestblock.get_metadata()
 
+        # Fill the previous checkpoints map
+        it_cps = iter(checkpoints)
+        prev_cp = next(it_cps)
+        for cp in it_cps:
+            self.previous_checkpoints[cp] = prev_cp
+            prev_cp = cp
+
         # Get all checkpoints to sync
         self.checkpoints_to_sync = [checkpoint for checkpoint in checkpoints if checkpoint.height > meta.height]
 
@@ -74,6 +89,39 @@ class SyncCheckpoint:
 
         self.is_running = True
         self.manager.reactor.callLater(0, self.try_to_sync)
+
+    # XXX: the tuple (start_hash, start_int, end_hash, end_int) appears too often, maybe make a named tuple for it
+    def _checkpoint_sync_interval(self, checkpoint: Checkpoint) -> Optional[Tuple[bytes, int, bytes, int]]:
+        """Calculate start and end point of a checkpoint."""
+        start_height, start_hash = checkpoint
+        end_height, end_hash = self.previous_checkpoints[checkpoint]
+        # XXX: this could be optimized a lot, but it actually isn't that slow
+        while start_height > end_height:
+            try:
+                block = self.manager.tx_storage.get_transaction(start_hash)
+            except TransactionDoesNotExist:
+                break
+            assert isinstance(block, Block)
+            start_hash = block.get_block_parent_hash()  # parent hash
+            start_height = block.get_metadata().height - 1  # parent height
+        # don't try to sync checkpoints that we already have all the blocks for
+        if start_height == end_height:
+            return None
+        return (start_hash, start_height, end_hash, end_height)
+
+    def _get_next_sync_interval(self) -> Optional[Tuple[bytes, int, bytes, int]]:
+        """Iterate over checkpoints_to_sync and find a valid interval to sync, pruning already synced intervals.
+
+        Will only return None when there are no more intervals to sync.
+        """
+        # for checkpoint in self.checkpoints_to_sync[::]:
+        for checkpoint in self.checkpoints_to_sync[::-1]:
+            sync_interval = self._checkpoint_sync_interval(checkpoint)
+            if sync_interval is not None:
+                return sync_interval
+            else:
+                self.checkpoints_to_sync.remove(checkpoint)
+        return None
 
     def stop(self):
         self.log.debug('stop sync')
@@ -106,7 +154,7 @@ class SyncCheckpoint:
             self.log.debug('not running')
             return
 
-        if self.manager.tx_storage.has_needed_tx():
+        if self.manager.tx_storage.has_needed_tx() and not self.should_skip_sync_tx:
             # Streaming ended. If there are needed txs, prioritize that
             return self.peer_syncing.run_sync_transactions()
 
@@ -114,11 +162,15 @@ class SyncCheckpoint:
             self.log.debug('no checkpoints to sync')
             return
 
-        best_block = self.manager.tx_storage.get_best_block()
-        meta = best_block.get_metadata()
-        checkpoint = self.checkpoints_to_sync[0]
+        sync_interval = self._get_next_sync_interval()
+        if not sync_interval:
+            self.log.debug('no checkpoints to sync anymore')
+            return
 
-        self.peer_syncing.run_sync_between_heights(best_block.hash, meta.height, checkpoint.hash, checkpoint.height)
+        self.peer_syncing.run_sync_between_heights(*sync_interval)
+
+        # XXX: reset skip flag
+        self.should_skip_sync_tx = False
 
     def sync_error(self):
         self.log.debug('sync error')
