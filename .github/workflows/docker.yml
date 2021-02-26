@@ -29,63 +29,60 @@ jobs:
         - python-impl: pypy
           python-version: 3.7
     steps:
+    - name: Checkout
+      uses: actions/checkout@v2
     - name: Prepare tags
       id: prep
+      shell: python
       run: |
-        DEFAULT_PYTHON=python3.7
-        DEFAULT_PYPY=pypy3.7
-        DOCKER_IMAGE=hathornetwork/hathor-core
-        GHCR_IMAGE="ghcr.io/$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')/hathor-core"
-        VERSION=noop
-        if [ "${{ github.event_name }}" = "schedule" ]; then
-          VERSION=nightly
-        elif [[ $GITHUB_REF == refs/tags/* ]]; then
-          VERSION=${GITHUB_REF#refs/tags/}
-          VERSION=${VERSION%%-r[0-9]*}
-        elif [[ $GITHUB_REF == refs/heads/* ]]; then
-          VERSION=$(echo ${GITHUB_REF#refs/heads/} | sed -r 's#/+#-#g')
-          if [ "${{ github.event.repository.default_branch }}" = "$VERSION" ]; then
-            VERSION=edge
-          fi
-        elif [[ $GITHUB_REF == refs/pull/* ]]; then
-          VERSION=pr-${{ github.event.number }}
-        fi
-        BASE_VERSION=$VERSION
-        DOCKERFILE=Dockerfile.github
-        SUFFIX=python${{ matrix.python-version }}
-        if [[ "${{ matrix.python-impl }}" == "pypy" ]]; then
-          DOCKERFILE=Dockerfile.github-pypy
-          SUFFIX=pypy${{ matrix.python-version }}
-        fi
-        VERSION="${VERSION}-${SUFFIX}"
-        TAGS="${DOCKER_IMAGE}:${VERSION}"
-        TAGS="${TAGS},${GHCR_IMAGE}:${VERSION}"
-        if [[ $SUFFIX == "$DEFAULT_PYTHON" ]]; then
-          TAGS="$TAGS,${DOCKER_IMAGE}:${BASE_VERSION}"
-          TAGS="$TAGS,${GHCR_IMAGE}:${BASE_VERSION}"
-        elif [[ $SUFFIX == "$DEFAULT_PYPY" ]]; then
-          TAGS="$TAGS,${DOCKER_IMAGE}:${BASE_VERSION}-pypy"
-          TAGS="$TAGS,${GHCR_IMAGE}:${BASE_VERSION}-pypy"
-        fi
-        if [[ $VERSION =~ ^v[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
-          MINOR=${BASE_VERSION%.*}-${SUFFIX}
-          TAGS="$TAGS,${DOCKER_IMAGE}:${MINOR}"
-          TAGS="$TAGS,${GHCR_IMAGE}:${MINOR}"
-          #MAJOR=${MINOR%.*}-${SUFFIX}
-          #TAGS="$TAGS,${DOCKER_IMAGE}:${MAJOR}"
-          #TAGS="$TAGS,${GHCR_IMAGE}:${MAJOR}"
-          if [[ $SUFFIX == "$DEFAULT_PYTHON" ]]; then
-            TAGS="$TAGS,${DOCKER_IMAGE}:latest"
-            TAGS="$TAGS,${GHCR_IMAGE}:latest"
-          fi
-        elif [ "${{ github.event_name }}" = "push" ]; then
-          # TAGS="$TAGS,${DOCKER_IMAGE}:sha-${GITHUB_SHA::8}-${SUFFIX}"  # these tags are annoying on DockerHub
-          TAGS="$TAGS,${GHCR_IMAGE}:sha-${GITHUB_SHA::8}-${SUFFIX}"
-        fi
-        echo ::set-output name=version::${VERSION}
-        echo ::set-output name=tags::${TAGS}
-        echo ::set-output name=created::$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-        echo ::set-output name=dockerfile::${DOCKERFILE}
+        import datetime
+        import itertools
+        import re
+        def extract_pyver(filename):
+            for line in open(filename).readlines():
+                if line.startswith('ARG PYTHON'):
+                    return line.split('=')[1].strip()
+        ref = '${{ github.ref }}'
+        dockerfile_cpython = 'Dockerfile.github'
+        dockerfile_pypy = 'Dockerfile.github-pypy'
+        default_python = 'python' + extract_pyver(dockerfile_cpython)
+        default_pypy = 'pypy' + extract_pyver(dockerfile_pypy)
+        if '${{ github.event_name }}' == 'schedule':
+            base_version = 'nightly'
+        elif ref.startswith('refs/tags/'):
+            base_version = ref[10:].split('-', 1)[0]
+        elif ref.startswith('refs/heads/'):
+            base_version = ref[11:].replace('/', '-')
+            if base_version == '${{ github.event.repository.default_branch }}':
+              base_version = 'stable'
+        elif ref.startswith('refs/pull/'):
+            base_version = 'pr-${{ github.event.number }}'
+        else:
+            base_version = 'noop'
+        if '${{ matrix.python-impl }}' == 'pypy':
+            dockerfile = dockerfile_pypy
+            suffix = 'pypy${{ matrix.python-version }}'
+        else:
+            dockerfile = dockerfile_cpython
+            suffix = 'python${{ matrix.python-version }}'
+        version = base_version + '-' + suffix
+        tags = {version}
+        if suffix == default_python:
+            tags.add(base_version)
+        elif suffix == default_pypy:
+            tags.add(base_version + '-pypy')
+        if re.match(r'^v[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$', base_version):
+            minor = base_version.rpartition('.')[0]
+            tags.add(minor + '-' + suffix)
+            if suffix == default_python:
+                tags.add('latest')
+        elif '${{ github.event_name }}' == 'push':
+            tags.add('sha-' + '${{ github.sha }}'[:8])
+        print('::set-output name=version::' + version)
+        print('::set-output name=tags::' + ','.join(itertools.chain(('${{ secrets.DOCKERHUB_IMAGE }}:' + t for t in tags),
+                                                                    ('${{ secrets.GHCR_IMAGE }}:' + t for t in tags))))
+        print('::set-output name=created::' + datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'))
+        print('::set-output name=dockerfile::' + dockerfile)
     - name: Set up QEMU  # arm64 is not available natively
       uses: docker/setup-qemu-action@v1
       with:
@@ -107,8 +104,6 @@ jobs:
         registry: ghcr.io
         username: ${{ secrets.GHCR_USERNAME }}
         password: ${{ secrets.GHCR_TOKEN }}
-    - name: Checkout
-      uses: actions/checkout@v2
     - name: Set up Python 3.7 (base) # 3.7 is the fastest to setup, and the specific version doesn't matter here
       uses: actions/setup-python@v2
       with:
@@ -150,7 +145,7 @@ jobs:
       with:
         context: .
         file: ${{ steps.prep.outputs.dockerfile }}
-        build-args: PYTHON_VERSION=${{ matrix.python-version }}
+        build-args: PYTHON=${{ matrix.python-version }}
         platforms: linux/amd64,linux/arm64
         pull: true
         push: ${{ github.event_name != 'pull_request' }}
