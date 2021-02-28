@@ -110,14 +110,7 @@ jobs:
         python-version: 3.7
     - name: Install Poetry
       run: pip -q --no-input install poetry
-    - name: Cache Poetry dependencies
-      uses: actions/cache@v2
-      id: poetry-cache
-      with:
-        path: ~/.cache/pypoetry
-        key: ${{ runner.os }}-py3.7-pypoetry-${{ hashFiles('poetry.lock') }}
     - name: Install Poetry dependencies
-      if: steps.poetry-cache.outputs.cache-hit != 'true'
       run: poetry install -n --no-root
     - name: Generate protobuf files
       run: poetry run make protos
