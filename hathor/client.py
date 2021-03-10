@@ -328,7 +328,7 @@ class MiningChannelStub(IMiningChannel):
         loop = asyncio.get_event_loop()
         self._queue = loop.create_future()
 
-    def _on_new_tx(self, key: HathorEvents, args: EventArguments) -> None:
+    def _on_new_tx(self, key: HathorEvents, _args: EventArguments) -> None:
         if self._queue.done():
             self._reset_queue()
         try:

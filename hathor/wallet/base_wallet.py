@@ -153,7 +153,7 @@ class BaseWallet:
         self.reactor.callLater(UTXO_CHECK_INTERVAL, self._check_utxos)
 
     def handle_publish(self, key: HathorEvents, args: EventArguments) -> None:
-        data = args.__dict__
+        data = args.data
         if key == HathorEvents.STORAGE_TX_VOIDED:
             self.on_tx_voided(data['tx'])
         elif key == HathorEvents.STORAGE_TX_WINNER:

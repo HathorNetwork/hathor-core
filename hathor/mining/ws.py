@@ -193,7 +193,7 @@ class MiningWebsocketFactory(WebSocketServerFactory):
     def buildProtocol(self, addr):
         return self.protocol(self)
 
-    def _on_new_tx(self, key: HathorEvents, args: EventArguments) -> None:
+    def _on_new_tx(self, key: HathorEvents, _args: EventArguments) -> None:
         """ Called when a new tx/block is received.
         """
         if self.manager.can_start_mining():

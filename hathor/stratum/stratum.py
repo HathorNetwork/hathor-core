@@ -745,7 +745,7 @@ class StratumFactory(Factory):
         Starts the Hathor Stratum server and subscribes for new blocks on the network in order to update miner jobs.
         """
         def on_new_block(event: HathorEvents, args: EventArguments) -> None:
-            tx = args.__dict__['tx']
+            tx = args.data['tx']
             if isinstance(tx, Block):
                 self.update_jobs()
 

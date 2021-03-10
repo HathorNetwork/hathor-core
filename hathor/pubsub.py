@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import UserDict, defaultdict
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Dict, List
 
@@ -90,16 +90,10 @@ class HathorEvents(Enum):
     WALLET_ELEMENT_VOIDED = 'wallet:element_voided'
 
 
-class EventArguments:
+class EventArguments(UserDict):
     """Simple object for storing event arguments.
     """
-
-    def __init__(self, **kwargs: Any) -> None:
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
-    def __contains__(self, key: str) -> bool:
-        return hasattr(self, key)
+    __slots__ = ()
 
 
 PubSubCallable = Callable[[HathorEvents, EventArguments], None]
@@ -146,7 +140,7 @@ class PubSubManager:
         """
         reactor_thread = ReactorThread.get_current_thread(self.reactor)
 
-        args = EventArguments(**kwargs)
+        args = EventArguments(kwargs)
         for fn in self._subscribers[key]:
             if reactor_thread == ReactorThread.NOT_RUNNING:
                 fn(key, args)
