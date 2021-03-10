@@ -146,27 +146,27 @@ def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_lo
             },
             'handlers': {
                 'default': {
-                    'level': 'DEBUG',
+                    'level': 'INFO',
                     'class': 'logging.StreamHandler',
                     'formatter': 'colored',
                 },
-                # 'file': {
-                #     'level': 'DEBUG',
-                #     'class': 'logging.handlers.WatchedFileHandler',
-                #     'filename': 'test.log',
-                #     'formatter': 'plain',
-                # },
+                'file': {
+                    'level': 'DEBUG',
+                    'class': 'logging.handlers.WatchedFileHandler',
+                    'filename': 'debug.log',
+                    'formatter': 'plain',
+                },
             },
             'loggers': {
                 # set twisted verbosity one level lower than hathor's
                 'twisted': {
-                    'handlers': ['default'],
-                    'level': 'INFO' if debug else 'WARN',
+                    'handlers': ['default', 'file'],
+                    'level': 'DEBUG',
                     'propagate': False,
                 },
                 '': {
-                    'handlers': ['default'],
-                    'level': 'DEBUG' if debug else 'INFO',
+                    'handlers': ['default', 'file'],
+                    'level': 'DEBUG',
                 },
             }
     })
