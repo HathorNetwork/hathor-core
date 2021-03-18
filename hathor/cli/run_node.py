@@ -291,6 +291,7 @@ class RunNode:
         from hathor.profiler.resources import CPUProfilerResource, ProfilerResource
         from hathor.prometheus import PrometheusMetricsExporter
         from hathor.transaction.resources import (
+            BlockAtHeightResource,
             CreateTxResource,
             DashboardTransactionResource,
             DecodeTxResource,
@@ -374,6 +375,7 @@ class RunNode:
                     root),
                 (b'graphviz', graphviz, root),
                 (b'transaction', TransactionResource(self.manager), root),
+                (b'block_at_height', BlockAtHeightResource(self.manager), root),
                 (b'transaction_acc_weight', TransactionAccWeightResource(self.manager), root),
                 (b'dashboard_tx', DashboardTransactionResource(self.manager), root),
                 (b'profiler', ProfilerResource(self.manager), root),

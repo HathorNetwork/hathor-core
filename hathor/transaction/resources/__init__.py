@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from hathor.transaction.resources.block_at_height import BlockAtHeightResource
 from hathor.transaction.resources.create_tx import CreateTxResource
 from hathor.transaction.resources.dashboard import DashboardTransactionResource
 from hathor.transaction.resources.decode_tx import DecodeTxResource
@@ -24,6 +25,7 @@ from hathor.transaction.resources.tx_parents import TxParentsResource
 from hathor.transaction.resources.validate_address import ValidateAddressResource
 
 __all__ = [
+    'BlockAtHeightResource',
     'CreateTxResource',
     'DecodeTxResource',
     'PushTxResource',
