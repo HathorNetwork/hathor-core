@@ -28,6 +28,7 @@ from zope.interface import implementer
 from hathor.conf import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.sync_manager import SyncManager
+from hathor.p2p.sync_mempool import SyncMempoolManager
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.exceptions import HathorError
@@ -139,6 +140,7 @@ class NodeBlockSync(SyncManager):
         # Saves if I am in the middle of a mempool sync
         # we don't execute any sync while in the middle of it
         self.mempool_sync_running = False
+        self.mempool_manager = SyncMempoolManager(self)
 
         # This exists to avoid sync-txs loop on sync-checkpoints
         self._last_sync_transactions_start_hash: Optional[bytes] = None
@@ -216,11 +218,14 @@ class NodeBlockSync(SyncManager):
             ProtocolMessages.GET_PEER_BLOCK_HASHES: self.handle_get_peer_block_hashes,
             ProtocolMessages.PEER_BLOCK_HASHES: self.handle_peer_block_hashes,
             ProtocolMessages.STOP_BLOCK_STREAMING: self.handle_stop_block_streaming,
-            ProtocolMessages.GET_MEMPOOL: self.handle_get_mempool,
-            ProtocolMessages.MEMPOOL_END: self.handle_mempool_end,
+            ProtocolMessages.GET_TIPS: self.handle_get_tips,
+            ProtocolMessages.TIPS: self.handle_tips,
+            ProtocolMessages.TIPS_END: self.handle_tips_end,
             # XXX: overriding ReadyState.handle_error
             ProtocolMessages.ERROR: self.handle_error,
+            ProtocolMessages.GET_DATA: self.handle_get_data,
             ProtocolMessages.DATA: self.handle_data,
+            ProtocolMessages.RELAY: self.handle_relay,
         }
 
     def handle_error(self, payload: str) -> None:
@@ -371,28 +376,41 @@ class NodeBlockSync(SyncManager):
 
     def run_sync_mempool(self) -> None:
         """ Simply ask for all the transactions on the remote's mempool."""
-        self.send_get_mempool()
-
-    def send_get_mempool(self) -> None:
         self.mempool_sync_running = True
-        self.send_message(ProtocolMessages.GET_MEMPOOL)
+        self.mempool_manager.run()
 
-    def handle_get_mempool(self, payload: str) -> None:
+    def send_get_tips(self) -> None:
+        self.send_message(ProtocolMessages.GET_TIPS)
+
+    def handle_get_tips(self, payload: str) -> None:
+        """Handle a received GET_TIPS message."""
         if self._is_streaming:
             self.log.warn('can\'t send while streaming')  # XXX: or can we?
             self.send_message(ProtocolMessages.MEMPOOL_END)
             return
-        self.log.debug('handle_get_mempool')
-        # XXX: this reversal requires allocation of the complete list, for now this isn't a problem because the mempool
-        #      sync algorithm will change before the final sync-v2 release
-        for tx in reversed(list(self.manager.tx_storage.iter_mempool())):
-            # XXX: should this be made async?
-            self.send_data(tx)
+        self.log.debug('handle_get_tips')
+        # TODO Use a streaming of tips
+        for txid in self.manager.tx_storage.get_tx_tips_index():
+            self.send_tips(txid)
+        self.send_message(ProtocolMessages.TIPS_END)
 
-        self.send_message(ProtocolMessages.MEMPOOL_END)
+    def send_tips(self, tx_id: bytes) -> None:
+        """Send a TIPS message."""
+        self.send_message(ProtocolMessages.TIPS, json.dumps([tx_id.hex()]))
 
-    def handle_mempool_end(self, payload: str) -> None:
+    def handle_tips(self, payload: str) -> None:
+        """Handle a received TIPS message."""
+        data = json.loads(payload)
+        data = [bytes.fromhex(x) for x in data]
+        self.mempool_manager.on_new_tips(data)
+
+    def handle_tips_end(self, payload: str) -> None:
+        """Handle a received TIPS-END message."""
         self.mempool_sync_running = False
+
+    def handle_relay(self, payload: str) -> None:
+        """Handle a received RELAY message."""
+        raise NotImplementedError
 
     def _setup_block_streaming(self, start_hash: bytes, start_height: int, end_hash: bytes, end_height: int,
                                reverse: bool) -> None:
@@ -885,24 +903,65 @@ class NodeBlockSync(SyncManager):
             if self._tx_received % 100 == 0:
                 self.log.debug('tx streaming in progress', txs_received=self._tx_received)
 
-    def send_data(self, tx: BaseTransaction) -> None:
+    def send_data(self, tx: BaseTransaction, *, origin: str = '') -> None:
         """ Send a DATA message.
         """
         self.log.debug('send tx', tx=tx.hash_hex)
-        payload = base64.b64encode(tx.get_struct()).decode('ascii')
+        tx_payload = base64.b64encode(tx.get_struct()).decode('ascii')
+        if not origin:
+            payload = tx_payload
+        else:
+            payload = ' '.join([origin, tx_payload])
         self.send_message(ProtocolMessages.DATA, payload)
+
+    def send_get_data(self, txid: bytes, *, origin: Optional[str] = None) -> None:
+        """Send a GET-DATA message for a given txid."""
+        data = {
+            'txid': txid.hex(),
+        }
+        if origin is not None:
+            data['origin'] = origin
+        payload = json.dumps(data)
+        self.send_message(ProtocolMessages.GET_DATA, payload)
+
+    def handle_get_data(self, payload: str) -> None:
+        """Handle a received GET-DATA message."""
+        data = json.loads(payload)
+        txid_hex = data['txid']
+        origin = data.get('origin', '')
+        # self.log.debug('handle_get_data', payload=hash_hex)
+        try:
+            tx = self.protocol.node.tx_storage.get_transaction(bytes.fromhex(txid_hex))
+            self.send_data(tx, origin=origin)
+        except TransactionDoesNotExist:
+            # In case the tx does not exist we send a NOT-FOUND message
+            # self.send_message(ProtocolMessages.NOT_FOUND, hash_hex)
+            pass
 
     def handle_data(self, payload: str) -> None:
         """ Handle a received DATA message.
         """
         if not payload:
             return
-        data = base64.b64decode(payload)
+        part1, _, part2 = payload.partition(' ')
+        if not part2:
+            origin = None
+            data = base64.b64decode(part1)
+        else:
+            origin = part1
+            data = base64.b64decode(part2)
 
         try:
             tx = tx_or_block_from_bytes(data)
         except struct.error:
             # Invalid data for tx decode
+            return
+
+        if origin:
+            if origin == 'mempool':
+                self.mempool_manager.on_new_mempool_tx(tx)
+            else:
+                raise NotImplementedError
             return
 
         assert tx is not None

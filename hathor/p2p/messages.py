@@ -86,6 +86,9 @@ class ProtocolMessages(Enum):
 
     GET_TIPS = 'GET-TIPS'
     TIPS = 'TIPS'
+    TIPS_END = 'TIPS-END'
+
+    RELAY = 'RELAY'
 
     GET_NEXT = 'GET-NEXT'
     NEXT = 'NEXT'

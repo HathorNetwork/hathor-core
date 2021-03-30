@@ -319,6 +319,14 @@ class TransactionStorage(ABC):
             if tx in self._tx_tips_index:
                 self._tx_tips_index.remove(tx)
 
+    def get_tx_tips_index(self) -> Set[bytes]:
+        """
+
+        TODO FIXME What to do with `get_tx_tips()`? They kind of do the same thing and it might be really confusing
+                   in the future.
+        """
+        return self._tx_tips_index
+
     def iter_mempool(self) -> Iterator[Transaction]:
         """
         Iterate over the transactions on the "mempool", even the ones that are not tips.
