@@ -162,3 +162,18 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
 
     def test_invalid_params_post(self):
         self._run_invalid_params_test(True)
+
+    @inlineCallbacks
+    def test_response500(self):
+        tx_hex = (
+            '000100010200000000e75a5085bf88c68cd43666afcbbe09ec1832f66b9816c853af1a568c0100754730450'
+            '22100fd73838a3d04d2c470cb7c16077015da7f912d7ca34b07d6e750a281de350e6c02203c5299cf8ce70e'
+            '977b424c0cbf01d3166462457c7be71b95eb1174dc5edd0c8e2c417a447637666d726639384666795468704'
+            '863486d75454d3830765143693034706e4d6f68427649747159380000001900001976a914e62640bbb1029f'
+            '3409a246091536bd0c1b5f997888ac0000004b00001976a91471fe2456c0dc242a022478d4928707c472094'
+            '3a588ac403a0000000000006065833b02000001e65f6691d25f7a440d0575457e356476074f02a1a7813fff'
+            'f27fca673700000000445a1be958502bd6126efe99fbf1f01626b936b36890f5a11b40ff233c2b459f'
+        )
+        response = yield self.web.post('push_tx', {'hex_tx': tx_hex})
+        data = response.json_value()
+        self.assertTrue(data['success'])
