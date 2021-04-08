@@ -437,7 +437,7 @@ class HathorManager:
                 assert tx_meta.validation.is_at_least_basic()
                 if not tx_meta.voided_by:
                     # XXX: this might not be needed when making a full init because the consensus should already have
-                    self.tx_storage.add_new_to_block_height_index(tx_meta.height, tx.hash)
+                    self.tx_storage.add_reorg_to_block_height_index(tx_meta.height, tx.hash, tx.timestamp)
 
                 # Check if it's a checkpoint block
                 if tx_meta.height in checkpoint_heights:

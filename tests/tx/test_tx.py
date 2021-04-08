@@ -796,7 +796,7 @@ class BaseTransactionTest(unittest.TestCase):
         reward_block.resolve()
         self.assertTrue(self.manager.propagate_tx(reward_block))
         # reward cannot be spent while not enough blocks are added
-        for _ in range(settings.REWARD_SPEND_MIN_BLOCKS):
+        for _ in range(settings.REWARD_SPEND_MIN_BLOCKS + 2):
             tx = self._spend_reward_tx(self.manager, reward_block)
             with self.assertRaises(InvalidNewTransaction):
                 self.manager.propagate_tx(tx, fails_silently=False)

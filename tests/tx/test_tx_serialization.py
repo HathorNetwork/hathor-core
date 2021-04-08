@@ -63,7 +63,8 @@ class _SerializationTest(unittest.TestCase):
 
     def test_serialization_tips(self):
         from itertools import chain
-        for tx_hash in chain(self.manager.tx_storage._tx_tips_index, self.tx_storage._block_height_index._index):
+        for tx_hash in chain(self.manager.tx_storage._tx_tips_index,
+                             (entry.hash for entry in self.tx_storage._block_height_index._index)):
             tx = self.tx_storage.get_transaction(tx_hash)
             tx_re = self._reserialize(tx)
             self._assertTxEq(tx, tx_re)

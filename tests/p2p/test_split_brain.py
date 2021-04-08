@@ -346,7 +346,6 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
 
     # XXX: should test_split_brain be ported to sync-v2?
 
-    @pytest.mark.skip(reason='TODO: fixme before enabling sync-v2, broken because of reward-lock verification')
     def test_split_brain_no_double_spending(self):
         manager1 = self.create_peer(self.network, unlock_wallet=True)
         manager1.avg_time_between_blocks = 3

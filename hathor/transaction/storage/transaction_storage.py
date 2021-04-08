@@ -410,9 +410,9 @@ class TransactionStorage(ABC):
 
         block_height = height
         side_chain_block = block
-        add_to_cache: List[Tuple[int, bytes]] = []
+        add_to_cache: List[Tuple[int, bytes, int]] = []
         while self.get_from_block_height_index(block_height) != side_chain_block.hash:
-            add_to_cache.append((block_height, not_none(side_chain_block.hash)))
+            add_to_cache.append((block_height, not_none(side_chain_block.hash), side_chain_block.timestamp))
 
             side_chain_block = side_chain_block.get_block_parent()
             new_block_height = side_chain_block.get_metadata().height
@@ -420,11 +420,11 @@ class TransactionStorage(ABC):
             block_height = new_block_height
 
         # Reverse the data because I was adding in the array from the highest block
-        reversed_add_to_cache = add_to_cache[::-1]
+        reversed_add_to_cache = reversed(add_to_cache)
 
-        for height, tx_hash in reversed_add_to_cache:
+        for height, block_hash, block_timestamp in reversed_add_to_cache:
             # Add it to the index
-            self.add_reorg_to_block_height_index(height, tx_hash)
+            self.add_reorg_to_block_height_index(height, block_hash, block_timestamp)
 
     # all other methods:
 
@@ -642,26 +642,14 @@ class TransactionStorage(ABC):
         When more than one block is returned, it means that there are multiple best chains and
         you can choose any of them.
         """
-        if timestamp is None and not skip_cache:
-            return self._parent_blocks_index.copy()
-
-        # XXX: legacy method using interval tree:
-
-        best_score = 0.0
-        best_tip_blocks: List[bytes] = []
-
-        for block_hash in (x.data for x in self.get_block_tips(timestamp)):
-            meta = self.get_metadata(block_hash)
-            assert meta is not None
-            if meta.voided_by and meta.voided_by != set([block_hash]):
-                # If anyone but the block itself is voiding this block, then it must be skipped.
-                continue
-            if abs(meta.score - best_score) < 1e-10:
-                best_tip_blocks.append(block_hash)
-            elif meta.score > best_score:
-                best_score = meta.score
-                best_tip_blocks = [block_hash]
-        return best_tip_blocks
+        blocks = list(self._parent_blocks_index)
+        if timestamp is not None:
+            previous_best_block = self._block_height_index.search_previous_best_block(timestamp)
+            if previous_best_block is not None:
+                return [previous_best_block]
+            else:
+                return []
+        return blocks
 
     def get_weight_best_block(self) -> float:
         heads = [self.get_transaction(h) for h in self.get_best_block_tips()]
@@ -916,14 +904,14 @@ class TransactionStorage(ABC):
         """
         return self.get_value(self._clean_db_attribute) == '1'
 
-    def add_new_to_block_height_index(self, height: int, block_hash: bytes) -> None:
+    def add_new_to_block_height_index(self, height: int, block_hash: bytes, timestamp: int) -> None:
         """Add a new block to the height index that must not result in a re-org"""
-        self._block_height_index.add(height, block_hash)
+        self._block_height_index.add(height, block_hash, timestamp)
 
-    def add_reorg_to_block_height_index(self, height: int, block_hash: bytes) -> None:
+    def add_reorg_to_block_height_index(self, height: int, block_hash: bytes, timestamp: int) -> None:
         """Add a new block to the height index that can result in a re-org"""
         # XXX: in the future we can make this more strict so that it MUST result in a re-orgr
-        self._block_height_index.add(height, block_hash, can_reorg=True)
+        self._block_height_index.add(height, block_hash, timestamp, can_reorg=True)
 
     def get_from_block_height_index(self, height: int) -> bytes:
         return self._block_height_index.get(height)

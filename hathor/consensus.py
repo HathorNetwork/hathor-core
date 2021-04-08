@@ -13,14 +13,14 @@
 # limitations under the License.
 
 from itertools import chain
-from typing import Iterable, List, Optional, Set, cast
+from typing import Iterable, List, Optional, Set, Tuple, cast
 
 from structlog import get_logger
 
 from hathor.conf import HathorSettings
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, Transaction, TxInput, sum_weights
-from hathor.util import classproperty
+from hathor.util import classproperty, not_none
 
 logger = get_logger()
 settings = HathorSettings()
@@ -184,7 +184,7 @@ class BlockConsensusAlgorithm:
             meta = block.get_metadata()
             if not meta.voided_by:
                 storage._best_block_tips = [block.hash]
-                storage.add_new_to_block_height_index(meta.height, block.hash)
+                storage.add_new_to_block_height_index(meta.height, block.hash, block.timestamp)
             # The following assert must be true, but it is commented out for performance reasons.
             #     assert len(storage.get_best_block_tips(skip_cache=True)) == 1
         else:
@@ -253,12 +253,35 @@ class BlockConsensusAlgorithm:
                     # assert best_block.hash is not None
                     # best_meta = best_block.get_metadata()
                     # self.log.debug('index previous best block', height=best_meta.height, block=best_block.hash_hex)
-                    # storage.add_new_to_block_height_index(best_meta.height, best_block.hash)
+                    # storage.add_new_to_block_height_index(best_meta.height, best_block.hash, block.timestamp)
 
         # Uncomment the following lines to check that the cache update is working properly.
         # You shouldn't run this test in production because it dampens performance.
         #     v = storage.get_best_block_tips(skip_cache=True)
         #     assert v == storage._best_block_tips
+
+    def update_block_height_cache_new_chain(self, height: int, block: Block) -> None:
+        """ When we have a new winner chain we must update all the height index
+            until the first height with a common block
+        """
+        storage = not_none(block.storage)
+        assert storage.get_from_block_height_index(height) != block.hash
+
+        block_height = height
+        side_chain_block = block
+        add_to_cache: List[Tuple[int, bytes, int]] = []
+        while storage.get_from_block_height_index(block_height) != side_chain_block.hash:
+            add_to_cache.append((block_height, not_none(side_chain_block.hash), side_chain_block.timestamp))
+
+            side_chain_block = side_chain_block.get_block_parent()
+            block_height = side_chain_block.get_metadata().height
+
+        # Reverse the data because I was adding in the array from the highest block
+        reversed_add_to_cache = reversed(add_to_cache)
+
+        for height, block_hash, block_timestamp in reversed_add_to_cache:
+            # Add it to the index
+            storage.add_new_to_block_height_index(height, block_hash, block_timestamp)
 
     def union_voided_by_from_parents(self, block: Block) -> Set[bytes]:
         """Return the union of the voided_by of block's parents.
