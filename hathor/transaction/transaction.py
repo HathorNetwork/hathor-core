@@ -36,6 +36,7 @@ from hathor.transaction.exceptions import (
     ScriptError,
     TimestampError,
     TooManyInputs,
+    TooManySigOps,
 )
 from hathor.transaction.util import VerboseCallback, get_deposit_amount, get_withdraw_amount, unpack, unpack_len
 
@@ -278,6 +279,7 @@ class Transaction(BaseTransaction):
             # TODO do genesis validation
             return
         self.verify_without_storage()
+        self.verify_sigops_input()
         self.verify_inputs()  # need to run verify_inputs first to check if all inputs exist
         self.verify_parents()
         self.verify_sum()
@@ -287,6 +289,8 @@ class Transaction(BaseTransaction):
         self.verify_number_of_inputs()
         self.verify_number_of_outputs()
         self.verify_outputs()
+        self.verify_sigops_output()
+        self.verify_sigops_input()
         self.verify_inputs(skip_script=True)  # need to run verify_inputs first to check if all inputs exist
         self.verify_parents()
         self.verify_sum()
@@ -297,6 +301,7 @@ class Transaction(BaseTransaction):
         self.verify_pow()
         self.verify_number_of_inputs()
         self.verify_outputs()
+        self.verify_sigops_output()
 
     def verify_number_of_inputs(self) -> None:
         """Verify number of inputs is in a valid range"""
@@ -306,6 +311,27 @@ class Transaction(BaseTransaction):
         if len(self.inputs) == 0:
             if not self.is_genesis:
                 raise NoInputError('Transaction must have at least one input')
+
+    def verify_sigops_input(self) -> None:
+        """ Count sig operations on all inputs and verify that the total sum is below the limit
+        """
+        from hathor.transaction.scripts import get_sigops_count
+        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+        n_txops = 0
+        for tx_input in self.inputs:
+            try:
+                spent_tx = self.get_spent_tx(tx_input)
+            except TransactionDoesNotExist:
+                raise InexistentInput('Input tx does not exist: {}'.format(tx_input.tx_id.hex()))
+            assert spent_tx.hash is not None
+            if tx_input.index >= len(spent_tx.outputs):
+                raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
+                    tx_input.tx_id.hex(), tx_input.index))
+            n_txops += get_sigops_count(tx_input.data, spent_tx.outputs[tx_input.index].script)
+
+        if n_txops > settings.MAX_TX_SIGOPS_INPUT:
+            raise TooManySigOps(
+                'TX[{}]: Max number of sigops for inputs exceeded ({})'.format(self.hash_hex, n_txops))
 
     def verify_outputs(self) -> None:
         """Verify outputs reference an existing token uid in the tokens list

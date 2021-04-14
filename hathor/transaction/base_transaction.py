@@ -39,6 +39,7 @@ from hathor.transaction.exceptions import (
     PowError,
     TimestampError,
     TooManyOutputs,
+    TooManySigOps,
     TxValidationError,
     WeightError,
 )
@@ -522,6 +523,19 @@ class BaseTransaction(ABC):
         """Verify number of outputs does not exceeds the limit"""
         if len(self.outputs) > MAX_NUM_OUTPUTS:
             raise TooManyOutputs('Maximum number of outputs exceeded')
+
+    def verify_sigops_output(self) -> None:
+        """ Count sig operations on all outputs and verify that the total sum is below the limit
+        """
+        from hathor.transaction.scripts import get_sigops_count
+        n_txops = 0
+
+        for tx_output in self.outputs:
+            n_txops += get_sigops_count(tx_output.script)
+
+        if n_txops > settings.MAX_TX_SIGOPS_OUTPUT:
+            raise TooManySigOps('TX[{}]: Maximum number of sigops for all outputs exceeded ({})'.format(
+                self.hash_hex, n_txops))
 
     def verify_outputs(self) -> None:
         """Verify there are no hathor authority UTXOs and outputs are all positive

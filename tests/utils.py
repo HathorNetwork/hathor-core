@@ -20,7 +20,7 @@ from hathor.manager import HathorEvents, HathorManager
 from hathor.p2p.utils import generate_certificate
 from hathor.pubsub import EventArguments
 from hathor.transaction import Transaction, TxInput, TxOutput, genesis
-from hathor.transaction.scripts import P2PKH
+from hathor.transaction.scripts import P2PKH, HathorScript, Opcode
 from hathor.transaction.storage import (
     TransactionMemoryStorage,
     TransactionRemoteStorage,
@@ -756,3 +756,18 @@ def start_remote_storage(tx_storage=None):
     tx_storage.connect_to(port)
 
     return tx_storage, _server
+
+
+def create_script_with_sigops(nops: int) -> bytes:
+    """ Generate a script with multiple OP_CHECKMULTISIG that amounts to `nops` sigops
+    """
+    hscript = HathorScript()
+    # each step adds 16 sigops up to `nops`, but not exceding nops
+    for _ in range(nops // 16):
+        hscript.addOpcode(Opcode.OP_16)
+        hscript.addOpcode(Opcode.OP_CHECKMULTISIG)
+
+    # add `nops % 16` sigops
+    hscript.addOpcode(getattr(Opcode, 'OP_{}'.format(nops % 16)))
+    hscript.addOpcode(Opcode.OP_CHECKMULTISIG)
+    return hscript.data

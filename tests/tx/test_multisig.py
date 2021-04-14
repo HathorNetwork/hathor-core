@@ -95,7 +95,7 @@ class MultisigTestCase(unittest.TestCase):
         tx.inputs = [tx_input]
 
         signatures = []
-        for private_key_hex in self.private_keys:
+        for private_key_hex in self.private_keys[:2]:
             signature = generate_signature(tx, bytes.fromhex(private_key_hex), password=b'1234')
             signatures.append(signature)
 

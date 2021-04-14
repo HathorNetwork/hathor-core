@@ -253,6 +253,19 @@ class HathorSettings(NamedTuple):
     # Maximum size of each txin's data (in bytes)
     MAX_INPUT_DATA_SIZE: int = 1024
 
+    # Maximum number of pubkeys per OP_CHECKMULTISIG
+    MAX_MULTISIG_PUBKEYS: int = 20
+
+    # Maximum number of signatures per OP_CHECKMULTISIG
+    MAX_MULTISIG_SIGNATURES: int = 15
+
+    # Maximum number of sig operations of all inputs on a given tx
+    # including the redeemScript in case of MultiSig
+    MAX_TX_SIGOPS_INPUT: int = 255*5
+
+    # Maximum number of sig operations of all outputs on a given tx
+    MAX_TX_SIGOPS_OUTPUT: int = 255*5
+
     # Maximum number of transactions returned on addresses history API
     MAX_TX_ADDRESSES_HISTORY: int = 150
 

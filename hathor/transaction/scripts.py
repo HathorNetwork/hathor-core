@@ -20,7 +20,7 @@ import re
 import struct
 from abc import ABC, abstractmethod
 from enum import IntEnum
-from typing import Any, Callable, Dict, List, NamedTuple, Optional, Pattern, Type, Union
+from typing import Any, Callable, Dict, Generator, List, NamedTuple, Optional, Pattern, Type, Union
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
@@ -34,12 +34,14 @@ from hathor.crypto.util import (
     get_address_b58_from_redeem_script_hash,
     get_hash160,
     get_public_key_from_bytes_compressed,
+    is_pubkey_compressed,
 )
 from hathor.transaction import BaseTransaction, Transaction, TxInput
 from hathor.transaction.exceptions import (
     DataIndexError,
     EqualVerifyFailed,
     FinalStackInvalid,
+    InvalidScriptError,
     InvalidStackData,
     MissingStackItems,
     OracleChecksigFailed,
@@ -64,6 +66,11 @@ class ScriptExtras(NamedTuple):
     tx: Transaction
     txin: TxInput
     spent_tx: BaseTransaction
+
+
+class OpcodePosition(NamedTuple):
+    opcode: int
+    position: int
 
 
 def re_compile(pattern: str) -> Pattern[bytes]:
@@ -151,6 +158,37 @@ class Opcode(IntEnum):
     OP_DATA_GREATERTHAN = 0xC1
     OP_FIND_P2PKH = 0xD0
     OP_DATA_MATCH_VALUE = 0xD1
+
+    @classmethod
+    def is_pushdata(cls, opcode: int) -> bool:
+        """ Check if `opcode` represents an operation of pushing data on stack
+        """
+        if 1 <= opcode <= 75:
+            # case: push [1,75] bytes on stack (op_pushdata)
+            return True
+        elif cls.OP_0 <= opcode <= cls.OP_16:
+            # case: push integer on stack (op_integer)
+            return True
+        elif opcode == cls.OP_PUSHDATA1:
+            # case: op_pushdata1
+            return True
+        # ...Any other case
+        return False
+
+    @classmethod
+    def is_valid_opcode(cls, opcode: int) -> bool:
+        """ Check if `opcode` is valid
+            - check for pushdata first to validate unconventional opcodes for data
+            - check for conventional opcode
+        """
+        if cls.is_pushdata(opcode):
+            return True
+        try:
+            cls(opcode)
+        except ValueError:
+            return False
+        else:
+            return True
 
 
 class HathorScript:
@@ -371,6 +409,24 @@ class MultiSig(BaseScript):
         return self.timelock
 
     @classmethod
+    def get_multisig_redeem_script_pos(cls, input_data: bytes) -> int:
+        """ Get the position of the opcode that pushed the redeem_script on the stack
+
+        :param input_data: data from the input being evaluated
+        :type input_data: bytes
+
+        :return: position of pushdata for redeem_script
+        :rtype: int
+        """
+        pos = 0
+        last_pos = 0
+        data_len = len(input_data)
+        while pos < data_len:
+            last_pos = pos
+            _, pos = get_script_op(pos, input_data)
+        return last_pos
+
+    @classmethod
     def create_output_script(cls, address: bytes, timelock: Optional[Any] = None) -> bytes:
         """
         :param address: address to send tokens
@@ -458,6 +514,8 @@ class MultiSig(BaseScript):
                 pos = op_pushdata(pos, input_data, stack)
             elif opcode == Opcode.OP_PUSHDATA1:
                 pos = op_pushdata1(pos, input_data, stack)
+            else:
+                pos += 1
 
         redeem_script = stack[-1]
         assert isinstance(redeem_script, bytes)
@@ -683,10 +741,231 @@ def parse_address_script(script: bytes) -> Optional[Union[P2PKH, MultiSig]]:
     return None
 
 
+def decode_opn(opcode: int) -> int:
+    """ Decode integer opcode (OP_N) to its integer value
+
+        :param opcode: the opcode to convert
+        :type opcode: bytes
+
+        :raises InvalidScriptError: case opcode is not a valid OP_N
+
+        :return: int value for opcode param
+        :rtype: int
+    """
+    int_val = opcode - Opcode.OP_0
+    if not (0 <= int_val <= 16):
+        raise InvalidScriptError('unknown opcode {}'.format(opcode))
+    return int_val
+
+
+def get_data_bytes(position: int, length: int, data: bytes) -> bytes:
+    """ Extract `length` bytes from `data` starting at `position`
+
+        :param position: start position of bytes string to extract
+        :type position: int
+
+        :param length: len of bytes str to extract
+        :type length: int
+
+        :param data: script containing data to extract
+        :type data: bytes
+
+        :raises OutOfData: when trying to read out of script
+
+        :return: bytes string of extracted data
+        :rtype: bytes
+    """
+    if not (0 < length <= len(data)):
+        raise OutOfData("length ({}) should be from 0 up to data length".format(length))
+    if not (0 < position < len(data)):
+        raise OutOfData("position should be inside data")
+    if (position+length) > len(data):
+        raise OutOfData('trying to read {} bytes starting at {}, available {}'.format(length, position, len(data)))
+    return data[position:position+length]
+
+
+def get_data_single_byte(position: int, data: bytes) -> int:
+    """ Extract 1 byte from `data` at `position`
+
+        :param position: position of byte to extract
+        :type position: int
+
+        :param data: script containing data to extract
+        :type data: bytes
+
+        :raises OutOfData: when trying to read out of script
+
+        :return: extracted byte
+        :rtype: int
+    """
+    if not (0 <= position < len(data)):
+        raise OutOfData("trying to read a byte at {} outside of data, available {}".format(position, len(data)))
+    return data[position]
+
+
+def get_script_op(pos: int, data: bytes, stack: Optional[Stack] = None) -> OpcodePosition:
+    """ Interpret opcode at `pos` and return the opcode and the position of the next opcode
+        if opcode is a pushdata, push extracted data to stack if there is a stack
+
+        :param pos: position of opcode to read
+        :type pos: int
+
+        :param data: script to be evaluated that contains data and opcodes
+        :type data: bytes
+
+        :param stack: stack to put any extracted data or None if not interested on the extracted data
+        :type stack: Union[Stack, None]
+
+        :raises OutOfData: when trying to read out of script
+        :raises InvalidScriptError: when opcode in `pos` is invalid
+
+        :return: extracted opcode at `pos` and position of next opcode on `data`
+        :rtype: OpcodePosition
+    """
+    opcode = get_data_single_byte(pos, data)
+
+    # validate opcode
+    if not Opcode.is_valid_opcode(opcode):
+        raise InvalidScriptError('Invalid Opcode ({}) at position {} in {!r}'.format(opcode, pos, data))
+
+    to_append: Union[bytes, int, str]
+    if 1 <= opcode <= 75:
+        # pushdata: push up to 75 bytes on stack
+        pos += 1
+        to_append = get_data_bytes(pos, opcode, data)
+        pos += opcode
+        if stack is not None:
+            stack.append(to_append)
+    elif opcode == Opcode.OP_PUSHDATA1:
+        # pushdata1: push up to 255 bytes on stack
+        pos += 1
+        length = get_data_single_byte(pos, data)
+        pos += 1
+        to_append = get_data_bytes(pos, length, data)
+        pos += length
+        if stack is not None:
+            stack.append(to_append)
+    elif Opcode.OP_0 <= opcode <= Opcode.OP_16:
+        # OP_N: push and  integer (0 to 16) to stack
+        # OP_N in [OP_0, OP_16]
+        to_append = decode_opn(opcode)
+        pos += 1
+        if stack is not None:
+            stack.append(to_append)
+    else:
+        # if opcode is a function and not a pushdata, move pos to next byte (next opcode)
+        pos += 1
+
+    return OpcodePosition(opcode=opcode, position=pos)
+
+
+class _ScriptOperation(NamedTuple):
+    opcode: Union[Opcode, int]
+    position: int
+    data: Union[None, bytes, int, str]
+
+
+def parse_script_ops(data: bytes) -> Generator[_ScriptOperation, None, None]:
+    """ Parse script yielding each operation on the script
+        this is an utility function to make scripts human readable for debugging and dev
+
+        :param data: script to parse that contains data and opcodes
+        :type data: bytes
+
+        :return: generator for operations on script
+        :rtype: Generator[_ScriptOperation, None, None]
+    """
+    op: Union[Opcode, int]
+
+    pos = 0
+    last_pos = 0
+    data_len = len(data)
+    stack: Stack = []
+    while pos < data_len:
+        last_pos = pos
+        opcode, pos = get_script_op(pos, data, stack)
+        try:
+            op = Opcode(opcode)
+        except ValueError:
+            op = opcode
+        if len(stack) != 0:
+            yield _ScriptOperation(opcode=op, position=last_pos, data=stack.pop())
+        else:
+            yield _ScriptOperation(opcode=op, position=last_pos, data=None)
+
+
+def count_sigops(data: bytes) -> int:
+    """ Count number of signature operations on the script
+
+        :param data: script to parse that contains data and opcodes
+        :type data: bytes
+
+        :raises OutOfData: when trying to read out of script
+        :raises InvalidScriptError: when an invalid opcode is found
+        :raises InvalidScriptError: when the previous opcode to an
+                OP_CHECKMULTISIG is not an integer (number of operations to execute)
+
+        :return: number of signature operations the script would do if it was executed
+        :rtype: int
+    """
+    n_ops: int = 0
+    data_len: int = len(data)
+    pos: int = 0
+    last_opcode: Union[int, None] = None
+
+    while pos < data_len:
+        opcode, pos = get_script_op(pos, data)
+
+        if opcode == Opcode.OP_CHECKSIG:
+            n_ops += 1
+        elif opcode == Opcode.OP_CHECKMULTISIG:
+            assert isinstance(last_opcode, int)
+            if Opcode.OP_0 <= last_opcode <= Opcode.OP_16:
+                # Conventional OP_CHECKMULTISIG: <sign_1>...<sign_m> <m> <pubkey_1>...<pubkey_n> <n> <checkmultisig>
+                # this function will run op_checksig with each pair (sign_x, pubkey_y) until all signatures
+                # are verified so the worst case scenario is n op_checksig and the best m op_checksig
+                # we know m <= n, so for now we are counting n operations (the upper limit)
+                n_ops += decode_opn(last_opcode)
+            else:
+                # Unconventional OP_CHECKMULTISIG:
+                # We count the limit for PUBKEYS, since this is also the upper limit on signature operations
+                # that any op_checkmultisig would run
+                n_ops += settings.MAX_MULTISIG_PUBKEYS
+        last_opcode = opcode
+    return n_ops
+
+
+def get_sigops_count(data: bytes, output_script: Optional[bytes] = None) -> int:
+    """ Count number of signature operations on the script, if it's an input script and the spent output is passed
+        check the spent output for MultiSig and count operations on redeem_script too
+
+        :param data: script to parse with opcodes
+        :type data: bytes
+
+        :param output_script: spent output script if data was from an TxIn
+        :type output_script: Union[None, bytes]
+
+        :raises OutOfData: when trying to read out of script
+        :raises InvalidScriptError: when an invalid opcode is found
+
+        :return: number of signature operations the script would do if it was executed
+        :rtype: int
+    """
+    # If validating an input, should check the spent_tx for MultiSig
+    if output_script is not None:
+        # If it's multisig we have to validate the redeem_script sigop count
+        if MultiSig.re_match.search(output_script):
+            multisig_data = MultiSig.get_multisig_data(data)
+            # input_script + redeem_script
+            return count_sigops(multisig_data)
+
+    return count_sigops(data)
+
+
 def execute_eval(data: bytes, log: List[str], extras: ScriptExtras) -> None:
     """ Execute eval from data executing opcode methods
 
-        :param data: data to be evaluate that contains data and opcodes
+        :param data: data to be evaluated that contains data and opcodes
         :type data: bytes
 
         :param log: List of log messages
@@ -702,20 +981,9 @@ def execute_eval(data: bytes, log: List[str], extras: ScriptExtras) -> None:
     data_len = len(data)
     pos = 0
     while pos < data_len:
-        opcode = data[pos]
-        if (opcode >= 1 and opcode <= 75):
-            pos = op_pushdata(pos, data, stack)
+        opcode, pos = get_script_op(pos, data, stack)
+        if Opcode.is_pushdata(opcode):
             continue
-        elif opcode == Opcode.OP_PUSHDATA1:
-            pos = op_pushdata1(pos, data, stack)
-            continue
-
-        # Checking if the opcode is an integer push (OP_0 - OP_16)
-        if opcode >= Opcode.OP_0 and opcode <= Opcode.OP_16:
-            op_integer(opcode, stack, log, extras)
-            pos += 1
-            continue
-
         # this is an opcode manipulating the stack
         fn = MAP_OPCODE_TO_FN.get(opcode, None)
         if fn is None:
@@ -723,21 +991,25 @@ def execute_eval(data: bytes, log: List[str], extras: ScriptExtras) -> None:
             raise ScriptError('unknown opcode')
 
         fn(stack, log, extras)
-        pos += 1
 
     evaluate_final_stack(stack, log)
 
 
 def evaluate_final_stack(stack: Stack, log: List[str]) -> None:
-    """ Checks the final state of the stack. It's valid if:
-          1. it's empty
-          2. top item on stack is True (non zero value)
+    """ Checks the final state of the stack.
+        It's valid if only has 1 value on stack and that value is 1 (true)
     """
-    if len(stack) > 0:
-        if stack.pop() == 0:
-            # stack left with False value
-            log.append('Stack left with False value')
-            raise FinalStackInvalid('\n'.join(log))
+    if len(stack) == 0:
+        log.append('Empty Stack left')
+        raise FinalStackInvalid('\n'.join(log))
+    if len(stack) > 1:
+        log.append('Stack left with more than one value')
+        raise FinalStackInvalid('\n'.join(log))
+    # check if value left on stack is 1 (true)
+    if stack.pop() != 1:
+        # stack left with non-True value
+        log.append('Stack left with False value')
+        raise FinalStackInvalid('\n'.join(log))
 
 
 def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction) -> None:
@@ -757,19 +1029,26 @@ def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction) -> No
     """
     input_data = txin.data
     output_script = spent_tx.outputs[txin.index].script
-
-    # merge input_data and output_script
-    full_data = input_data + output_script
     log: List[str] = []
     extras = ScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
-    execute_eval(full_data, log, extras)
 
-    # If it's multisig we still have to validate the script in input data
     if MultiSig.re_match.search(output_script):
-        # First execute_eval will check if this redeem_script is valid, so I can assume it is here
-        # So now we can execute another execute_eval only for the input_data (signatures and redeem script)
+        # For MultiSig there are 2 executions:
+        # First we need to evaluate that redeem_script matches redeem_script_hash
+        # we can't use input_data + output_script because it will end with an invalid stack
+        # i.e. the signatures will still be on the stack after ouput_script is executed
+        redeem_script_pos = MultiSig.get_multisig_redeem_script_pos(input_data)
+        full_data = txin.data[redeem_script_pos:] + output_script
+        execute_eval(full_data, log, extras)
+
+        # Second, we need to validate that the signatures on the input_data solves the redeem_script
+        # we pop and append the redeem_script to the input_data and execute it
         multisig_data = MultiSig.get_multisig_data(extras.txin.data)
         execute_eval(multisig_data, log, extras)
+    else:
+        # merge input_data and output_script
+        full_data = input_data + output_script
+        execute_eval(full_data, log, extras)
 
 
 def get_pushdata(data: bytes) -> bytes:
@@ -857,14 +1136,10 @@ def op_pushdata(position: int, full_data: bytes, stack: Stack) -> int:
     :return: new position to be read from full_data
     :rtype: int
     """
-    length = full_data[position]
+
+    length, new_pos = get_script_op(position, full_data, stack)
     assert length <= 75
-    position += 1
-    if (position + length) > len(full_data):
-        raise OutOfData('trying to read {} bytes starting at {}, available {}'.format(
-            length, position, len(full_data)))
-    stack.append(full_data[position:position + length])
-    return position + length
+    return new_pos
 
 
 def op_pushdata1(position: int, full_data: bytes, stack: Stack) -> int:
@@ -884,17 +1159,9 @@ def op_pushdata1(position: int, full_data: bytes, stack: Stack) -> int:
     :return: new position to be read from full_data
     :rtype: int
     """
-    data_len = len(full_data)
-    # next position is data length to push
-    position += 1
-    if position >= data_len:
-        raise OutOfData('trying to read byte {}, available {}'.format(position, data_len))
-    length = full_data[position]
-    if (position + length) >= data_len:
-        raise OutOfData('trying to read {} bytes starting at {}, available {}'.format(length, position, data_len))
-    position += 1
-    stack.append(full_data[position:position + length])
-    return position + length
+    opcode, new_pos = get_script_op(position, full_data, stack)
+    assert opcode == Opcode.OP_PUSHDATA1
+    return new_pos
 
 
 def op_dup(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
@@ -939,6 +1206,8 @@ def op_equalverify(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     :raises MissingStackItems: if there aren't 2 element on stack
     :raises EqualVerifyFailed: items don't match
     """
+    if len(stack) < 2:
+        raise MissingStackItems('OP_EQUALVERIFY: need 2 elements on stack, currently {}'.format(len(stack)))
     op_equal(stack, log, extras)
     is_equal = stack.pop()
     if not is_equal:
@@ -954,7 +1223,7 @@ def op_equal(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     :type stack: List[]
     """
     if len(stack) < 2:
-        raise MissingStackItems('OP_EQUALVERIFY: need 2 elements on stack, currently {}')
+        raise MissingStackItems('OP_EQUAL: need 2 elements on stack, currently {}'.format(len(stack)))
     elem1 = stack.pop()
     elem2 = stack.pop()
     assert isinstance(elem1, bytes)
@@ -974,6 +1243,7 @@ def op_checksig(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     :type stack: List[]
 
     :raises MissingStackItems: if there aren't 2 element on stack
+    :raises ScriptError: if pubkey on stack is not a compressed public key
 
     :return: if they don't match, return error message
     :rtype: string
@@ -984,7 +1254,14 @@ def op_checksig(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     signature = stack.pop()
     assert isinstance(pubkey, bytes)
     assert isinstance(signature, bytes)
-    public_key = get_public_key_from_bytes_compressed(pubkey)
+
+    if not is_pubkey_compressed(pubkey):
+        raise ScriptError('OP_CHECKSIG: pubkey is not a compressed public key')
+    try:
+        public_key = get_public_key_from_bytes_compressed(pubkey)
+    except ValueError as e:
+        # pubkey is not compressed public key
+        raise ScriptError('OP_CHECKSIG: pubkey is not a public key') from e
     try:
         public_key.verify(signature, extras.tx.get_sighash_all_data(), ec.ECDSA(hashes.SHA256()))
         # valid, push true to stack
@@ -1030,7 +1307,14 @@ def op_checkdatasig(stack: Stack, log: List[str], extras: ScriptExtras) -> None:
     assert isinstance(pubkey, bytes)
     assert isinstance(signature, bytes)
     assert isinstance(data, bytes)
-    public_key = get_public_key_from_bytes_compressed(pubkey)
+
+    if not is_pubkey_compressed(pubkey):
+        raise ScriptError('OP_CHECKDATASIG: pubkey is not a compressed public key')
+    try:
+        public_key = get_public_key_from_bytes_compressed(pubkey)
+    except ValueError as e:
+        # pubkey is not compressed public key
+        raise ScriptError('OP_CHECKDATASIG: pubkey is not a public key') from e
     try:
         public_key.verify(signature, data, ec.ECDSA(hashes.SHA256()))
         # valid, push true to stack
@@ -1261,6 +1545,13 @@ def op_checkmultisig(stack: Stack, log: List[str], extras: ScriptExtras) -> None
     if not isinstance(pubkey_count, int):
         raise InvalidStackData('OP_CHECKMULTISIG: pubkey count should be an integer')
 
+    if pubkey_count > settings.MAX_MULTISIG_PUBKEYS:
+        raise InvalidStackData('OP_CHECKMULTISIG: pubkey count ({}) exceeded the limit ({})'.format(
+                pubkey_count,
+                settings.MAX_MULTISIG_PUBKEYS,
+                )
+            )
+
     if len(stack) < pubkey_count:
         raise MissingStackItems('OP_CHECKMULTISIG: not enough public keys on the stack')
 
@@ -1274,11 +1565,17 @@ def op_checkmultisig(stack: Stack, log: List[str], extras: ScriptExtras) -> None
         raise MissingStackItems('OP_CHECKMULTISIG: less elements than should on the stack')
 
     # Pop the quantity of signatures required
-    # We don't need to check that this quantity is the minimum required because we already checked the redeem_script
     signatures_count = stack.pop()
 
     if not isinstance(signatures_count, int):
         raise InvalidStackData('OP_CHECKMULTISIG: signatures count should be an integer')
+
+    if signatures_count > settings.MAX_MULTISIG_SIGNATURES:
+        raise InvalidStackData('OP_CHECKMULTISIG: signature count ({}) exceeded the limit ({})'.format(
+                signatures_count,
+                settings.MAX_MULTISIG_SIGNATURES,
+                )
+            )
 
     # Error if we don't have the minimum quantity of signatures
     if len(stack) < signatures_count:
@@ -1325,10 +1622,10 @@ def op_integer(opcode: int, stack: Stack, log: List[str], extras: ScriptExtras) 
         :param stack: the stack used when evaluating the script
         :type stack: List[]
     """
-    to_append = opcode - Opcode.OP_0
-    if to_append < 0 or to_append > 16:
-        raise ScriptError('unknown opcode {}'.format(opcode))
-    stack.append(to_append)
+    try:
+        stack.append(decode_opn(opcode))
+    except InvalidScriptError as e:
+        raise ScriptError(e) from e
 
 
 MAP_OPCODE_TO_FN: Dict[int, Callable[[Stack, List[str], ScriptExtras], None]] = {

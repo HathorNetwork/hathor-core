@@ -259,6 +259,7 @@ class Block(BaseTransaction):
         self.verify_no_inputs()
         self.verify_outputs()
         self.verify_data()
+        self.verify_sigops_output()
 
     def get_base_hash(self) -> bytes:
         from hathor.merged_mining.bitcoin import sha256d_hash

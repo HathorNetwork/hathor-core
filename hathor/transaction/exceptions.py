@@ -56,6 +56,14 @@ class NoInputError(TxValidationError):
     """There is not input"""
 
 
+class InvalidScriptError(TxValidationError):
+    """Invalid script found when parsing"""
+
+
+class TooManySigOps(TxValidationError):
+    """Signature operations limit exceeded"""
+
+
 class TooManyInputs(TxValidationError):
     """More than 256 inputs"""
 

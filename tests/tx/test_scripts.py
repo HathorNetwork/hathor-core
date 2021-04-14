@@ -8,6 +8,7 @@ from hathor.transaction.exceptions import (
     DataIndexError,
     EqualVerifyFailed,
     FinalStackInvalid,
+    InvalidScriptError,
     InvalidStackData,
     MissingStackItems,
     OracleChecksigFailed,
@@ -23,11 +24,17 @@ from hathor.transaction.scripts import (
     Opcode,
     ScriptExtras,
     binary_to_int,
+    count_sigops,
     create_base_script,
     create_output_script,
+    decode_opn,
     evaluate_final_stack,
+    get_data_bytes,
+    get_data_single_byte,
     get_data_value,
     get_pushdata,
+    get_script_op,
+    get_sigops_count,
     op_checkdatasig,
     op_checkmultisig,
     op_checksig,
@@ -49,7 +56,7 @@ from hathor.transaction.scripts import (
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet import HDWallet
 from tests import unittest
-from tests.utils import get_genesis_key
+from tests.utils import BURN_ADDRESS, get_genesis_key
 
 
 class TestScripts(unittest.TestCase):
@@ -104,7 +111,6 @@ class TestScripts(unittest.TestCase):
         data = [0x00] * 20
         s.pushData(bytes(data))
         s.data = s.data.replace(b'\x14', b'\x15')
-        print(s.data)
         match = re_match.search(s.data)
         self.assertIsNone(match)
 
@@ -184,6 +190,49 @@ class TestScripts(unittest.TestCase):
         with self.assertRaises(EqualVerifyFailed):
             op_equalverify([elem, b'aaaa'], log=[], extras=None)
 
+    def test_checksig_raise_on_uncompressed_pubkey(self):
+        """ Uncompressed pubkeys shoud not be accepted, even if they solve the signature
+        """
+        block = self.genesis_blocks[0]
+
+        from hathor.transaction import Transaction, TxInput, TxOutput
+        txin = TxInput(tx_id=block.hash, index=0, data=b'')
+        txout = TxOutput(value=block.outputs[0].value, script=b'')
+        tx = Transaction(inputs=[txin], outputs=[txout])
+
+        import hashlib
+        data_to_sign = tx.get_sighash_all()
+        hashed_data = hashlib.sha256(data_to_sign).digest()
+        signature = self.genesis_private_key.sign(hashed_data, ec.ECDSA(hashes.SHA256()))
+
+        from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+        pubkey_uncompressed = self.genesis_public_key.public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
+        # ScriptError if pubkey is not a valid compressed public key
+        # with wrong signature
+        with self.assertRaises(ScriptError):
+            op_checksig([b'123', pubkey_uncompressed], log=[], extras=None)
+        # or with rigth one
+        # this will make sure the signature is not made when parameters are wrong
+        with self.assertRaises(ScriptError):
+            op_checksig([signature, pubkey_uncompressed], log=[], extras=None)
+
+    def test_checksig_check_for_compressed_pubkey(self):
+        """ Compressed pubkeys bytes representation always start with a byte 2 or 3
+            - test for invalid bytes starting with bytes 2 and 3
+            - test for bytes not starting with byte 2 or 3
+        """
+        # ScriptError if pubkey is not a public key but starts with 2 or 3
+        with self.assertRaises(ScriptError):
+            op_checksig([b'\x0233', b'\x0233'], log=[], extras=None)
+        with self.assertRaises(ScriptError):
+            op_checksig([b'\x0321', b'\x0321'], log=[], extras=None)
+
+        # ScriptError if pubkey does not start with 2 or 3
+        with self.assertRaises(ScriptError):
+            op_checksig([b'\x0123', b'\x0123'], log=[], extras=None)
+        with self.assertRaises(ScriptError):
+            op_checksig([b'\x0423', b'\x0423'], log=[], extras=None)
+
     def test_checksig(self):
         with self.assertRaises(MissingStackItems):
             op_checksig([1], log=[], extras=None)
@@ -243,6 +292,44 @@ class TestScripts(unittest.TestCase):
         stack = [elem]
         op_hash160(stack, log=[], extras=None)
         self.assertEqual(hash160, stack.pop())
+
+    def test_checkdatasig_raise_on_uncompressed_pubkey(self):
+        block = self.genesis_blocks[0]
+        data = b'some_random_data'
+
+        from hathor.transaction import Transaction, TxInput, TxOutput
+        txin = TxInput(tx_id=block.hash, index=0, data=b'')
+        txout = TxOutput(value=block.outputs[0].value, script=b'')
+        tx = Transaction(inputs=[txin], outputs=[txout])
+
+        import hashlib
+        data_to_sign = tx.get_sighash_all()
+        hashed_data = hashlib.sha256(data_to_sign).digest()
+        signature = self.genesis_private_key.sign(hashed_data, ec.ECDSA(hashes.SHA256()))
+
+        from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+        pubkey_uncompressed = self.genesis_public_key.public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
+        # ScriptError if pubkey is not a valid compressed public key
+        # with wrong signature
+        stack = [data, b'123', pubkey_uncompressed]
+        with self.assertRaises(ScriptError):
+            op_checkdatasig(stack, log=[], extras=None)
+        # or with rigth one
+        # this will make sure the signature is not made when parameters are wrong
+        stack = [data, signature, pubkey_uncompressed]
+        with self.assertRaises(ScriptError):
+            op_checkdatasig(stack, log=[], extras=None)
+
+    def test_checkdatasig_check_for_compressed_pubkey(self):
+        # ScriptError if pubkey is not a public key but starts with 2 or 3
+        with self.assertRaises(ScriptError):
+            op_checkdatasig([b'\x0233', b'\x0233', b'\x0233'], log=[], extras=None)
+        with self.assertRaises(ScriptError):
+            op_checkdatasig([b'\x0321', b'\x0321', b'\x0321'], log=[], extras=None)
+
+        # ScriptError if pubkey is not a public key
+        with self.assertRaises(ScriptError):
+            op_checkdatasig([b'\x0123', b'\x0123', b'\x0123'], log=[], extras=None)
 
     def test_checkdatasig(self):
         with self.assertRaises(MissingStackItems):
@@ -610,20 +697,31 @@ class TestScripts(unittest.TestCase):
         with self.assertRaises(ScriptError):
             op_integer(0x61, stack, [], None)
 
-    def test_final_stack(self):
-        # empty stack is valid
-        stack = []
-        evaluate_final_stack(stack, [])
+    def test_decode_opn(self):
+        for i in range(0, 17):
+            n = decode_opn(getattr(Opcode, 'OP_{}'.format(i)))
+            self.assertEqual(n, i)
 
-        # True (no zero value) in final stack is valid
+        with self.assertRaises(InvalidScriptError):
+            _ = decode_opn(0)
+
+        with self.assertRaises(InvalidScriptError):
+            _ = decode_opn(0x61)
+
+    def test_final_stack(self):
+        # empty stack is invalid
+        stack = []
+        with self.assertRaises(FinalStackInvalid):
+            evaluate_final_stack(stack, [])
+
+        # True in final stack is valid
         stack = [1]
         evaluate_final_stack(stack, [])
-        stack = [5]
-        evaluate_final_stack(stack, [])
 
-        # more than one item is valid, as long as top value is True
+        # more than one item is invalid
         stack = [0, 0, 1]
-        evaluate_final_stack(stack, [])
+        with self.assertRaises(FinalStackInvalid):
+            evaluate_final_stack(stack, [])
 
         # False on stack should fail
         stack = [0]
@@ -677,6 +775,194 @@ class TestScripts(unittest.TestCase):
             baddress = base58.b58decode(addr)
             script2 = create_output_script(baddress)
             self.assertEqual(script2, script.get_script())
+
+    def test_get_data_bytes(self):
+        value0 = b'value0'
+        value1 = b'vvvalue1'
+        value2 = b'vvvvvalue2'
+
+        # data = (bytes([len(value0)]) + value0 + bytes([len(value1)]) + value1 + bytes([len(value2)]) + value2)
+        data0 = (bytes([len(value0)])+value0)
+        data1 = (data0 + bytes([len(value1)]) + value1)
+        data2 = (data1 + bytes([len(value2)]) + value2)
+
+        # value0 is in all 3
+        self.assertEqual(get_data_bytes(1, len(value0), data0), value0)
+        self.assertEqual(get_data_bytes(1, len(value0), data1), value0)
+        self.assertEqual(get_data_bytes(1, len(value0), data2), value0)
+
+        # value1 is in data1 and data2
+        self.assertEqual(get_data_bytes(1+len(data0), len(value1), data1), value1)
+        self.assertEqual(get_data_bytes(1+len(data0), len(value1), data2), value1)
+
+        # value2 is in data2 only
+        self.assertEqual(get_data_bytes(1+len(data1), len(value2), data2), value2)
+
+        with self.assertRaises(OutOfData):
+            get_data_bytes(1, 10, data0)
+
+        with self.assertRaises(OutOfData):
+            get_data_bytes(7, 1, data0)
+
+        with self.assertRaises(OutOfData):
+            get_data_bytes(6, 2, data0)
+
+        with self.assertRaises(OutOfData):
+            get_data_bytes(-1, 1, data0)
+
+    def test_get_data_single_byte(self):
+        """
+            - return data in `int` if success
+            - OutOfData in case position > data_len
+        """
+        data = bytes([0x00, 0x01, 0x50, 0xFF])
+
+        self.assertEqual(get_data_single_byte(0, data), 0x00)  # 0
+        self.assertEqual(get_data_single_byte(1, data), 0x01)  # 1
+        self.assertEqual(get_data_single_byte(2, data), 0x50)  # 80 -> OP_0
+        self.assertEqual(get_data_single_byte(3, data), 0xFF)  # 255
+
+        with self.assertRaises(OutOfData):
+            get_data_single_byte(4, data)
+
+        with self.assertRaises(OutOfData):
+            get_data_single_byte(-1, data)
+
+    def test_get_script_op(self):
+        """
+            - pushdata, pushdata1, OP_N, OP_X
+            - OutOfData in case pos > data_len (tested in get_data_single_byte?)
+            - make script and iterate on it to make sure each step is returned
+        """
+        # for opcode test
+        script0 = HathorScript()
+        solution0 = []
+        # for pushdata stack test
+        script1 = HathorScript()
+        solution1 = []
+        # for integer stack test
+        script2 = HathorScript()
+        solution2 = []
+        # for opcode (non OP_N) stack test
+        script3 = HathorScript()
+
+        for i in range(1, 76):
+            solution0.append(i)
+            solution1.append(b'1'*i)
+            script0.pushData(b'1'*i)
+            script1.pushData(b'1'*i)
+        for i in range(0, 17):
+            opc = getattr(Opcode, 'OP_{}'.format(i))
+            solution0.append(opc)
+            solution2.append(int(opc) - int(Opcode.OP_0))
+            script0.addOpcode(opc)
+            script2.addOpcode(opc)
+        for o in [
+                Opcode.OP_DUP,
+                Opcode.OP_EQUAL,
+                Opcode.OP_EQUALVERIFY,
+                Opcode.OP_CHECKSIG,
+                Opcode.OP_HASH160,
+                Opcode.OP_GREATERTHAN_TIMESTAMP,
+                Opcode.OP_CHECKMULTISIG,
+                Opcode.OP_CHECKDATASIG,
+                Opcode.OP_DATA_STREQUAL,
+                Opcode.OP_DATA_GREATERTHAN,
+                Opcode.OP_FIND_P2PKH,
+                Opcode.OP_DATA_MATCH_VALUE,
+                ]:
+            solution0.append(o)
+            script0.addOpcode(o)
+            script3.addOpcode(o)
+
+        data0 = script0.data
+        data1 = script1.data
+        data2 = script2.data
+        data3 = script3.data
+
+        # test opcode recognition
+        pos = i = 0
+        while pos < len(data0):
+            opcode, pos = get_script_op(pos, data0, None)
+            self.assertEqual(opcode, solution0[i])
+            i += 1
+
+        # test for pushdata stack
+        pos = i = 0
+        stack = []
+        while pos < len(data1):
+            opcode, pos = get_script_op(pos, data1, stack)
+            self.assertEqual(stack.pop(), solution1[i])
+            i += 1
+
+        # test for push integer stack
+        pos = i = 0
+        stack = []
+        while pos < len(data2):
+            opcode, pos = get_script_op(pos, data2, stack)
+            self.assertEqual(stack.pop(), solution2[i])
+            i += 1
+
+        # test for opcode (non OP_N) stack test
+        pos = i = 0
+        stack = []
+        while pos < len(data3):
+            opcode, pos = get_script_op(pos, data3, stack)
+            self.assertEqual(len(stack), 0)
+            i += 1
+
+        # try to get opcode outside of script
+        with self.assertRaises(OutOfData):
+            pos = len(data0)
+            get_script_op(pos, data0, None)
+
+        with self.assertRaises(OutOfData):
+            pos = len(data0) + 1
+            get_script_op(pos, data0, None)
+
+    def test_count_sigops(self):
+        script_0 = HathorScript()
+        script_1 = HathorScript()
+        script_10 = HathorScript()
+        script_100 = HathorScript()
+
+        script_0.addOpcode(Opcode.OP_0)
+        self.assertEqual(count_sigops(script_0.data), 0)
+        #
+        script_1.addOpcode(Opcode.OP_10)
+        script_1.addOpcode(Opcode.OP_CHECKSIG)
+        self.assertEqual(count_sigops(script_1.data), 1)
+        #
+        script_10.addOpcode(Opcode.OP_10)
+        script_10.addOpcode(Opcode.OP_CHECKMULTISIG)
+        self.assertEqual(count_sigops(script_10.data), 10)
+        #
+        for i in range(6):
+            script_100.addOpcode(Opcode.OP_16)
+            script_100.addOpcode(Opcode.OP_CHECKMULTISIG)
+        for i in range(4):
+            script_100.addOpcode(Opcode.OP_CHECKSIG)
+        self.assertEqual(count_sigops(script_100.data), 100)
+
+    def test_get_sigops_count(self):
+        multisig_script = MultiSig.create_output_script(BURN_ADDRESS)
+        p2pkh_script = P2PKH.create_output_script(BURN_ADDRESS)
+
+        redeem_script = HathorScript()
+        redeem_script.addOpcode(Opcode.OP_9)
+        redeem_script.addOpcode(Opcode.OP_CHECKMULTISIG)
+
+        input_script = HathorScript()
+        input_script.pushData(BURN_ADDRESS)
+        input_script.addOpcode(Opcode.OP_CHECKSIG)
+        input_script.pushData(redeem_script.data)
+
+        # include redeem_script if output is MultiSig
+        self.assertEqual(get_sigops_count(input_script.data, multisig_script), 10)
+        # if output is not MultiSig, count only input
+        self.assertEqual(get_sigops_count(input_script.data, p2pkh_script), 1)
+        # if no output_script, count only input
+        self.assertEqual(get_sigops_count(input_script.data), 1)
 
 
 if __name__ == '__main__':
