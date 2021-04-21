@@ -220,7 +220,7 @@ class NodeSyncTimestamp(Plugin):
         self.is_running: bool = False
 
         # Create logger with context
-        self.log = logger.new(peer_id_short=self.short_peer_id)
+        self.log = logger.new(**self.protocol.get_logger_context())
 
     def get_status(self):
         """ Return the status of the sync.
@@ -229,14 +229,6 @@ class NodeSyncTimestamp(Plugin):
             'latest_timestamp': self.peer_timestamp,
             'synced_timestamp': self.synced_timestamp,
         }
-
-    @property
-    def short_peer_id(self) -> str:
-        """ Returns the id of the peer (only 7 first chars)
-        """
-        if self.protocol.peer is None or self.protocol.peer.id is None:
-            return ''
-        return self.protocol.peer.id[:7]
 
     def get_cmd_dict(self) -> Dict[ProtocolMessages, Callable[[str], None]]:
         """ Return a dict of messages of the plugin.

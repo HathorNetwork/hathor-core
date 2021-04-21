@@ -169,6 +169,7 @@ class HathorProtocol:
         self.log = logger.new()
 
     def change_state(self, state_enum: PeerState) -> None:
+        """Called to change the state of the connection."""
         if state_enum not in self._state_instances:
             state_cls = state_enum.value
             instance = state_cls(self)
@@ -182,11 +183,45 @@ class HathorProtocol:
             if self.state:
                 self.state.on_enter()
 
+    def is_state(self, state_enum: PeerState) -> bool:
+        """Checks whether current state is `state_enum`."""
+        return isinstance(self.state, state_enum.value)
+
+    def get_short_remote(self) -> str:
+        """Get remote for logging."""
+        parts = []
+
+        remote = self.transport.getPeer()
+        if hasattr(remote, 'host'):
+            parts.append(remote.host)
+        parts.append(':')
+
+        if hasattr(remote, 'port'):
+            parts.append(remote.port)
+
+        return ''.join(str(x) for x in parts)
+
+    def get_short_peer_id(self) -> Optional[str]:
+        """Get peer id for logging."""
+        if self.peer and self.peer.id:
+            return self.peer.id[:7]
+        return None
+
+    def get_logger_context(self) -> Dict[str, Optional[str]]:
+        """Return the context for logging."""
+        return {
+            'remote': self.get_short_remote(),
+            'peer_id': self.get_short_peer_id(),
+        }
+
+    def update_log_context(self) -> None:
+        self.log = self.log.bind(**self.get_logger_context())
+
     def on_connect(self) -> None:
         """ Executed when the connection is established.
         """
-        remote = self.transport.getPeer()
-        self.log.info('peer connected', remote=remote)
+        self.update_log_context()
+        self.log.debug('new connection')
 
         self.connection_time = time.time()
 
@@ -198,12 +233,22 @@ class HathorProtocol:
         if self.connections:
             self.connections.on_peer_connect(self)
 
+    def on_peer_ready(self) -> None:
+        assert self.connections is not None
+        assert self.peer is not None
+        self.update_log_context()
+        self.connections.on_peer_ready(self)
+        self.log.info('peer connected', peer_id=self.peer.id)
+
     def on_disconnect(self, reason: Failure) -> None:
         """ Executed when the connection is lost.
         """
-        remote = self.transport.getPeer()
-        self.log.info('disconnected', remote=remote, reason=reason.getErrorMessage())
+        if self.is_state(self.PeerState.READY):
+            self.log.info('disconnected', reason=reason.getErrorMessage())
+        else:
+            self.log.debug('disconnected', reason=reason.getErrorMessage())
         self.connected = False
+        self.update_log_context()
         if self.state:
             self.state.on_exit()
         if self.connections:
@@ -242,14 +287,16 @@ class HathorProtocol:
     def send_error(self, msg: str) -> None:
         """ Send an error message to the peer.
         """
-        self.log.warn('protocol error', msg=msg)
+        if self.is_state(self.PeerState.READY):
+            self.log.warn('send error', msg=msg)
+        else:
+            self.log.debug('send error', msg=msg)
         self.send_message(ProtocolMessages.ERROR, msg)
 
     def send_error_and_close_connection(self, msg: str) -> None:
         """ Send an ERROR message to the peer, and then closes the connection.
         """
         self.send_error(msg)
-        self.log.warn('close connection due to previous error')
         # from twisted docs: "If a producer is being used with the transport, loseConnection will only close
         # the connection once the producer is unregistered." We call on_exit to make sure any producers (like
         # the one from node_sync) are unregistered

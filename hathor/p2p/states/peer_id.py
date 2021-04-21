@@ -1,6 +1,7 @@
 import json
 from typing import TYPE_CHECKING, Any, Generator
 
+from structlog import get_logger
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.conf import HathorSettings
@@ -11,12 +12,15 @@ from hathor.p2p.states.base import BaseState
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
 
+logger = get_logger()
+
 settings = HathorSettings()
 
 
 class PeerIdState(BaseState):
     def __init__(self, protocol: 'HathorProtocol') -> None:
         super().__init__(protocol)
+        self.log = logger.new(remote=protocol.get_short_remote())
         self.cmd_map.update({
             ProtocolMessages.PEER_ID: self.handle_peer_id,
             ProtocolMessages.READY: self.handle_ready,
