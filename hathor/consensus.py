@@ -4,11 +4,13 @@ from typing import Iterable, List, Optional, Set, cast
 from structlog import get_logger
 
 from hathor.conf import HathorSettings
+from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, Transaction, TxInput, sum_weights
 from hathor.util import classproperty
 
 logger = get_logger()
 settings = HathorSettings()
+cpu = get_cpu_profiler()
 
 _base_transaction_log = logger.new()
 
@@ -43,6 +45,7 @@ class ConsensusAlgorithm:
         self.block_algorithm = BlockConsensusAlgorithm(self)
         self.transaction_algorithm = TransactionConsensusAlgorithm(self)
 
+    @cpu.profiler(key=lambda self, base: 'consensus!{}'.format(base.hash.hex()))
     def update(self, base: BaseTransaction) -> None:
         from hathor.transaction import Block, Transaction
         if isinstance(base, Transaction):

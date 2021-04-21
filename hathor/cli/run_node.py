@@ -208,8 +208,9 @@ class RunNode:
         from hathor.conf import HathorSettings
         from hathor.mining.ws import MiningWebsocketFactory
         from hathor.p2p.resources import AddPeersResource, MiningInfoResource, MiningResource, StatusResource
+        from hathor.profiler import get_cpu_profiler
+        from hathor.profiler.resources import CPUProfilerResource, ProfilerResource
         from hathor.prometheus import PrometheusMetricsExporter
-        from hathor.resources import ProfilerResource
         from hathor.transaction.resources import (
             CreateTxResource,
             DashboardTransactionResource,
@@ -253,6 +254,7 @@ class RunNode:
         from hathor.websocket import HathorAdminWebsocketFactory, WebsocketStatsResource
 
         settings = HathorSettings()
+        cpu = get_cpu_profiler()
 
         if args.prometheus:
             kwargs: Dict[str, Any] = {'metrics': self.manager.metrics}
@@ -298,6 +300,7 @@ class RunNode:
                 (b'transaction_acc_weight', TransactionAccWeightResource(self.manager), root),
                 (b'dashboard_tx', DashboardTransactionResource(self.manager), root),
                 (b'profiler', ProfilerResource(self.manager), root),
+                (b'top', CPUProfilerResource(self.manager, cpu), root),
                 # mining
                 (b'mining', MiningResource(self.manager), root),
                 (b'getmininginfo', MiningInfoResource(self.manager), root),
@@ -357,7 +360,19 @@ class RunNode:
 
             real_root = Resource()
             real_root.putChild(settings.API_VERSION_PREFIX.encode('ascii'), root)
-            status_server = server.Site(real_root)
+
+            class SiteProfiler(server.Site):
+                def _get_profiler_key(self, request):
+                    addr = request.getClientAddress()
+                    parts = [request.path.decode(), getattr(addr, 'host', '-')]
+                    key = 'http-api!' + ':'.join(parts)
+                    return key
+
+                @cpu.profiler(key=lambda self, request: self._get_profiler_key(request))
+                def getResourceFor(self, request):
+                    return super().getResourceFor(request)
+
+            status_server = SiteProfiler(real_root)
             reactor.listenTCP(args.status, status_server)
 
             # Set websocket factory in metrics

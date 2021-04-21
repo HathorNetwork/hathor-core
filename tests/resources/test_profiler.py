@@ -5,7 +5,7 @@ import tempfile
 
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.resources import ProfilerResource
+from hathor.profiler.resources import ProfilerResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 

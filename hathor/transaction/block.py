@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from hathor import protos
 from hathor.conf import HathorSettings
+from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, TxOutput, TxVersion
 from hathor.transaction.exceptions import BlockWithInputs, BlockWithTokensError, TransactionDataError
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 settings = HathorSettings()
+cpu = get_cpu_profiler()
 
 # Version (H), outputs len (B)
 _FUNDS_FORMAT_STRING = '!HB'
@@ -262,6 +264,7 @@ class Block(BaseTransaction):
         from hathor.merged_mining.bitcoin import sha256d_hash
         return sha256d_hash(self.get_header_without_nonce())
 
+    @cpu.profiler(key=lambda self: 'block-verify!{}'.format(self.hash.hex()))
     def verify(self) -> None:
         """
             (1) confirms at least two pending transactions and references last block

@@ -12,12 +12,14 @@ from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
+from hathor.profiler import get_cpu_profiler
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
     from hathor.p2p.manager import ConnectionsManager  # noqa: F401
 
 logger = get_logger()
+cpu = get_cpu_profiler()
 
 
 class HathorProtocol:
@@ -261,6 +263,7 @@ class HathorProtocol:
         """
         raise NotImplementedError
 
+    @cpu.profiler(key=lambda self, cmd: 'p2p-cmd!{}'.format(str(cmd)))
     def recv_message(self, cmd: ProtocolMessages, payload: str) -> Optional[Generator[Any, Any, None]]:
         """ Executed when a new message arrives.
         """
@@ -329,6 +332,7 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
         self.log.warn('lineLengthExceeded', line=line, line_len=len(line), max_line_len=self.MAX_LENGTH)
         super(HathorLineReceiver, self).lineLengthExceeded(line)
 
+    @cpu.profiler(key=lambda self: 'p2p!{}'.format(self.get_short_remote()))
     def lineReceived(self, line: bytes) -> Optional[Generator[Any, Any, None]]:
         self.metrics.received_messages += 1
         self.metrics.received_bytes += len(line)
