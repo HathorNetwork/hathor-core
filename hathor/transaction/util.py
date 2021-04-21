@@ -17,11 +17,13 @@ limitations under the License.
 import re
 import struct
 from math import ceil, floor
-from typing import Any, Tuple
+from typing import Any, Callable, Optional, Tuple
 
 from hathor.conf import HathorSettings
 
 settings = HathorSettings()
+
+VerboseCallback = Optional[Callable[[str, Any], None]]
 
 
 def int_to_bytes(number: int, size: int, signed: bool = False) -> bytes:

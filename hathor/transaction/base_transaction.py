@@ -42,7 +42,7 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.transaction_metadata import TransactionMetadata
-from hathor.transaction.util import int_to_bytes, unpack, unpack_len
+from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 from hathor.util import classproperty
 
 if TYPE_CHECKING:
@@ -227,7 +227,7 @@ class BaseTransaction(ABC):
     def is_transaction(self) -> bool:
         raise NotImplementedError
 
-    def get_fields_from_struct(self, struct_bytes: bytes) -> bytes:
+    def get_fields_from_struct(self, struct_bytes: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets all common fields for a Transaction and a Block from a buffer.
 
         :param struct_bytes: Bytes of a serialized transaction
@@ -238,14 +238,14 @@ class BaseTransaction(ABC):
 
         :raises ValueError: when the sequence of bytes is incorect
         """
-        buf = self.get_funds_fields_from_struct(struct_bytes)
-        buf = self.get_graph_fields_from_struct(buf)
+        buf = self.get_funds_fields_from_struct(struct_bytes, verbose=verbose)
+        buf = self.get_graph_fields_from_struct(buf, verbose=verbose)
         return buf
 
     @classmethod
     @abstractmethod
-    def create_from_struct(cls, struct_bytes: bytes,
-                           storage: Optional['TransactionStorage'] = None) -> 'BaseTransaction':
+    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
+                           *, verbose: VerboseCallback = None) -> 'BaseTransaction':
         """ Create a transaction from its bytes.
 
         :param struct_bytes: Bytes of a serialized transaction
@@ -352,10 +352,10 @@ class BaseTransaction(ABC):
         return is_genesis(self.hash)
 
     @abstractmethod
-    def get_funds_fields_from_struct(self, buf: bytes) -> bytes:
+    def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
         raise NotImplementedError
 
-    def get_graph_fields_from_struct(self, buf: bytes) -> bytes:
+    def get_graph_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets all common graph fields for a Transaction and a Block from a buffer.
 
         :param buf: Bytes of a serialized transaction
@@ -367,10 +367,16 @@ class BaseTransaction(ABC):
         :raises ValueError: when the sequence of bytes is incorect
         """
         (self.weight, self.timestamp, parents_len), buf = unpack(_GRAPH_FORMAT_STRING, buf)
+        if verbose:
+            verbose('weigth', self.weight)
+            verbose('timestamp', self.timestamp)
+            verbose('parents_len', parents_len)
 
         for _ in range(parents_len):
             parent, buf = unpack_len(TX_HASH_SIZE, buf)  # 256bits
             self.parents.append(parent)
+            if verbose:
+                verbose('parent', parent.hex())
 
         return buf
 
@@ -949,13 +955,20 @@ class TxInput:
         return bytes(ret)
 
     @classmethod
-    def create_from_bytes(cls, buf: bytes) -> Tuple['TxInput', bytes]:
+    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> Tuple['TxInput', bytes]:
         """ Creates a TxInput from a serialized input. Returns the input
         and remaining bytes
         """
         input_tx_id, buf = unpack_len(TX_HASH_SIZE, buf)
+        if verbose:
+            verbose('txin_tx_id', input_tx_id.hex())
         (input_index, data_len), buf = unpack('!BH', buf)
+        if verbose:
+            verbose('txin_index', input_index)
+            verbose('txin_data_len', data_len)
         input_data, buf = unpack_len(data_len, buf)
+        if verbose:
+            verbose('txin_data', input_data.hex())
         txin = cls(input_tx_id, input_index, input_data)
         return txin, buf
 
@@ -1065,13 +1078,20 @@ class TxOutput:
         return ret
 
     @classmethod
-    def create_from_bytes(cls, buf: bytes) -> Tuple['TxOutput', bytes]:
+    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> Tuple['TxOutput', bytes]:
         """ Creates a TxOutput from a serialized output. Returns the output
         and remaining bytes
         """
         value, buf = bytes_to_output_value(buf)
+        if verbose:
+            verbose('txout_value', value)
         (token_data, script_len), buf = unpack('!BH', buf)
+        if verbose:
+            verbose('txout_token_data', token_data)
+            verbose('txout_script_len', script_len)
         script, buf = unpack_len(script_len, buf)
+        if verbose:
+            verbose('txout_script', script.hex())
         txout = cls(value, script, token_data)
         return txout, buf
 

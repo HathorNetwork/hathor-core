@@ -35,7 +35,7 @@ from hathor.transaction.exceptions import (
     TimestampError,
     TooManyInputs,
 )
-from hathor.transaction.util import get_deposit_amount, get_withdraw_amount, unpack, unpack_len
+from hathor.transaction.util import VerboseCallback, get_deposit_amount, get_withdraw_amount, unpack, unpack_len
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -128,15 +128,17 @@ class Transaction(BaseTransaction):
         return tx
 
     @classmethod
-    def create_from_struct(cls, struct_bytes: bytes,
-                           storage: Optional['TransactionStorage'] = None) -> 'Transaction':
+    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
+                           *, verbose: VerboseCallback = None) -> 'Transaction':
         tx = cls()
-        buf = tx.get_fields_from_struct(struct_bytes)
+        buf = tx.get_fields_from_struct(struct_bytes, verbose=verbose)
 
         if len(buf) != cls.SERIALIZATION_NONCE_SIZE:
             raise ValueError('Invalid sequence of bytes')
 
         [tx.nonce, ], buf = unpack('!I', buf)
+        if verbose:
+            verbose('nonce', tx.nonce)
 
         tx.update_hash()
         tx.storage = storage
@@ -147,7 +149,7 @@ class Transaction(BaseTransaction):
         # XXX: transactions don't have height, using 0 as a placeholder
         return 0
 
-    def get_funds_fields_from_struct(self, buf: bytes) -> bytes:
+    def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets all funds fields for a transaction from a buffer.
 
         :param buf: Bytes of a serialized transaction
@@ -159,17 +161,24 @@ class Transaction(BaseTransaction):
         :raises ValueError: when the sequence of bytes is incorect
         """
         (self.version, tokens_len, inputs_len, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
+        if verbose:
+            verbose('version', self.version)
+            verbose('tokens_len', tokens_len)
+            verbose('inputs_len', inputs_len)
+            verbose('outputs_len', outputs_len)
 
         for _ in range(tokens_len):
             token_uid, buf = unpack_len(TX_HASH_SIZE, buf)
             self.tokens.append(token_uid)
+            if verbose:
+                verbose('token_uid', token_uid.hex())
 
         for _ in range(inputs_len):
-            txin, buf = TxInput.create_from_bytes(buf)
+            txin, buf = TxInput.create_from_bytes(buf, verbose=verbose)
             self.inputs.append(txin)
 
         for _ in range(outputs_len):
-            txout, buf = TxOutput.create_from_bytes(buf)
+            txout, buf = TxOutput.create_from_bytes(buf, verbose=verbose)
             self.outputs.append(txout)
 
         return buf
