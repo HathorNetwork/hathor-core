@@ -319,13 +319,14 @@ class HathorProtocol:
         self.send_error(msg)
         self.disconnect()
 
-    def disconnect(self, *, force: bool = False) -> None:
+    def disconnect(self, reason: str = '', *, force: bool = False) -> None:
         """Close connection."""
         # from twisted docs: "If a producer is being used with the transport, loseConnection will only close
         # the connection once the producer is unregistered." We call on_exit to make sure any producers (like
         # the one from node_sync) are unregistered
         if self.state:
             self.state.on_exit()
+        self.log.debug('disconnecting', reason=reason, force=force)
         if not force:
             self.transport.loseConnection()
         else:

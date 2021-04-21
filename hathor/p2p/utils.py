@@ -152,7 +152,20 @@ def generate_certificate(private_key: '_RSAPrivateKey', ca_file: str, ca_pkey_fi
     return certificate
 
 
-def parse_whitelist(text: str) -> Set[str]:
+def parse_file(text: str, *, header: Optional[str] = None) -> List[str]:
+    """Parses a list of strings."""
+    if header is None:
+        header = 'hathor-whitelist'
+    lines = text.splitlines()
+    _header = lines.pop(0)
+    if _header != header:
+        raise ValueError('invalid header')
+    stripped_lines = (line.strip() for line in lines)
+    nonblank_lines = filter(lambda line: line and not line.startswith('#'), stripped_lines)
+    return list(nonblank_lines)
+
+
+def parse_whitelist(text: str, *, header: Optional[str] = None) -> Set[str]:
     """ Parses the list of whitelist peer ids
 
     Example:
@@ -170,13 +183,8 @@ G2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
     {'2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367'}
 
     """
-    lines = text.splitlines()
-    header = lines.pop(0)
-    if header != 'hathor-whitelist':
-        raise ValueError('invalid header')
-    stripped_lines = (line.strip() for line in lines)
-    nonblank_lines = filter(lambda line: line and not line.startswith('#'), stripped_lines)
-    peerids = {line.split()[0] for line in nonblank_lines}
+    lines = parse_file(text, header=header)
+    peerids = {line.split()[0] for line in lines}
     for peerid in peerids:
         bpeerid = bytes.fromhex(peerid)
         if len(bpeerid) != 32:

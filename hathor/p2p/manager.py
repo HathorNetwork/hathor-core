@@ -25,6 +25,7 @@ from twisted.python.failure import Failure
 
 from hathor.conf import HathorSettings
 from hathor.p2p.downloader import Downloader
+from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import PeerStorage
 from hathor.p2p.protocol import HathorProtocol
@@ -366,6 +367,8 @@ class ConnectionsManager:
             factory = TLSMemoryBIOFactory(certificate_options, False, self.server_factory)
         else:
             factory = self.server_factory
+
+        factory = NetfilterFactory(self, factory)
 
         self.log.info('listen on', endpoint=description)
         endpoint.listen(factory)
