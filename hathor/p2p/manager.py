@@ -100,7 +100,7 @@ class ConnectionsManager:
         self.ssl = ssl
 
     def start(self) -> None:
-        self.lc_reconnect.start(5)
+        self.lc_reconnect.start(5, now=False)
         if settings.ENABLE_PEER_WHITELIST:
             self.wl_reconnect.start(30)
 
@@ -146,14 +146,12 @@ class ConnectionsManager:
             peer.update_retry_timestamp(now)
 
     def on_peer_connect(self, protocol: HathorProtocol) -> None:
-        self.log.debug('peer connect', protocol=type(protocol).__name__)
         self.handshaking_peers.add(protocol)
 
     def on_peer_ready(self, protocol: HathorProtocol) -> None:
         assert protocol.peer is not None
         assert protocol.peer.id is not None
 
-        self.log.debug('ready', peer_id=protocol.peer.id)
         self.handshaking_peers.remove(protocol)
         self.received_peer_storage.pop(protocol.peer.id, None)
 
@@ -185,7 +183,6 @@ class ConnectionsManager:
                 conn.state.send_peers([protocol])
 
     def on_peer_disconnect(self, protocol: HathorProtocol) -> None:
-        self.log.debug('peer disconnect', protocol=type(protocol).__name__)
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
         if protocol.peer:

@@ -1,6 +1,8 @@
 import json
 from typing import TYPE_CHECKING, Any, Dict
 
+from structlog import get_logger
+
 import hathor
 from hathor.conf import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
@@ -10,12 +12,15 @@ from hathor.p2p.utils import get_genesis_short_hash, get_settings_hello_dict
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
 
+logger = get_logger()
+
 settings = HathorSettings()
 
 
 class HelloState(BaseState):
     def __init__(self, protocol: 'HathorProtocol') -> None:
         super().__init__(protocol)
+        self.log = logger.new(**protocol.get_logger_context())
         self.cmd_map.update({
             ProtocolMessages.HELLO: self.handle_hello,
         })
