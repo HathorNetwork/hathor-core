@@ -19,11 +19,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from hathor import protos
 from hathor.conf import HathorSettings
-from hathor.transaction import Transaction, TxInput, TxOutput, TxVersion
+from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.exceptions import InvalidToken, TransactionDataError
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
-from hathor.transaction.transaction import TokenInfo
-from hathor.transaction.util import clean_token_string, int_to_bytes, unpack, unpack_len
+from hathor.transaction.transaction import TokenInfo, Transaction
+from hathor.transaction.util import VerboseCallback, clean_token_string, int_to_bytes, unpack, unpack_len
 
 settings = HathorSettings()
 
@@ -119,7 +119,7 @@ class TokenCreationTransaction(Transaction):
         self.tokens = [self.hash]
         return ret
 
-    def get_funds_fields_from_struct(self, buf: bytes) -> bytes:
+    def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets all funds fields for a transaction from a buffer.
 
         :param buf: Bytes of a serialized transaction
@@ -131,17 +131,21 @@ class TokenCreationTransaction(Transaction):
         :raises ValueError: when the sequence of bytes is incorect
         """
         (self.version, inputs_len, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
+        if verbose:
+            verbose('version', self.version)
+            verbose('inputs_len', inputs_len)
+            verbose('outputs_len', outputs_len)
 
         for _ in range(inputs_len):
-            txin, buf = TxInput.create_from_bytes(buf)
+            txin, buf = TxInput.create_from_bytes(buf, verbose=verbose)
             self.inputs.append(txin)
 
         for _ in range(outputs_len):
-            txout, buf = TxOutput.create_from_bytes(buf)
+            txout, buf = TxOutput.create_from_bytes(buf, verbose=verbose)
             self.outputs.append(txout)
 
         # token name and symbol
-        self.token_name, self.token_symbol, buf = TokenCreationTransaction.deserialize_token_info(buf)
+        self.token_name, self.token_symbol, buf = TokenCreationTransaction.deserialize_token_info(buf, verbose=verbose)
 
         return buf
 
@@ -208,17 +212,27 @@ class TokenCreationTransaction(Transaction):
         return ret
 
     @classmethod
-    def deserialize_token_info(cls, buf: bytes) -> Tuple[str, str, bytes]:
+    def deserialize_token_info(cls, buf: bytes, *, verbose: VerboseCallback = None) -> Tuple[str, str, bytes]:
         """ Gets the token name and symbol from serialized format
         """
         (token_info_version,), buf = unpack('!B', buf)
+        if verbose:
+            verbose('token_info_version', token_info_version)
         if token_info_version != TOKEN_INFO_VERSION:
             raise ValueError('unknown token info version: {}'.format(token_info_version))
 
         (name_len,), buf = unpack('!B', buf)
+        if verbose:
+            verbose('token_name_len', name_len)
         name, buf = unpack_len(name_len, buf)
+        if verbose:
+            verbose('token_name', name)
         (symbol_len,), buf = unpack('!B', buf)
+        if verbose:
+            verbose('token_symbol_len', symbol_len)
         symbol, buf = unpack_len(symbol_len, buf)
+        if verbose:
+            verbose('token_symbol', symbol)
 
         # Token name and symbol can be only utf-8 valid strings for now
         decoded_name = decode_string_utf8(name, 'Token name')
