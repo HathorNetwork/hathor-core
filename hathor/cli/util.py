@@ -211,6 +211,8 @@ def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_lo
             twisted_logger.log(level, msg, **kwargs)
         except Exception as e:
             print('error when logging event', e)
+            for k, v in event.items():
+                print(k, v)
 
     # start logging to std logger so structlog can catch it
     twisted.python.log.startLoggingWithObserver(twisted_structlog_observer, setStdout=capture_stdout)

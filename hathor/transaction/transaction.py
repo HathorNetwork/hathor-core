@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 
 from hathor import protos
 from hathor.conf import HathorSettings
+from hathor.profiler import get_cpu_profiler
 from hathor.transaction import MAX_NUM_INPUTS, BaseTransaction, Block, TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE
 from hathor.transaction.exceptions import (
@@ -41,6 +42,7 @@ if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 settings = HathorSettings()
+cpu = get_cpu_profiler()
 
 # Version (H), token uids len (B) and inputs len (B), outputs len (B).
 _FUNDS_FORMAT_STRING = '!HBBB'
@@ -258,6 +260,7 @@ class Transaction(BaseTransaction):
         json['tokens'] = [h.hex() for h in self.tokens]
         return json
 
+    @cpu.profiler(key=lambda self: 'tx-verify!{}'.format(self.hash.hex()))
     def verify(self) -> None:
         """ Common verification for all transactions:
            (i) number of inputs is at most 256
