@@ -37,6 +37,9 @@ Color: Optional['DefaultColor'] = None
 
 class ProfileData:
     """Profile data."""
+    hostname: str
+    version: str
+    network: str
     enabled: bool
     last_update: float
     error: str
@@ -45,6 +48,9 @@ class ProfileData:
     @classmethod
     def create_from_api(cls, data: Dict[str, Any]) -> 'ProfileData':
         self = cls()
+        self.hostname = data['hostname']
+        self.version = data['version']
+        self.network = data['network']
         self.enabled = data['enabled']
         self.last_update = data['last_update']
         self.error = data['error']
@@ -312,26 +318,60 @@ class MainWindow(Window):
         elif key == ord('p'):
             self.manager.goto('control')
 
-    def render(self) -> None:
+    def draw_cpu(self, win: Any, cpu_percent: float, *, width: int) -> None:
+        assert Color is not None
+        remaining_width = width
+
+        label = 'CPU '
+        remaining_width -= len(label) + 2
+
+        if cpu_percent > 100:
+            cpu_percent = 100
+
+        cpu_percent_text = '{:.1f}%'.format(cpu_percent)
+        bar_qty = int(remaining_width * cpu_percent / 100)
+        remaining_width -= bar_qty
+
+        attr = Color.CPU_PERCENT
+        if remaining_width < len(cpu_percent_text):
+            bar_qty -= len(cpu_percent_text) - remaining_width
+            remaining_width = len(cpu_percent_text)
+            attr = Color.CPU_NORMAL
+
+        win.addstr(label, Color.CPU_LABEL)
+        win.addstr('[', Color.CPU_BRACKET)
+        win.addstr('|' * bar_qty, Color.CPU_NORMAL)
+        win.addstr(' ' * (remaining_width - len(cpu_percent_text)))
+        win.addstr(cpu_percent_text, attr)
+        win.addstr(']', Color.CPU_BRACKET)
+        win.addstr('\n')
+        win.addstr('\n')
+
+    def draw_general_info(self, win: Any) -> None:
+        assert Color is not None
         assert Color is not None
         fetcher = self.manager.fetcher
-
-        self.win.addstr('URL: ', Color.CAPTION)
-        self.win.addstr(fetcher.url, Color.URL)
-        self.win.addstr('\n')
-
-        if self.manager.data is None:
-            self.win.addstr('Waiting for data...\n', Color.CAPTION)
-            if fetcher.error_count > 0:
-                self.win.addstr('\n')
-                self.win.addstr('Fetch failed: ', Color.FETCH_ERROR_CAPTION)
-                self.win.addstr('({}) {}\n'.format(fetcher.error_count, fetcher.error), Color.FETCH_ERROR)
-            return
-
         data = self.manager.data
         assert data is not None
 
-        self.win.addstr('Last update: ', Color.CAPTION)
+        win.addstr('Hostname: ', Color.CAPTION)
+        win.addstr(data.hostname, Color.HOSTNAME)
+        if (self.manager.alias):
+            win.addstr(' ({})'.format(self.manager.alias), Color.HOSTNAME)
+        win.addstr('\n')
+
+        win.addstr('Network: ', Color.CAPTION)
+        win.addstr(data.network, Color.NETWORK)
+        win.addstr(' (v', Color.VERSION)
+        win.addstr(data.version, Color.VERSION)
+        win.addstr(')', Color.VERSION)
+        win.addstr('\n')
+
+        win.addstr('URL: ', Color.CAPTION)
+        win.addstr(fetcher.url, Color.URL)
+        win.addstr('\n')
+
+        win.addstr('Last update: ', Color.CAPTION)
         if self.manager.freeze_data:
             attr = Color.LAST_UPDATE_FROZEN
         elif fetcher.error_count > 0:
@@ -343,31 +383,62 @@ class MainWindow(Window):
 
         if fetcher.last_update:
             last_update = datetime.datetime.fromtimestamp(fetcher.last_update)
-            self.win.addstr(last_update.astimezone().strftime("%Y-%m-%d %H:%M:%S %Z"), attr)
+            win.addstr(last_update.astimezone().strftime("%Y-%m-%d %H:%M:%S %Z"), attr)
         else:
-            self.win.addstr('Unknown', attr)
+            win.addstr('Unknown', attr)
 
         if self.manager.freeze_data:
-            self.win.addstr(' (frozen)', Color.FETCH_FROZEN)
+            win.addstr(' (frozen)', Color.FETCH_FROZEN)
         elif fetcher.error_count > 0:
-            self.win.addstr(' (fetch failed: {})'.format(fetcher.error_count), Color.FETCH_ERROR)
+            win.addstr(' (fetch failed: {})'.format(fetcher.error_count), Color.FETCH_ERROR)
         elif not data.enabled:
-            self.win.addstr(' (profiler is not running)', Color.PROFILER_DISABLED)
-        self.win.addstr('\n')
+            win.addstr(' (profiler is not running)', Color.PROFILER_DISABLED)
+        win.addstr('\n')
 
-        self.win.addstr('max_depth={} '.format(self.max_depth), Color.CAPTION)
-        self.win.addstr('group_cpu_percent={} '.format(self.group_cpu_percent), Color.CAPTION)
-        self.win.addstr('\n')
+        win.addstr('max_depth={} '.format(self.max_depth), Color.CAPTION)
+        win.addstr('group_cpu_percent={} '.format(self.group_cpu_percent), Color.CAPTION)
+        win.addstr('\n')
+
+    def draw_no_data(self, win: Any) -> None:
+        assert Color is not None
+        fetcher = self.manager.fetcher
+        win.addstr('URL: ', Color.CAPTION)
+        win.addstr(fetcher.url, Color.URL)
+        win.addstr('\n')
+        win.addstr('Waiting for data...\n', Color.CAPTION)
+        if fetcher.error_count > 0:
+            win.addstr('\n')
+            win.addstr('Fetch failed: ', Color.FETCH_ERROR_CAPTION)
+            win.addstr('({}) {}\n'.format(fetcher.error_count, fetcher.error), Color.FETCH_ERROR)
+
+    def render(self) -> None:
+        assert Color is not None
+
+        if self.manager.data is None:
+            self.draw_no_data(self.win)
+            return
+
+        self.draw_general_info(self.win)
+
+        data = self.manager.data
+        assert data is not None
 
         if data.error:
             self.win.addstr('>> PROFILER ERROR: {}'.format(data.error), Color.PROFILER_ERROR)
         self.win.addstr('\n')
 
+        height, width = self.win.getmaxyx()
+
+        proc_list: List[ProcItem] = data.proc_list
+        groups: ProcGroup = group_by_parent(proc_list)
+        if self.group_cpu_percent:
+            groups = group_cpu_percent(groups)
+        cpu_percent = sum(proc.percent_cpu for proc in groups[tuple()])
+        self.draw_cpu(self.win, cpu_percent, width=width // 2)
+
         fmt1 = '{:4s} {:8s} '
         title = fmt1.format('CPU%', 'TIME+')
         self.win.addstr(title, Color.TITLE)
-
-        height, width = self.win.getmaxyx()
         source_width = width - len(title)
 
         fmt2 = '{{:{}s}}'.format(source_width)
@@ -376,10 +447,6 @@ class MainWindow(Window):
         y, _ = self.win.getyx()
         max_rows = height - y - 1
 
-        proc_list: List[ProcItem] = data.proc_list
-        groups: ProcGroup = group_by_parent(proc_list)
-        if self.group_cpu_percent:
-            groups = group_cpu_percent(groups)
         printer = TreePrinter(self.win, groups, self.max_depth, max_rows, source_width)
         printer.print_tree()
 
@@ -482,7 +549,8 @@ class ControlWindow(Window):
 class ScreenManager:
     """Manage the screen."""
 
-    def __init__(self, loop: AbstractEventLoop, fetcher: 'ProfileAPIClient', *, update_interval: int = 2) -> None:
+    def __init__(self, loop: AbstractEventLoop, fetcher: 'ProfileAPIClient', *,
+                 update_interval: int = 2, alias: Optional[str] = None) -> None:
         """Initialize the screen and immediately draw an initial screen."""
         self.stdscr = curses.initscr()
         curses.noecho()
@@ -491,6 +559,8 @@ class ScreenManager:
         self.stdscr.keypad(True)
         self.stdscr.nodelay(True)
         self.register_colors()
+
+        self.alias = alias
 
         self._redraw: bool = False
 
@@ -671,6 +741,13 @@ class DefaultColor:
 
         self.CAPTION: int = _(A_NONE, COLOR_CYAN, COLOR_BLACK)
         self.URL: int = _(A_NONE, COLOR_CYAN, COLOR_BLACK)
+        self.HOSTNAME: int = _(A_BOLD, COLOR_WHITE, COLOR_BLACK)
+        self.NETWORK: int = _(A_BOLD, COLOR_CYAN, COLOR_BLACK)
+        self.VERSION: int = _(A_BOLD, COLOR_CYAN, COLOR_BLACK)
+        self.CPU_LABEL: int = _(A_NONE, COLOR_CYAN, COLOR_BLACK)
+        self.CPU_BRACKET: int = _(A_BOLD, COLOR_WHITE, COLOR_BLACK)
+        self.CPU_NORMAL: int = _(A_NONE, COLOR_GREEN, COLOR_BLACK)
+        self.CPU_PERCENT: int = _(A_BOLD, COLOR_BLACK, COLOR_BLACK)
         self.LAST_UPDATE: int = _(A_BOLD, COLOR_GREEN, COLOR_BLACK)
         self.LAST_UPDATE_ERROR: int = _(A_BOLD, COLOR_WHITE, COLOR_RED)
         self.LAST_UPDATE_FROZEN: int = _(A_BOLD, COLOR_WHITE, COLOR_CYAN)
@@ -704,6 +781,7 @@ def main() -> None:
     parser = create_parser()
     parser.add_argument('url', help='URL of the full-node API')
     parser.add_argument('-g', action='store_true', help='Group small CPU percent')
+    parser.add_argument('--alias', help='Alias to the server')
     args = parser.parse_args(sys.argv[1:])
 
     # data = fetch_data(args.url)
@@ -711,5 +789,5 @@ def main() -> None:
 
     loop = asyncio.get_event_loop()
     fetcher = ProfileAPIClient(loop, args.url)
-    ScreenManager(loop, fetcher)
+    ScreenManager(loop, fetcher, alias=args.alias)
     loop.run_forever()
