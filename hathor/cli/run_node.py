@@ -9,7 +9,6 @@ from typing import Any, Dict, List
 from autobahn.twisted.resource import WebSocketResource
 from structlog import get_logger
 from twisted.internet import reactor
-from twisted.web import server
 from twisted.web.resource import Resource
 
 logger = get_logger()
@@ -361,17 +360,7 @@ class RunNode:
             real_root = Resource()
             real_root.putChild(settings.API_VERSION_PREFIX.encode('ascii'), root)
 
-            class SiteProfiler(server.Site):
-                def _get_profiler_key(self, request):
-                    addr = request.getClientAddress()
-                    parts = [request.path.decode(), getattr(addr, 'host', '-')]
-                    key = 'http-api!' + ':'.join(parts)
-                    return key
-
-                @cpu.profiler(key=lambda self, request: self._get_profiler_key(request))
-                def getResourceFor(self, request):
-                    return super().getResourceFor(request)
-
+            from hathor.profiler.site import SiteProfiler
             status_server = SiteProfiler(real_root)
             reactor.listenTCP(args.status, status_server)
 

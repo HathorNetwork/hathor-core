@@ -1,5 +1,8 @@
 [run]
 branch = True
+omit =
+	# No way to test top command.
+	hathor/cli/top.py
 
 [report]
 exclude_lines =

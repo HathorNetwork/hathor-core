@@ -13,11 +13,13 @@
 # limitations under the License.
 
 import json
+import socket
 from typing import TYPE_CHECKING
 
 from twisted.web import resource
 from twisted.web.http import Request
 
+import hathor
 from hathor.api_util import render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 
@@ -80,7 +82,12 @@ class CPUProfilerResource(resource.Resource):
                 'total_time': proc.total_time,
             }))
 
+        hostname = socket.gethostname()
+
         ret = {
+            'version': hathor.__version__,
+            'network': self.manager.network,
+            'hostname': hostname,
             'enabled': self.cpu.enabled,
             'last_update': self.cpu.last_update,
             'error': self.cpu.error,
