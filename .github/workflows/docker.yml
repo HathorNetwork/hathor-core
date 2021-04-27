@@ -104,10 +104,10 @@ jobs:
         registry: ghcr.io
         username: ${{ secrets.GHCR_USERNAME }}
         password: ${{ secrets.GHCR_TOKEN }}
-    - name: Set up Python 3.7 (base) # 3.7 is the fastest to setup, and the specific version doesn't matter here
+    - name: Set up Python ${{ matrix.python }}
       uses: actions/setup-python@v2
       with:
-        python-version: 3.7
+        python-version: ${{ matrix.python }}
     - name: Install Poetry
       run: pip -q --no-input install poetry
     - name: Install Poetry dependencies
