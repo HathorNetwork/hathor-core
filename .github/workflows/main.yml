@@ -15,6 +15,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40  # default is 360
     strategy:
+      fail-fast: false
       matrix:
         python:
         - 3.6
