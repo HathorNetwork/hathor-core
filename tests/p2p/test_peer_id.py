@@ -135,14 +135,14 @@ class PeerIdTest(unittest.TestCase):
     def test_retry_connection(self):
         p = PeerId()
         interval = p.retry_interval
-        p.update_retry_timestamp(0)
+        p.increment_retry_attempt(0)
         self.assertEqual(settings.PEER_CONNECTION_RETRY_INTERVAL_MULTIPLIER*interval, p.retry_interval)
-        self.assertEqual(p.retry_interval, p.retry_timestamp)
+        self.assertEqual(interval, p.retry_timestamp)
 
         # when retry_interval is already 180
-        p.retry_interval = 190
-        p.update_retry_timestamp(0)
-        self.assertEqual(180, p.retry_interval)
+        p.retry_interval = settings.PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL + 10
+        p.increment_retry_attempt(0)
+        self.assertEqual(settings.PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL, p.retry_interval)
 
         # reset
         p.reset_retry_timestamp()
@@ -156,7 +156,7 @@ class PeerIdTest(unittest.TestCase):
         peer_id.entrypoints = ['tcp://127.0.0.1:40403']
 
         # we consider that we are starting the connection to the peer
-        protocol = HathorProtocol('testnet', peer_id, None, node=manager, use_ssl=True)
+        protocol = HathorProtocol('testnet', peer_id, None, node=manager, use_ssl=True, inbound=False)
         protocol.connection_string = 'tcp://127.0.0.1:40403'
         result = yield peer_id.validate_entrypoint(protocol)
         self.assertTrue(result)
@@ -188,7 +188,7 @@ class PeerIdTest(unittest.TestCase):
 
     def test_validate_certificate(self):
         peer = PeerId('testnet')
-        protocol = HathorProtocol('testnet', peer, None, node=None, use_ssl=True)
+        protocol = HathorProtocol('testnet', peer, None, node=None, use_ssl=True, inbound=True)
 
         class FakeTransport:
             def getPeerCertificate(self):
@@ -203,17 +203,44 @@ class PeerIdTest(unittest.TestCase):
 
     def test_retry_logic(self):
         peer = PeerId('testnet')
-        peer.retry_attempts = settings.MAX_PEER_CONNECTION_ATTEMPS
-        self.assertFalse(peer.can_retry(0))
-        peer.retry_attempts = 0
-        # should still fail as the RETRIES_EXCEEDED flag is already set
-        self.assertFalse(peer.can_retry(0))
-        # remove flag and try again
-        from hathor.p2p.peer_id import PeerFlags
-        peer.flags.remove(PeerFlags.RETRIES_EXCEEDED)
         self.assertTrue(peer.can_retry(0))
-        peer.retry_timestamp = 100
+
+        retry_interval = peer.retry_interval
+
+        peer.increment_retry_attempt(0)
         self.assertFalse(peer.can_retry(0))
+        self.assertFalse(peer.can_retry(retry_interval - 1))
+        self.assertTrue(peer.can_retry(retry_interval))
+        self.assertTrue(peer.can_retry(retry_interval + 1))
+
+        peer.increment_retry_attempt(0)
+        self.assertFalse(peer.can_retry(retry_interval))
+
+        retry_interval *= settings.PEER_CONNECTION_RETRY_INTERVAL_MULTIPLIER
+        self.assertFalse(peer.can_retry(retry_interval - 1))
+        self.assertTrue(peer.can_retry(retry_interval))
+        self.assertTrue(peer.can_retry(retry_interval))
+
+        # Retry until we reach max retry interval.
+        while peer.retry_interval < settings.PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL:
+            peer.increment_retry_attempt(0)
+        # We need to call it once more because peer.retry_interval is always one step behind.
+        peer.increment_retry_attempt(0)
+
+        # Confirm we are at the max retry interval.
+        self.assertFalse(peer.can_retry(settings.PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL - 1))
+        self.assertTrue(peer.can_retry(settings.PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL))
+        self.assertTrue(peer.can_retry(settings.PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL + 1))
+
+        # It shouldn't change with another retry.
+        peer.increment_retry_attempt(0)
+        self.assertFalse(peer.can_retry(settings.PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL - 1))
+        self.assertTrue(peer.can_retry(settings.PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL))
+        self.assertTrue(peer.can_retry(settings.PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL + 1))
+
+        # Finally, reset it.
+        peer.reset_retry_timestamp()
+        self.assertTrue(peer.can_retry(0))
 
 
 if __name__ == '__main__':

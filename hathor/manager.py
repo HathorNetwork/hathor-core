@@ -247,7 +247,7 @@ class HathorManager:
         self.metrics.start()
 
         for description in self.listen_addresses:
-            self.listen(description, ssl=self.ssl)
+            self.listen(description)
 
         self.do_discovery()
 
@@ -859,8 +859,8 @@ class HathorManager:
 
         return weight
 
-    def listen(self, description: str, ssl: bool = False) -> None:
-        endpoint = self.connections.listen(description, ssl)
+    def listen(self, description: str, use_ssl: Optional[bool] = None) -> None:
+        endpoint = self.connections.listen(description, use_ssl)
 
         if self.hostname:
             proto, _, _ = description.partition(':')

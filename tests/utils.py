@@ -252,6 +252,11 @@ class FakeConnection:
     def proto2(self):
         return self._proto2
 
+    def disable_idle_timeout(self):
+        """Disable timeout in both peers."""
+        self._proto1.disable_idle_timeout()
+        self._proto2.disable_idle_timeout()
+
     def run_one_step(self, debug=False, force=False):
         assert self.is_connected, 'not connected'
 

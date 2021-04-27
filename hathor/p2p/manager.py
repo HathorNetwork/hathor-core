@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, Optional, Set, Union
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Optional, Set, Union
 
 from structlog import get_logger
 from twisted.internet import endpoints
@@ -48,6 +48,7 @@ class ConnectionsManager:
     """ It manages all peer-to-peer connections and events related to control messages.
     """
 
+    connections: Set[HathorProtocol]
     connected_peers: Dict[str, HathorProtocol]
     connecting_peers: Dict[IStreamClientEndpoint, Deferred]
     handshaking_peers: Set[HathorProtocol]
@@ -66,6 +67,11 @@ class ConnectionsManager:
 
         self.client_factory = client_factory
         self.client_factory.connections = self
+
+        self.max_connections: int = settings.PEER_MAX_CONNECTIONS
+
+        # All connections.
+        self.connections = set()
 
         # List of pending connections.
         self.connecting_peers = {}  # Dict[IStreamClientEndpoint, twisted.internet.defer.Deferred]
@@ -138,17 +144,29 @@ class ConnectionsManager:
             assert isinstance(conn.state, ReadyState)
             conn.state.send_tx_to_peer(tx)
 
+    def disconnect_all_peers(self, *, force: bool = False) -> None:
+        """Disconnect all peers."""
+        for conn in self.get_all_connections():
+            conn.disconnect(force=force)
+
     def on_connection_failure(self, failure: Failure, peer: Optional[PeerId], endpoint: IStreamClientEndpoint) -> None:
         self.log.warn('connection failure', endpoint=endpoint, failure=failure.getErrorMessage())
         self.connecting_peers.pop(endpoint)
         if peer is not None:
             now = int(self.reactor.seconds())
-            peer.update_retry_timestamp(now)
+            peer.increment_retry_attempt(now)
 
     def on_peer_connect(self, protocol: HathorProtocol) -> None:
+        """Called when a new connection is established."""
+        if len(self.connections) >= self.max_connections:
+            self.log.warn('reached maximum number of connections', max_connections=self.max_connections)
+            protocol.disconnect(force=True)
+            return
+        self.connections.add(protocol)
         self.handshaking_peers.add(protocol)
 
     def on_peer_ready(self, protocol: HathorProtocol) -> None:
+        """Called when a peer is ready."""
         assert protocol.peer is not None
         assert protocol.peer.id is not None
 
@@ -183,6 +201,8 @@ class ConnectionsManager:
                 conn.state.send_peers([protocol])
 
     def on_peer_disconnect(self, protocol: HathorProtocol) -> None:
+        """Called when a peer disconnect."""
+        self.connections.discard(protocol)
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
         if protocol.peer:
@@ -199,6 +219,11 @@ class ConnectionsManager:
                 # reached READY state while the other is on PEER_ID state
                 self.connected_peers[protocol.peer.id] = existing_protocol
         self.pubsub.publish(HathorEvents.NETWORK_PEER_DISCONNECTED, protocol=protocol)
+
+    def get_all_connections(self) -> Iterable[HathorProtocol]:
+        """Iterate over all connections."""
+        for conn in self.connections:
+            yield conn
 
     def get_ready_connections(self) -> Set[HathorProtocol]:
         return set(self.connected_peers.values())
@@ -288,25 +313,11 @@ class ConnectionsManager:
     def _connect_to_callback(self, protocol: Union[HathorProtocol, TLSMemoryBIOProtocol], peer: Optional[PeerId],
                              endpoint: IStreamClientEndpoint, connection_string: str,
                              url_peer_id: Optional[str]) -> None:
+        """Called when we successfully connect to a peer."""
         if isinstance(protocol, HathorProtocol):
-            # Case it's not ssl
-            conn_protocol = protocol
+            protocol.on_outbound_connect(url_peer_id, connection_string)
         else:
-            conn_protocol = protocol.wrappedProtocol
-
-        if url_peer_id:
-            # Set in protocol the peer id extracted from the URL that must be validated
-            conn_protocol.expected_peer_id = url_peer_id
-        else:
-            # Add warning flag
-            conn_protocol.warning_flags.add(conn_protocol.WarningFlags.NO_PEER_ID_URL)
-
-        # Setting connection string in protocol, so we can validate it matches the entrypoints data
-        conn_protocol.connection_string = connection_string
-
-        # this node started the connection
-        conn_protocol.initiated_connection = True
-
+            protocol.wrappedProtocol.on_outbound_connect(url_peer_id, connection_string)
         self.connecting_peers.pop(endpoint)
 
     def connect_to(self, description: str, peer: Optional[PeerId] = None, use_ssl: Optional[bool] = None) -> None:
@@ -335,7 +346,7 @@ class ConnectionsManager:
         deferred.addErrback(self.on_connection_failure, peer, endpoint)
         self.log.info('connect to ', endpoint=description)
 
-    def listen(self, description: str, ssl: bool = True) -> IStreamServerEndpoint:
+    def listen(self, description: str, use_ssl: Optional[bool] = None) -> IStreamServerEndpoint:
         """ Start to listen to new connection according to the description.
 
         If `ssl` is True, then the connection will be wraped by a TLS.
@@ -349,7 +360,10 @@ class ConnectionsManager:
         """
         endpoint = endpoints.serverFromString(self.reactor, description)
 
-        if ssl:
+        if use_ssl is None:
+            use_ssl = self.ssl
+
+        if use_ssl:
             certificate_options = self.my_peer.get_certificate_options()
             factory = TLSMemoryBIOFactory(certificate_options, False, self.server_factory)
         else:
@@ -381,7 +395,7 @@ class ConnectionsManager:
         other_connection = self.connected_peers[protocol.peer.id]
         if protocol.my_peer.id > protocol.peer.id:
             # connection started by me is kept
-            if protocol.initiated_connection:
+            if not protocol.inbound:
                 # other connection is dropped
                 return other_connection
             else:
@@ -389,7 +403,7 @@ class ConnectionsManager:
                 return protocol
         else:
             # connection started by peer is kept
-            if protocol.initiated_connection:
+            if not protocol.inbound:
                 return protocol
             else:
                 return other_connection

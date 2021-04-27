@@ -17,6 +17,9 @@ class Shell(RunNode):
     def start_manager(self) -> None:
         pass
 
+    def register_signal_handlers(self, args: Namespace) -> None:
+        pass
+
     def register_resources(self, args: Namespace) -> None:
         imported_objects: Dict[str, Any] = {}
         imported_objects['tx_storage'] = self.tx_storage

@@ -32,6 +32,7 @@ from hathor.conf import HathorSettings
 from hathor.transaction.exceptions import (
     DuplicatedParents,
     IncorrectParents,
+    InvalidOutputScriptSize,
     InvalidOutputValue,
     InvalidToken,
     ParentDoesNotExist,
@@ -540,6 +541,11 @@ class BaseTransaction(ABC):
             if output.value <= 0:
                 raise InvalidOutputValue('Output value must be a positive integer. Value: {} and index: {}'.format(
                     output.value, index))
+
+            if len(output.script) > settings.MAX_OUTPUT_SCRIPT_SIZE:
+                raise InvalidOutputScriptSize('size: {} and max-size: {}'.format(
+                    len(output.script), settings.MAX_OUTPUT_SCRIPT_SIZE
+                ))
 
     def resolve(self, update_time: bool = True) -> bool:
         """Run a CPU mining looking for the nonce that solves the proof-of-work

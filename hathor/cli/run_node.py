@@ -77,6 +77,7 @@ class RunNode:
 
         settings = HathorSettings()
         log = logger.new()
+        self.log = log
 
         from setproctitle import setproctitle
         setproctitle('{}hathor-core'.format(args.procname_prefix))
@@ -86,6 +87,16 @@ class RunNode:
         else:
             sys.setrecursionlimit(5000)
 
+        try:
+            import resource
+        except ModuleNotFoundError:
+            pass
+        else:
+            (nofile_soft, _) = resource.getrlimit(resource.RLIMIT_NOFILE)
+            if nofile_soft < 256:
+                print('Maximum number of open file descriptors is too low. Minimum required is 256.')
+                sys.exit(-2)
+
         if not args.peer:
             peer_id = PeerId()
         else:
@@ -94,8 +105,15 @@ class RunNode:
 
         python = f'{platform.python_version()}-{platform.python_implementation()}'
 
-        log.info('hathor-core v{hathor}', hathor=hathor.__version__, genesis=genesis.GENESIS_HASH.hex()[:7],
-                 my_peer_id=str(peer_id.id), python=python, platform=platform.platform())
+        log.info(
+            'hathor-core v{hathor}',
+            hathor=hathor.__version__,
+            pid=os.getpid(),
+            genesis=genesis.GENESIS_HASH.hex()[:7],
+            my_peer_id=str(peer_id.id),
+            python=python,
+            platform=platform.platform()
+        )
 
         def create_wallet():
             if args.wallet == 'hd':
@@ -371,6 +389,20 @@ class RunNode:
             # Set websocket factory in metrics
             self.manager.metrics.websocket_factory = ws_factory
 
+    def register_signal_handlers(self, args: Namespace) -> None:
+        """Register signal handlers."""
+        import signal
+        sigusr1 = getattr(signal, 'SIGUSR1', None)
+        if sigusr1 is not None:
+            # USR1 is avaiable in this OS.
+            signal.signal(sigusr1, self.signal_usr1_handler)
+
+    def signal_usr1_handler(self, sig: int, frame: Any) -> None:
+        """Called when USR1 signal is received."""
+        self.log.warn('USR1 received. Killing all connections...')
+        if self.manager and self.manager.connections:
+            self.manager.connections.disconnect_all_peers(force=True)
+
     def __init__(self, *, argv=None):
         if argv is None:
             import sys
@@ -381,6 +413,7 @@ class RunNode:
             if not os.environ.get('HATHOR_CONFIG_FILE'):
                 os.environ['HATHOR_CONFIG_FILE'] = 'hathor.conf.testnet'
         self.prepare(args)
+        self.register_signal_handlers(args)
 
     def parse_args(self, argv: List[str]) -> Namespace:
         return self.parser.parse_args(argv)

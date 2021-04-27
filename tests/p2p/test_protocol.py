@@ -29,6 +29,12 @@ class HathorProtocolTestCase(unittest.TestCase):
         self.assertFalse(conn.tr1.disconnecting)
         self.assertFalse(conn.tr2.disconnecting)
 
+    def assertIsNotConnected(self, conn=None):
+        if conn is None:
+            conn = self.conn
+        self.assertTrue(conn.tr1.disconnecting)
+        self.assertTrue(conn.tr2.disconnecting)
+
     def _send_cmd(self, proto, cmd, payload=None):
         if not payload:
             line = '{}\r\n'.format(cmd)
@@ -178,11 +184,19 @@ class HathorProtocolTestCase(unittest.TestCase):
         self.assertTrue(conn.tr1.disconnecting)
 
     def test_invalid_same_peer_id2(self):
-        # we connect nodes 1-2 and 1-3. Nodes 2 and 3 have the same peer_id. The connections
-        # are established simultaneously, so we do not detect a peer id duplication in PEER_ID
-        # state, only on READY state
+        """
+        We connect nodes 1-2 and 1-3. Nodes 2 and 3 have the same peer_id. The connections
+        are established simultaneously, so we do not detect a peer id duplication in PEER_ID
+        state, only on READY state.
+        """
+        # Disable idle timeout before creating any new peer because self.create_peer(...)
+        # runs the main loop.
+        self.conn.disable_idle_timeout()
+        # Create new peer and disable idle timeout.
         manager3 = self.create_peer(self.network, peer_id=self.peer_id2)
         conn = FakeConnection(manager3, self.manager1)
+        # Disable idle timeout.
+        conn.disable_idle_timeout()
         # HELLO
         self.assertEqual(self.conn.peek_tr1_value().split()[0], b'HELLO')
         self.assertEqual(self.conn.peek_tr2_value().split()[0], b'HELLO')
@@ -211,12 +225,15 @@ class HathorProtocolTestCase(unittest.TestCase):
         # one of the peers will close the connection. We don't know which on, as it depends
         # on the peer ids
         conn1_value = self.conn.peek_tr1_value() + self.conn.peek_tr2_value()
+        conn2_value = conn.peek_tr1_value() + conn.peek_tr2_value()
         if b'ERROR' in conn1_value:
             conn_dead = self.conn
             conn_alive = conn
-        else:
+        elif b'ERROR' in conn2_value:
             conn_dead = conn
             conn_alive = self.conn
+        else:
+            raise Exception('It should never happen.')
         self._check_result_only_cmd(conn_dead.peek_tr1_value() + conn_dead.peek_tr2_value(), b'ERROR')
         # at this point, the connection must be closing as the error was detected on READY state
         self.assertIn(True, [conn_dead.tr1.disconnecting, conn_dead.tr2.disconnecting])
@@ -323,6 +340,12 @@ class HathorProtocolTestCase(unittest.TestCase):
 
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'PEERS')
         self.conn.run_one_step()
+
+    def test_idle_connection(self):
+        self.clock.advance(settings.PEER_IDLE_TIMEOUT - 10)
+        self.assertIsConnected(self.conn)
+        self.clock.advance(15)
+        self.assertIsNotConnected(self.conn)
 
     @inlineCallbacks
     def test_get_data(self):
