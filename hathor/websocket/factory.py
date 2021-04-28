@@ -1,6 +1,6 @@
 import json
 from collections import defaultdict, deque
-from typing import Any, DefaultDict, Deque, Dict, Optional, Set
+from typing import Any, DefaultDict, Deque, Dict, List, Optional, Set
 
 from autobahn.twisted.websocket import WebSocketServerFactory
 from twisted.internet import reactor
@@ -54,6 +54,29 @@ ADDRESS_EVENTS = [
     HathorEvents.WALLET_ELEMENT_VOIDED.value
 ]
 
+# All pubsub events we will subscribe to receive and send in the websocket
+PUBSUB_EVENTS = [
+    HathorEvents.NETWORK_NEW_TX_ACCEPTED,
+    HathorEvents.WALLET_OUTPUT_RECEIVED,
+    HathorEvents.WALLET_INPUT_SPENT,
+    HathorEvents.WALLET_BALANCE_UPDATED,
+    HathorEvents.WALLET_KEYS_GENERATED,
+    HathorEvents.WALLET_GAP_LIMIT,
+    HathorEvents.WALLET_HISTORY_UPDATED,
+    HathorEvents.WALLET_ADDRESS_HISTORY,
+    HathorEvents.WALLET_ELEMENT_WINNER,
+    HathorEvents.WALLET_ELEMENT_VOIDED,
+]
+
+# All ws messages that will be sent
+# We have all the pubsub events plus some custom ws messages
+WS_MESSAGES = [
+    'dashboard:metrics',
+]
+
+for pubsub_event in PUBSUB_EVENTS:
+    WS_MESSAGES.append(pubsub_event.value)
+
 
 class HathorAdminWebsocketFactory(WebSocketServerFactory):
     """ Factory of the admin websocket protocol so we can subscribe to events and
@@ -71,6 +94,9 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         """
         # Opened websocket connections so I can broadcast messages later
         self.connections: Set[HathorAdminWebsocketProtocol] = set()
+
+        # Connections that are subscribed for each message
+        self.subscribed_connections: DefaultDict[str, Set[HathorAdminWebsocketProtocol]] = defaultdict(set)
 
         # Websocket connection for each address
         self.address_connections: DefaultDict[str, Set[HathorAdminWebsocketProtocol]] = defaultdict(set)
@@ -117,7 +143,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             'type': 'dashboard:metrics',
             'time': reactor.seconds(),
         }
-        self.broadcast_message(data)
+        self.send_or_enqueue(data)
 
         if self.is_running:
             # Schedule next message
@@ -126,20 +152,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
     def subscribe(self, pubsub):
         """ Subscribe to defined events for the pubsub received
         """
-        events = [
-            HathorEvents.NETWORK_NEW_TX_ACCEPTED,
-            HathorEvents.WALLET_OUTPUT_RECEIVED,
-            HathorEvents.WALLET_INPUT_SPENT,
-            HathorEvents.WALLET_BALANCE_UPDATED,
-            HathorEvents.WALLET_KEYS_GENERATED,
-            HathorEvents.WALLET_GAP_LIMIT,
-            HathorEvents.WALLET_HISTORY_UPDATED,
-            HathorEvents.WALLET_ADDRESS_HISTORY,
-            HathorEvents.WALLET_ELEMENT_WINNER,
-            HathorEvents.WALLET_ELEMENT_VOIDED,
-        ]
-
-        for event in events:
+        for event in PUBSUB_EVENTS:
             pubsub.subscribe(event, self.handle_publish)
 
     def handle_publish(self, key, args):
@@ -223,6 +236,9 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         else:
             self.send_message(data)
 
+        # Send message to each connection that subscribed to it
+        self.execute_send(data, self.subscribed_connections[data['type']])
+
     def enqueue_for_later(self, data):
         """ Add this date to the correct deque to be processed later
             If this deque is not programed to be called later yet, we call it
@@ -268,6 +284,10 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             self._handle_subscribe_address(connection, message)
         elif message['type'] == 'unsubscribe_address':
             self._handle_unsubscribe_address(connection, message)
+        elif message['type'] == 'subscribe':
+            self._handle_subscribe(connection, message)
+        elif message['type'] == 'unsubscribe':
+            self._handle_unsubscribe(connection, message)
 
     def _handle_ping(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
         """ Handler for ping message, should respond with a simple {"type": "pong"}"""
@@ -311,13 +331,56 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         if len(self.address_connections[address]) == 0:
             del self.address_connections[address]
 
+    def _handle_subscribe(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
+        """ Handler for subscription to ws messages."""
+        ws_messages: Optional[List[str]] = message.get('messages')
+        if ws_messages is None:
+            # No messages key
+            return
+        for ws_message in ws_messages:
+            if ws_message in WS_MESSAGES:
+                if connection in self.connections:
+                    # Remove from the all connections set
+                    # Only in the first message subscription will still be in the set
+                    self.connections.remove(connection)
+                # Add the connection to the set
+                self.subscribed_connections[ws_message].add(connection)
+        # Reply back as subscribed success
+        payload = json.dumps({'type': 'subscribed', 'messages': ws_messages, 'success': True}).encode('utf-8')
+        connection.sendMessage(payload, False)
+
+    def _handle_unsubscribe(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
+        """ Handler for unsubscribe to ws messages."""
+        ws_messages: Optional[List[str]] = message.get('messages')
+        if ws_messages is None:
+            # No messages key
+            return
+        for ws_message in ws_messages:
+            if connection in self.subscribed_connections[ws_message]:
+                # Remove connection from set, if exists
+                self.subscribed_connections[ws_message].remove(connection)
+        # Reply back as unsubscribed success
+        payload = json.dumps({'type': 'unsubscribed', 'messages': ws_messages, 'success': True}).encode('utf-8')
+        connection.sendMessage(payload, False)
+
     def connection_closed(self, connection: HathorAdminWebsocketProtocol) -> None:
         """ Called when a ws connection is closed
             We should remove it from self.connections and from self.address_connections set for each address
         """
-        self.connections.remove(connection)
+        if connection in self.connections:
+            # With connections subscribing to an specific channel, we need to do this check
+            # In the future all connections should subscribe to channels
+            self.connections.remove(connection)
+
         for address in connection.subscribed_to:
             self._remove_connection_from_address_dict(connection, address)
+
+        # Removing from subsbribed connections set
+        # Given that we don't have many message types and use a set for storing the connections,
+        # shouldn't be a very expensive operation.
+        for conn_set in self.subscribed_connections.values():
+            if connection in conn_set:
+                conn_set.remove(connection)
 
 
 def _count_empty(addresses: Set[str], wallet_index: WalletIndex) -> int:
