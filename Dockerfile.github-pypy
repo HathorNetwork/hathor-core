@@ -15,7 +15,7 @@ ENV VIRTUAL_ENV=/app/.venv
 WORKDIR /app/
 RUN pypy -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-RUN pip --no-input --no-cache-dir install --upgrade "pip<21" wheel
+RUN pip --no-input --no-cache-dir install --upgrade pip wheel
 COPY requirements.txt ./requirements.txt
 RUN pip --no-input --no-cache-dir install --no-deps --compile -r requirements.txt
 COPY dist ./dist
