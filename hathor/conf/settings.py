@@ -176,7 +176,7 @@ class HathorSettings(NamedTuple):
     WS_MAX_SUBS_ADDRS_CONN: int = 200000
 
     # Maximum number of subscribed addresses that do not have any outputs (also per websocket connection)
-    WS_MAX_SUBS_ADDRS_EMPTY: int = 40
+    WS_MAX_SUBS_ADDRS_EMPTY: int = 100
 
     # Whether miners are assumed to mine txs by default
     STRATUM_MINE_TXS_DEFAULT: bool = True
