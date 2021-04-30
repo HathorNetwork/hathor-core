@@ -3,7 +3,9 @@ from collections import defaultdict, deque
 from typing import Any, DefaultDict, Deque, Dict, Optional, Set
 
 from autobahn.twisted.websocket import WebSocketServerFactory
+from structlog import get_logger
 from twisted.internet import reactor
+from twisted.internet.task import LoopingCall
 
 from hathor.conf import HathorSettings
 from hathor.indexes import WalletIndex
@@ -13,6 +15,7 @@ from hathor.pubsub import HathorEvents
 from hathor.websocket.protocol import HathorAdminWebsocketProtocol
 
 settings = HathorSettings()
+logger = get_logger()
 
 # CONTROLLED_TYPES define each Rate Limit parameter for each message type that should be limited
 # buffer_size (int): size of the deque that will hold the messages that will be processed in the future
@@ -86,6 +89,12 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
 
         self.is_running = False
 
+        self.log = logger.new()
+
+        # A timer to periodically broadcast dashboard metrics
+        self._lc_send_metrics = LoopingCall(self._send_metrics)
+        self._lc_send_metrics.clock = reactor
+
     def start(self):
         self.is_running = True
 
@@ -93,9 +102,11 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         self._setup_rate_limit()
 
         # Start metric sender
-        self._schedule_and_send_metric()
+        self._lc_send_metrics.start(settings.WS_SEND_METRICS_INTERVAL, now=False)
 
     def stop(self):
+        if self._lc_send_metrics.running:
+            self._lc_send_metrics.stop()
         self.is_running = False
 
     def _setup_rate_limit(self):
@@ -105,10 +116,10 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             self.rate_limiter.set_limit(control_type, config['max_hits'], config['hits_window_seconds'])
             self.buffer_deques[control_type] = deque(maxlen=config['buffer_size'])
 
-    def _schedule_and_send_metric(self):
-        """ Send dashboard metric to websocket and schedule next message
+    def _send_metrics(self):
+        """ Broadcast dashboard metric to websocket clients
         """
-        data = {
+        self.broadcast_message({
             'transactions': self.metrics.transactions,
             'blocks': self.metrics.blocks,
             'best_block_height': self.metrics.best_block_height,
@@ -116,12 +127,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             'peers': self.metrics.peers,
             'type': 'dashboard:metrics',
             'time': reactor.seconds(),
-        }
-        self.broadcast_message(data)
-
-        if self.is_running:
-            # Schedule next message
-            reactor.callLater(1, self._schedule_and_send_metric)
+        })
 
     def subscribe(self, pubsub):
         """ Subscribe to defined events for the pubsub received
@@ -186,7 +192,12 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         """
         payload = json.dumps(data).encode('utf-8')
         for c in connections:
-            c.sendMessage(payload, False)
+            try:
+                c.sendMessage(payload, False)
+            # XXX: unfortunately autobahn can raise 3 different exceptions and one of them is a bare Exception
+            # https://github.com/crossbario/autobahn-python/blob/v20.12.3/autobahn/websocket/protocol.py#L2201-L2294
+            except Exception:
+                self.log.error('send failed, moving on', exc_info=True)
 
     def broadcast_message(self, data: Dict[str, Any]) -> None:
         """ Broadcast the update message to the connections
