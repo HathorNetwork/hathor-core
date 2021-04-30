@@ -2,7 +2,9 @@ from collections import deque
 from typing import TYPE_CHECKING, Deque, NamedTuple, Optional
 
 from twisted.internet.interfaces import IReactorCore
+from twisted.internet.task import LoopingCall
 
+from hathor.conf import HathorSettings
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.transaction.base_transaction import sum_weights
 from hathor.transaction.block import Block
@@ -12,6 +14,8 @@ from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 if TYPE_CHECKING:
     from hathor.stratum import StratumFactory  # noqa: F401
     from hathor.websocket.factory import HathorAdminWebsocketFactory  # noqa: F401
+
+settings = HathorSettings()
 
 
 class WeightValue(NamedTuple):
@@ -40,7 +44,6 @@ class Metrics:
     exponential_alfa: float  # XXX: "alpha"?
     tx_hash_store_interval: int
     block_hash_store_interval: int
-    collect_data_interval: int
     websocket_connections: int
     subscribed_addresses: int
     websocket_factory: Optional['HathorAdminWebsocketFactory']
@@ -118,9 +121,6 @@ class Metrics:
         self.tx_hash_store_interval = 1
         self.block_hash_store_interval = 1
 
-        # Time between method call to collect data
-        self.collect_data_interval = 5
-
         # Websocket data stored
         self.websocket_connections = 0
         self.subscribed_addresses = 0
@@ -142,6 +142,10 @@ class Metrics:
         # Send-token timeouts counter
         self.send_token_timeouts = 0
 
+        # A timer to periodically collect data
+        self._lc_collect_data = LoopingCall(self._collect_data)
+        self._lc_collect_data.clock = reactor
+
     def _start_initial_values(self) -> None:
         """ When we start the metrics object we set the transaction and block count already in the network
         """
@@ -157,10 +161,12 @@ class Metrics:
         self._start_initial_values()
         self.subscribe()
         self.is_running = True
-        self.collect_data()
+        self._lc_collect_data.start(settings.METRICS_COLLECT_DATA_INTERVAL, now=False)
 
     def stop(self) -> None:
         self.is_running = False
+        if self._lc_collect_data.running:
+            self._lc_collect_data.stop()
 
     def subscribe(self) -> None:
         """ Subscribe to defined events for the pubsub received
@@ -229,12 +235,8 @@ class Metrics:
         self.blocks_found = blocks_found
         self.estimated_hash_rate = estimated_hash_rate
 
-    def collect_data(self) -> None:
+    def _collect_data(self) -> None:
         """ Call methods that collect data to metrics
-            If it's still running, we schedule another call
         """
         self.set_websocket_data()
         self.set_stratum_data()
-
-        if self.is_running:
-            self.reactor.callLater(self.collect_data_interval, self.collect_data)

@@ -3,9 +3,14 @@ from typing import TYPE_CHECKING, Dict
 
 from prometheus_client import CollectorRegistry, Gauge, write_to_textfile
 from twisted.internet import reactor
+from twisted.internet.task import LoopingCall
+
+from hathor.conf import HathorSettings
 
 if TYPE_CHECKING:
     from hathor.metrics import Metrics
+
+settings = HathorSettings()
 
 # Define prometheus metrics and it's explanation
 METRIC_INFO = {
@@ -54,11 +59,12 @@ class PrometheusMetricsExporter:
         # Setup initial prometheus lib objects for each metric
         self._initial_setup()
 
-        # Interval in which the write data method will be called (in seconds)
-        self.call_interval: int = 5
-
         # If exporter is running
         self.running: bool = False
+
+        # A timer to periodically write data to prometheus
+        self._lc_write_data = LoopingCall(self._write_data)
+        self._lc_write_data.clock = reactor
 
     def _initial_setup(self) -> None:
         """ Start a collector registry to send data to node exporter
@@ -73,7 +79,7 @@ class PrometheusMetricsExporter:
         """ Starts exporter
         """
         self.running = True
-        self._schedule_and_write_data()
+        self._lc_write_data.start(settings.PROMETHEUS_WRITE_INTERVAL, now=False)
 
     def set_new_metrics(self) -> None:
         """ Update metric_gauges dict with new data from metrics
@@ -83,18 +89,15 @@ class PrometheusMetricsExporter:
 
         write_to_textfile(self.filepath, self.registry)
 
-    def _schedule_and_write_data(self) -> None:
+    def _write_data(self) -> None:
         """ Update all metric data with new values
             Write new data to file
-            Schedule next call
         """
-        if self.running:
-            self.set_new_metrics()
-
-            # Schedule next call
-            reactor.callLater(self.call_interval, self._schedule_and_write_data)
+        self.set_new_metrics()
 
     def stop(self) -> None:
         """ Stops exporter
         """
         self.running = False
+        if self._lc_write_data.running:
+            self._lc_write_data.stop()
