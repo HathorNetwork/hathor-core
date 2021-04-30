@@ -21,6 +21,7 @@ from twisted.internet import endpoints
 from twisted.internet.base import ReactorBase
 from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IStreamClientEndpoint, IStreamServerEndpoint
+from twisted.internet.task import LoopingCall
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
 
@@ -54,7 +55,6 @@ class ConnectionsManager:
     def __init__(self, reactor: ReactorBase, my_peer: PeerId, server_factory: 'HathorServerFactory',
                  client_factory: 'HathorClientFactory', pubsub: PubSubManager, manager: 'HathorManager',
                  ssl: bool) -> None:
-        from twisted.internet.task import LoopingCall
         self.log = logger.new()
 
         self.reactor = reactor

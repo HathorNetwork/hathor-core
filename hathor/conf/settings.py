@@ -260,3 +260,6 @@ class HathorSettings(NamedTuple):
 
     # Where to download whitelist from
     WHITELIST_URL: Optional[str] = None
+
+    # Interval (in seconds) to broadcast dashboard metrics to websocket connections
+    WS_SEND_METRICS_INTERVAL: int = 1
