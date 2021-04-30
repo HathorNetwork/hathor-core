@@ -1292,19 +1292,18 @@ def op_checkmultisig(stack: Stack, log: List[str], extras: ScriptExtras) -> None
 
     # For each signature we check if it's valid with one of the public keys
     # Signatures must be in order (same as the public keys in the multi sig wallet)
+    pubkey_index = 0
     for signature in signatures:
-        valid = False
-        for index, pubkey in enumerate(pubkeys):
+        while pubkey_index < len(pubkeys):
+            pubkey = pubkeys[pubkey_index]
             new_stack = [signature, pubkey]
             op_checksig(new_stack, log, extras)
             result = new_stack.pop()
+            pubkey_index += 1
             if result == 1:
-                pubkeys = pubkeys[index + 1:]
-                valid = True
                 break
-
-        if not valid:
-            # If one signature is not valid we push 0 and return
+        else:
+            # finished all pubkeys and did not verify all signatures
             stack.append(0)
             return
 
