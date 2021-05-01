@@ -55,6 +55,7 @@ class RunNode:
                             help='Execute a fast initialization, which skips some transaction verifications. '
                             'This is still a beta feature as it may cause issues when restarting the full node '
                             'after a crash.')
+        parser.add_argument('--procname-prefix', help='Add a prefix to the process name', default='')
         return parser
 
     def prepare(self, args: Namespace) -> None:
@@ -76,6 +77,9 @@ class RunNode:
 
         settings = HathorSettings()
         log = logger.new()
+
+        from setproctitle import setproctitle
+        setproctitle('{}hathor-core'.format(args.procname_prefix))
 
         if args.recursion_limit:
             sys.setrecursionlimit(args.recursion_limit)
