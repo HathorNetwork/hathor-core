@@ -1103,6 +1103,14 @@ class TxOutput:
         """Whether this is a token authority output"""
         return (self.token_data & self.TOKEN_AUTHORITY_MASK) > 0
 
+    def is_standard_script(self) -> bool:
+        """Return True if this output has a standard script."""
+        from hathor.transaction.scripts import P2PKH
+        p2pkh = P2PKH.parse_script(self.script)
+        if p2pkh is not None:
+            return True
+        return False
+
     def can_mint_token(self) -> bool:
         """Whether this utxo can mint tokens"""
         return self.is_token_authority() and ((self.value & self.TOKEN_MINT_MASK) > 0)

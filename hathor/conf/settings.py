@@ -172,6 +172,9 @@ class HathorSettings(NamedTuple):
     # If should use stratum to resolve pow of transactions in send tokens resource
     SEND_TOKENS_STRATUM: bool = True
 
+    # Maximum size of the tx output's script allowed by the /push-tx API.
+    PUSHTX_MAX_OUTPUT_SCRIPT_SIZE: int = 256
+
     # Maximum number of subscribed addresses per websocket connection
     WS_MAX_SUBS_ADDRS_CONN: int = 200000
 

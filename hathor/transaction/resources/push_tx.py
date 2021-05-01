@@ -1,16 +1,22 @@
 import struct
-from typing import Any, Dict, cast
+from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
 from twisted.web import resource
 from twisted.web.http import Request
 
 from hathor.api_util import parse_get_arguments, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.conf import HathorSettings
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.exceptions import TxValidationError
 from hathor.util import json_dumpb, json_loadb
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager
+
+settings = HathorSettings()
 
 ARGS = ['hex_tx']
 
@@ -23,58 +29,76 @@ class PushTxResource(resource.Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: 'HathorManager', max_output_script_size: Optional[int] = None,
+                 allow_non_standard_script: bool = False) -> None:
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
+        self.max_output_script_size: int = settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE
+        self.allow_non_standard_script = allow_non_standard_script
 
-    def handle_push_tx(self, params: Dict[str, Any]) -> bytes:
+    def handle_push_tx(self, params: Dict[str, Any]) -> Dict[str, Any]:
         try:
             tx_bytes = bytes.fromhex(params['hex_tx'])
             tx = tx_or_block_from_bytes(tx_bytes)
         except ValueError:
-            data = {'success': False, 'message': 'Invalid hexadecimal data', 'can_force': False}
+            return {'success': False, 'message': 'Invalid hexadecimal data', 'can_force': False}
         except struct.error:
-            data = {
+            return {
                 'success': False,
                 'message': 'This transaction is invalid. Try to decode it first to validate it.',
                 'can_force': False
             }
-        else:
-            if tx.is_block:
-                # It's a block and we can't push blocks
-                data = {
+
+        if tx.is_block:
+            # It's a block and we can't push blocks
+            return {
+                'success': False,
+                'message': 'This transaction is invalid. A transaction must have at least one input',
+                'can_force': False
+            }
+
+        tx.storage = self.manager.tx_storage
+        # If this tx is a double spending, don't even try to propagate in the network
+        assert isinstance(tx, Transaction)
+        is_double_spending = tx.is_double_spending()
+        if is_double_spending:
+            return {
+                'success': False,
+                'message': 'Invalid transaction. At least one of your inputs has already been spent.',
+                'can_force': False
+            }
+
+        # Validate outputs.
+        for txout in tx.outputs:
+            if len(txout.script) > self.max_output_script_size:
+                return {
                     'success': False,
-                    'message': 'This transaction is invalid. A transaction must have at least one input',
-                    'can_force': False
+                    'message': 'Transaction has an output script that is too big.',
+                    'can_force': False,
                 }
-            else:
-                tx.storage = self.manager.tx_storage
-                # If this tx is a double spending, don't even try to propagate in the network
-                assert isinstance(tx, Transaction)
-                is_double_spending = tx.is_double_spending()
-                if is_double_spending:
-                    data = {
+            if not self.allow_non_standard_script:
+                if not txout.is_standard_script():
+                    return {
                         'success': False,
-                        'message': 'Invalid transaction. At least one of your inputs has already been spent.',
-                        'can_force': False
+                        'message': 'Transaction has a non-standard script. Only standard scripts are allowed.',
                     }
-                else:
-                    success, message = tx.validate_tx_error()
 
-                    if success or params['force']:
-                        message = ''
-                        try:
-                            success = self.manager.propagate_tx(tx, fails_silently=False)
-                        except (InvalidNewTransaction, TxValidationError) as e:
-                            success = False
-                            message = str(e)
-                        data = {'success': success, 'message': message}
-                        if success:
-                            data['tx'] = tx.to_json()
-                    else:
-                        data = {'success': success, 'message': message, 'can_force': True}
+        # Validate tx.
+        success, message = tx.validate_tx_error()
+        if not success and not params.get('force', False):
+            return {'success': success, 'message': message, 'can_force': True}
 
-        return json_dumpb(data)
+        # Finally, propagate the tx.
+        message = ''
+        try:
+            success = self.manager.propagate_tx(tx, fails_silently=False)
+        except (InvalidNewTransaction, TxValidationError) as e:
+            success = False
+            message = str(e)
+        data = {'success': success, 'message': message}
+        if success:
+            data['tx'] = tx.to_json()
+        return data
 
     def render_GET(self, request: Request) -> bytes:
         """ GET request for /push_tx/
@@ -94,7 +118,8 @@ class PushTxResource(resource.Resource):
         data = parsed['args']
         data['force'] = b'force' in request.args and request.args[b'force'][0].decode('utf-8') == 'true'
 
-        return self.handle_push_tx(data)
+        ret = self.handle_push_tx(data)
+        return json_dumpb(ret)
 
     def render_POST(self, request: Request) -> bytes:
         """ POST request for /push_tx/
@@ -115,7 +140,8 @@ class PushTxResource(resource.Resource):
         if 'hex_tx' not in data:
             return error_ret
 
-        return self.handle_push_tx(data)
+        ret = self.handle_push_tx(data)
+        return json_dumpb(ret)
 
     def render_OPTIONS(self, request: Request) -> int:
         return render_options(request)
