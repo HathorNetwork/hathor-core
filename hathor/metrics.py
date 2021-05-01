@@ -44,6 +44,7 @@ class Metrics:
     exponential_alfa: float  # XXX: "alpha"?
     tx_hash_store_interval: int
     block_hash_store_interval: int
+    collect_data_interval: int
     websocket_connections: int
     subscribed_addresses: int
     websocket_factory: Optional['HathorAdminWebsocketFactory']
@@ -142,6 +143,9 @@ class Metrics:
         # Send-token timeouts counter
         self.send_token_timeouts = 0
 
+        # Time between method call to collect data
+        self.collect_data_interval = settings.METRICS_COLLECT_DATA_INTERVAL
+
         # A timer to periodically collect data
         self._lc_collect_data = LoopingCall(self._collect_data)
         self._lc_collect_data.clock = reactor
@@ -161,7 +165,7 @@ class Metrics:
         self._start_initial_values()
         self.subscribe()
         self.is_running = True
-        self._lc_collect_data.start(settings.METRICS_COLLECT_DATA_INTERVAL, now=False)
+        self._lc_collect_data.start(self.collect_data_interval, now=False)
 
     def stop(self) -> None:
         self.is_running = False

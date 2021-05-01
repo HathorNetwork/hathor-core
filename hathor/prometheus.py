@@ -62,6 +62,9 @@ class PrometheusMetricsExporter:
         # If exporter is running
         self.running: bool = False
 
+        # Interval in which the write data method will be called (in seconds)
+        self.call_interval: int = settings.PROMETHEUS_WRITE_INTERVAL
+
         # A timer to periodically write data to prometheus
         self._lc_write_data = LoopingCall(self._write_data)
         self._lc_write_data.clock = reactor
@@ -79,7 +82,7 @@ class PrometheusMetricsExporter:
         """ Starts exporter
         """
         self.running = True
-        self._lc_write_data.start(settings.PROMETHEUS_WRITE_INTERVAL, now=False)
+        self._lc_write_data.start(self.call_interval, now=False)
 
     def set_new_metrics(self) -> None:
         """ Update metric_gauges dict with new data from metrics
