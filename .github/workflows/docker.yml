@@ -19,7 +19,6 @@ jobs:
         python-impl:
         - python
         python-version:
-        # - 3.6
         - 3.7
         - 3.8
         - 3.9
@@ -36,7 +35,6 @@ jobs:
       shell: python
       run: |
         import datetime
-        import itertools
         import re
         def extract_pyver(filename):
             for line in open(filename).readlines():
@@ -79,8 +77,25 @@ jobs:
         elif '${{ github.event_name }}' == 'push':
             tags.add('sha-' + '${{ github.sha }}'[:8])
         print('::set-output name=version::' + version)
-        print('::set-output name=tags::' + ','.join(itertools.chain(('${{ secrets.DOCKERHUB_IMAGE }}:' + t for t in tags),
-                                                                    ('${{ secrets.GHCR_IMAGE }}:' + t for t in tags))))
+        images = []
+        docker_image = '${{ secrets.DOCKERHUB_IMAGE }}'
+        if docker_image:
+            images.append(docker_image)
+            print('::set-output name=login-dockerhub::true')
+        else:
+            print('::set-output name=login-dockerhub::false')
+        ghcr_image = '${{ secrets.GHCR_IMAGE }}'
+        if ghcr_image:
+            images.append(ghcr_image)
+            print('::set-output name=login-ghcr::true')
+        else:
+            print('::set-output name=login-ghcr::false')
+        if images:
+            print('::set-output name=tags::' + ','.join(f'{i}:{t}' for i in images for t in tags))
+            print('::set-output name=push::true')
+        else:
+            print('::set-output name=tags::dont-push--local-only')
+            print('::set-output name=push::false')
         print('::set-output name=created::' + datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'))
         print('::set-output name=dockerfile::' + dockerfile)
     - name: Set up QEMU  # arm64 is not available natively
@@ -95,15 +110,17 @@ jobs:
         driver-opts: network=host
     - name: Login to DockerHub
       uses: docker/login-action@v1
+      if: steps.prep.outputs.login-dockerhub
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
     - name: Login to GitHub Container Registry
       uses: docker/login-action@v1
+      if: steps.prep.outputs.login-ghcr
       with:
         registry: ghcr.io
-        username: ${{ secrets.GHCR_USERNAME }}
-        password: ${{ secrets.GHCR_TOKEN }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     - name: Set up Python ${{ matrix.python }}
       uses: actions/setup-python@v2
       with:
@@ -141,7 +158,7 @@ jobs:
         build-args: PYTHON=${{ matrix.python-version }}
         platforms: linux/amd64,linux/arm64
         pull: true
-        push: ${{ github.event_name != 'pull_request' }}
+        push: ${{ github.event_name != 'pull_request' && steps.prep.outputs.push }}
         tags: ${{ steps.prep.outputs.tags }}
         # see: https://github.com/opencontainers/image-spec/blob/master/annotations.md
         labels: |

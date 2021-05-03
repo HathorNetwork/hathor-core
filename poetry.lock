@@ -967,7 +967,7 @@ rocksdb = ["cython", "python-rocksdb"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.6,<4"
-content-hash = "8554d621f222f926658a914a14b2d266ac112535215332a6e0e60380ee50be47"
+content-hash = "a5132652e72e7d56879cfdd4362f776fee1f99c6498ac82d90c498e7b49bcd64"
 
 [metadata.files]
 aiohttp = [

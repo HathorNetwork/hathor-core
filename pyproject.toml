@@ -75,6 +75,7 @@ aiohttp = "~3.7.3"
 idna = "~2.10"
 # move the following to "build-system.requires" when this poetry pr is merged and released: https://github.com/python-poetry/poetry/pull/2794
 cython = {version = "<0.30", optional = true}
+typing-extensions = "^3.7.4"  # indirect dependency, should not be needed on Python >3.7 but some packages import it anyway
 
 [tool.poetry.extras]
 rocksdb = ["cython", "python-rocksdb"]
