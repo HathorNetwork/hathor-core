@@ -24,7 +24,7 @@ class NanoContractsTest(_BaseResourceTest._ResourceTest):
         decode_resource = StubSite(NanoContractDecodeResource(self.manager))
         execute_resource = StubSite(NanoContractExecuteResource(self.manager))
         match_value_resource = StubSite(NanoContractMatchValueResource(self.manager))
-        pushtx_resource = StubSite(PushTxResource(self.manager))
+        pushtx_resource = StubSite(PushTxResource(self.manager, allow_non_standard_script=True))
         signtx_resource = StubSite(SignTxResource(self.manager))
         decodetx_resource = StubSite(DecodeTxResource(self.manager))
         add_new_blocks(self.manager, 3)
