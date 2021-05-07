@@ -14,6 +14,8 @@ from hathor.transaction.exceptions import (
     InexistentInput,
     InputOutputMismatch,
     InvalidInputData,
+    InvalidInputDataSize,
+    InvalidOutputScriptSize,
     InvalidOutputValue,
     NoInputError,
     ParentDoesNotExist,
@@ -704,6 +706,50 @@ class BasicTransaction(unittest.TestCase):
         input_.data = P2PKH.create_input_data(public_bytes, signature)
         tx.resolve()
         return tx
+
+    def _test_txout_script_limit(self, offset):
+        genesis_block = self.genesis_blocks[0]
+        _input = TxInput(genesis_block.hash, 0, b'')
+
+        value = genesis_block.outputs[0].value
+        script = b'*' * (settings.MAX_OUTPUT_SCRIPT_SIZE + offset)
+        _output = TxOutput(value, script)
+
+        tx = Transaction(inputs=[_input], outputs=[_output], storage=self.tx_storage)
+        tx.verify_outputs()
+
+    def test_txout_script_limit_exceeded(self):
+        with self.assertRaises(InvalidOutputScriptSize):
+            self._test_txout_script_limit(offset=1)
+
+    def test_txout_script_limit_success(self):
+        self._test_txout_script_limit(offset=-1)
+        self._test_txout_script_limit(offset=0)
+
+    def _test_txin_data_limit(self, offset):
+        genesis_block = self.genesis_blocks[0]
+        data = b'*' * (settings.MAX_INPUT_DATA_SIZE + offset)
+        _input = TxInput(genesis_block.hash, 0, data)
+
+        value = genesis_block.outputs[0].value
+        _output = TxOutput(value, b'')
+
+        tx = Transaction(
+            timestamp=int(self.manager.reactor.seconds()) + 1,
+            inputs=[_input],
+            outputs=[_output],
+            storage=self.tx_storage
+        )
+        tx.verify_inputs(skip_script=True)
+
+    def test_txin_data_limit_exceeded(self):
+        with self.assertRaises(InvalidInputDataSize):
+            self._test_txin_data_limit(offset=1)
+
+    def test_txin_data_limit_success(self):
+        add_blocks_unlock_reward(self.manager)
+        self._test_txin_data_limit(offset=-1)
+        self._test_txin_data_limit(offset=0)
 
     def test_reward_lock(self):
         from hathor.transaction.exceptions import RewardLocked

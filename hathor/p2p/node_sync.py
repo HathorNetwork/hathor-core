@@ -73,6 +73,8 @@ class SendDataPush:
     def start(self) -> None:
         """ Start pushing data.
         """
+        if self.is_running:
+            raise Exception('SendDataPush is already stopped.')
         self.is_running = True
         self.consumer.registerProducer(self, True)
         self.resumeProducing()
@@ -80,6 +82,8 @@ class SendDataPush:
     def stop(self) -> None:
         """ Stop pushing data.
         """
+        if not self.is_running:
+            raise Exception('SendDataPush is already stopped.')
         self.is_running = False
         self.pauseProducing()
         self.consumer.unregisterProducer()
@@ -216,6 +220,9 @@ class NodeSyncTimestamp(Plugin):
         # that the peer is synced (in seconds).
         self.sync_threshold: int = settings.P2P_SYNC_THRESHOLD
 
+        # Indicate whether the sync has been started.
+        self.is_started: bool = False
+
         # Indicate whether the synchronization is running.
         self.is_running: bool = False
 
@@ -246,6 +253,9 @@ class NodeSyncTimestamp(Plugin):
     def start(self) -> None:
         """ Start sync.
         """
+        if self.is_started:
+            raise Exception('NodeSyncTimestamp is already running')
+        self.is_started = True
         if self.send_data_queue:
             self.send_data_queue.start()
         self.next_step()
@@ -253,6 +263,9 @@ class NodeSyncTimestamp(Plugin):
     def stop(self) -> None:
         """ Stop sync.
         """
+        if not self.is_started:
+            raise Exception('NodeSyncTimestamp is already stopped')
+        self.is_started = False
         if self.send_data_queue:
             self.send_data_queue.stop()
         if self.call_later_id and self.call_later_id.active():

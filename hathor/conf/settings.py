@@ -202,11 +202,17 @@ class HathorSettings(NamedTuple):
     # during peer connection. Peers shouldn't have their clocks more than MAX_FUTURE_TIMESTAMP_ALLOWED/2 apart
     MAX_FUTURE_TIMESTAMP_ALLOWED: int = 5 * 60
 
-    # Maximum number of peer connection attemps before stop retrying
-    MAX_PEER_CONNECTION_ATTEMPS: int = 3
-
     # Multiplier for the value to increase the timestamp for the next retry moment to connect to the peer
     PEER_CONNECTION_RETRY_INTERVAL_MULTIPLIER: int = 5
+
+    # Maximum retry interval for retrying to connect to the peer
+    PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL: int = 300
+
+    # Number max of connections in the p2p network
+    PEER_MAX_CONNECTIONS: int = 125
+
+    # Maximum period without receiving any messages from ther peer (in seconds).
+    PEER_IDLE_TIMEOUT: int = 60
 
     # Filepath of ca certificate file to generate connection certificates
     CA_FILEPATH: str = os.path.join(os.path.dirname(__file__), '../p2p/ca.crt')
@@ -240,6 +246,12 @@ class HathorSettings(NamedTuple):
 
     # Mamimum number of outputs accepted
     MAX_NUM_OUTPUTS: int = 255
+
+    # Maximum size of each txout's script (in bytes)
+    MAX_OUTPUT_SCRIPT_SIZE: int = 1024
+
+    # Maximum size of each txin's data (in bytes)
+    MAX_INPUT_DATA_SIZE: int = 1024
 
     # Maximum number of transactions returned on addresses history API
     MAX_TX_ADDRESSES_HISTORY: int = 150

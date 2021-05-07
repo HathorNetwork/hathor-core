@@ -29,6 +29,7 @@ from hathor.transaction.exceptions import (
     InexistentInput,
     InputOutputMismatch,
     InvalidInputData,
+    InvalidInputDataSize,
     InvalidToken,
     NoInputError,
     RewardLocked,
@@ -436,6 +437,11 @@ class Transaction(BaseTransaction):
 
         spent_outputs: Set[Tuple[bytes, int]] = set()
         for input_tx in self.inputs:
+            if len(input_tx.data) > settings.MAX_INPUT_DATA_SIZE:
+                raise InvalidInputDataSize('size: {} and max-size: {}'.format(
+                    len(input_tx.data), settings.MAX_INPUT_DATA_SIZE
+                ))
+
             try:
                 spent_tx = self.get_spent_tx(input_tx)
                 assert spent_tx.hash is not None

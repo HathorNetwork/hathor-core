@@ -89,17 +89,20 @@ class HelloState(BaseState):
             protocol.send_error_and_close_connection('Different genesis.')
             return
 
-        if abs(data['timestamp'] - protocol.node.reactor.seconds()) > settings.MAX_FUTURE_TIMESTAMP_ALLOWED/2:
+        dt = data['timestamp'] - protocol.node.reactor.seconds()
+        if abs(dt) > settings.MAX_FUTURE_TIMESTAMP_ALLOWED / 2:
             protocol.send_error_and_close_connection('Nodes timestamps too far apart.')
             return
 
-        settings_dict = get_settings_hello_dict()
-        if 'settings_dict' in data and data['settings_dict'] != settings_dict:
+        if 'settings_dict' in data:
             # If settings_dict is sent we must validate it
-            protocol.send_error_and_close_connection(
-                'Settings values are different. {}'.format(json.dumps(settings_dict))
-            )
-            return
+            settings_dict = get_settings_hello_dict()
+            if data['settings_dict'] != settings_dict:
+                protocol.send_error_and_close_connection(
+                    'Settings values are different. {}'.format(json.dumps(settings_dict))
+                )
+                return
 
         protocol.app_version = data['app']
+        protocol.diff_timestamp = dt
         protocol.change_state(protocol.PeerState.PEER_ID)

@@ -225,15 +225,16 @@ class PeerId:
         json.dump(data, fp, indent=4)
         fp.close()
 
-    def update_retry_timestamp(self, now: int) -> None:
+    def increment_retry_attempt(self, now: int) -> None:
         """ Updates timestamp for next retry.
 
         :param now: current timestamp
         """
-        self.retry_interval = self.retry_interval * settings.PEER_CONNECTION_RETRY_INTERVAL_MULTIPLIER
-        if self.retry_interval > 180:
-            self.retry_interval = 180
         self.retry_timestamp = now + self.retry_interval
+        self.retry_attempts += 1
+        self.retry_interval = self.retry_interval * settings.PEER_CONNECTION_RETRY_INTERVAL_MULTIPLIER
+        if self.retry_interval > settings.PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL:
+            self.retry_interval = settings.PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL
 
     def reset_retry_timestamp(self) -> None:
         """ Resets retry values.
@@ -248,18 +249,9 @@ class PeerId:
             We validate if peer already has RETRIES_EXCEEDED flag, or has reached the maximum allowed attempts
             If not, we check if the timestamp is already a valid one to retry
         """
-        if PeerFlags.RETRIES_EXCEEDED in self.flags:
+        if now < self.retry_timestamp:
             return False
-
-        if self.retry_attempts >= settings.MAX_PEER_CONNECTION_ATTEMPS:
-            self.flags.add(PeerFlags.RETRIES_EXCEEDED)
-            return False
-
-        if now >= self.retry_timestamp:
-            self.retry_attempts += 1
-            return True
-
-        return False
+        return True
 
     def get_certificate(self) -> x509.Certificate:
         if not self.certificate:

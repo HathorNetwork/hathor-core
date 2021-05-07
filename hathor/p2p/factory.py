@@ -42,7 +42,8 @@ class HathorServerFactory(protocol.ServerFactory):
             my_peer=self.my_peer,
             connections=self.connections,
             node=self.node,
-            use_ssl=self.use_ssl
+            use_ssl=self.use_ssl,
+            inbound=True,
         )
         p.factory = self
         return p
@@ -77,7 +78,8 @@ class HathorClientFactory(protocol.ClientFactory):
             my_peer=self.my_peer,
             connections=self.connections,
             node=self.node,
-            use_ssl=self.use_ssl
+            use_ssl=self.use_ssl,
+            inbound=False,
         )
         p.factory = self
         return p
