@@ -3,8 +3,8 @@ from twisted.internet.defer import inlineCallbacks
 
 import hathor
 from hathor.p2p.resources import StatusResource
+from hathor.simulator import FakeConnection
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import FakeConnection
 
 
 class StatusTest(_BaseResourceTest._ResourceTest):

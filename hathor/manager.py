@@ -128,6 +128,8 @@ class HathorManager:
         self.my_peer = peer_id or PeerId()
         self.network = network or 'testnet'
 
+        self.is_started: bool = False
+
         self.cpu = cpu
 
         # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
@@ -199,6 +201,10 @@ class HathorManager:
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
         """
+        if self.is_started:
+            raise Exception('HathorManager is already started')
+        self.is_started = True
+
         self.log.info('start manager', network=self.network)
         # If it's a full verification, we save on the storage that we are starting it
         # this is required because if we stop the initilization in the middle, the metadata
@@ -263,6 +269,10 @@ class HathorManager:
         self.tx_storage.start_running_manager()
 
     def stop(self) -> Deferred:
+        if not self.is_started:
+            raise Exception('HathorManager is already stopped')
+        self.is_started = False
+
         waits = []
 
         self.log.info('stop manager')
@@ -595,9 +605,10 @@ class HathorManager:
             if tx.is_genesis:
                 raise InvalidNewTransaction('Genesis? {}'.format(tx.hash_hex))
 
-        if tx.timestamp - self.reactor.seconds() > settings.MAX_FUTURE_TIMESTAMP_ALLOWED:
-            raise InvalidNewTransaction('Ignoring transaction in the future {} (timestamp={})'.format(
-                tx.hash_hex, tx.timestamp))
+        now = self.reactor.seconds()
+        if tx.timestamp - now > settings.MAX_FUTURE_TIMESTAMP_ALLOWED:
+            raise InvalidNewTransaction('Ignoring transaction in the future {} (timestamp={}, now={})'.format(
+                tx.hash_hex, tx.timestamp, now))
 
         # Verify transaction and raises an TxValidationError if tx is not valid.
         tx.verify()
@@ -715,10 +726,11 @@ class HathorManager:
 
         if not quiet:
             ts_date = datetime.datetime.fromtimestamp(tx.timestamp)
+            now = datetime.datetime.fromtimestamp(self.reactor.seconds())
             if tx.is_block:
-                self.log.info('new block', tx=tx, ts_date=ts_date, time_from_now=tx.get_time_from_now())
+                self.log.info('new block', tx=tx, ts_date=ts_date, time_from_now=tx.get_time_from_now(now))
             else:
-                self.log.info('new tx', tx=tx, ts_date=ts_date, time_from_now=tx.get_time_from_now())
+                self.log.info('new tx', tx=tx, ts_date=ts_date, time_from_now=tx.get_time_from_now(now))
 
         if propagate_to_peers:
             # Propagate to our peers.

@@ -5,15 +5,10 @@ from mnemonic import Mnemonic
 
 from hathor.graphviz import GraphvizVisualizer
 from hathor.manager import TestMode
+from hathor.simulator import FakeConnection
 from hathor.wallet import HDWallet
 from tests import unittest
-from tests.utils import (
-    FakeConnection,
-    add_blocks_unlock_reward,
-    add_new_block,
-    add_new_double_spending,
-    add_new_transactions,
-)
+from tests.utils import add_blocks_unlock_reward, add_new_block, add_new_double_spending, add_new_transactions
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):

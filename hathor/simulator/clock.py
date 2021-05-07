@@ -44,7 +44,7 @@ class HeapClock:
         """
         See L{twisted.internet.interfaces.IReactorTime.getDelayedCalls}
         """
-        return self.calls
+        return [dc for _, dc in self.calls]
 
     def advance(self, amount):
         """
@@ -54,6 +54,7 @@ class HeapClock:
         @param amount: The number of seconds which to advance this clock's
         time.
         """
+        assert amount >= 0
         self.rightNow += amount
         while self.calls:
             time, call = self.calls[0]  # smallest item

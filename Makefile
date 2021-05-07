@@ -5,9 +5,8 @@ all: check tests
 
 # testing:
 
-tests_simulation = tests/simulation/
 tests_cli = tests/cli/
-tests_lib = $(filter-out ${tests_cli} ${tests_simulation} tests/__pycache__/, $(dir $(wildcard tests/*/.)))
+tests_lib = $(filter-out ${tests_cli} tests/__pycache__/, $(dir $(wildcard tests/*/.)))
 
 pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov-report=xml --cov=hathor
 mypy_flags = --warn-unused-configs --disallow-incomplete-defs --no-implicit-optional --warn-redundant-casts --warn-unused-ignores
@@ -36,10 +35,6 @@ tests-doctests:
 .PHONY: tests-lib
 tests-lib:
 	pytest --durations=10 $(pytest_flags) --doctest-modules hathor --cov-fail-under=83 $(tests_lib)
-
-.PHONY: tests-simulation
-tests-simulation:
-	pytest --durations=10 --cov=hathor --cov-report=term -p no:warnings $(tests_simulation)
 
 .PHONY: tests-genesis
 tests-genesis:

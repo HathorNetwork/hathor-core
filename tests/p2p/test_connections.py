@@ -32,7 +32,4 @@ class ConnectionsTest(unittest.TestCase):
         self.assertFalse(endpoint in manager.connections.handshaking_peers)
         self.assertFalse(endpoint in manager.connections.connected_peers)
 
-        manager.stop()
-        manager.stop()
-
         shutil.rmtree(tmpdir)

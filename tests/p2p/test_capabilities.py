@@ -1,6 +1,6 @@
 from hathor.conf import HathorSettings
+from hathor.simulator import FakeConnection
 from tests import unittest
-from tests.utils import FakeConnection
 
 settings = HathorSettings()
 
