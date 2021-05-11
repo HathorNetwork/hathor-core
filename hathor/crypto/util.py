@@ -242,3 +242,17 @@ def decode_address(address58: str) -> bytes:
     if address_checksum != valid_checksum:
         raise InvalidAddress('Invalid checksum of address')
     return decoded_address
+
+
+def is_pubkey_compressed(pubkey: bytes) -> bool:
+    """ Receives a public key bytes and return True if in CompressedPoint format
+        This function will not test if this is a valid public key.
+        Only the byte that signals the format is tested.
+    """
+    if len(pubkey) == 0:
+        return False
+    # CompressedPoint encoding always starts with the bits "0000 001_"
+    # UncompressedPoint always starts with the bits "0000 0100"
+    # so testing if the first byte is 2 or 3 will make sure that this is an Unconpressed public key
+    # https://www.secg.org/sec1-v2.pdf [2.3.3 Elliptic-Curve-Point-to-Octet-String Conversion]
+    return pubkey[0] in [0x02, 0x03]

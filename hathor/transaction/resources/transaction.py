@@ -54,6 +54,9 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
                     spent_outputs[index] = spent_tx.hash_hex
                     break
 
+    # Maps the token uid to the token_data value
+    token_uid_map: Dict[bytes, int] = {settings.HATHOR_TOKEN_UID: 0}
+
     # Sending also output information for each input
     inputs = []
     for index, tx_in in enumerate(tx.inputs):
@@ -67,18 +70,21 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
 
             # We need to get the token_data from the current tx, and not the tx being spent
             token_uid = tx2.get_token_uid(tx2_out.get_token_index())
-            for out in tx.outputs:
-                out_token_uid = tx.get_token_uid(out.get_token_index())
-                if out_token_uid == token_uid:
-                    output['decoded']['token_data'] = out.token_data
-                    break
-            else:
-                # This is the case when the token from the input does not appear in the outputs
-                # This case can happen when we have a full melt, so all tokens from the inputs are destroyed
-                # So we manually add this token to the array and set the token_data properly
-                serialized['tokens'].append(token_uid.hex())
-                output['decoded']['token_data'] = len(serialized['tokens'])
+            if token_uid not in token_uid_map:
+                for idx, uid in enumerate(serialized['tokens']):
+                    # If we find the uid in the serialized tokens
+                    # we set the token_data as the array index plus 1
+                    if token_uid.hex() == uid:
+                        token_uid_map[token_uid] = idx + 1
+                        break
+                else:
+                    # This is the case when the token from the input does not appear in the outputs
+                    # This case can happen when we have a full melt, so all tokens from the inputs are destroyed
+                    # So we manually add this token to the array and set the token_data properly
+                    serialized['tokens'].append(token_uid.hex())
+                    token_uid_map[token_uid] = len(serialized['tokens'])
 
+            output['decoded']['token_data'] = token_uid_map[token_uid]
             inputs.append(output)
 
     serialized['inputs'] = inputs

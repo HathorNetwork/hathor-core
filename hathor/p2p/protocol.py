@@ -2,22 +2,25 @@ import time
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, Generator, Optional, Set
 
-from autobahn.twisted.websocket import WebSocketClientProtocol, WebSocketServerProtocol
 from structlog import get_logger
-from twisted.internet.interfaces import ITransport
+from twisted.internet.interfaces import IDelayedCall, ITransport
 from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
+from hathor.conf import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
+from hathor.profiler import get_cpu_profiler
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
     from hathor.p2p.manager import ConnectionsManager  # noqa: F401
 
+settings = HathorSettings()
 logger = get_logger()
+cpu = get_cpu_profiler()
 
 
 class HathorProtocol:
@@ -29,9 +32,9 @@ class HathorProtocol:
     nonce value.
 
     After receiving a HELLO message, the peer must reply with a PEER-ID
-    message, which will identity the peer through its id, public key,
-    and endpoints. There must be a signature of the nonce value which
-    will be checked against the public key.
+    message, which will identify the peer through its id, public key,
+    and endpoints. The connection is encrypted and its public key in the
+    certificate must be equal to the given public key.
 
     After the PEER-ID message, the peer is ready to communicate.
 
@@ -43,55 +46,6 @@ class HathorProtocol:
         HELLO = HelloState
         PEER_ID = PeerIdState
         READY = ReadyState
-
-    class Metrics:
-        def __init__(self) -> None:
-            self.received_messages: int = 0
-            self.sent_messages: int = 0
-            self.received_bytes: int = 0
-            self.sent_bytes: int = 0
-            self.received_txs: int = 0
-            self.discarded_txs: int = 0
-            self.received_blocks: int = 0
-            self.discarded_blocks: int = 0
-
-        def format_bytes(self, value: int) -> str:
-            """ Format bytes in MB and kB.
-            """
-            if value > 1024*1024:
-                return '{:11.2f} MB'.format(value / 1024 / 1024)
-            elif value > 1024:
-                return '{:11.2f} kB'.format(value / 1024)
-            else:
-                return '{} B'.format(value)
-
-        def print_stats(self, prefix: str = '') -> None:
-            """ Print a status of the metrics in stdout.
-            """
-            print('----')
-            print('{}Received:       {:8d} messages  {}'.format(
-                prefix,
-                self.received_messages,
-                self.format_bytes(self.received_bytes))
-            )
-            print('{}Sent:           {:8d} messages  {}'.format(
-                prefix,
-                self.sent_messages,
-                self.format_bytes(self.sent_bytes))
-            )
-            print('{}Blocks:         {:8d} received  {:8d} discarded ({:2.0f}%)'.format(
-                prefix,
-                self.received_blocks,
-                self.discarded_blocks,
-                100.0 * self.discarded_blocks / (self.received_blocks + self.discarded_blocks)
-            ))
-            print('{}Transactions:   {:8d} received  {:8d} discarded ({:2.0f}%)'.format(
-                prefix,
-                self.received_txs,
-                self.discarded_txs,
-                100.0 * self.discarded_txs / (self.received_txs + self.discarded_txs)
-            ))
-            print('----')
 
     class RateLimitKeys(str, Enum):
         GLOBAL = 'global'
@@ -115,25 +69,41 @@ class HathorProtocol:
     expected_peer_id: Optional[str]
     warning_flags: Set[str]
     connected: bool
-    initiated_connection: bool
+    diff_timestamp: Optional[int]
+    idle_timeout: int
 
     def __init__(self, network: str, my_peer: PeerId, connections: Optional['ConnectionsManager'] = None, *,
-                 node: 'HathorManager', use_ssl: bool) -> None:
+                 node: 'HathorManager', use_ssl: bool, inbound: bool) -> None:
         self.network = network
         self.my_peer = my_peer
         self.connections = connections
         self.node = node
 
+        if self.connections is not None:
+            assert self.connections.reactor is not None
+            self.reactor = self.connections.reactor
+        else:
+            from twisted.internet import reactor
+            self.reactor = reactor
+
+        # Indicate whether it is an inbound connection (true) or an outbound connection (false).
+        self.inbound = inbound
+
+        # Maximum period without receiving any messages.
+        self.idle_timeout = settings.PEER_IDLE_TIMEOUT
+        self._idle_timeout_call_later: Optional[IDelayedCall] = None
+
         self._state_instances = {}
 
         self.app_version = 'Unknown'
+        self.diff_timestamp = None
 
         # The peer on the other side of the connection.
         self.peer = None
 
         # The last time a message has been received from this peer.
         self.last_message = 0
-        self.metrics = self.Metrics()
+        self.metrics: 'ConnectionMetrics' = ConnectionMetrics()
 
         # The last time a request was send to this peer.
         self.last_request = 0
@@ -145,7 +115,7 @@ class HathorProtocol:
         self.state: Optional[BaseState] = None
 
         # Default rate limit
-        self.ratelimit = RateLimiter()
+        self.ratelimit: RateLimiter = RateLimiter()
         # self.ratelimit.set_limit(self.RateLimitKeys.GLOBAL, 120, 60)
 
         # Connection string of the peer
@@ -161,14 +131,12 @@ class HathorProtocol:
         # If peer is connected
         self.connected = False
 
-        self.use_ssl = use_ssl
-
-        # Set to true if this node initiated the connection
-        self.initiated_connection = False
+        self.use_ssl: bool = use_ssl
 
         self.log = logger.new()
 
     def change_state(self, state_enum: PeerState) -> None:
+        """Called to change the state of the connection."""
         if state_enum not in self._state_instances:
             state_cls = state_enum.value
             instance = state_cls(self)
@@ -182,13 +150,69 @@ class HathorProtocol:
             if self.state:
                 self.state.on_enter()
 
+    def is_state(self, state_enum: PeerState) -> bool:
+        """Checks whether current state is `state_enum`."""
+        return isinstance(self.state, state_enum.value)
+
+    def get_short_remote(self) -> str:
+        """Get remote for logging."""
+        parts = []
+
+        remote = self.transport.getPeer()
+        if hasattr(remote, 'host'):
+            parts.append(remote.host)
+        parts.append(':')
+
+        if hasattr(remote, 'port'):
+            parts.append(remote.port)
+
+        return ''.join(str(x) for x in parts)
+
+    def get_short_peer_id(self) -> Optional[str]:
+        """Get peer id for logging."""
+        if self.peer and self.peer.id:
+            return self.peer.id[:7]
+        return None
+
+    def get_logger_context(self) -> Dict[str, Optional[str]]:
+        """Return the context for logging."""
+        return {
+            'remote': self.get_short_remote(),
+            'peer_id': self.get_short_peer_id(),
+        }
+
+    def update_log_context(self) -> None:
+        self.log = self.log.bind(**self.get_logger_context())
+
+    def disable_idle_timeout(self) -> None:
+        """Disable idle timeout. Used for testing."""
+        self.idle_timeout = -1
+        self.reset_idle_timeout()
+
+    def reset_idle_timeout(self) -> None:
+        """Reset idle timeout."""
+        if self._idle_timeout_call_later is not None:
+            self._idle_timeout_call_later.cancel()
+            self._idle_timeout_call_later = None
+        if self.idle_timeout > 0:
+            self._idle_timeout_call_later = self.reactor.callLater(self.idle_timeout, self.on_idle_timeout)
+
+    def on_idle_timeout(self) -> None:
+        """Called when a connection is idle for too long."""
+        self._idle_timeout_call_later = None
+        self.log.warn('Connection closed for idle timeout.')
+        # We cannot use self.disconnect() because it will wait to send pending data.
+        self.disconnect(force=True)
+
     def on_connect(self) -> None:
         """ Executed when the connection is established.
         """
-        remote = self.transport.getPeer()
-        self.log.info('peer connected', remote=remote)
+        self.update_log_context()
+        self.log.debug('new connection')
 
         self.connection_time = time.time()
+
+        self.reset_idle_timeout()
 
         # The initial state is HELLO.
         self.change_state(self.PeerState.HELLO)
@@ -198,12 +222,37 @@ class HathorProtocol:
         if self.connections:
             self.connections.on_peer_connect(self)
 
+    def on_outbound_connect(self, url_peer_id: Optional[str], connection_string: str) -> None:
+        """Called when we successfully establish an outbound connection to a peer."""
+        if url_peer_id:
+            # Set in protocol the peer id extracted from the URL that must be validated
+            self.expected_peer_id = url_peer_id
+        else:
+            # Add warning flag
+            self.warning_flags.add(self.WarningFlags.NO_PEER_ID_URL)
+
+        # Setting connection string in protocol, so we can validate it matches the entrypoints data
+        self.connection_string = connection_string
+
+    def on_peer_ready(self) -> None:
+        assert self.connections is not None
+        assert self.peer is not None
+        self.update_log_context()
+        self.connections.on_peer_ready(self)
+        self.log.info('peer connected', peer_id=self.peer.id)
+
     def on_disconnect(self, reason: Failure) -> None:
         """ Executed when the connection is lost.
         """
-        remote = self.transport.getPeer()
-        self.log.info('disconnected', remote=remote, reason=reason.getErrorMessage())
+        if self.is_state(self.PeerState.READY):
+            self.log.info('disconnected', reason=reason.getErrorMessage())
+        else:
+            self.log.debug('disconnected', reason=reason.getErrorMessage())
+        if self._idle_timeout_call_later:
+            self._idle_timeout_call_later.cancel()
+            self._idle_timeout_call_later = None
         self.connected = False
+        self.update_log_context()
         if self.state:
             self.state.on_exit()
         if self.connections:
@@ -216,12 +265,14 @@ class HathorProtocol:
         """
         raise NotImplementedError
 
+    @cpu.profiler(key=lambda self, cmd: 'p2p-cmd!{}'.format(str(cmd)))
     def recv_message(self, cmd: ProtocolMessages, payload: str) -> Optional[Generator[Any, Any, None]]:
         """ Executed when a new message arrives.
         """
         assert self.state is not None
 
         self.last_message = self.node.reactor.seconds()
+        self.reset_idle_timeout()
 
         if not self.ratelimit.add_hit(self.RateLimitKeys.GLOBAL):
             self.state.send_throttle(self.RateLimitKeys.GLOBAL)
@@ -242,20 +293,29 @@ class HathorProtocol:
     def send_error(self, msg: str) -> None:
         """ Send an error message to the peer.
         """
-        self.log.warn('protocol error', msg=msg)
+        if self.is_state(self.PeerState.READY):
+            self.log.warn('send error', msg=msg)
+        else:
+            self.log.debug('send error', msg=msg)
         self.send_message(ProtocolMessages.ERROR, msg)
 
     def send_error_and_close_connection(self, msg: str) -> None:
         """ Send an ERROR message to the peer, and then closes the connection.
         """
         self.send_error(msg)
-        self.log.warn('close connection due to previous error')
+        self.disconnect()
+
+    def disconnect(self, *, force: bool = False) -> None:
+        """Close connection."""
         # from twisted docs: "If a producer is being used with the transport, loseConnection will only close
         # the connection once the producer is unregistered." We call on_exit to make sure any producers (like
         # the one from node_sync) are unregistered
         if self.state:
             self.state.on_exit()
-        self.transport.loseConnection()
+        if not force:
+            self.transport.loseConnection()
+        else:
+            self.transport.abortConnection()
 
     def handle_error(self, payload: str) -> None:
         """ Executed when an ERROR command is received.
@@ -282,6 +342,7 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
         self.log.warn('lineLengthExceeded', line=line, line_len=len(line), max_line_len=self.MAX_LENGTH)
         super(HathorLineReceiver, self).lineLengthExceeded(line)
 
+    @cpu.profiler(key=lambda self: 'p2p!{}'.format(self.get_short_remote()))
     def lineReceived(self, line: bytes) -> Optional[Generator[Any, Any, None]]:
         self.metrics.received_messages += 1
         self.metrics.received_bytes += len(line)
@@ -313,11 +374,51 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
         self.sendLine(line)
 
 
-class HathorWebSocketServerProtocol(WebSocketServerProtocol, HathorProtocol):  # pragma: no cover
-    def onMessage(self, payload, isBinary):
-        pass
+class ConnectionMetrics:
+    def __init__(self) -> None:
+        self.received_messages: int = 0
+        self.sent_messages: int = 0
+        self.received_bytes: int = 0
+        self.sent_bytes: int = 0
+        self.received_txs: int = 0
+        self.discarded_txs: int = 0
+        self.received_blocks: int = 0
+        self.discarded_blocks: int = 0
 
+    def format_bytes(self, value: int) -> str:
+        """ Format bytes in MB and kB.
+        """
+        if value > 1024*1024:
+            return '{:11.2f} MB'.format(value / 1024 / 1024)
+        elif value > 1024:
+            return '{:11.2f} kB'.format(value / 1024)
+        else:
+            return '{} B'.format(value)
 
-class HathorWebSocketClientProtocol(WebSocketClientProtocol, HathorProtocol):  # pragma: no cover
-    def onMessage(self, payload, isBinary):
-        pass
+    def print_stats(self, prefix: str = '') -> None:
+        """ Print a status of the metrics in stdout.
+        """
+        print('----')
+        print('{}Received:       {:8d} messages  {}'.format(
+            prefix,
+            self.received_messages,
+            self.format_bytes(self.received_bytes))
+        )
+        print('{}Sent:           {:8d} messages  {}'.format(
+            prefix,
+            self.sent_messages,
+            self.format_bytes(self.sent_bytes))
+        )
+        print('{}Blocks:         {:8d} received  {:8d} discarded ({:2.0f}%)'.format(
+            prefix,
+            self.received_blocks,
+            self.discarded_blocks,
+            100.0 * self.discarded_blocks / (self.received_blocks + self.discarded_blocks)
+        ))
+        print('{}Transactions:   {:8d} received  {:8d} discarded ({:2.0f}%)'.format(
+            prefix,
+            self.received_txs,
+            self.discarded_txs,
+            100.0 * self.discarded_txs / (self.received_txs + self.discarded_txs)
+        ))
+        print('----')

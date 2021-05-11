@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 
 from hathor import protos
 from hathor.conf import HathorSettings
+from hathor.profiler import get_cpu_profiler
 from hathor.transaction import MAX_NUM_INPUTS, BaseTransaction, Block, TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE
 from hathor.transaction.exceptions import (
@@ -28,19 +29,22 @@ from hathor.transaction.exceptions import (
     InexistentInput,
     InputOutputMismatch,
     InvalidInputData,
+    InvalidInputDataSize,
     InvalidToken,
     NoInputError,
     RewardLocked,
     ScriptError,
     TimestampError,
     TooManyInputs,
+    TooManySigOps,
 )
-from hathor.transaction.util import get_deposit_amount, get_withdraw_amount, unpack, unpack_len
+from hathor.transaction.util import VerboseCallback, get_deposit_amount, get_withdraw_amount, unpack, unpack_len
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 settings = HathorSettings()
+cpu = get_cpu_profiler()
 
 # Version (H), token uids len (B) and inputs len (B), outputs len (B).
 _FUNDS_FORMAT_STRING = '!HBBB'
@@ -128,15 +132,17 @@ class Transaction(BaseTransaction):
         return tx
 
     @classmethod
-    def create_from_struct(cls, struct_bytes: bytes,
-                           storage: Optional['TransactionStorage'] = None) -> 'Transaction':
+    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
+                           *, verbose: VerboseCallback = None) -> 'Transaction':
         tx = cls()
-        buf = tx.get_fields_from_struct(struct_bytes)
+        buf = tx.get_fields_from_struct(struct_bytes, verbose=verbose)
 
         if len(buf) != cls.SERIALIZATION_NONCE_SIZE:
             raise ValueError('Invalid sequence of bytes')
 
         [tx.nonce, ], buf = unpack('!I', buf)
+        if verbose:
+            verbose('nonce', tx.nonce)
 
         tx.update_hash()
         tx.storage = storage
@@ -147,7 +153,7 @@ class Transaction(BaseTransaction):
         # XXX: transactions don't have height, using 0 as a placeholder
         return 0
 
-    def get_funds_fields_from_struct(self, buf: bytes) -> bytes:
+    def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets all funds fields for a transaction from a buffer.
 
         :param buf: Bytes of a serialized transaction
@@ -159,17 +165,24 @@ class Transaction(BaseTransaction):
         :raises ValueError: when the sequence of bytes is incorect
         """
         (self.version, tokens_len, inputs_len, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
+        if verbose:
+            verbose('version', self.version)
+            verbose('tokens_len', tokens_len)
+            verbose('inputs_len', inputs_len)
+            verbose('outputs_len', outputs_len)
 
         for _ in range(tokens_len):
             token_uid, buf = unpack_len(TX_HASH_SIZE, buf)
             self.tokens.append(token_uid)
+            if verbose:
+                verbose('token_uid', token_uid.hex())
 
         for _ in range(inputs_len):
-            txin, buf = TxInput.create_from_bytes(buf)
+            txin, buf = TxInput.create_from_bytes(buf, verbose=verbose)
             self.inputs.append(txin)
 
         for _ in range(outputs_len):
-            txout, buf = TxOutput.create_from_bytes(buf)
+            txout, buf = TxOutput.create_from_bytes(buf, verbose=verbose)
             self.outputs.append(txout)
 
         return buf
@@ -249,6 +262,7 @@ class Transaction(BaseTransaction):
         json['tokens'] = [h.hex() for h in self.tokens]
         return json
 
+    @cpu.profiler(key=lambda self: 'tx-verify!{}'.format(self.hash.hex()))
     def verify(self) -> None:
         """ Common verification for all transactions:
            (i) number of inputs is at most 256
@@ -265,6 +279,7 @@ class Transaction(BaseTransaction):
             # TODO do genesis validation
             return
         self.verify_without_storage()
+        self.verify_sigops_input()
         self.verify_inputs()  # need to run verify_inputs first to check if all inputs exist
         self.verify_parents()
         self.verify_sum()
@@ -274,6 +289,8 @@ class Transaction(BaseTransaction):
         self.verify_number_of_inputs()
         self.verify_number_of_outputs()
         self.verify_outputs()
+        self.verify_sigops_output()
+        self.verify_sigops_input()
         self.verify_inputs(skip_script=True)  # need to run verify_inputs first to check if all inputs exist
         self.verify_parents()
         self.verify_sum()
@@ -284,6 +301,7 @@ class Transaction(BaseTransaction):
         self.verify_pow()
         self.verify_number_of_inputs()
         self.verify_outputs()
+        self.verify_sigops_output()
 
     def verify_number_of_inputs(self) -> None:
         """Verify number of inputs is in a valid range"""
@@ -293,6 +311,27 @@ class Transaction(BaseTransaction):
         if len(self.inputs) == 0:
             if not self.is_genesis:
                 raise NoInputError('Transaction must have at least one input')
+
+    def verify_sigops_input(self) -> None:
+        """ Count sig operations on all inputs and verify that the total sum is below the limit
+        """
+        from hathor.transaction.scripts import get_sigops_count
+        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+        n_txops = 0
+        for tx_input in self.inputs:
+            try:
+                spent_tx = self.get_spent_tx(tx_input)
+            except TransactionDoesNotExist:
+                raise InexistentInput('Input tx does not exist: {}'.format(tx_input.tx_id.hex()))
+            assert spent_tx.hash is not None
+            if tx_input.index >= len(spent_tx.outputs):
+                raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
+                    tx_input.tx_id.hex(), tx_input.index))
+            n_txops += get_sigops_count(tx_input.data, spent_tx.outputs[tx_input.index].script)
+
+        if n_txops > settings.MAX_TX_SIGOPS_INPUT:
+            raise TooManySigOps(
+                'TX[{}]: Max number of sigops for inputs exceeded ({})'.format(self.hash_hex, n_txops))
 
     def verify_outputs(self) -> None:
         """Verify outputs reference an existing token uid in the tokens list
@@ -424,6 +463,11 @@ class Transaction(BaseTransaction):
 
         spent_outputs: Set[Tuple[bytes, int]] = set()
         for input_tx in self.inputs:
+            if len(input_tx.data) > settings.MAX_INPUT_DATA_SIZE:
+                raise InvalidInputDataSize('size: {} and max-size: {}'.format(
+                    len(input_tx.data), settings.MAX_INPUT_DATA_SIZE
+                ))
+
             try:
                 spent_tx = self.get_spent_tx(input_tx)
                 assert spent_tx.hash is not None

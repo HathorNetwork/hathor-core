@@ -12,17 +12,15 @@ logger = get_logger()
 
 class BaseState:
     protocol: 'HathorProtocol'
-    base_cmd_map: Dict[ProtocolMessages, Callable[[str], None]]
     cmd_map: Dict[ProtocolMessages, Callable[[str], None]]
 
     def __init__(self, protocol: 'HathorProtocol'):
-        self.log = logger.new()
+        self.log = logger.new(**protocol.get_logger_context())
         self.protocol = protocol
-        self.base_cmd_map = {
+        self.cmd_map = {
             ProtocolMessages.ERROR: self.handle_error,
             ProtocolMessages.THROTTLE: self.handle_throttle,
         }
-        self.cmd_map = {}
 
         # This variable is set by HathorProtocol after instantiating the state
         self.state_name = None

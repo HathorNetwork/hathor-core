@@ -172,11 +172,14 @@ class HathorSettings(NamedTuple):
     # If should use stratum to resolve pow of transactions in send tokens resource
     SEND_TOKENS_STRATUM: bool = True
 
+    # Maximum size of the tx output's script allowed by the /push-tx API.
+    PUSHTX_MAX_OUTPUT_SCRIPT_SIZE: int = 256
+
     # Maximum number of subscribed addresses per websocket connection
     WS_MAX_SUBS_ADDRS_CONN: int = 200000
 
     # Maximum number of subscribed addresses that do not have any outputs (also per websocket connection)
-    WS_MAX_SUBS_ADDRS_EMPTY: int = 40
+    WS_MAX_SUBS_ADDRS_EMPTY: int = 100
 
     # Whether miners are assumed to mine txs by default
     STRATUM_MINE_TXS_DEFAULT: bool = True
@@ -199,11 +202,17 @@ class HathorSettings(NamedTuple):
     # during peer connection. Peers shouldn't have their clocks more than MAX_FUTURE_TIMESTAMP_ALLOWED/2 apart
     MAX_FUTURE_TIMESTAMP_ALLOWED: int = 5 * 60
 
-    # Maximum number of peer connection attemps before stop retrying
-    MAX_PEER_CONNECTION_ATTEMPS: int = 3
-
     # Multiplier for the value to increase the timestamp for the next retry moment to connect to the peer
     PEER_CONNECTION_RETRY_INTERVAL_MULTIPLIER: int = 5
+
+    # Maximum retry interval for retrying to connect to the peer
+    PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL: int = 300
+
+    # Number max of connections in the p2p network
+    PEER_MAX_CONNECTIONS: int = 125
+
+    # Maximum period without receiving any messages from ther peer (in seconds).
+    PEER_IDLE_TIMEOUT: int = 60
 
     # Filepath of ca certificate file to generate connection certificates
     CA_FILEPATH: str = os.path.join(os.path.dirname(__file__), '../p2p/ca.crt')
@@ -238,6 +247,25 @@ class HathorSettings(NamedTuple):
     # Mamimum number of outputs accepted
     MAX_NUM_OUTPUTS: int = 255
 
+    # Maximum size of each txout's script (in bytes)
+    MAX_OUTPUT_SCRIPT_SIZE: int = 1024
+
+    # Maximum size of each txin's data (in bytes)
+    MAX_INPUT_DATA_SIZE: int = 1024
+
+    # Maximum number of pubkeys per OP_CHECKMULTISIG
+    MAX_MULTISIG_PUBKEYS: int = 20
+
+    # Maximum number of signatures per OP_CHECKMULTISIG
+    MAX_MULTISIG_SIGNATURES: int = 15
+
+    # Maximum number of sig operations of all inputs on a given tx
+    # including the redeemScript in case of MultiSig
+    MAX_TX_SIGOPS_INPUT: int = 255*5
+
+    # Maximum number of sig operations of all outputs on a given tx
+    MAX_TX_SIGOPS_OUTPUT: int = 255*5
+
     # Maximum number of transactions returned on addresses history API
     MAX_TX_ADDRESSES_HISTORY: int = 150
 
@@ -260,3 +288,12 @@ class HathorSettings(NamedTuple):
 
     # Where to download whitelist from
     WHITELIST_URL: Optional[str] = None
+
+    # Interval (in seconds) to broadcast dashboard metrics to websocket connections
+    WS_SEND_METRICS_INTERVAL: int = 1
+
+    # Interval (in seconds) to write data to prometheus
+    PROMETHEUS_WRITE_INTERVAL: int = 5
+
+    # Interval (in seconds) to collect metrics data
+    METRICS_COLLECT_DATA_INTERVAL: int = 5

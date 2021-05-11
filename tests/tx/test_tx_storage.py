@@ -14,6 +14,7 @@ from hathor.conf import HathorSettings
 from hathor.indexes import TokensIndex, WalletIndex
 from hathor.manager import TestMode
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
+from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import (
     TransactionBinaryStorage,
     TransactionCacheStorage,
@@ -25,6 +26,7 @@ from hathor.transaction.storage import (
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.wallet import Wallet
 from tests.utils import (
+    BURN_ADDRESS,
     MIN_TIMESTAMP,
     add_blocks_unlock_reward,
     add_new_blocks,
@@ -70,7 +72,7 @@ class _BaseTransactionStorageTest:
             self.tx_storage.tokens_index = TokensIndex()
 
             block_parents = [tx.hash for tx in chain(self.genesis_blocks, self.genesis_txs)]
-            output = TxOutput(200, bytes.fromhex('1e393a5ce2ff1c98d4ff6892f2175100f2dad049'))
+            output = TxOutput(200, P2PKH.create_output_script(BURN_ADDRESS))
             self.block = Block(timestamp=MIN_TIMESTAMP, weight=12, outputs=[output], parents=block_parents,
                                nonce=100781, storage=tx_storage)
             self.block.resolve()

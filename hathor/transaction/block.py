@@ -20,14 +20,16 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from hathor import protos
 from hathor.conf import HathorSettings
+from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, TxOutput, TxVersion
 from hathor.transaction.exceptions import BlockWithInputs, BlockWithTokensError, TransactionDataError
-from hathor.transaction.util import int_to_bytes, unpack, unpack_len
+from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 settings = HathorSettings()
+cpu = get_cpu_profiler()
 
 # Version (H), outputs len (B)
 _FUNDS_FORMAT_STRING = '!HB'
@@ -108,10 +110,10 @@ class Block(BaseTransaction):
         return tx
 
     @classmethod
-    def create_from_struct(cls, struct_bytes: bytes,
-                           storage: Optional['TransactionStorage'] = None) -> 'Block':
+    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
+                           *, verbose: VerboseCallback = None) -> 'Block':
         blc = cls()
-        buf = blc.get_fields_from_struct(struct_bytes)
+        buf = blc.get_fields_from_struct(struct_bytes, verbose=verbose)
 
         blc.nonce = int.from_bytes(buf, byteorder='big')
         if len(buf) != cls.SERIALIZATION_NONCE_SIZE:
@@ -143,7 +145,7 @@ class Block(BaseTransaction):
         assert isinstance(block_parent, Block)
         return block_parent
 
-    def get_funds_fields_from_struct(self, buf: bytes) -> bytes:
+    def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets all funds fields for a block from a buffer.
 
         :param buf: Bytes of a serialized block
@@ -155,14 +157,17 @@ class Block(BaseTransaction):
         :raises ValueError: when the sequence of bytes is incorect
         """
         (self.version, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
+        if verbose:
+            verbose('version', self.version)
+            verbose('outputs_len', outputs_len)
 
         for _ in range(outputs_len):
-            txout, buf = TxOutput.create_from_bytes(buf)
+            txout, buf = TxOutput.create_from_bytes(buf, verbose=verbose)
             self.outputs.append(txout)
 
         return buf
 
-    def get_graph_fields_from_struct(self, buf: bytes) -> bytes:
+    def get_graph_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets graph fields for a block from a buffer.
 
         :param buf: Bytes of a serialized transaction
@@ -173,9 +178,13 @@ class Block(BaseTransaction):
 
         :raises ValueError: when the sequence of bytes is incorect
         """
-        buf = super().get_graph_fields_from_struct(buf)
+        buf = super().get_graph_fields_from_struct(buf, verbose=verbose)
         (data_bytes,), buf = unpack('!B', buf)
+        if verbose:
+            verbose('data_len', data_bytes)
         self.data, buf = unpack_len(data_bytes, buf)
+        if verbose:
+            verbose('data', self.data.hex())
         return buf
 
     def get_funds_struct(self) -> bytes:
@@ -250,11 +259,13 @@ class Block(BaseTransaction):
         self.verify_no_inputs()
         self.verify_outputs()
         self.verify_data()
+        self.verify_sigops_output()
 
     def get_base_hash(self) -> bytes:
         from hathor.merged_mining.bitcoin import sha256d_hash
         return sha256d_hash(self.get_header_without_nonce())
 
+    @cpu.profiler(key=lambda self: 'block-verify!{}'.format(self.hash.hex()))
     def verify(self) -> None:
         """
             (1) confirms at least two pending transactions and references last block

@@ -32,17 +32,19 @@ from hathor.conf import HathorSettings
 from hathor.transaction.exceptions import (
     DuplicatedParents,
     IncorrectParents,
+    InvalidOutputScriptSize,
     InvalidOutputValue,
     InvalidToken,
     ParentDoesNotExist,
     PowError,
     TimestampError,
     TooManyOutputs,
+    TooManySigOps,
     TxValidationError,
     WeightError,
 )
 from hathor.transaction.transaction_metadata import TransactionMetadata
-from hathor.transaction.util import int_to_bytes, unpack, unpack_len
+from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 from hathor.util import classproperty
 
 if TYPE_CHECKING:
@@ -227,7 +229,7 @@ class BaseTransaction(ABC):
     def is_transaction(self) -> bool:
         raise NotImplementedError
 
-    def get_fields_from_struct(self, struct_bytes: bytes) -> bytes:
+    def get_fields_from_struct(self, struct_bytes: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets all common fields for a Transaction and a Block from a buffer.
 
         :param struct_bytes: Bytes of a serialized transaction
@@ -238,14 +240,14 @@ class BaseTransaction(ABC):
 
         :raises ValueError: when the sequence of bytes is incorect
         """
-        buf = self.get_funds_fields_from_struct(struct_bytes)
-        buf = self.get_graph_fields_from_struct(buf)
+        buf = self.get_funds_fields_from_struct(struct_bytes, verbose=verbose)
+        buf = self.get_graph_fields_from_struct(buf, verbose=verbose)
         return buf
 
     @classmethod
     @abstractmethod
-    def create_from_struct(cls, struct_bytes: bytes,
-                           storage: Optional['TransactionStorage'] = None) -> 'BaseTransaction':
+    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
+                           *, verbose: VerboseCallback = None) -> 'BaseTransaction':
         """ Create a transaction from its bytes.
 
         :param struct_bytes: Bytes of a serialized transaction
@@ -352,10 +354,10 @@ class BaseTransaction(ABC):
         return is_genesis(self.hash)
 
     @abstractmethod
-    def get_funds_fields_from_struct(self, buf: bytes) -> bytes:
+    def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
         raise NotImplementedError
 
-    def get_graph_fields_from_struct(self, buf: bytes) -> bytes:
+    def get_graph_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets all common graph fields for a Transaction and a Block from a buffer.
 
         :param buf: Bytes of a serialized transaction
@@ -367,10 +369,16 @@ class BaseTransaction(ABC):
         :raises ValueError: when the sequence of bytes is incorect
         """
         (self.weight, self.timestamp, parents_len), buf = unpack(_GRAPH_FORMAT_STRING, buf)
+        if verbose:
+            verbose('weigth', self.weight)
+            verbose('timestamp', self.timestamp)
+            verbose('parents_len', parents_len)
 
         for _ in range(parents_len):
             parent, buf = unpack_len(TX_HASH_SIZE, buf)  # 256bits
             self.parents.append(parent)
+            if verbose:
+                verbose('parent', parent.hex())
 
         return buf
 
@@ -444,7 +452,7 @@ class BaseTransaction(ABC):
 
         my_parents_txs = 0      # number of tx parents
         my_parents_blocks = 0   # number of block parents
-        min_timestamp = None
+        min_timestamp: Optional[int] = None
 
         for parent_hash in self.parents:
             try:
@@ -516,6 +524,19 @@ class BaseTransaction(ABC):
         if len(self.outputs) > MAX_NUM_OUTPUTS:
             raise TooManyOutputs('Maximum number of outputs exceeded')
 
+    def verify_sigops_output(self) -> None:
+        """ Count sig operations on all outputs and verify that the total sum is below the limit
+        """
+        from hathor.transaction.scripts import get_sigops_count
+        n_txops = 0
+
+        for tx_output in self.outputs:
+            n_txops += get_sigops_count(tx_output.script)
+
+        if n_txops > settings.MAX_TX_SIGOPS_OUTPUT:
+            raise TooManySigOps('TX[{}]: Maximum number of sigops for all outputs exceeded ({})'.format(
+                self.hash_hex, n_txops))
+
     def verify_outputs(self) -> None:
         """Verify there are no hathor authority UTXOs and outputs are all positive
 
@@ -534,6 +555,11 @@ class BaseTransaction(ABC):
             if output.value <= 0:
                 raise InvalidOutputValue('Output value must be a positive integer. Value: {} and index: {}'.format(
                     output.value, index))
+
+            if len(output.script) > settings.MAX_OUTPUT_SCRIPT_SIZE:
+                raise InvalidOutputScriptSize('size: {} and max-size: {}'.format(
+                    len(output.script), settings.MAX_OUTPUT_SCRIPT_SIZE
+                ))
 
     def resolve(self, update_time: bool = True) -> bool:
         """Run a CPU mining looking for the nonce that solves the proof-of-work
@@ -949,13 +975,20 @@ class TxInput:
         return bytes(ret)
 
     @classmethod
-    def create_from_bytes(cls, buf: bytes) -> Tuple['TxInput', bytes]:
+    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> Tuple['TxInput', bytes]:
         """ Creates a TxInput from a serialized input. Returns the input
         and remaining bytes
         """
         input_tx_id, buf = unpack_len(TX_HASH_SIZE, buf)
+        if verbose:
+            verbose('txin_tx_id', input_tx_id.hex())
         (input_index, data_len), buf = unpack('!BH', buf)
+        if verbose:
+            verbose('txin_index', input_index)
+            verbose('txin_data_len', data_len)
         input_data, buf = unpack_len(data_len, buf)
+        if verbose:
+            verbose('txin_data', input_data.hex())
         txin = cls(input_tx_id, input_index, input_data)
         return txin, buf
 
@@ -1027,7 +1060,8 @@ class TxOutput:
         assert isinstance(value, int), 'value is %s, type %s' % (str(value), type(value))
         assert isinstance(script, bytes), 'script is %s, type %s' % (str(script), type(script))
         assert isinstance(token_data, int), 'token_data is %s, type %s' % (str(token_data), type(token_data))
-        assert value <= MAX_OUTPUT_VALUE and value > 0
+        if value <= 0 or value > MAX_OUTPUT_VALUE:
+            raise InvalidOutputValue
 
         self.value = value  # int
         self.script = script  # bytes
@@ -1064,13 +1098,20 @@ class TxOutput:
         return ret
 
     @classmethod
-    def create_from_bytes(cls, buf: bytes) -> Tuple['TxOutput', bytes]:
+    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> Tuple['TxOutput', bytes]:
         """ Creates a TxOutput from a serialized output. Returns the output
         and remaining bytes
         """
         value, buf = bytes_to_output_value(buf)
+        if verbose:
+            verbose('txout_value', value)
         (token_data, script_len), buf = unpack('!BH', buf)
+        if verbose:
+            verbose('txout_token_data', token_data)
+            verbose('txout_script_len', script_len)
         script, buf = unpack_len(script_len, buf)
+        if verbose:
+            verbose('txout_script', script.hex())
         txout = cls(value, script, token_data)
         return txout, buf
 
@@ -1081,6 +1122,14 @@ class TxOutput:
     def is_token_authority(self) -> bool:
         """Whether this is a token authority output"""
         return (self.token_data & self.TOKEN_AUTHORITY_MASK) > 0
+
+    def is_standard_script(self) -> bool:
+        """Return True if this output has a standard script."""
+        from hathor.transaction.scripts import P2PKH
+        p2pkh = P2PKH.parse_script(self.script)
+        if p2pkh is not None:
+            return True
+        return False
 
     def can_mint_token(self) -> bool:
         """Whether this utxo can mint tokens"""

@@ -73,6 +73,8 @@ class SendDataPush:
     def start(self) -> None:
         """ Start pushing data.
         """
+        if self.is_running:
+            raise Exception('SendDataPush is already stopped.')
         self.is_running = True
         self.consumer.registerProducer(self, True)
         self.resumeProducing()
@@ -80,6 +82,8 @@ class SendDataPush:
     def stop(self) -> None:
         """ Stop pushing data.
         """
+        if not self.is_running:
+            raise Exception('SendDataPush is already stopped.')
         self.is_running = False
         self.pauseProducing()
         self.consumer.unregisterProducer()
@@ -216,11 +220,14 @@ class NodeSyncTimestamp(Plugin):
         # that the peer is synced (in seconds).
         self.sync_threshold: int = settings.P2P_SYNC_THRESHOLD
 
+        # Indicate whether the sync has been started.
+        self.is_started: bool = False
+
         # Indicate whether the synchronization is running.
         self.is_running: bool = False
 
         # Create logger with context
-        self.log = logger.new(peer_id_short=self.short_peer_id)
+        self.log = logger.new(**self.protocol.get_logger_context())
 
     def get_status(self):
         """ Return the status of the sync.
@@ -229,14 +236,6 @@ class NodeSyncTimestamp(Plugin):
             'latest_timestamp': self.peer_timestamp,
             'synced_timestamp': self.synced_timestamp,
         }
-
-    @property
-    def short_peer_id(self) -> str:
-        """ Returns the id of the peer (only 7 first chars)
-        """
-        if self.protocol.peer is None or self.protocol.peer.id is None:
-            return ''
-        return self.protocol.peer.id[:7]
 
     def get_cmd_dict(self) -> Dict[ProtocolMessages, Callable[[str], None]]:
         """ Return a dict of messages of the plugin.
@@ -254,6 +253,9 @@ class NodeSyncTimestamp(Plugin):
     def start(self) -> None:
         """ Start sync.
         """
+        if self.is_started:
+            raise Exception('NodeSyncTimestamp is already running')
+        self.is_started = True
         if self.send_data_queue:
             self.send_data_queue.start()
         self.next_step()
@@ -261,6 +263,9 @@ class NodeSyncTimestamp(Plugin):
     def stop(self) -> None:
         """ Stop sync.
         """
+        if not self.is_started:
+            raise Exception('NodeSyncTimestamp is already stopped')
+        self.is_started = False
         if self.send_data_queue:
             self.send_data_queue.stop()
         if self.call_later_id and self.call_later_id.active():

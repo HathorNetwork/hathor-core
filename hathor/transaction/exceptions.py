@@ -48,8 +48,20 @@ class InvalidInputData(TxValidationError):
     """Input data does not solve output script correctly"""
 
 
+class InvalidInputDataSize(TxValidationError):
+    """Input data is too big"""
+
+
 class NoInputError(TxValidationError):
     """There is not input"""
+
+
+class InvalidScriptError(TxValidationError):
+    """Invalid script found when parsing"""
+
+
+class TooManySigOps(TxValidationError):
+    """Signature operations limit exceeded"""
 
 
 class TooManyInputs(TxValidationError):
@@ -70,6 +82,10 @@ class TooManyOutputs(TxValidationError):
 
 class InvalidOutputValue(TxValidationError):
     """Value of output is invalid"""
+
+
+class InvalidOutputScriptSize(TxValidationError):
+    """Output's script's size is too big"""
 
 
 class PowError(TxValidationError):

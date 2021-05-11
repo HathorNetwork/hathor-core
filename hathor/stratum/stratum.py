@@ -29,6 +29,8 @@ from hathor.util import json_dumpb, json_loadb
 from hathor.wallet.exceptions import InvalidAddress
 
 if TYPE_CHECKING:
+    from multiprocessing.sharedctypes import _Array, _Value  # noqa: F401
+
     from hathor.manager import HathorManager  # noqa: F401
 
 logger = get_logger()
@@ -100,11 +102,11 @@ class ServerJob:
 
 class MinerJob(NamedTuple):
     """ Data class used to share job data between mining processes """
-    data: Array = Array('B', 2048)
-    data_size: Value = Value('I')
-    job_id: Array = Array('B', 16)
-    nonce_size: Value = Value('I')
-    weight: Value = Value('d')
+    data: '_Array' = Array('B', 2048)
+    data_size: '_Value' = Value('I')
+    job_id: '_Array' = Array('B', 16)
+    nonce_size: '_Value' = Value('I')
+    weight: '_Value' = Value('d')
 
     def update_job(self, params: Dict[str, Any]) -> bool:
         """
@@ -126,9 +128,9 @@ class MinerJob(NamedTuple):
         try:
             data = bytes.fromhex(params['data'])
             data_size: int = len(data)
-            self.data[:data_size] = data
+            self.data[:data_size] = data  # type: ignore
             self.data_size.value = data_size
-            self.job_id[:] = bytes.fromhex(params['job_id'])
+            self.job_id[:] = bytes.fromhex(params['job_id'])  # type: ignore
             self.nonce_size.value = int(params['nonce_size'])
             self.weight.value = float(params['weight'])
         except KeyError:
@@ -797,7 +799,7 @@ class StratumClient(JSONRPC):
     job: Dict
     miners: List[Process]
     loop: Optional[task.LoopingCall]
-    signal: Value
+    signal: '_Value'
     job_data: MinerJob
 
     address: Optional[bytes]
@@ -879,7 +881,7 @@ class StratumClient(JSONRPC):
         self.log.warn('handle_error', error=error, data=data)
 
 
-def miner_job(index: int, process_num: int, job_data: MinerJob, signal: Value, queue: MQueue) -> None:
+def miner_job(index: int, process_num: int, job_data: MinerJob, signal: '_Value', queue: MQueue) -> None:
     """
     Job to be executed by the mining process.
 
@@ -899,11 +901,11 @@ def miner_job(index: int, process_num: int, job_data: MinerJob, signal: Value, q
     :param queue: queue used to submit solutions to supervisor process
     :type queue: MQueue
     """
-    def update_job() -> Tuple[Array, int, Any, int, int]:
+    def update_job() -> Tuple[bytes, int, Any, int, int]:
         while signal.value == StratumClient.SLEEP:
             sleep(StratumClient.NAP_DURATION)
         return (
-            job_data.job_id[:],  # current_job
+            bytes(job_data.job_id[:]),  # current_job
             int(2**(256 - job_data.weight.value)) - 1,  # target
             sha256(bytes(job_data.data[:job_data.data_size.value])),  # midstate
             int(index * (1 << (8 * job_data.nonce_size.value)) / process_num),  # start_nonce

@@ -27,6 +27,11 @@ def generate_multisig_redeem_script(signatures_required: int, public_key_bytes: 
         :return: The redeem script for the multisig wallet
         :rtype: bytes
     """
+    if signatures_required > settings.MAX_MULTISIG_SIGNATURES:
+        raise ValueError('Signatures required {} is over the limit'.format(signatures_required))
+    if len(public_key_bytes) > settings.MAX_MULTISIG_PUBKEYS:
+        raise ValueError('PubKeys length {} is over the limit'.format(len(public_key_bytes)))
+
     redeem_script = HathorScript()
     redeem_script.addOpcode(getattr(Opcode, 'OP_{}'.format(signatures_required)))
     for pubkey_bytes in public_key_bytes:

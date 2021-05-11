@@ -37,6 +37,7 @@ from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
+from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion, sum_weights
 from hathor.transaction.exceptions import TxValidationError
@@ -45,6 +46,7 @@ from hathor.wallet import BaseWallet
 
 settings = HathorSettings()
 logger = get_logger()
+cpu = get_cpu_profiler()
 
 
 class TestMode(IntFlag):
@@ -125,6 +127,8 @@ class HathorManager:
 
         self.my_peer = peer_id or PeerId()
         self.network = network or 'testnet'
+
+        self.cpu = cpu
 
         # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
         self.pubsub = pubsub or PubSubManager(self.reactor)
@@ -243,7 +247,7 @@ class HathorManager:
         self.metrics.start()
 
         for description in self.listen_addresses:
-            self.listen(description, ssl=self.ssl)
+            self.listen(description)
 
         self.do_discovery()
 
@@ -657,6 +661,7 @@ class HathorManager:
             tx.storage = self.tx_storage
         return self.on_new_tx(tx, fails_silently=fails_silently)
 
+    @cpu.profiler('on_new_tx')
     def on_new_tx(self, tx: BaseTransaction, *, conn: Optional[HathorProtocol] = None,
                   quiet: bool = False, fails_silently: bool = True, propagate_to_peers: bool = True,
                   skip_block_weight_verification: bool = False) -> bool:
@@ -741,6 +746,7 @@ class HathorManager:
         n_windows = 1 + (dt // settings.WEIGHT_DECAY_WINDOW_SIZE)
         return n_windows * settings.WEIGHT_DECAY_AMOUNT
 
+    @cpu.profiler(key=lambda self, block: 'calculate_block_difficulty!{}'.format(block.hash.hex()))
     def calculate_block_difficulty(self, block: Block) -> float:
         """ Calculate block weight according to the ascendents of `block`, using calculate_next_weight."""
         # In test mode we don't validate the block difficulty
@@ -853,8 +859,8 @@ class HathorManager:
 
         return weight
 
-    def listen(self, description: str, ssl: bool = False) -> None:
-        endpoint = self.connections.listen(description, ssl)
+    def listen(self, description: str, use_ssl: Optional[bool] = None) -> None:
+        endpoint = self.connections.listen(description, use_ssl)
 
         if self.hostname:
             proto, _, _ = description.partition(':')

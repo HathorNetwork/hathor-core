@@ -5,15 +5,8 @@ tag = 769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:latest
 
 .PHONY: docker
 docker: nginx.conf set_real_ip_from_cloudfront
-	docker build -t $(tag) .
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(tag) .
 
-.PHONY: docker-push
-docker-push: docker
-	docker push $(tag)
-
-.PHONY: run
-run: docker
-	docker run --rm --link=fullnode -p 8000:80 -it $(tag)
 
 nginx.conf:
 	python -m hathor generate_nginx_config nginx.conf

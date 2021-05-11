@@ -211,4 +211,9 @@ class MiningWebsocketFactory(WebSocketServerFactory):
         """ Broadcast notification to all connections
         """
         for conn in self.connections:
-            conn.send_notification(method=method, params=params)
+            try:
+                conn.send_notification(method=method, params=params)
+            # XXX: unfortunately autobahn can raise 3 different exceptions and one of them is a bare Exception
+            # https://github.com/crossbario/autobahn-python/blob/v20.12.3/autobahn/websocket/protocol.py#L2201-L2294
+            except Exception:
+                self.log.error('send failed, moving on', exc_info=True)

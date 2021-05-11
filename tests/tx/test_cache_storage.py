@@ -4,9 +4,10 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.manager import TestMode
 from hathor.transaction import Block, Transaction, TransactionMetadata, TxOutput
+from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
 from tests import unittest
-from tests.utils import MIN_TIMESTAMP, add_new_blocks, add_new_transactions
+from tests.utils import BURN_ADDRESS, MIN_TIMESTAMP, add_new_blocks, add_new_transactions
 
 CACHE_SIZE = 5
 
@@ -152,10 +153,11 @@ class BasicTransaction(unittest.TestCase):
         self.cache_storage._clone_if_needed = False
 
         block_parents = [block.hash for block in self.genesis_blocks] + [tx.hash for tx in self.genesis_txs]
-        output = TxOutput(200, bytes.fromhex('1e393a5ce2ff1c98d4ff6892f2175100f2dad049'))
+        output = TxOutput(200, P2PKH.create_output_script(BURN_ADDRESS))
         obj = Block(timestamp=MIN_TIMESTAMP, weight=12, outputs=[output], parents=block_parents, nonce=100781,
                     storage=self.cache_storage)
         obj.resolve()
+        obj.verify()
 
         self.cache_storage.save_transaction_deferred(obj)
 

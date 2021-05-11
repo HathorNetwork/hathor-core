@@ -14,6 +14,8 @@ from hathor.transaction.exceptions import (
     InexistentInput,
     InputOutputMismatch,
     InvalidInputData,
+    InvalidInputDataSize,
+    InvalidOutputScriptSize,
     InvalidOutputValue,
     NoInputError,
     ParentDoesNotExist,
@@ -21,6 +23,7 @@ from hathor.transaction.exceptions import (
     TimestampError,
     TooManyInputs,
     TooManyOutputs,
+    TooManySigOps,
     TransactionDataError,
     WeightError,
 )
@@ -29,7 +32,13 @@ from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.transaction.util import int_to_bytes
 from hathor.wallet import Wallet
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions, get_genesis_key
+from tests.utils import (
+    add_blocks_unlock_reward,
+    add_new_blocks,
+    add_new_transactions,
+    create_script_with_sigops,
+    get_genesis_key,
+)
 
 settings = HathorSettings()
 
@@ -654,7 +663,7 @@ class BasicTransaction(unittest.TestCase):
             bytes_to_output_value(invalid_output)
 
         # Can't instantiate an output with negative value
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(InvalidOutputValue):
             TxOutput(-1, script)
 
     def test_tx_version(self):
@@ -704,6 +713,50 @@ class BasicTransaction(unittest.TestCase):
         input_.data = P2PKH.create_input_data(public_bytes, signature)
         tx.resolve()
         return tx
+
+    def _test_txout_script_limit(self, offset):
+        genesis_block = self.genesis_blocks[0]
+        _input = TxInput(genesis_block.hash, 0, b'')
+
+        value = genesis_block.outputs[0].value
+        script = b'*' * (settings.MAX_OUTPUT_SCRIPT_SIZE + offset)
+        _output = TxOutput(value, script)
+
+        tx = Transaction(inputs=[_input], outputs=[_output], storage=self.tx_storage)
+        tx.verify_outputs()
+
+    def test_txout_script_limit_exceeded(self):
+        with self.assertRaises(InvalidOutputScriptSize):
+            self._test_txout_script_limit(offset=1)
+
+    def test_txout_script_limit_success(self):
+        self._test_txout_script_limit(offset=-1)
+        self._test_txout_script_limit(offset=0)
+
+    def _test_txin_data_limit(self, offset):
+        genesis_block = self.genesis_blocks[0]
+        data = b'*' * (settings.MAX_INPUT_DATA_SIZE + offset)
+        _input = TxInput(genesis_block.hash, 0, data)
+
+        value = genesis_block.outputs[0].value
+        _output = TxOutput(value, b'')
+
+        tx = Transaction(
+            timestamp=int(self.manager.reactor.seconds()) + 1,
+            inputs=[_input],
+            outputs=[_output],
+            storage=self.tx_storage
+        )
+        tx.verify_inputs(skip_script=True)
+
+    def test_txin_data_limit_exceeded(self):
+        with self.assertRaises(InvalidInputDataSize):
+            self._test_txin_data_limit(offset=1)
+
+    def test_txin_data_limit_success(self):
+        add_blocks_unlock_reward(self.manager)
+        self._test_txin_data_limit(offset=-1)
+        self._test_txin_data_limit(offset=0)
 
     def test_reward_lock(self):
         from hathor.transaction.exceptions import RewardLocked
@@ -853,6 +906,111 @@ class BasicTransaction(unittest.TestCase):
                 tx.get_sighash_all_data()
 
             mocked.sha256.assert_called_once()
+
+    def test_sigops_output_single_above_limit(self) -> None:
+        genesis_block = self.genesis_blocks[0]
+        value = genesis_block.outputs[0].value - 1
+        _input = TxInput(genesis_block.hash, 0, b'')
+
+        hscript = create_script_with_sigops(settings.MAX_TX_SIGOPS_OUTPUT + 1)
+        output1 = TxOutput(value, hscript)
+        tx = Transaction(inputs=[_input], outputs=[output1], storage=self.tx_storage)
+        tx.update_hash()
+        # This calls verify to ensure that verify_sigops_output is being called on verify
+        with self.assertRaises(TooManySigOps):
+            tx.verify()
+
+    def test_sigops_output_multi_above_limit(self) -> None:
+        genesis_block = self.genesis_blocks[0]
+        value = genesis_block.outputs[0].value - 1
+        _input = TxInput(genesis_block.hash, 0, b'')
+        num_outputs = 5
+
+        hscript = create_script_with_sigops((settings.MAX_TX_SIGOPS_OUTPUT + num_outputs) // num_outputs)
+        output2 = TxOutput(value, hscript)
+        tx = Transaction(inputs=[_input], outputs=[output2]*num_outputs, storage=self.tx_storage)
+        tx.update_hash()
+        with self.assertRaises(TooManySigOps):
+            tx.verify()
+
+    def test_sigops_output_single_below_limit(self) -> None:
+        genesis_block = self.genesis_blocks[0]
+        value = genesis_block.outputs[0].value - 1
+        _input = TxInput(genesis_block.hash, 0, b'')
+
+        hscript = create_script_with_sigops(settings.MAX_TX_SIGOPS_OUTPUT - 1)
+        output3 = TxOutput(value, hscript)
+        tx = Transaction(inputs=[_input], outputs=[output3], storage=self.tx_storage)
+        tx.update_hash()
+        tx.verify_sigops_output()
+
+    def test_sigops_output_multi_below_limit(self) -> None:
+        genesis_block = self.genesis_blocks[0]
+        value = genesis_block.outputs[0].value - 1
+        _input = TxInput(genesis_block.hash, 0, b'')
+        num_outputs = 5
+
+        hscript = create_script_with_sigops((settings.MAX_TX_SIGOPS_OUTPUT - 1) // num_outputs)
+        output4 = TxOutput(value, hscript)
+        tx = Transaction(inputs=[_input], outputs=[output4]*num_outputs, storage=self.tx_storage)
+        tx.update_hash()
+        tx.verify_sigops_output()
+
+    def test_sigops_input_single_above_limit(self) -> None:
+        genesis_block = self.genesis_blocks[0]
+        value = genesis_block.outputs[0].value - 1
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+        _output = TxOutput(value, script)
+
+        hscript = create_script_with_sigops(settings.MAX_TX_SIGOPS_INPUT + 1)
+        input1 = TxInput(genesis_block.hash, 0, hscript)
+        tx = Transaction(inputs=[input1], outputs=[_output], storage=self.tx_storage)
+        tx.update_hash()
+        with self.assertRaises(TooManySigOps):
+            tx.verify()
+
+    def test_sigops_input_multi_above_limit(self) -> None:
+        genesis_block = self.genesis_blocks[0]
+        value = genesis_block.outputs[0].value - 1
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+        _output = TxOutput(value, script)
+        num_inputs = 5
+
+        hscript = create_script_with_sigops((settings.MAX_TX_SIGOPS_INPUT + num_inputs) // num_inputs)
+        input2 = TxInput(genesis_block.hash, 0, hscript)
+        tx = Transaction(inputs=[input2]*num_inputs, outputs=[_output], storage=self.tx_storage)
+        tx.update_hash()
+        with self.assertRaises(TooManySigOps):
+            tx.verify()
+
+    def test_sigops_input_single_below_limit(self) -> None:
+        genesis_block = self.genesis_blocks[0]
+        value = genesis_block.outputs[0].value - 1
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+        _output = TxOutput(value, script)
+
+        hscript = create_script_with_sigops(settings.MAX_TX_SIGOPS_INPUT - 1)
+        input3 = TxInput(genesis_block.hash, 0, hscript)
+        tx = Transaction(inputs=[input3], outputs=[_output], storage=self.tx_storage)
+        tx.update_hash()
+        tx.verify_sigops_input()
+
+    def test_sigops_input_multi_below_limit(self) -> None:
+        genesis_block = self.genesis_blocks[0]
+        value = genesis_block.outputs[0].value - 1
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+        _output = TxOutput(value, script)
+        num_inputs = 5
+
+        hscript = create_script_with_sigops((settings.MAX_TX_SIGOPS_INPUT - 1) // num_inputs)
+        input4 = TxInput(genesis_block.hash, 0, hscript)
+        tx = Transaction(inputs=[input4]*num_inputs, outputs=[_output], storage=self.tx_storage)
+        tx.update_hash()
+        tx.verify_sigops_input()
 
 
 if __name__ == '__main__':
