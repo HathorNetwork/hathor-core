@@ -429,7 +429,7 @@ class WalletIndex:
     def handle_tx_event(self, key: HathorEvents, args: 'EventArguments') -> None:
         """ This method is called when pubsub publishes an event that we subscribed
         """
-        data = args.__dict__
+        data = args.data
         tx = data['tx']
         meta = tx.get_metadata()
         if meta.has_voided_by_changed_since_last_call() or meta.has_spent_by_changed_since_last_call():

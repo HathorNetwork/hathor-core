@@ -126,7 +126,7 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
 
         with self.assertRaises(ValueError):
             kwargs = {}
-            args = EventArguments(**kwargs)
+            args = EventArguments(kwargs)
             self.factory.serialize_message_data(HathorEvents.NETWORK_PEER_CONNECTED, args)
 
     def test_ping(self):
@@ -187,7 +187,7 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
 
     def test_invalid_metric_key(self):
         kwargs = {'test': False}
-        arg = EventArguments(**kwargs)
+        arg = EventArguments(kwargs)
         with self.assertRaises(ValueError):
             self.manager.metrics.handle_publish('invalid_key', arg)
 

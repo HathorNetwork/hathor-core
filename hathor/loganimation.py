@@ -31,7 +31,7 @@ class GraphvizLogAnimation:
         self.manager.pubsub.unsubscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, self.on_new_tx)
         self.is_running = False
 
-    def on_new_tx(self, key: HathorEvents, args: EventArguments) -> None:
+    def on_new_tx(self, key: HathorEvents, _args: EventArguments) -> None:
         """ This method is called every change in the DAG. It saves a new snapshot in disk.
         """
         if not self.is_running:

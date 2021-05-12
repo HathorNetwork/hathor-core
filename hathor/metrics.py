@@ -189,7 +189,7 @@ class Metrics:
         """
         from hathor.p2p.protocol import HathorProtocol
 
-        data = args.__dict__
+        data = args.data
         if key == HathorEvents.NETWORK_NEW_TX_ACCEPTED:
             if data['tx'].is_block:
                 self.blocks = self.tx_storage.get_block_count()

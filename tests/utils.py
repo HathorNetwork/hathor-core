@@ -403,7 +403,8 @@ class MinerSimulator:
         """ Called when a new tx or block is received. It updates the current mining to the
         new block.
         """
-        tx = args.tx  # type: ignore
+        data = args.data
+        tx = data['tx']
         if not tx.is_block:
             return
         if not self.block:
