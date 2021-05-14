@@ -3,10 +3,11 @@ import random
 from hathor.crypto.util import decode_address
 from hathor.p2p.node_sync import NodeSyncTimestamp
 from hathor.p2p.protocol import PeerIdState
+from hathor.simulator import FakeConnection
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
 from hathor.transaction.storage.remote_storage import RemoteCommunicationError, TransactionRemoteStorage
 from tests import unittest
-from tests.utils import FakeConnection, start_remote_storage
+from tests.utils import start_remote_storage
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):

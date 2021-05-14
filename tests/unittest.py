@@ -1,11 +1,9 @@
-import random
 import shutil
 import tempfile
 import time
 from typing import Optional
 from unittest import main as ut_main
 
-import numpy.random
 from structlog import get_logger
 from twisted.internet import reactor
 from twisted.internet.task import Clock
@@ -72,13 +70,6 @@ class TestCase(unittest.TestCase):
         for call in self.clock.getDelayedCalls():
             amount = call.getTime() - self.clock.seconds()
             self.clock.advance(amount)
-
-    def set_random_seed(self, seed=None):
-        if seed is None:
-            seed = numpy.random.randint(2**32)
-        self.random_seed = seed
-        random.seed(self.random_seed)
-        numpy.random.seed(self.random_seed)
 
     def assertTipsEqual(self, manager1, manager2):
         s1 = set(manager1.tx_storage.get_all_tips())
