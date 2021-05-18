@@ -49,6 +49,9 @@ class GraphvizVisualizer:
         self.voided_attrs = dict(style='dashed,filled', penwidth='0.25', fillcolor='#BDC3C7')
         self.conflict_attrs = dict(style='dashed,filled', penwidth='2.0', fillcolor='#BDC3C7')
 
+        # Labels
+        self.labels: Dict[bytes, str] = {}
+
         # Internals
         self._blocks_set: Set[bytes] = set()
         self._txs_set: Set[bytes] = set()
@@ -57,7 +60,11 @@ class GraphvizVisualizer:
         """ Return the node's label for tx.
         """
         assert tx.hash is not None
-        parts = [tx.hash.hex()[-4:]]
+        if tx.hash in self.labels:
+            parts = [self.labels[tx.hash]]
+        else:
+            parts = [tx.hash.hex()[-4:]]
+
         if self.show_weight:
             parts.append('w: {:.2f}'.format(tx.weight))
         if self.show_acc_weight:
