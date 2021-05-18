@@ -19,7 +19,8 @@ from typing import TYPE_CHECKING, Dict, List, Optional
 import numpy.random
 from mnemonic import Mnemonic
 
-from hathor.manager import HathorManager, TestMode
+from hathor.daa import TestMode, _set_test_mode
+from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.simulator.clock import HeapClock
 from hathor.transaction.genesis import _get_genesis_transactions_unsafe
@@ -62,8 +63,6 @@ class Simulator:
         )
 
         manager.reactor = self.clock
-        manager.test_mode = TestMode.DISABLED
-        manager.avg_time_between_blocks = 64
         manager._full_verification = True
         manager.start()
         self.run_to_completion()
@@ -91,9 +90,18 @@ class Simulator:
         self._original_verify_pow = BaseTransaction.verify_pow
         BaseTransaction.verify_pow = verify_pow
 
+        _set_test_mode(TestMode.DISABLED)
+
+        from hathor import daa
+        self._original_avg_time_between_blocks = daa.AVG_TIME_BETWEEN_BLOCKS
+        daa.AVG_TIME_BETWEEN_BLOCKS = 64
+
     def remove_patches(self):
         from hathor.transaction import BaseTransaction
         BaseTransaction.verify_pow = self._original_verify_pow
+
+        from hathor import daa
+        daa.AVG_TIME_BETWEEN_BLOCKS = self._original_avg_time_between_blocks
 
     def add_peer(self, name: str, peer: 'HathorManager') -> None:
         if name in self.peers:

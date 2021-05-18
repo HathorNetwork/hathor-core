@@ -2,7 +2,7 @@ import collections
 
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.manager import TestMode
+from hathor.daa import TestMode, _set_test_mode
 from hathor.transaction import Block, Transaction, TransactionMetadata, TxOutput
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
@@ -196,7 +196,7 @@ class BasicTransaction(unittest.TestCase):
         self.assertEqual(total, 4)
 
     def test_topological_sort_dfs(self):
-        self.manager.test_mode = TestMode.TEST_ALL_WEIGHT
+        _set_test_mode(TestMode.TEST_ALL_WEIGHT)
         add_new_blocks(self.manager, 11, advance_clock=1)
         tx = add_new_transactions(self.manager, 1, advance_clock=1)[0]
 

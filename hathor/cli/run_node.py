@@ -64,7 +64,6 @@ class RunNode:
         parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
         parser.add_argument('--recursion-limit', type=int, help='Set python recursion limit')
         parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
-        parser.add_argument('--min-block-weight', type=int, help='Minimum weight for blocks')
         parser.add_argument('--x-fast-init-beta', action='store_true',
                             help='Execute a fast initialization, which skips some transaction verifications. '
                             'This is still a beta feature as it may cause issues when restarting the full node '
@@ -75,7 +74,8 @@ class RunNode:
     def prepare(self, args: Namespace) -> None:
         import hathor
         from hathor.conf import HathorSettings
-        from hathor.manager import HathorManager, TestMode
+        from hathor.daa import TestMode, _set_test_mode
+        from hathor.manager import HathorManager
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
         from hathor.p2p.peer_id import PeerId
         from hathor.p2p.utils import discover_hostname
@@ -205,7 +205,7 @@ class RunNode:
         network = settings.NETWORK_NAME
         self.manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname,
                                      tx_storage=self.tx_storage, wallet=self.wallet, wallet_index=args.wallet_index,
-                                     stratum_port=args.stratum, min_block_weight=args.min_block_weight, ssl=True)
+                                     stratum_port=args.stratum, ssl=True)
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
 
@@ -223,7 +223,7 @@ class RunNode:
             self.manager.add_peer_discovery(BootstrapPeerDiscovery(args.bootstrap))
 
         if args.test_mode_tx_weight:
-            self.manager.test_mode = TestMode.TEST_TX_WEIGHT
+            _set_test_mode(TestMode.TEST_TX_WEIGHT)
             if self.wallet:
                 self.wallet.test_mode = True
 

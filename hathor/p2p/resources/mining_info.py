@@ -20,8 +20,8 @@ from twisted.web import resource
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
+from hathor.daa import get_mined_tokens
 from hathor.difficulty import Weight
-from hathor.util import get_mined_tokens
 
 settings = HathorSettings()
 

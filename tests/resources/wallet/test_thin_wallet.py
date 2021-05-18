@@ -4,6 +4,7 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
+from hathor.daa import minimum_tx_weight
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.wallet.resources.thin_wallet import (
@@ -81,7 +82,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         i.data = P2PKH.create_input_data(public_key_bytes, signature_bytes)
         tx2.inputs = [i]
         tx2.timestamp = int(self.clock.seconds())
-        tx2.weight = self.manager.minimum_tx_weight(tx2)
+        tx2.weight = minimum_tx_weight(tx2)
 
         response_wrong_amount = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx2.get_struct().hex()})
         data_wrong_amount = response_wrong_amount.json_value()
@@ -96,7 +97,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         i.data = P2PKH.create_input_data(public_key_bytes, signature_bytes)
         tx3.inputs = [i]
         tx3.timestamp = int(self.clock.seconds())
-        tx3.weight = self.manager.minimum_tx_weight(tx3)
+        tx3.weight = minimum_tx_weight(tx3)
 
         # Then send tokens
         response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx3.get_struct().hex()})
@@ -141,7 +142,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 #            self.clock.advance(5)
 #            tx.timestamp = int(self.clock.seconds())
 #            if weight == 0:
-#                weight = self.manager.minimum_tx_weight(tx)
+#                weight = minimum_tx_weight(tx)
 #            tx.weight = weight
 #            return tx.get_struct().hex()
 #
@@ -411,7 +412,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         i.data = P2PKH.create_input_data(public_key_bytes, signature_bytes)
         tx2.inputs = [i]
         tx2.timestamp = int(self.clock.seconds())
-        tx2.weight = self.manager.minimum_tx_weight(tx2)
+        tx2.weight = minimum_tx_weight(tx2)
         tx2.parents = self.manager.get_new_tx_parents()
         tx2.resolve()
         self.manager.propagate_tx(tx2)

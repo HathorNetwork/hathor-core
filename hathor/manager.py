@@ -16,8 +16,7 @@ import datetime
 import random
 import sys
 import time
-from enum import Enum, IntFlag
-from math import log
+from enum import Enum
 from typing import Any, Iterator, List, NamedTuple, Optional, Union, cast
 
 from structlog import get_logger
@@ -27,6 +26,7 @@ from twisted.internet.interfaces import IReactorCore
 from twisted.python.threadpool import ThreadPool
 
 import hathor.util
+from hathor import daa
 from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.exception import InvalidNewTransaction
@@ -47,13 +47,6 @@ logger = get_logger()
 cpu = get_cpu_profiler()
 
 
-class TestMode(IntFlag):
-    DISABLED = 0
-    TEST_TX_WEIGHT = 1
-    TEST_BLOCK_WEIGHT = 2
-    TEST_ALL_WEIGHT = 3
-
-
 class HathorManager:
     """ HathorManager manages the node with the help of other specialized classes.
 
@@ -71,7 +64,7 @@ class HathorManager:
                  hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
                  peer_storage: Optional[Any] = None, default_port: int = 40403, wallet_index: bool = False,
-                 stratum_port: Optional[int] = None, min_block_weight: Optional[int] = None, ssl: bool = True,
+                 stratum_port: Optional[int] = None, ssl: bool = True,
                  capabilities: Optional[List[str]] = None) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
@@ -99,9 +92,6 @@ class HathorManager:
 
         :param stratum_port: Stratum server port. Stratum server will only be created if it is not None.
         :type stratum_port: Optional[int]
-
-        :param min_block_weight: Minimum weight for blocks.
-        :type min_block_weight: Optional[int]
         """
         from hathor.metrics import Metrics
         from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
@@ -138,12 +128,9 @@ class HathorManager:
             self.tx_storage.wallet_index = WalletIndex(self.pubsub)
             self.tx_storage.tokens_index = TokensIndex()
 
-        self.avg_time_between_blocks = settings.AVG_TIME_BETWEEN_BLOCKS
-        self.min_block_weight = min_block_weight or settings.MIN_BLOCK_WEIGHT
-
         self.metrics = Metrics(
             pubsub=self.pubsub,
-            avg_time_between_blocks=self.avg_time_between_blocks,
+            avg_time_between_blocks=settings.AVG_TIME_BETWEEN_BLOCKS,
             tx_storage=self.tx_storage,
             reactor=self.reactor,
         )
@@ -162,9 +149,6 @@ class HathorManager:
         if self.wallet:
             self.wallet.pubsub = self.pubsub
             self.wallet.reactor = self.reactor
-
-        # When manager is in test mode we reduce the weight of blocks/transactions.
-        self.test_mode: int = 0
 
         if stratum_port:
             # XXX: only import if needed
@@ -537,7 +521,7 @@ class HathorManager:
         else:
             timestamp_max = timestamp_abs_max
         timestamp = min(max(current_timestamp, timestamp_min), timestamp_max)
-        weight = self.calculate_next_weight(parent_block, timestamp)
+        weight = daa.calculate_next_weight(parent_block, timestamp)
         parent_block_metadata = parent_block.get_metadata()
         height = parent_block_metadata.height + 1
         parents = [parent_block.hash] + parent_txs.must_include
@@ -552,7 +536,7 @@ class HathorManager:
             assert len(parents_any) == 0, 'Extra parents to choose from that cannot be chosen'
         return BlockTemplate(
             versions={TxVersion.REGULAR_BLOCK.value, TxVersion.MERGE_MINED_BLOCK.value},
-            reward=self.get_tokens_issued_per_block(height),
+            reward=daa.get_tokens_issued_per_block(height),
             weight=weight,
             timestamp_now=current_timestamp,
             timestamp_min=timestamp_min,
@@ -587,7 +571,7 @@ class HathorManager:
 
     def get_tokens_issued_per_block(self, height: int) -> int:
         """Return the number of tokens issued (aka reward) per block of a given height."""
-        return hathor.util._get_tokens_issued_per_block(height)
+        return daa.get_tokens_issued_per_block(height)
 
     def validate_new_tx(self, tx: BaseTransaction, skip_block_weight_verification: bool = False) -> bool:
         """ Process incoming transaction during initialization.
@@ -617,7 +601,7 @@ class HathorManager:
 
             if not skip_block_weight_verification:
                 # Validate minimum block difficulty
-                block_weight = self.calculate_block_difficulty(tx)
+                block_weight = daa.calculate_block_difficulty(tx)
                 if tx.weight < block_weight - settings.WEIGHT_TOL:
                     raise InvalidNewTransaction(
                         'Invalid new block {}: weight ({}) is smaller than the minimum weight ({})'.format(
@@ -626,7 +610,7 @@ class HathorManager:
                     )
 
             parent_block = tx.get_block_parent()
-            tokens_issued_per_block = self.get_tokens_issued_per_block(parent_block.get_metadata().height + 1)
+            tokens_issued_per_block = daa.get_tokens_issued_per_block(parent_block.get_metadata().height + 1)
             if tx.sum_outputs != tokens_issued_per_block:
                 raise InvalidNewTransaction(
                     'Invalid number of issued tokens tag=invalid_issued_tokens'
@@ -637,9 +621,10 @@ class HathorManager:
                 )
         else:
             assert tx.hash is not None  # XXX: it appears that after casting this assert "casting" is lost
+            assert isinstance(tx, Transaction)
 
             # Validate minimum tx difficulty
-            min_tx_weight = self.minimum_tx_weight(tx)
+            min_tx_weight = daa.minimum_tx_weight(tx)
             if tx.weight < min_tx_weight - settings.WEIGHT_TOL:
                 raise InvalidNewTransaction(
                     'Invalid new tx {}: weight ({}) is smaller than the minimum weight ({})'.format(
@@ -742,132 +727,6 @@ class HathorManager:
         self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
 
         return True
-
-    def get_weight_decay_amount(self, distance: int) -> float:
-        """Return the amount to be reduced in the weight of the block."""
-        if not settings.WEIGHT_DECAY_ENABLED:
-            return 0.0
-        if distance < settings.WEIGHT_DECAY_ACTIVATE_DISTANCE:
-            return 0.0
-
-        dt = distance - settings.WEIGHT_DECAY_ACTIVATE_DISTANCE
-
-        # Calculate the number of windows.
-        n_windows = 1 + (dt // settings.WEIGHT_DECAY_WINDOW_SIZE)
-        return n_windows * settings.WEIGHT_DECAY_AMOUNT
-
-    @cpu.profiler(key=lambda self, block: 'calculate_block_difficulty!{}'.format(block.hash.hex()))
-    def calculate_block_difficulty(self, block: Block) -> float:
-        """ Calculate block weight according to the ascendents of `block`, using calculate_next_weight."""
-        # In test mode we don't validate the block difficulty
-        if self.test_mode & TestMode.TEST_BLOCK_WEIGHT:
-            return 1.0
-        if block.is_genesis:
-            return self.min_block_weight
-        return self.calculate_next_weight(block.get_block_parent(), block.timestamp)
-
-    def calculate_next_weight(self, parent_block: Block, timestamp: int) -> float:
-        """ Calculate the next block weight, aka DAA/difficulty adjustment algorithm.
-
-        The algorithm used is described in [RFC 22](https://gitlab.com/HathorNetwork/rfcs/merge_requests/22).
-
-        The weight must not be less than `self.min_block_weight`.
-        """
-        # In test mode we don't validate the block difficulty
-        if self.test_mode & TestMode.TEST_BLOCK_WEIGHT:
-            return 1.0
-
-        root = parent_block
-        N = min(2 * settings.BLOCK_DIFFICULTY_N_BLOCKS, parent_block.get_metadata().height - 1)
-        K = N // 2
-        T = self.avg_time_between_blocks
-        S = 5
-        if N < 10:
-            return self.min_block_weight
-
-        blocks: List[Block] = []
-        while len(blocks) < N + 1:
-            blocks.append(root)
-            root = root.get_block_parent()
-            assert isinstance(root, Block)
-            assert root is not None
-
-        # TODO: revise if this assertion can be safely removed
-        assert blocks == sorted(blocks, key=lambda tx: -tx.timestamp)
-        blocks = list(reversed(blocks))
-
-        assert len(blocks) == N + 1
-        solvetimes, weights = zip(*(
-            (block.timestamp - prev_block.timestamp, block.weight)
-            for prev_block, block in hathor.util.iwindows(blocks, 2)
-        ))
-        assert len(solvetimes) == len(weights) == N, f'got {len(solvetimes)}, {len(weights)} expected {N}'
-
-        sum_solvetimes = 0.0
-        logsum_weights = 0.0
-
-        prefix_sum_solvetimes = [0]
-        for st in solvetimes:
-            prefix_sum_solvetimes.append(prefix_sum_solvetimes[-1] + st)
-
-        # Loop through N most recent blocks. N is most recently solved block.
-        for i in range(K, N):
-            solvetime = solvetimes[i]
-            weight = weights[i]
-            x = (prefix_sum_solvetimes[i + 1] - prefix_sum_solvetimes[i - K]) / K
-            ki = K * (x - T)**2 / (2 * T * T)
-            ki = max(1, ki / S)
-            sum_solvetimes += ki * solvetime
-            logsum_weights = sum_weights(logsum_weights, log(ki, 2) + weight)
-
-        weight = logsum_weights - log(sum_solvetimes, 2) + log(T, 2)
-
-        # Apply weight decay
-        weight -= self.get_weight_decay_amount(timestamp - parent_block.timestamp)
-
-        # Apply minimum weight
-        if weight < self.min_block_weight:
-            weight = self.min_block_weight
-
-        return weight
-
-    def minimum_tx_weight(self, tx: BaseTransaction) -> float:
-        """ Returns the minimum weight for the param tx
-            The minimum is calculated by the following function:
-
-            w = alpha * log(size, 2) +       4.0         + 4.0
-                                       ----------------
-                                        1 + k / amount
-
-            :param tx: tx to calculate the minimum weight
-            :type tx: :py:class:`hathor.transaction.transaction.Transaction`
-
-            :return: minimum weight for the tx
-            :rtype: float
-        """
-        # In test mode we don't validate the minimum weight for tx
-        # We do this to allow generating many txs for testing
-        if self.test_mode & TestMode.TEST_TX_WEIGHT:
-            return 1
-
-        if tx.is_genesis:
-            return settings.MIN_TX_WEIGHT
-
-        tx_size = len(tx.get_struct())
-
-        # We need to take into consideration the decimal places because it is inside the amount.
-        # For instance, if one wants to transfer 20 HTRs, the amount will be 2000.
-        # Max below is preventing division by 0 when handling authority methods that have no outputs
-        amount = max(1, tx.sum_outputs) / (10 ** settings.DECIMAL_PLACES)
-        weight = (
-            + settings.MIN_TX_WEIGHT_COEFFICIENT * log(tx_size, 2)
-            + 4 / (1 + settings.MIN_TX_WEIGHT_K / amount) + 4
-        )
-
-        # Make sure the calculated weight is at least the minimum
-        weight = max(weight, settings.MIN_TX_WEIGHT)
-
-        return weight
 
     def listen(self, description: str, use_ssl: Optional[bool] = None) -> None:
         endpoint = self.connections.listen(description, use_ssl)
