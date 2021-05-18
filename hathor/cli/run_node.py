@@ -90,8 +90,7 @@ class RunNode:
         from hathor.wallet import HDWallet, Wallet
 
         settings = HathorSettings()
-        log = logger.new()
-        self.log = log
+        self.log = logger.new()
 
         from setproctitle import setproctitle
         setproctitle('{}hathor-core'.format(args.procname_prefix))
@@ -119,7 +118,7 @@ class RunNode:
 
         python = f'{platform.python_version()}-{platform.python_implementation()}'
 
-        log.info(
+        self.log.info(
             'hathor-core v{hathor}',
             hathor=hathor.__version__,
             pid=os.getpid(),
@@ -166,24 +165,24 @@ class RunNode:
                 tx_storage = TransactionRocksDBStorage(path=args.data, with_index=(not args.cache))
             else:
                 tx_storage = TransactionCompactStorage(path=args.data, with_index=(not args.cache))
-            log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
+            self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
             if args.cache:
                 tx_storage = TransactionCacheStorage(tx_storage, reactor)
                 if args.cache_size:
                     tx_storage.capacity = args.cache_size
                 if args.cache_interval:
                     tx_storage.interval = args.cache_interval
-                log.info('with cache', capacity=tx_storage.capacity, interval=tx_storage.interval)
+                self.log.info('with cache', capacity=tx_storage.capacity, interval=tx_storage.interval)
                 tx_storage.start()
         else:
             # if using MemoryStorage, no need to have cache
             tx_storage = TransactionMemoryStorage()
-            log.info('with storage', storage_class=type(tx_storage).__name__)
+            self.log.info('with storage', storage_class=type(tx_storage).__name__)
         self.tx_storage = tx_storage
 
         if args.wallet:
             self.wallet = create_wallet()
-            log.info('with wallet', wallet=self.wallet, path=args.data)
+            self.log.info('with wallet', wallet=self.wallet, path=args.data)
         else:
             self.wallet = None
 
@@ -363,7 +362,8 @@ class RunNode:
                 from hathor.stratum.resources import MiningStatsResource
                 root.putChild(b'miners', MiningStatsResource(self.manager))
 
-            if self.wallet and args.wallet_enable_api:
+            with_wallet_api = bool(self.wallet and args.wallet_enable_api)
+            if with_wallet_api:
                 wallet_resources = (
                     # /wallet
                     (b'balance', BalanceResource(self.manager), wallet_resource),
@@ -399,6 +399,7 @@ class RunNode:
             from hathor.profiler.site import SiteProfiler
             status_server = SiteProfiler(real_root)
             reactor.listenTCP(args.status, status_server)
+            self.log.info('with status', listen=args.status, with_wallet_api=with_wallet_api)
 
             # Set websocket factory in metrics
             self.manager.metrics.websocket_factory = ws_factory
