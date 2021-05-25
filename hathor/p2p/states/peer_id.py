@@ -123,4 +123,16 @@ class PeerIdState(BaseState):
         # If it gets here, the peer is validated, and we are ready to start communicating.
         protocol.peer = peer
 
+        from hathor.p2p.netfilter import get_table
+        from hathor.p2p.netfilter.context import NetfilterContext
+        context = NetfilterContext(
+            protocol=self.protocol,
+            connections=self.protocol.connections,
+            addr=self.protocol.transport.getPeer(),
+        )
+        verdict = get_table('filter').get_chain('post_peerid').process(context)
+        if not bool(verdict):
+            self.protocol.disconnect('rejected by netfilter: filter post_peerid', force=True)
+            return
+
         self.send_ready()

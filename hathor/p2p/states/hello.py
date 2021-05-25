@@ -119,4 +119,17 @@ class HelloState(BaseState):
 
         protocol.app_version = data['app']
         protocol.diff_timestamp = dt
+
+        from hathor.p2p.netfilter import get_table
+        from hathor.p2p.netfilter.context import NetfilterContext
+        context = NetfilterContext(
+            protocol=self.protocol,
+            connections=self.protocol.connections,
+            addr=self.protocol.transport.getPeer(),
+        )
+        verdict = get_table('filter').get_chain('post_hello').process(context)
+        if not bool(verdict):
+            self.protocol.disconnect('rejected by netfilter: filter post_hello', force=True)
+            return
+
         protocol.change_state(protocol.PeerState.PEER_ID)
