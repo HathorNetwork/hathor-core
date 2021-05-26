@@ -85,7 +85,7 @@ class TxDetails:
                 self.requested_index += 1
                 self.retry_count = 0
 
-            if not connection.protocol.connected:
+            if connection.protocol.aborting:
                 # Connection was already closed, so try the next one
                 connection = None
 

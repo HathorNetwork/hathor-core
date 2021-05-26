@@ -61,3 +61,7 @@ class BaseState:
 
     def on_exit(self) -> None:
         pass
+
+    def prepare_to_disconnect(self) -> None:
+        """Called when we will disconnect with the peer."""
+        pass
