@@ -34,14 +34,14 @@ class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
         super().__init__()
 
     def onConnect(self, request):
-        self.log.info('connect', request=request)
+        self.log.info('connection opened, starting handshake...', request=request)
 
     def onOpen(self) -> None:
-        self.factory.connections.add(self)
-        self.log.info('connection opened')
+        self.factory.on_client_open(self)
+        self.log.info('connection established')
 
     def onClose(self, wasClean, code, reason):
-        self.factory.connection_closed(self)
+        self.factory.on_client_close(self)
         self.log.info('connection closed', reason=reason)
 
     def onMessage(self, payload: Union[bytes, str], isBinary: bool) -> None:
