@@ -100,7 +100,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         conn.run_one_step()  # PEER-ID
         conn.run_one_step()  # READY
 
-        node_sync = conn.proto1.state.get_sync_plugin()
+        node_sync = conn.proto1.state.sync_manager
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
         self.assertTipsEqual(self.manager1, manager2)
 
@@ -118,7 +118,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
             conn.run_one_step(debug=True)
             self.clock.advance(0.1)
 
-        node_sync = conn.proto1.state.get_sync_plugin()
+        node_sync = conn.proto1.state.sync_manager
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
         self.assertTipsEqual(self.manager1, manager2)
         self.assertConsensusEqual(self.manager1, manager2)
@@ -137,7 +137,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
             conn.run_one_step(debug=True)
             self.clock.advance(0.1)
 
-        node_sync = conn.proto1.state.get_sync_plugin()
+        node_sync = conn.proto1.state.sync_manager
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
         self.assertTipsEqual(self.manager1, manager2)
         self.assertConsensusEqual(self.manager1, manager2)
@@ -165,7 +165,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # dot2 = manager2.tx_storage.graphviz(format='pdf')
         # dot2.render('dot2')
 
-        node_sync = conn.proto1.state.get_sync_plugin()
+        node_sync = conn.proto1.state.sync_manager
         self.assertEqual(self.manager1.tx_storage.latest_timestamp, manager2.tx_storage.latest_timestamp)
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
         self.assertTipsEqual(self.manager1, manager2)

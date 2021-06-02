@@ -103,7 +103,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
             dot2 = GraphvizVisualizer(manager2.tx_storage, include_verifications=True).dot()
             dot2.render('dot2-post')
 
-        node_sync = conn.proto1.state.get_sync_plugin()
+        node_sync = conn.proto1.state.sync_manager
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
         self.assertTipsEqual(manager1, manager2)
         self.assertConsensusEqual(manager1, manager2)
