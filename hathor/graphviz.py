@@ -1,3 +1,17 @@
+# Copyright 2021 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 
 from itertools import chain
 from typing import Dict, Iterator, Set
@@ -35,6 +49,9 @@ class GraphvizVisualizer:
         self.voided_attrs = dict(style='dashed,filled', penwidth='0.25', fillcolor='#BDC3C7')
         self.conflict_attrs = dict(style='dashed,filled', penwidth='2.0', fillcolor='#BDC3C7')
 
+        # Labels
+        self.labels: Dict[bytes, str] = {}
+
         # Internals
         self._blocks_set: Set[bytes] = set()
         self._txs_set: Set[bytes] = set()
@@ -43,7 +60,11 @@ class GraphvizVisualizer:
         """ Return the node's label for tx.
         """
         assert tx.hash is not None
-        parts = [tx.hash.hex()[-4:]]
+        if tx.hash in self.labels:
+            parts = [self.labels[tx.hash]]
+        else:
+            parts = [tx.hash.hex()[-4:]]
+
         if self.show_weight:
             parts.append('w: {:.2f}'.format(tx.weight))
         if self.show_acc_weight:

@@ -1,18 +1,16 @@
-"""
-Copyright 2019 Hathor Labs
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-   http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-"""
+# Copyright 2021 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import math
 import warnings
@@ -32,51 +30,6 @@ settings = HathorSettings()
 
 
 T = TypeVar('T')
-
-
-def _get_tokens_issued_per_block(height: int) -> int:
-    """Return the number of tokens issued per block of a given height.
-
-    Always use Manager.get_tokens_issued_per_block.
-    You should not use this method unless you know what you are doing.
-    """
-    if settings.BLOCKS_PER_HALVING is None:
-        assert settings.MINIMUM_TOKENS_PER_BLOCK == settings.INITIAL_TOKENS_PER_BLOCK
-        return settings.MINIMUM_TOKENS_PER_BLOCK
-
-    number_of_halvings = (height - 1) // settings.BLOCKS_PER_HALVING
-    number_of_halvings = max(0, number_of_halvings)
-
-    if number_of_halvings > settings.MAXIMUM_NUMBER_OF_HALVINGS:
-        return settings.MINIMUM_TOKENS_PER_BLOCK
-
-    amount = settings.INITIAL_TOKENS_PER_BLOCK // (2**number_of_halvings)
-    amount = max(amount, settings.MINIMUM_TOKENS_PER_BLOCK)
-    return amount
-
-
-def get_mined_tokens(height: int) -> int:
-    """Return the number of tokens mined in total at height
-    """
-    assert settings.BLOCKS_PER_HALVING is not None
-    number_of_halvings = (height - 1) // settings.BLOCKS_PER_HALVING
-    number_of_halvings = max(0, number_of_halvings)
-
-    blocks_in_this_halving = height - number_of_halvings * settings.BLOCKS_PER_HALVING
-
-    tokens_per_block = settings.INITIAL_TOKENS_PER_BLOCK
-    mined_tokens = 0
-
-    # Sum the past halvings
-    for _ in range(number_of_halvings):
-        mined_tokens += settings.BLOCKS_PER_HALVING * tokens_per_block
-        tokens_per_block //= 2
-        tokens_per_block = max(tokens_per_block, settings.MINIMUM_TOKENS_PER_BLOCK)
-
-    # Sum the blocks in the current halving
-    mined_tokens += blocks_in_this_halving * tokens_per_block
-
-    return mined_tokens
 
 
 def practically_equal(a: Dict[Any, Any], b: Dict[Any, Any]) -> bool:

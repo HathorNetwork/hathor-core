@@ -2,7 +2,8 @@ from twisted.internet.defer import succeed
 from twisted.web import server
 from twisted.web.test.requesthelper import DummyRequest
 
-from hathor.manager import HathorManager, TestMode
+from hathor.daa import TestMode, _set_test_mode
+from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.util import json_dumpb, json_loadb
 from tests import unittest
@@ -28,7 +29,7 @@ class _BaseResourceTest:
             self.reactor = self.clock
             self.manager = HathorManager(self.reactor, **self._manager_kwargs())
             self.manager.allow_mining_without_peers()
-            self.manager.test_mode = TestMode.TEST_ALL_WEIGHT
+            _set_test_mode(TestMode.TEST_ALL_WEIGHT)
             self.manager.start()
 
         def tearDown(self):

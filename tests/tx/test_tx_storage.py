@@ -11,8 +11,8 @@ from twisted.internet.threads import deferToThread
 from twisted.trial import unittest
 
 from hathor.conf import HathorSettings
+from hathor.daa import TestMode, _set_test_mode
 from hathor.indexes import TokensIndex, WalletIndex
-from hathor.manager import TestMode
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import (
@@ -339,7 +339,7 @@ class _BaseTransactionStorageTest:
             return block
 
         def test_topological_sort(self):
-            self.manager.test_mode = TestMode.TEST_ALL_WEIGHT
+            _set_test_mode(TestMode.TEST_ALL_WEIGHT)
             _total = 0
             blocks = add_new_blocks(self.manager, 1, advance_clock=1)
             _total += len(blocks)

@@ -1,3 +1,17 @@
+# Copyright 2021 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import getpass
 import json
 import os
@@ -50,7 +64,6 @@ class RunNode:
         parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
         parser.add_argument('--recursion-limit', type=int, help='Set python recursion limit')
         parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
-        parser.add_argument('--min-block-weight', type=int, help='Minimum weight for blocks')
         parser.add_argument('--x-fast-init-beta', action='store_true',
                             help='Execute a fast initialization, which skips some transaction verifications. '
                             'This is still a beta feature as it may cause issues when restarting the full node '
@@ -61,7 +74,8 @@ class RunNode:
     def prepare(self, args: Namespace) -> None:
         import hathor
         from hathor.conf import HathorSettings
-        from hathor.manager import HathorManager, TestMode
+        from hathor.daa import TestMode, _set_test_mode
+        from hathor.manager import HathorManager
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
         from hathor.p2p.peer_id import PeerId
         from hathor.p2p.utils import discover_hostname
@@ -76,8 +90,7 @@ class RunNode:
         from hathor.wallet import HDWallet, Wallet
 
         settings = HathorSettings()
-        log = logger.new()
-        self.log = log
+        self.log = logger.new()
 
         from setproctitle import setproctitle
         setproctitle('{}hathor-core'.format(args.procname_prefix))
@@ -105,7 +118,7 @@ class RunNode:
 
         python = f'{platform.python_version()}-{platform.python_implementation()}'
 
-        log.info(
+        self.log.info(
             'hathor-core v{hathor}',
             hathor=hathor.__version__,
             pid=os.getpid(),
@@ -152,24 +165,24 @@ class RunNode:
                 tx_storage = TransactionRocksDBStorage(path=args.data, with_index=(not args.cache))
             else:
                 tx_storage = TransactionCompactStorage(path=args.data, with_index=(not args.cache))
-            log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
+            self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
             if args.cache:
                 tx_storage = TransactionCacheStorage(tx_storage, reactor)
                 if args.cache_size:
                     tx_storage.capacity = args.cache_size
                 if args.cache_interval:
                     tx_storage.interval = args.cache_interval
-                log.info('with cache', capacity=tx_storage.capacity, interval=tx_storage.interval)
+                self.log.info('with cache', capacity=tx_storage.capacity, interval=tx_storage.interval)
                 tx_storage.start()
         else:
             # if using MemoryStorage, no need to have cache
             tx_storage = TransactionMemoryStorage()
-            log.info('with storage', storage_class=type(tx_storage).__name__)
+            self.log.info('with storage', storage_class=type(tx_storage).__name__)
         self.tx_storage = tx_storage
 
         if args.wallet:
             self.wallet = create_wallet()
-            log.info('with wallet', wallet=self.wallet, path=args.data)
+            self.log.info('with wallet', wallet=self.wallet, path=args.data)
         else:
             self.wallet = None
 
@@ -191,7 +204,7 @@ class RunNode:
         network = settings.NETWORK_NAME
         self.manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname,
                                      tx_storage=self.tx_storage, wallet=self.wallet, wallet_index=args.wallet_index,
-                                     stratum_port=args.stratum, min_block_weight=args.min_block_weight, ssl=True)
+                                     stratum_port=args.stratum, ssl=True)
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
 
@@ -209,7 +222,7 @@ class RunNode:
             self.manager.add_peer_discovery(BootstrapPeerDiscovery(args.bootstrap))
 
         if args.test_mode_tx_weight:
-            self.manager.test_mode = TestMode.TEST_TX_WEIGHT
+            _set_test_mode(TestMode.TEST_TX_WEIGHT)
             if self.wallet:
                 self.wallet.test_mode = True
 
@@ -349,7 +362,8 @@ class RunNode:
                 from hathor.stratum.resources import MiningStatsResource
                 root.putChild(b'miners', MiningStatsResource(self.manager))
 
-            if self.wallet and args.wallet_enable_api:
+            with_wallet_api = bool(self.wallet and args.wallet_enable_api)
+            if with_wallet_api:
                 wallet_resources = (
                     # /wallet
                     (b'balance', BalanceResource(self.manager), wallet_resource),
@@ -385,6 +399,7 @@ class RunNode:
             from hathor.profiler.site import SiteProfiler
             status_server = SiteProfiler(real_root)
             reactor.listenTCP(args.status, status_server)
+            self.log.info('with status', listen=args.status, with_wallet_api=with_wallet_api)
 
             # Set websocket factory in metrics
             self.manager.metrics.websocket_factory = ws_factory

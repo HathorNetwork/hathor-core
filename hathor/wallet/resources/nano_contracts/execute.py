@@ -1,3 +1,17 @@
+# Copyright 2021 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import base64
 import binascii
 import json
@@ -8,6 +22,7 @@ from twisted.web import resource
 from hathor.api_util import get_missing_params_msg, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
+from hathor.daa import minimum_tx_weight
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, NanoContractMatchValues
 from hathor.wallet.exceptions import InvalidAddress
@@ -85,7 +100,7 @@ class NanoContractExecuteResource(resource.Resource):
 
         tx.parents = self.manager.get_new_tx_parents()
         tx.update_timestamp(int(self.manager.reactor.seconds()))
-        tx.weight = self.manager.minimum_tx_weight(tx)
+        tx.weight = minimum_tx_weight(tx)
         tx.resolve()
         success = self.manager.propagate_tx(tx)
 

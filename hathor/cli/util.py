@@ -1,3 +1,17 @@
+# Copyright 2021 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from argparse import ArgumentParser
 from collections import OrderedDict
 from datetime import datetime
@@ -201,9 +215,9 @@ def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_lo
             level = twisted_to_logging_level.get(event.get('log_level'), logging.INFO)
             kwargs = {}
             msg = ''
-            if not msg and 'log_format' in event:
+            if not msg and event.get('log_format', None):
                 msg = event['log_format'].format(**event)
-            if not msg and 'format' in event:
+            if not msg and event.get('format', None):
                 msg = event['format'] % event
             failure = event.get('log_failure')
             if failure is not None:

@@ -1,3 +1,17 @@
+# Copyright 2021 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import time
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, Generator, Optional, Set
@@ -68,7 +82,7 @@ class HathorProtocol:
     connection_string: Optional[str]
     expected_peer_id: Optional[str]
     warning_flags: Set[str]
-    connected: bool
+    aborting: bool
     diff_timestamp: Optional[int]
     idle_timeout: int
 
@@ -128,8 +142,10 @@ class HathorProtocol:
         # Set of warning flags that may be added during the connection process
         self.warning_flags: Set[str] = set()
 
-        # If peer is connected
-        self.connected = False
+        # This property is used to indicate the connection is being dropped (either because of a prototcol error or
+        # because the remote disconnected), and the following buffered lines are ignored.
+        # See `HathorLineReceiver.lineReceived`
+        self.aborting = False
 
         self.use_ssl: bool = use_ssl
 
@@ -207,6 +223,7 @@ class HathorProtocol:
     def on_connect(self) -> None:
         """ Executed when the connection is established.
         """
+        assert not self.aborting
         self.update_log_context()
         self.log.debug('new connection')
 
@@ -216,8 +233,6 @@ class HathorProtocol:
 
         # The initial state is HELLO.
         self.change_state(self.PeerState.HELLO)
-
-        self.connected = True
 
         if self.connections:
             self.connections.on_peer_connect(self)
@@ -251,10 +266,11 @@ class HathorProtocol:
         if self._idle_timeout_call_later:
             self._idle_timeout_call_later.cancel()
             self._idle_timeout_call_later = None
-        self.connected = False
+        self.aborting = True
         self.update_log_context()
         if self.state:
             self.state.on_exit()
+            self.state = None
         if self.connections:
             self.connections.on_peer_disconnect(self)
 
@@ -305,15 +321,17 @@ class HathorProtocol:
         self.send_error(msg)
         self.disconnect()
 
-    def disconnect(self, *, force: bool = False) -> None:
+    def disconnect(self, reason: str = '', *, force: bool = False) -> None:
         """Close connection."""
         # from twisted docs: "If a producer is being used with the transport, loseConnection will only close
         # the connection once the producer is unregistered." We call on_exit to make sure any producers (like
         # the one from node_sync) are unregistered
         if self.state:
-            self.state.on_exit()
+            self.state.prepare_to_disconnect()
+        self.log.debug('disconnecting', reason=reason, force=force)
         if not force:
             self.transport.loseConnection()
+            self.aborting = True
         else:
             self.transport.abortConnection()
 
@@ -344,6 +362,14 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
 
     @cpu.profiler(key=lambda self: 'p2p!{}'.format(self.get_short_remote()))
     def lineReceived(self, line: bytes) -> Optional[Generator[Any, Any, None]]:
+        if self.aborting:
+            # XXX: this can happen when we receive more than one line at once (normally happens when the remote buffers
+            # and the next datagram contains several lines) and for any reason (like a protocol error) we decide to
+            # abort and close the connection, HathorLineReceive.lineReceived will still be called for the buffered
+            # lines. If that happens we just ignore those messages.
+            self.log.debug('ignore received messager after abort')
+            return None
+
         self.metrics.received_messages += 1
         self.metrics.received_bytes += len(line)
 

@@ -2,6 +2,7 @@ import base64
 
 from twisted.internet.defer import inlineCallbacks
 
+from hathor.daa import TestMode, _set_test_mode
 from hathor.transaction import Transaction
 from hathor.transaction.resources import CreateTxResource
 from hathor.transaction.scripts import P2PKH, create_base_script
@@ -191,7 +192,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_tx_propagate(self):
-        self.manager.test_mode = 0  # disable test_mode so the weight is not 1
+        _set_test_mode(TestMode.DISABLED)      # disable test_mode so the weight is not 1
         src_tx = self.unspent_tx
         output_address = 'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199A'
         resp = (yield self.web.post('create_tx', {
@@ -229,7 +230,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_tx_propagate_multiple_inputs(self):
-        self.manager.test_mode = 0  # disable test_mode so the weight is not 1
+        _set_test_mode(TestMode.DISABLED)      # disable test_mode so the weight is not 1
         output_address = 'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199A'
         resp = (yield self.web.post('create_tx', {
             'inputs': [

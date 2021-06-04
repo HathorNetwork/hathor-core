@@ -1,3 +1,17 @@
+# Copyright 2021 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import json
 from typing import TYPE_CHECKING, Any, Dict
 
@@ -105,4 +119,17 @@ class HelloState(BaseState):
 
         protocol.app_version = data['app']
         protocol.diff_timestamp = dt
+
+        from hathor.p2p.netfilter import get_table
+        from hathor.p2p.netfilter.context import NetfilterContext
+        context = NetfilterContext(
+            protocol=self.protocol,
+            connections=self.protocol.connections,
+            addr=self.protocol.transport.getPeer(),
+        )
+        verdict = get_table('filter').get_chain('post_hello').process(context)
+        if not bool(verdict):
+            self.protocol.disconnect('rejected by netfilter: filter post_hello', force=True)
+            return
+
         protocol.change_state(protocol.PeerState.PEER_ID)

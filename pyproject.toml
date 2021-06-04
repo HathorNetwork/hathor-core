@@ -1,4 +1,4 @@
-# Copyright 2019 Hathor Labs
+# Copyright 2021 Hathor Labs
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 
 [tool.poetry]
 name = "hathor"
-version = "0.39.0"
+version = "0.39.1"
 description = "Hathor Network full-node"
 authors = ["Hathor Team <contact@hathor.network>"]
 license = "Apache-2.0"

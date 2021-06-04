@@ -1,3 +1,17 @@
+# Copyright 2021 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import base64
 import hashlib
 import json
@@ -13,6 +27,7 @@ from OpenSSL.crypto import X509, PKey
 from twisted.internet.defer import inlineCallbacks
 from twisted.internet.ssl import Certificate, CertificateOptions, TLSVersion, trustRootFromCertificates
 
+from hathor import daa
 from hathor.conf import HathorSettings
 from hathor.p2p.utils import connection_string_to_host, discover_dns, generate_certificate
 
@@ -308,7 +323,8 @@ class PeerId:
                     found_entrypoint = True
                     break
                 host = connection_string_to_host(entrypoint)
-                result = yield discover_dns(host, protocol.node.test_mode)
+                # TODO: don't use `daa.TEST_MODE` for this
+                result = yield discover_dns(host, daa.TEST_MODE)
                 if protocol.connection_string in result:
                     # Found the entrypoint
                     found_entrypoint = True
@@ -324,7 +340,7 @@ class PeerId:
                 if connection_host == host:
                     found_entrypoint = True
                     break
-                result = yield discover_dns(host, protocol.node.test_mode)
+                result = yield discover_dns(host, daa.TEST_MODE)
                 if connection_host in [connection_string_to_host(x) for x in result]:
                     # Found the entrypoint
                     found_entrypoint = True

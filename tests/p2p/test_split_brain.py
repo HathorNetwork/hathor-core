@@ -3,17 +3,12 @@ import random
 import pytest
 from mnemonic import Mnemonic
 
+from hathor.daa import TestMode, _set_test_mode
 from hathor.graphviz import GraphvizVisualizer
-from hathor.manager import TestMode
+from hathor.simulator import FakeConnection
 from hathor.wallet import HDWallet
 from tests import unittest
-from tests.utils import (
-    FakeConnection,
-    add_blocks_unlock_reward,
-    add_new_block,
-    add_new_double_spending,
-    add_new_transactions,
-)
+from tests.utils import add_blocks_unlock_reward, add_new_block, add_new_double_spending, add_new_transactions
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):
@@ -36,8 +31,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         wallet = HDWallet(gap_limit=2)
         wallet._manually_initialize()
 
+        _set_test_mode(TestMode.TEST_ALL_WEIGHT)
         manager = super().create_peer(network, wallet=wallet)
-        manager.test_mode = TestMode.TEST_ALL_WEIGHT
         manager.avg_time_between_blocks = 64
 
         # Don't use it anywhere else. It is unsafe to generate mnemonic words like this.
@@ -108,7 +103,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
             dot2 = GraphvizVisualizer(manager2.tx_storage, include_verifications=True).dot()
             dot2.render('dot2-post')
 
-        node_sync = conn.proto1.state.get_sync_plugin()
+        node_sync = conn.proto1.state.sync_manager
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
         self.assertTipsEqual(manager1, manager2)
         self.assertConsensusEqual(manager1, manager2)

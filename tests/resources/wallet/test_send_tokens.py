@@ -2,7 +2,7 @@ import base64
 
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.manager import TestMode
+from hathor.daa import TestMode, _set_test_mode
 from hathor.p2p.resources import MiningResource
 from hathor.wallet.resources import BalanceResource, HistoryResource, SendTokensResource
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
@@ -165,13 +165,13 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_tx_weight(self):
+        _set_test_mode(TestMode.DISABLED)
         add_new_blocks(self.manager, 3, advance_clock=1)
         add_blocks_unlock_reward(self.manager)
         self.reactor.advance(3)
 
         # Unlocking wallet
         self.manager.wallet.unlock(b"MYPASS")
-        self.manager.test_mode = TestMode.DISABLED
 
         data_json = {
             "outputs": [{

@@ -1,18 +1,16 @@
-"""
-Copyright 2019 Hathor Labs
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-   http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-"""
+# Copyright 2021 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import base64
 import json
@@ -30,7 +28,6 @@ from zope.interface import implementer
 
 from hathor.conf import HathorSettings
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
-from hathor.p2p.plugin import Plugin
 from hathor.transaction import BaseTransaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
@@ -74,7 +71,7 @@ class SendDataPush:
         """ Start pushing data.
         """
         if self.is_running:
-            raise Exception('SendDataPush is already stopped.')
+            raise Exception('SendDataPush is already started.')
         self.is_running = True
         self.consumer.registerProducer(self, True)
         self.resumeProducing()
@@ -172,14 +169,15 @@ class SendDataPush:
         self.priority_queue.clear()
 
 
-class NodeSyncTimestamp(Plugin):
+class NodeSyncTimestamp:
     """ An algorithm to sync the DAG between two peers using the timestamp of the transactions.
 
     This algorithm must assume that a new item may arrive while it is running. The item's timestamp
     may be recent or old, changing the tips of any timestamp.
     """
+    name: str = 'node-sync-timestamp'
 
-    MAX_HASHES = 40
+    MAX_HASHES: int = 40
 
     def __init__(self, protocol: 'HathorProtocol', reactor: Clock = None) -> None:
         """
@@ -238,7 +236,7 @@ class NodeSyncTimestamp(Plugin):
         }
 
     def get_cmd_dict(self) -> Dict[ProtocolMessages, Callable[[str], None]]:
-        """ Return a dict of messages of the plugin.
+        """ Return a dict of messages.
         """
         return {
             ProtocolMessages.GET_DATA: self.handle_get_data,
@@ -266,7 +264,7 @@ class NodeSyncTimestamp(Plugin):
         if not self.is_started:
             raise Exception('NodeSyncTimestamp is already stopped')
         self.is_started = False
-        if self.send_data_queue:
+        if self.send_data_queue and self.send_data_queue.is_running:
             self.send_data_queue.stop()
         if self.call_later_id and self.call_later_id.active():
             self.call_later_id.cancel()

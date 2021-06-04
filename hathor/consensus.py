@@ -1,3 +1,17 @@
+# Copyright 2021 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from itertools import chain
 from typing import Iterable, List, Optional, Set, cast
 
@@ -157,6 +171,8 @@ class BlockConsensusAlgorithm:
         parent_meta = parent.get_metadata()
         assert block.hash in parent_meta.children
 
+        # This method is called after the metadata of the parent is updated.
+        # So, if the parent has only one child, it must be the current block.
         is_connected_to_the_head = bool(len(parent_meta.children) == 1)
         is_connected_to_the_best_chain = bool(not parent_meta.voided_by)
 
@@ -172,6 +188,10 @@ class BlockConsensusAlgorithm:
             #     assert len(storage.get_best_block_tips(skip_cache=True)) == 1
         else:
             # Resolve all other cases, but (i).
+            log = self.log.new(block=block.hash_hex)
+            log.debug('this block is not the head of the bestchain',
+                      is_connected_to_the_head=is_connected_to_the_head,
+                      is_connected_to_the_best_chain=is_connected_to_the_best_chain)
 
             # First, void this block.
             self.mark_as_voided(block, skip_remove_first_block_markers=True)
@@ -368,6 +388,7 @@ class BlockConsensusAlgorithm:
         """ Mark a block as voided. By default, it will remove the first block markers from
         `meta.first_block` of the transactions that point to it.
         """
+        self.log.debug('block.mark_as_voided', block=block.hash_hex)
         if not skip_remove_first_block_markers:
             self.remove_first_block_markers(block)
         self.add_voided_by(block)

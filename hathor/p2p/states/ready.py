@@ -1,6 +1,20 @@
+# Copyright 2021 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import json
 from math import inf
-from typing import TYPE_CHECKING, Dict, Iterable, Optional, cast
+from typing import TYPE_CHECKING, Iterable, Optional
 
 from structlog import get_logger
 from twisted.internet.task import LoopingCall
@@ -8,7 +22,6 @@ from twisted.internet.task import LoopingCall
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.node_sync import NodeSyncTimestamp
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.plugin import Plugin
 from hathor.p2p.states.base import BaseState
 from hathor.transaction import BaseTransaction
 
@@ -19,10 +32,6 @@ logger = get_logger()
 
 
 class ReadyState(BaseState):
-    SYNC_PLUGIN_NAME = 'node-sync-timestamp'
-
-    plugins: Dict[str, Plugin]
-
     def __init__(self, protocol: 'HathorProtocol') -> None:
         super().__init__(protocol)
         self.log = logger.new(**protocol.get_logger_context())
@@ -55,17 +64,12 @@ class ReadyState(BaseState):
             ProtocolMessages.GET_PEERS: self.handle_get_peers,
             ProtocolMessages.PEERS: self.handle_peers,
 
-            # Other messages are added by plugins.
+            # Other messages are added by the sync manager.
         })
 
-        # List of plugins.
-        self.plugins = {}
-        self.add_plugin(self.SYNC_PLUGIN_NAME, NodeSyncTimestamp(self.protocol, reactor=self.reactor))
-
-    def add_plugin(self, name: str, plugin: Plugin) -> None:
-        self.plugins[name] = plugin
-        cmd_list = plugin.get_cmd_dict()
-        self.cmd_map.update(cmd_list)
+        # Initialize sync manager and add its commands to the list of available commands.
+        self.sync_manager = NodeSyncTimestamp(self.protocol, reactor=self.reactor)
+        self.cmd_map.update(self.sync_manager.get_cmd_dict())
 
     def on_enter(self) -> None:
         if self.protocol.connections:
@@ -74,24 +78,23 @@ class ReadyState(BaseState):
         self.lc_ping.start(1, now=False)
         self.send_get_peers()
 
-        for plugin in self.plugins.values():
-            plugin.start()
+        self.sync_manager.start()
 
     def on_exit(self) -> None:
         if self.lc_ping.running:
             self.lc_ping.stop()
 
-        for plugin in self.plugins.values():
-            plugin.stop()
+        if self.sync_manager.is_started:
+            self.sync_manager.stop()
 
-    def get_sync_plugin(self) -> NodeSyncTimestamp:
-        return cast(NodeSyncTimestamp, self.plugins[self.SYNC_PLUGIN_NAME])
+    def prepare_to_disconnect(self) -> None:
+        self.sync_manager.stop()
 
     def send_tx_to_peer(self, tx: BaseTransaction) -> None:
-        self.plugins[self.SYNC_PLUGIN_NAME].send_tx_to_peer_if_possible(tx)
+        self.sync_manager.send_tx_to_peer_if_possible(tx)
 
     def is_synced(self) -> bool:
-        return self.plugins[self.SYNC_PLUGIN_NAME].is_synced()
+        return self.sync_manager.is_synced()
 
     def send_get_peers(self) -> None:
         """ Send a GET-PEERS command, requesting a list of nodes.

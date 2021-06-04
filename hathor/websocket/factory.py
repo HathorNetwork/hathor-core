@@ -1,7 +1,22 @@
+# Copyright 2021 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import json
 from collections import defaultdict, deque
 from typing import Any, DefaultDict, Deque, Dict, Optional, Set
 
+from autobahn.exception import Disconnected
 from autobahn.twisted.websocket import WebSocketServerFactory
 from structlog import get_logger
 from twisted.internet import reactor
@@ -73,6 +88,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         :type metrics: :py:class:`hathor.metrics.Metrics`
         """
         # Opened websocket connections so I can broadcast messages later
+        # It contains only connections that have finished handshaking.
         self.connections: Set[HathorAdminWebsocketProtocol] = set()
 
         # Websocket connection for each address
@@ -194,6 +210,9 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         for c in connections:
             try:
                 c.sendMessage(payload, False)
+            except Disconnected:
+                # Connection is closed. Nothing to do.
+                pass
             # XXX: unfortunately autobahn can raise 3 different exceptions and one of them is a bare Exception
             # https://github.com/crossbario/autobahn-python/blob/v20.12.3/autobahn/websocket/protocol.py#L2201-L2294
             except Exception:
@@ -322,11 +341,14 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         if len(self.address_connections[address]) == 0:
             del self.address_connections[address]
 
-    def connection_closed(self, connection: HathorAdminWebsocketProtocol) -> None:
-        """ Called when a ws connection is closed
-            We should remove it from self.connections and from self.address_connections set for each address
-        """
-        self.connections.remove(connection)
+    def on_client_open(self, connection: HathorAdminWebsocketProtocol) -> None:
+        """Called when a ws connection is opened (after handshaking)."""
+        self.connections.add(connection)
+
+    def on_client_close(self, connection: HathorAdminWebsocketProtocol) -> None:
+        """Called when a ws connection is closed."""
+        # A connection closed before finishing handshake will not be in `self.connections`.
+        self.connections.discard(connection)
         for address in connection.subscribed_to:
             self._remove_connection_from_address_dict(connection, address)
 

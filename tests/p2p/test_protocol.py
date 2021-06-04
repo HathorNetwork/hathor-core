@@ -7,8 +7,8 @@ from twisted.python.failure import Failure
 from hathor.conf import HathorSettings
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
+from hathor.simulator import FakeConnection
 from tests import unittest
-from tests.utils import FakeConnection
 
 settings = HathorSettings()
 
