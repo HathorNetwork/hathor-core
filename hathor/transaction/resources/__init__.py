@@ -17,6 +17,7 @@ from hathor.transaction.resources.create_tx import CreateTxResource
 from hathor.transaction.resources.dashboard import DashboardTransactionResource
 from hathor.transaction.resources.decode_tx import DecodeTxResource
 from hathor.transaction.resources.graphviz import GraphvizFullResource, GraphvizNeighboursResource
+from hathor.transaction.resources.mempool import MempoolResource
 from hathor.transaction.resources.mining import GetBlockTemplateResource, SubmitBlockResource
 from hathor.transaction.resources.push_tx import PushTxResource
 from hathor.transaction.resources.transaction import TransactionResource
@@ -38,4 +39,5 @@ __all__ = [
     'DashboardTransactionResource',
     'TxParentsResource',
     'ValidateAddressResource',
+    'MempoolResource',
 ]
