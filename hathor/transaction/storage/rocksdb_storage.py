@@ -16,13 +16,13 @@ import os
 from typing import TYPE_CHECKING, Iterator, Optional
 
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
+from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
 
 
-class TransactionRocksDBStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
+class TransactionRocksDBStorage(BaseTransactionStorage):
     """This storage saves tx and metadata to the same key on RocksDB
 
     It uses Protobuf serialization internally.

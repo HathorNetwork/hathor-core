@@ -3,7 +3,7 @@ from twisted.internet.defer import inlineCallbacks
 from hathor.transaction import Transaction
 from hathor.transaction.resources import TransactionResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions, start_remote_storage
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
 
 
 class TransactionTest(_BaseResourceTest._ResourceTest):
@@ -231,14 +231,3 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
                 })
         data = response.json_value()
         self.assertFalse(data['success'])
-
-
-class RemoteStorageTransactionTest(TransactionTest):
-    def setUp(self):
-        self.tx_storage, self._server = start_remote_storage()
-        self.tx_storage.with_index = True
-        super().setUp()
-
-    def tearDown(self):
-        super().tearDown()
-        self._server.stop(0).wait()

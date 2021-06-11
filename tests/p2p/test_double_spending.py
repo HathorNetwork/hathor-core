@@ -2,7 +2,7 @@ import random
 
 from hathor.crypto.util import decode_address
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_tx, start_remote_storage
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_tx
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):
@@ -311,15 +311,3 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # dot2 = self.manager1.tx_storage.graphviz_funds(format='pdf', acc_weight=True)
         # dot2.render('dot2')
-
-
-class RemoteStorageSyncTest(HathorSyncMethodsTestCase):
-    def setUp(self):
-        super().setUp()
-        tx_storage, self._server = start_remote_storage()
-
-        self.manager1.tx_storage = tx_storage
-
-    def tearDown(self):
-        self._server.stop(0).wait()
-        super().tearDown()

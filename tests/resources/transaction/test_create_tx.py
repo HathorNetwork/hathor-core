@@ -7,7 +7,7 @@ from hathor.transaction import Transaction
 from hathor.transaction.resources import CreateTxResource
 from hathor.transaction.scripts import P2PKH, create_base_script
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_tx, start_remote_storage
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_tx
 
 
 class TransactionTest(_BaseResourceTest._ResourceTest):
@@ -357,14 +357,3 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         })
 
     # TODO: tests that use the tokens field (i.e. not only HTR)
-
-
-class RemoteStorageTransactionTest(TransactionTest):
-    def setUp(self):
-        self.tx_storage, self._server = start_remote_storage()
-        self.tx_storage.with_index = True
-        super().setUp()
-
-    def tearDown(self):
-        super().tearDown()
-        self._server.stop(0).wait()

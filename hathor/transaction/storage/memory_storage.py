@@ -15,14 +15,14 @@
 from typing import Any, Dict, Iterator, Optional, TypeVar
 
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
+from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.transaction import BaseTransaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 
 _Clonable = TypeVar('_Clonable', BaseTransaction, TransactionMetadata)
 
 
-class TransactionMemoryStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
+class TransactionMemoryStorage(BaseTransactionStorage):
     def __init__(self, with_index: bool = True, *, _clone_if_needed: bool = False) -> None:
         """
         :param _clone_if_needed: *private parameter*, defaults to True, controls whether to clone

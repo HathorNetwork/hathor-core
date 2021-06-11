@@ -1,4 +1,3 @@
-import hathor.protos.transaction_pb2_grpc  # noqa this file has nothing to test, only import
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletOutputInfo
