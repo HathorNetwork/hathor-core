@@ -69,6 +69,10 @@ class RunNode:
                             'This is still a beta feature as it may cause issues when restarting the full node '
                             'after a crash.')
         parser.add_argument('--procname-prefix', help='Add a prefix to the process name', default='')
+        parser.add_argument('--allow-non-standard-script', action='store_true', help='Accept non-standard scripts on '
+                            '/push-tx API')
+        parser.add_argument('--max-output-script-size', type=int, default=None, help='Custom max accepted script size '
+                            'on /push-tx API')
         return parser
 
     def prepare(self, args: Namespace) -> None:
@@ -325,7 +329,9 @@ class RunNode:
                 (b'create_tx', CreateTxResource(self.manager), root),
                 (b'decode_tx', DecodeTxResource(self.manager), root),
                 (b'validate_address', ValidateAddressResource(self.manager), root),
-                (b'push_tx', PushTxResource(self.manager), root),
+                (b'push_tx',
+                    PushTxResource(self.manager, args.max_output_script_size, args.allow_non_standard_script),
+                    root),
                 (b'graphviz', graphviz, root),
                 (b'tips-histogram', TipsHistogramResource(self.manager), root),
                 (b'transaction', TransactionResource(self.manager), root),
