@@ -196,6 +196,8 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             tx = data['tx']
             data = tx.to_json_extended()
             data['is_block'] = tx.is_block
+            # XXX: needed to check if the transaction is from the mempool
+            data['first_block'] = tx.get_metadata().first_block
             return data
         elif event == HathorEvents.WALLET_BALANCE_UPDATED:
             data['balance'] = data['balance'][settings.HATHOR_TOKEN_UID]._asdict()
