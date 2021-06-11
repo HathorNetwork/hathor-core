@@ -160,7 +160,7 @@ def add_new_block(manager, advance_clock=None, *, parent_block_hash=None, data=b
     if weight is not None:
         block.weight = weight
     block.resolve()
-    block.verify()
+    block.validate_full()
     manager.propagate_tx(block, fails_silently=False)
     if advance_clock:
         manager.reactor.advance(advance_clock)

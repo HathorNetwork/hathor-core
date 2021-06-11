@@ -30,6 +30,7 @@ class MiningApiTest(_BaseResourceTest._ResourceTest):
                 'conflict_with': [],
                 'voided_by': [],
                 'twins': [],
+                'validation': 'initial',
                 'accumulated_weight': 1.0,
                 'score': 0,
                 'height': 1,
@@ -59,6 +60,7 @@ class MiningApiTest(_BaseResourceTest._ResourceTest):
                 'conflict_with': [],
                 'voided_by': [],
                 'twins': [],
+                'validation': 'initial',  # FIXME: change to 'full' when validations are enabled
                 'accumulated_weight': 1.0,
                 'score': 0,
                 'height': 1,

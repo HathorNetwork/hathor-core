@@ -17,13 +17,16 @@ from collections import namedtuple
 from struct import pack
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 
-from hathor import protos
+from hathor import daa, protos
 from hathor.conf import HathorSettings
+from hathor.exception import InvalidNewTransaction
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import MAX_NUM_INPUTS, BaseTransaction, Block, TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE
 from hathor.transaction.exceptions import (
     ConflictingInputs,
+    DuplicatedParents,
+    IncorrectParents,
     InexistentInput,
     InputOutputMismatch,
     InvalidInputData,
@@ -259,6 +262,34 @@ class Transaction(BaseTransaction):
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['tokens'] = [h.hex() for h in self.tokens]
         return json
+
+    def verify_basic(self, skip_block_weight_verification: bool = False) -> None:
+        """Partially run validations, the ones that need parents/inputs are skipped."""
+        if self.is_genesis:
+            # TODO do genesis validation?
+            return
+        self.verify_parents_basic()
+        self.verify_weight()
+        self.verify_without_storage()
+
+    def verify_parents_basic(self) -> None:
+        """Verify number and non-duplicity of parents."""
+        assert self.storage is not None
+
+        # check if parents are duplicated
+        parents_set = set(self.parents)
+        if len(self.parents) > len(parents_set):
+            raise DuplicatedParents('Tx has duplicated parents: {}', [tx_hash.hex() for tx_hash in self.parents])
+
+        if len(self.parents) != 2:
+            raise IncorrectParents(f'wrong number of parents (tx type): {len(self.parents)}, expecting 2')
+
+    def verify_weight(self) -> None:
+        """Validate minimum tx difficulty."""
+        min_tx_weight = daa.minimum_tx_weight(self)
+        if self.weight < min_tx_weight - settings.WEIGHT_TOL:
+            raise InvalidNewTransaction(f'Invalid new tx {self.hash_hex}: weight ({self.weight}) is '
+                                        f'smaller than the minimum weight ({min_tx_weight})')
 
     @cpu.profiler(key=lambda self: 'tx-verify!{}'.format(self.hash.hex()))
     def verify(self) -> None:

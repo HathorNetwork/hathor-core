@@ -16,6 +16,8 @@ import os
 from math import log
 from typing import List, NamedTuple, Optional
 
+from hathor.checkpoint import Checkpoint
+
 DECIMAL_PLACES = 2
 
 GENESIS_TOKEN_UNITS = 1 * (10**9)  # 1B
@@ -297,8 +299,9 @@ class HathorSettings(NamedTuple):
     # the difficulty of all blocks, we execute the validation every N blocks only
     VERIFY_WEIGHT_EVERY_N_BLOCKS: int = 1000
 
-    # Name of whitelist capability
+    # Capabilities
     CAPABILITY_WHITELIST: str = 'whitelist'
+    CAPABILITY_SYNC_V2: str = 'node-sync-v2'
 
     # Where to download whitelist from
     WHITELIST_URL: Optional[str] = None
@@ -311,3 +314,6 @@ class HathorSettings(NamedTuple):
 
     # Interval (in seconds) to collect metrics data
     METRICS_COLLECT_DATA_INTERVAL: int = 5
+
+    # Block checkpoints
+    CHECKPOINTS: List[Checkpoint] = []

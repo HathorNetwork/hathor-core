@@ -204,7 +204,7 @@ class RunNode:
         network = settings.NETWORK_NAME
         self.manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname,
                                      tx_storage=self.tx_storage, wallet=self.wallet, wallet_index=args.wallet_index,
-                                     stratum_port=args.stratum, ssl=True)
+                                     stratum_port=args.stratum, ssl=True, checkpoints=settings.CHECKPOINTS)
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
 
@@ -255,7 +255,6 @@ class RunNode:
             PushTxResource,
             SubmitBlockResource,
             TipsHistogramResource,
-            TipsResource,
             TransactionAccWeightResource,
             TransactionResource,
             TxParentsResource,
@@ -329,7 +328,6 @@ class RunNode:
                 (b'push_tx', PushTxResource(self.manager), root),
                 (b'graphviz', graphviz, root),
                 (b'tips-histogram', TipsHistogramResource(self.manager), root),
-                (b'tips', TipsResource(self.manager), root),
                 (b'transaction', TransactionResource(self.manager), root),
                 (b'transaction_acc_weight', TransactionAccWeightResource(self.manager), root),
                 (b'dashboard_tx', DashboardTransactionResource(self.manager), root),

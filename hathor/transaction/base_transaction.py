@@ -19,9 +19,10 @@ import time
 import weakref
 from abc import ABC, abstractclassmethod, abstractmethod
 from enum import IntEnum
+from itertools import chain
 from math import inf, isfinite, log
 from struct import error as StructError, pack
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Iterator, List, Optional, Tuple, Type
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Iterator, List, Optional, Set, Tuple, Type
 
 from structlog import get_logger
 
@@ -424,8 +425,81 @@ class BaseTransaction(ABC):
         struct_bytes += self.get_struct_nonce()
         return struct_bytes
 
+    def get_all_dependencies(self) -> Set[bytes]:
+        """Set of all tx-hashes needed to fully validate this tx, including parent blocks/txs and inputs."""
+        return set(chain(self.parents, (i.tx_id for i in self.inputs)))
+
+    def get_tx_dependencies(self) -> Set[bytes]:
+        """Set of all tx-hashes needed to fully validate this, except for block parent, i.e. only tx parents/inputs."""
+        parents = self.parents[1:] if self.is_block else self.parents
+        return set(chain(parents, (i.tx_id for i in self.inputs)))
+
+    def get_tx_parents(self) -> Set[bytes]:
+        """Set of parent tx hashes, typically used for syncing transactions."""
+        return set(self.parents[1:] if self.is_block else self.parents)
+
+    def can_validate_full(self) -> bool:
+        """ Check if this transaction is ready to be fully validated, either all deps are full-valid or one is invalid.
+        """
+        assert self.storage is not None
+        deps = self.get_all_dependencies()
+        all_exist = True
+        all_valid = True
+        # either they all exist and are fully valid
+        for dep in deps:
+            meta = self.storage.get_metadata(dep)
+            if meta is None:
+                all_exist = False
+                continue
+            if not meta.validation.is_valid():
+                all_valid = False
+            if meta.validation.is_invalid():
+                # or any of them is invalid (which would make this one invalid too)
+                return True
+        return all_exist and all_valid
+
+    def validate_basic(self, skip_block_weight_verification: bool = False) -> bool:
+        """ Run basic validations (all that are possible without dependencies) and update the validation state.
+
+        If no exception is raised, the ValidationState will end up as `BASIC` and return `True`.
+        """
+        from hathor.transaction.transaction_metadata import ValidationState
+
+        meta = self.get_metadata()
+
+        self.verify_basic(skip_block_weight_verification=skip_block_weight_verification)
+
+        meta.validation = ValidationState.BASIC
+        return True
+
+    def validate_full(self, skip_block_weight_verification: bool = False) -> bool:
+        """ Run full validations (these need access to all dependencies) and update the validation state.
+
+        If no exception is raised, the ValidationState will end up as `FULL` and return `True`.
+        """
+        from hathor.transaction.transaction_metadata import ValidationState
+
+        meta = self.get_metadata()
+        if not meta.validation.is_at_least_basic():
+            self.validate_basic(skip_block_weight_verification=skip_block_weight_verification)
+
+        self.verify()
+
+        meta.validation = ValidationState.FULL
+        return True
+
+    @abstractmethod
+    def verify_basic(self, skip_block_weight_verification: bool = False) -> None:
+        """Basic verifications (the ones without access to dependencies: parents+inputs). Raises on error.
+
+        To be implemented by tx/block, used by `self.validate_basic`. Should not modify the validation state."""
+        raise NotImplementedError
+
     @abstractmethod
     def verify(self) -> None:
+        """Run all verifications. Raises on error.
+
+        To be implemented by tx/block, used by `self.validate_full`. Should not modify the validation state."""
         raise NotImplementedError
 
     def verify_parents(self) -> None:

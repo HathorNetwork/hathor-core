@@ -16,7 +16,7 @@
 import heapq
 from abc import ABC, abstractmethod
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Iterator, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, List, Optional, Set, Union
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction  # noqa: F401
@@ -111,17 +111,25 @@ class GenericWalk(ABC):
         """
         self._ignore_neighbors = tx
 
-    def run(self, root: 'BaseTransaction', *, skip_root: bool = False) -> Iterator['BaseTransaction']:
+    def run(self, root: Union['BaseTransaction', Iterable['BaseTransaction']], *,
+            skip_root: bool = False) -> Iterator['BaseTransaction']:
         """ Run the walk.
+
+        XXX: when using multiple roots the behavior of skip_root=True is undefined. We don't have a need for any
+        particular behavior when one of the roots is a parent/child of another (still visit it, or skip it).
 
         :param skip_root: Indicate whether we should include the `root` or not in the walk
         """
-        assert root.hash is not None
-        self.seen.add(root.hash)
-        if not skip_root:
-            self._push_visit(root)
-        else:
-            self.add_neighbors(root)
+
+        roots = root if isinstance(root, Iterable) else [root]
+
+        for root in roots:
+            assert root.hash is not None
+            self.seen.add(root.hash)
+            if not skip_root:
+                self._push_visit(root)
+            else:
+                self.add_neighbors(root)
 
         while self.to_visit:
             tx = self._pop_visit()

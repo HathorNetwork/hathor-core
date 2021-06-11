@@ -357,7 +357,7 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
         self.on_disconnect(reason)
 
     def lineLengthExceeded(self, line: str) -> None:
-        self.log.warn('lineLengthExceeded', line=line, line_len=len(line), max_line_len=self.MAX_LENGTH)
+        self.log.warn('line length exceeded', line=line, line_len=len(line), max_line_len=self.MAX_LENGTH)
         super(HathorLineReceiver, self).lineLengthExceeded(line)
 
     @cpu.profiler(key=lambda self: 'p2p!{}'.format(self.get_short_remote()))
