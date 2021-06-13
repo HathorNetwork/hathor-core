@@ -19,8 +19,10 @@ Asyncio with async/await is much more ergonomic and less cumbersome than twisted
 """
 
 import asyncio
+import enum
 import random
 import time
+from collections import defaultdict
 from itertools import count
 from typing import Any, Callable, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple, Union
 from uuid import uuid4
@@ -46,6 +48,7 @@ from hathor.merged_mining.bitcoin import (
     encode_uint32,
 )
 from hathor.merged_mining.bitcoin_rpc import IBitcoinRPC
+from hathor.merged_mining.digibyte_rpc import IDigibyteRPC
 from hathor.merged_mining.util import Periodic
 from hathor.transaction import BitcoinAuxPow, MergeMinedBlock as HathorBlock
 from hathor.transaction.exceptions import ScriptError, TxValidationError
@@ -73,6 +76,53 @@ INVALID_SOLUTION = {'code': 30, 'message': 'Invalid solution'}
 JOB_NOT_FOUND = {'code': 32, 'message': 'Job not found'}
 # PROPAGATION_FAILED = {'code': 33, 'message': 'Solution propagation failed'}
 DUPLICATE_SOLUTION = {'code': 34, 'message': 'Solution already submitted'}
+
+
+class ParentChain(enum.Enum):
+    BITCOIN = enum.auto()
+    DIGIBYTE = enum.auto()
+
+
+class HathorAddress(NamedTuple):
+    address: str
+    baddress: bytes
+    script: bytes
+
+    def __str__(self) -> str:
+        return self.address
+
+    @classmethod
+    def dummy(cls) -> 'HathorAddress':
+        return cls('', b'', b'')
+
+    @classmethod
+    def from_raw_address(cls, address: str) -> 'HathorAddress':
+        from hathor.transaction.scripts import create_output_script as create_output_script_htr
+        baddress = decode_address(address)
+        script = create_output_script_htr(baddress)
+        return cls(address, baddress, script)
+
+
+class BitcoinLikeAddress(NamedTuple):
+    address: str
+    script: bytes
+    segwit: Optional[bytes] = None
+
+    def __str__(self) -> str:
+        return self.address
+
+    @classmethod
+    def dummy(cls) -> 'BitcoinLikeAddress':
+        return cls('', b'')
+
+    @classmethod
+    def from_validation_result(cls, data: Dict[str, Any]) -> 'BitcoinLikeAddress':
+        assert data['isvalid']
+        return cls(
+            data['address'],
+            bytes.fromhex(data['scriptPubKey']),
+            bytes.fromhex(data['witness_program']) if data['iswitness'] else None,
+        )
 
 
 class HathorCoordJob(NamedTuple):
@@ -105,30 +155,90 @@ def flip80(data: bytes) -> bytes:
     return b''.join(x[::-1] for x in ichunks(data, 4))
 
 
-def parse_login_with_addresses(login: str) -> Tuple[bytes, bytes, Optional[str]]:
-    """ Parses a login of the form HATHOR_ADDRESS.BITCOIN_ADDRESS[.WORKER_NAME] returns output scripts and worker name.
+async def discover_addresses_and_worker_from(login: str,
+                                             bitcoin_rpc: Optional[IBitcoinRPC],
+                                             digibyte_rpc: Optional[IDigibyteRPC],
+                                             ) -> Tuple[HathorAddress, BitcoinLikeAddress, ParentChain, Optional[str]]:
+    """ Parses a login of the loose form of HATHOR_ADDRESS.PARENT_CHAIN_ADDRESS[.WORKER_NAME] though the order is free.
 
-    Examples:
-
-    >>> out = parse_login_with_addresses('HC7w4j7mPet49BBN5a2An3XUiPvK6C1TL7.1Mtb6rphrRq6kUdxpzQCUXZBaMbNpM3ZCN')
-    >>> out[0].hex(), out[1].hex(), out[2]
-    ('76a9143d6dbcbf6e67b2cbcc3225994756a56a5e2d3a2788ac', '76a914e52432216dabf32d60a02894ec871293baaa1b1288ac', None)
-    >>> out = parse_login_with_addresses('HC7w4j7mPet49BBN5a2An3XUiPvK6C1TL7.1Mtb6rphrRq6kUdxpzQCUXZBaMbNpM3ZCN.foo')
-    >>> out[0].hex(), out[1].hex(), out[2]
-    ('76a9143d6dbcbf6e67b2cbcc3225994756a56a5e2d3a2788ac', '76a914e52432216dabf32d60a02894ec871293baaa1b1288ac', 'foo')
+    Supported parent chains are Bitcoin and DigiByte.
     """
-    from hathor.merged_mining.bitcoin import create_output_script as create_output_script_btc
-    from hathor.transaction.scripts import create_output_script as create_output_script_htr
-    parts = login.split('.', maxsplit=2)
+    from hathor.wallet.exceptions import InvalidAddress
+
+    class AddrType(enum.Enum):
+        HTR = enum.auto()
+        BTC = enum.auto()
+        DGB = enum.auto()
+
+    worker_name: Optional[str] = None
+    hathor_address: HathorAddress
+    parent_address: BitcoinLikeAddress
+    parent_chain: ParentChain
+
+    parts = login.split('.')
     if len(parts) < 2:
-        raise ValueError(
-            'Expected `{{HTR_ADDR}}.{{BTC_ADDR}}` or `{{HTR_ADDR}}.{{BTC_ADDR}}.{{WORKER}}` got "{}"'.format(login))
-    payback_address_hathor = parts[0]
-    payback_address_bitcoin = parts[1]
-    payback_script_hathor = create_output_script_htr(decode_address(payback_address_hathor))
-    payback_script_bitcoin = create_output_script_btc(decode_address(payback_address_bitcoin))
-    worker_name = parts[2] if len(parts) > 2 else None
-    return payback_script_hathor, payback_script_bitcoin, worker_name
+        raise ValueError('Expected `{HTR_ADDR}.{BTC_ADDR}` or `{HTR_ADDR}.{BTC_ADDR}.{WORKER}` got "{}"'.format(login))
+
+    found_hathor_addr: bool = False
+    found_parent_addr: bool = False
+
+    find_addr_types = list(AddrType)
+    for part in parts:
+        for addr_type in find_addr_types:
+            if addr_type is AddrType.HTR:
+                assert not found_hathor_addr  # it isn't possible to find it twice since we remove from the list
+                try:
+                    hathor_address = HathorAddress.from_raw_address(part)
+                except (ValueError, InvalidAddress):
+                    continue
+                else:
+                    found_hathor_addr = True
+                    # XXX: usually modifying the iterator while iterating would be bad, be we're immediatly breaking
+                    find_addr_types.remove(addr_type)
+                    break
+            elif addr_type is AddrType.BTC:
+                assert not found_parent_addr  # it isn't possible to find it twice since we remove from the list
+                if bitcoin_rpc is None:
+                    continue
+                validation_result = await bitcoin_rpc.validate_address(part)
+                logger.debug('bitcoin.validateaddress response', res=validation_result)
+                if not validation_result['isvalid']:
+                    continue
+                parent_address = BitcoinLikeAddress.from_validation_result(validation_result)
+                parent_chain = ParentChain.BITCOIN
+                found_parent_addr = True
+                # XXX: usually modifying the iterator while iterating would be bad, be we're immediatly breaking
+                find_addr_types.remove(AddrType.BTC)
+                find_addr_types.remove(AddrType.DGB)
+                break
+            elif addr_type is AddrType.DGB:
+                assert not found_parent_addr  # it isn't possible to find it twice since we remove from the list
+                if digibyte_rpc is None:
+                    continue
+                validation_result = await digibyte_rpc.validate_address(part)
+                logger.debug('digibyte.validateaddress response', res=validation_result)
+                if not validation_result['isvalid']:
+                    continue
+                parent_address = BitcoinLikeAddress.from_validation_result(validation_result)
+                parent_chain = ParentChain.DIGIBYTE
+                found_parent_addr = True
+                # XXX: usually modifying the iterator while iterating would be bad, be we're immediatly breaking
+                find_addr_types.remove(AddrType.BTC)
+                find_addr_types.remove(AddrType.DGB)
+                break
+        else:
+            # this means we looped through all types and there was no match (break), so we assume it's the worker name
+            if worker_name is None:
+                worker_name = part
+            else:
+                worker_name = '.'.join([worker_name, part])
+
+    if not found_hathor_addr:
+        raise ValueError('missing Hathor address')
+    if not found_parent_addr:
+        raise ValueError('missing Bitcoin or DigiByte address')
+
+    return hathor_address, parent_address, parent_chain, worker_name
 
 
 class SingleMinerWork(NamedTuple):
@@ -171,6 +281,7 @@ class SingleMinerJob(NamedTuple):
     """ Partial job unit that is delegated to a miner.
     """
 
+    parent_chain: ParentChain
     job_id: str
     prev_hash: bytes
     coinbase_head: bytes
@@ -184,7 +295,7 @@ class SingleMinerJob(NamedTuple):
     xnonce1: bytes
     xnonce2_size: int
     clean: bool = True
-    bitcoin_height: int = 0
+    parent_height: int = 0
     hathor_height: Optional[int] = None
 
     def to_stratum_params(self) -> List:
@@ -221,8 +332,8 @@ class SingleMinerJob(NamedTuple):
         )
         return bitcoin_header, coinbase_tx
 
-    def build_bitcoin_block_header(self, work: SingleMinerWork) -> BitcoinBlockHeader:
-        """ Build the Bitcoin Block Header from job and work data.
+    def build_bitcoin_like_header(self, work: SingleMinerWork) -> BitcoinBlockHeader:
+        """ Build the Bitcoin-like Block Header from job and work data (used on both Bitcoin and DigiByte).
         """
         bitcoin_header, _ = self._make_bitcoin_block_and_coinbase(work)
         return bitcoin_header
@@ -239,7 +350,7 @@ class SingleMinerJob(NamedTuple):
         coinbase_head, coinbase_tail = coinbase.split(block_base_hash)
         return BitcoinAuxPow(header_head, coinbase_head, coinbase_tail, list(self.merkle_path), header_tail)
 
-    def build_bitcoin_block(self, work: SingleMinerWork) -> BitcoinBlock:
+    def build_bitcoin_like_block(self, work: SingleMinerWork) -> BitcoinBlock:
         """ Build the Bitcoin Block from job and work data.
         """
         bitcoin_header, coinbase_tx = self._make_bitcoin_block_and_coinbase(work)
@@ -251,10 +362,10 @@ class SingleMinerJob(NamedTuple):
         """
         return SingleMinerWork(self.job_id, 0, self.xnonce1, b'\0' * self.xnonce2_size)
 
-    def dummy_bitcoin_block(self) -> BitcoinBlock:
+    def dummy_bitcoin_like_block(self) -> BitcoinBlock:
         """ Used for debugging and validating a block proposal.
         """
-        return self.build_bitcoin_block(self.dummy_work())
+        return self.build_bitcoin_like_block(self.dummy_work())
 
 
 class MergedMiningStratumProtocol(asyncio.Protocol):
@@ -274,7 +385,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
     merged_job: 'MergedJob'
 
     def __init__(self, coordinator: 'MergedMiningCoordinator', xnonce1: bytes = b'',
-                 min_difficulty: Optional[int] = None,
+                 min_difficulty: Optional[int] = None, constant_difficulty: bool = False,
                  job_id_generator: Optional[Callable[[], Iterator[Union[str, int]]]] = lambda: count()):
         self.log = logger.new()
         self.coordinator = coordinator
@@ -284,10 +395,12 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         self.miner_id: Optional[str] = None
         self.miner_address: Optional[bytes] = None
         self.min_difficulty = min_difficulty if min_difficulty is not None else self.MIN_DIFFICULTY
+        self.constant_difficulty = constant_difficulty
         self.initial_difficulty = PDiff(self.INITIAL_DIFFICULTY)
         self._current_difficulty = PDiff(1)
-        self.payback_script_bitcoin: Optional[bytes] = None
-        self.payback_script_hathor: Optional[bytes] = None
+        self.payback_address_parent: Optional[BitcoinLikeAddress] = None
+        self.payback_address_hathor: Optional[HathorAddress] = None
+        self.parent_chain: Optional[ParentChain] = None
         self.worker_name: Optional[str] = None
         self.login: Optional[str] = None
         # used to estimate the miner's hashrate, items are a tuple (timestamp, logwork)
@@ -396,14 +509,14 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
             self.log.warn('invalid message received', message=message, message_hex=message.hex(), exc_info=True)
             return self.send_error(PARSE_ERROR, data={'message': message})
         assert isinstance(data, dict)
-        self.json_received(data)
+        asyncio.ensure_future(self.process_data(data))
 
-    def json_received(self, data: Dict[Any, Any]) -> None:
+    async def process_data(self, data: Dict[Any, Any]) -> None:
         """ Process JSON and forward to the appropriate handle, usually `handle_request`.
         """
         msgid = data.get('id')
         if 'method' in data:
-            return self.handle_request(data['method'], data.get('params'), msgid)
+            return await self.handle_request(data['method'], data.get('params'), msgid)
         elif 'result' in data and 'error' in data:
             if data['result'] and data['error'] is None:
                 return self.handle_result(data['result'], msgid)
@@ -461,7 +574,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         except TypeError:
             self.log.error('failed to encode', json=json)
 
-    def handle_request(self, method: str, params: Optional[Union[List, Dict]], msgid: Optional[str]) -> None:
+    async def handle_request(self, method: str, params: Optional[Union[List, Dict]], msgid: Optional[str]) -> None:
         """ Handles subscribe and submit requests.
 
         :param method: JSON-RPC 2.0 request method
@@ -480,7 +593,8 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
             return self.handle_subscribe(params, msgid)
         if method in {'authorize', 'mining.authorize'}:
             assert isinstance(params, List)
-            return self.handle_authorize(params, msgid)
+            # XXX: maybe all other handlers could be made async, they just don't need to right now
+            return await self.handle_authorize(params, msgid)
         if method in {'submit', 'mining.submit'}:
             assert isinstance(params, List)
             return self.handle_submit(params, msgid)
@@ -505,22 +619,23 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         """
         self.log.error('handle error', msgid=msgid, error=error)
 
-    def handle_authorize(self, params: List, msgid: Optional[str]) -> None:
+    async def handle_authorize(self, params: List, msgid: Optional[str]) -> None:
         """ Handles authorize request by always authorizing even if the request is invalid.
         """
         if self.coordinator.address_from_login:
             try:
                 login, password = params
-                self.payback_script_hathor, self.payback_script_bitcoin, self.worker_name = \
-                    parse_login_with_addresses(login)
-                if self.worker_name:
-                    self.log = self.log.bind(worker_name=self.worker_name)
+                self.payback_address_hathor, self.payback_address_parent, self.parent_chain, self.worker_name = \
+                    await discover_addresses_and_worker_from(login,
+                                                             self.coordinator.bitcoin_rpc,
+                                                             self.coordinator.digibyte_rpc)
             except Exception as e:
                 self.log.warn('authorization failed', exc=e, login=login, password=password)
                 # TODO: proper error
                 self.send_error({'code': 0, 'message': 'Address should be of the format <HTR_ADDR>.<BTC_ADDR>'}, msgid)
                 self.transport.close()
                 return
+            # XXX: this is no longer necessary, should we remove it?
             if 'nicehash' in password.lower():
                 self.log.info('special case mindiff for NiceHash')
                 self.min_difficulty = NICEHASH_MIN_DIFF
@@ -528,14 +643,18 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         else:
             # TODO: authorization system
             login, _password = params
+            self.worker_name = login
             self.send_result(True, msgid)
+        if self.worker_name:
+            self.log = self.log.bind(worker_name=self.worker_name)
         if self._subscribed:
             self.set_difficulty(self.initial_difficulty)
         self.login = login
         self._authorized = True
         self.log.info('miner authorized')
         self.job_request()
-        self.start_estimator()
+        if not self.constant_difficulty:
+            self.start_estimator()
 
     def handle_configure(self, params: List, msgid: Optional[str]) -> None:
         """ Handles stratum-extensions configuration
@@ -616,7 +735,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
             return
         self.last_submit_at = time.time()
 
-        bitcoin_block_header = job.build_bitcoin_block_header(work)
+        bitcoin_block_header = job.build_bitcoin_like_header(work)
         block_base_hash = job.hathor_block.get_base_hash()
         block_hash = Hash(bitcoin_block_header.hash)
         self.log.debug('work received', bitcoin_header=bytes(bitcoin_block_header).hex(),
@@ -647,17 +766,17 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         self._new_submitted_work.append((now, logwork, block_hash))
 
         # too many jobs too fast, increase difficulty out of caution (more than 10 submits within the last 10s)
-        if sum(1 for t, w, _ in self._new_submitted_work if now - t < 10) > 10:
+        if not self.constant_difficulty and sum(1 for t, w, _ in self._new_submitted_work if now - t < 10) > 100:
             self._submitted_work.extend(self._new_submitted_work)
             self._new_submitted_work = []
             self.set_difficulty(self._current_difficulty * 2)
             return
 
-        self.log.debug('forward work to hathor', aux_pow=aux_pow)
+        self.log.debug('submit work to hathor', aux_pow=aux_pow)
         asyncio.ensure_future(self.submit_to_hathor(job, aux_pow))
 
-        self.log.debug('forward work to bitcoin', work=work)
-        asyncio.ensure_future(self.submit_to_bitcoin(job, work))
+        self.log.debug('submit work to parent', work=work)
+        asyncio.ensure_future(self.submit_to_parent(job, work))
 
     async def submit_to_hathor(self, job: SingleMinerJob, aux_pow: BitcoinAuxPow) -> None:
         """ Submit AuxPOW to Hathor stratum.
@@ -687,28 +806,36 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         if res:
             self.log.info('new Hathor block found!!!', hash=block.hash.hex())
 
+    async def submit_to_parent(self, job: SingleMinerJob, work: SingleMinerWork) -> None:
+        if job.parent_chain is ParentChain.BITCOIN:
+            self.log.debug('submit to Bitcoin')
+            await self.submit_to_bitcoin(job, work)
+        elif job.parent_chain is ParentChain.DIGIBYTE:
+            self.log.debug('submit to DigiByte')
+            await self.submit_to_digibyte(job, work)
+
     async def submit_to_bitcoin(self, job: SingleMinerJob, work: SingleMinerWork) -> None:
         """ Submit work to Bitcoin RPC.
         """
         bitcoin_rpc = self.coordinator.bitcoin_rpc
-        # bitcoin_block = job.build_bitcoin_block(work)  # XXX: too expensive for now
-        bitcoin_block_header = job.build_bitcoin_block_header(work)
+        assert bitcoin_rpc is not None
+        bitcoin_block_header = job.build_bitcoin_like_header(work)
         block_hash = Hash(bitcoin_block_header.hash)
         block_target = Target(int.from_bytes(bitcoin_block_header.bits, 'big'))
         if block_hash.to_u256() > block_target.to_u256():
             self.log.debug('high hash for Bitcoin, keep mining')
             return
-        if self.coordinator.should_skip_bitcoin_submit(job.bitcoin_height):
+        if self.coordinator.should_skip_parent_submit(job.parent_height, ParentChain.BITCOIN):
             self.log.debug('late winning share, skipping Bitcoin submit')
             return
-        bitcoin_block = job.build_bitcoin_block(work)  # XXX: far fewer cases, so it's OK now
+        bitcoin_block = job.build_bitcoin_like_block(work)
         data = bytes(bitcoin_block)
         try:
             res = await bitcoin_rpc.submit_block(data)
         except Exception:
             self.log.warn('submit to Bitcoin failed', exc_info=True)
             return
-        self.coordinator.update_bitcoin_submitted(job.bitcoin_height)
+        self.coordinator.update_parent_submitted(job.parent_height, ParentChain.BITCOIN)
         self.log.debug('bitcoin_rpc.submit_block', res=res)
         if res is None:
             self.log.info('new Bitcoin block found!!!', hash=bitcoin_block.header.hash.hex())
@@ -719,6 +846,41 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
             # - bad-*: invalid block data
             # - unexpected-witness: transaction has inputs with witness but isn't marked as containing witnesses
             self.log.error('block rejected from Bitcoin', reason=res)
+
+    async def submit_to_digibyte(self, job: SingleMinerJob, work: SingleMinerWork) -> None:
+        """ Submit work to DigiByte RPC.
+        """
+        digibyte_rpc = self.coordinator.digibyte_rpc
+        assert digibyte_rpc is not None
+        bitcoin_block_header = job.build_bitcoin_like_header(work)
+        block_hash = Hash(bitcoin_block_header.hash)
+        block_target = Target(int.from_bytes(bitcoin_block_header.bits, 'big'))
+        if block_hash.to_u256() > block_target.to_u256():
+            self.log.debug('high hash for DigiByte, keep mining')
+            return
+        if self.coordinator.should_skip_parent_submit(job.parent_height, ParentChain.DIGIBYTE):
+            self.log.debug('late winning share, skipping DigiByte submit')
+            return
+        bitcoin_block = job.build_bitcoin_like_block(work)
+        data = bytes(bitcoin_block)
+        try:
+            res = await digibyte_rpc.submit_block(data)
+        except Exception:
+            self.log.warn('submit to DigiByte failed', exc_info=True)
+            return
+        self.coordinator.update_parent_submitted(job.parent_height, ParentChain.DIGIBYTE)
+        self.log.debug('digibyte_rpc.submit_block', res=res)
+        if res is None:
+            self.log.info('new DigiByte block found!!!', hash=bitcoin_block.header.hash.hex())
+            await self.coordinator.update_bitcoin_block()
+        else:
+            # Known reasons:
+            # - high-hash: PoW not enough, shouldn't happen because we check the difficulty before sending
+            # - bad-*: invalid block data
+            # - inconclusive-not-best-prevblk: DigiByte will drop submissions that don't have the current best prevblk
+            #   (aka, parent or block tip), so in case the best prevblk changed before the miner could start the new
+            #   job, this error will happen, it's not uncommon in practice
+            self.log.error('block rejected from DigiByte', reason=res)
 
     def set_difficulty(self, diff: float) -> None:
         """ Sends the difficulty to the connected client, applies for all future "mining.notify" until it is set again.
@@ -737,8 +899,9 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
             self.send_error(NODE_SYNCING, data={'message': 'Not ready to give a job.'})
             return
 
+        assert self.parent_chain is not None
         try:
-            job = self.coordinator.merged_job.new_single_miner_job(self)
+            job = self.coordinator.merged_job[self.parent_chain].new_single_miner_job(self)
         except (ValueError, ScriptError) as e:
             # ScriptError might happen if try to use a mainnet address in the testnet or vice versa
             # ValueError happens if address is not a valid base58 address
@@ -749,9 +912,9 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
             self.send_request('mining.notify', job.to_stratum_params())
 
             # for debugging only:
-            bitcoin_block = job.build_bitcoin_block_header(job.dummy_work())
-            self.log.debug('job updated', bitcoin_block=bytes(bitcoin_block).hex(),
-                           merkle_root=bitcoin_block.merkle_root.hex())
+            parent_block = job.build_bitcoin_like_header(job.dummy_work())
+            self.log.debug('job updated', parent_block=bytes(parent_block).hex(),
+                           merkle_root=parent_block.merkle_root.hex())
 
     async def estimator_loop(self) -> None:
         """ This loop only cares about reducing the current difficulty if the miner takes too long to submit a solution.
@@ -785,7 +948,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
         self.set_difficulty(target_diff)
 
 
-class BitcoinCoordJob(NamedTuple):
+class ParentCoordJob(NamedTuple):
     version: int
     previous_block_hash: bytes
     coinbase_value: int
@@ -801,7 +964,7 @@ class BitcoinCoordJob(NamedTuple):
     append_to_input: bool = True
 
     @classmethod
-    def from_dict(cls, params: dict) -> 'BitcoinCoordJob':
+    def from_dict(cls, params: dict) -> 'ParentCoordJob':
         r""" Convert from dict of the properties returned from Bitcoin RPC.
 
         Examples:
@@ -943,17 +1106,19 @@ class BitcoinCoordJob(NamedTuple):
             'merkle_path': [h.hex() for h in self.merkle_path],
         }
 
-    def make_coinbase_transaction(self, hathor_block_hash: bytes, payback_script_bitcoin: bytes,
+    # XXX: cannot use ABC to make this abstract because NamedTuple needs the metaclass
+    def make_cbheight(self) -> bytes:
+        raise NotImplementedError
+
+    def make_coinbase_transaction(self, hathor_block_hash: bytes, payback_address_parent: BitcoinLikeAddress,
                                   extra_nonce_size: Optional[int] = None) -> BitcoinTransaction:
         """ The coinbase transaction is entirely defined by the coordinator, which acts as a pool server.
         """
-        import struct
-
         inputs = []
         outputs: List[BitcoinTransactionOutput] = []
 
         # coinbase input
-        coinbase_script = encode_bytearray(struct.pack('<q', self.height).rstrip(b'\0'))
+        coinbase_script = encode_bytearray(self.make_cbheight())
 
         if self.append_to_input:
             coinbase_script += MAGIC_NUMBER
@@ -965,13 +1130,16 @@ class BitcoinCoordJob(NamedTuple):
         # append after sorting out segwit
 
         # coinbase output: payout
-        coinbase_output = BitcoinTransactionOutput(self.coinbase_value, payback_script_bitcoin)
+        coinbase_output = BitcoinTransactionOutput(self.coinbase_value, payback_address_parent.script)
         outputs.append(coinbase_output)
 
         if self.witness_commitment is not None:
             segwit_output = BitcoinTransactionOutput(0, self.witness_commitment)
             outputs.append(segwit_output)
-            coinbase_input.script_witness.append(b'\0' * 32)
+            witness_program = b'\0' * 32
+            logger.debug('add witness program to coinbase', script=witness_program.hex(),
+                         commitment=self.witness_commitment)
+            coinbase_input = coinbase_input._replace(script_witness=(witness_program,))
 
         # append now because segwit presence may change this
         inputs.append(coinbase_input)
@@ -986,7 +1154,8 @@ class BitcoinCoordJob(NamedTuple):
             coinbase_output = BitcoinTransactionOutput(0, output_script)
             outputs.append(coinbase_output)
 
-        return BitcoinTransaction(inputs=inputs, outputs=outputs, include_witness=False)
+        # include_witness = payback_address_parent.segwit is not None
+        return BitcoinTransaction(inputs=tuple(inputs), outputs=tuple(outputs), include_witness=False)
 
     def get_timestamp(self) -> int:
         """ Timestamp is now or min_time, whatever is higher."""
@@ -994,59 +1163,83 @@ class BitcoinCoordJob(NamedTuple):
         return max(int(datetime.now().timestamp()), self.min_time)
 
 
+class BitcoinCoordJob(ParentCoordJob):
+    @classmethod
+    def from_dict(cls, params: dict) -> 'BitcoinCoordJob':
+        return super().from_dict(params)
+
+    def make_cbheight(self) -> bytes:
+        import struct
+        return struct.pack('<q', self.height).rstrip(b'\0')
+
+
+class DigibyteCoordJob(ParentCoordJob):
+    @classmethod
+    def from_dict(cls, params: dict) -> 'DigibyteCoordJob':
+        return super().from_dict(params)
+
+    def make_cbheight(self) -> bytes:
+        import struct
+        return struct.pack('<q', self.height)[0:4]
+
+
 class MergedJob(NamedTuple):
     """ Current merged job, of which 'single miner jobs' may fullfill the work for either coin.
     """
 
+    parent_chain: ParentChain
+    parent_coord: ParentCoordJob
     hathor_coord: HathorCoordJob
-    bitcoin_coord: BitcoinCoordJob
-    payback_script_bitcoin: Optional[bytes]
-    clean: bool
+    clean: bool = True
+    payback_address_hathor: Optional[HathorAddress] = None
+    payback_address_parent: Optional[BitcoinLikeAddress] = None
 
     def build_sample_block_proposal(self) -> BitcoinBlock:
         return self._new_single_miner_job(
             '',
             b'\0' * MergedMiningCoordinator.XNONCE1_SIZE,
             MergedMiningStratumProtocol.DEFAULT_XNONCE2_SIZE,
-            b'',
-            b'',
-        ).dummy_bitcoin_block()
+            HathorAddress.dummy(),
+            BitcoinLikeAddress.dummy(),
+        ).dummy_bitcoin_like_block()
 
     def new_single_miner_job(self, protocol: MergedMiningStratumProtocol) -> SingleMinerJob:
         """ Generate a partial job for a single miner, based on this job.
         """
-        assert protocol.payback_script_hathor is not None
-        payback_script_bitcoin = self.payback_script_bitcoin or protocol.payback_script_bitcoin
-        assert payback_script_bitcoin is not None
+        payback_address_hathor = self.payback_address_hathor or protocol.payback_address_hathor
+        assert payback_address_hathor is not None
+        payback_address_parent = self.payback_address_parent or protocol.payback_address_parent
+        assert payback_address_parent is not None
         return self._new_single_miner_job(
             protocol.next_job_id(),
             protocol.xnonce1,
             protocol.xnonce2_size,
-            protocol.payback_script_hathor,
-            payback_script_bitcoin,
+            payback_address_hathor,
+            payback_address_parent,
         )
 
-    def _new_single_miner_job(self, job_id: str, xnonce1: bytes, xnonce2_size: int, payback_script_hathor: bytes,
-                              payback_script_bitcoin: bytes) -> SingleMinerJob:
+    def _new_single_miner_job(self, job_id: str, xnonce1: bytes, xnonce2_size: int,
+                              payback_address_hathor: HathorAddress,
+                              payback_address_parent: BitcoinLikeAddress) -> SingleMinerJob:
         """ Private method, used on `build_sample_block_proposal` and `new_single_miner_job`.
         """
         xnonce_size = len(xnonce1) + xnonce2_size
 
         # base txs for merkle tree, before coinbase
-        transactions = self.bitcoin_coord.transactions
+        transactions = self.parent_coord.transactions
 
         # payback_address_hathor
         hathor_block = self.hathor_coord.block.clone()
         assert isinstance(hathor_block, HathorBlock)
         if not hathor_block.outputs[0].script:
-            hathor_block.outputs[0].script = payback_script_hathor
+            hathor_block.outputs[0].script = payback_address_hathor.script
             hathor_block.update_hash()
 
         # build coinbase transaction with hathor block hash
         hathor_block_hash = hathor_block.get_base_hash()
-        coinbase_tx = self.bitcoin_coord.make_coinbase_transaction(
+        coinbase_tx = self.parent_coord.make_coinbase_transaction(
             hathor_block_hash,
-            payback_script_bitcoin,
+            payback_address_parent,
             xnonce_size,
         )
         coinbase_bytes = bytes(coinbase_tx)
@@ -1055,24 +1248,25 @@ class MergedJob(NamedTuple):
         assert len(coinbase_bytes) == len(coinbase_head) + xnonce_size + len(coinbase_tail)  # just a sanity check
 
         logger.debug('created miner job with scripts',
-                     htr_script=hathor_block.outputs[0].script.hex(),
-                     btc_script=payback_script_bitcoin.hex())
+                     payback_address_hathor=repr(payback_address_hathor),
+                     payback_address_parent=repr(payback_address_parent))
 
         # TODO: check if total transaction size increase exceed size and sigop limits, there's probably an RPC for this
 
         return SingleMinerJob(
+            parent_chain=self.parent_chain,
             job_id=job_id,
-            prev_hash=self.bitcoin_coord.previous_block_hash,
+            prev_hash=self.parent_coord.previous_block_hash,
             coinbase_head=coinbase_head,
             coinbase_tail=coinbase_tail,
-            merkle_path=self.bitcoin_coord.merkle_path,
-            version=self.bitcoin_coord.version,
-            bits=self.bitcoin_coord.bits,
+            merkle_path=self.parent_coord.merkle_path,
+            version=self.parent_coord.version,
+            bits=self.parent_coord.bits,
             hathor_block=hathor_block,
-            timestamp=self.bitcoin_coord.get_timestamp(),
+            timestamp=self.parent_coord.get_timestamp(),
             transactions=transactions,
             clean=self.clean,
-            bitcoin_height=self.bitcoin_coord.height,
+            parent_height=self.parent_coord.height,
             hathor_height=self.hathor_coord.height,
             xnonce1=xnonce1,
             xnonce2_size=xnonce2_size,
@@ -1106,35 +1300,54 @@ class MergedMiningCoordinator:
     """
 
     BITCOIN_UPDATE_INTERVAL = 10.0
+    DIGIBYTE_UPDATE_INTERVAL = 3.0
     # very arbitrary, max times since last submit that we consider sending a new winning share
-    BITCOIN_MAX_FUTURE_SUBMIT_SECONDS = 30.0
+    MAX_FUTURE_SUBMIT_SECONDS = {
+        ParentChain.BITCOIN: 30.0,
+        ParentChain.DIGIBYTE: 10.0,
+    }
     HATHOR_MAX_FUTURE_SUBMIT_SECONDS = 30.0
     XNONCE1_SIZE = 2
     MAX_XNONCE1 = 2**XNONCE1_SIZE - 1
     MAX_RECONNECT_BACKOFF = 30
 
-    def __init__(self,  bitcoin_rpc: IBitcoinRPC, hathor_client: IHathorClient,
-                 payback_address_bitcoin: Optional[str], payback_address_hathor: Optional[str],
-                 address_from_login: bool = True, min_difficulty: Optional[int] = None,
+    def __init__(self,
+                 hathor_client: IHathorClient,
+                 bitcoin_rpc: Optional[IBitcoinRPC] = None,
+                 digibyte_rpc: Optional[IDigibyteRPC] = None,
+                 payback_address_hathor: Optional[str] = None,
+                 payback_address_bitcoin: Optional[str] = None,
+                 payback_address_digibyte: Optional[str] = None,
+                 address_from_login: bool = True,
+                 min_difficulty: Optional[int] = None,
+                 constant_difficulty: bool = False,
                  sequential_xnonce1: bool = False):
         self.log = logger.new()
-        self.bitcoin_rpc = bitcoin_rpc
         self.hathor_client = hathor_client
+        self.bitcoin_rpc = bitcoin_rpc
+        self.digibyte_rpc = digibyte_rpc
         self.hathor_mining: Optional[IMiningChannel] = None
         self.address_from_login = address_from_login
         self.jobs: Set[SingleMinerJob] = set()
         self.miner_protocols: Dict[str, MergedMiningStratumProtocol] = {}
-        self.payback_address_bitcoin: Optional[str] = payback_address_bitcoin
-        self.payback_address_hathor: Optional[str] = payback_address_hathor
+        self._payback_address_bitcoin: Optional[str] = payback_address_bitcoin
+        self._payback_address_digibyte: Optional[str] = payback_address_digibyte
+        self.payback_address_hathor: Optional[HathorAddress] = None
+        if payback_address_hathor is not None:
+            self.payback_address_hathor = HathorAddress.from_raw_address(payback_address_hathor)
+        self.payback_address_bitcoin: Optional[BitcoinLikeAddress] = None
+        self.payback_address_digibyte: Optional[BitcoinLikeAddress] = None
         self.bitcoin_coord_job: Optional[BitcoinCoordJob] = None
+        self.digibyte_coord_job: Optional[DigibyteCoordJob] = None
         self.hathor_coord_job: Optional[HathorCoordJob] = None
-        self.last_bitcoin_block_received = 0.0
-        self.last_bitcoin_height_submitted = 0
-        self.last_bitcoin_timestamp_submitted = 0.0
+        self.last_parent_block_received: Dict[ParentChain, float] = defaultdict(float)
+        self.last_parent_height_submitted: Dict[ParentChain, int] = defaultdict(int)
+        self.last_parent_timestamp_submitted: Dict[ParentChain, float] = defaultdict(float)
         self.last_hathor_block_received = 0.0
         self.last_hathor_height_submitted = 0
         self.last_hathor_timestamp_submitted = 0.0
-        self.merged_job: Optional[MergedJob] = None
+        self.merged_job: Dict[ParentChain, MergedJob] = {}
+        self.next_merged_job: Dict[ParentChain, MergedJob] = {}
         self.min_difficulty = min_difficulty
         self.sequential_xnonce1 = sequential_xnonce1
         self._next_xnonce1 = 0
@@ -1144,6 +1357,7 @@ class MergedMiningCoordinator:
         self.started_at = 0.0
         self.strip_all_transactions = False
         self.strip_segwit_transactions = False
+        self.constant_difficulty = constant_difficulty
 
     @property
     def uptime(self) -> float:
@@ -1170,41 +1384,68 @@ class MergedMiningCoordinator:
 
         See: https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.loop.create_server
         """
-        return MergedMiningStratumProtocol(self, self.next_xnonce1(), min_difficulty=self.min_difficulty)
+        protocol = MergedMiningStratumProtocol(self, self.next_xnonce1(), min_difficulty=self.min_difficulty,
+                                               constant_difficulty=self.constant_difficulty)
+        if self.payback_address_bitcoin is not None:
+            protocol.payback_address_parent = self.payback_address_bitcoin
+            protocol.parent_chain = ParentChain.BITCOIN
+        if self.payback_address_digibyte is not None:
+            protocol.payback_address_parent = self.payback_address_digibyte
+            protocol.parent_chain = ParentChain.DIGIBYTE
+        if self.payback_address_hathor is not None:
+            protocol.payback_address_hathor = self.payback_address_hathor
+        return protocol
 
     def update_jobs(self) -> None:
         """ Creates and sends a new job for each subscribed miner.
         """
-        self.merged_job = self.next_merged_job
-        for miner, protocol in self.miner_protocols.items():
-            if protocol.subscribed:
-                protocol.job_request()
+        for parent in ParentChain:
+            if parent not in self.next_merged_job:
+                continue
+            self.merged_job[parent] = self.next_merged_job[parent]
+            for miner, protocol in self.miner_protocols.items():
+                if protocol.subscribed and protocol.parent_chain is parent:
+                    protocol.job_request()
 
     async def start(self) -> None:
         """ Starts the coordinator and subscribes for new blocks on the both networks in order to update miner jobs.
         """
         loop = asyncio.get_event_loop()
         self.started_at = time.time()
-        self.update_bitcoin_block_task = loop.create_task(self.update_bitcoin_block())
+        if self.bitcoin_rpc is not None:
+            if self._payback_address_bitcoin:
+                validation_result = await self.bitcoin_rpc.validate_address(self._payback_address_bitcoin)
+                self.log.debug('bitcoin.validateaddress response', res=validation_result)
+                self.payback_address_bitcoin = BitcoinLikeAddress.from_validation_result(validation_result)
+            self.update_bitcoin_block_task = loop.create_task(self.update_bitcoin_block())
+        if self.digibyte_rpc is not None:
+            if self._payback_address_digibyte:
+                validation_result = await self.digibyte_rpc.validate_address(self._payback_address_digibyte)
+                self.log.debug('digibyte.validateaddress response', res=validation_result)
+                self.payback_address_digibyte = BitcoinLikeAddress.from_validation_result(validation_result)
+            self.update_digibyte_block_task = loop.create_task(self.update_digibyte_block())
         self.update_hathor_block_task = loop.create_task(self.update_hathor_block())
 
     async def stop(self) -> None:
         """ Stops the client, interrupting mining processes, stoping supervisor loop, and sending finished jobs.
         """
-        assert self.update_bitcoin_block_task is not None
-        self.update_bitcoin_block_task.cancel()
+        tasks = []
+        if self.bitcoin_rpc is not None:
+            assert self.update_bitcoin_block_task is not None
+            self.update_bitcoin_block_task.cancel()
+            tasks.append(self.update_bitcoin_block_task)
+        if self.digibyte_rpc is not None:
+            assert self.update_digibyte_block_task is not None
+            self.update_digibyte_block_task.cancel()
+            tasks.append(self.update_digibyte_block_task)
         assert self.update_hathor_block_task is not None
         self.update_hathor_block_task.cancel()
+        tasks.append(self.update_hathor_block_task)
         try:
-            await asyncio.gather(
-                self.update_bitcoin_block_task,
-                self.update_hathor_block_task,
-            )
-        except asyncio.CancelledError:
+            await asyncio.gather(*tasks)
+        except (asyncio.CancelledError, asyncio.TimeoutError):
             pass
         except Exception:
-            # XXX: ignore cancelled error, not clear what class it will be, depends on the event loop implementation
-            #      it's probably not too important to nail down the exact exception
             self.log.warn('exception stopping Hathor task', exc_info=True)
 
     async def update_bitcoin_block(self) -> None:
@@ -1212,10 +1453,13 @@ class MergedMiningCoordinator:
         """
         backoff = 1
         longpoll_id = None
+        assert self.bitcoin_rpc is not None
         while True:
             self.log.debug('get Bitcoin block template')
             try:
                 data = await self.bitcoin_rpc.get_block_template(longpoll_id=longpoll_id)
+            except asyncio.CancelledError:
+                return
             except Exception:
                 self.log.exception('failed to get Bitcoin Block Template', exc_info=True)
                 await asyncio.sleep(backoff)
@@ -1230,29 +1474,62 @@ class MergedMiningCoordinator:
                 del data_log['transactions']
                 self.log.debug('bitcoin.getblocktemplate response', res=data_log)
                 self.bitcoin_coord_job = BitcoinCoordJob.from_dict(data)
+                assert self.bitcoin_coord_job is not None
                 self.log.debug('new Bitcoin block template', height=self.bitcoin_coord_job.height)
-                await self.update_merged_block()
+                await self.update_merged_block([ParentChain.BITCOIN])
                 if longpoll_id is None:
                     self.log.warn('no longpoll_id received, sleep instead')
                     await asyncio.sleep(self.BITCOIN_UPDATE_INTERVAL)
 
-    def update_bitcoin_submitted(self, height: int) -> None:
+    async def update_digibyte_block(self) -> None:
+        """ Task that continuously polls block templates from bitcoin.get_block_template
+        """
+        backoff = 1
+        longpoll_id = None
+        assert self.digibyte_rpc is not None
+        while True:
+            self.log.debug('get DigiByte block template')
+            try:
+                data = await self.digibyte_rpc.get_block_template(longpoll_id=longpoll_id)
+            except asyncio.CancelledError:
+                return
+            except Exception:
+                self.log.exception('failed to get DigiByte Block Template', exc_info=True)
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, self.MAX_RECONNECT_BACKOFF)
+                continue
+            else:
+                backoff = 1
+                longpoll_id = data.get('longpollid')
+                self.last_bitcoin_block_received = time.time()
+                data_log = data.copy()
+                data_log['len(transactions)'] = len(data_log['transactions'])
+                del data_log['transactions']
+                self.log.debug('digibyte.getblocktemplate response', res=data_log)
+                self.digibyte_coord_job = DigibyteCoordJob.from_dict(data)
+                self.log.debug('new DigiByte block template', height=self.digibyte_coord_job.height)
+                await self.update_merged_block([ParentChain.DIGIBYTE])
+                if longpoll_id is None:
+                    self.log.warn('no longpoll_id received, sleep instead')
+                    await asyncio.sleep(self.DIGIBYTE_UPDATE_INTERVAL)
+
+    def update_parent_submitted(self, height: int, parent: ParentChain) -> None:
         """ Used to remember the last height submitted, for use when discarding late winning shares.
         """
         timestamp = time.time()
-        if height > self.last_bitcoin_height_submitted:
-            self.last_bitcoin_height_submitted = height
-            self.last_bitcoin_timestamp_submitted = timestamp
+        if height > self.last_parent_height_submitted[parent]:
+            self.last_parent_height_submitted[parent] = height
+            self.last_parent_timestamp_submitted[parent] = timestamp
 
-    def should_skip_bitcoin_submit(self, height: int) -> bool:
+    def should_skip_parent_submit(self, height: int, parent: ParentChain) -> bool:
         """ Check the last submit timestamp and height to decide if the winning share is too late to be submitted.
         """
         timestamp = time.time()
-        if height == self.last_bitcoin_height_submitted:
+        if height == self.last_parent_height_submitted[parent]:
             # if timestamp too into the future, SKIP
-            return timestamp - self.last_bitcoin_timestamp_submitted > self.BITCOIN_MAX_FUTURE_SUBMIT_SECONDS
+            return timestamp - self.last_parent_timestamp_submitted[parent] > self.MAX_FUTURE_SUBMIT_SECONDS[parent]
         # if height less than last submission, SKIP
-        return height < self.last_bitcoin_height_submitted
+        return height < self.last_parent_height_submitted[parent]
 
     def update_hathor_submitted(self, height: int) -> None:
         """ Used to remember the last height submitted, for use when discarding late winning shares.
@@ -1294,8 +1571,7 @@ class MergedMiningCoordinator:
             self.log.debug('got Hathor block template')
             # TODO: maybe hang on to all templates
             block_template = random.choice(block_templates)
-            address_str = self.payback_address_hathor
-            address = decode_address(address_str) if address_str is not None else None
+            address = self.payback_address_hathor.baddress if self.payback_address_hathor is not None else None
             block = block_template.generate_mining_block(merge_mined=True, address=address)
             height = block_template.height
             assert isinstance(block, HathorBlock)
@@ -1303,58 +1579,86 @@ class MergedMiningCoordinator:
             # self.log.debug('hathor.get_block_template response', block=block, height=height)
             self.hathor_coord_job = HathorCoordJob(block, height)
             self.log.debug('new Hathor block template', height=height, weight=block.weight)
-            self.update_merged_block()
+            await self.update_merged_block(list(ParentChain))
 
-    def is_next_job_clean(self) -> bool:
+    def is_next_job_clean(self, parent: ParentChain) -> bool:
         """ Used to determine if the current job must be immediatly stopped in favor of the next job.
 
         In practice this is True when height of either block changes, so miners can know their current job would
         probably be thrown away anyway, so they can halt and start mining the next job.
         """
-        assert self.bitcoin_coord_job is not None
         assert self.hathor_coord_job is not None
-        if self.merged_job is None or self.merged_job.bitcoin_coord is None or self.merged_job.hathor_coord is None:
+        if parent not in self.merged_job:
             return True
-        if self.merged_job.bitcoin_coord.height != self.bitcoin_coord_job.height:
+        merged_job = self.merged_job[parent]
+        if merged_job.parent_coord is None or merged_job.hathor_coord is None:
             return True
-        if self.merged_job.hathor_coord.block.get_block_parent_hash() != \
+        parent_coord_job = self.bitcoin_coord_job if parent is ParentChain.BITCOIN else self.digibyte_coord_job
+        assert parent_coord_job is not None
+        if merged_job.parent_coord.height != parent_coord_job.height:
+            return True
+        if merged_job.hathor_coord.block.get_block_parent_hash() != \
            self.hathor_coord_job.block.get_block_parent_hash():
             return True
         return False
 
-    async def update_merged_block(self) -> None:
+    async def update_merged_block(self, parents: List[ParentChain]) -> None:
         """ This should be called after either (Hathor/Bitcoin) block template is updated to downstream the changes.
         """
-        from hathor.merged_mining.bitcoin import create_output_script as create_output_script_btc
-        if self.bitcoin_coord_job is None or self.hathor_coord_job is None:
+        if self.hathor_coord_job is None:
             self.log.debug('not ready')
             return
+        if self.bitcoin_coord_job is None and self.digibyte_coord_job is None:
+            self.log.debug('not ready')
+            return
+        assert len(parents) > 0
         self.job_count += 1
         if self.job_count == 1:
             self.log.info('ready')
-        output_script: Optional[bytes]
-        if self.payback_address_bitcoin:
-            output_script = create_output_script_btc(decode_address(self.payback_address_bitcoin))
-        else:
-            output_script = None
-        merged_job = MergedJob(
-            self.hathor_coord_job,
-            self.bitcoin_coord_job,
-            output_script,
-            self.is_next_job_clean(),
-        )
-        # validate built job
-        block_proposal = merged_job.build_sample_block_proposal()
-        merkle_root = build_merkle_root(list(tx.txid for tx in block_proposal.transactions))
-        if merkle_root != block_proposal.header.merkle_root:
-            self.log.warn('bad merkle root', expected=merkle_root.hex(), got=block_proposal.header.merkle_root.hex())
-        error = await self.bitcoin_rpc.verify_block_proposal(block=bytes(block_proposal))
-        if error is not None:
-            self.log.warn('proposed block is invalid, skipping update', error=error)
-        else:
-            self.next_merged_job = merged_job
-            self.update_jobs()
-            self.log.debug('merged job updated')
+        if self.bitcoin_rpc is None and ParentChain.BITCOIN in parents:
+            parents.remove(ParentChain.BITCOIN)
+        if self.digibyte_rpc is None and ParentChain.DIGIBYTE in parents:
+            parents.remove(ParentChain.DIGIBYTE)
+        for parent in parents:
+            parent_rpc: Union[IBitcoinRPC, IDigibyteRPC]
+            parent_job: ParentCoordJob
+            parent_address: Optional[BitcoinLikeAddress]
+            if parent is ParentChain.BITCOIN:
+                assert self.bitcoin_rpc is not None
+                assert self.bitcoin_coord_job is not None
+                parent_rpc = self.bitcoin_rpc
+                parent_job = self.bitcoin_coord_job
+                parent_address = self.payback_address_bitcoin
+            elif parent is ParentChain.DIGIBYTE:
+                assert self.digibyte_rpc is not None
+                assert self.digibyte_coord_job is not None
+                parent_rpc = self.digibyte_rpc
+                parent_job = self.digibyte_coord_job
+                parent_address = self.payback_address_digibyte
+            else:
+                raise RuntimeError('impossible')
+            merged_job = MergedJob(
+                parent,
+                parent_job,
+                self.hathor_coord_job,
+                self.is_next_job_clean(parent),
+                self.payback_address_hathor,
+                parent_address,
+            )
+            # validate built job
+            block_proposal = merged_job.build_sample_block_proposal()
+            merkle_root = build_merkle_root(list(tx.txid for tx in block_proposal.transactions))
+            if merkle_root != block_proposal.header.merkle_root:
+                self.log.warn('bad merkle root', expected=merkle_root.hex(),
+                              got=block_proposal.header.merkle_root.hex())
+            # self.log.debug('verify block proposal', block=bytes(block_proposal).hex(), data=block_proposal)
+            error = await parent_rpc.verify_block_proposal(block=bytes(block_proposal))
+            if error is not None:
+                self.log.warn('proposed block is invalid, skipping update', error=error)
+            else:
+                self.next_merged_job[parent] = merged_job
+                self.update_jobs()
+                self.log.debug('proposal verified, merged job updated')
 
     def status(self) -> Dict[Any, Any]:
         """ Build status dict with useful metrics for use in MM Status API.
@@ -1367,5 +1671,6 @@ class MergedMiningCoordinator:
             'started_at': self.started_at,
             'uptime': self.uptime,
             'bitcoin_job': self.bitcoin_coord_job.to_dict() if self.bitcoin_coord_job else None,
+            'digibyte_job': self.digibyte_coord_job.to_dict() if self.digibyte_coord_job else None,
             'hathor_job': self.hathor_coord_job.to_dict() if self.hathor_coord_job else None,
         }

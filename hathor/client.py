@@ -51,7 +51,12 @@ class JsonRpcError(HathorError):
 
 class IMiningChannel(AsyncIterator[List[BlockTemplate]]):
     @abstractmethod
-    async def submit(self, block: Block) -> Optional[BlockTemplate]:
+    async def submit(self, block: Block) -> bool:
+        """Submit a mined block, when valid returns True."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def submit_optimistic(self, block: Block) -> Optional[BlockTemplate]:
         """Submit a mined block, when valid get a follow up template that uses the given block as parent."""
         raise NotImplementedError
 
@@ -247,9 +252,16 @@ class MiningChannel(IMiningChannel):
         await self._task
         await self._ws.close()
 
-    async def submit(self, block: Block) -> Optional[BlockTemplate]:
+    async def submit(self, block: Block) -> bool:
         resp: Union[bool, Dict] = await self._do_request('mining.submit', {
             'hexdata': bytes(block).hex(),
+        })
+        return bool(resp)
+
+    async def submit_optimistic(self, block: Block) -> Optional[BlockTemplate]:
+        resp: Union[bool, Dict] = await self._do_request('mining.submit', {
+            'hexdata': bytes(block).hex(),
+            'optimistic': True,
         })
         if resp:
             assert isinstance(resp, Dict)
@@ -336,7 +348,10 @@ class MiningChannelStub(IMiningChannel):
         except Exception as e:
             self._queue.set_exception(e)
 
-    async def submit(self, block: Block) -> Optional[BlockTemplate]:
+    async def submit(self, block: Block) -> bool:
+        return self.manager.propagate_tx(block)
+
+    async def submit_optimistic(self, block: Block) -> Optional[BlockTemplate]:
         if await self.submit(block):
             assert block.hash is not None
             return self.manager.make_block_template(block.hash)

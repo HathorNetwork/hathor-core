@@ -34,7 +34,7 @@ tests-doctests:
 
 .PHONY: tests-lib
 tests-lib:
-	pytest --durations=10 $(pytest_flags) --doctest-modules hathor --cov-fail-under=83 $(tests_lib)
+	pytest --durations=10 $(pytest_flags) --doctest-modules hathor --cov-fail-under=82 $(tests_lib)
 
 .PHONY: tests-genesis
 tests-genesis:

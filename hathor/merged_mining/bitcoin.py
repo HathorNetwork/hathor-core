@@ -127,7 +127,7 @@ def _merkle_concat(left: bytes, right: bytes) -> bytes:
     return bytes(reversed(left)) + bytes(reversed(right))
 
 
-def build_merkle_path_for_coinbase(merkle_leaves: List[bytes]) -> List[bytes]:
+def build_merkle_path_for_coinbase(merkle_leaves: Sequence[bytes]) -> Tuple[bytes, ...]:
     """ Return the merkle path (unidirectional since it's a list) to the coinbase (not included) from hash leaves.
 
     >>> tx_list = [bytes.fromhex(tx) for tx in [
@@ -156,20 +156,20 @@ def build_merkle_path_for_coinbase(merkle_leaves: List[bytes]) -> List[bytes]:
 '67ce1464dc89e67dd30acf8adf74c7ec37fa9f14040b7ecd9127391af1b25f2a', \
 'ee017b11d10898f3b19194f43d9b5b9cf443b8e992797e49f4edd603fee060c7']
     """
-    return _build_merkle_path_for_coinbase([b''] + merkle_leaves)
+    return _build_merkle_path_for_coinbase([b''] + list(merkle_leaves))
 
 
-def _build_merkle_path_for_coinbase(merkle_leaves: List[bytes], _partial_path: List[bytes] = []) -> List[bytes]:
+def _build_merkle_path_for_coinbase(merkle_leaves: List[bytes], _partial_path: List[bytes] = []) -> Tuple[bytes, ...]:
     """ Internal implementation of `build_merkle_path_for_coinbase`, assumes first `merkle_leave` is the coinbase.
     """
     merkle_leaves = merkle_leaves[:]  # copy to preserve original
     _partial_path = _partial_path[:]  # copy to preserve original
     len_merkle_leaves = len(merkle_leaves)
     if len_merkle_leaves == 0:
-        return []
+        return ()
     # FIXME: maybe breaks if initial merkle_leaves has len 1?
     if len_merkle_leaves <= 1:
-        return _partial_path
+        return tuple(_partial_path)
     if len_merkle_leaves % 2:
         merkle_leaves.append(merkle_leaves[-1])
         len_merkle_leaves += 1
@@ -181,7 +181,7 @@ def _build_merkle_path_for_coinbase(merkle_leaves: List[bytes], _partial_path: L
     )
 
 
-def build_merkle_root(merkle_leaves: List[bytes]) -> bytes:
+def build_merkle_root(merkle_leaves: Sequence[bytes]) -> bytes:
     """ Return the merkle root hash from hash leaves.
 
     >>> build_merkle_root([bytes.fromhex(tx) for tx in [
@@ -205,6 +205,7 @@ def build_merkle_root(merkle_leaves: List[bytes]) -> bytes:
     ... ]]).hex()
     '8927d337549640aaafdaa0dcbdb9c09972533a66bfb287aba3eb9c1be5b523ba'
     """
+    merkle_leaves = list(merkle_leaves)
     len_merkle_leaves = len(merkle_leaves)
     assert len_merkle_leaves > 0
     if len_merkle_leaves <= 1:
@@ -216,7 +217,7 @@ def build_merkle_root(merkle_leaves: List[bytes]) -> bytes:
     return build_merkle_root([sha256d_hash(_merkle_concat(a, b)) for a, b in zip(iter_leaves, iter_leaves)])
 
 
-def build_merkle_root_from_path(merkle_path: List[bytes]) -> bytes:
+def build_merkle_root_from_path(merkle_path: Sequence[bytes]) -> bytes:
     """ Return the merkle root hash from a given unidirectional (all right) merkle path.
 
     Useful for computing merkle root given the merkle path to the coinbase (including the coinbase tx).
@@ -245,7 +246,7 @@ def build_merkle_root_from_path(merkle_path: List[bytes]) -> bytes:
     ... ]]))).hex()
     '9fedb4e40f8532eac81338b479049a2e6bcee68d78b56767d43ebf1020ef8a68'
     """
-    merkle_path = merkle_path[:]  # copy to preserve original
+    merkle_path = list(merkle_path)
     assert len(merkle_path) >= 1
     while len(merkle_path) > 1:
         a = merkle_path.pop(0)
@@ -292,7 +293,7 @@ class BitcoinTransactionInput(NamedTuple):
     # Transaction version as defined by the sender. Intended for "replacement" of transactions when information is
     # updated before inclusion into a block.
     sequence: int = SEQUENCE_FINAL  # default value disables nLockTime
-    script_witness: List[bytes] = []
+    script_witness: Tuple[bytes, ...] = ()
 
     def __bytes__(self) -> bytes:
         """ Convert to byte representation of the header.
@@ -363,7 +364,7 @@ class BitcoinTransactionInput(NamedTuple):
         return cls(
             BitcoinOutPoint(bytes(reversed(bytes.fromhex(params['txid']))), params['vout']),
             bytes.fromhex(params['scriptSig']['hex']), params['sequence'],
-            list(map(bytes.fromhex, params.get('txinwitness', []))))
+            tuple(map(bytes.fromhex, params.get('txinwitness', []))))
 
 
 class BitcoinTransactionOutput(NamedTuple):
@@ -425,8 +426,8 @@ class BitcoinTransactionOutput(NamedTuple):
 class BitcoinTransaction(NamedTuple):
     version: int = 1  # Transaction data format version (note, this is signed)
     include_witness: bool = True  # Whether to include the witness flag (0001)
-    inputs: List[BitcoinTransactionInput] = []  # A list of 1 or more transaction inputs or sources for coins
-    outputs: List[BitcoinTransactionOutput] = []  # A list of 1 or more transaction outputs or destinations for coins
+    inputs: Tuple[BitcoinTransactionInput, ...] = ()  # A list of 1 or more tx inputs or sources for coins
+    outputs: Tuple[BitcoinTransactionOutput, ...] = ()  # A list of 1 or more tx outputs or destinations for coins
     lock_time: int = 0  # The block number or timestamp at which this transaction is unlocked
 
     def __bytes__(self) -> bytes:
@@ -472,10 +473,10 @@ class BitcoinTransaction(NamedTuple):
         return BitcoinRawTransaction(self.hash, self.txid, bytes(self))
 
     @property
-    def tx_witnesses(self) -> List[List[bytes]]:
+    def tx_witnesses(self) -> Tuple[Tuple[bytes, ...], ...]:
         """ List of witnesses list: each input yields a list.
         """
-        return [i.script_witness or [b'\00' * 32] for i in self.inputs]
+        return tuple(i.script_witness or (b'\00' * 32,) for i in self.inputs)
 
     @property
     def hash(self) -> bytes:
@@ -674,8 +675,8 @@ class BitcoinTransaction(NamedTuple):
         return cls(
             params['version'],
             True,  # TODO: is it always the case?
-            list(map(BitcoinTransactionInput.from_dict, params['vin'])),
-            list(map(BitcoinTransactionOutput.from_dict, params['vout'])),
+            tuple(map(BitcoinTransactionInput.from_dict, params['vin'])),
+            tuple(map(BitcoinTransactionOutput.from_dict, params['vout'])),
             params['locktime'],
         )
 
@@ -709,8 +710,8 @@ class BitcoinTransaction(NamedTuple):
         i = bytearray(encoded)
         version = read_int32(i)
         include_witness = read_segwit_flag(i)
-        inputs = read_inputs(i, include_witness)
-        outputs = read_outputs(i)
+        inputs = tuple(read_inputs(i, include_witness))
+        outputs = tuple(read_outputs(i))
         lock_time = read_uint32(i)
         assert len(i) == 0, 'Extra bytes found'
         return cls(version, include_witness, inputs, outputs, lock_time)
@@ -777,7 +778,7 @@ def encode_list(buffer: Sequence[bytes]) -> bytes:
     return encode_varint(len(buffer)) + b''.join(buffer)
 
 
-def encode_bytearray_list(buffer: List[bytes]) -> bytes:
+def encode_bytearray_list(buffer: Sequence[bytes]) -> bytes:
     """ Variable length list encoding of bytes
     """
     return encode_varint(len(buffer)) + b''.join(map(encode_bytearray, buffer))
@@ -863,13 +864,13 @@ def read_nrevbytes(buffer: bytearray, length: int) -> bytes:
     return array
 
 
-def read_input(buffer: bytearray, witnesses: List[bytes] = []) -> BitcoinTransactionInput:
+def read_input(buffer: bytearray, witnesses: Sequence[bytes] = []) -> BitcoinTransactionInput:
     """ Parse a single input, read bytes are consumed.
     """
     outpoint = read_outpoint(buffer)
     script_sig = read_bytes(buffer)
     sequence = read_uint32(buffer)
-    return BitcoinTransactionInput(outpoint, script_sig, sequence, witnesses)
+    return BitcoinTransactionInput(outpoint, script_sig, sequence, tuple(witnesses))
 
 
 def read_witnesses(buffer: bytearray, input_count: int, witnesses_offset: int) -> List[List[bytes]]:
