@@ -34,7 +34,7 @@ tests-doctests:
 
 .PHONY: tests-lib
 tests-lib:
-	pytest --durations=10 $(pytest_flags) --doctest-modules hathor --cov-fail-under=83 $(tests_lib)
+	pytest --durations=10 $(pytest_flags) --doctest-modules hathor $(tests_lib)
 
 .PHONY: tests-genesis
 tests-genesis:
@@ -46,7 +46,7 @@ tests: tests-cli tests-lib tests-genesis
 
 .PHONY: tests-full
 tests-full:
-	pytest $(pytest_flags) --durations=10 --cov-fail-under=90 --cov-config=.coveragerc_full ./tests
+	pytest $(pytest_flags) --durations=10 --cov-config=.coveragerc_full ./tests
 
 # checking:
 
