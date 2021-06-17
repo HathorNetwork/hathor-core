@@ -135,7 +135,11 @@ class CliManager:
             pudb.set_trace(paused=False)
             capture_stdout = False
 
-        setup_logging(debug, capture_stdout)
+        json_logs = '--json-logs' in sys.argv
+        if json_logs:
+            sys.argv.remove('--json-logs')
+
+        setup_logging(debug, capture_stdout, json_logs)
         module.main()
 
 

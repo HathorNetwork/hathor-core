@@ -23,7 +23,13 @@ def create_parser() -> ArgumentParser:
     return configargparse.ArgumentParser(auto_env_var_prefix='hathor_')
 
 
-def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_logging: bool = False) -> None:
+def setup_logging(
+            debug: bool = False,
+            capture_stdout: bool = False,
+            json_logging: bool = False,
+            *,
+            _test_logging: bool = False,
+        ) -> None:
     import logging
     import logging.config
 
@@ -142,6 +148,11 @@ def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_lo
             else:
                 return super()._repr(val)
 
+    if json_logging:
+        handlers = ['json']
+    else:
+        handlers = ['pretty']
+
     # See: https://docs.python.org/3/library/logging.config.html#configuration-dictionary-schema
     logging.config.dictConfig({
             'version': 1,
@@ -157,12 +168,22 @@ def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_lo
                     'processor': ConsoleRenderer(colors=True),
                     'foreign_pre_chain': pre_chain,
                 },
+                'json': {
+                    '()': structlog.stdlib.ProcessorFormatter,
+                    'processor': structlog.processors.JSONRenderer(),
+                    'foreign_pre_chain': pre_chain,
+                },
             },
             'handlers': {
-                'default': {
+                'pretty': {
                     'level': 'DEBUG',
                     'class': 'logging.StreamHandler',
                     'formatter': 'colored',
+                },
+                'json': {
+                    'level': 'DEBUG',
+                    'class': 'logging.StreamHandler',
+                    'formatter': 'json',
                 },
                 # 'file': {
                 #     'level': 'DEBUG',
@@ -174,12 +195,12 @@ def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_lo
             'loggers': {
                 # set twisted verbosity one level lower than hathor's
                 'twisted': {
-                    'handlers': ['default'],
+                    'handlers': handlers,
                     'level': 'INFO' if debug else 'WARN',
                     'propagate': False,
                 },
                 '': {
-                    'handlers': ['default'],
+                    'handlers': handlers,
                     'level': 'DEBUG' if debug else 'INFO',
                 },
             }
