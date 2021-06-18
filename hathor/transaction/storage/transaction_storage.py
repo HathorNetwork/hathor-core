@@ -94,6 +94,14 @@ class TransactionStorage(ABC):
         # Key storage attribute to save if the node has clean db
         self._clean_db_attribute: str = 'clean_db'
 
+    def is_empty(self) -> bool:
+        """True when only genesis is present, useful for checking for a fresh database."""
+        return self.get_count_tx_blocks() <= 3
+
+    def pre_init(self) -> None:
+        """Storages can implement this to run code before transaction loading starts"""
+        pass
+
     def _save_or_verify_genesis(self) -> None:
         """Save all genesis in the storage."""
         for tx in self._get_genesis_from_settings():

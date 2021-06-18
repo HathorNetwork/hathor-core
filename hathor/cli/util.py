@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import sys
 from argparse import ArgumentParser
 from collections import OrderedDict
 from datetime import datetime
@@ -259,3 +260,10 @@ def setup_logging(
         logger.warning('Test: warning.')
         logger.error('Test error.')
         logger.critical('Test: critical.')
+
+
+def check_or_exit(condition: bool, message: str) -> None:
+    """Will exit printing `message` if `condition` is False."""
+    if not condition:
+        print(message)
+        sys.exit(2)

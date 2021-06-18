@@ -14,7 +14,7 @@ class BasicTransaction(unittest.TestCase):
         store = TransactionMemoryStorage()
         self.cache_storage = TransactionCacheStorage(store, self.clock, capacity=5)
         self.cache_storage._manually_initialize()
-        self.cache_storage.start()
+        self.cache_storage.pre_init()
 
         self.genesis = self.cache_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]

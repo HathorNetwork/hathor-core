@@ -73,7 +73,8 @@ class TransactionCacheStorage(BaseTransactionStorage):
         else:
             return x
 
-    def start(self) -> None:
+    def pre_init(self) -> None:
+        self.store.pre_init()
         self.reactor.callLater(self.interval, self._start_flush_thread)
 
     def _enable_weakref(self) -> None:
