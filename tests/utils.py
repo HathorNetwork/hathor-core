@@ -3,10 +3,8 @@ import random
 import subprocess
 import time
 import urllib.parse
-from concurrent import futures
 from typing import List, Optional, cast
 
-import grpc
 import requests
 
 from hathor.conf import HathorSettings
@@ -14,11 +12,6 @@ from hathor.crypto.util import decode_address, get_private_key_from_bytes
 from hathor.manager import HathorManager
 from hathor.transaction import Transaction, TxInput, TxOutput, genesis
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode
-from hathor.transaction.storage import (
-    TransactionMemoryStorage,
-    TransactionRemoteStorage,
-    create_transaction_storage_server,
-)
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount
 
@@ -426,29 +419,6 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
         manager.propagate_tx(tx, fails_silently=False)
         manager.reactor.advance(8)
     return tx
-
-
-def start_remote_storage(tx_storage=None):
-    """ Starts a remote storage
-
-        :param tx_storage: storage to run in the remote storage
-        :type tx_storage: :py:class:`hathor.transaction.storage.TransactionStorage`
-
-        :return: Remote tx storage and the remote server
-        :rtype: Tuple[:py:class:`hathor.transaction.storage.TransactionRemoteStorage`, grpc server]
-    """
-    if not tx_storage:
-        tx_storage = TransactionMemoryStorage()
-
-    _server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    tx_storage._manually_initialize()
-    _servicer, port = create_transaction_storage_server(_server, tx_storage)
-    _server.start()
-
-    tx_storage = TransactionRemoteStorage()
-    tx_storage.connect_to(port)
-
-    return tx_storage, _server
 
 
 def create_script_with_sigops(nops: int) -> bytes:

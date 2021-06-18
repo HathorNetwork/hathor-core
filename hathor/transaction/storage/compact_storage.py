@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterator, Optional
 
 from hathor.conf import HathorSettings
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
+from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.transaction_metadata import TransactionMetadata
 
 if TYPE_CHECKING:
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 settings = HathorSettings()
 
 
-class TransactionCompactStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
+class TransactionCompactStorage(BaseTransactionStorage):
     """This storage saves tx and metadata in the same file.
 
     It also uses JSON format. Saved file is of format {'tx': {...}, 'meta': {...}}

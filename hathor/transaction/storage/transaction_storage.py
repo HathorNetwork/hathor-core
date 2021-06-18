@@ -16,12 +16,11 @@ import hashlib
 from abc import ABC, abstractmethod, abstractproperty
 from collections import deque
 from threading import Lock
-from typing import Any, Dict, Generator, Iterator, List, NamedTuple, Optional, Set, Tuple, cast
+from typing import Any, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple, cast
 from weakref import WeakValueDictionary
 
 from intervaltree.interval import Interval
 from structlog import get_logger
-from twisted.internet.defer import Deferred, inlineCallbacks, succeed
 
 from hathor.conf import HathorSettings
 from hathor.indexes import IndexesManager, TokensIndex, TransactionsIndex, WalletIndex
@@ -30,7 +29,6 @@ from hathor.transaction.block import Block
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
 from hathor.transaction.transaction import BaseTransaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
-from hathor.util import skip_warning
 
 settings = HathorSettings()
 
@@ -268,92 +266,6 @@ class TransactionStorage(ABC):
         """Return the number of transactions/blocks stored.
 
         :rtype int
-        """
-        raise NotImplementedError
-
-    """Async interface, all methods mirrorred from TransactionStorageSync, but suffixed with `_deferred`."""
-
-    @abstractmethod
-    def save_transaction_deferred(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
-        """Saves the tx.
-
-        :param tx: Transaction to save
-        :type tx: :py:class:`hathor.transaction.BaseTransaction`
-
-        :param only_metadata: Don't save the transaction, only the metadata of this transaction
-        :type only_metadata: bool
-
-        :rtype :py:class:`twisted.internet.defer.Deferred[None]`
-        """
-        if self.with_index:
-            self._add_to_cache(tx)
-        return succeed(None)
-
-    @abstractmethod
-    def remove_transaction_deferred(self, tx: BaseTransaction) -> None:
-        """Remove the tx.
-
-        :param tx: Transaction to be removed
-
-        :rtype :py:class:`twisted.internet.defer.Deferred[None]`
-        """
-        if self.with_index:
-            self._del_from_cache(tx)
-        return succeed(None)
-
-    @abstractmethod
-    def transaction_exists_deferred(self, hash_bytes: bytes) -> bool:
-        """Returns `True` if transaction with hash `hash_bytes` exists.
-
-        :param hash_bytes: Hash in bytes that will be checked.
-        :type hash_bytes: bytes
-
-        :rtype :py:class:`twisted.internet.defer.Deferred[bool]`
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_transaction_deferred(self, hash_bytes: bytes) -> BaseTransaction:
-        """Returns the transaction with hash `hash_bytes`.
-
-        :param hash_bytes: Hash in bytes that will be checked.
-        :type hash_bytes: bytes
-
-        :rtype :py:class:`twisted.internet.defer.Deferred[hathor.transaction.BaseTransaction]`
-        """
-        raise NotImplementedError
-
-    @inlineCallbacks
-    def get_metadata_deferred(self, hash_bytes: bytes) -> Generator[Any, Any, Optional[TransactionMetadata]]:
-        """Returns the transaction metadata with hash `hash_bytes`.
-
-        :param hash_bytes: Hash in bytes that will be checked.
-        :type hash_bytes: bytes
-
-        :rtype :py:class:`twisted.internet.defer.Deferred[hathor.transaction.TransactionMetadata]`
-        """
-        try:
-            tx = yield self.get_transaction_deferred(hash_bytes)
-            return tx.get_metadata(use_storage=False)
-        except TransactionDoesNotExist:
-            return None
-
-    @abstractmethod
-    def get_all_transactions_deferred(self) -> Iterator[BaseTransaction]:
-        # TODO: find an `async generator` type
-        # TODO: verify the following claim:
-        """Return all transactions that are not blocks.
-
-        :rtype :py:class:`twisted.internet.defer.Deferred[typing.Iterable[hathor.transaction.BaseTransaction]]`
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_count_tx_blocks_deferred(self) -> int:
-        # TODO: verify the following claim:
-        """Return the number of transactions/blocks stored.
-
-        :rtype :py:class:`twisted.internet.defer.Deferred[int]`
         """
         raise NotImplementedError
 
@@ -642,28 +554,6 @@ class TransactionStorage(ABC):
         """ Return if the node has a clean db (without voided blocks/txs)
         """
         return self.get_value(self._clean_db_attribute) == '1'
-
-
-class TransactionStorageAsyncFromSync(TransactionStorage):
-    """Implement async interface from sync interface, for legacy implementations."""
-
-    def save_transaction_deferred(self, tx: BaseTransaction, *, only_metadata: bool = False) -> Deferred:
-        return succeed(skip_warning(self.save_transaction)(tx, only_metadata=only_metadata))
-
-    def remove_transaction_deferred(self, tx: BaseTransaction) -> Deferred:
-        return succeed(skip_warning(self.remove_transaction)(tx))
-
-    def transaction_exists_deferred(self, hash_bytes: bytes) -> Deferred:
-        return succeed(skip_warning(self.transaction_exists)(hash_bytes))
-
-    def get_transaction_deferred(self, hash_bytes: bytes) -> Deferred:
-        return succeed(skip_warning(self.get_transaction)(hash_bytes))
-
-    def get_all_transactions_deferred(self) -> Deferred:
-        return succeed(skip_warning(self.get_all_transactions)())
-
-    def get_count_tx_blocks_deferred(self) -> Deferred:
-        return succeed(skip_warning(self.get_count_tx_blocks)())
 
 
 class BaseTransactionStorage(TransactionStorage):

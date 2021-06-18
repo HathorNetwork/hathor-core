@@ -23,14 +23,14 @@ from hathor.transaction.storage.exceptions import (
     TransactionDoesNotExist,
     TransactionMetadataDoesNotExist,
 )
-from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
+from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.transaction_metadata import TransactionMetadata
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
 
 
-class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
+class TransactionBinaryStorage(BaseTransactionStorage):
     def __init__(self, path='./', with_index=True):
         self.tx_path = os.path.join(path, 'tx')
         os.makedirs(self.tx_path, exist_ok=True)

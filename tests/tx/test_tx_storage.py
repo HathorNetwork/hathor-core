@@ -21,7 +21,6 @@ from hathor.transaction.storage import (
     TransactionCompactStorage,
     TransactionMemoryStorage,
     TransactionRocksDBStorage,
-    TransactionSubprocessStorage,
 )
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.wallet import Wallet
@@ -32,7 +31,6 @@ from tests.utils import (
     add_new_blocks,
     add_new_transactions,
     create_tokens,
-    start_remote_storage,
 )
 
 try:
@@ -406,25 +404,6 @@ class _BaseTransactionStorageTest:
             # Key should not exist again
             self.assertIsNone(self.tx_storage.get_value(attr))
 
-    class _RemoteStorageTest(_TransactionStorageTest):
-        def setUp(self, tx_storage, reactor=None):
-            tx_storage, self._server = start_remote_storage(tx_storage=tx_storage)
-            super().setUp(tx_storage, reactor=reactor)
-
-        def tearDown(self):
-            self._server.stop(0)
-            super().tearDown()
-
-    class _SubprocessStorageTest(_TransactionStorageTest):
-        def setUp(self, tx_storage_constructor, reactor=None):
-            tx_storage = TransactionSubprocessStorage(tx_storage_constructor)
-            tx_storage.start()
-            super().setUp(tx_storage, reactor=reactor)
-
-        def tearDown(self):
-            self.tx_storage.stop()
-            super().tearDown()
-
 
 class TransactionBinaryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
     def setUp(self):
@@ -486,31 +465,6 @@ class TransactionMemoryStorageTest(_BaseTransactionStorageTest._TransactionStora
 
 
 class CacheMemoryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
-    def setUp(self):
-        store = TransactionMemoryStorage()
-        reactor = Clock()
-        super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
-
-
-# class SubprocessMemoryStorageTest(_BaseTransactionStorageTest._SubprocessStorageTest):
-#    def setUp(self):
-#        super().setUp(TransactionMemoryStorage)
-
-# class SubprocessCacheMemoryStorageTest(_BaseTransactionStorageTest._SubprocessStorageTest):
-#    def setUp(self):
-#        def storage_constructor():
-#            store = TransactionMemoryStorage()
-#            reactor = Clock()
-#            return TransactionCacheStorage(store, reactor, capacity=5)
-#        super().setUp(storage_constructor)
-
-
-class RemoteMemoryStorageTest(_BaseTransactionStorageTest._RemoteStorageTest):
-    def setUp(self):
-        super().setUp(TransactionMemoryStorage())
-
-
-class RemoteCacheMemoryStorageTest(_BaseTransactionStorageTest._RemoteStorageTest):
     def setUp(self):
         store = TransactionMemoryStorage()
         reactor = Clock()
