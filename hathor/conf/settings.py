@@ -154,6 +154,9 @@ class HathorSettings(NamedTuple):
     # that the peer is synced (in seconds).
     P2P_SYNC_THRESHOLD: int = 60
 
+    # Whether to warn the other peer of the reason for closing the connection
+    WHITELIST_WARN_BLOCKED_PEERS: bool = False
+
     # Maximum number of opened threads that are solving POW for send tokens
     MAX_POW_THREADS: int = 5
 
