@@ -274,8 +274,12 @@ class ConnectionsManager:
     def _update_whitelist_err(self, *args: Any, **kwargs: Any) -> None:
         self.log.error('update whitelist failed', args=args, kwargs=kwargs)
 
-    def _update_whitelist_cb(self, body: bytes) -> None:
-        self.log.info('update whitelist got response')
+    def _update_whitelist_cb(self, body: Optional[bytes]) -> None:
+        if body is None:
+            self.log.warn('update whitelist got no response')
+            return
+        else:
+            self.log.info('update whitelist got response')
         try:
             text = body.decode()
             new_whitelist = parse_whitelist(text)
