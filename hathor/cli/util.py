@@ -16,6 +16,7 @@ import sys
 from argparse import ArgumentParser
 from collections import OrderedDict
 from datetime import datetime
+from typing import Any, List
 
 import configargparse
 
@@ -212,18 +213,30 @@ def setup_logging(
             event_dict['event'] = event_dict['event'].format(**event_dict)
         return event_dict
 
+    processors: List[Any] = [
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+    ]
+
+    try:
+        from structlog_sentry import SentryProcessor
+    except ModuleNotFoundError:
+        pass
+    else:
+        processors.append(SentryProcessor(level=logging.ERROR))
+
+    processors.extend([
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        kwargs_formatter,
+        timestamper,
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+    ])
+
     structlog.configure(
-        processors=[
-            structlog.stdlib.filter_by_level,
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.add_log_level,
-            structlog.stdlib.PositionalArgumentsFormatter(),
-            kwargs_formatter,
-            timestamper,
-            structlog.processors.StackInfoRenderer(),
-            structlog.processors.format_exc_info,
-            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
-        ],
+        processors=processors,
         context_class=OrderedDict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         wrapper_class=structlog.stdlib.BoundLogger,

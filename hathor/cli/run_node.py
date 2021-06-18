@@ -79,6 +79,7 @@ class RunNode:
                             '/push-tx API')
         parser.add_argument('--max-output-script-size', type=int, default=None, help='Custom max accepted script size '
                             'on /push-tx API')
+        parser.add_argument('--sentry-dsn', help='Sentry DSN')
         return parser
 
     def prepare(self, args: Namespace) -> None:
@@ -254,10 +255,32 @@ class RunNode:
         for description in args.listen:
             self.manager.add_listen_address(description)
 
-        self.start_manager()
+        self.start_manager(args)
         self.register_resources(args)
 
-    def start_manager(self) -> None:
+    def start_sentry_if_possible(self, args: Namespace) -> None:
+        """Start Sentry integration if possible."""
+        if not args.sentry_dsn:
+            return
+        self.log.info('Starting Sentry', dsn=args.sentry_dsn)
+        try:
+            import sentry_sdk
+            from structlog_sentry import SentryProcessor  # noqa: F401
+        except ModuleNotFoundError:
+            self.log.error('Please use `poetry install -E sentry` for enabling Sentry.')
+            sys.exit(-3)
+
+        import hathor
+        from hathor.conf import HathorSettings
+        settings = HathorSettings()
+        sentry_sdk.init(
+            dsn=args.sentry_dsn,
+            release=hathor.__version__,
+            environment=settings.NETWORK_NAME,
+        )
+
+    def start_manager(self, args: Namespace) -> None:
+        self.start_sentry_if_possible(args)
         self.manager.start()
 
     def register_resources(self, args: Namespace) -> None:

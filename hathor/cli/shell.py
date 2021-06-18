@@ -28,7 +28,7 @@ def get_ipython(extra_args: List[Any], imported_objects: Dict[str, Any]) -> Call
 
 
 class Shell(RunNode):
-    def start_manager(self) -> None:
+    def start_manager(self, args: Namespace) -> None:
         pass
 
     def register_signal_handlers(self, args: Namespace) -> None:
