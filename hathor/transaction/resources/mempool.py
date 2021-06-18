@@ -46,12 +46,14 @@ class MempoolResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        # XXX: maybe respond with tx ids only and client can download the txs if needed
-        # tx_list = list(map(lambda tx: tx.id, self.manager.tx_storage.iter_mempool()))
-        #
         # Get a list of all txs on the mempool
-        tx_list = list(self.manager.tx_storage.iter_mempool())
-        data = {'success': True, 'transactions': tx_list}
+        tx_ids = map(
+            # get only tx_ids
+            lambda tx: tx.hash_hex,
+            # order by timestamp
+            sorted(list(self.manager.tx_storage.iter_mempool()), key=lambda tx: tx.timestamp),
+        )
+        data = {'success': True, 'transactions': list(tx_ids)}
         return json.dumps(data, indent=4).encode('utf-8')
 
 
