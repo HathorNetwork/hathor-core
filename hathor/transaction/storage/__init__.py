@@ -19,6 +19,7 @@ from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.transaction.storage.transaction_storage import TransactionStorage
 
 try:
+    from hathor.transaction.storage.old_rocksdb_storage import TransactionOldRocksDBStorage
     from hathor.transaction.storage.rocksdb_storage import TransactionRocksDBStorage
 except ImportError:
     pass
@@ -30,4 +31,5 @@ __all__ = [
     'TransactionCacheStorage',
     'TransactionBinaryStorage',
     'TransactionRocksDBStorage',
+    'TransactionOldRocksDBStorage',
 ]

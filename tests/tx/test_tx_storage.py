@@ -20,6 +20,7 @@ from hathor.transaction.storage import (
     TransactionCacheStorage,
     TransactionCompactStorage,
     TransactionMemoryStorage,
+    TransactionOldRocksDBStorage,
     TransactionRocksDBStorage,
 )
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
@@ -469,6 +470,17 @@ class CacheMemoryStorageTest(_BaseTransactionStorageTest._TransactionStorageTest
         store = TransactionMemoryStorage()
         reactor = Clock()
         super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
+
+
+@pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
+class TransactionOldRocksDBStorageTest(_BaseTransactionStorageTest._TransactionStorageTest):
+    def setUp(self):
+        self.directory = tempfile.mkdtemp()
+        super().setUp(TransactionOldRocksDBStorage(self.directory))
+
+    def tearDown(self):
+        shutil.rmtree(self.directory)
+        super().tearDown()
 
 
 @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')

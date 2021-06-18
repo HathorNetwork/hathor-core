@@ -48,6 +48,7 @@ class RunNode:
         parser.add_argument('--stratum', type=int, help='Port to run stratum server')
         parser.add_argument('--data', help='Data directory')
         parser.add_argument('--rocksdb-storage', action='store_true', help='Use RocksDB storage backend')
+        # parser.add_argument('--rocksdb-cache', type=int, help='Size (bytes) of RocksDB block-table cache', default=0)
         parser.add_argument('--wallet', help='Set wallet type. Options are hd (Hierarchical Deterministic) or keypair',
                             default=None)
         parser.add_argument('--wallet-enable-api', action='store_true',
@@ -88,7 +89,7 @@ class RunNode:
             TransactionCacheStorage,
             TransactionCompactStorage,
             TransactionMemoryStorage,
-            TransactionRocksDBStorage,
+            TransactionOldRocksDBStorage,
             TransactionStorage,
         )
         from hathor.wallet import HDWallet, Wallet
@@ -166,7 +167,10 @@ class RunNode:
         tx_storage: TransactionStorage
         if args.data:
             if args.rocksdb_storage:
-                tx_storage = TransactionRocksDBStorage(path=args.data, with_index=(not args.cache))
+                # cache_capacity = args.rocksdb_cache or None
+                # tx_storage = TransactionRocksDBStorage(path=args.data, with_index=(not args.cache),
+                #                                        cache_capacity=cache_capacity)
+                tx_storage = TransactionOldRocksDBStorage(path=args.data, with_index=(not args.cache))
             else:
                 tx_storage = TransactionCompactStorage(path=args.data, with_index=(not args.cache))
             self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
