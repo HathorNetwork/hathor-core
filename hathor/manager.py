@@ -17,7 +17,7 @@ import random
 import sys
 import time
 from enum import Enum
-from typing import Any, Iterator, List, NamedTuple, Optional, Tuple, Union
+from typing import Any, Iterable, Iterator, List, NamedTuple, Optional, Tuple, Union
 
 from structlog import get_logger
 from twisted.internet import defer
@@ -30,7 +30,7 @@ from hathor import daa
 from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
-from hathor.exception import InvalidNewTransaction
+from hathor.exception import HathorError, InvalidNewTransaction
 from hathor.indexes import TokensIndex, WalletIndex
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -41,6 +41,7 @@ from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion, sum_weights
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.wallet import BaseWallet
 
 settings = HathorSettings()
@@ -213,7 +214,7 @@ class HathorManager:
                     'that was stopped in the middle. The storage is not reliable anymore and, because of that, '
                     'you must initialize with a full verification again or remove your storage and do a full sync.'
                 )
-                sys.exit()
+                sys.exit(-1)
 
             # If self.tx_storage.is_running_manager() is True, the last time the node was running it had a sudden crash
             # because of that, we must run a full verification because some storage data might be wrong.
@@ -224,7 +225,7 @@ class HathorManager:
                     'The storage is not reliable anymore and, because of that, so you must run a full verification '
                     'or remove your storage and do a full sync.'
                 )
-                sys.exit()
+                sys.exit(-1)
 
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
@@ -336,10 +337,22 @@ class HathorManager:
 
         self.tx_storage.pre_init()
 
+        # Checkpoints as {height: hash}
+        checkpoint_heights = {}
+        for cp in self.checkpoints:
+            checkpoint_heights[cp.height] = cp.hash
+
         # self.start_profiler()
+        if self._full_verification:
+            self.log.debug('reset all metadata')
+            for tx in self.tx_storage.get_all_transactions():
+                tx.reset_metadata()
 
         self.log.debug('load blocks and transactions')
         for tx in self.tx_storage._topological_sort():
+            if self._full_verification:
+                tx.update_initial_metadata()
+
             assert tx.hash is not None
 
             tx_meta = tx.get_metadata()
@@ -367,12 +380,34 @@ class HathorManager:
                 skip_block_weight_verification = False
 
             try:
-                assert self.on_new_tx(
-                    tx,
-                    quiet=True,
-                    fails_silently=False,
-                    skip_block_weight_verification=skip_block_weight_verification
-                )
+                if self._full_verification:
+                    # TODO: deal with invalid tx
+                    if self.tx_storage.is_tx_needed(tx.hash):
+                        assert isinstance(tx, Transaction)
+                        tx._height_cache = self.tx_storage.needed_index_height(tx.hash)
+                    if tx.can_validate_full():
+                        self.tx_storage.add_to_indexes(tx)
+                        assert tx.validate_full(skip_block_weight_verification=skip_block_weight_verification)
+                        self.consensus_algorithm.update(tx)
+                        self.tx_storage.update_tx_tips(tx)
+                        self.step_validations([tx])
+                        if tx.is_block:
+                            self.tx_storage.add_to_parent_blocks_index(tx.hash)
+                    else:
+                        assert tx.validate_basic(skip_block_weight_verification=skip_block_weight_verification)
+                        self.tx_storage.add_to_deps_index(tx.hash, tx.get_all_dependencies())
+                        self.tx_storage.add_needed_deps(tx)
+                    self.tx_storage.save_transaction(tx, only_metadata=True)
+                else:
+                    # TODO: deal with invalid tx
+                    if not tx_meta.validation.is_final():
+                        assert tx_meta.validation.is_at_least_basic(), f'invalid: {tx.hash_hex}'
+                        self.tx_storage.add_needed_deps(tx)
+                    elif tx.is_transaction and tx_meta.first_block is None and not tx_meta.voided_by:
+                        self.tx_storage.update_tx_tips(tx)
+                    elif tx.is_block:
+                        self.tx_storage.add_to_parent_blocks_index(tx.hash)
+                    self.tx_storage.add_to_indexes(tx)
             except (InvalidNewTransaction, TxValidationError):
                 self.log.error('unexpected error when initializing', tx=tx, exc_info=True)
                 raise
@@ -380,11 +415,62 @@ class HathorManager:
             if tx.is_block:
                 block_count += 1
 
+                # this works because blocks on the best chain are iterated from lower to higher height
+                assert tx.hash is not None
+                assert tx_meta.validation.is_at_least_basic()
+                if not tx_meta.voided_by:
+                    # XXX: this might not be needed when making a full init because the consensus should already have
+                    self.tx_storage.add_new_to_block_height_index(tx_meta.height, tx.hash)
+
+                # Check if it's a checkpoint block
+                if tx_meta.height in checkpoint_heights:
+                    if tx.hash == checkpoint_heights[tx_meta.height]:
+                        del checkpoint_heights[tx_meta.height]
+                    else:
+                        # If the hash is different from checkpoint hash, we stop the node
+                        self.log.error('Error initializing the node. Checkpoint validation error.')
+                        sys.exit()
+            else:
+                tx_count += 1
+
             if time.time() - t2 > 1:
                 dt = hathor.util.LogDuration(time.time() - t2)
                 self.log.warn('tx took too long to load', tx=tx.hash_hex, dt=dt)
 
+        # we have to have a best_block by now
+        # assert best_block is not None
+
         self.log.debug('done loading transactions')
+
+        # Check if all checkpoints in database are ok
+        my_best_height = self.tx_storage.get_height_best_block()
+        if checkpoint_heights:
+            # If I have checkpoints that were not validated I must check if they are all in a height I still don't have
+            first = min(list(checkpoint_heights.keys()))
+            if first <= my_best_height:
+                # If the height of the first checkpoint not validated is lower than the height of the best block
+                # Then it's missing this block
+                self.log.error('Error initializing the node. Checkpoint validation error.')
+                sys.exit()
+
+        # restart all validations possible
+        deps_size = self.tx_storage.count_deps_index()
+        if deps_size > 0:
+            self.log.debug('run pending validations', deps_size=deps_size)
+            depended_final_txs: List[BaseTransaction] = []
+            for tx_hash in self.tx_storage.iter_deps_index():
+                if not self.tx_storage.transaction_exists(tx_hash):
+                    continue
+                tx = self.tx_storage.get_transaction(tx_hash)
+                if tx.get_metadata().validation.is_final():
+                    depended_final_txs.append(tx)
+            self.step_validations(depended_final_txs)
+            new_deps_size = self.tx_storage.count_deps_index()
+            self.log.debug('pending validations finished', changes=deps_size - new_deps_size)
+
+        best_height = self.tx_storage.get_height_best_block()
+        if best_height != h:
+            self.log.warn('best height doesn\'t match', best_height=best_height, max_height=h)
 
         # self.stop_profiler(save_to='profiles/initializing.prof')
         self.state = self.NodeState.READY
@@ -587,33 +673,6 @@ class HathorManager:
         """Return the number of tokens issued (aka reward) per block of a given height."""
         return daa.get_tokens_issued_per_block(height)
 
-    def validate_new_tx(self, tx: BaseTransaction, skip_block_weight_verification: bool = False) -> bool:
-        """ Process incoming transaction during initialization.
-        These transactions came only from storage.
-        """
-        assert tx.hash is not None
-
-        if self.state == self.NodeState.INITIALIZING:
-            if tx.is_genesis:
-                return True
-
-        else:
-            if tx.is_genesis:
-                raise InvalidNewTransaction('Genesis? {}'.format(tx.hash_hex))
-
-        now = self.reactor.seconds()
-        if tx.timestamp - now > settings.MAX_FUTURE_TIMESTAMP_ALLOWED:
-            raise InvalidNewTransaction('Ignoring transaction in the future {} (timestamp={}, now={})'.format(
-                tx.hash_hex, tx.timestamp, now))
-
-        if self.state != self.NodeState.INITIALIZING and not tx.can_validate_full():
-            raise InvalidNewTransaction('Cannot validate, missing dependency')
-
-        # validate transaction, raises a TxValidationError if tx is not valid
-        tx.validate_full()
-
-        return True
-
     def submit_block(self, blk: Block, fails_silently: bool = True) -> bool:
         """Used by submit block from all mining APIs.
         """
@@ -633,59 +692,106 @@ class HathorManager:
             assert tx.storage == self.tx_storage, 'Invalid tx storage'
         else:
             tx.storage = self.tx_storage
-        return self.on_new_tx(tx, fails_silently=fails_silently)
+
+        return self.on_new_tx(tx, fails_silently=fails_silently, propagate_to_peers=True)
 
     @cpu.profiler('on_new_tx')
     def on_new_tx(self, tx: BaseTransaction, *, conn: Optional[HathorProtocol] = None,
                   quiet: bool = False, fails_silently: bool = True, propagate_to_peers: bool = True,
-                  skip_block_weight_verification: bool = False) -> bool:
-        """This method is called when any transaction arrive.
-
-        If `fails_silently` is False, it may raise either InvalidNewTransaction or TxValidationError.
-
-        :return: True if the transaction was accepted
-        :rtype: bool
+                  skip_block_weight_verification: bool = False, partial: bool = False) -> bool:
+        """ New method for adding transactions or blocks that steps the validation state machine.
         """
         assert tx.hash is not None
-        if self.state != self.NodeState.INITIALIZING:
-            if self.tx_storage.transaction_exists(tx.hash):
-                if not fails_silently:
-                    raise InvalidNewTransaction('Transaction already exists {}'.format(tx.hash_hex))
-                self.log.debug('on_new_tx(): Transaction already exists', tx=tx.hash_hex)
-                return False
+        if self.tx_storage.transaction_exists(tx.hash):
+            if not fails_silently:
+                raise InvalidNewTransaction('Transaction already exists {}'.format(tx.hash_hex))
+            self.log.warn('on_new_tx(): Transaction already exists', tx=tx.hash_hex)
+            return False
 
-        if self.state != self.NodeState.INITIALIZING or self._full_verification:
+        if tx.timestamp - self.reactor.seconds() > settings.MAX_FUTURE_TIMESTAMP_ALLOWED:
+            if not fails_silently:
+                raise InvalidNewTransaction('Ignoring transaction in the future {} (timestamp={})'.format(
+                    tx.hash_hex, tx.timestamp))
+            self.log.warn('on_new_tx(): Ignoring transaction in the future', tx=tx.hash_hex,
+                          future_timestamp=tx.timestamp)
+            return False
+
+        tx.storage = self.tx_storage
+
+        try:
+            metadata = tx.get_metadata()
+        except TransactionDoesNotExist:
+            if not fails_silently:
+                raise InvalidNewTransaction('missing parent')
+            self.log.warn('on_new_tx(): missing parent', tx=tx.hash_hex)
+            return False
+
+        if metadata.validation.is_invalid():
+            if not fails_silently:
+                raise InvalidNewTransaction('previously marked as invalid')
+            self.log.warn('on_new_tx(): previously marked as invalid', tx=tx.hash_hex)
+            return False
+
+        # if partial=False (the default) we don't even try to partially validate transactions
+        if not partial or (metadata.validation.is_fully_connected() or tx.can_validate_full()):
+            if isinstance(tx, Transaction) and self.tx_storage.is_tx_needed(tx.hash):
+                tx._height_cache = self.tx_storage.needed_index_height(tx.hash)
+
+            if not metadata.validation.is_valid():
+                try:
+                    tx.validate_full()
+                except HathorError as e:
+                    if not fails_silently:
+                        raise InvalidNewTransaction('full validation failed') from e
+                    self.log.warn('on_new_tx(): full validation failed', tx=tx.hash_hex, exc_info=True)
+                    return False
+
+            # The method below adds the tx as a child of the parents
+            # This needs to be called right before the save because we were adding the children
+            # in the tx parents even if the tx was invalid (failing the verifications above)
+            # then I would have a children that was not in the storage
+            tx.update_initial_metadata()
+            self.tx_storage.save_transaction(tx, add_to_indexes=True)
             try:
-                assert self.validate_new_tx(tx, skip_block_weight_verification=skip_block_weight_verification) is True
-            except (InvalidNewTransaction, TxValidationError):
-                # Discard invalid Transaction/block.
-                self.log.debug('tx/block discarded', tx=tx, exc_info=True)
-                if not fails_silently:
-                    raise
-                return False
-
-        if self.state != self.NodeState.INITIALIZING:
-            self.tx_storage.save_transaction(tx)
-        else:
-            self.tx_storage._add_to_cache(tx)
-            if self._full_verification:
-                tx.reset_metadata()
-            else:
-                # When doing a fast init, we don't update the consensus, so we must trust the data on the metadata
-                # For transactions, we don't store them on the tips index if they are voided
-                # We have to execute _add_to_cache before because _del_from_cache does not remove from all indexes
-                metadata = tx.get_metadata()
-                if not tx.is_block and metadata.voided_by:
-                    self.tx_storage._del_from_cache(tx)
-
-        if self.state != self.NodeState.INITIALIZING or self._full_verification:
-            try:
-                tx.update_initial_metadata()
                 self.consensus_algorithm.update(tx)
-            except Exception:
-                self.log.exception('unexpected error when processing tx', tx=tx)
-                self.tx_storage.remove_transaction(tx)
-                raise
+            except HathorError as e:
+                if not fails_silently:
+                    raise InvalidNewTransaction('consensus update failed') from e
+                self.log.warn('on_new_tx(): consensus update failed', tx=tx.hash_hex)
+                return False
+            else:
+                self.tx_fully_validated(tx)
+        else:
+            if isinstance(tx, Block) and not tx.has_basic_block_parent():
+                if not fails_silently:
+                    raise InvalidNewTransaction('block parent needs to be at least basic-valid')
+                self.log.warn('on_new_tx(): block parent needs to be at least basic-valid', tx=tx.hash_hex)
+                return False
+            if not tx.validate_basic():
+                if not fails_silently:
+                    raise InvalidNewTransaction('basic validation failed')
+                self.log.warn('on_new_tx(): basic validation failed', tx=tx.hash_hex)
+                return False
+
+            # The method below adds the tx as a child of the parents
+            # This needs to be called right before the save because we were adding the children
+            # in the tx parents even if the tx was invalid (failing the verifications above)
+            # then I would have a children that was not in the storage
+            tx.update_initial_metadata()
+            self.tx_storage.save_transaction(tx)
+            self.tx_storage.add_to_deps_index(tx.hash, tx.get_all_dependencies())
+            self.tx_storage.add_needed_deps(tx)
+
+        if tx.is_transaction:
+            self.tx_storage.remove_from_needed_index(tx.hash)
+
+        try:
+            self.step_validations([tx])
+        except (AssertionError, HathorError) as e:
+            if not fails_silently:
+                raise InvalidNewTransaction('step validations failed') from e
+            self.log.warn('on_new_tx(): step validations failed', tx=tx.hash_hex)
+            return False
 
         if not quiet:
             ts_date = datetime.datetime.fromtimestamp(tx.timestamp)
@@ -699,14 +805,51 @@ class HathorManager:
             # Propagate to our peers.
             self.connections.send_tx_to_peers(tx)
 
+        return True
+
+    def step_validations(self, txs: Iterable[BaseTransaction]) -> None:
+        """ Step all validations until none can be stepped anymore.
+        """
+        # cur_txs will be empty when there are no more new txs that reached full
+        # validation because of an initial trigger
+        for ready_tx in txs:
+            assert ready_tx.hash is not None
+            self.tx_storage.remove_ready_for_validation(ready_tx.hash)
+        for tx in map(self.tx_storage.get_transaction, self.tx_storage.next_ready_for_validation()):
+            assert tx.hash is not None
+            tx.update_initial_metadata()
+            try:
+                assert tx.validate_full()
+            except (AssertionError, HathorError):
+                # TODO
+                raise
+            else:
+                self.tx_storage.save_transaction(tx, only_metadata=True, add_to_indexes=True)
+                self.consensus_algorithm.update(tx)
+                # save and process its dependencies even if it became invalid
+                # because invalidation state also has to propagate to children
+                self.tx_storage.remove_ready_for_validation(tx.hash)
+                self.tx_fully_validated(tx)
+
+    def tx_fully_validated(self, tx: BaseTransaction) -> None:
+        """ Handle operations that need to happen once the tx becomes fully validated.
+
+        This might happen immediately after we receive the tx, if we have all dependencies
+        already. Or it might happen later.
+        """
+        assert tx.hash is not None
+
+        # Publish to pubsub manager the new tx accepted, now that it's full validated
+        self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
+
+        self.tx_storage.del_from_deps_index(tx.hash)
+        self.tx_storage.update_tx_tips(tx)
+        if tx.is_block:
+            self.tx_storage.add_to_parent_blocks_index(tx.hash)
+
         if self.wallet:
             # TODO Remove it and use pubsub instead.
             self.wallet.on_new_tx(tx)
-
-        # Publish to pubsub manager the new tx accepted
-        self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
-
-        return True
 
     def listen(self, description: str, use_ssl: Optional[bool] = None) -> None:
         endpoint = self.connections.listen(description, use_ssl)

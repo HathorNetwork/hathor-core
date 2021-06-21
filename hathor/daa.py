@@ -23,6 +23,8 @@ from enum import IntFlag
 from math import log
 from typing import TYPE_CHECKING, List
 
+from structlog import get_logger
+
 from hathor.conf import HathorSettings
 from hathor.profiler import get_cpu_profiler
 from hathor.util import iwindows
@@ -30,6 +32,7 @@ from hathor.util import iwindows
 if TYPE_CHECKING:
     from hathor.transaction import Block, Transaction
 
+logger = get_logger()
 settings = HathorSettings()
 cpu = get_cpu_profiler()
 
@@ -49,6 +52,7 @@ TEST_MODE = TestMode.DISABLED
 
 def _set_test_mode(mode: TestMode) -> None:
     global TEST_MODE
+    logger.debug('change DAA test mode', from_mode=TEST_MODE.name, to_mode=mode.name)
     TEST_MODE = mode
 
 

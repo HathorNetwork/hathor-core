@@ -521,6 +521,7 @@ class BaseWallet:
             script_type_out = parse_address_script(output.script)
             if script_type_out:
                 if script_type_out.address in self.keys:
+                    self.log.debug('detected tx output', tx=tx.hash_hex, index=index, address=script_type_out.address)
                     token_id = tx.get_token_uid(output.get_token_index())
                     # this wallet received tokens
                     utxo = UnspentTx(tx.hash, index, output.value, tx.timestamp, script_type_out.address,

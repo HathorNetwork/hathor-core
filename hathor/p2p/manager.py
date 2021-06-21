@@ -35,9 +35,9 @@ from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
 
 if TYPE_CHECKING:
-    from hathor.manager import HathorManager  # noqa: F401
-    from hathor.p2p.factory import HathorClientFactory, HathorServerFactory  # noqa: F401
-    from hathor.p2p.node_sync import NodeSyncTimestamp  # noqa: F401
+    from hathor.manager import HathorManager
+    from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
+    from hathor.p2p.node_sync import NodeSyncTimestamp
 
 logger = get_logger()
 settings = HathorSettings()

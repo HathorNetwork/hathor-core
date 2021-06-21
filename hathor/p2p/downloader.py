@@ -203,12 +203,12 @@ class Downloader:
         """ This is called when a new transaction arrives.
         """
         assert tx.hash is not None
-        self.log.debug('new tx', tx=tx.hash_hex)
+        self.log.debug('new tx/block', tx=tx.hash_hex)
 
         details = self.pending_transactions.get(tx.hash, None)
         if not details:
             # Something is wrong! It should never happen.
-            self.log.warn('new tx arrived but tx detail does not exist', tx=tx.hash_hex)
+            self.log.warn('new tx/block arrived but tx detail does not exist', tx=tx.hash_hex)
             return
 
         assert len(self.downloading_deque) > 0
