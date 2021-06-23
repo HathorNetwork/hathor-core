@@ -62,8 +62,12 @@ flake8:
 isort-check:
 	isort --ac --check-only $(py_sources)
 
+.PHONY: check-version
+check-version:
+	bash ./extras/check_version.sh
+
 .PHONY: check
-check: flake8 isort-check mypy
+check: flake8 isort-check mypy check-version
 
 # formatting:
 
