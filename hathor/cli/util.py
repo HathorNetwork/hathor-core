@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import sys
 from argparse import ArgumentParser
 from collections import OrderedDict
 from datetime import datetime
+from typing import Any, List
 
 import configargparse
 
@@ -23,7 +25,13 @@ def create_parser() -> ArgumentParser:
     return configargparse.ArgumentParser(auto_env_var_prefix='hathor_')
 
 
-def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_logging: bool = False) -> None:
+def setup_logging(
+            debug: bool = False,
+            capture_stdout: bool = False,
+            json_logging: bool = False,
+            *,
+            _test_logging: bool = False,
+        ) -> None:
     import logging
     import logging.config
 
@@ -142,6 +150,11 @@ def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_lo
             else:
                 return super()._repr(val)
 
+    if json_logging:
+        handlers = ['json']
+    else:
+        handlers = ['pretty']
+
     # See: https://docs.python.org/3/library/logging.config.html#configuration-dictionary-schema
     logging.config.dictConfig({
             'version': 1,
@@ -157,12 +170,22 @@ def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_lo
                     'processor': ConsoleRenderer(colors=True),
                     'foreign_pre_chain': pre_chain,
                 },
+                'json': {
+                    '()': structlog.stdlib.ProcessorFormatter,
+                    'processor': structlog.processors.JSONRenderer(),
+                    'foreign_pre_chain': pre_chain,
+                },
             },
             'handlers': {
-                'default': {
+                'pretty': {
                     'level': 'DEBUG',
                     'class': 'logging.StreamHandler',
                     'formatter': 'colored',
+                },
+                'json': {
+                    'level': 'DEBUG',
+                    'class': 'logging.StreamHandler',
+                    'formatter': 'json',
                 },
                 # 'file': {
                 #     'level': 'DEBUG',
@@ -174,12 +197,12 @@ def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_lo
             'loggers': {
                 # set twisted verbosity one level lower than hathor's
                 'twisted': {
-                    'handlers': ['default'],
+                    'handlers': handlers,
                     'level': 'INFO' if debug else 'WARN',
                     'propagate': False,
                 },
                 '': {
-                    'handlers': ['default'],
+                    'handlers': handlers,
                     'level': 'DEBUG' if debug else 'INFO',
                 },
             }
@@ -190,18 +213,30 @@ def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_lo
             event_dict['event'] = event_dict['event'].format(**event_dict)
         return event_dict
 
+    processors: List[Any] = [
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+    ]
+
+    try:
+        from structlog_sentry import SentryProcessor
+    except ModuleNotFoundError:
+        pass
+    else:
+        processors.append(SentryProcessor(level=logging.ERROR))
+
+    processors.extend([
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        kwargs_formatter,
+        timestamper,
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+    ])
+
     structlog.configure(
-        processors=[
-            structlog.stdlib.filter_by_level,
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.add_log_level,
-            structlog.stdlib.PositionalArgumentsFormatter(),
-            kwargs_formatter,
-            timestamper,
-            structlog.processors.StackInfoRenderer(),
-            structlog.processors.format_exc_info,
-            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
-        ],
+        processors=processors,
         context_class=OrderedDict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         wrapper_class=structlog.stdlib.BoundLogger,
@@ -238,3 +273,10 @@ def setup_logging(debug: bool = False, capture_stdout: bool = False, *, _test_lo
         logger.warning('Test: warning.')
         logger.error('Test error.')
         logger.critical('Test: critical.')
+
+
+def check_or_exit(condition: bool, message: str) -> None:
+    """Will exit printing `message` if `condition` is False."""
+    if not condition:
+        print(message)
+        sys.exit(2)

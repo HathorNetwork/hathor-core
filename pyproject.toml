@@ -14,7 +14,7 @@
 
 [tool.poetry]
 name = "hathor"
-version = "0.39.1"
+version = "0.40.0"
 description = "Hathor Network full-node"
 authors = ["Hathor Team <contact@hathor.network>"]
 license = "Apache-2.0"
@@ -77,10 +77,13 @@ idna = "~2.10"
 cython = {version = "<0.30", optional = true}
 typing-extensions = "^3.7.4"  # indirect dependency, should not be needed on Python >3.7 but some packages import it anyway
 setproctitle = "^1.2.2"
+sentry-sdk = {version = "^1.1.0", optional = true}
+structlog-sentry = {version = "^1.4.0", optional = true}
 
 [tool.poetry.extras]
 rocksdb = ["cython", "python-rocksdb"]
 grpc = ["grpcio", "grpcio-tools"]
+sentry = ["sentry-sdk", "structlog-sentry"]
 
 [tool.isort]
 combine_as_imports = true

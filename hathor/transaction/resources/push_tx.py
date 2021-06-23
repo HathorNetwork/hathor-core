@@ -47,7 +47,11 @@ class PushTxResource(resource.Resource):
                  allow_non_standard_script: bool = False) -> None:
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
-        self.max_output_script_size: int = settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE
+        self.max_output_script_size: int = (
+            settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE
+            if max_output_script_size is None else
+            max_output_script_size
+        )
         self.allow_non_standard_script = allow_non_standard_script
 
     def handle_push_tx(self, params: Dict[str, Any]) -> Dict[str, Any]:

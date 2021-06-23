@@ -5,9 +5,7 @@ from hathor.p2p.node_sync import NodeSyncTimestamp
 from hathor.p2p.protocol import PeerIdState
 from hathor.simulator import FakeConnection
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
-from hathor.transaction.storage.remote_storage import RemoteCommunicationError, TransactionRemoteStorage
 from tests import unittest
-from tests.utils import start_remote_storage
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):
@@ -72,12 +70,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(0, len(result))
 
         genesis_tx = [tx for tx in self.genesis if not tx.is_block][0]
-        if isinstance(self.manager1.tx_storage, TransactionRemoteStorage):
-            with self.assertRaises(RemoteCommunicationError):
-                self.manager1.tx_storage.get_blocks_before(genesis_tx.hash)
-        else:
-            with self.assertRaises(TransactionIsNotABlock):
-                self.manager1.tx_storage.get_blocks_before(genesis_tx.hash)
+        with self.assertRaises(TransactionIsNotABlock):
+            self.manager1.tx_storage.get_blocks_before(genesis_tx.hash)
 
         blocks = self._add_new_blocks(20)
         num_blocks = 5
@@ -301,15 +295,3 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # And try again
         downloader.check_downloading_queue()
         self.assertEqual(len(downloader.downloading_deque), 0)
-
-
-class RemoteStorageSyncTest(HathorSyncMethodsTestCase):
-    def setUp(self):
-        super().setUp()
-        tx_storage, self._server = start_remote_storage()
-
-        self.manager1.tx_storage = tx_storage
-
-    def tearDown(self):
-        self._server.stop(0).wait()
-        super().tearDown()

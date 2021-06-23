@@ -47,7 +47,13 @@ class RunNode:
         parser.add_argument('--status', type=int, help='Port to run status server')
         parser.add_argument('--stratum', type=int, help='Port to run stratum server')
         parser.add_argument('--data', help='Data directory')
-        parser.add_argument('--rocksdb-storage', action='store_true', help='Use RocksDB storage backend')
+        storage = parser.add_mutually_exclusive_group()
+        storage.add_argument('--rocksdb-storage', action='store_true', help='Use RocksDB storage backend (default)')
+        storage.add_argument('--old-rocksdb-storage', action='store_true',
+                             help='Use old RocksDB storage backend (deprecated)')
+        storage.add_argument('--memory-storage', action='store_true', help='Do not use any storage')
+        storage.add_argument('--json-storage', action='store_true', help='Use legacy JSON storage (not recommended)')
+        parser.add_argument('--rocksdb-cache', type=int, help='RocksDB block-table cache size (bytes)', default=None)
         parser.add_argument('--wallet', help='Set wallet type. Options are hd (Hierarchical Deterministic) or keypair',
                             default=None)
         parser.add_argument('--wallet-enable-api', action='store_true',
@@ -69,10 +75,16 @@ class RunNode:
                             'This is still a beta feature as it may cause issues when restarting the full node '
                             'after a crash.')
         parser.add_argument('--procname-prefix', help='Add a prefix to the process name', default='')
+        parser.add_argument('--allow-non-standard-script', action='store_true', help='Accept non-standard scripts on '
+                            '/push-tx API')
+        parser.add_argument('--max-output-script-size', type=int, default=None, help='Custom max accepted script size '
+                            'on /push-tx API')
+        parser.add_argument('--sentry-dsn', help='Sentry DSN')
         return parser
 
     def prepare(self, args: Namespace) -> None:
         import hathor
+        from hathor.cli.util import check_or_exit
         from hathor.conf import HathorSettings
         from hathor.daa import TestMode, _set_test_mode
         from hathor.manager import HathorManager
@@ -84,6 +96,7 @@ class RunNode:
             TransactionCacheStorage,
             TransactionCompactStorage,
             TransactionMemoryStorage,
+            TransactionOldRocksDBStorage,
             TransactionRocksDBStorage,
             TransactionStorage,
         )
@@ -160,24 +173,34 @@ class RunNode:
                 raise ValueError('Invalid type for wallet')
 
         tx_storage: TransactionStorage
-        if args.data:
-            if args.rocksdb_storage:
-                tx_storage = TransactionRocksDBStorage(path=args.data, with_index=(not args.cache))
-            else:
-                tx_storage = TransactionCompactStorage(path=args.data, with_index=(not args.cache))
-            self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
-            if args.cache:
-                tx_storage = TransactionCacheStorage(tx_storage, reactor)
-                if args.cache_size:
-                    tx_storage.capacity = args.cache_size
-                if args.cache_interval:
-                    tx_storage.interval = args.cache_interval
-                self.log.info('with cache', capacity=tx_storage.capacity, interval=tx_storage.interval)
-                tx_storage.start()
-        else:
+        if args.memory_storage:
+            check_or_exit(not args.data, '--data should not be used with --memory-storage')
             # if using MemoryStorage, no need to have cache
             tx_storage = TransactionMemoryStorage()
             self.log.info('with storage', storage_class=type(tx_storage).__name__)
+        elif args.json_storage:
+            check_or_exit(args.data, '--data is expected')
+            tx_storage = TransactionCompactStorage(path=args.data, with_index=(not args.cache))
+        elif args.old_rocksdb_storage:
+            check_or_exit(args.data, '--data is expected')
+            self.log.warn('the old rocksdb storage is deprecated and support will be removed')
+            tx_storage = TransactionOldRocksDBStorage(path=args.data)
+        else:
+            check_or_exit(args.data, '--data is expected')
+            if args.rocksdb_storage:
+                self.log.warn('--rocksdb-storage is now implied, no need to specify it')
+            cache_capacity = args.rocksdb_cache
+            tx_storage = TransactionRocksDBStorage(path=args.data, with_index=(not args.cache),
+                                                   cache_capacity=cache_capacity)
+        self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
+        if args.cache:
+            check_or_exit(not args.memory_storage, '--cache should not be used with --memory-storage')
+            tx_storage = TransactionCacheStorage(tx_storage, reactor)
+            if args.cache_size:
+                tx_storage.capacity = args.cache_size
+            if args.cache_interval:
+                tx_storage.interval = args.cache_interval
+            self.log.info('with cache', capacity=tx_storage.capacity, interval=tx_storage.interval)
         self.tx_storage = tx_storage
 
         if args.wallet:
@@ -204,7 +227,7 @@ class RunNode:
         network = settings.NETWORK_NAME
         self.manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname,
                                      tx_storage=self.tx_storage, wallet=self.wallet, wallet_index=args.wallet_index,
-                                     stratum_port=args.stratum, ssl=True)
+                                     stratum_port=args.stratum, ssl=True, checkpoints=settings.CHECKPOINTS)
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
 
@@ -232,10 +255,32 @@ class RunNode:
         for description in args.listen:
             self.manager.add_listen_address(description)
 
-        self.start_manager()
+        self.start_manager(args)
         self.register_resources(args)
 
-    def start_manager(self) -> None:
+    def start_sentry_if_possible(self, args: Namespace) -> None:
+        """Start Sentry integration if possible."""
+        if not args.sentry_dsn:
+            return
+        self.log.info('Starting Sentry', dsn=args.sentry_dsn)
+        try:
+            import sentry_sdk
+            from structlog_sentry import SentryProcessor  # noqa: F401
+        except ModuleNotFoundError:
+            self.log.error('Please use `poetry install -E sentry` for enabling Sentry.')
+            sys.exit(-3)
+
+        import hathor
+        from hathor.conf import HathorSettings
+        settings = HathorSettings()
+        sentry_sdk.init(
+            dsn=args.sentry_dsn,
+            release=hathor.__version__,
+            environment=settings.NETWORK_NAME,
+        )
+
+    def start_manager(self, args: Namespace) -> None:
+        self.start_sentry_if_possible(args)
         self.manager.start()
 
     def register_resources(self, args: Namespace) -> None:
@@ -246,6 +291,7 @@ class RunNode:
         from hathor.profiler.resources import CPUProfilerResource, ProfilerResource
         from hathor.prometheus import PrometheusMetricsExporter
         from hathor.transaction.resources import (
+            BlockAtHeightResource,
             CreateTxResource,
             DashboardTransactionResource,
             DecodeTxResource,
@@ -254,8 +300,6 @@ class RunNode:
             GraphvizNeighboursResource,
             PushTxResource,
             SubmitBlockResource,
-            TipsHistogramResource,
-            TipsResource,
             TransactionAccWeightResource,
             TransactionResource,
             TxParentsResource,
@@ -326,11 +370,12 @@ class RunNode:
                 (b'create_tx', CreateTxResource(self.manager), root),
                 (b'decode_tx', DecodeTxResource(self.manager), root),
                 (b'validate_address', ValidateAddressResource(self.manager), root),
-                (b'push_tx', PushTxResource(self.manager), root),
+                (b'push_tx',
+                    PushTxResource(self.manager, args.max_output_script_size, args.allow_non_standard_script),
+                    root),
                 (b'graphviz', graphviz, root),
-                (b'tips-histogram', TipsHistogramResource(self.manager), root),
-                (b'tips', TipsResource(self.manager), root),
                 (b'transaction', TransactionResource(self.manager), root),
+                (b'block_at_height', BlockAtHeightResource(self.manager), root),
                 (b'transaction_acc_weight', TransactionAccWeightResource(self.manager), root),
                 (b'dashboard_tx', DashboardTransactionResource(self.manager), root),
                 (b'profiler', ProfilerResource(self.manager), root),

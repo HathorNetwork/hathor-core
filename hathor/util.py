@@ -262,3 +262,15 @@ class LogDuration(float):
         else:
             return '<1ms'
     __repr__ = __str__
+
+
+_T = TypeVar("_T")
+
+
+# borrowed from: https://github.com/facebook/pyre-check/blob/master/pyre_extensions/__init__.py
+def not_none(optional: Optional[_T], message: str = 'Unexpected `None`') -> _T:
+    """Convert an optional to its value. Raises an `AssertionError` if the
+    value is `None`"""
+    if optional is None:
+        raise AssertionError(message)
+    return optional

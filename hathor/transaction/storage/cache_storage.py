@@ -13,10 +13,9 @@
 # limitations under the License.
 
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Any, Generator, Iterator, Optional, Set
+from typing import TYPE_CHECKING, Any, Optional, Set
 
 from twisted.internet import threads
-from twisted.internet.defer import Deferred, inlineCallbacks, succeed
 
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
@@ -74,7 +73,8 @@ class TransactionCacheStorage(BaseTransactionStorage):
         else:
             return x
 
-    def start(self) -> None:
+    def pre_init(self) -> None:
+        self.store.pre_init()
         self.reactor.callLater(self.interval, self._start_flush_thread)
 
     def _enable_weakref(self) -> None:
@@ -119,12 +119,13 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self.dirty_txs.discard(tx.hash)
         self._remove_from_weakref(tx)
 
-    def save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
+    def save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False,
+                         add_to_indexes: bool = False) -> None:
         self._save_transaction(tx)
         self._save_to_weakref(tx)
 
         # call super which adds to index if needed
-        super().save_transaction(tx, only_metadata=only_metadata)
+        super().save_transaction(tx, only_metadata=only_metadata, add_to_indexes=add_to_indexes)
 
     def get_all_genesis(self) -> Set[BaseTransaction]:
         return self.store.get_all_genesis()
@@ -190,56 +191,6 @@ class TransactionCacheStorage(BaseTransactionStorage):
     def get_count_tx_blocks(self) -> int:
         self._flush_to_storage(self.dirty_txs.copy())
         return self.store.get_count_tx_blocks()
-
-    @inlineCallbacks
-    def save_transaction_deferred(self, tx: BaseTransaction, *, only_metadata: bool = False) -> Iterator[Deferred]:
-        # TODO: yield self._save_transaction_deferred
-        self._save_transaction(tx)
-
-        # call super which adds to index if needed
-        yield super().save_transaction_deferred(tx)
-
-    @inlineCallbacks
-    def remove_transaction_deferred(self, tx: BaseTransaction) -> Iterator[Deferred]:
-        yield super().remove_transaction_deferred(tx)
-
-    def transaction_exists_deferred(self, hash_bytes: bytes) -> Deferred:
-        if hash_bytes in self.cache:
-            return succeed(True)
-        return self.store.transaction_exists_deferred(hash_bytes)
-
-    @inlineCallbacks
-    def get_transaction_deferred(self, hash_bytes: bytes) -> Generator[Deferred, Any, BaseTransaction]:
-        if hash_bytes in self.cache:
-            tx = self._clone(self.cache[hash_bytes])
-            self.cache.move_to_end(hash_bytes, last=True)
-            self.stats['hit'] += 1
-            return tx
-        else:
-            tx = yield self.store.get_transaction_deferred(hash_bytes)
-            # TODO: yield self._update_cache_deferred(tx)
-            self._update_cache(tx)
-            self.stats['miss'] += 1
-            return tx
-
-    @inlineCallbacks
-    def get_all_transactions_deferred(self):
-        # TODO: yield self._flush_to_storage_deferred(self.dirty_txs.copy())
-        self._flush_to_storage(self.dirty_txs.copy())
-        all_transactions = yield self.store.get_all_transactions_deferred()
-
-        def _mygenerator():
-            for tx in all_transactions:
-                tx.storage = self
-                yield tx
-        return _mygenerator()
-
-    @inlineCallbacks
-    def get_count_tx_blocks_deferred(self):
-        # TODO: yield self._flush_to_storage_deferred(self.dirty_txs.copy())
-        self._flush_to_storage(self.dirty_txs.copy())
-        res = yield self.store.get_count_tx_blocks_deferred()
-        return res
 
     def add_value(self, key: str, value: str) -> None:
         self.store.add_value(key, value)

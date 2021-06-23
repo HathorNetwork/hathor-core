@@ -23,14 +23,14 @@ from hathor.transaction.storage.exceptions import (
     TransactionDoesNotExist,
     TransactionMetadataDoesNotExist,
 )
-from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorageAsyncFromSync
+from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.transaction_metadata import TransactionMetadata
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
 
 
-class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFromSync):
+class TransactionBinaryStorage(BaseTransactionStorage):
     def __init__(self, path='./', with_index=True):
         self.tx_path = os.path.join(path, 'tx')
         os.makedirs(self.tx_path, exist_ok=True)
@@ -59,8 +59,8 @@ class TransactionBinaryStorage(BaseTransactionStorage, TransactionStorageAsyncFr
         except FileNotFoundError:
             pass
 
-    def save_transaction(self, tx, *, only_metadata=False):
-        super().save_transaction(tx, only_metadata=only_metadata)
+    def save_transaction(self, tx, *, only_metadata=False, add_to_indexes=False):
+        super().save_transaction(tx, only_metadata=only_metadata, add_to_indexes=add_to_indexes)
         self._save_transaction(tx, only_metadata=only_metadata)
         self._save_to_weakref(tx)
 

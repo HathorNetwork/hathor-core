@@ -34,7 +34,7 @@ tests-doctests:
 
 .PHONY: tests-lib
 tests-lib:
-	pytest --durations=10 $(pytest_flags) --doctest-modules hathor --cov-fail-under=83 $(tests_lib)
+	pytest --durations=10 $(pytest_flags) --doctest-modules hathor $(tests_lib)
 
 .PHONY: tests-genesis
 tests-genesis:
@@ -46,7 +46,7 @@ tests: tests-cli tests-lib tests-genesis
 
 .PHONY: tests-full
 tests-full:
-	pytest $(pytest_flags) --durations=10 --cov-fail-under=90 --cov-config=.coveragerc_full ./tests
+	pytest $(pytest_flags) --durations=10 --cov-config=.coveragerc_full ./tests
 
 # checking:
 
@@ -62,8 +62,12 @@ flake8:
 isort-check:
 	isort --ac --check-only $(py_sources)
 
+.PHONY: check-version
+check-version:
+	bash ./extras/check_version.sh
+
 .PHONY: check
-check: flake8 isort-check mypy
+check: flake8 isort-check mypy check-version
 
 # formatting:
 
@@ -82,7 +86,9 @@ isort:
 
 proto_dir = ./hathor/protos
 proto_srcs = $(wildcard $(proto_dir)/*.proto)
-proto_outputs = $(patsubst %.proto,%_pb2.py,$(proto_srcs)) $(patsubst %.proto,%_pb2_grpc.py,$(proto_srcs)) $(patsubst %.proto,%_pb2.pyi,$(proto_srcs))
+proto_srcs_old = $(proto_dir)/transaction_storage.proto
+proto_outputs = $(patsubst %.proto,%_pb2.py,$(proto_srcs)) $(patsubst %.proto,%_pb2.pyi,$(proto_srcs))
+proto_outputs_old = $(patsubst %.proto,%_pb2_grpc.py,$(proto_srcs) $(proto_srcs_old))
 GRPC_TOOLS_VERSION = "$(shell python -m grpc_tools.protoc --version 2>/dev/null || true)"
 #ifdef GRPC_TOOLS_VERSION
 ifneq ($(GRPC_TOOLS_VERSION),"")
@@ -94,8 +100,6 @@ endif
 # all proto_srcs are added as deps so when a change on any of them triggers all to be rebuilt
 %_pb2.pyi %_pb2.py: %.proto $(proto_srcs)
 	$(protoc) -I. --python_out=. --mypy_out=. $<
-%_pb2_grpc.py: %.proto $(proto_srcs)
-	$(protoc) -I. --grpc_python_out=. $< || true
 
 .PHONY: protos
 protos: $(proto_outputs)
@@ -104,7 +108,7 @@ protos: $(proto_outputs)
 
 .PHONY: clean-protos
 clean-protos:
-	rm -f $(proto_outputs)
+	rm -f $(proto_outputs) $(proto_outputs_old)
 
 .PHONY: clean-pyc
 clean-pyc:

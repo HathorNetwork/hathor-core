@@ -184,6 +184,7 @@ class BlockConsensusAlgorithm:
             meta = block.get_metadata()
             if not meta.voided_by:
                 storage._best_block_tips = [block.hash]
+                storage.add_new_to_block_height_index(meta.height, block.hash)
             # The following assert must be true, but it is commented out for performance reasons.
             #     assert len(storage.get_best_block_tips(skip_cache=True)) == 1
         else:
@@ -242,8 +243,17 @@ class BlockConsensusAlgorithm:
                     meta = block.get_metadata()
                     if not meta.voided_by:
                         storage._best_block_tips = [block.hash]
+                        self.log.debug('index new winner block', height=meta.height, block=block.hash_hex)
+                        # We update the height cache index with the new winner chain
+                        storage.update_block_height_cache_new_chain(meta.height, block)
                 else:
                     storage._best_block_tips = [blk.hash for blk in heads]
+                    # XXX Is it safe to select one of the heads?
+                    best_block = heads[0]
+                    assert best_block.hash is not None
+                    best_meta = best_block.get_metadata()
+                    self.log.debug('index previous best block', height=best_meta.height, block=best_block.hash_hex)
+                    storage.add_new_to_block_height_index(best_meta.height, best_block.hash)
 
         # Uncomment the following lines to check that the cache update is working properly.
         # You shouldn't run this test in production because it dampens performance.
@@ -286,7 +296,7 @@ class BlockConsensusAlgorithm:
             else:
                 meta.voided_by = voided_by.copy()
             block.storage.save_transaction(block, only_metadata=True)
-            block.storage._del_from_cache(block, relax_assert=True)  # XXX: accessing private method
+            block.storage.del_from_indexes(block, relax_assert=True)
             return True
         return False
 
@@ -735,7 +745,7 @@ class TransactionConsensusAlgorithm:
         if voided_by:
             meta.voided_by = voided_by.copy()
             tx.storage.save_transaction(tx, only_metadata=True)
-            tx.storage._del_from_cache(tx)  # XXX: accessing private method
+            tx.storage.del_from_indexes(tx)
 
         # Check conflicts of the transactions voiding us.
         for h in voided_by:
@@ -853,7 +863,7 @@ class TransactionConsensusAlgorithm:
             tx2.storage.save_transaction(tx2, only_metadata=True)
             if not meta.voided_by:
                 meta.voided_by = None
-                tx.storage._add_to_cache(tx2)  # XXX: accessing private method
+                tx.storage.add_to_indexes(tx2)
 
         from hathor.transaction import Transaction
         for tx2 in check_list:
@@ -912,7 +922,7 @@ class TransactionConsensusAlgorithm:
                 # All voided transactions with conflicts must have their accumulated weight calculated.
                 tx2.update_accumulated_weight(save_file=False)
             tx2.storage.save_transaction(tx2, only_metadata=True)
-            tx2.storage._del_from_cache(tx2, relax_assert=True)  # XXX: accessing private method
+            tx2.storage.del_from_indexes(tx2, relax_assert=True)
 
         for tx2 in check_list:
             self.check_conflicts(tx2)

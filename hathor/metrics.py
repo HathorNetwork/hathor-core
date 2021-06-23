@@ -216,7 +216,8 @@ class Metrics:
             self.peers += 1
         elif key == HathorEvents.NETWORK_PEER_DISCONNECTED:
             # Check if peer was ready before disconnecting
-            if data['protocol'].state.state_name == HathorProtocol.PeerState.READY.name:
+            protocol_state = data['protocol'].state
+            if protocol_state is not None and protocol_state.state_name == HathorProtocol.PeerState.READY.name:
                 self.peers -= 1
         else:
             raise ValueError('Invalid key')

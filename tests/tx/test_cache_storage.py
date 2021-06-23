@@ -1,13 +1,8 @@
-import collections
-
-from twisted.internet.defer import inlineCallbacks
-
 from hathor.daa import TestMode, _set_test_mode
-from hathor.transaction import Block, Transaction, TransactionMetadata, TxOutput
-from hathor.transaction.scripts import P2PKH
+from hathor.transaction import Transaction, TransactionMetadata
 from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
 from tests import unittest
-from tests.utils import BURN_ADDRESS, MIN_TIMESTAMP, add_new_blocks, add_new_transactions
+from tests.utils import add_new_blocks, add_new_transactions
 
 CACHE_SIZE = 5
 
@@ -19,14 +14,14 @@ class BasicTransaction(unittest.TestCase):
         store = TransactionMemoryStorage()
         self.cache_storage = TransactionCacheStorage(store, self.clock, capacity=5)
         self.cache_storage._manually_initialize()
-        self.cache_storage.start()
+        self.cache_storage.pre_init()
 
         self.genesis = self.cache_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
 
         # Save genesis metadata
-        self.cache_storage.save_transaction_deferred(self.genesis_txs[0], only_metadata=True)
+        self.cache_storage.save_transaction(self.genesis_txs[0], only_metadata=True)
 
         self.manager = self.create_peer('testnet', tx_storage=self.cache_storage, unlock_wallet=True)
 
@@ -142,58 +137,6 @@ class BasicTransaction(unittest.TestCase):
         # Remove element from cache to test a part of the code
         del self.cache_storage.cache[next(iter(self.cache_storage.dirty_txs))]
         self.cache_storage._flush_to_storage(self.cache_storage.dirty_txs.copy())
-
-    def test_deferred_methods(self):
-        for _ in self._test_deferred_methods():
-            pass
-
-    @inlineCallbacks
-    def _test_deferred_methods(self):
-        # Testing without cloning
-        self.cache_storage._clone_if_needed = False
-
-        block_parents = [block.hash for block in self.genesis_blocks] + [tx.hash for tx in self.genesis_txs]
-        output = TxOutput(200, P2PKH.create_output_script(BURN_ADDRESS))
-        obj = Block(timestamp=MIN_TIMESTAMP, weight=12, outputs=[output], parents=block_parents, nonce=100781,
-                    storage=self.cache_storage)
-        obj.resolve()
-        obj.verify()
-
-        self.cache_storage.save_transaction_deferred(obj)
-
-        loaded_obj1 = yield self.cache_storage.get_transaction_deferred(obj.hash)
-
-        metadata_obj1_def = yield self.cache_storage.get_metadata_deferred(obj.hash)
-        metadata_obj1 = obj.get_metadata()
-        self.assertEqual(metadata_obj1_def, metadata_obj1)
-        metadata_error = yield self.cache_storage.get_metadata_deferred(
-            bytes.fromhex('0001569c85fffa5782c3979e7d68dce1d8d84772505a53ddd76d636585f3977e'))
-        self.assertIsNone(metadata_error)
-
-        self.cache_storage._flush_to_storage(self.cache_storage.dirty_txs.copy())
-        self.cache_storage.cache = collections.OrderedDict()
-        loaded_obj2 = yield self.cache_storage.get_transaction_deferred(obj.hash)
-
-        self.assertEqual(loaded_obj1, loaded_obj2)
-
-        self.assertTrue((yield self.cache_storage.transaction_exists_deferred(obj.hash)))
-        self.assertFalse((yield self.cache_storage.transaction_exists_deferred(
-            '0001569c85fffa5782c3979e7d68dce1d8d84772505a53ddd76d636585f3977e')))
-
-        self.assertFalse(
-            self.cache_storage.transaction_exists('0001569c85fffa5782c3979e7d68dce1d8d84772505a53ddd76d636585f3977e'))
-
-        self.assertEqual(obj, loaded_obj1)
-        self.assertEqual(obj.is_block, loaded_obj1.is_block)
-
-        count = yield self.cache_storage.get_count_tx_blocks_deferred()
-        self.assertEqual(count, 4)
-
-        all_transactions = yield self.cache_storage.get_all_transactions_deferred()
-        total = 0
-        for tx in all_transactions:
-            total += 1
-        self.assertEqual(total, 4)
 
     def test_topological_sort_dfs(self):
         _set_test_mode(TestMode.TEST_ALL_WEIGHT)

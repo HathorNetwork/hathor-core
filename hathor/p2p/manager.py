@@ -35,9 +35,9 @@ from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
 
 if TYPE_CHECKING:
-    from hathor.manager import HathorManager  # noqa: F401
-    from hathor.p2p.factory import HathorClientFactory, HathorServerFactory  # noqa: F401
-    from hathor.p2p.node_sync import NodeSyncTimestamp  # noqa: F401
+    from hathor.manager import HathorManager
+    from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
+    from hathor.p2p.node_sync import NodeSyncTimestamp
 
 logger = get_logger()
 settings = HathorSettings()
@@ -274,8 +274,12 @@ class ConnectionsManager:
     def _update_whitelist_err(self, *args: Any, **kwargs: Any) -> None:
         self.log.error('update whitelist failed', args=args, kwargs=kwargs)
 
-    def _update_whitelist_cb(self, body: bytes) -> None:
-        self.log.info('update whitelist got response')
+    def _update_whitelist_cb(self, body: Optional[bytes]) -> None:
+        if body is None:
+            self.log.warn('update whitelist got no response')
+            return
+        else:
+            self.log.info('update whitelist got response')
         try:
             text = body.decode()
             new_whitelist = parse_whitelist(text)

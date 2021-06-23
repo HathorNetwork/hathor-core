@@ -80,6 +80,18 @@ class BasicTransaction(unittest.TestCase):
         with self.assertRaises(InputOutputMismatch):
             tx.verify_sum()
 
+    def test_validation(self):
+        # add 100 blocks and check that walking through get_next_block_best_chain yields the same blocks
+        blocks = add_new_blocks(self.manager, 100, advance_clock=1)
+        iblocks = iter(blocks)
+        block_from_chain = self.last_block
+        for _ in range(100):
+            block_from_list = next(iblocks)
+            block_from_chain = block_from_chain.get_next_block_best_chain()
+            self.assertEqual(block_from_chain, block_from_list)
+            self.assertTrue(block_from_chain.has_basic_block_parent())
+        self.assertEqual(block_from_chain.get_next_block_best_chain(), None)
+
     def test_script(self):
         genesis_block = self.genesis_blocks[0]
 

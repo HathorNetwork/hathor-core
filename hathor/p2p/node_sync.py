@@ -686,6 +686,10 @@ class NodeSyncTimestamp:
             assert tx.timestamp is not None
             self.requested_data_arrived(tx.timestamp)
             deferred.callback(tx)
+        elif self.manager.tx_storage.transaction_exists(tx.hash):
+            # transaction already added to the storage, ignore it
+            # XXX: maybe we could add a hash blacklist and punish peers propagating known bad txs
+            return
         else:
             # If we have not requested the data, it is a new transaction being propagated
             # in the network, thus, we propagate it as well.
@@ -719,7 +723,7 @@ class NodeSyncTimestamp:
         key = 'get-data-{}'.format(hash_bytes.hex())
         return key
 
-    def remove_deferred(self, reason: 'Failure',  hash_bytes: bytes) -> None:
+    def remove_deferred(self, reason: 'Failure', hash_bytes: bytes) -> None:
         """ Remove the deferred from the deferred_by_key
             Used when a requested tx deferred fails for some reason (not found, or timeout)
         """
