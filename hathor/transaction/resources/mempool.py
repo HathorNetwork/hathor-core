@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
+from itertools import islice
 from typing import TYPE_CHECKING
+import json
 
 from twisted.web import resource
 
@@ -53,7 +54,8 @@ class MempoolResource(resource.Resource):
             # order by timestamp
             sorted(list(self.manager.tx_storage.iter_mempool()), key=lambda tx: tx.timestamp),
         )
-        data = {'success': True, 'transactions': list(tx_ids)}
+        # Only return up to 100 txs per call
+        data = {'success': True, 'transactions': list(islice(tx_ids, 100))}
         return json.dumps(data, indent=4).encode('utf-8')
 
 
@@ -70,8 +72,8 @@ MempoolResource.openapi = {
             ],
             'per-ip': [
                 {
-                    'rate': '3r/s',
-                    'burst': 10,
+                    'rate': '1r/s',
+                    'burst': 5,
                     'delay': 3
                 }
             ]
@@ -85,7 +87,21 @@ MempoolResource.openapi = {
                 '200': {
                     'description': 'Success',
                     'content': {
-                        'application/json': {}
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success',
+                                    'value': {
+                                        'success': True,
+                                        'transactions': [
+                                            '339f47da87435842b0b1b528ecd9eac2495ce983b3e9c923a37e1befbe12c792',
+                                            '16ba3dbe424c443e571b00840ca54b9ff4cff467e10b6a15536e718e2008f952',
+                                            '33e14cb555a96967841dcbe0f95e9eab5810481d01de8f4f73afb8cce365e869',
+                                        ],
+                                    },
+                                },
+                            },
+                        },
                     }
                 }
             }

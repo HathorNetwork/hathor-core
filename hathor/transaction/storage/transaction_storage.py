@@ -313,9 +313,10 @@ class TransactionStorage(ABC):
         bfs = BFSWalk(self, is_dag_verifications=True, is_left_to_right=False)
         for tx in bfs.run(map(self.get_transaction, self._tx_tips_index), skip_root=False):
             assert isinstance(tx, Transaction)
-            yield tx
             if tx.get_metadata().first_block is not None:
                 bfs.skip_neighbors(tx)
+            else:
+                yield tx
 
     def update_tx_tips(self, tx: BaseTransaction) -> None:
         """
