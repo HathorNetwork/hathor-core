@@ -2,7 +2,7 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.transaction.resources import MempoolResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_new_blocks, add_new_transactions, add_blocks_unlock_reward
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
 
 
 class MempoolTest(_BaseResourceTest._ResourceTest):
