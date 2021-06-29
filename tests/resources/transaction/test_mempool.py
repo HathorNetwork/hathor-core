@@ -10,7 +10,6 @@ class MempoolTest(_BaseResourceTest._ResourceTest):
         super().setUp()
         self.web = StubSite(MempoolResource(self.manager))
         self.manager.wallet.unlock(b'MYPASS')
-        # add block to confirm genesis txs
         add_new_blocks(self.manager, 4, advance_clock=1)
         add_blocks_unlock_reward(self.manager)
 
@@ -18,7 +17,6 @@ class MempoolTest(_BaseResourceTest._ResourceTest):
     def test_get(self):
 
         # Success empty mempool
-        # genesis_block = next(x for x in self.manager.tx_storage.get_all_genesis() if x.is_block)
         response1 = yield self.web.get("mempool")
         data1 = response1.json_value()
         self.assertTrue(data1['success'])
