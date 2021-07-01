@@ -20,6 +20,9 @@ from twisted.web import resource
 
 from hathor.api_util import set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.conf import HathorSettings
+
+settings = HathorSettings()
 
 if TYPE_CHECKING:
     from twisted.web.http import Request
@@ -54,8 +57,8 @@ class MempoolResource(resource.Resource):
             # order by timestamp
             sorted(list(self.manager.tx_storage.iter_mempool()), key=lambda tx: tx.timestamp),
         )
-        # Only return up to 100 txs per call
-        data = {'success': True, 'transactions': list(islice(tx_ids, 100))}
+        # Only return up to settings.MEMPOOL_API_TX_LIMIT txs per call (default: 100)
+        data = {'success': True, 'transactions': list(islice(tx_ids, settings.MEMPOOL_API_TX_LIMIT))}
         return json.dumps(data, indent=4).encode('utf-8')
 
 

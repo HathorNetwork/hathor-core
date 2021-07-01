@@ -1,8 +1,11 @@
 from twisted.internet.defer import inlineCallbacks
 
+from hathor.conf import HathorSettings
 from hathor.transaction.resources import MempoolResource
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
+
+settings = HathorSettings()
 
 
 class MempoolTest(_BaseResourceTest._ResourceTest):
@@ -23,25 +26,36 @@ class MempoolTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data1['transactions'], [])
 
         # Success mempool with single TX
-        tx = add_new_transactions(self.manager, 1, advance_clock=1)
+        txs2 = add_new_transactions(self.manager, 1, advance_clock=1)
         response2 = yield self.web.get("mempool")
         data2 = response2.json_value()
         self.assertTrue(data2['success'])
-        self.assertEqual(data2['transactions'], [tx[0].hash.hex()])
+        self.assertEqual(data2['transactions'], list(map(lambda t: t.hash.hex(), txs2)))
 
         # Success mempool with multiple TX
-        txs = add_new_transactions(self.manager, 2, advance_clock=1)
+        txs3 = add_new_transactions(self.manager, 2, advance_clock=1)
         response3 = yield self.web.get("mempool")
         data3 = response3.json_value()
         self.assertTrue(data3['success'])
-        self.assertEqual(data3['transactions'], list(map(lambda t: t.hash.hex(), tx+txs)))
+        self.assertEqual(data3['transactions'], list(map(lambda t: t.hash.hex(), txs2+txs3)))
 
         # add block to confirm previous txs
         add_new_blocks(self.manager, 1, advance_clock=1)
 
         # and next call will not have previous mempool
-        txs2 = add_new_transactions(self.manager, 2, advance_clock=1)
+        txs4 = add_new_transactions(self.manager, 2, advance_clock=1)
         response4 = yield self.web.get("mempool")
         data4 = response4.json_value()
         self.assertTrue(data4['success'])
-        self.assertEqual(data4['transactions'], list(map(lambda t: t.hash.hex(), txs2)))
+        self.assertEqual(data4['transactions'], list(map(lambda t: t.hash.hex(), txs4)))
+
+        # add block to confirm previous txs
+        add_new_blocks(self.manager, 1, advance_clock=1)
+
+        # Add more than api limit and check truncated return
+        add_new_transactions(self.manager, settings.MEMPOOL_API_TX_LIMIT + 1, advance_clock=1)
+        response5 = yield self.web.get("mempool")
+        data5 = response5.json_value()
+        self.assertTrue(data5['success'])
+        # default limit is 100
+        self.assertEqual(len(data5['transactions']), settings.MEMPOOL_API_TX_LIMIT)
