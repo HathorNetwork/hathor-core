@@ -1,5 +1,8 @@
 import shutil
+import sys
 import tempfile
+
+import pytest
 
 from hathor.manager import HathorManager
 from hathor.transaction.storage import TransactionMemoryStorage
@@ -9,6 +12,8 @@ from tests.utils import run_server
 
 
 class ConnectionsTest(unittest.TestCase):
+
+    @pytest.mark.skipif(sys.platform == 'win32', reason='run_server is very finicky on Windows')
     def test_connections(self):
         process = run_server()
         process2 = run_server(listen=8006, status=8086, bootstrap='tcp://127.0.0.1:8005')
