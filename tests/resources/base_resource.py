@@ -52,6 +52,8 @@ class RequestBody(object):
 
 
 class TestDummyRequest(DummyRequest):
+    __test__ = False
+
     def __init__(self, method, url, args=None, headers=None):
         slash = b'/' if isinstance(url, bytes) else '/'
         path = url.split(slash)
