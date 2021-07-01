@@ -13,8 +13,11 @@
 # limitations under the License.
 
 import os
-from typing import TYPE_CHECKING, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Iterator, List, Optional
 
+from structlog import get_logger
+
+from hathor.indexes import IndexesManager, RocksDBIndexesManager
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.util import json_dumpb, json_loadb
@@ -22,6 +25,7 @@ from hathor.util import json_dumpb, json_loadb
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction, TransactionMetadata
 
+logger = get_logger()
 
 _DB_NAME = 'data_v2.db'
 _CF_NAME_TX = b'tx'
@@ -38,12 +42,13 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
     def __init__(self, path: str = './', with_index: bool = True, cache_capacity: Optional[int] = None):
         import rocksdb
 
+        self.log = logger.new()
         self._path = path
 
         tx_dir = os.path.join(path, _DB_NAME)
         lru_cache = cache_capacity and rocksdb.LRUCache(cache_capacity)
         table_factory = rocksdb.BlockBasedTableFactory(block_cache=lru_cache)
-        opts = dict(
+        options = rocksdb.Options(
             table_factory=table_factory,
             write_buffer_size=83886080,  # 80MB (default is 4MB)
             compression=rocksdb.CompressionType.no_compression,
@@ -51,28 +56,34 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             allow_mmap_reads=True,  # default is already True
         )
 
+        cf_names: List[bytes]
         try:
-            self.log.debug('create new db')
-            new_db = rocksdb.DB(tx_dir, rocksdb.Options(error_if_exists=True, create_if_missing=True, **opts))
-            new_db.create_column_family(_CF_NAME_TX, rocksdb.ColumnFamilyOptions())
-            new_db.create_column_family(_CF_NAME_META, rocksdb.ColumnFamilyOptions())
-            new_db.create_column_family(_CF_NAME_ATTR, rocksdb.ColumnFamilyOptions())
-            del new_db  # XXX: this forces deallocation allowing us to reopen the db right after
-        except rocksdb.errors.InvalidArgument:
-            self.log.debug('db already exists')
+            # get the list of existing column families
+            cf_names = rocksdb.list_column_families(tx_dir, options)
+        except rocksdb.errors.RocksIOError:
+            # this means the db doesn't exist, a repair will create one
+            rocksdb.repair_db(tx_dir, options)
+            cf_names = []
 
-        options = rocksdb.Options(**opts)
-        self._db = rocksdb.DB(tx_dir, options, column_families={
-            _CF_NAME_TX: rocksdb.ColumnFamilyOptions(),
-            _CF_NAME_META: rocksdb.ColumnFamilyOptions(),
-            _CF_NAME_ATTR: rocksdb.ColumnFamilyOptions(),
-        })
+        # we need to open all column families
+        column_families = {cf: rocksdb.ColumnFamilyOptions() for cf in cf_names}
 
-        self._cf_tx = self._db.get_column_family(_CF_NAME_TX)
-        self._cf_meta = self._db.get_column_family(_CF_NAME_META)
-        self._cf_attr = self._db.get_column_family(_CF_NAME_ATTR)
+        # finally, open the database
+        self._db = rocksdb.DB(tx_dir, options, column_families=column_families)
+        self.log.debug('open db', cf_list=[cf.name.decode('ascii') for cf in self._db.column_families])
+
+        self._cf_tx = self._get_or_create_column_family(_CF_NAME_TX)
+        self._cf_meta = self._get_or_create_column_family(_CF_NAME_META)
+        self._cf_attr = self._get_or_create_column_family(_CF_NAME_ATTR)
 
         super().__init__(with_index=with_index)
+
+    def _get_or_create_column_family(self, cf_name: bytes) -> Any:  # TODO: typing
+        import rocksdb
+        cf = self._db.get_column_family(cf_name)
+        if cf is None:
+            cf = self._db.create_column_family(cf_name, rocksdb.ColumnFamilyOptions())
+        return cf
 
     def _load_from_bytes(self, tx_data: bytes, meta_data: bytes) -> 'BaseTransaction':
         from hathor.transaction.base_transaction import tx_or_block_from_bytes
@@ -82,6 +93,9 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         tx._metadata = TransactionMetadata.create_from_json(json_loadb(meta_data))
         tx.storage = self
         return tx
+
+    def _build_indexes_manager(self) -> IndexesManager:
+        return RocksDBIndexesManager(self._db)
 
     def _tx_to_bytes(self, tx: 'BaseTransaction') -> bytes:
         return bytes(tx)

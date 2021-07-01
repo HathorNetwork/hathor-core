@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Optional, Set
 
 from twisted.internet import threads
 
+from hathor.indexes import IndexesManager
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 
@@ -130,6 +131,9 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
     def get_all_genesis(self) -> Set[BaseTransaction]:
         return self.store.get_all_genesis()
+
+    def _build_indexes_manager(self) -> IndexesManager:
+        return self.store._build_indexes_manager()
 
     def _save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         """Saves the transaction without modifying TimestampIndex entries (in superclass)."""

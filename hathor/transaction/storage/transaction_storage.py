@@ -1015,13 +1015,16 @@ class BaseTransactionStorage(TransactionStorage):
     def _save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         raise NotImplementedError
 
+    def _build_indexes_manager(self) -> IndexesManager:
+        return MemoryIndexesManager()
+
     def _reset_cache(self) -> None:
         """Reset all caches. This function should not be called unless you know what you are doing."""
         assert self.with_index, 'Cannot reset cache because it has not been enabled.'
         self._cache_block_count = 0
         self._cache_tx_count = 0
 
-        self.indexes = MemoryIndexesManager()
+        self.indexes = self._build_indexes_manager()
 
         genesis = self.get_all_genesis()
         if genesis:

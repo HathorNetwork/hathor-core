@@ -17,13 +17,17 @@ from typing import TYPE_CHECKING, Optional
 
 from structlog import get_logger
 
-from hathor.indexes.addresses_index import AddressesIndex
+from hathor.indexes.address_index import AddressIndex
+from hathor.indexes.memory_address_index import MemoryAddressIndex
+from hathor.indexes.rocksdb_address_index import RocksDBAddressIndex
 from hathor.indexes.timestamp_index import TimestampIndex
 from hathor.indexes.tips_index import TipsIndex
 from hathor.indexes.tokens_index import TokensIndex
 from hathor.transaction import BaseTransaction
 
 if TYPE_CHECKING:  # pragma: no cover
+    import rocksdb
+
     from hathor.pubsub import PubSubManager
 
 logger = get_logger()
@@ -38,12 +42,12 @@ class IndexesManager(ABC):
     sorted_blocks: 'TimestampIndex'
     sorted_txs: 'TimestampIndex'
 
-    addresses: Optional['AddressesIndex']
+    addresses: Optional['AddressIndex']
     tokens: Optional['TokensIndex']
 
     @abstractmethod
-    def enable_addresses_index(self, pubsub: 'PubSubManager') -> None:
-        """Enable addresses index. It does nothing if it has already been enabled."""
+    def enable_address_index(self, pubsub: 'PubSubManager') -> None:
+        """Enable address index. It does nothing if it has already been enabled."""
         raise NotImplementedError
 
     @abstractmethod
@@ -84,13 +88,13 @@ class MemoryIndexesManager(IndexesManager):
         self.sorted_blocks = TimestampIndex()
         self.sorted_txs = TimestampIndex()
 
-        self.addresses: Optional[AddressesIndex] = None
-        self.tokens: Optional[TokensIndex] = None
+        self.addresses = None
+        self.tokens = None
 
-    def enable_addresses_index(self, pubsub: 'PubSubManager') -> None:
-        """Enable addresses index."""
+    def enable_address_index(self, pubsub: 'PubSubManager') -> None:
+        """Enable address index."""
         if self.addresses is None:
-            self.addresses = AddressesIndex(pubsub)
+            self.addresses = MemoryAddressIndex(pubsub)
 
     def enable_tokens_index(self) -> None:
         """Enable tokens index."""
@@ -147,3 +151,14 @@ class MemoryIndexesManager(IndexesManager):
 
         if self.tokens:
             self.tokens.del_tx(tx)
+
+
+class RocksDBIndexesManager(MemoryIndexesManager):
+    def __init__(self, db: 'rocksdb.DB') -> None:
+        self._db = db
+        super().__init__()
+
+    def enable_address_index(self, pubsub: 'PubSubManager') -> None:
+        """Enable address index."""
+        if self.addresses is None:
+            self.addresses = RocksDBAddressIndex(self._db, pubsub=pubsub)

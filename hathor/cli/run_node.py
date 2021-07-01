@@ -488,7 +488,7 @@ class RunNode:
             # Websocket resource
             assert self.manager.tx_storage.indexes is not None
             ws_factory = HathorAdminWebsocketFactory(metrics=self.manager.metrics,
-                                                     addresses_index=self.manager.tx_storage.indexes.addresses)
+                                                     address_index=self.manager.tx_storage.indexes.addresses)
             ws_factory.start()
             root.putChild(b'ws', WebSocketResource(ws_factory))
 
