@@ -604,7 +604,7 @@ class TransactionConsensusAlgorithm:
 
         spent_tx = tx.storage.get_transaction(txin.tx_id)
         spent_meta = spent_tx.get_metadata()
-        spent_by = spent_meta.spent_outputs[txin.index]  # Set[bytes(hash)]
+        spent_by = spent_meta.spent_outputs[txin.index]
         assert tx.hash not in spent_by
 
         # Update our meta.conflict_with.
@@ -616,7 +616,7 @@ class TransactionConsensusAlgorithm:
             else:
                 meta.voided_by.add(tx.hash)
             if meta.conflict_with:
-                meta.conflict_with.extend(spent_by)
+                meta.conflict_with.extend(set(spent_by) - set(meta.conflict_with))
             else:
                 meta.conflict_with = spent_by.copy()
         tx.storage.save_transaction(tx, only_metadata=True)
@@ -626,7 +626,9 @@ class TransactionConsensusAlgorithm:
             conflict_tx = tx.storage.get_transaction(h)
             tx_meta = conflict_tx.get_metadata()
             if tx_meta.conflict_with:
-                tx_meta.conflict_with.append(tx.hash)
+                if tx.hash not in tx_meta.conflict_with:
+                    # We could use a set instead of a list but it consumes ~2.15 times more of memory.
+                    tx_meta.conflict_with.append(tx.hash)
             else:
                 tx_meta.conflict_with = [tx.hash]
             tx.storage.save_transaction(conflict_tx, only_metadata=True)

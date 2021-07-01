@@ -260,7 +260,7 @@ class TransactionMetadata:
             data['spent_outputs'].append([idx, [h_bytes.hex() for h_bytes in hashes]])
         data['received_by'] = list(self.received_by)
         data['children'] = [x.hex() for x in self.children]
-        data['conflict_with'] = [x.hex() for x in self.conflict_with] if self.conflict_with else []
+        data['conflict_with'] = [x.hex() for x in set(self.conflict_with)] if self.conflict_with else []
         data['voided_by'] = [x.hex() for x in self.voided_by] if self.voided_by else []
         data['twins'] = [x.hex() for x in self.twins]
         data['accumulated_weight'] = self.accumulated_weight
@@ -285,8 +285,8 @@ class TransactionMetadata:
         meta.received_by = list(data['received_by'])
         meta.children = [bytes.fromhex(h) for h in data['children']]
 
-        if 'conflict_with' in data:
-            meta.conflict_with = [bytes.fromhex(h) for h in data['conflict_with']] if data['conflict_with'] else None
+        if 'conflict_with' in data and data['conflict_with']:
+            meta.conflict_with = [bytes.fromhex(h) for h in set(data['conflict_with'])]
         else:
             meta.conflict_with = None
 
