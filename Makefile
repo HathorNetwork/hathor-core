@@ -67,7 +67,7 @@ check-version:
 	bash ./extras/check_version.sh
 
 .PHONY: check
-check: flake8 isort-check mypy check-version
+check: check-version flake8 isort-check mypy
 
 # formatting:
 
