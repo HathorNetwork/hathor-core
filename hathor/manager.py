@@ -295,11 +295,11 @@ class HathorManager:
         for peer_discovery in self.peer_discoveries:
             peer_discovery.discover_and_connect(self.connections.connect_to)
 
-    def start_profiler(self) -> None:
+    def start_profiler(self, *, reset: bool = False) -> None:
         """
         Start profiler. It can be activated from a web resource, as well.
         """
-        if not self.profiler:
+        if reset or not self.profiler:
             import cProfile
             self.profiler = cProfile.Profile()
         self.profiler.enable()

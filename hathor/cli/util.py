@@ -30,6 +30,7 @@ def setup_logging(
             capture_stdout: bool = False,
             json_logging: bool = False,
             *,
+            sentry: bool = False,
             _test_logging: bool = False,
         ) -> None:
     import logging
@@ -219,11 +220,8 @@ def setup_logging(
         structlog.stdlib.add_log_level,
     ]
 
-    try:
+    if sentry:
         from structlog_sentry import SentryProcessor
-    except ModuleNotFoundError:
-        pass
-    else:
         processors.append(SentryProcessor(level=logging.ERROR))
 
     processors.extend([
