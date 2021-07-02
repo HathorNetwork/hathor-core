@@ -41,6 +41,8 @@ AVG_TIME_BETWEEN_BLOCKS = settings.AVG_TIME_BETWEEN_BLOCKS
 
 
 class TestMode(IntFlag):
+    __test__ = False
+
     DISABLED = 0
     TEST_TX_WEIGHT = 1
     TEST_BLOCK_WEIGHT = 2
