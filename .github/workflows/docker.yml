@@ -24,8 +24,6 @@ jobs:
         - 3.9
         include:
         - python-impl: pypy
-          python-version: 3.6
-        - python-impl: pypy
           python-version: 3.7
     steps:
     - name: Checkout
