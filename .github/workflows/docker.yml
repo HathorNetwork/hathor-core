@@ -146,9 +146,7 @@ jobs:
         # this key is setup such that every branch has its cache and new branches can reuse dev's cache, but not the other way around
         key: ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-${{ github.head_ref || github.ref }}-${{ github.sha }}
         restore-keys: |
-          ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-${{ github.head_ref || github.ref }}-
-          ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-refs/heads/dev-
-          ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-
+          ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-refs/heads/master-
     - name: Build and push
       uses: docker/build-push-action@v2
       id: docker_build
