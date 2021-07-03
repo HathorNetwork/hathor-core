@@ -25,7 +25,4 @@ if [[ x${PACKAGE_VERSION}x != x${OPENAPI_VERSION}x ]]; then
 	EXITCODE=-1
 fi
 
-if [[ ${EXITCODE} == 0 ]]; then
-	echo OK
-fi
 exit $EXITCODE
