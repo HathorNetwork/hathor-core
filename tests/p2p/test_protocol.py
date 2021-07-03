@@ -1,5 +1,7 @@
 import json
+import sys
 
+import pytest
 import twisted.names.client
 from twisted.internet.defer import inlineCallbacks
 from twisted.python.failure import Failure
@@ -155,6 +157,7 @@ class HathorProtocolTestCase(unittest.TestCase):
         self.assertFalse(self.conn.tr1.disconnecting)
         self.assertFalse(self.conn.tr2.disconnecting)
 
+    @pytest.mark.skipif(sys.platform == 'win32', reason='resolver._parseCall not defined on Windows')
     @inlineCallbacks
     def test_invalid_peer_id(self):
         self.conn.run_one_step()  # HELLO
