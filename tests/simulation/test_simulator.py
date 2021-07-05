@@ -1,10 +1,14 @@
 import random
+import sys
 from typing import Optional
+
+import pytest
 
 from hathor.simulator import FakeConnection, MinerSimulator, RandomTransactionGenerator, Simulator
 from tests import unittest
 
 
+@pytest.mark.skipif(sys.platform == 'win32', reason='set_seed fails on Windows')
 class HathorSimulatorTestCase(unittest.TestCase):
     seed_config: Optional[int] = None
 

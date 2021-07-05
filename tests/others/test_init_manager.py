@@ -4,7 +4,13 @@ from hathor.conf import HathorSettings
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_new_block, add_new_blocks, add_new_transactions
+from tests.utils import (
+    add_blocks_unlock_reward,
+    add_new_block,
+    add_new_blocks,
+    add_new_double_spending,
+    add_new_transactions,
+)
 
 settings = HathorSettings()
 
@@ -31,7 +37,8 @@ class ManagerInitializationTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.tx_storage = ModifiedTransactionMemoryStorage()
-        self.manager = self.create_peer('testnet', tx_storage=self.tx_storage)
+        self.network = 'testnet'
+        self.manager = self.create_peer(self.network, tx_storage=self.tx_storage)
 
         self.all_hashes = set()
         for tx in self.manager.tx_storage.get_all_transactions():
@@ -89,3 +96,34 @@ class ManagerInitializationTestCase(unittest.TestCase):
         # a new manager must be successfully initialized
         self.tx_storage._reset_cache()
         self.create_peer('testnet', tx_storage=self.tx_storage)
+
+    def test_init_not_voided_tips(self):
+        # add a bunch of blocks and transactions
+        for i in range(30):
+            add_new_block(self.manager, advance_clock=15)
+            add_new_transactions(self.manager, 5, advance_clock=15)
+
+        # add a bunch of conflicting transactions, these will all become voided
+        for i in range(50):
+            add_new_double_spending(self.manager)
+
+        # finish up with another bunch of blocks and transactions
+        for i in range(30):
+            add_new_block(self.manager, advance_clock=15)
+            add_new_transactions(self.manager, 5, advance_clock=15)
+
+        # not the point of this test, but just a sanity check
+        self.assertConsensusValid(self.manager)
+
+        # make sure we have the right number of voided transactions
+        self.assertEqual(50, sum(bool(tx.get_metadata().voided_by) for tx in self.tx_storage.get_all_transactions()))
+
+        # create a new manager (which will initialize in the self.create_peer call)
+        self.tx_storage._reset_cache()
+        self.manager.stop()
+        manager = self.create_peer(self.network, tx_storage=self.tx_storage, full_verification=False)
+
+        # make sure none of its tx tips are voided
+        all_tips = manager.generate_parent_txs(None).get_all_tips()
+        iter_tips_meta = map(manager.tx_storage.get_metadata, all_tips)
+        self.assertFalse(any(tx_meta.voided_by for tx_meta in iter_tips_meta))

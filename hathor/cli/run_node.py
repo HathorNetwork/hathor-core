@@ -298,6 +298,7 @@ class RunNode:
             GetBlockTemplateResource,
             GraphvizFullResource,
             GraphvizNeighboursResource,
+            MempoolResource,
             PushTxResource,
             SubmitBlockResource,
             TransactionAccWeightResource,
@@ -380,6 +381,7 @@ class RunNode:
                 (b'dashboard_tx', DashboardTransactionResource(self.manager), root),
                 (b'profiler', ProfilerResource(self.manager), root),
                 (b'top', CPUProfilerResource(self.manager, cpu), root),
+                (b'mempool', MempoolResource(self.manager), root),
                 # mining
                 (b'mining', MiningResource(self.manager), root),
                 (b'getmininginfo', MiningInfoResource(self.manager), root),

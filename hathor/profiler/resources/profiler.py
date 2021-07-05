@@ -60,7 +60,10 @@ class ProfilerResource(resource.Resource):
         ret = {'success': True}
 
         if 'start' in post_data:
-            self.manager.start_profiler()
+            reset = False
+            if 'reset' in post_data:
+                reset = True
+            self.manager.start_profiler(reset=reset)
 
         elif 'stop' in post_data:
             if 'filepath' in post_data:
@@ -99,6 +102,13 @@ ProfilerResource.openapi = {
                                 'summary': 'Start profiler',
                                 'value': {
                                     'start': True
+                                }
+                            },
+                            'start-reset': {
+                                'summary': 'Start profiler',
+                                'value': {
+                                    'start': True,
+                                    'reset': True
                                 }
                             },
                             'stop': {

@@ -1,4 +1,5 @@
 import base64
+import os
 import random
 import subprocess
 import time
@@ -192,7 +193,7 @@ def add_blocks_unlock_reward(manager):
     return add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS, advance_clock=1, address=BURN_ADDRESS)
 
 
-def run_server(hostname='localhost', listen=8005, status=8085, bootstrap=None, tries=100):
+def run_server(hostname='localhost', listen=8005, status=8085, bootstrap=None, tries=100, alive_for_at_least_sec=3):
     """ Starts a full node in a subprocess running the cli command
 
         :param hostname: Hostname used to be accessed by other peers
@@ -229,12 +230,21 @@ def run_server(hostname='localhost', listen=8005, status=8085, bootstrap=None, t
     if bootstrap:
         command = '{} --bootstrap {}'.format(command, bootstrap)
 
-    process = subprocess.Popen(command.split())
+    process = subprocess.Popen(command.split(), env=os.environ)
+
+    # check that the process doesn't close in the first few seconds
+    for _ in range(alive_for_at_least_sec):
+        exit_code = process.poll()
+        if exit_code is not None:
+            raise RuntimeError(f'remote process died with {exit_code}')
 
     partial_url = 'http://{}:{}'.format(hostname, status)
     url = urllib.parse.urljoin(partial_url, '/wallet/balance/')
     while True:
         try:
+            exit_code = process.poll()
+            if exit_code is not None:
+                raise RuntimeError(f'remote process died with {exit_code}')
             requests.get(url)
             break
         except requests.exceptions.ConnectionError:

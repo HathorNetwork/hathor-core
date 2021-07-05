@@ -1,6 +1,9 @@
 import os
 import shutil
+import sys
 import tempfile
+
+import pytest
 
 from hathor.prometheus import PrometheusMetricsExporter
 from tests import unittest
@@ -14,6 +17,7 @@ class PrometheusTest(unittest.TestCase):
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, unlock_wallet=True)
 
+    @pytest.mark.skipif(sys.platform == 'win32', reason='set_new_metrics fails on Windows')
     def test_wallet(self):
         tmpdir = tempfile.mkdtemp()
         tmpfile = tempfile.NamedTemporaryFile(dir=tmpdir, suffix='.prom', delete=False)

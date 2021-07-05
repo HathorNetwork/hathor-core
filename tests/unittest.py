@@ -43,7 +43,7 @@ class TestCase(unittest.TestCase):
         return wallet
 
     def create_peer(self, network, peer_id=None, wallet=None, tx_storage=None, unlock_wallet=True, wallet_index=False,
-                    capabilities=None):
+                    capabilities=None, full_verification=True):
         if peer_id is None:
             peer_id = PeerId()
         if not wallet:
@@ -60,7 +60,7 @@ class TestCase(unittest.TestCase):
             capabilities=capabilities,
         )
         manager.avg_time_between_blocks = 0.0001
-        manager._full_verification = True
+        manager._full_verification = full_verification
         manager.start()
         self.run_to_completion()
         return manager

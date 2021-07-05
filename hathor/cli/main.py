@@ -139,7 +139,9 @@ class CliManager:
         if json_logs:
             sys.argv.remove('--json-logs')
 
-        setup_logging(debug, capture_stdout, json_logs)
+        sentry = '--sentry-dsn' in sys.argv
+
+        setup_logging(debug, capture_stdout, json_logs, sentry=sentry)
         module.main()
 
 

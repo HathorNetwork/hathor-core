@@ -13,8 +13,6 @@
 # limitations under the License.
 
 import asyncio
-import curses
-import curses.ascii
 import datetime
 import signal
 import sys
@@ -25,6 +23,12 @@ from asyncio import AbstractEventLoop
 from collections import defaultdict
 from math import floor
 from typing import Any, Callable, DefaultDict, Dict, List, Optional, Tuple
+
+try:
+    import curses
+    import curses.ascii
+except ModuleNotFoundError:
+    pass
 
 from aiohttp import ClientSession
 

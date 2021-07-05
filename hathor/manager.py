@@ -295,11 +295,11 @@ class HathorManager:
         for peer_discovery in self.peer_discoveries:
             peer_discovery.discover_and_connect(self.connections.connect_to)
 
-    def start_profiler(self) -> None:
+    def start_profiler(self, *, reset: bool = False) -> None:
         """
         Start profiler. It can be activated from a web resource, as well.
         """
-        if not self.profiler:
+        if reset or not self.profiler:
             import cProfile
             self.profiler = cProfile.Profile()
         self.profiler.enable()
@@ -408,6 +408,8 @@ class HathorManager:
                     elif tx.is_block:
                         self.tx_storage.add_to_parent_blocks_index(tx.hash)
                     self.tx_storage.add_to_indexes(tx)
+                    if tx.is_transaction and tx_meta.voided_by:
+                        self.tx_storage.del_from_indexes(tx)
             except (InvalidNewTransaction, TxValidationError):
                 self.log.error('unexpected error when initializing', tx=tx, exc_info=True)
                 raise
