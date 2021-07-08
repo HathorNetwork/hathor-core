@@ -98,7 +98,9 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
                     serialized['tokens'].append(token_uid.hex())
                     token_uid_map[token_uid] = len(serialized['tokens'])
 
-            output['decoded']['token_data'] = token_uid_map[token_uid]
+            token_data = token_uid_map[token_uid]
+            output['decoded']['token_data'] = token_data
+            output['token_data'] = token_data
             inputs.append(output)
 
     serialized['inputs'] = inputs
