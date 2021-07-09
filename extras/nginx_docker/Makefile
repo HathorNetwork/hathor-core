@@ -2,10 +2,10 @@
 all: docker
 
 tag = 769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:latest
-use_cases_tag = 769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:use-cases-latest
+no_rate_limit_tag = 769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:no-rate-limit-latest
 
 .PHONY: docker
-docker: docker-default docker-use-cases
+docker: docker-default docker-no-rate-limit
 
 # Default Nginx Image
 .PHONY: docker-default
@@ -18,13 +18,13 @@ nginx.conf:
 	python -m hathor generate_nginx_config - > $@
 
 # Nginx Image used for private use cases, with rate limits disabled
-.PHONY: docker-use-cases
-docker-use-cases: nginx_use_cases.conf set_real_ip_from_cloudfront
-	mv nginx_use_cases.conf nginx.conf
-	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(use_cases_tag) .
+.PHONY: docker-no-rate-limit
+docker-no-rate-limit: nginx_no_rate_limit.conf set_real_ip_from_cloudfront
+	mv nginx_no_rate_limit.conf nginx.conf
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(no_rate_limit_tag) .
 
-nginx_use_cases.conf: export PYTHONPATH := ../..
-nginx_use_cases.conf:
+nginx_no_rate_limit.conf: export PYTHONPATH := ../..
+nginx_no_rate_limit.conf:
 	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
 	python -m hathor generate_nginx_config --disable-rate-limits - > $@
 
