@@ -54,6 +54,9 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
 
         tx = self.genesis[1]
+        meta = tx.get_metadata()
+        meta.first_block = self.genesis[0].hash
+        self.manager.tx_storage.save_transaction(tx, only_metadata=True)
         self.manager.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED,
                                     tx=tx)
         self.run_to_completion()
