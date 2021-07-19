@@ -189,7 +189,7 @@ class HathorManager:
         if capabilities is not None:
             self.capabilities = capabilities
         else:
-            self.capabilities = [settings.CAPABILITY_WHITELIST, settings.CAPABILITY_SYNC_V2]
+            self.capabilities = [settings.CAPABILITY_WHITELIST]
 
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
