@@ -5,6 +5,7 @@ from twisted.web.test.requesthelper import DummyRequest
 from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
+from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.util import json_dumpb, json_loadb
 from tests import unittest
 
@@ -16,12 +17,25 @@ class _BaseResourceTest:
             network = 'testnet'
             wallet = self._create_test_wallet()
             tx_storage = getattr(self, 'tx_storage', None)
+            if tx_storage is None:
+                tx_storage = TransactionMemoryStorage()
+            assert (
+                hasattr(self, '_enable_sync_v1') and
+                hasattr(self, '_enable_sync_v2') and
+                (self._enable_sync_v1 or self._enable_sync_v2)
+            ), (
+                'Please set both `_enable_sync_v1` and `_enable_sync_v2` on the class. '
+                'Also they can\'t both be False. '
+                'This is by design so we don\'t forget to test for multiple sync versions.'
+            )
             return dict(
                 peer_id=peer_id,
                 network=network,
                 wallet=wallet,
                 tx_storage=tx_storage,
-                wallet_index=True
+                wallet_index=True,
+                enable_sync_v1=self._enable_sync_v1,
+                enable_sync_v2=self._enable_sync_v2,
             )
 
         def setUp(self):

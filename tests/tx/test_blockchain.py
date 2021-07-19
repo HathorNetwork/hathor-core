@@ -10,7 +10,9 @@ from tests.utils import add_new_blocks, add_new_transactions
 settings = HathorSettings()
 
 
-class BlockchainTestCase(unittest.TestCase):
+class BaseBlockchainTestCase(unittest.TestCase):
+    __test__ = False
+
     """
     Thus, there are eight cases to be handled when a new block arrives, which are:
     (i)    Single best chain, connected to the head of the best chain
@@ -481,5 +483,14 @@ class BlockchainTestCase(unittest.TestCase):
         self.assertAlmostEqual(weight, daa.MIN_BLOCK_WEIGHT)
 
 
-if __name__ == '__main__':
-    unittest.main()
+class SyncV1BlockchainTestCase(unittest.SyncV1Params, BaseBlockchainTestCase):
+    __test__ = True
+
+
+class SyncV2BlockchainTestCase(unittest.SyncV2Params, BaseBlockchainTestCase):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeBlockchainTestCase(unittest.SyncBridgeParams, SyncV2BlockchainTestCase):
+    pass

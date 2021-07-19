@@ -10,14 +10,22 @@ from twisted.internet import reactor
 from twisted.internet.task import Clock
 from twisted.trial import unittest
 
+from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
+from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.util import Random
 from hathor.wallet import Wallet
 
 logger = get_logger()
 main = ut_main
+settings = HathorSettings()
+
+
+def shorten_hash(container):
+    container_type = type(container)
+    return container_type(h[-2:].hex() for h in container)
 
 
 def _load_peer_id_pool(file_path: str = 'tests/peer_id_pool.json') -> Iterator[PeerId]:
@@ -29,8 +37,28 @@ def _load_peer_id_pool(file_path: str = 'tests/peer_id_pool.json') -> Iterator[P
 
 PEER_ID_POOL = list(_load_peer_id_pool())
 
+# XXX: Sync*Params classes should be inherited before the TestCase class when a sync version is needed
+
+
+class SyncV1Params:
+    _enable_sync_v1 = True
+    _enable_sync_v2 = False
+
+
+class SyncV2Params:
+    _enable_sync_v1 = False
+    _enable_sync_v2 = True
+
+
+class SyncBridgeParams:
+    _enable_sync_v1 = True
+    _enable_sync_v2 = True
+
 
 class TestCase(unittest.TestCase):
+    _enable_sync_v1: bool
+    _enable_sync_v2: bool
+
     def setUp(self):
         _set_test_mode(TestMode.TEST_ALL_WEIGHT)
         self.tmpdirs = []
@@ -75,13 +103,25 @@ class TestCase(unittest.TestCase):
         return wallet
 
     def create_peer(self, network, peer_id=None, wallet=None, tx_storage=None, unlock_wallet=True, wallet_index=False,
-                    capabilities=None, full_verification=True):
+                    capabilities=None, full_verification=True, enable_sync_v1=None, enable_sync_v2=None):
+        if enable_sync_v1 is None:
+            assert hasattr(self, '_enable_sync_v1'), ('`_enable_sync_v1` has no default by design, either set one on '
+                                                      'the test class or pass `enable_sync_v1` by argument')
+            enable_sync_v1 = self._enable_sync_v1
+        if enable_sync_v2 is None:
+            assert hasattr(self, '_enable_sync_v2'), ('`_enable_sync_v2` has no default by design, either set one on '
+                                                      'the test class or pass `enable_sync_v2` by argument')
+            enable_sync_v2 = self._enable_sync_v2
+        assert enable_sync_v1 or enable_sync_v2, 'enable at least one sync version'
+
         if peer_id is None:
             peer_id = PeerId()
         if not wallet:
             wallet = self._create_test_wallet()
             if unlock_wallet:
                 wallet.unlock(b'MYPASS')
+        if tx_storage is None:
+            tx_storage = TransactionMemoryStorage()
         manager = HathorManager(
             self.clock,
             peer_id=peer_id,
@@ -91,7 +131,16 @@ class TestCase(unittest.TestCase):
             wallet_index=wallet_index,
             capabilities=capabilities,
             rng=self.rng,
+            enable_sync_v1=enable_sync_v1,
+            enable_sync_v2=enable_sync_v2,
         )
+
+        # XXX: just making sure that tests set this up correctly
+        if enable_sync_v2:
+            assert settings.CAPABILITY_SYNC_V2 in manager.capabilities
+        else:
+            assert settings.CAPABILITY_SYNC_V2 not in manager.capabilities
+
         manager.avg_time_between_blocks = 0.0001
         manager._full_verification = full_verification
         manager.start()

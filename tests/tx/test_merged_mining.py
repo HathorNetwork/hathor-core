@@ -16,7 +16,9 @@ class SimpleTests(unittest.TestCase):
                 flip80(i)
 
 
-class TestMergedMining(unittest.TestCase):
+class BaseMergedMiningTest(unittest.TestCase):
+    __test__ = False
+
     @ensure_deferred
     async def test_coordinator(self):
         from cryptography.hazmat.backends import default_backend
@@ -1410,3 +1412,16 @@ class BitcoinRPCStub(IBitcoinRPC):
         stub = 'high-hash'
         await asyncio.sleep(self.response_delay)
         return stub
+
+
+class SyncV1MergedMiningTest(unittest.SyncV1Params, BaseMergedMiningTest):
+    __test__ = True
+
+
+class SyncV2MergedMiningTest(unittest.SyncV2Params, BaseMergedMiningTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeMergedMiningTest(unittest.SyncBridgeParams, SyncV2MergedMiningTest):
+    pass

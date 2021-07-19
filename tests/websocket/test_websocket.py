@@ -9,12 +9,15 @@ from hathor.pubsub import EventArguments, HathorEvents
 from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance
 from hathor.websocket import WebsocketStatsResource
 from hathor.websocket.factory import HathorAdminWebsocketFactory, HathorAdminWebsocketProtocol
+from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 settings = HathorSettings()
 
 
-class TestWebsocket(_BaseResourceTest._ResourceTest):
+class BaseWebsocketTest(_BaseResourceTest._ResourceTest):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
 
@@ -224,3 +227,16 @@ class TestWebsocket(_BaseResourceTest._ResourceTest):
         data = response.json_value()
         self.assertEqual(data['connections'], 1)
         self.assertEqual(data['subscribed_addresses'], 2)
+
+
+class SyncV1WebsocketTest(unittest.SyncV1Params, BaseWebsocketTest):
+    __test__ = True
+
+
+class SyncV2WebsocketTest(unittest.SyncV2Params, BaseWebsocketTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeWebsocketTest(unittest.SyncBridgeParams, SyncV2WebsocketTest):
+    pass

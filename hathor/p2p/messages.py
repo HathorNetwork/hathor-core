@@ -90,10 +90,25 @@ class ProtocolMessages(Enum):
     GET_NEXT = 'GET-NEXT'
     NEXT = 'NEXT'
 
-    GET_BLOCKS = 'GET-BLOCKS'  # Request a list of hashes for blocks. Payload is the current latest block.
-    BLOCKS = 'BLOCKS'  # Send a list of hashes for blocks. Payload is a list of hashes.
+    # Sync-v2 messages
 
-    GET_TRANSACTIONS = 'GET-TRANSACTIONS'  # Request a list of hashes for transactions.
-    TRANSACTIONS = 'TRANSACTIONS'  # Send a list of hashes for transactions.
+    GET_NEXT_BLOCKS = 'GET-NEXT-BLOCKS'
+    BLOCKS = 'BLOCKS'
+    BLOCKS_END = 'BLOCKS-END'
 
-    HASHES = 'HASHES'
+    GET_BEST_BLOCK = 'GET-BEST-BLOCK'  # Request the best block of the peer
+    BEST_BLOCK = 'BEST-BLOCK'  # Send the best block to your peer
+
+    GET_BLOCK_TXS = 'GET-BLOCK-TXS'  # TODO: rename, maybe GET-TX-RANGE or repurpose GET-TRANSACTIONS above
+    TRANSACTION = 'TRANSACTION'
+
+    GET_MEMPOOL = 'GET-MEMPOOL'  # TODO: rename, maybe GET-TX-RANGE or repurpose GET-TRANSACTIONS above
+    MEMPOOL_END = 'MEMPOOL-END'  # End of mempool sync
+
+    GET_COMMON_CHAIN = 'GET-COMMON-CHAIN'
+    COMMON_CHAIN = 'COMMON-CHAIN'
+
+    GET_PEER_BLOCK_HASHES = 'GET-PEER-BLOCK-HASHES'
+    PEER_BLOCK_HASHES = 'PEER-BLOCK-HASHES'
+
+    STOP_BLOCK_STREAMING = 'STOP-BLOCK-STREAMING'

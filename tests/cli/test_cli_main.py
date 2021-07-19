@@ -23,7 +23,3 @@ class CliMainTest(unittest.TestCase):
 
         # 3 is the number of prints we have without any command
         self.assertTrue(len(output) >= 3)
-
-
-if __name__ == '__main__':
-    unittest.main()

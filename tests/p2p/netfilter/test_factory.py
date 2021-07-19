@@ -10,7 +10,9 @@ from hathor.p2p.peer_id import PeerId
 from tests import unittest
 
 
-class NetfilterFactoryTest(unittest.TestCase):
+class BaseNetfilterFactoryTest(unittest.TestCase):
+    __test__ = False
+
     def test_factory(self):
         pre_conn = get_table('filter').get_chain('pre_conn')
 
@@ -18,7 +20,8 @@ class NetfilterFactoryTest(unittest.TestCase):
         rule = NetfilterRule(match, NetfilterReject())
         pre_conn.add_rule(rule)
 
-        wrapped_factory = HathorServerFactory('testnet', PeerId(), node=None, use_ssl=False)
+        wrapped_factory = HathorServerFactory('testnet', PeerId(), node=None, use_ssl=False,
+                                              enable_sync_v1=self._enable_sync_v1, enable_sync_v2=self._enable_sync_v2)
         factory = NetfilterFactory(connections=None, wrappedFactory=wrapped_factory)
 
         ret = factory.buildProtocol(IPv4Address('TCP', '192.168.0.1', 1234))
@@ -26,3 +29,16 @@ class NetfilterFactoryTest(unittest.TestCase):
 
         ret = factory.buildProtocol(IPv4Address('TCP', '192.168.0.2', 1234))
         self.assertIsNotNone(ret)
+
+
+class SyncV1NetfilterFactoryTest(unittest.SyncV1Params, BaseNetfilterFactoryTest):
+    __test__ = True
+
+
+class SyncV2NetfilterFactoryTest(unittest.SyncV2Params, BaseNetfilterFactoryTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeNetfilterFactoryTest(unittest.SyncBridgeParams, SyncV2NetfilterFactoryTest):
+    pass

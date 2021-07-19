@@ -8,7 +8,7 @@ from tests.utils import add_new_blocks
 settings = HathorSettings()
 
 
-class BlockchainTestCase(unittest.TestCase):
+class BaseMiningTest(unittest.TestCase):
     """
     Thus, there are eight cases to be handled when a new block arrives, which are:
     (i)    Single best chain, connected to the head of the best chain
@@ -20,6 +20,9 @@ class BlockchainTestCase(unittest.TestCase):
     (vii)  Multiple best chains, connected to the head of a side chain
     (viii) Multiple best chains, connected to the tail of a side chain
     """
+
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         self.tx_storage = TransactionMemoryStorage()
@@ -71,5 +74,14 @@ class BlockchainTestCase(unittest.TestCase):
         self.assertConsensusValid(manager)
 
 
-if __name__ == '__main__':
-    unittest.main()
+class SyncV1MiningTest(unittest.SyncV1Params, BaseMiningTest):
+    __test__ = True
+
+
+class SyncV2MiningTest(unittest.SyncV2Params, BaseMiningTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeMiningTest(unittest.SyncBridgeParams, SyncV2MiningTest):
+    pass

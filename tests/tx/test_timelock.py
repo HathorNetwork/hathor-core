@@ -9,7 +9,9 @@ from tests.utils import add_blocks_unlock_reward, add_new_blocks
 settings = HathorSettings()
 
 
-class TimelockTransactionTestCase(unittest.TestCase):
+class BaseTimelockTransactionTestCase(unittest.TestCase):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         self.network = 'testnet'
@@ -152,3 +154,16 @@ class TimelockTransactionTestCase(unittest.TestCase):
 
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, blocks_tokens[0]))
+
+
+class SyncV1TimelockTransactionTestCase(unittest.SyncV1Params, BaseTimelockTransactionTestCase):
+    __test__ = True
+
+
+class SyncV2TimelockTransactionTestCase(unittest.SyncV2Params, BaseTimelockTransactionTestCase):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeTimelockTransactionTestCase(unittest.SyncBridgeParams, SyncV2TimelockTransactionTestCase):
+    pass

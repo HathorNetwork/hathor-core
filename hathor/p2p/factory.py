@@ -42,13 +42,20 @@ class HathorServerFactory(protocol.ServerFactory):
             *,
             node: 'HathorManager',
             use_ssl: bool,
+            enable_sync_v1: bool,
+            enable_sync_v2: bool,
     ):
+        if not (enable_sync_v1 or enable_sync_v2):
+            raise ValueError('At least one sync version is required')
+
         super().__init__()
         self.network = network
         self.my_peer = my_peer
         self.connections = connections
         self.node = node
         self.use_ssl = use_ssl
+        self.enable_sync_v1 = enable_sync_v1
+        self.enable_sync_v2 = enable_sync_v2
 
     def buildProtocol(self, addr: Tuple[str, int]) -> MyServerProtocol:
         p = self.protocol(
@@ -58,6 +65,8 @@ class HathorServerFactory(protocol.ServerFactory):
             node=self.node,
             use_ssl=self.use_ssl,
             inbound=True,
+            enable_sync_v1=self.enable_sync_v1,
+            enable_sync_v2=self.enable_sync_v2,
         )
         p.factory = self
         return p
@@ -78,13 +87,20 @@ class HathorClientFactory(protocol.ClientFactory):
             *,
             node: 'HathorManager',
             use_ssl: bool,
+            enable_sync_v1: bool,
+            enable_sync_v2: bool,
     ):
+        if not (enable_sync_v1 or enable_sync_v2):
+            raise ValueError('At least one sync version is required')
+
         super().__init__()
         self.network = network
         self.my_peer = my_peer
         self.connections = connections
         self.node = node
         self.use_ssl = use_ssl
+        self.enable_sync_v1 = enable_sync_v1
+        self.enable_sync_v2 = enable_sync_v2
 
     def buildProtocol(self, addr: Tuple[str, int]) -> MyClientProtocol:
         p = self.protocol(
@@ -94,6 +110,8 @@ class HathorClientFactory(protocol.ClientFactory):
             node=self.node,
             use_ssl=self.use_ssl,
             inbound=False,
+            enable_sync_v1=self.enable_sync_v1,
+            enable_sync_v2=self.enable_sync_v2,
         )
         p.factory = self
         return p

@@ -43,7 +43,9 @@ from tests.utils import (
 settings = HathorSettings()
 
 
-class BasicTransaction(unittest.TestCase):
+class BaseTransactionTest(unittest.TestCase):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         self.wallet = Wallet()
@@ -1025,5 +1027,14 @@ class BasicTransaction(unittest.TestCase):
         tx.verify_sigops_input()
 
 
-if __name__ == '__main__':
-    unittest.main()
+class SyncV1TransactionTest(unittest.SyncV1Params, BaseTransactionTest):
+    __test__ = True
+
+
+class SyncV2TransactionTest(unittest.SyncV2Params, BaseTransactionTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeTransactionTest(unittest.SyncBridgeParams, SyncV2TransactionTest):
+    pass
