@@ -16,11 +16,13 @@
 Module for abstractions around generating mining templates.
 """
 
-import random
 from typing import Dict, Iterable, List, NamedTuple, Optional, Set, Tuple, Type, Union
+
+from numpy.random import Generator as Rng
 
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock
 from hathor.transaction.storage import TransactionStorage
+from hathor.util import random_choice, random_choices
 
 
 class BlockTemplate(NamedTuple):
@@ -45,7 +47,7 @@ class BlockTemplate(NamedTuple):
             weight=self.weight,
         )
 
-    def generate_mining_block(self, merge_mined: bool = False, address: Optional[bytes] = None,
+    def generate_mining_block(self, rng: Rng, merge_mined: bool = False, address: Optional[bytes] = None,
                               timestamp: Optional[int] = None, data: Optional[bytes] = None,
                               storage: Optional[TransactionStorage] = None, include_metadata: bool = False,
                               ) -> Union[Block, MergeMinedBlock]:
@@ -57,7 +59,7 @@ class BlockTemplate(NamedTuple):
         from hathor.transaction import TransactionMetadata, TxOutput
         from hathor.transaction.scripts import create_output_script
 
-        parents = list(self.get_random_parents())
+        parents = list(self.get_random_parents(rng))
         output_script = create_output_script(address) if address is not None else b''
         base_timestamp = timestamp if timestamp is not None else self.timestamp_now
         block_timestamp = min(max(base_timestamp, self.timestamp_min), self.timestamp_max)
@@ -70,12 +72,13 @@ class BlockTemplate(NamedTuple):
         block.get_metadata(use_storage=False)
         return block
 
-    def get_random_parents(self) -> Tuple[bytes, bytes, bytes]:
+    def get_random_parents(self, rng: Rng) -> Tuple[bytes, bytes, bytes]:
         """ Get parents from self.parents plus a random choice from self.parents_any to make it 3 in total.
 
         Return type is tuple just to make it clear that the length is always 3.
         """
-        more_parents = [x for _, x in sorted(random.sample(list(enumerate(self.parents_any)), 3 - len(self.parents)))]
+        more_parents = random_choices(rng, self.parents_any, 3 - len(self.parents))
+        more_parents.sort(key=lambda tx_hash: self.parents_any.index(tx_hash))
         p1, p2, p3 = self.parents[:] + more_parents
         return p1, p2, p3
 
@@ -116,12 +119,16 @@ class BlockTemplates(List[BlockTemplate]):
         self.storage = storage
         assert len(self) > 0, 'This class requires at least one block template.'
 
-    def generate_mining_block(self, merge_mined: bool = False, address: Optional[bytes] = None,
+    def choose_random_template(self, rng: Rng) -> BlockTemplate:
+        """ Randomly choose and return a template and use that for generating a block, see BlockTemplate"""
+        return random_choice(rng, self)
+
+    def generate_mining_block(self, rng: Rng, merge_mined: bool = False, address: Optional[bytes] = None,
                               timestamp: Optional[int] = None, data: Optional[bytes] = None,
                               storage: Optional[TransactionStorage] = None, include_metadata: bool = False,
                               ) -> Union[Block, MergeMinedBlock]:
         """ Randomly choose a template and use that for generating a block, see BlockTemplate.generate_mining_block"""
-        return random.choice(self).generate_mining_block(merge_mined=merge_mined, address=address,
-                                                         timestamp=timestamp, data=data,
-                                                         storage=storage or self.storage,
-                                                         include_metadata=include_metadata)
+        return self.choose_random_template(rng).generate_mining_block(rng, merge_mined=merge_mined, address=address,
+                                                                      timestamp=timestamp, data=data,
+                                                                      storage=storage or self.storage,
+                                                                      include_metadata=include_metadata)

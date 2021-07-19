@@ -1,10 +1,9 @@
-import random
 import sys
 from typing import Optional
 
 import pytest
 
-from hathor.simulator import FakeConnection, MinerSimulator, RandomTransactionGenerator, Simulator
+from hathor.simulator import FakeConnection, Simulator
 from tests import unittest
 
 
@@ -15,13 +14,7 @@ class HathorSimulatorTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
-        self.clock = None
-
-        if self.seed_config is None:
-            self.seed_config = random.randint(0, 2**32 - 1)
-
-        self.simulator = Simulator()
-        self.simulator.set_seed(self.seed_config)
+        self.simulator = Simulator(self.seed_config)
         self.simulator.start()
 
         print('-'*30)
@@ -32,26 +25,31 @@ class HathorSimulatorTestCase(unittest.TestCase):
         self.simulator.stop()
         super().tearDown()
 
-    def test_one_node(self):
-        manager1 = self.simulator.create_peer()
+    def create_peer(self):
+        return self.simulator.create_peer(
+            peer_id=self.get_random_peer_id_from_pool(),
+        )
 
-        miner1 = MinerSimulator(manager1, hashpower=100e6)
+    def test_one_node(self):
+        manager1 = self.create_peer()
+
+        miner1 = self.simulator.create_miner(manager1, hashpower=100e6)
         miner1.start()
         self.simulator.run(10)
 
-        gen_tx1 = RandomTransactionGenerator(manager1, rate=2 / 60., hashpower=1e6, ignore_no_funds=True)
+        gen_tx1 = self.simulator.create_tx_generator(manager1, rate=2 / 60., hashpower=1e6, ignore_no_funds=True)
         gen_tx1.start()
         self.simulator.run(60 * 60)
 
     def test_two_nodes(self):
-        manager1 = self.simulator.create_peer()
-        manager2 = self.simulator.create_peer()
+        manager1 = self.create_peer()
+        manager2 = self.create_peer()
 
-        miner1 = MinerSimulator(manager1, hashpower=10e6)
+        miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
         miner1.start()
         self.simulator.run(10)
 
-        gen_tx1 = RandomTransactionGenerator(manager1, rate=3 / 60., hashpower=1e6, ignore_no_funds=True)
+        gen_tx1 = self.simulator.create_tx_generator(manager1, rate=3 / 60., hashpower=1e6, ignore_no_funds=True)
         gen_tx1.start()
         self.simulator.run(60)
 
@@ -59,11 +57,11 @@ class HathorSimulatorTestCase(unittest.TestCase):
         self.simulator.add_connection(conn12)
         self.simulator.run(60)
 
-        miner2 = MinerSimulator(manager2, hashpower=100e6)
+        miner2 = self.simulator.create_miner(manager2, hashpower=100e6)
         miner2.start()
         self.simulator.run(120)
 
-        gen_tx2 = RandomTransactionGenerator(manager2, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
+        gen_tx2 = self.simulator.create_tx_generator(manager2, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
         gen_tx2.start()
         self.simulator.run(10 * 60)
 
@@ -82,14 +80,14 @@ class HathorSimulatorTestCase(unittest.TestCase):
         miners = []
 
         for hashpower in [10e6, 5e6, 1e6, 1e6, 1e6]:
-            manager = self.simulator.create_peer()
+            manager = self.create_peer()
             for node in nodes:
                 conn = FakeConnection(manager, node, latency=0.085)
                 self.simulator.add_connection(conn)
 
             nodes.append(manager)
 
-            miner = MinerSimulator(manager, hashpower=hashpower)
+            miner = self.simulator.create_miner(manager, hashpower=hashpower)
             miner.start()
             miners.append(miner)
 
@@ -108,32 +106,34 @@ class HathorSimulatorTestCase(unittest.TestCase):
         miners = []
         tx_generators = []
 
-        manager = self.simulator.create_peer()
+        manager = self.create_peer()
         nodes.append(manager)
-        miner = MinerSimulator(manager, hashpower=10e6)
+        miner = self.simulator.create_miner(manager, hashpower=10e6)
         miner.start()
         miners.append(miner)
         self.simulator.run(600)
 
         for hashpower in [10e6, 8e6, 5e6]:
-            manager = self.simulator.create_peer()
+            manager = self.create_peer()
             for node in nodes:
                 conn = FakeConnection(manager, node, latency=0.085)
                 self.simulator.add_connection(conn)
             nodes.append(manager)
 
-            miner = MinerSimulator(manager, hashpower=hashpower)
+            miner = self.simulator.create_miner(manager, hashpower=hashpower)
             miner.start()
             miners.append(miner)
 
         for i, rate in enumerate([5, 4, 3]):
-            tx_gen = RandomTransactionGenerator(nodes[i], rate=rate * 1 / 60., hashpower=1e6, ignore_no_funds=True)
+            tx_gen = self.simulator.create_tx_generator(nodes[i], rate=rate * 1 / 60., hashpower=1e6,
+                                                        ignore_no_funds=True)
             tx_gen.start()
             tx_generators.append(tx_gen)
 
         self.simulator.run(600)
 
-        late_manager = self.simulator.create_peer()
+        self.log.debug('adding late node')
+        late_manager = self.create_peer()
         for node in nodes:
             conn = FakeConnection(late_manager, node, latency=0.300)
             self.simulator.add_connection(conn)
@@ -148,5 +148,6 @@ class HathorSimulatorTestCase(unittest.TestCase):
         self.simulator.run(600)
 
         for idx, node in enumerate(nodes):
-            print('Checking node {}...'.format(idx))
-            self.assertTipsEqual(late_manager, node)
+            self.log.debug(f'checking node {idx}')
+            self.assertConsensusValid(node)
+            self.assertConsensusEqual(node, late_manager)

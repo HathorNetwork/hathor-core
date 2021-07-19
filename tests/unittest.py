@@ -1,9 +1,11 @@
+import json
 import shutil
 import tempfile
 import time
-from typing import Optional
+from typing import Iterator, List, Optional
 from unittest import main as ut_main
 
+from numpy.random import PCG64, Generator as Rng, SeedSequence
 from structlog import get_logger
 from twisted.internet import reactor
 from twisted.internet.task import Clock
@@ -12,10 +14,21 @@ from twisted.trial import unittest
 from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
+from hathor.util import random_choice
 from hathor.wallet import Wallet
 
 logger = get_logger()
 main = ut_main
+
+
+def _load_peer_id_pool(file_path: str = 'tests/peer_id_pool.json') -> Iterator[PeerId]:
+    with open(file_path) as peer_id_pool_file:
+        peer_id_pool_dict = json.load(peer_id_pool_file)
+        for peer_id_dict in peer_id_pool_dict:
+            yield PeerId.create_from_json(peer_id_dict)
+
+
+PEER_ID_POOL = list(_load_peer_id_pool())
 
 
 class TestCase(unittest.TestCase):
@@ -25,9 +38,30 @@ class TestCase(unittest.TestCase):
         self.clock = Clock()
         self.clock.advance(time.time())
         self.log = logger.new()
+        self.reset_peer_id_pool()
+        self._seed = SeedSequence()
+        self.log.debug('unit-test seed (usually not used by tests)', seed=self._seed.entropy)
+        self.rng = Rng(PCG64(self._seed))
 
     def tearDown(self):
         self.clean_tmpdirs()
+
+    def reset_peer_id_pool(self) -> None:
+        self._free_peer_id_pool = self.new_peer_id_pool()
+
+    def new_peer_id_pool(self) -> List[PeerId]:
+        return PEER_ID_POOL.copy()
+
+    def get_random_peer_id_from_pool(self, pool: Optional[List[PeerId]] = None, rng: Optional[Rng] = None) -> PeerId:
+        if pool is None:
+            pool = self._free_peer_id_pool
+        if not pool:
+            raise RuntimeError('no more peer ids on the pool')
+        if rng is None:
+            rng = self.rng
+        peer_id = random_choice(rng, pool)
+        pool.remove(peer_id)
+        return peer_id
 
     def _create_test_wallet(self):
         """ Generate a Wallet with a number of keypairs for testing
@@ -58,6 +92,7 @@ class TestCase(unittest.TestCase):
             tx_storage=tx_storage,
             wallet_index=wallet_index,
             capabilities=capabilities,
+            rng=self.rng,
         )
         manager.avg_time_between_blocks = 0.0001
         manager._full_verification = full_verification

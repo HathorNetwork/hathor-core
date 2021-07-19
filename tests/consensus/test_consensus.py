@@ -51,7 +51,7 @@ class ConsensusTestCase(unittest.TestCase):
         # This block verifies the conflicting transaction and has a high weight.
         # So, it will be executed and previous blocks and transactions will be voided.
         tb0 = manager.make_custom_block_template(blocks[-1].hash, [conflicting_tx.hash, conflicting_tx.parents[0]])
-        b0 = tb0.generate_mining_block(storage=manager.tx_storage)
+        b0 = tb0.generate_mining_block(manager.rng, storage=manager.tx_storage)
         b0.weight = 10
         b0.resolve()
         b0.verify()
@@ -168,7 +168,7 @@ class ConsensusTestCase(unittest.TestCase):
 
         # This block verifies the conflicting transaction and has a high weight.
         tb0 = manager.make_custom_block_template(blocks[-1].hash, [conflicting_tx.hash, conflicting_tx.parents[0]])
-        b0 = tb0.generate_mining_block(storage=manager.tx_storage)
+        b0 = tb0.generate_mining_block(manager.rng, storage=manager.tx_storage)
         b0.weight = 10
         b0.resolve()
         b0.verify()

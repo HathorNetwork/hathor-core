@@ -36,7 +36,6 @@ exclude = ["tests", "tests.*"]
 hathor-cli = 'hathor.cli.main:main'
 
 [tool.poetry.dev-dependencies]
-numpy = "~1.19.5"
 flake8 = "~3.8.4"
 isort = {version = "~5.7.0", extras = ["colors"]}
 yapf = "^0.30"
@@ -79,6 +78,7 @@ typing-extensions = "^3.7.4"  # indirect dependency, should not be needed on Pyt
 setproctitle = "^1.2.2"
 sentry-sdk = {version = "^1.1.0", optional = true}
 structlog-sentry = {version = "^1.4.0", optional = true}
+numpy = "~1.19.5"
 
 [tool.poetry.extras]
 rocksdb = ["cython", "python-rocksdb"]

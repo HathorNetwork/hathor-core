@@ -17,8 +17,10 @@ import warnings
 from collections import OrderedDict
 from enum import Enum
 from functools import partial, wraps
-from typing import Any, Callable, Deque, Dict, Iterable, Iterator, Optional, Tuple, TypeVar, cast
+from typing import Any, Callable, Deque, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple, TypeVar, cast
 
+import numpy as np
+from numpy.random import Generator as Rng
 from structlog import get_logger
 from twisted.internet.interfaces import IReactorCore
 from twisted.python.threadable import isInIOThread
@@ -274,3 +276,19 @@ def not_none(optional: Optional[_T], message: str = 'Unexpected `None`') -> _T:
     if optional is None:
         raise AssertionError(message)
     return optional
+
+
+def random_choices(rng: Rng, options: Sequence[_T], size: int) -> List[_T]:
+    """Choose `size` randomly selected elements from `options` sequence."""
+    # XXX: explicitly convert to numpy array to prevent numpy from converting a NamedTuple (i.e.) to a numpy array too
+    _options = np.empty(len(options), dtype=object)
+    _options[:] = options
+    return list(rng.choice(_options, size, replace=False))
+
+
+def random_choice(rng: Rng, options: Sequence[_T]) -> _T:
+    """Choose a single randomly selected element from `options` sequence."""
+    # XXX: explicitly convert to numpy array to prevent numpy from converting a NamedTuple (i.e.) to a numpy array too
+    _options = np.empty(len(options), dtype=object)
+    _options[:] = options
+    return rng.choice(_options)

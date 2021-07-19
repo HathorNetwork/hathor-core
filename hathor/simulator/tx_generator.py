@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import random
 from typing import TYPE_CHECKING, List
 
-import numpy.random
+from numpy.random import default_rng
+from structlog import get_logger
 
 from hathor import daa
 from hathor.conf import HathorSettings
@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager
 
 settings = HathorSettings()
+logger = get_logger()
 
 
 class RandomTransactionGenerator:
@@ -50,6 +51,8 @@ class RandomTransactionGenerator:
         self.ignore_no_funds = ignore_no_funds
         self.tx = None
         self.delayedcall = None
+        self.log = logger.new()
+        self.rng = default_rng()
 
     def start(self):
         """ Start generating random transactions.
@@ -70,7 +73,8 @@ class RandomTransactionGenerator:
             self.manager.propagate_tx(self.tx, fails_silently=False)
             self.tx = None
 
-        dt = random.expovariate(self.rate)
+        dt = self.rng.exponential(1 / self.rate)
+        self.log.debug('randomized step: schedule new transaction step ', dt=dt)
         self.delayedcall = self.clock.callLater(dt, self.new_tx_step1)
 
     def new_tx_step1(self):
@@ -84,9 +88,10 @@ class RandomTransactionGenerator:
         if not self.send_to:
             address = self.manager.wallet.get_unused_address(mark_as_used=False)
         else:
-            address = random.choice(self.send_to)
+            address = self.rng.choice(self.send_to)
 
-        value = random.randint(1, balance.available)
+        value = self.rng.integers(1, balance.available, endpoint=True)
+        self.log.debug('randomized step: send to', address=address, amount=value / 100)
 
         try:
             tx = gen_new_tx(self.manager, address, value)
@@ -98,8 +103,9 @@ class RandomTransactionGenerator:
         tx.update_hash()
 
         geometric_p = 2**(-tx.weight)
-        trials = numpy.random.geometric(geometric_p)
+        trials = self.rng.geometric(geometric_p)
         dt = 1.0 * trials / self.hashpower
 
         self.tx = tx
         self.delayedcall = self.clock.callLater(dt, self.schedule_next_transaction)
+        self.log.debug('randomized step: schedule next transaction', dt=dt, hash=tx.hash_hex)
