@@ -83,6 +83,9 @@ class PeerId:
         return ('PeerId(id=%s, entrypoints=%s, retry_timestamp=%d, retry_interval=%d)' % (self.id, self.entrypoints,
                 self.retry_timestamp, self.retry_interval))
 
+    def __hash__(self):
+        return hash(self.id)
+
     def merge(self, other: 'PeerId') -> None:
         """ Merge two PeerId objects, checking that they have the same
         id, public_key, and private_key. The entrypoints are merged without

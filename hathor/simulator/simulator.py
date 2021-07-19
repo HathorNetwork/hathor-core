@@ -134,7 +134,8 @@ class Simulator:
         self._started = False
         self._patches_rc_decrement()
 
-    def create_peer(self, network: Optional[str] = None, peer_id: Optional[PeerId] = None) -> HathorManager:
+    def create_peer(self, network: Optional[str] = None, peer_id: Optional[PeerId] = None,
+                    enable_sync_v1: bool = True, enable_sync_v2: bool = True) -> HathorManager:
         assert self._started
         if network is None:
             network = self._network
@@ -151,6 +152,8 @@ class Simulator:
             peer_id=peer_id,
             network=network,
             wallet=wallet,
+            enable_sync_v1=enable_sync_v1,
+            enable_sync_v2=enable_sync_v2,
             tx_storage=tx_storage,
             rng=self._node_rng,
         )

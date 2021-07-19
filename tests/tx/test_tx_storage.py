@@ -146,11 +146,11 @@ class _BaseTransactionStorageTest:
             self.assertEqual(2, self.tx_storage.get_tx_count())
             self.assertEqual(3, self.tx_storage.get_count_tx_blocks())
 
-            block_parents_hash = [x.data for x in self.tx_storage.get_block_tips()]
+            block_parents_hash = self.tx_storage.get_best_block_tips()
             self.assertEqual(1, len(block_parents_hash))
             self.assertEqual(block_parents_hash, [self.genesis_blocks[0].hash])
 
-            tx_parents_hash = [x.data for x in self.tx_storage.get_tx_tips()]
+            tx_parents_hash = self.manager.get_new_tx_parents()
             self.assertEqual(2, len(tx_parents_hash))
             self.assertEqual(set(tx_parents_hash), {self.genesis_txs[0].hash, self.genesis_txs[1].hash})
 
@@ -349,7 +349,7 @@ class _BaseTransactionStorageTest:
             _total += len(blocks)
             blocks = add_blocks_unlock_reward(self.manager)
             _total += len(blocks)
-            add_new_transactions(self.manager, 1, advance_clock=1)[0]
+            add_new_transactions(self.manager, 1, advance_clock=1)
 
             total = 0
             for tx in self.tx_storage._topological_sort():
@@ -497,7 +497,3 @@ class TransactionRocksDBStorageTest(_BaseTransactionStorageTest._TransactionStor
     def tearDown(self):
         shutil.rmtree(self.directory)
         super().tearDown()
-
-
-if __name__ == '__main__':
-    unittest.main()

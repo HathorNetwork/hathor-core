@@ -2,10 +2,12 @@ from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletOutputInfo
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_double_spending
 
 
-class TwinTransactionTestCase(unittest.TestCase):
+class BaseTwinTransactionTestCase(unittest.TestCase):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         self.network = 'testnet'
@@ -69,6 +71,9 @@ class TwinTransactionTestCase(unittest.TestCase):
         self.assertEqual(meta2.voided_by, {tx2.hash})
         self.assertEqual(meta2.twins, [tx1.hash])
 
+        # The same as tx1 but with one output different, so it's not a twin
+        tx3 = add_new_double_spending(self.manager, tx=tx1)
+
         # Propagate another conflicting transaction but it's not a twin
         self.manager.propagate_tx(tx3)
 
@@ -77,5 +82,19 @@ class TwinTransactionTestCase(unittest.TestCase):
 
         meta3 = tx3.get_metadata()
         self.assertEqual(meta3.twins, [])
+        self.assertEqual(meta3.conflict_with, [tx1.hash, tx2.hash])
 
         self.assertConsensusValid(self.manager)
+
+
+class SyncV1TwinTransactionTestCase(unittest.SyncV1Params, BaseTwinTransactionTestCase):
+    __test__ = True
+
+
+class SyncV2TwinTransactionTestCase(unittest.SyncV2Params, BaseTwinTransactionTestCase):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeTwinTransactionTestCase(unittest.SyncBridgeParams, SyncV2TwinTransactionTestCase):
+    pass

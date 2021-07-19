@@ -59,7 +59,7 @@ class TransactionStorage(ABC):
     """Legacy sync interface, please copy @deprecated decorator when implementing methods."""
 
     pubsub: Optional[PubSubManager]
-    with_index: bool  # noqa: E701
+    with_index: bool
     wallet_index: Optional[WalletIndex]
     tokens_index: Optional[TokensIndex]
     block_index: Optional[IndexesManager]
@@ -123,11 +123,11 @@ class TransactionStorage(ABC):
         self._needed_txs_index: Dict[bytes, Tuple[int, bytes]] = {}
 
         # Hold txs that have not been confirmed
-        self._tx_tips_index: Set[bytes] = set()
+        self._tx_tips_index: List[bytes] = []
 
         # Hold blocks that can be used as the next parent block
         # XXX: if there is more than one they must all have the same score, must always have at least one hash
-        self._parent_blocks_index: Set[bytes] = {BLOCK_GENESIS.hash}
+        self._parent_blocks_index: List[bytes] = [BLOCK_GENESIS.hash]
 
     # rev-dep-index methods:
 
@@ -144,7 +144,7 @@ class TransactionStorage(ABC):
 
     def _update_deps(self, deps: _DirDepValue) -> None:
         """Propagate the new validation state of the given deps."""
-        for tx, validation in deps.items():
+        for tx, validation in sorted(deps.items()):
             self._update_validation(tx, validation)
 
     def _update_validation(self, tx: bytes, validation: ValidationState) -> None:
@@ -180,7 +180,7 @@ class TransactionStorage(ABC):
     def del_from_deps_index(self, tx: bytes) -> None:
         """Call to remove tx from all reverse dependencies, for example when validation is complete."""
         _deps = self._dir_dep_index.pop(tx, _DirDepValue())
-        for rev_dep in _deps.keys():
+        for rev_dep in sorted(_deps.keys()):
             rev_deps = self._rev_dep_index[rev_dep]
             if tx in rev_deps:
                 rev_deps.remove(tx)
@@ -205,7 +205,7 @@ class TransactionStorage(ABC):
         else:
             cur_ready, self._txs_with_deps_ready = self._txs_with_deps_ready, set()
         while cur_ready:
-            yield from iter(cur_ready)
+            yield from iter(sorted(cur_ready))
             if dry_run:
                 cur_ready = self._txs_with_deps_ready - cur_ready
             else:
@@ -213,7 +213,7 @@ class TransactionStorage(ABC):
 
     def iter_deps_index(self) -> Iterator[bytes]:
         """Iterate through all hashes depended by any tx or block."""
-        yield from self._rev_dep_index.keys()
+        yield from sorted(self._rev_dep_index.keys())
 
     def get_rev_deps(self, tx: bytes) -> FrozenSet[bytes]:
         """Get all txs that depend on the given tx (i.e. its reverse depdendencies)."""
@@ -242,7 +242,7 @@ class TransactionStorage(ABC):
         # This strategy maximizes the chance to download multiple txs on the same stream
         # find the tx with highest "height"
         # XXX: we could cache this onto `needed_txs` so we don't have to fetch txs every time
-        height, start_hash, tx = max((h, s, t) for t, (h, s) in self._needed_txs_index.items())
+        height, start_hash, tx = max((h, s, t) for t, (h, s) in sorted(self._needed_txs_index.items()))
         self.log.debug('next needed tx start', needed=len(self._needed_txs_index), start=start_hash.hex(),
                        height=height, needed_tx=tx.hex())
         return start_hash
@@ -280,12 +280,13 @@ class TransactionStorage(ABC):
         cur_score = not_none(self.get_metadata(next(iter(self._parent_blocks_index)))).score
         if isclose(new_score, cur_score):
             self.log.debug('same score: new competing parent block', block=block.hex())
-            self._parent_blocks_index.add(block)
+            if block not in self._parent_blocks_index:
+                self._parent_blocks_index.append(block)
         elif new_score > cur_score and not meta.voided_by:
             # If it's a high score, then I can't add one that is voided
             self.log.debug('high score: new best parent block', block=block.hex())
             self._parent_blocks_index.clear()
-            self._parent_blocks_index.add(block)
+            self._parent_blocks_index.append(block)
         else:
             self.log.debug('low score: skip parent block', block=block.hex())
 
@@ -300,11 +301,13 @@ class TransactionStorage(ABC):
             it = filter(lambda tx: tx.timestamp < not_none(max_timestamp), it)
         yield from cast(Iterator[Transaction], it)
 
-    def remove_from_tx_tips_index(self, remove_txs: Set[bytes]) -> None:
+    def remove_from_tx_tips_index(self, remove_txs: Iterable[bytes]) -> None:
         """
         This should be called to remove a transaction from the "mempool", usually when it is confirmed by a block.
         """
-        self._tx_tips_index -= remove_txs
+        for tx in iter(remove_txs):
+            if tx in self._tx_tips_index:
+                self._tx_tips_index.remove(tx)
 
     def iter_mempool(self) -> Iterator[Transaction]:
         """
@@ -327,8 +330,8 @@ class TransactionStorage(ABC):
         # confirming tx2 will make it valid while tx1 becomes voided, so it has to be removed
         # from the tips.
         assert tx.hash is not None
-        to_remove: Set[bytes] = set()
-        to_remove_parents: Set[bytes] = set()
+        to_remove: List[bytes] = []
+        to_remove_parents: List[bytes] = []
         for tip_tx in self.iter_tx_tips():
             assert tip_tx.hash is not None
             # A new tx/block added might cause a tx in the tips to become voided. For instance,
@@ -338,8 +341,11 @@ class TransactionStorage(ABC):
             # themselves become tips (hence we use to_remove_parents)
             meta = tip_tx.get_metadata()
             if meta.voided_by:
-                to_remove.add(tip_tx.hash)
-                to_remove_parents.update(tip_tx.parents)
+                if tip_tx.hash not in to_remove:
+                    to_remove.append(tip_tx.hash)
+                for parent_hash in tip_tx.parents:
+                    if parent_hash not in to_remove_parents:
+                        to_remove_parents.append(parent_hash)
                 continue
 
             # might also happen that a tip has a child that became valid, so it's not a tip anymore
@@ -350,7 +356,8 @@ class TransactionStorage(ABC):
                     confirmed = True
                     break
             if confirmed:
-                to_remove.add(tip_tx.hash)
+                if tip_tx.hash not in to_remove:
+                    to_remove.append(tip_tx.hash)
 
         if to_remove:
             self.remove_from_tx_tips_index(to_remove)
@@ -375,7 +382,9 @@ class TransactionStorage(ABC):
                 to_add.add(tx_hash)
 
         if to_add:
-            self._tx_tips_index.update(to_add)
+            for tx_hash in to_add:
+                if tx_hash not in self._tx_tips_index:
+                    self._tx_tips_index.append(tx_hash)
             self.log.debug('added txs to tips', txs=[tx.hex() for tx in to_add])
 
         if tx.get_metadata().voided_by:
@@ -386,7 +395,9 @@ class TransactionStorage(ABC):
         self.remove_from_tx_tips_index(set(tx.parents))
 
         if tx.is_transaction and tx.get_metadata().first_block is None:
-            self._tx_tips_index.add(tx.hash)
+            assert tx.hash is not None
+            if tx.hash not in self._tx_tips_index:
+                self._tx_tips_index.append(tx.hash)
 
     # block height index methods:
 
@@ -979,6 +990,7 @@ class BaseTransactionStorage(TransactionStorage):
         if not self.with_index:
             raise NotImplementedError
         assert self.block_index is not None
+        assert self.block_index.tips_index is not None
         if timestamp is None:
             timestamp = self.latest_timestamp
         return self.block_index.tips_index[timestamp]
@@ -987,6 +999,7 @@ class BaseTransactionStorage(TransactionStorage):
         if not self.with_index:
             raise NotImplementedError
         assert self.tx_index is not None
+        assert self.tx_index.tips_index is not None
         if timestamp is None:
             timestamp = self.latest_timestamp
         tips = self.tx_index.tips_index[timestamp]
@@ -1011,6 +1024,7 @@ class BaseTransactionStorage(TransactionStorage):
             assert self._all_tips_cache.timestamp == self.latest_timestamp
             return self._all_tips_cache.tips
 
+        assert self.all_index.tips_index is not None
         tips = self.all_index.tips_index[timestamp]
         if timestamp >= self.latest_timestamp:
             merkle_tree, hashes = self.calculate_merkle_tree(tips)

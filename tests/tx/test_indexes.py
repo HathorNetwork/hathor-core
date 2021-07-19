@@ -6,7 +6,9 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, get_genesis_key
 
 
-class BasicTransaction(unittest.TestCase):
+class BaseIndexesTest(unittest.TestCase):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         self.wallet = Wallet()
@@ -130,5 +132,14 @@ class BasicTransaction(unittest.TestCase):
         )
 
 
-if __name__ == '__main__':
-    unittest.main()
+class SyncV1IndexesTest(unittest.SyncV1Params, BaseIndexesTest):
+    __test__ = True
+
+
+class SyncV2IndexesTest(unittest.SyncV2Params, BaseIndexesTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeIndexesTest(unittest.SyncBridgeParams, SyncV2IndexesTest):
+    pass

@@ -2,11 +2,14 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.transaction.resources import DecodeTxResource
 from hathor.transaction.scripts import parse_address_script
+from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, create_tokens
 
 
-class DecodeTxTest(_BaseResourceTest._ResourceTest):
+class BaseDecodeTxTest(_BaseResourceTest._ResourceTest):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         self.web = StubSite(DecodeTxResource(self.manager))
@@ -51,3 +54,16 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.get('decode_tx', {b'hex_tx': bytes(tx2.get_struct().hex(), 'utf-8')})
         data = response.json_value()
         self.assertTrue(data['success'])
+
+
+class SyncV1DecodeTxTest(unittest.SyncV1Params, BaseDecodeTxTest):
+    __test__ = True
+
+
+class SyncV2DecodeTxTest(unittest.SyncV2Params, BaseDecodeTxTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeDecodeTxTest(unittest.SyncBridgeParams, SyncV2DecodeTxTest):
+    pass

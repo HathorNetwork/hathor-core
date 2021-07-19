@@ -534,6 +534,7 @@ class Transaction(BaseTransaction):
         We only consider the blocks on the best chain up to the tx's timestamp.
         """
         assert self.storage is not None
+
         if self._height_cache:
             # get_best_block_tips is a costly method because there are many orphan blocks in our blockchain
             # This method is called for each input that spends a block and, since we have many transactions

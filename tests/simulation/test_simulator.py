@@ -8,7 +8,9 @@ from tests import unittest
 
 
 @pytest.mark.skipif(sys.platform == 'win32', reason='set_seed fails on Windows')
-class HathorSimulatorTestCase(unittest.TestCase):
+class SimulatorTestCase(unittest.TestCase):
+    __test__ = False
+
     seed_config: Optional[int] = None
 
     def setUp(self):
@@ -25,11 +27,24 @@ class HathorSimulatorTestCase(unittest.TestCase):
         self.simulator.stop()
         super().tearDown()
 
-    def create_peer(self):
+    def create_peer(self, enable_sync_v1=None, enable_sync_v2=None):
+        if enable_sync_v1 is None:
+            assert hasattr(self, '_enable_sync_v1'), ('`_enable_sync_v1` has no default by design, either set one on '
+                                                      'the test class or pass `enable_sync_v1` by argument')
+            enable_sync_v1 = self._enable_sync_v1
+        if enable_sync_v2 is None:
+            assert hasattr(self, '_enable_sync_v2'), ('`_enable_sync_v2` has no default by design, either set one on '
+                                                      'the test class or pass `enable_sync_v2` by argument')
+            enable_sync_v2 = self._enable_sync_v2
+        assert enable_sync_v1 or enable_sync_v2, 'enable at least one sync version'
         return self.simulator.create_peer(
             peer_id=self.get_random_peer_id_from_pool(),
+            enable_sync_v1=enable_sync_v1,
+            enable_sync_v2=enable_sync_v2,
         )
 
+
+class BaseRandomSimulatorTestCase(SimulatorTestCase):
     def test_one_node(self):
         manager1 = self.create_peer()
 
@@ -151,3 +166,22 @@ class HathorSimulatorTestCase(unittest.TestCase):
             self.log.debug(f'checking node {idx}')
             self.assertConsensusValid(node)
             self.assertConsensusEqual(node, late_manager)
+
+
+class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, BaseRandomSimulatorTestCase):
+    __test__ = True
+
+    # XXX: I'm not sure if marking this as flaky is ideal, but it can fail randomly if it lands on a bad seed,
+    #      known bad seeds are saved bellow, failing twice in a row is still possible but much less likely
+    @pytest.mark.flaky(max_runs=2, min_passes=1)
+    def test_new_syncing_peer(self):
+        super().test_new_syncing_peer()
+
+
+class SyncV2RandomSimulatorTestCase(unittest.SyncV2Params, BaseRandomSimulatorTestCase):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeRandomSimulatorTestCase(unittest.SyncBridgeParams, SyncV2RandomSimulatorTestCase):
+    __test__ = True

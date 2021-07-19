@@ -4,13 +4,16 @@ from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.transaction.scripts import parse_address_script
 from hathor.wallet.resources.thin_wallet import AddressBalanceResource, AddressSearchResource
+from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, create_tokens
 
 settings = HathorSettings()
 
 
-class SearchAddressTest(_BaseResourceTest._ResourceTest):
+class BaseSearchAddressTest(_BaseResourceTest._ResourceTest):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
 
@@ -112,3 +115,16 @@ class SearchAddressTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(0, data['tokens_data'][settings.HATHOR_TOKEN_UID.hex()]['spent'])
         self.assertEqual(100, data['tokens_data'][self.token_uid.hex()]['received'])
         self.assertEqual(0, data['tokens_data'][self.token_uid.hex()]['spent'])
+
+
+class SyncV1SearchAddressTest(unittest.SyncV1Params, BaseSearchAddressTest):
+    __test__ = True
+
+
+class SyncV2SearchAddressTest(unittest.SyncV2Params, BaseSearchAddressTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeSearchAddressTest(unittest.SyncBridgeParams, SyncV2SearchAddressTest):
+    pass

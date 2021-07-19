@@ -36,9 +36,14 @@ def resolve_block_bytes(block_bytes):
     return block.get_struct()
 
 
-def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False) -> Transaction:
-    tx_interval = random.choice(list(manager.tx_storage.get_tx_tips()))
-    tx = manager.tx_storage.get_transaction(tx_interval.data)
+def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False,
+                            tx: Optional[Transaction] = None) -> Transaction:
+    if tx is None:
+        tx_interval = random.choice(list(manager.tx_storage.get_tx_tips()))
+        _tx = manager.tx_storage.get_transaction(tx_interval.data)
+        assert isinstance(_tx, Transaction)
+        tx = _tx
+
     txin = random.choice(tx.inputs)
 
     from hathor.transaction.scripts import P2PKH, parse_address_script
@@ -71,8 +76,9 @@ def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = 
     return tx2
 
 
-def add_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False) -> Transaction:
-    tx = gen_new_double_spending(manager, use_same_parents=use_same_parents)
+def add_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False,
+                            tx: Optional[Transaction] = None) -> Transaction:
+    tx = gen_new_double_spending(manager, use_same_parents=use_same_parents, tx=tx)
     manager.propagate_tx(tx, fails_silently=False)
     return tx
 
@@ -98,7 +104,7 @@ def gen_new_tx(manager, address, value, verify=True):
     return tx
 
 
-def add_new_tx(manager, address, value, advance_clock=None):
+def add_new_tx(manager, address, value, advance_clock=None, propagate=True):
     """ Create, resolve and propagate a new tx
 
         :param manager: Manager object to handle the creation
@@ -114,13 +120,14 @@ def add_new_tx(manager, address, value, advance_clock=None):
         :rtype: :py:class:`hathor.transaction.transaction.Transaction`
     """
     tx = gen_new_tx(manager, address, value)
-    manager.propagate_tx(tx, fails_silently=False)
+    if propagate:
+        manager.propagate_tx(tx, fails_silently=False)
     if advance_clock:
         manager.reactor.advance(advance_clock)
     return tx
 
 
-def add_new_transactions(manager, num_txs, advance_clock=None):
+def add_new_transactions(manager, num_txs, advance_clock=None, propagate=True):
     """ Create, resolve and propagate some transactions
 
         :param manager: Manager object to handle the creation
@@ -136,12 +143,13 @@ def add_new_transactions(manager, num_txs, advance_clock=None):
     for _ in range(num_txs):
         address = 'HGov979VaeyMQ92ubYcnVooP6qPzUJU8Ro'
         value = random.choice([5, 10, 15, 20])
-        tx = add_new_tx(manager, address, value, advance_clock)
+        tx = add_new_tx(manager, address, value, advance_clock, propagate)
         txs.append(tx)
     return txs
 
 
-def add_new_block(manager, advance_clock=None, *, parent_block_hash=None, data=b'', weight=None, address=None):
+def add_new_block(manager, advance_clock=None, *, parent_block_hash=None,
+                  data=b'', weight=None, address=None, propagate=True):
     """ Create, resolve and propagate a new block
 
         :param manager: Manager object to handle the creation
@@ -155,7 +163,8 @@ def add_new_block(manager, advance_clock=None, *, parent_block_hash=None, data=b
         block.weight = weight
     block.resolve()
     block.validate_full()
-    manager.propagate_tx(block, fails_silently=False)
+    if propagate:
+        manager.propagate_tx(block, fails_silently=False)
     if advance_clock:
         manager.reactor.advance(advance_clock)
     return block

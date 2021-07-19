@@ -10,7 +10,9 @@ from tests.utils import add_blocks_unlock_reward, add_new_blocks, create_tokens
 settings = HathorSettings()
 
 
-class HathorSyncMethodsTestCase(unittest.TestCase):
+class BaseHathorSyncMethodsTestCase(unittest.TestCase):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
 
@@ -433,3 +435,16 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(self.manager.wallet.balance[token_id], WalletBalance(0, amount - 30))
         # hathor balance remains the same
         self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID], hathor_balance)
+
+
+class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMethodsTestCase):
+    __test__ = True
+
+
+class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMethodsTestCase):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeHathorSyncMethodsTestCase(unittest.SyncBridgeParams, SyncV2HathorSyncMethodsTestCase):
+    pass

@@ -19,10 +19,13 @@ from typing import TYPE_CHECKING, Iterable, Optional
 from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
+from hathor.exception import HathorError
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.node_sync import NodeSyncTimestamp
 from hathor.p2p.peer_id import PeerId
+from hathor.p2p.protocol_version import ProtocolVersion
 from hathor.p2p.states.base import BaseState
+from hathor.p2p.sync_manager import SyncManager
 from hathor.transaction import BaseTransaction
 
 if TYPE_CHECKING:
@@ -68,7 +71,16 @@ class ReadyState(BaseState):
         })
 
         # Initialize sync manager and add its commands to the list of available commands.
-        self.sync_manager = NodeSyncTimestamp(self.protocol, reactor=self.reactor)
+        self.sync_manager: SyncManager
+        if protocol.protocol_version is ProtocolVersion.V1:
+            self.log.debug('loading sync-v1')
+            self.sync_manager = NodeSyncTimestamp(self.protocol, reactor=self.reactor)
+        elif protocol.protocol_version is ProtocolVersion.V2:
+            self.log.debug('loading sync-v2 (pretend)')
+            # self.sync_manager = NodeBlockSync(self.protocol, reactor=self.reactor)
+            self.sync_manager = NodeSyncTimestamp(self.protocol, reactor=self.reactor)
+        else:
+            raise HathorError(f'wrong protocol version: {protocol.protocol_version}')
         self.cmd_map.update(self.sync_manager.get_cmd_dict())
 
     def on_enter(self) -> None:
@@ -88,7 +100,8 @@ class ReadyState(BaseState):
             self.sync_manager.stop()
 
     def prepare_to_disconnect(self) -> None:
-        self.sync_manager.stop()
+        if self.sync_manager.is_started:
+            self.sync_manager.stop()
 
     def send_tx_to_peer(self, tx: BaseTransaction) -> None:
         self.sync_manager.send_tx_to_peer_if_possible(tx)

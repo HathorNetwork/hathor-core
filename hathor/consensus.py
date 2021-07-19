@@ -154,14 +154,14 @@ class BlockConsensusAlgorithm:
 
         # Update accumulated weight of the transactions voiding us.
         assert block.hash not in voided_by
-        for h in voided_by:
+        for h in sorted(voided_by):
             tx = storage.get_transaction(h)
             tx_meta = tx.get_metadata()
             tx_meta.accumulated_weight = sum_weights(tx_meta.accumulated_weight, block.weight)
             storage.save_transaction(tx, only_metadata=True)
 
         # Check conflicts of the transactions voiding us.
-        for h in voided_by:
+        for h in sorted(voided_by):
             tx = storage.get_transaction(h)
             if not tx.is_block:
                 assert isinstance(tx, Transaction)

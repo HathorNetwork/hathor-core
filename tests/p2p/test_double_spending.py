@@ -5,7 +5,9 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_tx
 
 
-class HathorSyncMethodsTestCase(unittest.TestCase):
+class BaseHathorSyncMethodsTestCase(unittest.TestCase):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
 
@@ -81,8 +83,8 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
             spent_meta = spent_tx.get_metadata()
             self.assertEqual([tx1.hash, tx2.hash], spent_meta.spent_outputs[txin.index])
 
-        self.assertNotIn(tx1.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
-        self.assertNotIn(tx2.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
+        self.assertNotIn(tx1.hash, self.manager1.tx_storage._tx_tips_index)
+        self.assertNotIn(tx2.hash, self.manager1.tx_storage._tx_tips_index)
 
         # Propagate another conflicting transaction, but with higher weight.
         self.manager1.propagate_tx(tx3)
@@ -105,9 +107,9 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
             spent_meta = spent_tx.get_metadata()
             self.assertEqual([tx1.hash, tx2.hash, tx3.hash], spent_meta.spent_outputs[txin.index])
 
-        self.assertNotIn(tx1.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
-        self.assertNotIn(tx2.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
-        self.assertIn(tx3.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
+        self.assertNotIn(tx1.hash, self.manager1.tx_storage._tx_tips_index)
+        self.assertNotIn(tx2.hash, self.manager1.tx_storage._tx_tips_index)
+        self.assertIn(tx3.hash, self.manager1.tx_storage._tx_tips_index)
 
         self.assertConsensusValid(self.manager1)
 
@@ -166,7 +168,6 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         self.clock.advance(15)
         self.assertTrue(self.manager1.propagate_tx(tx1))
-        print('tx1', tx1.hash.hex())
         self.clock.advance(15)
 
         # ---
@@ -184,7 +185,6 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx2.resolve()
         self.clock.advance(15)
         self.manager1.propagate_tx(tx2)
-        print('tx2', tx2.hash.hex())
         self.clock.advance(15)
 
         self.assertGreater(tx2.timestamp, tx1.timestamp)
@@ -204,14 +204,12 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx3.resolve()
         self.clock.advance(15)
         self.assertTrue(self.manager1.propagate_tx(tx3))
-        print('tx3', tx3.hash.hex())
         self.clock.advance(15)
 
         # ---
 
         self.clock.advance(15)
         self.assertTrue(self.manager1.propagate_tx(tx4, False))
-        print('tx4', tx4.hash.hex())
         self.clock.advance(15)
 
         self.run_to_completion()
@@ -237,7 +235,6 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx5.resolve()
         self.clock.advance(15)
         self.manager1.propagate_tx(tx5)
-        print('tx5', tx5.hash.hex())
         self.clock.advance(15)
 
         meta5 = tx5.get_metadata()
@@ -254,7 +251,6 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx6.resolve()
         self.clock.advance(15)
         self.manager1.propagate_tx(tx6)
-        print('tx6', tx6.hash.hex())
         self.clock.advance(15)
 
         meta6 = tx6.get_metadata()
@@ -276,7 +272,6 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx7.resolve()
         self.clock.advance(15)
         self.manager1.propagate_tx(tx7, False)
-        print('tx7', tx7.hash.hex())
         self.clock.advance(15)
 
         meta1 = tx1.get_metadata(force_reload=True)
@@ -311,3 +306,16 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # dot2 = self.manager1.tx_storage.graphviz_funds(format='pdf', acc_weight=True)
         # dot2.render('dot2')
+
+
+class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMethodsTestCase):
+    __test__ = True
+
+
+class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMethodsTestCase):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeHathorSyncMethodsTestCase(unittest.SyncBridgeParams, SyncV2HathorSyncMethodsTestCase):
+    pass

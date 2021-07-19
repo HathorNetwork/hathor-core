@@ -28,6 +28,7 @@ from zope.interface import implementer
 
 from hathor.conf import HathorSettings
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
+from hathor.p2p.sync_manager import SyncManager
 from hathor.transaction import BaseTransaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
@@ -169,7 +170,7 @@ class SendDataPush:
         self.priority_queue.clear()
 
 
-class NodeSyncTimestamp:
+class NodeSyncTimestamp(SyncManager):
     """ An algorithm to sync the DAG between two peers using the timestamp of the transactions.
 
     This algorithm must assume that a new item may arrive while it is running. The item's timestamp
@@ -218,8 +219,8 @@ class NodeSyncTimestamp:
         # that the peer is synced (in seconds).
         self.sync_threshold: int = settings.P2P_SYNC_THRESHOLD
 
-        # Indicate whether the sync has been started.
-        self.is_started: bool = False
+        # Indicate whether the sync manager has been started.
+        self._started: bool = False
 
         # Indicate whether the synchronization is running.
         self.is_running: bool = False
@@ -248,12 +249,16 @@ class NodeSyncTimestamp:
             ProtocolMessages.NOT_FOUND: self.handle_not_found,
         }
 
+    @property
+    def is_started(self) -> bool:
+        return self._started
+
     def start(self) -> None:
         """ Start sync.
         """
-        if self.is_started:
+        if self._started:
             raise Exception('NodeSyncTimestamp is already running')
-        self.is_started = True
+        self._started = True
         if self.send_data_queue:
             self.send_data_queue.start()
         self.next_step()
@@ -261,9 +266,9 @@ class NodeSyncTimestamp:
     def stop(self) -> None:
         """ Stop sync.
         """
-        if not self.is_started:
+        if not self._started:
             raise Exception('NodeSyncTimestamp is already stopped')
-        self.is_started = False
+        self._started = False
         if self.send_data_queue and self.send_data_queue.is_running:
             self.send_data_queue.stop()
         if self.call_later_id and self.call_later_id.active():

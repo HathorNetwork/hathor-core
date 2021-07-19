@@ -2,10 +2,13 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.resources import AddPeersResource
+from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
-class AddPeerTest(_BaseResourceTest._ResourceTest):
+class BaseAddPeerTest(_BaseResourceTest._ResourceTest):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         self.web = StubSite(AddPeersResource(self.manager))
@@ -36,3 +39,16 @@ class AddPeerTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.post('p2p/peers', {'a': 'tcp://localhost:8006'})
         data = response.json_value()
         self.assertFalse(data['success'])
+
+
+class SyncV1AddPeerTest(unittest.SyncV1Params, BaseAddPeerTest):
+    __test__ = True
+
+
+class SyncV2AddPeerTest(unittest.SyncV2Params, BaseAddPeerTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeAddPeerTest(unittest.SyncBridgeParams, SyncV2AddPeerTest):
+    pass

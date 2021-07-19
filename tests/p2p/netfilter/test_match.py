@@ -164,6 +164,10 @@ class NetfilterMatchTest(unittest.TestCase):
         context = NetfilterContext()
         self.assertFalse(matcher.match(context))
 
+
+class BaseNetfilterMatchTest(unittest.TestCase):
+    __test__ = False
+
     def test_match_peer_id(self):
         network = 'testnet'
         peer_id1 = PeerId()
@@ -191,3 +195,16 @@ class NetfilterMatchTest(unittest.TestCase):
         # Fail because proto1 is connected to proto2, and the peer id cannot match.
         context = NetfilterContext(protocol=conn.proto1)
         self.assertFalse(matcher.match(context))
+
+
+class SyncV1NetfilterMatchTest(unittest.SyncV1Params, BaseNetfilterMatchTest):
+    __test__ = True
+
+
+class SyncV2NetfilterMatchTest(unittest.SyncV2Params, BaseNetfilterMatchTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeNetfilterMatchTest(unittest.SyncBridgeParams, SyncV2NetfilterMatchTest):
+    pass

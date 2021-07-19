@@ -80,6 +80,8 @@ class RunNode:
         parser.add_argument('--max-output-script-size', type=int, default=None, help='Custom max accepted script size '
                             'on /push-tx API')
         parser.add_argument('--sentry-dsn', help='Sentry DSN')
+        parser.add_argument('--x-sync-bridge', action='store_true',
+                            help='Enable support for running both sync protocols. DO NOT ENABLE, IT WILL BREAK.')
         return parser
 
     def prepare(self, args: Namespace) -> None:
@@ -227,7 +229,8 @@ class RunNode:
         network = settings.NETWORK_NAME
         self.manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname,
                                      tx_storage=self.tx_storage, wallet=self.wallet, wallet_index=args.wallet_index,
-                                     stratum_port=args.stratum, ssl=True, checkpoints=settings.CHECKPOINTS)
+                                     stratum_port=args.stratum, ssl=True, checkpoints=settings.CHECKPOINTS,
+                                     enable_sync_v1=True, enable_sync_v2=args.x_sync_bridge)
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
 

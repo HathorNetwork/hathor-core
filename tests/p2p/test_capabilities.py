@@ -5,10 +5,7 @@ from tests import unittest
 settings = HathorSettings()
 
 
-class HathorCapabilitiesTestCase(unittest.TestCase):
-    def setUp(self):
-        super().setUp()
-
+class SyncV1HathorCapabilitiesTestCase(unittest.SyncV1Params, unittest.TestCase):
     def test_capabilities(self):
         network = 'testnet'
         manager1 = self.create_peer(network, capabilities=[settings.CAPABILITY_WHITELIST])
@@ -37,3 +34,12 @@ class HathorCapabilitiesTestCase(unittest.TestCase):
 
         self.assertEqual(conn2._proto1.state.state_name, 'READY')
         self.assertEqual(conn2._proto2.state.state_name, 'READY')
+
+
+class SyncV2HathorCapabilitiesTestCase(unittest.SyncV2Params, unittest.TestCase):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeHathorCapabilitiesTestCase(unittest.SyncBridgeParams, SyncV2HathorCapabilitiesTestCase):
+    pass
