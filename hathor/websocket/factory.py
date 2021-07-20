@@ -197,7 +197,9 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             data = tx.to_json_extended()
             data['is_block'] = tx.is_block
             # needed to check if the transaction is from the mempool
-            data['first_block'] = tx.get_metadata().first_block
+            first_block = tx.get_metadata().first_block
+            first_block_hex: Optional[str] = None if first_block is None else first_block.hex()
+            data['first_block'] = first_block_hex
             return data
         elif event == HathorEvents.WALLET_BALANCE_UPDATED:
             data['balance'] = data['balance'][settings.HATHOR_TOKEN_UID]._asdict()
@@ -208,7 +210,11 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
     def execute_send(self, data: Dict[str, Any], connections: Set[HathorAdminWebsocketProtocol]) -> None:
         """ Send data in ws message for the connections
         """
-        payload = json.dumps(data).encode('utf-8')
+        try:
+            payload = json.dumps(data).encode('utf-8')
+        except TypeError:
+            self.log.error('failed to serialize data', data=repr(data), exc_info=True)
+            return
         for c in connections:
             try:
                 c.sendMessage(payload, False)
