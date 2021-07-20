@@ -249,11 +249,11 @@ class BlockConsensusAlgorithm:
                 else:
                     storage._best_block_tips = [blk.hash for blk in heads]
                     # XXX Is it safe to select one of the heads?
-                    best_block = heads[0]
-                    assert best_block.hash is not None
-                    best_meta = best_block.get_metadata()
-                    self.log.debug('index previous best block', height=best_meta.height, block=best_block.hash_hex)
-                    storage.add_new_to_block_height_index(best_meta.height, best_block.hash)
+                    # best_block = heads[0]
+                    # assert best_block.hash is not None
+                    # best_meta = best_block.get_metadata()
+                    # self.log.debug('index previous best block', height=best_meta.height, block=best_block.hash_hex)
+                    # storage.add_new_to_block_height_index(best_meta.height, best_block.hash)
 
         # Uncomment the following lines to check that the cache update is working properly.
         # You shouldn't run this test in production because it dampens performance.

@@ -547,7 +547,7 @@ class Transaction(BaseTransaction):
             assert len(tips) > 0
             tip = self.storage.get_transaction(tips[0])
             assert tip is not None
-            assert self.timestamp > tip.timestamp
+            assert self.timestamp > tip.timestamp  # XXX: should this be an assert? fails on a test
             best_height = tip.get_metadata().height
             self._height_cache = best_height
         spent_height = block.get_metadata().height

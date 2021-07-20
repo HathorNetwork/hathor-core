@@ -39,10 +39,14 @@ def resolve_block_bytes(block_bytes):
 def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False,
                             tx: Optional[Transaction] = None) -> Transaction:
     if tx is None:
-        tx_interval = random.choice(list(manager.tx_storage.get_tx_tips()))
-        _tx = manager.tx_storage.get_transaction(tx_interval.data)
-        assert isinstance(_tx, Transaction)
-        tx = _tx
+        possible_parents = manager.get_new_tx_parents()
+        genesis = manager.tx_storage.get_all_genesis()
+        genesis_txs = [tx for tx in genesis if not tx.is_block]
+        for genesis_tx in genesis_txs:
+            if genesis_tx.hash in possible_parents:
+                possible_parents.remove(genesis_tx.hash)
+        tx_hash = random.choice(possible_parents)
+        tx = cast(Transaction, manager.tx_storage.get_transaction(tx_hash))
 
     txin = random.choice(tx.inputs)
 

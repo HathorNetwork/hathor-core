@@ -80,6 +80,32 @@ class FakeConnection:
         self._proto1.disable_idle_timeout()
         self._proto2.disable_idle_timeout()
 
+    def synced_or_error(self) -> bool:
+        """Short-hand check that can be used to make "step loops" without having to guess the number of iterations."""
+        from hathor.p2p.node_sync import NodeSyncTimestamp
+        from hathor.p2p.node_sync_v2 import NodeBlockSync, PeerState
+        from hathor.p2p.states.ready import ReadyState
+        state1 = self._proto1.state
+        state2 = self._proto2.state
+        if not isinstance(state1, ReadyState) or not isinstance(state2, ReadyState):
+            return False
+        sync1 = state1.sync_manager
+        sync2 = state2.sync_manager
+        if isinstance(sync1, NodeBlockSync):
+            assert isinstance(sync2, NodeBlockSync)
+            if sync1.state is PeerState.ERROR or sync2.state is PeerState.ERROR:
+                return True
+            return sync1.synced and sync2.synced
+        elif isinstance(sync1, NodeSyncTimestamp):
+            assert isinstance(sync2, NodeSyncTimestamp)
+            # this is kinda tricky because it can happen that this condition is met even without them having synced
+            ts_eq = sync1.peer_timestamp == sync1.synced_timestamp == sync2.peer_timestamp == sync2.synced_timestamp
+            if not ts_eq:
+                return False
+            return sync1.manager.tx_storage.latest_timestamp == sync2.manager.tx_storage.latest_timestamp
+        else:
+            raise NotImplementedError('there isn\'t another sync class')
+
     def run_one_step(self, debug=False, force=False):
         assert self.is_connected, 'not connected'
 

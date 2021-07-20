@@ -31,6 +31,7 @@ from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import PeerStorage
 from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.states.ready import ReadyState
+from hathor.p2p.sync_checkpoints import SyncCheckpoint
 from hathor.p2p.utils import description_to_connection_string, parse_whitelist
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
@@ -52,6 +53,7 @@ class ConnectionsManager:
     connected_peers: Dict[str, HathorProtocol]
     connecting_peers: Dict[IStreamClientEndpoint, Deferred]
     handshaking_peers: Set[HathorProtocol]
+    sync_checkpoints: SyncCheckpoint
     whitelist_only: bool
 
     def __init__(self, reactor: ReactorBase, my_peer: PeerId, server_factory: 'HathorServerFactory',
@@ -106,6 +108,9 @@ class ConnectionsManager:
         self.pubsub = pubsub
 
         self.ssl = ssl
+
+        # Object that handles the sync until the last checkpoint for all peers
+        self.sync_checkpoints = SyncCheckpoint(manager)
 
         # Parameter to explicitly enable whitelist-only mode, when False it will still check the whitelist for sync-v1
         self.whitelist_only = whitelist_only
@@ -223,13 +228,24 @@ class ConnectionsManager:
                 self.connected_peers[protocol.peer.id] = existing_protocol
         self.pubsub.publish(HathorEvents.NETWORK_PEER_DISCONNECTED, protocol=protocol)
 
+    # XXX: maybe rename these to `iter_*` since they aren't returning a contatainer
+
     def get_all_connections(self) -> Iterable[HathorProtocol]:
         """Iterate over all connections."""
         for conn in self.connections:
             yield conn
 
-    def get_ready_connections(self) -> Set[HathorProtocol]:
-        return set(self.connected_peers.values())
+    def get_ready_connections(self) -> Iterable[HathorProtocol]:
+        """Iterate over ready connections."""
+        for conn in self.connected_peers.values():
+            yield conn
+
+    def get_not_ready_connections(self) -> Iterable[HathorProtocol]:
+        """Iterate over not-ready connections."""
+        for conn in self.connecting_peers.values():
+            yield conn
+        for conn in self.handshaking_peers:
+            yield conn
 
     def is_peer_connected(self, peer_id: str) -> bool:
         """

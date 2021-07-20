@@ -56,8 +56,8 @@ class AddPeersResource(resource.Resource):
             # determines if given connection string is already among connected or connecting peers
             endpoint_url = connection_string.replace('//', '')
 
-            # remove peers that we're already trying to connect
-            if endpoint_url in self.manager.connections.connecting_peers:
+            # ignore peers that we're already trying to connect
+            if endpoint_url in set(self.manager.connections.get_not_ready_connections()):
                 return True
 
             # remove peers we already know about

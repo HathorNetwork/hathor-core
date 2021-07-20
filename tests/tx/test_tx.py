@@ -5,6 +5,7 @@ from math import isinf, isnan
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_from_public_key, get_private_key_from_bytes
 from hathor.daa import TestMode, _set_test_mode
+from hathor.exception import InvalidNewTransaction
 from hathor.transaction import MAX_NUM_INPUTS, MAX_NUM_OUTPUTS, MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
     BlockWithInputs,
@@ -773,7 +774,7 @@ class BaseTransactionTest(unittest.TestCase):
         self._test_txin_data_limit(offset=0)
 
     def test_reward_lock(self):
-        from hathor.transaction.exceptions import RewardLocked
+        # from hathor.transaction.exceptions import RewardLocked
 
         # add block with a reward we can spend
         reward_block = self.manager.generate_mining_block(address=get_address_from_public_key(self.genesis_public_key))
@@ -782,37 +783,27 @@ class BaseTransactionTest(unittest.TestCase):
         # reward cannot be spent while not enough blocks are added
         for _ in range(settings.REWARD_SPEND_MIN_BLOCKS):
             tx = self._spend_reward_tx(self.manager, reward_block)
-            with self.assertRaises(RewardLocked):
-                tx.verify()
+            # meta = tx.get_metadata()
+            tips = tx.storage.get_best_block_tips()
+            assert len(tips) > 0
             add_new_blocks(self.manager, 1, advance_clock=1)
         # now it should be spendable
         tx = self._spend_reward_tx(self.manager, reward_block)
         self.assertTrue(self.manager.propagate_tx(tx, fails_silently=False))
 
-    def test_reward_lock_timestamp(self):
-        from hathor.transaction.exceptions import RewardLocked
-
-        # add block with a reward we can spend
+        # Now we run the same test again but uses propagate tx, to check that we can't propagate it
         reward_block = self.manager.generate_mining_block(address=get_address_from_public_key(self.genesis_public_key))
         reward_block.resolve()
         self.assertTrue(self.manager.propagate_tx(reward_block))
-
-        # we add enough blocks that this output could be spent based on block height
-        blocks = add_blocks_unlock_reward(self.manager)
-
-        # tx timestamp is equal to the block that unlock the spent rewards. It should
-        # be greater, so it'll fail
+        # reward cannot be spent while not enough blocks are added
+        for _ in range(settings.REWARD_SPEND_MIN_BLOCKS):
+            tx = self._spend_reward_tx(self.manager, reward_block)
+            with self.assertRaises(InvalidNewTransaction):
+                self.manager.propagate_tx(tx, fails_silently=False)
+            add_new_blocks(self.manager, 1, advance_clock=1)
+        # now it should be spendable
         tx = self._spend_reward_tx(self.manager, reward_block)
-        tx.timestamp = blocks[-1].timestamp
-        tx.resolve()
-        with self.assertRaises(RewardLocked):
-            tx.verify()
-
-        # we can fix it be incrementing the timestamp
-        tx._height_cache = None
-        tx.timestamp = blocks[-1].timestamp + 1
-        tx.resolve()
-        tx.verify()
+        self.assertTrue(self.manager.propagate_tx(tx, fails_silently=False))
 
     def test_wallet_index(self):
         # First transaction: send tokens to output with address=address_b58

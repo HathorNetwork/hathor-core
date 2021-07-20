@@ -134,6 +134,7 @@ class _BaseTransactionStorageTest:
                 self.assertEqual(tx, tx2)
                 self.assertTrue(self.tx_storage.transaction_exists(tx.hash))
 
+        @pytest.mark.skip(reason='legacy')
         def test_get_empty_merklee_tree(self):
             # We use `first_timestamp - 1` to ensure that the merkle tree will be empty.
             self.tx_storage.get_merkle_tree(self.tx_storage.first_timestamp - 1)
@@ -297,26 +298,31 @@ class _BaseTransactionStorageTest:
             self.assertEqual(total, 4)
 
         def test_storage_new_blocks(self):
-            tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
-            self.assertEqual(tip_blocks, [self.genesis_blocks[0].hash])
+            self.assertEqual(self.tx_storage.get_best_block_tips(), [self.genesis_blocks[0].hash])
 
             block1 = self._add_new_block()
-            tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
-            self.assertEqual(tip_blocks, [block1.hash])
+            self.assertEqual(self.tx_storage.get_best_block_tips(), [block1.hash])
 
             block2 = self._add_new_block()
-            tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
-            self.assertEqual(tip_blocks, [block2.hash])
+            self.assertEqual(self.tx_storage.get_best_block_tips(), [block2.hash])
 
-            # Block3 has the same parents as block2.
+            meta2 = block2.get_metadata()
+            self.assertIsNone(meta2.voided_by)
+
+            # Block3 has the same parents as block2, then block3 and block2 will be voided
+            # the tips will have both of them
             block3 = self._add_new_block(parents=block2.parents)
-            tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
-            self.assertEqual(set(tip_blocks), {block2.hash, block3.hash})
+            self.assertCountEqual(block3.parents, block2.parents)
+            self.assertCountEqual(self.tx_storage.get_best_block_tips(), [block2.hash, block3.hash])
+
+            meta2 = block2.get_metadata(force_reload=True)
+            meta3 = block3.get_metadata()
+            self.assertIsNotNone(meta2.voided_by)
+            self.assertIsNotNone(meta3.voided_by)
 
             # Re-generate caches to test topological sort.
             self.tx_storage._manually_initialize()
-            tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
-            self.assertEqual(set(tip_blocks), {block2.hash, block3.hash})
+            self.assertCountEqual(self.tx_storage.get_best_block_tips(), [block2.hash, block3.hash])
 
         def test_token_list(self):
             tx = self.tx

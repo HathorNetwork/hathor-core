@@ -742,8 +742,12 @@ class NodeSyncTimestamp(SyncManager):
         # the parameter of the second callback is the return of the first
         # so I need to return the same tx to guarantee that all peers will receive it
         if tx:
-            # Add tx to the DAG.
-            success = self.manager.on_new_tx(tx)
+            assert tx.hash is not None
+            if self.manager.tx_storage.transaction_exists(tx.hash):
+                success = True
+            else:
+                # Add tx to the DAG.
+                success = self.manager.on_new_tx(tx)
             # Updating stats data
             self.update_received_stats(tx, success)
         return tx

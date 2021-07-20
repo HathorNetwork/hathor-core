@@ -127,6 +127,7 @@ class TransactionStorage(ABC):
 
         # Hold blocks that can be used as the next parent block
         # XXX: if there is more than one they must all have the same score, must always have at least one hash
+        # self._parent_blocks_index: Set[bytes] = {BLOCK_GENESIS.hash}
         self._parent_blocks_index: List[bytes] = [BLOCK_GENESIS.hash]
 
     # rev-dep-index methods:
@@ -641,8 +642,10 @@ class TransactionStorage(ABC):
         When more than one block is returned, it means that there are multiple best chains and
         you can choose any of them.
         """
-        if timestamp is None and not skip_cache and self._best_block_tips is not None:
-            return self._best_block_tips
+        if timestamp is None and not skip_cache:
+            return self._parent_blocks_index.copy()
+
+        # XXX: legacy method using interval tree:
 
         best_score = 0.0
         best_tip_blocks: List[bytes] = []
