@@ -20,7 +20,7 @@ RUN apk add openssl-dev libffi-dev build-base rust cargo
 RUN pip --no-input --no-cache-dir install --upgrade pip poetry
 ENV POETRY_VIRTUALENVS_IN_PROJECT=true
 COPY pyproject.toml poetry.lock  ./
-RUN poetry install -n -E rocksdb --no-root --no-dev
+RUN poetry install -n -E rocksdb -E sentry --no-root --no-dev
 
 # stage-1: install all dev dependencies and build protos, reuse .venv from stage-0
 FROM python:$PYTHON-alpine$ALPINE as stage-1
@@ -33,9 +33,9 @@ RUN apk add openssl-dev libffi-dev build-base rust cargo
 RUN pip --no-input --no-cache-dir install --upgrade pip poetry
 ENV POETRY_VIRTUALENVS_IN_PROJECT=true
 COPY pyproject.toml poetry.lock  ./
-RUN poetry install -n -E rocksdb --no-root --no-dev
+RUN poetry install -n -E rocksdb -E sentry --no-root --no-dev
 # up to the line above is be the same as in stage-0, and thus all layers are re-used
-RUN poetry install -n -E rocksdb --no-root
+RUN poetry install -n -E rocksdb -E sentry --no-root
 COPY Makefile ./
 COPY hathor/protos ./hathor/protos/
 RUN make clean-protos
