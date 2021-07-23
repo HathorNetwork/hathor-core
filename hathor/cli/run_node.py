@@ -32,6 +32,7 @@ logger = get_logger()
 class RunNode:
     UNSAFE_ARGUMENTS: List[Tuple[str, Callable[[Namespace], bool]]] = [
         ('--test-mode-tx-weight', lambda args: bool(args.test_mode_tx_weight)),
+        ('--enable-crash-api', lambda args: bool(args.enable_crash_api)),
     ]
 
     def create_parser(self) -> ArgumentParser:
@@ -86,6 +87,8 @@ class RunNode:
         parser.add_argument('--max-output-script-size', type=int, default=None, help='Custom max accepted script size '
                             'on /push-tx API')
         parser.add_argument('--sentry-dsn', help='Sentry DSN')
+        parser.add_argument('--enable-debug-api', action='store_true', help='Enable _debug/* endpoints')
+        parser.add_argument('--enable-crash-api', action='store_true', help='Enable _crash/* endpoints')
         return parser
 
     def prepare(self, args: Namespace) -> None:
@@ -293,6 +296,14 @@ class RunNode:
 
     def register_resources(self, args: Namespace) -> None:
         from hathor.conf import HathorSettings
+        from hathor.debug_resources import (
+            DebugCrashResource,
+            DebugLogResource,
+            DebugMessAroundResource,
+            DebugPrintResource,
+            DebugRaiseResource,
+            DebugRejectResource,
+        )
         from hathor.mining.ws import MiningWebsocketFactory
         from hathor.p2p.resources import AddPeersResource, MiningInfoResource, MiningResource, StatusResource
         from hathor.profiler import get_cpu_profiler
@@ -373,7 +384,7 @@ class RunNode:
                 graphviz.putChild(b'full.' + bfmt, GraphvizFullResource(self.manager, format=fmt))
                 graphviz.putChild(b'neighbours.' + bfmt, GraphvizNeighboursResource(self.manager, format=fmt))
 
-            resources = (
+            resources = [
                 (b'status', StatusResource(self.manager), root),
                 (b'version', VersionResource(self.manager), root),
                 (b'create_tx', CreateTxResource(self.manager), root),
@@ -409,7 +420,25 @@ class RunNode:
                 (b'execute', NanoContractExecuteResource(self.manager), contracts_resource),
                 # /p2p
                 (b'peers', AddPeersResource(self.manager), p2p_resource),
-            )
+            ]
+
+            if args.enable_debug_api:
+                debug_resource = Resource()
+                root.putChild(b'_debug', debug_resource)
+                resources.extend([
+                    (b'log', DebugLogResource(), debug_resource),
+                    (b'raise', DebugRaiseResource(), debug_resource),
+                    (b'reject', DebugRejectResource(), debug_resource),
+                    (b'print', DebugPrintResource(), debug_resource),
+                ])
+            if args.enable_crash_api:
+                crash_resource = Resource()
+                root.putChild(b'_crash', crash_resource)
+                resources.extend([
+                    (b'exit', DebugCrashResource(), crash_resource),
+                    (b'mess_around', DebugMessAroundResource(self.manager), crash_resource),
+                ])
+
             for url_path, resource, parent in resources:
                 parent.putChild(url_path, resource)
 
