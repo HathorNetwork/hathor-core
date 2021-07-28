@@ -29,7 +29,7 @@ from structlog import get_logger
 from hathor.crypto.util import decode_address
 from hathor.exception import HathorError
 from hathor.manager import HathorManager
-from hathor.mining import BlockTemplate
+from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.transaction import BaseTransaction, Block, TransactionMetadata
 from hathor.transaction.storage import TransactionStorage
@@ -49,7 +49,7 @@ class JsonRpcError(HathorError):
         super().__init__(message if message is not None else str(code))
 
 
-class IMiningChannel(AsyncIterator[List[BlockTemplate]]):
+class IMiningChannel(AsyncIterator[BlockTemplates]):
     @abstractmethod
     async def submit(self, block: Block) -> Optional[BlockTemplate]:
         """Submit a mined block, when valid get a follow up template that uses the given block as parent."""
@@ -211,7 +211,7 @@ class MiningChannel(IMiningChannel):
         if data['method'] != 'mining.notify':
             self.log.warn('unknown method received', data=data)
             return
-        block_templates = [BlockTemplate.from_dict(d) for d in data.get('params', [])]
+        block_templates = BlockTemplates(BlockTemplate.from_dict(d) for d in data.get('params', []))
         if self._queue.done():
             self._queue = self.loop.create_future()
         self._queue.set_result(block_templates)

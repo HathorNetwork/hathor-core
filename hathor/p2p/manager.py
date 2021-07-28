@@ -33,6 +33,7 @@ from hathor.p2p.states.ready import ReadyState
 from hathor.p2p.utils import description_to_connection_string, parse_whitelist
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
+from hathor.util import Random
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
@@ -54,8 +55,9 @@ class ConnectionsManager:
 
     def __init__(self, reactor: ReactorBase, my_peer: PeerId, server_factory: 'HathorServerFactory',
                  client_factory: 'HathorClientFactory', pubsub: PubSubManager, manager: 'HathorManager',
-                 ssl: bool) -> None:
+                 ssl: bool, rng: Random) -> None:
         self.log = logger.new()
+        self.rng = rng
 
         self.reactor = reactor
         self.my_peer = my_peer
@@ -134,10 +136,8 @@ class ConnectionsManager:
         :param tx: BaseTransaction to be sent.
         :type tx: py:class:`hathor.transaction.BaseTransaction`
         """
-        import random
-
         connections = list(self.get_ready_connections())
-        random.shuffle(connections)
+        self.rng.shuffle(connections)
         for conn in connections:
             assert conn.state is not None
             assert isinstance(conn.state, ReadyState)
@@ -302,8 +302,6 @@ class ConnectionsManager:
     def connect_to_if_not_connected(self, peer: PeerId, now: int) -> None:
         """ Attempts to connect if it is not connected to the peer.
         """
-        import random
-
         if not peer.entrypoints:
             return
         if peer.id in self.connected_peers:
@@ -311,7 +309,7 @@ class ConnectionsManager:
 
         assert peer.id is not None
         if peer.can_retry(now):
-            self.connect_to(random.choice(peer.entrypoints), peer)
+            self.connect_to(self.rng.choice(peer.entrypoints), peer)
 
     def _connect_to_callback(self, protocol: Union[HathorProtocol, TLSMemoryBIOProtocol], peer: Optional[PeerId],
                              endpoint: IStreamClientEndpoint, connection_string: str,

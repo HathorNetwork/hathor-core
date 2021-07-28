@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import datetime
-import random
 import sys
 import time
 from enum import Enum
@@ -25,7 +24,6 @@ from twisted.internet.defer import Deferred
 from twisted.internet.interfaces import IReactorCore
 from twisted.python.threadpool import ThreadPool
 
-import hathor.util
 from hathor import daa
 from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
@@ -42,6 +40,7 @@ from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transact
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.util import LogDuration, Random
 from hathor.wallet import BaseWallet
 
 settings = HathorSettings()
@@ -67,7 +66,8 @@ class HathorManager:
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
                  peer_storage: Optional[Any] = None, default_port: int = 40403, wallet_index: bool = False,
                  stratum_port: Optional[int] = None, ssl: bool = True,
-                 capabilities: Optional[List[str]] = None, checkpoints: Optional[List[Checkpoint]] = None) -> None:
+                 capabilities: Optional[List[str]] = None, checkpoints: Optional[List[Checkpoint]] = None,
+                 rng: Optional[Random] = None) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node. If not given, a new one is created.
@@ -101,6 +101,10 @@ class HathorManager:
         from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 
         self.log = logger.new()
+
+        if rng is None:
+            rng = Random()
+        self.rng = rng
 
         self.reactor = reactor
         if hasattr(self.reactor, 'addSystemEventTrigger'):
@@ -154,7 +158,7 @@ class HathorManager:
         self.server_factory = HathorServerFactory(self.network, self.my_peer, node=self, use_ssl=ssl)
         self.client_factory = HathorClientFactory(self.network, self.my_peer, node=self, use_ssl=ssl)
         self.connections = ConnectionsManager(self.reactor, self.my_peer, self.server_factory, self.client_factory,
-                                              self.pubsub, self, ssl)
+                                              self.pubsub, self, ssl, rng=self.rng)
 
         self.wallet = wallet
         if self.wallet:
@@ -358,7 +362,7 @@ class HathorManager:
             tx_meta = tx.get_metadata()
 
             t2 = time.time()
-            dt = hathor.util.LogDuration(t2 - t1)
+            dt = LogDuration(t2 - t1)
             dcnt = cnt - cnt2
             tx_rate = '?' if dt == 0 else dcnt / dt
             h = max(h, tx_meta.height)
@@ -436,7 +440,7 @@ class HathorManager:
                 tx_count += 1
 
             if time.time() - t2 > 1:
-                dt = hathor.util.LogDuration(time.time() - t2)
+                dt = LogDuration(time.time() - t2)
                 self.log.warn('tx took too long to load', tx=tx.hash_hex, dt=dt)
 
         # we have to have a best_block by now
@@ -476,7 +480,7 @@ class HathorManager:
 
         # self.stop_profiler(save_to='profiles/initializing.prof')
         self.state = self.NodeState.READY
-        tdt = hathor.util.LogDuration(t2 - t0)
+        tdt = LogDuration(t2 - t0)
         tx_rate = '?' if tdt == 0 else cnt / tdt
         self.log.info('ready', tx_count=cnt, tx_rate=tx_rate, total_dt=tdt, height=h, blocks=block_count, txs=tx_count)
 
@@ -493,16 +497,8 @@ class HathorManager:
         :rtype: List[bytes(hash)]
         """
         timestamp = timestamp or self.reactor.seconds()
-        ret = list(self.tx_storage.get_tx_tips(timestamp - 1))
-        random.shuffle(ret)
-        ret = ret[:2]
-        if len(ret) == 1:
-            # If there is only one tip, let's randomly choose one of its parents.
-            parents = list(self.tx_storage.get_tx_tips(ret[0].begin - 1))
-            ret.append(random.choice(parents))
-        assert len(ret) == 2, 'timestamp={} tips={}'.format(
-            timestamp, [x.hex() for x in self.tx_storage.get_tx_tips(timestamp - 1)])
-        return [x.data for x in ret]
+        parent_txs = self.generate_parent_txs(timestamp)
+        return list(parent_txs.get_random_parents(self.rng))
 
     def generate_parent_txs(self, timestamp: Optional[float]) -> 'ParentTxs':
         """Select which transactions will be confirmed by a new block.
@@ -665,6 +661,7 @@ class HathorManager:
             address = self.wallet.get_unused_address_bytes(mark_as_used=False)
         assert address is not None
         block = self.get_block_templates(parent_block_hash, timestamp).generate_mining_block(
+            rng=self.rng,
             merge_mined=merge_mined,
             address=address or None,  # XXX: because we allow b'' for explicit empty output script
             data=data,
@@ -889,13 +886,13 @@ class ParentTxs(NamedTuple):
     can_include: List[bytes]
     must_include: List[bytes]
 
-    def get_random_parents(self) -> Tuple[bytes, bytes]:
+    def get_random_parents(self, rng: Random) -> Tuple[bytes, bytes]:
         """ Get parents from self.parents plus a random choice from self.parents_any to make it 3 in total.
 
         Using tuple as return type to make it explicit that the length is always 2.
         """
         assert len(self.must_include) <= 1
-        fill = [x for _, x in sorted(random.sample(list(enumerate(self.can_include)), 2 - len(self.must_include)))]
+        fill = rng.ordered_sample(self.can_include, 2 - len(self.must_include))
         p1, p2 = self.must_include[:] + fill
         return p1, p2
 
