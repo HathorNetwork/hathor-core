@@ -18,7 +18,7 @@ import os
 import platform
 import sys
 from argparse import ArgumentParser, Namespace
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Tuple
 
 from autobahn.twisted.resource import WebSocketResource
 from structlog import get_logger
@@ -30,12 +30,18 @@ logger = get_logger()
 
 
 class RunNode:
+    UNSAFE_ARGUMENTS: List[Tuple[str, Callable[[Namespace], bool]]] = [
+        ('--test-mode-tx-weight', lambda args: bool(args.test_mode_tx_weight)),
+    ]
+
     def create_parser(self) -> ArgumentParser:
         from hathor.cli.util import create_parser
         parser = create_parser()
 
         parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
         parser.add_argument('--auto-hostname', action='store_true', help='Try to discover the hostname automatically')
+        parser.add_argument('--unsafe-mode',
+                            help='Enable unsafe parameters. **NEVER USE IT IN PRODUCTION ENVIRONMENT**')
         parser.add_argument('--testnet', action='store_true', help='Connect to Hathor testnet')
         parser.add_argument('--test-mode-tx-weight', action='store_true',
                             help='Reduces tx weight to 1 for testing purposes')
@@ -130,6 +136,8 @@ class RunNode:
             peer_id = PeerId.create_from_json(data)
 
         python = f'{platform.python_version()}-{platform.python_implementation()}'
+
+        self.check_unsafe_arguments(args)
 
         self.log.info(
             'hathor-core v{hathor}',
@@ -464,6 +472,87 @@ class RunNode:
         self.log.warn('USR1 received. Killing all connections...')
         if self.manager and self.manager.connections:
             self.manager.connections.disconnect_all_peers(force=True)
+
+    def check_unsafe_arguments(self, args: Namespace) -> None:
+        unsafe_args_found = []
+        for arg_cmdline, arg_test_fn in self.UNSAFE_ARGUMENTS:
+            if arg_test_fn(args):
+                unsafe_args_found.append(arg_cmdline)
+
+        if args.unsafe_mode is None:
+            if unsafe_args_found:
+                message = [
+                    'You need to enable --unsafe-mode to run with these arguments.',
+                    '',
+                    'The following argument require unsafe mode:',
+                ]
+                for arg_cmdline in unsafe_args_found:
+                    message.append(arg_cmdline)
+                message.extend([
+                    '',
+                    'Never enable UNSAFE MODE in a production environment.'
+                ])
+                self.log.critical('\n'.join(message))
+                sys.exit(-1)
+
+        else:
+            fail = False
+            message = [
+                'UNSAFE MODE IS ENABLED',
+                '',
+                '********************************************************',
+                '********************************************************',
+                '',
+                'UNSAFE MODE IS ENABLED',
+                '',
+                'You should never use --unsafe-mode in production environments.',
+                '',
+            ]
+
+            from hathor.conf import HathorSettings
+            settings = HathorSettings()
+
+            if args.unsafe_mode != settings.NETWORK_NAME:
+                message.extend([
+                    f'Unsafe mode enabled for wrong network ({args.unsafe_mode} != {settings.NETWORK_NAME}).',
+                    '',
+                ])
+                fail = True
+
+            is_local_network = True
+            if settings.NETWORK_NAME == 'mainnet':
+                is_local_network = False
+            elif settings.NETWORK_NAME.startswith('testnet'):
+                is_local_network = False
+
+            if not is_local_network:
+                message.extend([
+                    f'You should not enable unsafe mode on {settings.NETWORK_NAME} unless you know what you are doing',
+                    '',
+                ])
+
+            if not unsafe_args_found:
+                message.extend([
+                    '--unsafe-mode is not needed because you have not enabled any unsafe feature.',
+                    '',
+                    'Remove --unsafe-mode and try again.',
+                ])
+                fail = True
+            else:
+                message.append('You have enabled the following features:')
+                for arg_cmdline in unsafe_args_found:
+                    message.append(arg_cmdline)
+
+            message.extend([
+                '',
+                '********************************************************',
+                '********************************************************',
+                '',
+            ])
+
+            self.log.critical('\n'.join(message))
+            if fail:
+                sys.exit(-1)
 
     def __init__(self, *, argv=None):
         if argv is None:
