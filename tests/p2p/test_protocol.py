@@ -1,8 +1,5 @@
 import json
-import sys
 
-import pytest
-import twisted.names.client
 from twisted.internet.defer import inlineCallbacks
 from twisted.python.failure import Failure
 
@@ -15,7 +12,9 @@ from tests import unittest
 settings = HathorSettings()
 
 
-class HathorProtocolTestCase(unittest.TestCase):
+class BaseHathorProtocolTestCase(unittest.TestCase):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         self.network = 'testnet'
@@ -157,7 +156,6 @@ class HathorProtocolTestCase(unittest.TestCase):
         self.assertFalse(self.conn.tr1.disconnecting)
         self.assertFalse(self.conn.tr2.disconnecting)
 
-    @pytest.mark.skipif(sys.platform == 'win32', reason='resolver._parseCall not defined on Windows')
     @inlineCallbacks
     def test_invalid_peer_id(self):
         self.conn.run_one_step()  # HELLO
@@ -171,12 +169,6 @@ class HathorProtocolTestCase(unittest.TestCase):
         yield self._send_cmd(self.conn.proto1, 'PEER-ID', json.dumps(invalid_payload))
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'ERROR')
         self.assertTrue(self.conn.tr1.disconnecting)
-        # When a DNS request is made to twisted client, it starts a callLater to check the resolv file every minute
-        # https://github.com/twisted/twisted/blob/59f8266c286e2b073ddb05c70317ac20693f2b0c/src/twisted/names/client.py#L147  # noqa
-        # So we need to stop this call manually, otherwise the reactor would be unclean with a pending call
-        # TODO We should use a fake DNS resolver for tests otherwise we would need internet connection to run it
-        resolver = twisted.names.client.getResolver().resolvers[2]
-        resolver._parseCall.cancel()
 
     def test_invalid_same_peer_id(self):
         manager3 = self.create_peer(self.network, peer_id=self.peer_id1)
@@ -364,3 +356,16 @@ class HathorProtocolTestCase(unittest.TestCase):
         yield self._send_cmd(self.conn.proto1, 'GET-DATA', missing_tx)
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'NOT-FOUND')
         self.conn.run_one_step()
+
+
+class SyncV1HathorProtocolTestCase(unittest.SyncV1Params, BaseHathorProtocolTestCase):
+    __test__ = True
+
+
+class SyncV2HathorProtocolTestCase(unittest.SyncV2Params, BaseHathorProtocolTestCase):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeHathorProtocolTestCase(unittest.SyncBridgeParams, SyncV2HathorProtocolTestCase):
+    pass

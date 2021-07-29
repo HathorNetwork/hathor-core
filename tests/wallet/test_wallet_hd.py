@@ -10,7 +10,9 @@ from tests.utils import add_blocks_unlock_reward, add_new_block
 settings = HathorSettings()
 
 
-class WalletHD(unittest.TestCase):
+class BaseWalletHDTest(unittest.TestCase):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         self.wallet = HDWallet(gap_limit=2)
@@ -103,3 +105,16 @@ class WalletHD(unittest.TestCase):
     def test_exceptions(self):
         with self.assertRaises(ValueError):
             HDWallet(word_count=3)
+
+
+class SyncV1WalletHDTest(unittest.SyncV1Params, BaseWalletHDTest):
+    __test__ = True
+
+
+class SyncV2WalletHDTest(unittest.SyncV2Params, BaseWalletHDTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeWalletHDTest(unittest.SyncBridgeParams, SyncV2WalletHDTest):
+    pass

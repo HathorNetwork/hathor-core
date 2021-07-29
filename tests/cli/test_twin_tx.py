@@ -22,7 +22,9 @@ from tests.utils import (
 settings = HathorSettings()
 
 
-class TwinTxTest(unittest.TestCase):
+class BaseTwinTxTest(unittest.TestCase):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
 
@@ -168,3 +170,16 @@ class TwinTxTest(unittest.TestCase):
         output = f.getvalue().strip().splitlines()
 
         self.assertEqual('The command expects raw_tx or hash and url as parameters', output[0])
+
+
+class SyncV1TwinTxTest(unittest.SyncV1Params, BaseTwinTxTest):
+    __test__ = True
+
+
+class SyncV2TwinTxTest(unittest.SyncV2Params, BaseTwinTxTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeTwinTxTest(unittest.SyncBridgeParams, SyncV2TwinTxTest):
+    pass

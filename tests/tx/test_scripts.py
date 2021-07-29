@@ -963,7 +963,3 @@ class TestScripts(unittest.TestCase):
         self.assertEqual(get_sigops_count(input_script.data, p2pkh_script), 1)
         # if no output_script, count only input
         self.assertEqual(get_sigops_count(input_script.data), 1)
-
-
-if __name__ == '__main__':
-    unittest.main()

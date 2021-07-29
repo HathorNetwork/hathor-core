@@ -52,10 +52,11 @@ class ConnectionsManager:
     connected_peers: Dict[str, HathorProtocol]
     connecting_peers: Dict[IStreamClientEndpoint, Deferred]
     handshaking_peers: Set[HathorProtocol]
+    whitelist_only: bool
 
     def __init__(self, reactor: ReactorBase, my_peer: PeerId, server_factory: 'HathorServerFactory',
                  client_factory: 'HathorClientFactory', pubsub: PubSubManager, manager: 'HathorManager',
-                 ssl: bool, rng: Random) -> None:
+                 ssl: bool, rng: Random, whitelist_only: bool) -> None:
         self.log = logger.new()
         self.rng = rng
 
@@ -105,6 +106,9 @@ class ConnectionsManager:
         self.pubsub = pubsub
 
         self.ssl = ssl
+
+        # Parameter to explicitly enable whitelist-only mode, when False it will still check the whitelist for sync-v1
+        self.whitelist_only = whitelist_only
 
     def start(self) -> None:
         self.lc_reconnect.start(5, now=False)

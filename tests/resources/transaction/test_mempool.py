@@ -2,13 +2,16 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.conf import HathorSettings
 from hathor.transaction.resources import MempoolResource
+from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
 
 settings = HathorSettings()
 
 
-class MempoolTest(_BaseResourceTest._ResourceTest):
+class BaseMempoolTest(_BaseResourceTest._ResourceTest):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         self.web = StubSite(MempoolResource(self.manager))
@@ -59,3 +62,16 @@ class MempoolTest(_BaseResourceTest._ResourceTest):
         self.assertTrue(data5['success'])
         # default limit is 100
         self.assertEqual(len(data5['transactions']), settings.MEMPOOL_API_TX_LIMIT)
+
+
+class SyncV1MempoolTest(unittest.SyncV1Params, BaseMempoolTest):
+    __test__ = True
+
+
+class SyncV2MempoolTest(unittest.SyncV2Params, BaseMempoolTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeMempoolTest(unittest.SyncBridgeParams, SyncV2MempoolTest):
+    pass

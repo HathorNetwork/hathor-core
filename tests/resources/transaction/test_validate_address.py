@@ -1,10 +1,13 @@
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.transaction.resources import ValidateAddressResource
+from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
-class TransactionTest(_BaseResourceTest._ResourceTest):
+class BaseTransactionTest(_BaseResourceTest._ResourceTest):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         self.web = StubSite(ValidateAddressResource(self.manager))
@@ -63,3 +66,16 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
            'error': 'InvalidAddress',
            'msg': 'Invalid base58 address',
         })
+
+
+class SyncV1TransactionTest(unittest.SyncV1Params, BaseTransactionTest):
+    __test__ = True
+
+
+class SyncV2TransactionTest(unittest.SyncV2Params, BaseTransactionTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeTransactionTest(unittest.SyncBridgeParams, SyncV2TransactionTest):
+    pass

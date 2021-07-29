@@ -24,6 +24,7 @@ from twisted.python.failure import Failure
 from hathor.conf import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
+from hathor.p2p.protocol_version import ProtocolVersion
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
 from hathor.profiler import get_cpu_profiler
@@ -85,9 +86,15 @@ class HathorProtocol:
     aborting: bool
     diff_timestamp: Optional[int]
     idle_timeout: int
+    protocol_version: ProtocolVersion
 
     def __init__(self, network: str, my_peer: PeerId, connections: Optional['ConnectionsManager'] = None, *,
-                 node: 'HathorManager', use_ssl: bool, inbound: bool) -> None:
+                 node: 'HathorManager', use_ssl: bool, inbound: bool, enable_sync_v1: bool, enable_sync_v2: bool,
+                 ) -> None:
+
+        if not (enable_sync_v1 or enable_sync_v2):
+            raise ValueError('At least one sync version is required')
+
         self.network = network
         self.my_peer = my_peer
         self.connections = connections
@@ -148,6 +155,11 @@ class HathorProtocol:
         self.aborting = False
 
         self.use_ssl: bool = use_ssl
+        self.enable_sync_v1: bool = enable_sync_v1
+        self.enable_sync_v2: bool = enable_sync_v2
+
+        # Protocol version is initially unset
+        self.protocol_version = ProtocolVersion.UNSET
 
         self.log = logger.new()
 
@@ -302,7 +314,8 @@ class HathorProtocol:
                 self.log.warn('recv_message processing error', exc_info=True)
                 raise
         else:
-            self.send_error_and_close_connection('Invalid Command: {}'.format(cmd))
+            self.log.debug('cmd not found', cmd=cmd, payload=payload, available=list(self.state.cmd_map.keys()))
+            self.send_error_and_close_connection('Invalid Command: {} {}'.format(cmd, payload))
 
         return None
 

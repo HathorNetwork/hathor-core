@@ -5,96 +5,125 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks
 
 
-class _Base:
-    class _SerializationTest(unittest.TestCase):
-        def setUp(self):
-            super().setUp()
+class _SerializationTest(unittest.TestCase):
+    __test__ = False
 
-            self.network = 'testnet'
-            self.manager = self.create_peer(self.network, unlock_wallet=True)
-            self.tx_storage = self.manager.tx_storage
+    def setUp(self):
+        super().setUp()
 
-            data = b'This is a test block.'
-            self.blocks = add_new_blocks(self.manager, 3, advance_clock=15, block_data=data)
-            add_blocks_unlock_reward(self.manager)
+        self.network = 'testnet'
+        self.manager = self.create_peer(self.network, unlock_wallet=True)
+        self.tx_storage = self.manager.tx_storage
 
-            address = self.get_address(0)
-            value = 100
+        data = b'This is a test block.'
+        self.blocks = add_new_blocks(self.manager, 3, advance_clock=15, block_data=data)
+        add_blocks_unlock_reward(self.manager)
 
-            outputs = [
-                WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None)
-            ]
+        address = self.get_address(0)
+        value = 100
 
-            self.tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.tx_storage)
-            self.tx1.weight = 10
-            self.tx1.parents = self.manager.get_new_tx_parents()
-            self.tx1.timestamp = int(self.clock.seconds())
-            self.tx1.resolve()
-            self.manager.propagate_tx(self.tx1)
+        outputs = [
+            WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None)
+        ]
 
-            # Change of parents only, so it's a twin.
-            # With less weight, so the balance will continue because tx1 will be the winner
-            self.tx2 = Transaction.create_from_struct(self.tx1.get_struct())
-            self.tx2.parents = [self.tx1.parents[1], self.tx1.parents[0]]
-            self.tx2.weight = 9
-            self.tx2.resolve()
+        self.tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.tx_storage)
+        self.tx1.weight = 10
+        self.tx1.parents = self.manager.get_new_tx_parents()
+        self.tx1.timestamp = int(self.clock.seconds())
+        self.tx1.resolve()
+        self.manager.propagate_tx(self.tx1)
 
-            # Propagate a conflicting twin transaction
-            self.manager.propagate_tx(self.tx2)
+        # Change of parents only, so it's a twin.
+        # With less weight, so the balance will continue because tx1 will be the winner
+        self.tx2 = Transaction.create_from_struct(self.tx1.get_struct())
+        self.tx2.parents = [self.tx1.parents[1], self.tx1.parents[0]]
+        self.tx2.weight = 9
+        self.tx2.resolve()
 
-        def _reserialize(self, tx):
-            raise NotImplementedError
+        # Propagate a conflicting twin transaction
+        self.manager.propagate_tx(self.tx2)
 
-        def _assertTxEq(self, tx1, tx2):
-            raise NotImplementedError
+    def _reserialize(self, tx):
+        raise NotImplementedError
 
-        def test_serialization_simple(self):
-            tx2_re = self._reserialize(self.tx2)
-            self._assertTxEq(self.tx2, tx2_re)
+    def _assertTxEq(self, tx1, tx2):
+        raise NotImplementedError
 
-            tx1_re = self._reserialize(self.tx1)
-            self._assertTxEq(self.tx1, tx1_re)
+    def test_serialization_simple(self):
+        tx2_re = self._reserialize(self.tx2)
+        self._assertTxEq(self.tx2, tx2_re)
 
-        def test_serialization_genesis(self):
-            for tx in self.tx_storage.get_all_genesis():
-                tx_re = self._reserialize(tx)
-                self._assertTxEq(tx, tx_re)
+        tx1_re = self._reserialize(self.tx1)
+        self._assertTxEq(self.tx1, tx1_re)
 
-        def test_serialization_tips(self):
-            from itertools import chain
-            for tip_interval in chain(self.tx_storage.get_tx_tips(), self.tx_storage.get_block_tips()):
-                tx = self.tx_storage.get_transaction(tip_interval.data)
-                tx_re = self._reserialize(tx)
-                self._assertTxEq(tx, tx_re)
+    def test_serialization_genesis(self):
+        for tx in self.tx_storage.get_all_genesis():
+            tx_re = self._reserialize(tx)
+            self._assertTxEq(tx, tx_re)
 
-    class _SerializationWithoutMetadataTest(_SerializationTest):
-        def _assertTxEq(self, tx1, tx2):
-            self.log.info('assertEqual tx without metadata', a=tx1.to_json(), b=tx2.to_json())
-            self.assertEqual(tx1, tx2)
-
-    class _SerializationWithMetadataTest(_SerializationTest):
-        def _assertTxEq(self, tx1, tx2):
-            self.log.info('assertEqual tx with metadata', a=tx1.to_json(), b=tx2.to_json())
-            self.assertEqual(tx1, tx2)
-            self.log.info('assertEqual tx metadata', a=tx1.get_metadata().to_json(), b=tx2.get_metadata().to_json())
-            self.assertEqual(tx1.get_metadata(), tx2.get_metadata())
+    def test_serialization_tips(self):
+        from itertools import chain
+        for tx_hash in chain(self.manager.tx_storage._mempool_tips_index, self.tx_storage._block_height_index._index):
+            tx = self.tx_storage.get_transaction(tx_hash)
+            tx_re = self._reserialize(tx)
+            self._assertTxEq(tx, tx_re)
 
 
-class NoSerializationTest(_Base._SerializationWithMetadataTest):
+class _SerializationWithoutMetadataTest(_SerializationTest):
+    def _assertTxEq(self, tx1, tx2):
+        self.log.info('assertEqual tx without metadata', a=tx1.to_json(), b=tx2.to_json())
+        self.assertEqual(tx1, tx2)
+
+
+class _SerializationWithMetadataTest(_SerializationTest):
+    def _assertTxEq(self, tx1, tx2):
+        self.log.info('assertEqual tx with metadata', a=tx1.to_json(), b=tx2.to_json())
+        self.assertEqual(tx1, tx2)
+        self.log.info('assertEqual tx metadata', a=tx1.get_metadata().to_json(), b=tx2.get_metadata().to_json())
+        self.assertEqual(tx1.get_metadata(), tx2.get_metadata())
+
+
+class BaseNoSerializationTest(_SerializationWithMetadataTest):
     """This should absolutely not fail, or the tests are wrong."""
 
     def _reserialize(self, tx):
         return tx
 
 
-class StructSerializationTest(_Base._SerializationWithoutMetadataTest):
+class SyncV1NoSerializationTest(unittest.SyncV1Params, BaseNoSerializationTest):
+    __test__ = True
+
+
+class SyncV2NoSerializationTest(unittest.SyncV2Params, BaseNoSerializationTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeNoSerializationTest(unittest.SyncBridgeParams, SyncV2NoSerializationTest):
+    pass
+
+
+class BaseStructSerializationTest(_SerializationWithoutMetadataTest):
     def _reserialize(self, tx):
         cls = tx.__class__
         tx_struct = tx.get_struct()
         return cls.create_from_struct(tx_struct)
 
 
-class ProtobufSerializationTest(_Base._SerializationWithMetadataTest):
+class SyncV1StructSerializationTest(unittest.SyncV1Params, BaseStructSerializationTest):
+    __test__ = True
+
+
+class SyncV2StructSerializationTest(unittest.SyncV2Params, BaseStructSerializationTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeStructSerializationTest(unittest.SyncBridgeParams, SyncV2StructSerializationTest):
+    pass
+
+
+class BaseProtobufSerializationTest(_SerializationWithMetadataTest):
     def _reserialize(self, tx):
         from hathor.transaction import tx_or_block_from_proto
         tx_proto = tx.to_proto()
@@ -102,5 +131,14 @@ class ProtobufSerializationTest(_Base._SerializationWithMetadataTest):
         return tx_re
 
 
-if __name__ == '__main__':
-    unittest.main()
+class SyncV1ProtobufSerializationTest(unittest.SyncV1Params, BaseProtobufSerializationTest):
+    __test__ = True
+
+
+class SyncV2ProtobufSerializationTest(unittest.SyncV2Params, BaseProtobufSerializationTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeProtobufSerializationTest(unittest.SyncBridgeParams, SyncV2ProtobufSerializationTest):
+    pass

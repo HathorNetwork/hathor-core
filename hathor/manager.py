@@ -66,6 +66,7 @@ class HathorManager:
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
                  peer_storage: Optional[Any] = None, default_port: int = 40403, wallet_index: bool = False,
                  stratum_port: Optional[int] = None, ssl: bool = True,
+                 enable_sync_v1: bool = True, enable_sync_v2: bool = False,
                  capabilities: Optional[List[str]] = None, checkpoints: Optional[List[Checkpoint]] = None,
                  rng: Optional[Random] = None) -> None:
         """
@@ -80,7 +81,7 @@ class HathorManager:
         :param pubsub: If not given, a new one is created.
         :type pubsub: :py:class:`hathor.pubsub.PubSubManager`
 
-        :param tx_storage: If not given, a :py:class:`TransactionMemoryStorage` one is created.
+        :param tx_storage: Required storage backend.
         :type tx_storage: :py:class:`hathor.transaction.storage.transaction_storage.TransactionStorage`
 
         :param peer_storage: If not given, a new one is created.
@@ -98,7 +99,12 @@ class HathorManager:
         from hathor.metrics import Metrics
         from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
         from hathor.p2p.manager import ConnectionsManager
-        from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
+
+        if not (enable_sync_v1 or enable_sync_v2):
+            raise TypeError(f'{type(self).__name__}() at least one sync version is required')
+
+        if tx_storage is None:
+            raise TypeError(f'{type(self).__name__}() missing 1 required positional argument: \'tx_storage\'')
 
         self.log = logger.new()
 
@@ -137,7 +143,7 @@ class HathorManager:
 
         # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
         self.pubsub = pubsub or PubSubManager(self.reactor)
-        self.tx_storage = tx_storage or TransactionMemoryStorage()
+        self.tx_storage = tx_storage
         self.tx_storage.pubsub = self.pubsub
         if wallet_index and self.tx_storage.with_index:
             self.tx_storage.wallet_index = WalletIndex(self.pubsub)
@@ -155,10 +161,12 @@ class HathorManager:
         self.peer_discoveries: List[PeerDiscovery] = []
 
         self.ssl = ssl
-        self.server_factory = HathorServerFactory(self.network, self.my_peer, node=self, use_ssl=ssl)
-        self.client_factory = HathorClientFactory(self.network, self.my_peer, node=self, use_ssl=ssl)
+        self.server_factory = HathorServerFactory(self.network, self.my_peer, node=self, use_ssl=ssl,
+                                                  enable_sync_v1=enable_sync_v1, enable_sync_v2=enable_sync_v2)
+        self.client_factory = HathorClientFactory(self.network, self.my_peer, node=self, use_ssl=ssl,
+                                                  enable_sync_v1=enable_sync_v1, enable_sync_v2=enable_sync_v2)
         self.connections = ConnectionsManager(self.reactor, self.my_peer, self.server_factory, self.client_factory,
-                                              self.pubsub, self, ssl, rng=self.rng)
+                                              self.pubsub, self, ssl, whitelist_only=False, rng=self.rng)
 
         self.wallet = wallet
         if self.wallet:
@@ -192,6 +200,8 @@ class HathorManager:
         # List of capabilities of the peer
         if capabilities is not None:
             self.capabilities = capabilities
+        elif enable_sync_v2:
+            self.capabilities = [settings.CAPABILITY_WHITELIST, settings.CAPABILITY_SYNC_V2]
         else:
             self.capabilities = [settings.CAPABILITY_WHITELIST]
 
@@ -393,7 +403,7 @@ class HathorManager:
                         self.tx_storage.add_to_indexes(tx)
                         assert tx.validate_full(skip_block_weight_verification=skip_block_weight_verification)
                         self.consensus_algorithm.update(tx)
-                        self.tx_storage.update_tx_tips(tx)
+                        self.tx_storage.update_mempool_tips(tx)
                         self.step_validations([tx])
                         if tx.is_block:
                             self.tx_storage.add_to_parent_blocks_index(tx.hash)
@@ -408,7 +418,7 @@ class HathorManager:
                         assert tx_meta.validation.is_at_least_basic(), f'invalid: {tx.hash_hex}'
                         self.tx_storage.add_needed_deps(tx)
                     elif tx.is_transaction and tx_meta.first_block is None and not tx_meta.voided_by:
-                        self.tx_storage.update_tx_tips(tx)
+                        self.tx_storage.update_mempool_tips(tx)
                     elif tx.is_block:
                         self.tx_storage.add_to_parent_blocks_index(tx.hash)
                     self.tx_storage.add_to_indexes(tx)
@@ -842,7 +852,7 @@ class HathorManager:
         self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
 
         self.tx_storage.del_from_deps_index(tx.hash)
-        self.tx_storage.update_tx_tips(tx)
+        self.tx_storage.update_mempool_tips(tx)
         if tx.is_block:
             self.tx_storage.add_to_parent_blocks_index(tx.hash)
 

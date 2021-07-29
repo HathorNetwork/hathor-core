@@ -1,14 +1,15 @@
 import random
 
 from hathor.crypto.util import decode_address
-from hathor.p2p.node_sync import NodeSyncTimestamp
 from hathor.p2p.protocol import PeerIdState
 from hathor.simulator import FakeConnection
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
 from tests import unittest
 
 
-class HathorSyncMethodsTestCase(unittest.TestCase):
+class BaseHathorSyncMethodsTestCase(unittest.TestCase):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
 
@@ -40,6 +41,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         tx.verify()
         self.manager1.propagate_tx(tx)
         self.clock.advance(10)
+        return tx
 
     def _add_new_transactions(self, num_txs):
         txs = []
@@ -50,18 +52,18 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
             txs.append(tx)
         return txs
 
-    def _add_new_block(self):
+    def _add_new_block(self, propagate=True):
         block = self.manager1.generate_mining_block()
         self.assertTrue(block.resolve())
         block.verify()
-        self.manager1.propagate_tx(block)
+        self.manager1.on_new_tx(block, propagate_to_peers=propagate)
         self.clock.advance(10)
         return block
 
-    def _add_new_blocks(self, num_blocks):
+    def _add_new_blocks(self, num_blocks, propagate=True):
         blocks = []
         for _ in range(num_blocks):
-            blocks.append(self._add_new_block())
+            blocks.append(self._add_new_block(propagate=propagate))
         return blocks
 
     def test_get_blocks_before(self):
@@ -172,56 +174,58 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         """
         self._add_new_blocks(25)
 
-        manager2 = self.create_peer(self.network)
-        conn1 = FakeConnection(self.manager1, manager2)
+        self.manager2 = self.create_peer(self.network)
+        self.conn1 = FakeConnection(self.manager1, self.manager2)
 
         for _ in range(1000):
-            if conn1.is_empty():
+            if self.conn1.is_empty():
                 break
-            conn1.run_one_step()
+            self.conn1.run_one_step()
             self.clock.advance(0.1)
-        self.assertTipsEqual(self.manager1, manager2)
+        self.assertTipsEqual(self.manager1, self.manager2)
 
         self._add_new_blocks(1)
 
         for _ in range(1000):
-            if conn1.is_empty():
+            if self.conn1.is_empty():
                 break
-            conn1.run_one_step()
+            self.conn1.run_one_step()
             self.clock.advance(0.1)
-        self.assertTipsEqual(self.manager1, manager2)
+        self.assertTipsEqual(self.manager1, self.manager2)
 
-        manager3 = self.create_peer(self.network)
-        conn2 = FakeConnection(manager2, manager3)
+        self.manager3 = self.create_peer(self.network)
+        self.conn2 = FakeConnection(self.manager2, self.manager3)
 
         for _ in range(1000):
-            if conn1.is_empty() and conn2.is_empty():
+            if self.conn1.is_empty() and self.conn2.is_empty():
                 break
-            conn1.run_one_step()
-            conn2.run_one_step()
+            self.conn1.run_one_step()
+            self.conn2.run_one_step()
             self.clock.advance(0.1)
 
-        self.assertTipsEqual(self.manager1, manager2)
-        self.assertTipsEqual(self.manager1, manager3)
+        self.assertTipsEqual(self.manager1, self.manager2)
+        self.assertTipsEqual(self.manager1, self.manager3)
 
         self._add_new_transactions(1)
 
         for _ in range(1000):
-            if conn1.is_empty() and conn2.is_empty():
+            if self.conn1.is_empty() and self.conn2.is_empty():
                 break
-            conn1.run_one_step()
-            conn2.run_one_step()
+            self.conn1.run_one_step()
+            self.conn2.run_one_step()
             self.clock.advance(0.1)
 
-        self.assertTipsEqual(self.manager1, manager2)
-        self.assertTipsEqual(self.manager1, manager3)
-        self.assertConsensusEqual(self.manager1, manager2)
-        self.assertConsensusEqual(self.manager1, manager3)
+        self.assertTipsEqual(self.manager1, self.manager2)
+        self.assertTipsEqual(self.manager1, self.manager3)
+        self.assertConsensusEqual(self.manager1, self.manager2)
+        self.assertConsensusEqual(self.manager1, self.manager3)
         self.assertConsensusValid(self.manager1)
-        self.assertConsensusValid(manager2)
-        self.assertConsensusValid(manager3)
+        self.assertConsensusValid(self.manager2)
+        self.assertConsensusValid(self.manager3)
 
     def test_downloader(self):
+        from hathor.p2p.node_sync import NodeSyncTimestamp
+
         blocks = self._add_new_blocks(3)
 
         manager2 = self.create_peer(self.network)
@@ -295,3 +299,16 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         # And try again
         downloader.check_downloading_queue()
         self.assertEqual(len(downloader.downloading_deque), 0)
+
+
+class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMethodsTestCase):
+    __test__ = True
+
+
+class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMethodsTestCase):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeHathorSyncMethodsTestCase(unittest.SyncBridgeParams, SyncV2HathorSyncMethodsTestCase):
+    pass

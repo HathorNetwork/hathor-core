@@ -4,11 +4,14 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.p2p.resources import MiningResource
 from hathor.wallet.resources import BalanceResource
+from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import resolve_block_bytes
 
 
-class BalanceTest(_BaseResourceTest._ResourceTest):
+class BaseBalanceTest(_BaseResourceTest._ResourceTest):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         self.web = StubSite(BalanceResource(self.manager))
@@ -33,3 +36,16 @@ class BalanceTest(_BaseResourceTest._ResourceTest):
         self.assertTrue(data2['success'])
         tokens = self.manager.get_tokens_issued_per_block(1)
         self.assertEqual(data2['balance'], {'available': tokens, 'locked': 0})
+
+
+class SyncV1BalanceTest(unittest.SyncV1Params, BaseBalanceTest):
+    __test__ = True
+
+
+class SyncV2BalanceTest(unittest.SyncV2Params, BaseBalanceTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeBalanceTest(unittest.SyncBridgeParams, SyncV2BalanceTest):
+    pass

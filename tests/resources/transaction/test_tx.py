@@ -2,11 +2,14 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.transaction import Transaction
 from hathor.transaction.resources import TransactionResource
+from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
 
 
-class TransactionTest(_BaseResourceTest._ResourceTest):
+class BaseTransactionTest(_BaseResourceTest._ResourceTest):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         self.web = StubSite(TransactionResource(self.manager))
@@ -334,3 +337,16 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
                 })
         data = response.json_value()
         self.assertFalse(data['success'])
+
+
+class SyncV1TransactionTest(unittest.SyncV1Params, BaseTransactionTest):
+    __test__ = True
+
+
+class SyncV2TransactionTest(unittest.SyncV2Params, BaseTransactionTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeTransactionTest(unittest.SyncBridgeParams, SyncV2TransactionTest):
+    pass
