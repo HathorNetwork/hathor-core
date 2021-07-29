@@ -386,12 +386,14 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
     def line_received(self, message: bytes) -> None:
         """ Parse line, pass result to `json_received`.
         """
+        from json import JSONDecodeError
+
         from hathor.util import json_loadb
 
         self.log.debug('line received', line=message)
         try:
             data = json_loadb(message)
-        except ValueError:
+        except JSONDecodeError:
             self.log.warn('invalid message received', message=message, message_hex=message.hex(), exc_info=True)
             return self.send_error(PARSE_ERROR, data={'message': message})
         assert isinstance(data, dict)

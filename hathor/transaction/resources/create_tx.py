@@ -69,6 +69,7 @@ class CreateTxResource(resource.Resource):
         set_cors(request, 'POST')
 
         body_content = json_loadb(request.content.read())
+
         raw_inputs = body_content.get('inputs', [])
         raw_outputs = body_content.get('outputs', [])
 

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import struct
+from json import JSONDecodeError
 from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
 from twisted.web import resource
@@ -150,7 +151,16 @@ class PushTxResource(resource.Resource):
         if not body_content:
             return error_ret
 
-        data = json_loadb(body_content)
+        try:
+            data = json_loadb(body_content)
+        except JSONDecodeError as exc:
+            return json_dumpb({
+                'success': False,
+                'message': str(exc),
+            })
+
+        if not isinstance(data, dict):
+            return error_ret
 
         # Need to do that because json_loadb returns an object, which is not compatible with Dict[str, Any]
         data = cast(Dict[str, Any], data)
@@ -192,7 +202,10 @@ PushTxResource.openapi = {
                 'content': {
                     'application/json': {
                         'schema': {
-                            'type': 'string',
+                            'type': 'object',
+                            'properties': {
+                                'hex_tx': 'string',
+                            }
                         }
                     }
                 }

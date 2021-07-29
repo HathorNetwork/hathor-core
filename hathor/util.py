@@ -215,7 +215,12 @@ def json_loadb(raw: bytes) -> Dict:
 
     # XXX: from Python3.6 onwards, json.loads can take bytes
     #      See: https://docs.python.org/3/library/json.html#json.loads
-    return json.loads(raw)
+    try:
+        return json.loads(raw)
+    except UnicodeDecodeError as exc:
+        # We cannot do `doc=raw` because it expects a str and there
+        # is no way to decode it.
+        raise json.JSONDecodeError(msg=str(exc), doc=raw.hex(), pos=exc.start) from exc
 
 
 def json_dumpb(obj: object) -> bytes:
