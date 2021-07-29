@@ -174,7 +174,8 @@ class TestCase(unittest.TestCase):
             tx2 = manager2.tx_storage.get_transaction(tx1.hash)
             tx1_meta = tx1.get_metadata()
             tx2_meta = tx2.get_metadata()
-            self.assertEqual(tx1_meta.conflict_with, tx2_meta.conflict_with)
+            # conflict_with's type is Optional[List[bytes]], so we convert to a set because order does not matter.
+            self.assertEqual(set(tx1_meta.conflict_with or []), set(tx2_meta.conflict_with or []))
             # Soft verification
             if tx1_meta.voided_by is None:
                 # If tx1 is not voided, then tx2 must be not voided.
