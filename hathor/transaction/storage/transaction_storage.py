@@ -534,7 +534,7 @@ class TransactionStorage(ABC):
         if self.with_index:
             assert self.all_index is not None
 
-            self.del_from_indexes(tx, relax_assert=True)
+            self.del_from_indexes(tx, relax_assert=True, del_blocks=True)
             # TODO Move it to self.del_from_indexes. We cannot simply do it because
             #      this method is used by the consensus algorithm which does not
             #      expect to have it removed from self.all_index.
@@ -810,7 +810,7 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def del_from_indexes(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
+    def del_from_indexes(self, tx: BaseTransaction, *, relax_assert: bool = False, del_blocks: bool = False) -> None:
         raise NotImplementedError
 
     @abstractmethod
@@ -1170,7 +1170,7 @@ class BaseTransactionStorage(TransactionStorage):
             if self.tx_index.add_tx(tx):
                 self._cache_tx_count += 1
 
-    def del_from_indexes(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
+    def del_from_indexes(self, tx: BaseTransaction, *, relax_assert: bool = False, del_blocks: bool = False) -> None:
         if not self.with_index:
             raise NotImplementedError
         assert self.block_index is not None
@@ -1178,8 +1178,12 @@ class BaseTransactionStorage(TransactionStorage):
         if self.tokens_index:
             self.tokens_index.del_tx(tx)
         if tx.is_block:
-            if self.block_index.del_tx(tx, relax_assert=relax_assert):
-                self._cache_block_count -= 1
+            # This is the code to remove the block from the indexes.
+            # But we cannot remove blocks from index because they are used to validate
+            # block rewards.
+            if del_blocks:
+                if self.block_index.del_tx(tx, relax_assert=relax_assert):
+                    self._cache_block_count -= 1
         else:
             if self.tx_index.del_tx(tx, relax_assert=relax_assert):
                 self._cache_tx_count -= 1

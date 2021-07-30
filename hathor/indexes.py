@@ -59,7 +59,7 @@ class IndexesManager:
             assert r1 == r2
         return r1
 
-    def del_tx(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
+    def del_tx(self, tx: BaseTransaction, *, relax_assert: bool = False) -> bool:
         """ Delete a transaction from the indexes
 
         :param tx: Transaction to be deleted

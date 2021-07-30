@@ -187,7 +187,7 @@ class _BaseTransactionStorageTest:
                 else:
                     self.assertTrue(obj.hash in self.tx_storage.tx_index.tips_index.tx_last_interval)
 
-            self.tx_storage.del_from_indexes(obj)
+            self.tx_storage.del_from_indexes(obj, del_blocks=True)
 
             if self.tx_storage.with_index:
                 if obj.is_block:
