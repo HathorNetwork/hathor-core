@@ -225,6 +225,9 @@ class NodeSyncTimestamp(SyncManager):
         # Indicate whether the synchronization is running.
         self.is_running: bool = False
 
+        # Used to restart sync when a tx is downloaded but fails to be added to the DAG.
+        self.restart_sync: bool = False
+
         # Create logger with context
         self.log = logger.new(**self.protocol.get_logger_context())
 
@@ -398,8 +401,13 @@ class NodeSyncTimestamp(SyncManager):
                 break
             if next_timestamp > self.peer_timestamp:
                 break
-        for deferred in pending:
-            yield deferred
+            # This loop must be inside the while to ensure we can restart the sync
+            # without going through the whole download.
+            for deferred in pending:
+                yield deferred
+            pending = WeakSet()
+            if self.restart_sync:
+                break
 
     @inlineCallbacks
     def find_synced_timestamp(self) -> Iterator[Union[Iterator, Iterator[Deferred]]]:
@@ -468,6 +476,7 @@ class NodeSyncTimestamp(SyncManager):
     def _next_step(self) -> Iterator[Union[Iterator, Iterator[Deferred]]]:
         """ Run the next step to keep nodes synced.
         """
+        self.restart_sync = False
         next_timestamp = yield self.find_synced_timestamp()
         self.log.debug('_next_step', next_timestamp=next_timestamp)
         if next_timestamp is None:
@@ -743,6 +752,8 @@ class NodeSyncTimestamp(SyncManager):
         if tx:
             # Add tx to the DAG.
             success = self.manager.on_new_tx(tx)
+            if not success:
+                self.restart_sync = True
             # Updating stats data
             self.update_received_stats(tx, success)
         return tx

@@ -426,6 +426,7 @@ class BlockConsensusAlgorithm:
 
         meta.voided_by.add(voided_hash)
         storage.save_transaction(block, only_metadata=True)
+        block.storage.del_from_indexes(block)
 
         spent_by: Iterable[bytes] = chain(*meta.spent_outputs.values())
         for tx_hash in spent_by:
@@ -457,6 +458,7 @@ class BlockConsensusAlgorithm:
         meta.voided_by.remove(voided_hash)
         if not meta.voided_by:
             meta.voided_by = None
+            block.storage.add_to_indexes(block)
         block.storage.save_transaction(block, only_metadata=True)
 
         spent_by: Iterable[bytes] = chain(*meta.spent_outputs.values())

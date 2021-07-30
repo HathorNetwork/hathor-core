@@ -1178,11 +1178,11 @@ class BaseTransactionStorage(TransactionStorage):
         if self.tokens_index:
             self.tokens_index.del_tx(tx)
         if tx.is_block:
-            self._cache_block_count -= 1
-            self.block_index.del_tx(tx, relax_assert=relax_assert)
+            if self.block_index.del_tx(tx, relax_assert=relax_assert):
+                self._cache_block_count -= 1
         else:
-            self._cache_tx_count -= 1
-            self.tx_index.del_tx(tx, relax_assert=relax_assert)
+            if self.tx_index.del_tx(tx, relax_assert=relax_assert):
+                self._cache_tx_count -= 1
 
     def get_block_count(self) -> int:
         if not self.with_index:
