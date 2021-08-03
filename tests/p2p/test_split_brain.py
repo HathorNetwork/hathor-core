@@ -44,8 +44,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         wallet.unlock(words=words, tx_storage=manager.tx_storage)
         return manager
 
-    # retry the test once if it fails, see: https://github.com/box/flaky
-    @pytest.mark.flaky
+    @pytest.mark.flaky(max_runs=3, min_passes=1)
     def test_split_brain(self):
         debug_pdf = False
 
