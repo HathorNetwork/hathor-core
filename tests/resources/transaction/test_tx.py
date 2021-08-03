@@ -202,7 +202,8 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
                           '010757617420776174035741544030e34594da5bdd6108740d020038c3d3b69ce90bb88c0c4d6a87b9f0c349e5b'
                           '10c9b7ce6714f996e512ac1640000476810205cb3625d62897fcdad620e01d66649869329640f5504d77e960d00'
                           '00d810')
-        tx_parent2 = TokenCreationTransaction.create_from_struct(bytes.fromhex(tx_parent2_hex), self.manager.tx_storage)
+        tx_parent2_bytes = bytes.fromhex(tx_parent2_hex)
+        tx_parent2 = TokenCreationTransaction.create_from_struct(tx_parent2_bytes, self.manager.tx_storage)
         self.manager.tx_storage.save_transaction(tx_parent2)
 
         # Both inputs are the same as the last parent, so no need to manually add them
