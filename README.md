@@ -115,16 +115,16 @@ It may take a considerable amount of time for it to sync all the transactions in
 #### Speeding up the sync
 You can use database snapshots to speed things up.
 
-We provide both testnet and mainnet snapshots:
-- Testnet: https://hathor-public-files.s3.amazonaws.com/temp/testnet-data-20210707174940.tar.gz
-- Mainnet: https://hathor-public-files.s3.amazonaws.com/temp/data-20210624040233.tar.gz
+We provide both testnet and mainnet snapshots. You can get the link to the latest snapshots this way:
+- Testnet: `curl https://hathor-public-files.s3.amazonaws.com/temp/testnet-data-latest` 
+- Mainnet: `curl https://hathor-public-files.s3.amazonaws.com/temp/mainnet-data-latest`
 
 You should download and unpack one of them into your `data` directory before starting the full-node:
 
 ```
-wget https://hathor-public-files.s3.amazonaws.com/temp/testnet-data-20210707174940.tar.gz
+wget $(curl https://hathor-public-files.s3.amazonaws.com/temp/testnet-data-latest) 
 
-tar xzf testnet-data-20210707174940.tar.gz
+tar xzf testnet-data-*.tar.gz
 ```
 
 
