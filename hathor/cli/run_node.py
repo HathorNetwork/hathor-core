@@ -18,7 +18,7 @@ import os
 import platform
 import sys
 from argparse import ArgumentParser, Namespace
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Tuple
 
 from autobahn.twisted.resource import WebSocketResource
 from structlog import get_logger
@@ -30,12 +30,20 @@ logger = get_logger()
 
 
 class RunNode:
+    UNSAFE_ARGUMENTS: List[Tuple[str, Callable[[Namespace], bool]]] = [
+        ('--test-mode-tx-weight', lambda args: bool(args.test_mode_tx_weight)),
+        ('--enable-crash-api', lambda args: bool(args.enable_crash_api)),
+        ('--x-sync-bridge', lambda args: bool(args.x_sync_bridge)),
+    ]
+
     def create_parser(self) -> ArgumentParser:
         from hathor.cli.util import create_parser
         parser = create_parser()
 
         parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
         parser.add_argument('--auto-hostname', action='store_true', help='Try to discover the hostname automatically')
+        parser.add_argument('--unsafe-mode',
+                            help='Enable unsafe parameters. **NEVER USE IT IN PRODUCTION ENVIRONMENT**')
         parser.add_argument('--testnet', action='store_true', help='Connect to Hathor testnet')
         parser.add_argument('--test-mode-tx-weight', action='store_true',
                             help='Reduces tx weight to 1 for testing purposes')
@@ -80,6 +88,10 @@ class RunNode:
         parser.add_argument('--max-output-script-size', type=int, default=None, help='Custom max accepted script size '
                             'on /push-tx API')
         parser.add_argument('--sentry-dsn', help='Sentry DSN')
+        parser.add_argument('--enable-debug-api', action='store_true', help='Enable _debug/* endpoints')
+        parser.add_argument('--enable-crash-api', action='store_true', help='Enable _crash/* endpoints')
+        parser.add_argument('--x-sync-bridge', action='store_true',
+                            help='Enable support for running both sync protocols. DO NOT ENABLE, IT WILL BREAK.')
         return parser
 
     def prepare(self, args: Namespace) -> None:
@@ -130,6 +142,8 @@ class RunNode:
             peer_id = PeerId.create_from_json(data)
 
         python = f'{platform.python_version()}-{platform.python_implementation()}'
+
+        self.check_unsafe_arguments(args)
 
         self.log.info(
             'hathor-core v{hathor}',
@@ -227,7 +241,8 @@ class RunNode:
         network = settings.NETWORK_NAME
         self.manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname,
                                      tx_storage=self.tx_storage, wallet=self.wallet, wallet_index=args.wallet_index,
-                                     stratum_port=args.stratum, ssl=True, checkpoints=settings.CHECKPOINTS)
+                                     stratum_port=args.stratum, ssl=True, checkpoints=settings.CHECKPOINTS,
+                                     enable_sync_v1=True, enable_sync_v2=args.x_sync_bridge)
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
 
@@ -285,6 +300,14 @@ class RunNode:
 
     def register_resources(self, args: Namespace) -> None:
         from hathor.conf import HathorSettings
+        from hathor.debug_resources import (
+            DebugCrashResource,
+            DebugLogResource,
+            DebugMessAroundResource,
+            DebugPrintResource,
+            DebugRaiseResource,
+            DebugRejectResource,
+        )
         from hathor.mining.ws import MiningWebsocketFactory
         from hathor.p2p.resources import AddPeersResource, MiningInfoResource, MiningResource, StatusResource
         from hathor.profiler import get_cpu_profiler
@@ -365,7 +388,7 @@ class RunNode:
                 graphviz.putChild(b'full.' + bfmt, GraphvizFullResource(self.manager, format=fmt))
                 graphviz.putChild(b'neighbours.' + bfmt, GraphvizNeighboursResource(self.manager, format=fmt))
 
-            resources = (
+            resources = [
                 (b'status', StatusResource(self.manager), root),
                 (b'version', VersionResource(self.manager), root),
                 (b'create_tx', CreateTxResource(self.manager), root),
@@ -401,7 +424,25 @@ class RunNode:
                 (b'execute', NanoContractExecuteResource(self.manager), contracts_resource),
                 # /p2p
                 (b'peers', AddPeersResource(self.manager), p2p_resource),
-            )
+            ]
+
+            if args.enable_debug_api:
+                debug_resource = Resource()
+                root.putChild(b'_debug', debug_resource)
+                resources.extend([
+                    (b'log', DebugLogResource(), debug_resource),
+                    (b'raise', DebugRaiseResource(), debug_resource),
+                    (b'reject', DebugRejectResource(), debug_resource),
+                    (b'print', DebugPrintResource(), debug_resource),
+                ])
+            if args.enable_crash_api:
+                crash_resource = Resource()
+                root.putChild(b'_crash', crash_resource)
+                resources.extend([
+                    (b'exit', DebugCrashResource(), crash_resource),
+                    (b'mess_around', DebugMessAroundResource(self.manager), crash_resource),
+                ])
+
             for url_path, resource, parent in resources:
                 parent.putChild(url_path, resource)
 
@@ -464,6 +505,87 @@ class RunNode:
         self.log.warn('USR1 received. Killing all connections...')
         if self.manager and self.manager.connections:
             self.manager.connections.disconnect_all_peers(force=True)
+
+    def check_unsafe_arguments(self, args: Namespace) -> None:
+        unsafe_args_found = []
+        for arg_cmdline, arg_test_fn in self.UNSAFE_ARGUMENTS:
+            if arg_test_fn(args):
+                unsafe_args_found.append(arg_cmdline)
+
+        if args.unsafe_mode is None:
+            if unsafe_args_found:
+                message = [
+                    'You need to enable --unsafe-mode to run with these arguments.',
+                    '',
+                    'The following argument require unsafe mode:',
+                ]
+                for arg_cmdline in unsafe_args_found:
+                    message.append(arg_cmdline)
+                message.extend([
+                    '',
+                    'Never enable UNSAFE MODE in a production environment.'
+                ])
+                self.log.critical('\n'.join(message))
+                sys.exit(-1)
+
+        else:
+            fail = False
+            message = [
+                'UNSAFE MODE IS ENABLED',
+                '',
+                '********************************************************',
+                '********************************************************',
+                '',
+                'UNSAFE MODE IS ENABLED',
+                '',
+                'You should never use --unsafe-mode in production environments.',
+                '',
+            ]
+
+            from hathor.conf import HathorSettings
+            settings = HathorSettings()
+
+            if args.unsafe_mode != settings.NETWORK_NAME:
+                message.extend([
+                    f'Unsafe mode enabled for wrong network ({args.unsafe_mode} != {settings.NETWORK_NAME}).',
+                    '',
+                ])
+                fail = True
+
+            is_local_network = True
+            if settings.NETWORK_NAME == 'mainnet':
+                is_local_network = False
+            elif settings.NETWORK_NAME.startswith('testnet'):
+                is_local_network = False
+
+            if not is_local_network:
+                message.extend([
+                    f'You should not enable unsafe mode on {settings.NETWORK_NAME} unless you know what you are doing',
+                    '',
+                ])
+
+            if not unsafe_args_found:
+                message.extend([
+                    '--unsafe-mode is not needed because you have not enabled any unsafe feature.',
+                    '',
+                    'Remove --unsafe-mode and try again.',
+                ])
+                fail = True
+            else:
+                message.append('You have enabled the following features:')
+                for arg_cmdline in unsafe_args_found:
+                    message.append(arg_cmdline)
+
+            message.extend([
+                '',
+                '********************************************************',
+                '********************************************************',
+                '',
+            ])
+
+            self.log.critical('\n'.join(message))
+            if fail:
+                sys.exit(-1)
 
     def __init__(self, *, argv=None):
         if argv is None:

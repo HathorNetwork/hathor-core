@@ -6,7 +6,9 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, get_genesis_key
 
 
-class BasicTransaction(unittest.TestCase):
+class BaseIndexesTest(unittest.TestCase):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         self.wallet = Wallet()
@@ -42,7 +44,7 @@ class BasicTransaction(unittest.TestCase):
         tx1.resolve()
         self.assertTrue(self.manager.propagate_tx(tx1, False))
         self.assertEqual(
-            {tx.hash for tx in self.manager.tx_storage.iter_tx_tips()},
+            {tx.hash for tx in self.manager.tx_storage.iter_mempool_tips()},
             {tx1.hash}
         )
 
@@ -56,7 +58,7 @@ class BasicTransaction(unittest.TestCase):
         tx2.resolve()
         self.assertTrue(self.manager.propagate_tx(tx2, False))
         self.assertEqual(
-            {tx.hash for tx in self.manager.tx_storage.iter_tx_tips()},
+            {tx.hash for tx in self.manager.tx_storage.iter_mempool_tips()},
             {tx2.hash}
         )
 
@@ -68,7 +70,7 @@ class BasicTransaction(unittest.TestCase):
         self.assertTrue(self.manager.propagate_tx(tx3, False))
         self.assertIn(tx3.hash, tx2.get_metadata().conflict_with)
         self.assertEqual(
-            {tx.hash for tx in self.manager.tx_storage.iter_tx_tips()},
+            {tx.hash for tx in self.manager.tx_storage.iter_mempool_tips()},
             # XXX: what should we expect here? I don't think we should exclude both tx2 and tx3, but maybe let the
             # function using the index decide
             # {tx1.hash, tx3.hash}
@@ -96,7 +98,7 @@ class BasicTransaction(unittest.TestCase):
         tx1.resolve()
         self.assertTrue(self.manager.propagate_tx(tx1, False))
         self.assertEqual(
-            {tx.hash for tx in self.manager.tx_storage.iter_tx_tips()},
+            {tx.hash for tx in self.manager.tx_storage.iter_mempool_tips()},
             {tx1.hash}
         )
 
@@ -108,7 +110,7 @@ class BasicTransaction(unittest.TestCase):
         tx2.resolve()
         self.assertTrue(self.manager.propagate_tx(tx2, False))
         self.assertEqual(
-            {tx.hash for tx in self.manager.tx_storage.iter_tx_tips()},
+            {tx.hash for tx in self.manager.tx_storage.iter_mempool_tips()},
             {tx2.hash}
         )
 
@@ -123,12 +125,21 @@ class BasicTransaction(unittest.TestCase):
         # self.assertIn(tx3.hash, tx2.get_metadata().voided_by)
         self.assertIn(tx3.hash, tx2.get_metadata().conflict_with)
         self.assertEqual(
-            {tx.hash for tx in self.manager.tx_storage.iter_tx_tips()},
+            {tx.hash for tx in self.manager.tx_storage.iter_mempool_tips()},
             # XXX: what should we expect here? I don't think we should exclude both tx2 and tx3, but maybe let the
             # function using the index decide
             {tx1.hash, tx3.hash}
         )
 
 
-if __name__ == '__main__':
-    unittest.main()
+class SyncV1IndexesTest(unittest.SyncV1Params, BaseIndexesTest):
+    __test__ = True
+
+
+class SyncV2IndexesTest(unittest.SyncV2Params, BaseIndexesTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeIndexesTest(unittest.SyncBridgeParams, SyncV2IndexesTest):
+    pass

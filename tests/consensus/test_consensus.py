@@ -12,7 +12,9 @@ from tests.utils import (
 settings = HathorSettings()
 
 
-class ConsensusTestCase(unittest.TestCase):
+class BaseConsensusTestCase(unittest.TestCase):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         self.tx_storage = TransactionMemoryStorage()
@@ -51,7 +53,7 @@ class ConsensusTestCase(unittest.TestCase):
         # This block verifies the conflicting transaction and has a high weight.
         # So, it will be executed and previous blocks and transactions will be voided.
         tb0 = manager.make_custom_block_template(blocks[-1].hash, [conflicting_tx.hash, conflicting_tx.parents[0]])
-        b0 = tb0.generate_mining_block(storage=manager.tx_storage)
+        b0 = tb0.generate_mining_block(manager.rng, storage=manager.tx_storage)
         b0.weight = 10
         b0.resolve()
         b0.verify()
@@ -149,10 +151,10 @@ class ConsensusTestCase(unittest.TestCase):
         add_blocks_unlock_reward(manager)
 
         # Add some transactions between blocks
-        add_new_transactions(manager, 5, advance_clock=15)
+        txs = add_new_transactions(manager, 5, advance_clock=15)
 
         # Create a double spending transaction.
-        conflicting_tx = add_new_double_spending(manager)
+        conflicting_tx = add_new_double_spending(manager, tx=txs[-1])
         meta = conflicting_tx.get_metadata()
         self.assertEqual(len(meta.conflict_with), 1)
         self.assertIn(list(meta.conflict_with)[0], conflicting_tx.parents)
@@ -168,7 +170,7 @@ class ConsensusTestCase(unittest.TestCase):
 
         # This block verifies the conflicting transaction and has a high weight.
         tb0 = manager.make_custom_block_template(blocks[-1].hash, [conflicting_tx.hash, conflicting_tx.parents[0]])
-        b0 = tb0.generate_mining_block(storage=manager.tx_storage)
+        b0 = tb0.generate_mining_block(manager.rng, storage=manager.tx_storage)
         b0.weight = 10
         b0.resolve()
         b0.verify()
@@ -245,3 +247,16 @@ class ConsensusTestCase(unittest.TestCase):
             self.assertIsNone(meta.voided_by)
 
         self.assertConsensusValid(manager)
+
+
+class SyncV1ConsensusTestCase(unittest.SyncV1Params, BaseConsensusTestCase):
+    __test__ = True
+
+
+class SyncV2ConsensusTestCase(unittest.SyncV2Params, BaseConsensusTestCase):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeConsensusTestCase(unittest.SyncBridgeParams, SyncV2ConsensusTestCase):
+    pass

@@ -12,4 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-__version__ = '0.41.0'
+from enum import IntEnum
+
+
+class ProtocolVersion(IntEnum):
+    UNSET = 0
+    V1 = 1
+    V2 = 2
+
+    def __str__(self):
+        if self is ProtocolVersion.UNSET:
+            return 'unset'
+        elif self is ProtocolVersion.V1:
+            return 'sync-v1'
+        elif self is ProtocolVersion.V2:
+            return 'sync-v2'
+        else:
+            raise ValueError(f'ProtocolVersion cannot have a value of `{int(self)}`')

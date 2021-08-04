@@ -30,7 +30,9 @@ def _send_subscribe(protocol, id=None):
     protocol.lineReceived('{{"jsonrpc": "2.0", "id": "{}", "method": "subscribe"}}'.format(id).encode())
 
 
-class StratumTestBase(unittest.TestCase):
+class _BaseStratumTest(unittest.TestCase):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         self.manager = self.create_peer('testnet')
@@ -55,7 +57,8 @@ class StratumTestBase(unittest.TestCase):
         return json_loads(data)
 
 
-class TestStratum(StratumTestBase):
+class BaseStratumServerTest(_BaseStratumTest):
+    __test__ = False
 
     def test_parse_error(self):
         self.protocol.lineReceived(b'{]')
@@ -137,7 +140,20 @@ class TestStratum(StratumTestBase):
         self.assertEqual(job['method'], 'job')
 
 
-class TestStratumJob(StratumTestBase):
+class SyncV1StratumServerTest(unittest.SyncV1Params, BaseStratumServerTest):
+    __test__ = True
+
+
+class SyncV2StratumServerTest(unittest.SyncV2Params, BaseStratumServerTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeStratumServerTest(unittest.SyncBridgeParams, SyncV2StratumServerTest):
+    pass
+
+
+class BaseStratumJobTest(_BaseStratumTest):
     def _get_nonce(self, valid=True):
         target = 2**(256 - self.job['weight']) - 1
         base = sha256(bytes.fromhex(self.job['data']))
@@ -215,7 +231,22 @@ class TestStratumJob(StratumTestBase):
         self.assertTrue(job.weight >= 1, f'job weight of {job.weight} is too small')
 
 
-class StratumClientTest(unittest.TestCase):
+class SyncV1StratumJobTest(unittest.SyncV1Params, BaseStratumJobTest):
+    __test__ = True
+
+
+class SyncV2StratumJobTest(unittest.SyncV2Params, BaseStratumJobTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeStratumJobTest(unittest.SyncBridgeParams, SyncV2StratumJobTest):
+    pass
+
+
+class BaseStratumClientTest(unittest.TestCase):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         from hathor.transaction.genesis import _get_genesis_transactions_unsafe
@@ -259,3 +290,16 @@ class StratumClientTest(unittest.TestCase):
             self.block.nonce = int(nonce, 16)
             self.block.update_hash()
             self.block.verify_pow()
+
+
+class SyncV1StratumClientTest(unittest.SyncV1Params, BaseStratumClientTest):
+    __test__ = True
+
+
+class SyncV2StratumClientTest(unittest.SyncV2Params, BaseStratumClientTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeStratumClientTest(unittest.SyncBridgeParams, SyncV2StratumClientTest):
+    pass

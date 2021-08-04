@@ -20,6 +20,7 @@ from structlog import get_logger
 import hathor
 from hathor.conf import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
+from hathor.p2p.protocol_version import ProtocolVersion
 from hathor.p2p.states.base import BaseState
 from hathor.p2p.utils import get_genesis_short_hash, get_settings_hello_dict
 
@@ -90,6 +91,40 @@ class HelloState(BaseState):
         if settings.ENABLE_PEER_WHITELIST and settings.CAPABILITY_WHITELIST not in data['capabilities']:
             # If peer is not sending whitelist capability we must close the connection
             protocol.send_error_and_close_connection('Must have whitelist capability.')
+            return
+
+        # start with sync-v2, which has higher priority
+        if protocol.enable_sync_v2:
+            # we accept sync-v2, but does the remote accept too?
+            assert settings.CAPABILITY_SYNC_V2 in protocol.node.capabilities
+            if settings.CAPABILITY_SYNC_V2 in data['capabilities']:
+                # ok we both support sync-v2, so we'll use that
+                self.log.debug('set protocol version to sync-v2')
+                protocol.protocol_version = ProtocolVersion.V2
+            elif protocol.enable_sync_v1:
+                # the remote does not accept sync-v2, but we can still proceed because we accept sync-v1
+                self.log.debug('set protocol version to sync-v1 (remote-fallback)')
+                protocol.protocol_version = ProtocolVersion.V1
+            else:
+                # no compatible sync version to use, this is fine though we just can't connect to this peer
+                self.log.info('no compatible sync version to use')
+                protocol.send_error_and_close_connection('no compatible sync version to use')
+                return
+        elif protocol.enable_sync_v1:
+            # we don't accept sync-v2, so it doesn't matter much whether the remote supports but we'll check anyway
+            assert settings.CAPABILITY_SYNC_V2 not in protocol.node.capabilities
+            if settings.CAPABILITY_SYNC_V2 in data['capabilities']:
+                # they do support it so we should fallback because we don't
+                self.log.debug('set protocol version to sync-v1 (local-fallback)')
+            else:
+                # same old sync-v1-only to sync-v1-only, should be the most common path for a now
+                self.log.debug('set protocol version to sync-v1')
+            protocol.protocol_version = ProtocolVersion.V1
+        else:
+            # XXX: this shouldn't be possible to configure normally, but if you mess up setting up tests or messing
+            # with a custom capabilities it might end up here, should we raise a RuntimeError?
+            self.log.error('no protocol version configured')
+            protocol.send_error_and_close_connection('no protocol version supported')
             return
 
         if data['app'] != self._app():

@@ -99,6 +99,8 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
                     token_uid_map[token_uid] = len(serialized['tokens'])
 
             token_data = token_uid_map[token_uid]
+            if tx2_out.is_token_authority():
+                token_data = token_data | tx2_out.TOKEN_AUTHORITY_MASK
             output['decoded']['token_data'] = token_data
             output['token_data'] = token_data
             inputs.append(output)

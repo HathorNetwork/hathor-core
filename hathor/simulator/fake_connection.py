@@ -16,6 +16,7 @@ from collections import deque
 from typing import TYPE_CHECKING, Deque
 
 from OpenSSL.crypto import X509
+from structlog import get_logger
 from twisted.test import proto_helpers
 
 from hathor.conf import HathorSettings
@@ -26,12 +27,13 @@ if TYPE_CHECKING:
     from hathor.p2p.peer_id import PeerId
 
 settings = HathorSettings()
+logger = get_logger()
 
 
 class HathorStringTransport(proto_helpers.StringTransport):
     def __init__(self, peer: 'PeerId'):
-        self.peer = peer
         super().__init__()
+        self.peer = peer
 
     def getPeerCertificate(self) -> X509:
         certificate = generate_certificate(self.peer.private_key, settings.CA_FILEPATH, settings.CA_KEY_FILEPATH)
@@ -44,6 +46,8 @@ class FakeConnection:
         """
         :param: latency: Latency between nodes in seconds
         """
+        self.log = logger.new()
+
         self.manager1 = manager1
         self.manager2 = manager2
 
@@ -80,7 +84,7 @@ class FakeConnection:
         assert self.is_connected, 'not connected'
 
         if debug:
-            print('[do step]')
+            self.log.debug('conn step')
 
         if self._do_buffering:
             if not self._buf1:
@@ -107,21 +111,21 @@ class FakeConnection:
             if self.latency > 0:
                 self.manager1.reactor.callLater(self.latency, self._deliver_message, self._proto2, line1, debug)
                 if debug:
-                    print('[1->2] delayed by', self.latency)
+                    self.log.debug('[1->2] delivery delayed', latency=self.latency)
             else:
                 self._proto2.dataReceived(line1)
                 if debug:
-                    print('[1->2]', line1)
+                    self.log.debug('[1->2] delivered', line=line1)
 
         if line2:
             if self.latency > 0:
                 self.manager2.reactor.callLater(self.latency, self._deliver_message, self._proto1, line2, debug)
                 if debug:
-                    print('[1->2] delayed by', self.latency)
+                    self.log.debug('[2->1] delivery delayed', latency=self.latency)
             else:
                 self._proto1.dataReceived(line2)
                 if debug:
-                    print('[2->1]', line2)
+                    self.log.debug('[2->1] delivered', line=line2)
 
         return True
 

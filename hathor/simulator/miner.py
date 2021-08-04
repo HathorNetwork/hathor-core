@@ -12,26 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import random
 from typing import TYPE_CHECKING
 
-import numpy.random
+from structlog import get_logger
 
 from hathor.conf import HathorSettings
 from hathor.manager import HathorEvents
+from hathor.util import Random
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
     from hathor.pubsub import EventArguments
 
 settings = HathorSettings()
+logger = get_logger()
 
 
 class MinerSimulator:
     """ Simulate block mining with actually solving the block. It is supposed to be used
     with Simulator class. The mining part is simulated using the geometrical distribution.
     """
-    def __init__(self, manager: 'HathorManager', *, hashpower: float):
+    def __init__(self, manager: 'HathorManager', rng: Random, *, hashpower: float):
         """
         :param: hashpower: Number of hashes per second
         """
@@ -41,6 +42,8 @@ class MinerSimulator:
         self.clock = manager.reactor
         self.block = None
         self.delayedcall = None
+        self.log = logger.new()
+        self.rng = rng
 
     def start(self) -> None:
         """ Start mining blocks.
@@ -76,18 +79,21 @@ class MinerSimulator:
         """ Schedule the propagation of the next block, and propagate a block if it has been found.
         """
         if self.block:
-            self.block.nonce = random.randrange(0, 2**32)
+            self.block.nonce = self.rng.getrandbits(32)
             self.block.update_hash()
             self.blocks_found += 1
+            self.log.debug('randomized step: found new block', hash=self.block.hash_hex, nonce=self.block.nonce)
             self.manager.propagate_tx(self.block, fails_silently=False)
             self.block = None
 
         if self.manager.can_start_mining():
             block = self.manager.generate_mining_block()
             geometric_p = 2**(-block.weight)
-            trials = numpy.random.geometric(geometric_p)
+            trials = self.rng.geometric(geometric_p)
             dt = 1.0 * trials / self.hashpower
             self.block = block
+            self.log.debug('randomized step: start mining new block', dt=dt, parents=[h.hex() for h in block.parents],
+                           block_timestamp=block.timestamp)
         else:
             dt = 60
 

@@ -14,7 +14,7 @@
 
 [tool.poetry]
 name = "hathor"
-version = "0.40.2"
+version = "0.41.0"
 description = "Hathor Network full-node"
 authors = ["Hathor Team <contact@hathor.network>"]
 license = "Apache-2.0"
@@ -36,7 +36,6 @@ exclude = ["tests", "tests.*"]
 hathor-cli = 'hathor.cli.main:main'
 
 [tool.poetry.dev-dependencies]
-numpy = "~1.19.5"
 flake8 = "~3.8.4"
 isort = {version = "~5.7.0", extras = ["colors"]}
 yapf = "^0.30"

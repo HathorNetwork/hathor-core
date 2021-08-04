@@ -2,11 +2,15 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.transaction import Transaction
 from hathor.transaction.resources import TransactionResource
+from hathor.transaction.token_creation_tx import TokenCreationTransaction
+from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
 
 
-class TransactionTest(_BaseResourceTest._ResourceTest):
+class BaseTransactionTest(_BaseResourceTest._ResourceTest):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         self.web = StubSite(TransactionResource(self.manager))
@@ -128,7 +132,6 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.get(
             "transaction", {b'id': b'0033784bc8443ba851fd88d81c6f06774ae529f25c1fa8f026884ad0a0e98011'})
         data = response.json_value()
-        print('data', data)
 
         self.assertEqual(len(data['tx']['inputs']), 3)
         self.assertEqual(len(data['tx']['outputs']), 6)
@@ -155,6 +158,80 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data['tx']['outputs'][4]['decoded']['token_data'], 2)
         self.assertEqual(data['tx']['outputs'][5]['token_data'], 2)
         self.assertEqual(data['tx']['outputs'][5]['decoded']['token_data'], 2)
+
+    @inlineCallbacks
+    def test_get_one_known_tx_with_authority(self):
+        # Tx tesnet 00005f234469407614bf0abedec8f722bb5e534949ad37650f6077c899741ed7
+        # We had a bug with this endpoint in this tx because the token_data from inputs
+        # was not considering authority mask
+
+        # First add needed data on storage
+        tx_hex = ('0001010202000023b318c91dcfd4b967b205dc938f9f5e2fd5114256caacfb8f6dd13db330000023b318c91dcfd4b967b20'
+                  '5dc938f9f5e2fd5114256caacfb8f6dd13db33000006946304402200f7de9e866fbc2d600d6a46eb620fa2d72c9bf032250'
+                  'f1bb4d241b988182ecfe022002e3010a01ecc539f1f095759642549ca3c626d5603b8efa9499acba0ea13c3621038f962b5'
+                  '6731fdb26740e04830b63ae5a39e392fd821beef0e99f6d9ae401f201000023b318c91dcfd4b967b205dc938f9f5e2fd511'
+                  '4256caacfb8f6dd13db33002006946304402200f7de9e866fbc2d600d6a46eb620fa2d72c9bf032250f1bb4d241b988182e'
+                  'cfe022002e3010a01ecc539f1f095759642549ca3c626d5603b8efa9499acba0ea13c3621038f962b56731fdb26740e0483'
+                  '0b63ae5a39e392fd821beef0e99f6d9ae401f2010000000100001976a914ee216186a0fad459df6f067f9bfa51ce913e1b0'
+                  '588ac0000000281001976a914ee216186a0fad459df6f067f9bfa51ce913e1b0588ac4030c398b4620e3161087c07020000'
+                  '7851af043c11e19f28675b010e8cf4d8da3278f126d2429490a804a7fb2c000023b318c91dcfd4b967b205dc938f9f5e2fd'
+                  '5114256caacfb8f6dd13db33000020393')
+        tx = Transaction.create_from_struct(bytes.fromhex(tx_hex), self.manager.tx_storage)
+        self.manager.tx_storage.save_transaction(tx)
+
+        tx_parent1_hex = ('0001010203000023b318c91dcfd4b967b205dc938f9f5e2fd5114256caacfb8f6dd13db330000023b318c91dcfd'
+                          '4b967b205dc938f9f5e2fd5114256caacfb8f6dd13db33003006a473045022100b1a0293277469636ae5af69703'
+                          '5c2cba5f15f625814f27938e29ffab8d609ce2022047bce945a30dd498e429b8e73cbce51ef6413c4f4cba5de83'
+                          '7559dafb754ed45210234490c2447ce61a54cd242b8c24e76fb7e1c6f5313792b33ef75bbc85b3f4302000023b3'
+                          '18c91dcfd4b967b205dc938f9f5e2fd5114256caacfb8f6dd13db330010069463044022056588e67e0971ab42d6'
+                          '432d0b758e28247393e0dcfddec6bdb07805655d9948f0220141cc506e7e0c95d672e476498cd0eacd7f62737fe'
+                          '16f475791eaaa372094e9e21038f962b56731fdb26740e04830b63ae5a39e392fd821beef0e99f6d9ae401f2010'
+                          '000006401001976a914d937d2c33f04ee680c996ebbc80af79330c4071288ac0000000181001976a914d937d2c3'
+                          '3f04ee680c996ebbc80af79330c4071288ac0000000800001976a914ed9c36b495444302885969447f0fae5e256'
+                          '08ef288ac40311513e4fef9d161087be202000023b318c91dcfd4b967b205dc938f9f5e2fd5114256caacfb8f6d'
+                          'd13db3300038c3d3b69ce90bb88c0c4d6a87b9f0c349e5b10c9b7ce6714f996e512ac16400021261')
+        tx_parent1 = Transaction.create_from_struct(bytes.fromhex(tx_parent1_hex), self.manager.tx_storage)
+        self.manager.tx_storage.save_transaction(tx_parent1)
+
+        tx_parent2_hex = ('000201040000476810205cb3625d62897fcdad620e01d66649869329640f5504d77e960d01006a473045022100c'
+                          'e2ce57330c77b5599e2d044686338a1d55faca50d3436359a60be81654db2d00220574e78eebf7c97f57cde9468'
+                          '323aacc2f0abeadc84f69ca6fa2485b99eac3ac62102b4efd2d336030d430b37c3b287ae6de6c2bd5aced0d5e03'
+                          '653de6e33c18e4ebe0000006401001976a91481ec322ae3282046d833013529da8d5dcbfb30bf88ac0000000181'
+                          '001976a91481ec322ae3282046d833013529da8d5dcbfb30bf88ac0000000281001976a91481ec322ae3282046d'
+                          '833013529da8d5dcbfb30bf88ac0000000900001976a914fe96dc8cd6ed2e8fda3ce6fe12e4714195c215b888ac'
+                          '010757617420776174035741544030e34594da5bdd6108740d020038c3d3b69ce90bb88c0c4d6a87b9f0c349e5b'
+                          '10c9b7ce6714f996e512ac1640000476810205cb3625d62897fcdad620e01d66649869329640f5504d77e960d00'
+                          '00d810')
+        tx_parent2_bytes = bytes.fromhex(tx_parent2_hex)
+        tx_parent2 = TokenCreationTransaction.create_from_struct(tx_parent2_bytes, self.manager.tx_storage)
+        self.manager.tx_storage.save_transaction(tx_parent2)
+
+        # Both inputs are the same as the last parent, so no need to manually add them
+
+        token_bytes1 = bytes.fromhex('000023b318c91dcfd4b967b205dc938f9f5e2fd5114256caacfb8f6dd13db330')
+        status = self.manager.tx_storage.tokens_index.tokens[token_bytes1]
+        status.name = 'Wat wat'
+        status.symbol = 'WAT'
+
+        response = yield self.web.get(
+            "transaction", {b'id': b'00005f234469407614bf0abedec8f722bb5e534949ad37650f6077c899741ed7'})
+        data = response.json_value()
+
+        self.assertEqual(len(data['tx']['inputs']), 2)
+        self.assertEqual(len(data['tx']['outputs']), 2)
+        self.assertEqual(len(data['tx']['tokens']), 1)
+
+        # Inputs token data
+        self.assertEqual(data['tx']['inputs'][0]['token_data'], 1)
+        self.assertEqual(data['tx']['inputs'][0]['decoded']['token_data'], 1)
+        self.assertEqual(data['tx']['inputs'][1]['token_data'], 129)
+        self.assertEqual(data['tx']['inputs'][1]['decoded']['token_data'], 129)
+
+        # Outputs token data
+        self.assertEqual(data['tx']['outputs'][0]['token_data'], 0)
+        self.assertEqual(data['tx']['outputs'][0]['decoded']['token_data'], 0)
+        self.assertEqual(data['tx']['outputs'][1]['token_data'], 129)
+        self.assertEqual(data['tx']['outputs'][1]['decoded']['token_data'], 129)
 
     @inlineCallbacks
     def test_get_many(self):
@@ -334,3 +411,16 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
                 })
         data = response.json_value()
         self.assertFalse(data['success'])
+
+
+class SyncV1TransactionTest(unittest.SyncV1Params, BaseTransactionTest):
+    __test__ = True
+
+
+class SyncV2TransactionTest(unittest.SyncV2Params, BaseTransactionTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeTransactionTest(unittest.SyncBridgeParams, SyncV2TransactionTest):
+    pass

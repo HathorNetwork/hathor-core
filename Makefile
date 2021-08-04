@@ -36,6 +36,10 @@ tests-doctests:
 tests-lib:
 	pytest --durations=10 $(pytest_flags) --doctest-modules hathor $(tests_lib)
 
+.PHONY: tests-quick
+tests-quick:
+	pytest --durations=10 $(pytest_flags) --doctest-modules hathor $(tests_lib) --maxfail=1
+
 .PHONY: tests-genesis
 tests-genesis:
 	HATHOR_TEST_CONFIG_FILE=hathor.conf.mainnet pytest tests/tx/test_genesis.py

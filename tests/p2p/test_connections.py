@@ -33,8 +33,8 @@ class ConnectionsTest(unittest.TestCase):
         endpoint = 'tcp://127.0.0.1:8005'
         manager.connections.connect_to(endpoint, use_ssl=True)
 
-        self.assertFalse(endpoint in manager.connections.connecting_peers)
-        self.assertFalse(endpoint in manager.connections.handshaking_peers)
-        self.assertFalse(endpoint in manager.connections.connected_peers)
+        self.assertNotIn(endpoint, manager.connections.connecting_peers)
+        self.assertNotIn(endpoint, manager.connections.handshaking_peers)
+        self.assertNotIn(endpoint, manager.connections.connected_peers)
 
         shutil.rmtree(tmpdir)

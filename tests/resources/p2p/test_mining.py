@@ -4,10 +4,13 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.p2p.resources import MiningResource
 from hathor.transaction import Block
+from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
-class MiningTest(_BaseResourceTest._ResourceTest):
+class BaseMiningTest(_BaseResourceTest._ResourceTest):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         self.web = StubSite(MiningResource(self.manager))
@@ -69,3 +72,16 @@ class MiningTest(_BaseResourceTest._ResourceTest):
         # invalid base64
         response_post = yield self.web.post('mining', {'block_bytes': 'YWFha'})
         self.assertEqual(response_post.written[0], b'0')
+
+
+class SyncV1MiningTest(unittest.SyncV1Params, BaseMiningTest):
+    __test__ = True
+
+
+class SyncV2MiningTest(unittest.SyncV2Params, BaseMiningTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeMiningTest(unittest.SyncBridgeParams, SyncV2MiningTest):
+    pass

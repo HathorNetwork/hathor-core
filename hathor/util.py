@@ -17,7 +17,8 @@ import warnings
 from collections import OrderedDict
 from enum import Enum
 from functools import partial, wraps
-from typing import Any, Callable, Deque, Dict, Iterable, Iterator, Optional, Tuple, TypeVar, cast
+from random import Random as PyRandom
+from typing import Any, Callable, Deque, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple, TypeVar, cast
 
 from structlog import get_logger
 from twisted.internet.interfaces import IReactorCore
@@ -214,7 +215,12 @@ def json_loadb(raw: bytes) -> Dict:
 
     # XXX: from Python3.6 onwards, json.loads can take bytes
     #      See: https://docs.python.org/3/library/json.html#json.loads
-    return json.loads(raw)
+    try:
+        return json.loads(raw)
+    except UnicodeDecodeError as exc:
+        # We cannot do `doc=raw` because it expects a str and there
+        # is no way to decode it.
+        raise json.JSONDecodeError(msg=str(exc), doc=raw.hex(), pos=exc.start) from exc
 
 
 def json_dumpb(obj: object) -> bytes:
@@ -274,3 +280,27 @@ def not_none(optional: Optional[_T], message: str = 'Unexpected `None`') -> _T:
     if optional is None:
         raise AssertionError(message)
     return optional
+
+
+class Random(PyRandom):
+    def geometric(self, p: float) -> int:
+        """Port of numpy.random.Generator.geometric sampling
+
+        It uses the Inverse Transform Sampling [1].
+        CDF(x) = 1 - (1 - p)**x
+        CDF^{-1}(x) = log(1 - x) / log(1 - p)
+        [1] https://en.wikipedia.org/wiki/Inverse_transform_sampling
+        """
+        return math.ceil(math.log(self.random()) / math.log(1 - p))
+
+    def ordered_sample(self, seq: Sequence[T], k: int) -> List[T]:
+        """Like self.sample but preserve orginal order.
+
+        For example, ordered_sample([1, 2, 3]) will never return [3, 2] only [2, 3] instead."""
+        return [x for _, x in sorted(self.sample(list(enumerate(seq)), k))]
+
+    # XXX: backport of randbytes from https://github.com/python/cpython/blob/3.9/Lib/random.py#L283-L285
+    if not hasattr(PyRandom, 'randbytes'):
+        def randbytes(self, n):
+            """Generate n random bytes."""
+            return self.getrandbits(n * 8).to_bytes(n, 'little')

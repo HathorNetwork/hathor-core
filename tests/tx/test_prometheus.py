@@ -10,7 +10,9 @@ from tests import unittest
 from tests.utils import add_new_blocks, add_new_transactions
 
 
-class PrometheusTest(unittest.TestCase):
+class BasePrometheusTest(unittest.TestCase):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
 
@@ -49,3 +51,16 @@ class PrometheusTest(unittest.TestCase):
 
         # Removing tmpdir
         shutil.rmtree(tmpdir)
+
+
+class SyncV1PrometheusTest(unittest.SyncV1Params, BasePrometheusTest):
+    __test__ = True
+
+
+class SyncV2PrometheusTest(unittest.SyncV2Params, BasePrometheusTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgePrometheusTest(unittest.SyncBridgeParams, SyncV2PrometheusTest):
+    pass

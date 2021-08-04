@@ -2,11 +2,14 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.transaction import Transaction
 from hathor.transaction.resources import GraphvizFullResource, GraphvizNeighboursResource
+from tests import unittest
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transactions
 
 
-class _GraphvizBase(_BaseResourceTest._ResourceTest):
+class BaseGraphvizTest(_BaseResourceTest._ResourceTest):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
         self.resource = self.create_resource()
@@ -27,8 +30,11 @@ class _GraphvizBase(_BaseResourceTest._ResourceTest):
 
         self.manager.propagate_tx(self.tx2)
 
+    def create_resource(self):
+        raise NotImplementedError
 
-class GraphvizFullTest(_GraphvizBase):
+
+class BaseGraphvizFullTest(BaseGraphvizTest):
     def create_resource(self):
         return GraphvizFullResource(self.manager, format='dot')
 
@@ -73,7 +79,20 @@ class GraphvizFullTest(_GraphvizBase):
         self.assertIsNone(request._finishedDeferreds)
 
 
-class GraphvizNeigboursTest(_GraphvizBase):
+class SyncV1GraphvizFullTest(unittest.SyncV1Params, BaseGraphvizFullTest):
+    __test__ = True
+
+
+class SyncV2GraphvizFullTest(unittest.SyncV2Params, BaseGraphvizFullTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeGraphvizFullTest(unittest.SyncBridgeParams, SyncV2GraphvizFullTest):
+    pass
+
+
+class BaseGraphvizNeigboursTest(BaseGraphvizTest):
     def create_resource(self):
         return GraphvizNeighboursResource(self.manager, format='dot')
 
@@ -91,3 +110,16 @@ class GraphvizNeigboursTest(_GraphvizBase):
         self.assertIsNotNone(request._finishedDeferreds)
         self.resource._err_tx_resolve('Error', request)
         self.assertIsNone(request._finishedDeferreds)
+
+
+class SyncV1GraphvizNeigboursTest(unittest.SyncV1Params, BaseGraphvizNeigboursTest):
+    __test__ = True
+
+
+class SyncV2GraphvizNeigboursTest(unittest.SyncV2Params, BaseGraphvizNeigboursTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeGraphvizNeigboursTest(unittest.SyncBridgeParams, SyncV2GraphvizNeigboursTest):
+    pass

@@ -44,8 +44,8 @@ class IndexesManager:
         so it will know which index is better to use in each moment
     """
 
-    def __init__(self) -> None:
-        self.tips_index = TipsIndex()
+    def __init__(self, with_tips_index: bool = True) -> None:
+        self.tips_index = TipsIndex() if with_tips_index else None
         self.txs_index = TransactionsIndex()
 
     def add_tx(self, tx: BaseTransaction) -> bool:
@@ -53,9 +53,10 @@ class IndexesManager:
 
         :param tx: Transaction to be added
         """
-        r1 = self.tips_index.add_tx(tx)
-        r2 = self.txs_index.add_tx(tx)
-        assert r1 == r2
+        r1 = self.txs_index.add_tx(tx)
+        if self.tips_index is not None:
+            r2 = self.tips_index.add_tx(tx)
+            assert r1 == r2
         return r1
 
     def del_tx(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
@@ -63,8 +64,9 @@ class IndexesManager:
 
         :param tx: Transaction to be deleted
         """
-        self.tips_index.del_tx(tx, relax_assert=relax_assert)
         self.txs_index.del_tx(tx)
+        if self.tips_index is not None:
+            self.tips_index.del_tx(tx, relax_assert=relax_assert)
 
     def get_newest(self, count: int) -> Tuple[List[bytes], bool]:
         """ Get transactions or blocks in txs_index from the newest to the oldest

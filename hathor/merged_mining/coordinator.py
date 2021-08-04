@@ -19,7 +19,6 @@ Asyncio with async/await is much more ergonomic and less cumbersome than twisted
 """
 
 import asyncio
-import random
 import time
 from itertools import count
 from typing import Any, Callable, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple, Union
@@ -49,7 +48,7 @@ from hathor.merged_mining.bitcoin_rpc import IBitcoinRPC
 from hathor.merged_mining.util import Periodic
 from hathor.transaction import BitcoinAuxPow, MergeMinedBlock as HathorBlock
 from hathor.transaction.exceptions import ScriptError, TxValidationError
-from hathor.util import MaxSizeOrderedDict, ichunks
+from hathor.util import MaxSizeOrderedDict, Random, ichunks
 
 logger = get_logger()
 settings = HathorSettings()
@@ -387,12 +386,14 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
     def line_received(self, message: bytes) -> None:
         """ Parse line, pass result to `json_received`.
         """
+        from json import JSONDecodeError
+
         from hathor.util import json_loadb
 
         self.log.debug('line received', line=message)
         try:
             data = json_loadb(message)
-        except ValueError:
+        except JSONDecodeError:
             self.log.warn('invalid message received', message=message, message_hex=message.hex(), exc_info=True)
             return self.send_error(PARSE_ERROR, data={'message': message})
         assert isinstance(data, dict)
@@ -1116,8 +1117,11 @@ class MergedMiningCoordinator:
     def __init__(self,  bitcoin_rpc: IBitcoinRPC, hathor_client: IHathorClient,
                  payback_address_bitcoin: Optional[str], payback_address_hathor: Optional[str],
                  address_from_login: bool = True, min_difficulty: Optional[int] = None,
-                 sequential_xnonce1: bool = False):
+                 sequential_xnonce1: bool = False, rng: Optional[Random] = None):
         self.log = logger.new()
+        if rng is None:
+            rng = Random()
+        self.rng = rng
         self.bitcoin_rpc = bitcoin_rpc
         self.hathor_client = hathor_client
         self.hathor_mining: Optional[IMiningChannel] = None
@@ -1161,9 +1165,9 @@ class MergedMiningCoordinator:
             self._next_xnonce1 += 1
             if self._next_xnonce1 > self.MAX_XNONCE1:
                 self._next_xnonce1 = 0
+            return xnonce1.to_bytes(self.XNONCE1_SIZE, 'big')
         else:
-            xnonce1 = random.getrandbits(8 * self.XNONCE1_SIZE)
-        return xnonce1.to_bytes(self.XNONCE1_SIZE, 'big')
+            return self.rng.randbytes(self.XNONCE1_SIZE)
 
     def __call__(self) -> MergedMiningStratumProtocol:
         """ Making this class a callable so it can be used as a protocol factory.
@@ -1293,10 +1297,10 @@ class MergedMiningCoordinator:
         async for block_templates in mining:
             self.log.debug('got Hathor block template')
             # TODO: maybe hang on to all templates
-            block_template = random.choice(block_templates)
+            block_template = block_templates.choose_random_template(self.rng)
             address_str = self.payback_address_hathor
             address = decode_address(address_str) if address_str is not None else None
-            block = block_template.generate_mining_block(merge_mined=True, address=address)
+            block = block_template.generate_mining_block(self.rng, merge_mined=True, address=address)
             height = block_template.height
             assert isinstance(block, HathorBlock)
             self.last_hathor_block_received = time.time()

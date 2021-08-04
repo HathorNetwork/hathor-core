@@ -26,9 +26,9 @@ from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 settings = HathorSettings()
 
 if TYPE_CHECKING:
-    from hathor.manager import HathorManager  # noqa: F401
-    from hathor.p2p.node_sync import NodeSyncTimestamp  # noqa: F401
-    from hathor.transaction import BaseTransaction  # noqa: F401
+    from hathor.manager import HathorManager
+    from hathor.p2p.node_sync import NodeSyncTimestamp
+    from hathor.transaction import BaseTransaction
 
 logger = get_logger()
 

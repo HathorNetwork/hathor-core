@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import random
 from typing import TYPE_CHECKING, List
 
-import numpy.random
+from structlog import get_logger
 
 from hathor import daa
 from hathor.conf import HathorSettings
 from hathor.transaction.exceptions import RewardLocked
+from hathor.util import Random
 from hathor.wallet.exceptions import InsufficientFunds
 from tests.utils import gen_new_tx
 
@@ -27,13 +27,15 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager
 
 settings = HathorSettings()
+logger = get_logger()
 
 
 class RandomTransactionGenerator:
     """ Generates random transactions without mining. It is supposed to be used
     with Simulator class. The mining part is simulated using the geometrical distribution.
     """
-    def __init__(self, manager: 'HathorManager', *, rate: float, hashpower: float, ignore_no_funds: bool = False):
+    def __init__(self, manager: 'HathorManager', rng: Random, *,
+                 rate: float, hashpower: float, ignore_no_funds: bool = False):
         """
         :param: rate: Number of transactions per second
         :param: hashpower: Number of hashes per second
@@ -50,6 +52,8 @@ class RandomTransactionGenerator:
         self.ignore_no_funds = ignore_no_funds
         self.tx = None
         self.delayedcall = None
+        self.log = logger.new()
+        self.rng = rng
 
     def start(self):
         """ Start generating random transactions.
@@ -70,7 +74,8 @@ class RandomTransactionGenerator:
             self.manager.propagate_tx(self.tx, fails_silently=False)
             self.tx = None
 
-        dt = random.expovariate(self.rate)
+        dt = self.rng.expovariate(self.rate)
+        self.log.debug('randomized step: schedule new transaction step ', dt=dt)
         self.delayedcall = self.clock.callLater(dt, self.new_tx_step1)
 
     def new_tx_step1(self):
@@ -84,9 +89,10 @@ class RandomTransactionGenerator:
         if not self.send_to:
             address = self.manager.wallet.get_unused_address(mark_as_used=False)
         else:
-            address = random.choice(self.send_to)
+            address = self.rng.choice(self.send_to)
 
-        value = random.randint(1, balance.available)
+        value = self.rng.randint(1, balance.available)
+        self.log.debug('randomized step: send to', address=address, amount=value / 100)
 
         try:
             tx = gen_new_tx(self.manager, address, value)
@@ -98,8 +104,9 @@ class RandomTransactionGenerator:
         tx.update_hash()
 
         geometric_p = 2**(-tx.weight)
-        trials = numpy.random.geometric(geometric_p)
+        trials = self.rng.geometric(geometric_p)
         dt = 1.0 * trials / self.hashpower
 
         self.tx = tx
         self.delayedcall = self.clock.callLater(dt, self.schedule_next_transaction)
+        self.log.debug('randomized step: schedule next transaction', dt=dt, hash=tx.hash_hex)

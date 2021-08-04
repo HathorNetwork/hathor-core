@@ -11,7 +11,9 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_block, add_new_double_spending, add_new_transactions
 
 
-class HathorSyncMethodsTestCase(unittest.TestCase):
+class BaseHathorSyncMethodsTestCase(unittest.TestCase):
+    __test__ = False
+
     def setUp(self):
         super().setUp()
 
@@ -42,8 +44,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         wallet.unlock(words=words, tx_storage=manager.tx_storage)
         return manager
 
-    # retry the test once if it fails, see: https://github.com/box/flaky
-    @pytest.mark.flaky
+    @pytest.mark.flaky(max_runs=3, min_passes=1)
     def test_split_brain(self):
         debug_pdf = False
 
@@ -109,3 +110,16 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusEqual(manager1, manager2)
         # self.assertConsensusValid(manager1)
         self.assertConsensusValid(manager2)
+
+
+class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMethodsTestCase):
+    __test__ = True
+
+
+class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMethodsTestCase):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeHathorSyncMethodsTestCase(unittest.SyncBridgeParams, SyncV2HathorSyncMethodsTestCase):
+    pass
