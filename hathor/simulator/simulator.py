@@ -189,7 +189,7 @@ class Simulator:
         self._connections.append(conn)
 
     def _run(self, interval: float, step: float, status_interval: float) -> Generator[None, None, None]:
-        """ Implementation of run, yields at every step to allow verifications like in run_until_synced
+        """ Implementation of run, yields at every step to allow verifications like in run_until_complete
         """
         assert self._started
         initial = self._clock.seconds()
@@ -218,6 +218,20 @@ class Simulator:
                               dt_step=sim_dt, dt_remaining=sim_remaining, delayed_calls=delayed_calls)
                 latest_time = self._clock.seconds()
             self._clock.advance(step)
+
+    def run_until_complete(self,
+                           max_interval: float,
+                           step: float = DEFAULT_STEP_INTERVAL,
+                           status_interval: float = DEFAULT_STATUS_INTERVAL) -> bool:
+        """ Will stop when all peers have synced/errored (-> True), or when max_interval is elapsed (-> False).
+
+        Make sure miners/tx_generators are stopped or this will almost certainly run until max_interval.
+        """
+        assert self._started
+        for _ in self._run(max_interval, step, status_interval):
+            if all(not conn.can_step() for conn in self._connections):
+                return True
+        return False
 
     def run(self,
             interval: float,

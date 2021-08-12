@@ -61,8 +61,8 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
             add_blocks_unlock_reward(manager2)
             self.clock.advance(10)
             for _ in range(random.randint(3, 10)):
-                add_new_transactions(manager1, random.randint(2, 4))
-                add_new_transactions(manager2, random.randint(3, 7))
+                add_new_transactions(manager1, random.randint(2, 4), advance_clock=1)
+                add_new_transactions(manager2, random.randint(3, 7), advance_clock=1)
                 add_new_double_spending(manager1)
                 add_new_double_spending(manager2)
                 self.clock.advance(10)

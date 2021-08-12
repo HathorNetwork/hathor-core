@@ -92,6 +92,7 @@ class RunNode:
         parser.add_argument('--enable-crash-api', action='store_true', help='Enable _crash/* endpoints')
         parser.add_argument('--x-sync-bridge', action='store_true',
                             help='Enable support for running both sync protocols. DO NOT ENABLE, IT WILL BREAK.')
+        parser.add_argument('--x-localhost-only', action='store_true', help='Only connect to peers on localhost')
         return parser
 
     def prepare(self, args: Namespace) -> None:
@@ -245,6 +246,9 @@ class RunNode:
                                      enable_sync_v1=True, enable_sync_v2=args.x_sync_bridge)
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
+
+        if args.x_localhost_only:
+            self.manager.connections.localhost_only = True
 
         dns_hosts = []
         if settings.BOOTSTRAP_DNS:

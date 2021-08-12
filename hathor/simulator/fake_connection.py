@@ -80,6 +80,35 @@ class FakeConnection:
         self._proto1.disable_idle_timeout()
         self._proto2.disable_idle_timeout()
 
+    def can_step(self) -> bool:
+        """Short-hand check that can be used to make "step loops" without having to guess the number of iterations."""
+        from hathor.p2p.states.ready import ReadyState
+        conn1_aborting = self._proto1.aborting
+        conn2_aborting = self._proto2.aborting
+        if conn1_aborting or conn2_aborting:
+            self.log.debug('conn aborting', conn1_aborting=conn1_aborting, conn2_aborting=conn2_aborting)
+            return False
+        state1 = self._proto1.state
+        state2 = self._proto2.state
+        state1_is_ready = isinstance(state1, ReadyState)
+        state2_is_ready = isinstance(state2, ReadyState)
+        if not state1_is_ready or not state2_is_ready:
+            self.log.debug('peer not ready', peer1_ready=state1_is_ready, peer2_ready=state2_is_ready)
+            return True
+        assert isinstance(state1, ReadyState)  # mypy can't infer this from the above
+        assert isinstance(state2, ReadyState)  # mypy can't infer this from the above
+        state1_is_errored = state1.sync_manager.is_errored()
+        state2_is_errored = state2.sync_manager.is_errored()
+        if state1_is_errored or state2_is_errored:
+            self.log.debug('peer errored', peer1_errored=state1_is_errored, peer2_errored=state2_is_errored)
+            return False
+        state1_is_synced = state1.sync_manager.is_synced()
+        state2_is_synced = state2.sync_manager.is_synced()
+        if not state1_is_synced or not state2_is_synced:
+            self.log.debug('peer not synced', peer1_synced=state1_is_synced, peer2_synced=state2_is_synced)
+            return True
+        return False
+
     def run_one_step(self, debug=False, force=False):
         assert self.is_connected, 'not connected'
 

@@ -111,7 +111,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         print()
         print()
         print('Manager 1: Connection metrics')
-        for conn in nodes[0].connections.get_ready_connections():
+        for conn in nodes[0].connections.iter_ready_connections():
             conn.metrics.print_stats()
         print()
         print()

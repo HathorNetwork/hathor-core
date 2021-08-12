@@ -39,10 +39,16 @@ def resolve_block_bytes(block_bytes):
 def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False,
                             tx: Optional[Transaction] = None) -> Transaction:
     if tx is None:
-        tx_interval = random.choice(list(manager.tx_storage.get_tx_tips()))
-        _tx = manager.tx_storage.get_transaction(tx_interval.data)
-        assert isinstance(_tx, Transaction)
-        tx = _tx
+        tx_candidates = manager.get_new_tx_parents()
+        genesis = manager.tx_storage.get_all_genesis()
+        genesis_txs = [tx for tx in genesis if not tx.is_block]
+        # XXX: it isn't possible to double-spend a genesis transaction, thus we remove it from tx_candidates
+        for genesis_tx in genesis_txs:
+            if genesis_tx.hash in tx_candidates:
+                tx_candidates.remove(genesis_tx.hash)
+        assert tx_candidates, 'Must not be empty, otherwise test was wrongly set up'
+        tx_hash = random.choice(tx_candidates)
+        tx = cast(Transaction, manager.tx_storage.get_transaction(tx_hash))
 
     txin = random.choice(tx.inputs)
 

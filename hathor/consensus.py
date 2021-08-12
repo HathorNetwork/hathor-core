@@ -20,7 +20,7 @@ from structlog import get_logger
 from hathor.conf import HathorSettings
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, Block, Transaction, TxInput, sum_weights
-from hathor.util import classproperty
+from hathor.util import classproperty, not_none
 
 logger = get_logger()
 settings = HathorSettings()
@@ -183,10 +183,11 @@ class BlockConsensusAlgorithm:
             # we need to check that block is not voided.
             meta = block.get_metadata()
             if not meta.voided_by:
-                storage._best_block_tips = [block.hash]
-                storage.add_new_to_block_height_index(meta.height, block.hash)
+                storage.add_new_to_block_height_index(meta.height, block.hash, block.timestamp)
+                storage.update_best_block_tips_cache([block.hash])
             # The following assert must be true, but it is commented out for performance reasons.
-            #     assert len(storage.get_best_block_tips(skip_cache=True)) == 1
+            if settings.SLOW_ASSERTS:
+                assert len(storage.get_best_block_tips(skip_cache=True)) == 1
         else:
             # Resolve all other cases, but (i).
             log = self.log.new(block=block.hash_hex)
@@ -242,23 +243,12 @@ class BlockConsensusAlgorithm:
                     # we need to check that block is not voided.
                     meta = block.get_metadata()
                     if not meta.voided_by:
-                        storage._best_block_tips = [block.hash]
                         self.log.debug('index new winner block', height=meta.height, block=block.hash_hex)
                         # We update the height cache index with the new winner chain
                         storage.update_block_height_cache_new_chain(meta.height, block)
+                        storage.update_best_block_tips_cache([block.hash])
                 else:
-                    storage._best_block_tips = [blk.hash for blk in heads]
-                    # XXX Is it safe to select one of the heads?
-                    best_block = heads[0]
-                    assert best_block.hash is not None
-                    best_meta = best_block.get_metadata()
-                    self.log.debug('index previous best block', height=best_meta.height, block=best_block.hash_hex)
-                    storage.add_new_to_block_height_index(best_meta.height, best_block.hash)
-
-        # Uncomment the following lines to check that the cache update is working properly.
-        # You shouldn't run this test in production because it dampens performance.
-        #     v = storage.get_best_block_tips(skip_cache=True)
-        #     assert v == storage._best_block_tips
+                    storage.update_best_block_tips_cache([not_none(blk.hash) for blk in heads])
 
     def union_voided_by_from_parents(self, block: Block) -> Set[bytes]:
         """Return the union of the voided_by of block's parents.
