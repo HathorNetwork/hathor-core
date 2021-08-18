@@ -688,6 +688,7 @@ class HathorManager:
         tips = self.tx_storage.get_best_block_tips()
         parent_hash = blk.get_block_parent_hash()
         if parent_hash not in tips:
+            self.log.warn('submit_block(): Ignoring block: parent not a tip', blk=blk.hash_hex)
             return False
         return self.propagate_tx(blk, fails_silently=fails_silently)
 
