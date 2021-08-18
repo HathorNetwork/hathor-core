@@ -197,7 +197,7 @@ class JSONRPC(LineReceiver, ABC):
         try:
             data = json_loadb(line)
         except JSONDecodeError:
-            return self.send_error(PARSE_ERROR, data={'message': line.decode()})
+            return self.send_error(PARSE_ERROR, data={'message': repr(line)})
         assert isinstance(data, dict)
 
         msgid = data.get('id')
