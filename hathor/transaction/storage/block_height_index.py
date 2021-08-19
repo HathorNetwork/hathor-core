@@ -69,3 +69,46 @@ class BlockHeightIndex:
         """
         height = len(self._index) - 1
         return height, self._index[height].hash
+
+    def search_previous_best_block(self, timestamp: float) -> bytes:
+        """Get the hash of the block with highest timestamp that isn't higher then the given timestamp."""
+        # XXX: commented simple O(N) search, use when in doubt
+        # for entry in reversed(self._index):
+        #     if entry.timestamp <= timestamp:
+        #         return entry.hash
+        # return None
+        # XXX: interpolation search, timestamp is very linearly correlated to height, so O(log(log(N))) on average,
+        #      but the worst case will be O(N), which can happen often on tests because the genesis timestamp is fixed
+        low = 0
+        low_entry = self._index[low]
+        if low_entry.timestamp > timestamp:
+            raise ValueError('timestamp cannot be lower than genesis\'')
+        high = len(self._index) - 1
+        high_entry = self._index[high]
+        if high_entry.timestamp <= timestamp:
+            return high_entry.hash
+        while low != high:
+            assert low_entry.timestamp <= timestamp <= high_entry.timestamp
+            # next key proportional to timestamp difference, greatly reduces iterations
+            mid = low + int((timestamp - low_entry.timestamp) * (high - low) //
+                            (high_entry.timestamp - low_entry.timestamp))
+
+            assert low <= mid <= high
+            mid_entry = self._index[mid]
+            if mid_entry.timestamp > timestamp:
+                high = mid - 1
+                high_entry = self._index[high]
+                if high_entry.timestamp < timestamp:
+                    # flipped, return new lower
+                    return high_entry.hash
+            elif mid_entry.timestamp < timestamp:
+                low = mid + 1
+                low_entry = self._index[low]
+                if low_entry.timestamp > timestamp:
+                    # flipped, return previous lower
+                    return mid_entry.hash
+            else:
+                # exact match
+                return mid_entry.hash
+        # XXX: I'm not sure this is actually reachable because we check for flips on both changes and exact match
+        return low_entry.hash
