@@ -169,6 +169,8 @@ class TestCase(unittest.TestCase):
         self.assertNotEqual(s1, s2)
 
     def assertConsensusEqual(self, manager1, manager2):
+        self.assertEqual(manager1.tx_storage.get_block_count(), manager2.tx_storage.get_block_count())
+        self.assertEqual(manager1.tx_storage.get_tx_count(), manager2.tx_storage.get_tx_count())
         self.assertEqual(manager1.tx_storage.get_count_tx_blocks(), manager2.tx_storage.get_count_tx_blocks())
         for tx1 in manager1.tx_storage.get_all_transactions():
             tx2 = manager2.tx_storage.get_transaction(tx1.hash)
@@ -182,6 +184,7 @@ class TestCase(unittest.TestCase):
                 self.assertIsNone(tx2_meta.voided_by)
             else:
                 # If tx1 is voided, then tx2 must be voided.
+                self.assertIsNotNone(tx2_meta.voided_by)
                 self.assertGreaterEqual(len(tx1_meta.voided_by), 1)
                 self.assertGreaterEqual(len(tx2_meta.voided_by), 1)
             # Hard verification

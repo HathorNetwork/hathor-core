@@ -59,14 +59,16 @@ class IndexesManager:
             assert r1 == r2
         return r1
 
-    def del_tx(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
+    def del_tx(self, tx: BaseTransaction, *, relax_assert: bool = False) -> bool:
         """ Delete a transaction from the indexes
 
         :param tx: Transaction to be deleted
         """
-        self.txs_index.del_tx(tx)
+        r1 = self.txs_index.del_tx(tx)
         if self.tips_index is not None:
-            self.tips_index.del_tx(tx, relax_assert=relax_assert)
+            r2 = self.tips_index.del_tx(tx, relax_assert=relax_assert)
+            assert r1 == r2
+        return r1
 
     def get_newest(self, count: int) -> Tuple[List[bytes], bool]:
         """ Get transactions or blocks in txs_index from the newest to the oldest
@@ -161,7 +163,7 @@ class TipsIndex:
         self.tx_last_interval[tx.hash] = interval
         return True
 
-    def del_tx(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
+    def del_tx(self, tx: BaseTransaction, *, relax_assert: bool = False) -> bool:
         """ Remove a transaction from the index.
         """
         assert tx.hash is not None
@@ -169,7 +171,7 @@ class TipsIndex:
 
         interval = self.tx_last_interval.pop(tx.hash, None)
         if interval is None:
-            return
+            return False
 
         if not relax_assert:
             assert interval.end == inf
@@ -183,6 +185,8 @@ class TipsIndex:
             if parent.is_block != tx.is_block:
                 continue
             self.update_tx(parent, relax_assert=relax_assert)
+
+        return True
 
     def update_tx(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
         """ Update a tx according to its children.
@@ -293,7 +297,7 @@ class TransactionsIndex:
         self.transactions.add(element)
         return True
 
-    def del_tx(self, tx: BaseTransaction) -> None:
+    def del_tx(self, tx: BaseTransaction) -> bool:
         """ Delete a transaction from the index
 
         :param tx: Transaction to be deleted
@@ -301,6 +305,8 @@ class TransactionsIndex:
         idx = self.transactions.bisect_key_left((tx.timestamp, tx.hash))
         if idx < len(self.transactions) and self.transactions[idx].hash == tx.hash:
             self.transactions.pop(idx)
+            return True
+        return False
 
     def find_tx_index(self, tx: BaseTransaction) -> Optional[int]:
         """Return the index of a transaction in the index
