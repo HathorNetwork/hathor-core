@@ -103,7 +103,8 @@ class TestCase(unittest.TestCase):
         return wallet
 
     def create_peer(self, network, peer_id=None, wallet=None, tx_storage=None, unlock_wallet=True, wallet_index=False,
-                    capabilities=None, full_verification=True, enable_sync_v1=None, enable_sync_v2=None):
+                    capabilities=None, full_verification=True, enable_sync_v1=None, enable_sync_v2=None,
+                    checkpoints=None):
         if enable_sync_v1 is None:
             assert hasattr(self, '_enable_sync_v1'), ('`_enable_sync_v1` has no default by design, either set one on '
                                                       'the test class or pass `enable_sync_v1` by argument')
@@ -133,6 +134,7 @@ class TestCase(unittest.TestCase):
             rng=self.rng,
             enable_sync_v1=enable_sync_v1,
             enable_sync_v2=enable_sync_v2,
+            checkpoints=checkpoints,
         )
 
         # XXX: just making sure that tests set this up correctly

@@ -131,6 +131,11 @@ class BaseIndexesTest(unittest.TestCase):
             {tx1.hash, tx3.hash}
         )
 
+    def test_genesis_not_in_mempool(self):
+        mempool_txs = list(self.tx_storage.iter_mempool())
+        for tx in self.genesis_txs:
+            self.assertNotIn(tx, mempool_txs)
+
 
 class SyncV1IndexesTest(unittest.SyncV1Params, BaseIndexesTest):
     __test__ = True

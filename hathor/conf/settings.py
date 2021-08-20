@@ -323,3 +323,6 @@ class HathorSettings(NamedTuple):
 
     # Block checkpoints
     CHECKPOINTS: List[Checkpoint] = []
+
+    # Used on testing to enable slow asserts that help catch bugs but we don't want to run in production
+    SLOW_ASSERTS: bool = False

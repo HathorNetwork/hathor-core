@@ -1,3 +1,5 @@
+import pytest
+
 from hathor.simulator import FakeConnection, Simulator
 from tests import unittest
 
@@ -104,6 +106,8 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
         simulator.run(10)
         return nodes
 
+    # XXX: marked as flaky because of a known random issue
+    @pytest.mark.flaky(max_runs=3, min_passes=1)
     def test_determinism_full_runs(self):
         # sanity assert as to not mess up with it on the setup
         self.assertEqual(self.simulator1.seed, self.simulator2.seed)
@@ -120,6 +124,8 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
             self.assertConsensusEqual(node1, node2)
             self.assertConsensusEqual(node1, node3)
 
+    # XXX: marked as flaky because of a known random issue
+    @pytest.mark.flaky(max_runs=3, min_passes=1)
     def test_determinism_interleaved(self):
         # sanity assert as to not mess up with it on the setup
         self.assertEqual(self.simulator1.seed, self.simulator2.seed)

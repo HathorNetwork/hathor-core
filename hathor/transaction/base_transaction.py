@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Iterator, List,
 from structlog import get_logger
 
 from hathor import protos
+from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.transaction.exceptions import (
     DuplicatedParents,
@@ -460,12 +461,26 @@ class BaseTransaction(ABC):
             if meta is None:
                 all_exist = False
                 continue
-            if not meta.validation.is_valid():
+            if not meta.validation.is_fully_connected():
                 all_valid = False
             if meta.validation.is_invalid():
                 # or any of them is invalid (which would make this one invalid too)
                 return True
         return all_exist and all_valid
+
+    def validate_checkpoint(self, checkpoints: List[Checkpoint]) -> bool:
+        """ Run checkpoint validations  and update the validation state.
+
+        If no exception is raised, the ValidationState will end up as `CHECKPOINT` and return `True`.
+        """
+        from hathor.transaction.transaction_metadata import ValidationState
+
+        meta = self.get_metadata()
+
+        self.verify_checkpoint(checkpoints)
+
+        meta.validation = ValidationState.CHECKPOINT
+        return True
 
     def validate_basic(self, skip_block_weight_verification: bool = False) -> bool:
         """ Run basic validations (all that are possible without dependencies) and update the validation state.
@@ -481,21 +496,38 @@ class BaseTransaction(ABC):
         meta.validation = ValidationState.BASIC
         return True
 
-    def validate_full(self, skip_block_weight_verification: bool = False) -> bool:
+    def validate_full(self, skip_block_weight_verification: bool = False, sync_checkpoints: bool = False) -> bool:
         """ Run full validations (these need access to all dependencies) and update the validation state.
 
-        If no exception is raised, the ValidationState will end up as `FULL` and return `True`.
+        If no exception is raised, the ValidationState will end up as `FULL` or `CHECKPOINT_FULL` and return `True`.
         """
         from hathor.transaction.transaction_metadata import ValidationState
 
         meta = self.get_metadata()
+        # skip full validation when it is a checkpoint
+        if meta.validation.is_checkpoint():
+            meta.validation = ValidationState.CHECKPOINT_FULL
+            return True
+        # XXX: in some cases it might be possible that this transaction is verified by a checkpoint but we went
+        #      directly into trying a full validation so we should check it here to make sure the validation states
+        #      ends up being CHECKPOINT_FULL instead of FULL
         if not meta.validation.is_at_least_basic():
-            self.validate_basic(skip_block_weight_verification=skip_block_weight_verification)
+            # run basic validation if we haven't already
+            self.verify_basic(skip_block_weight_verification=skip_block_weight_verification)
 
         self.verify()
-
-        meta.validation = ValidationState.FULL
+        if sync_checkpoints:
+            meta.validation = ValidationState.CHECKPOINT_FULL
+        else:
+            meta.validation = ValidationState.FULL
         return True
+
+    @abstractmethod
+    def verify_checkpoint(self, checkpoints: List[Checkpoint]) -> None:
+        """Check that this tx is a known checkpoint or is parent of another checkpoint-valid tx/block.
+
+        To be implemented by tx/block, used by `self.validate_checkpoint`. Should not modify the validation state."""
+        raise NotImplementedError
 
     @abstractmethod
     def verify_basic(self, skip_block_weight_verification: bool = False) -> None:

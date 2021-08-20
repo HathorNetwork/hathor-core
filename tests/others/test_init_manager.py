@@ -1,6 +1,7 @@
 from typing import Iterator
 
 from hathor.conf import HathorSettings
+from hathor.manager import HathorManager
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
@@ -31,6 +32,47 @@ class ModifiedTransactionMemoryStorage(TransactionMemoryStorage):
         for tx in super().get_all_transactions():
             if tx.hash != skip_hash:
                 yield tx
+
+
+class SimpleManagerInitializationTestCase(unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        self.tx_storage = ModifiedTransactionMemoryStorage()
+
+    def test_invalid_arguments(self):
+        # this is a base case, it shouldn't raise any error
+        # (otherwise we might not be testing the correct thing below)
+        manager = HathorManager(self.clock, tx_storage=self.tx_storage)
+        del manager
+
+        # disabling both sync versions should be invalid
+        with self.assertRaises(TypeError):
+            HathorManager(self.clock, tx_storage=self.tx_storage, enable_sync_v1=False, enable_sync_v2=False)
+
+        # not passing a storage should be invalid
+        with self.assertRaises(TypeError):
+            HathorManager(self.clock)
+
+    def tests_init_with_stratum(self):
+        manager = HathorManager(self.clock, tx_storage=self.tx_storage, stratum_port=50505)
+        manager.start()
+        manager.stop()
+        del manager
+
+    def test_double_start(self):
+        manager = HathorManager(self.clock, tx_storage=self.tx_storage)
+        manager.start()
+        with self.assertRaises(Exception):
+            manager.start()
+
+    def test_wrong_stop(self):
+        manager = HathorManager(self.clock, tx_storage=self.tx_storage)
+        with self.assertRaises(Exception):
+            manager.stop()
+        manager.start()
+        manager.stop()
+        with self.assertRaises(Exception):
+            manager.stop()
 
 
 class BaseManagerInitializationTestCase(unittest.TestCase):

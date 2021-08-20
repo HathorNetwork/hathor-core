@@ -239,15 +239,15 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertTrue(isinstance(conn.proto1.state, PeerIdState))
         self.assertTrue(isinstance(conn.proto2.state, PeerIdState))
 
-        node_sync1 = NodeSyncTimestamp(conn.proto1, reactor=conn.proto1.node.reactor)
+        downloader = conn.proto2.connections.sync_v1_factory.downloader
+
+        node_sync1 = NodeSyncTimestamp(conn.proto1, downloader, reactor=conn.proto1.node.reactor)
         node_sync1.start()
-        node_sync2 = NodeSyncTimestamp(conn.proto2, reactor=conn.proto2.node.reactor)
+        node_sync2 = NodeSyncTimestamp(conn.proto2, downloader, reactor=conn.proto2.node.reactor)
         node_sync2.start()
 
         self.assertTrue(isinstance(conn.proto1.state, PeerIdState))
         self.assertTrue(isinstance(conn.proto2.state, PeerIdState))
-
-        downloader = conn.proto2.connections.downloader
 
         deferred1 = downloader.get_tx(blocks[0].hash, node_sync1)
         deferred1.addCallback(node_sync1.on_tx_success)

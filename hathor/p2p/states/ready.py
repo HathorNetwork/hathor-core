@@ -21,10 +21,10 @@ from twisted.internet.task import LoopingCall
 
 from hathor.exception import HathorError
 from hathor.p2p.messages import ProtocolMessages
-from hathor.p2p.node_sync import NodeSyncTimestamp
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol_version import ProtocolVersion
 from hathor.p2p.states.base import BaseState
+from hathor.p2p.sync_factory import SyncManagerFactory
 from hathor.p2p.sync_manager import SyncManager
 from hathor.transaction import BaseTransaction
 
@@ -71,15 +71,18 @@ class ReadyState(BaseState):
         })
 
         # Initialize sync manager and add its commands to the list of available commands.
-        self.sync_manager: SyncManager
+        connections = self.protocol.connections
+        assert connections is not None
+        sync_factory: SyncManagerFactory
         if self.protocol.protocol_version is ProtocolVersion.V1:
             self.log.debug('loading sync-v1')
-            self.sync_manager = NodeSyncTimestamp(self.protocol, reactor=self.reactor)
+            sync_factory = connections.sync_v1_factory
         elif self.protocol.protocol_version is ProtocolVersion.V2:
-            self.log.debug('loading sync-v2 (pretend)')
-            self.sync_manager = NodeSyncTimestamp(self.protocol, reactor=self.reactor)
+            self.log.debug('loading fake sync-v2 (actually sync-v1)')
+            sync_factory = connections.sync_v2_factory
         else:
             raise HathorError(f'wrong protocol version: {self.protocol.protocol_version}')
+        self.sync_manager: SyncManager = sync_factory.create_sync_manager(self.protocol, reactor=self.reactor)
         self.cmd_map.update(self.sync_manager.get_cmd_dict())
 
     def on_enter(self) -> None:
@@ -118,7 +121,7 @@ class ReadyState(BaseState):
         a list of all known peers.
         """
         if self.protocol.connections:
-            self.send_peers(self.protocol.connections.get_ready_connections())
+            self.send_peers(self.protocol.connections.iter_ready_connections())
 
     def send_peers(self, connections: Iterable['HathorProtocol']) -> None:
         """ Send a PEERS command with a list of all known peers.

@@ -114,7 +114,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         for node in nodes[1:]:
             self.assertTipsEqual(nodes[0], node)
 
-    @pytest.mark.flaky(max_runs=3, min_passes=1)
+    @pytest.mark.flaky(max_runs=5, min_passes=1)
     def test_new_syncing_peer(self):
         nodes = []
         miners = []
@@ -159,7 +159,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         for miner in miners:
             miner.stop()
 
-        self.simulator.run(600)
+        self.simulator.run_until_complete(600)
 
         for idx, node in enumerate(nodes):
             self.log.debug(f'checking node {idx}')
