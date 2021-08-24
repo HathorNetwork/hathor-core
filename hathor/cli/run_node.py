@@ -34,6 +34,7 @@ class RunNode:
         ('--test-mode-tx-weight', lambda args: bool(args.test_mode_tx_weight)),
         ('--enable-crash-api', lambda args: bool(args.enable_crash_api)),
         ('--x-sync-bridge', lambda args: bool(args.x_sync_bridge)),
+        ('--x-sync-v2-only', lambda args: bool(args.x_sync_v2_only)),
     ]
 
     def create_parser(self) -> ArgumentParser:
@@ -90,8 +91,11 @@ class RunNode:
         parser.add_argument('--sentry-dsn', help='Sentry DSN')
         parser.add_argument('--enable-debug-api', action='store_true', help='Enable _debug/* endpoints')
         parser.add_argument('--enable-crash-api', action='store_true', help='Enable _crash/* endpoints')
-        parser.add_argument('--x-sync-bridge', action='store_true',
+        v2args = parser.add_mutually_exclusive_group()
+        v2args.add_argument('--x-sync-bridge', action='store_true',
                             help='Enable support for running both sync protocols. DO NOT ENABLE, IT WILL BREAK.')
+        v2args.add_argument('--x-sync-v2-only', action='store_true',
+                            help='Disable support for running sync-v1. DO NOT ENABLE, IT WILL BREAK.')
         parser.add_argument('--x-localhost-only', action='store_true', help='Only connect to peers on localhost')
         return parser
 
@@ -240,10 +244,13 @@ class RunNode:
             print('Hostname discovered and set to {}'.format(hostname))
 
         network = settings.NETWORK_NAME
+        enable_sync_v1 = not args.x_sync_v2_only
+        enable_sync_v2 = args.x_sync_v2_only or args.x_sync_bridge
+
         self.manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname,
                                      tx_storage=self.tx_storage, wallet=self.wallet, wallet_index=args.wallet_index,
                                      stratum_port=args.stratum, ssl=True, checkpoints=settings.CHECKPOINTS,
-                                     enable_sync_v1=True, enable_sync_v2=args.x_sync_bridge)
+                                     enable_sync_v1=enable_sync_v1, enable_sync_v2=enable_sync_v2)
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
 
