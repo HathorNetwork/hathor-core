@@ -2,6 +2,7 @@ import random
 
 from hathor.crypto.util import decode_address
 from hathor.p2p.protocol import PeerIdState
+from hathor.p2p.sync_version import SyncVersion
 from hathor.simulator import FakeConnection
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
 from tests import unittest
@@ -223,6 +224,10 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(self.manager2)
         self.assertConsensusValid(self.manager3)
 
+
+class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMethodsTestCase):
+    __test__ = True
+
     def test_downloader(self):
         from hathor.p2p.node_sync import NodeSyncTimestamp
 
@@ -239,7 +244,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertTrue(isinstance(conn.proto1.state, PeerIdState))
         self.assertTrue(isinstance(conn.proto2.state, PeerIdState))
 
-        downloader = conn.proto2.connections.sync_v1_factory.downloader
+        downloader = conn.proto2.connections._sync_factories[SyncVersion.V1].downloader
 
         node_sync1 = NodeSyncTimestamp(conn.proto1, downloader, reactor=conn.proto1.node.reactor)
         node_sync1.start()
@@ -301,12 +306,10 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(len(downloader.downloading_deque), 0)
 
 
-class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMethodsTestCase):
-    __test__ = True
-
-
 class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMethodsTestCase):
     __test__ = True
+
+    # TODO: an equivalent test to test_downloader, could be something like test_checkpoint_sync
 
 
 # sync-bridge should behave like sync-v2

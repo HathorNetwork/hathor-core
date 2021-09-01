@@ -19,13 +19,9 @@ from typing import TYPE_CHECKING, Iterable, Optional
 from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
-from hathor.exception import HathorError
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.protocol_version import ProtocolVersion
 from hathor.p2p.states.base import BaseState
-from hathor.p2p.sync_factory import SyncManagerFactory
-from hathor.p2p.sync_manager import SyncManager
 from hathor.transaction import BaseTransaction
 
 if TYPE_CHECKING:
@@ -73,16 +69,14 @@ class ReadyState(BaseState):
         # Initialize sync manager and add its commands to the list of available commands.
         connections = self.protocol.connections
         assert connections is not None
-        sync_factory: SyncManagerFactory
-        if self.protocol.protocol_version is ProtocolVersion.V1:
-            self.log.debug('loading sync-v1')
-            sync_factory = connections.sync_v1_factory
-        elif self.protocol.protocol_version is ProtocolVersion.V2:
-            self.log.debug('loading fake sync-v2 (actually sync-v1)')
-            sync_factory = connections.sync_v2_factory
-        else:
-            raise HathorError(f'wrong protocol version: {self.protocol.protocol_version}')
-        self.sync_manager: SyncManager = sync_factory.create_sync_manager(self.protocol, reactor=self.reactor)
+
+        # Get the sync factory and create a sync manager from it
+        sync_version = self.protocol.sync_version
+        assert sync_version is not None
+        self.log.debug(f'loading {sync_version}')
+        sync_factory = connections.get_sync_factory(sync_version)
+
+        self.sync_manager = sync_factory.create_sync_manager(self.protocol, reactor=self.reactor)
         self.cmd_map.update(self.sync_manager.get_cmd_dict())
 
     def on_enter(self) -> None:
