@@ -13,15 +13,16 @@
 # limitations under the License.
 
 import json
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, Set
 
 from structlog import get_logger
 
 import hathor
 from hathor.conf import HathorSettings
+from hathor.exception import HathorError
 from hathor.p2p.messages import ProtocolMessages
-from hathor.p2p.protocol_version import ProtocolVersion
 from hathor.p2p.states.base import BaseState
+from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import get_genesis_short_hash, get_settings_hello_dict
 
 if TYPE_CHECKING:
@@ -49,7 +50,7 @@ class HelloState(BaseState):
         """
         protocol = self.protocol
         remote = protocol.transport.getPeer()
-        return {
+        data = {
             'app': self._app(),
             'network': protocol.network,
             'remote_address': '{}:{}'.format(remote.host, remote.port),
@@ -58,6 +59,15 @@ class HelloState(BaseState):
             'settings_dict': get_settings_hello_dict(),
             'capabilities': protocol.node.capabilities,
         }
+        if self.protocol.node.has_sync_version_capability():
+            data['sync_versions'] = [x.value for x in self._get_sync_versions()]
+        return data
+
+    def _get_sync_versions(self) -> Set[SyncVersion]:
+        """Shortcut to ConnectionManager.get_sync_versions"""
+        connections_manager = self.protocol.connections
+        assert connections_manager is not None
+        return connections_manager.get_sync_versions()
 
     def on_enter(self) -> None:
         # After a connection is made, we just send a HELLO message.
@@ -93,39 +103,24 @@ class HelloState(BaseState):
             protocol.send_error_and_close_connection('Must have whitelist capability.')
             return
 
-        # start with sync-v2, which has higher priority
-        if protocol.enable_sync_v2:
-            # we accept sync-v2, but does the remote accept too?
-            assert settings.CAPABILITY_SYNC_V2 in protocol.node.capabilities
-            if settings.CAPABILITY_SYNC_V2 in data['capabilities']:
-                # ok we both support sync-v2, so we'll use that
-                self.log.debug('set protocol version to sync-v2')
-                protocol.protocol_version = ProtocolVersion.V2
-            elif protocol.enable_sync_v1:
-                # the remote does not accept sync-v2, but we can still proceed because we accept sync-v1
-                self.log.debug('set protocol version to sync-v1 (remote-fallback)')
-                protocol.protocol_version = ProtocolVersion.V1
-            else:
-                # no compatible sync version to use, this is fine though we just can't connect to this peer
-                self.log.info('no compatible sync version to use')
-                protocol.send_error_and_close_connection('no compatible sync version to use')
-                return
-        elif protocol.enable_sync_v1:
-            # we don't accept sync-v2, so it doesn't matter much whether the remote supports but we'll check anyway
-            assert settings.CAPABILITY_SYNC_V2 not in protocol.node.capabilities
-            if settings.CAPABILITY_SYNC_V2 in data['capabilities']:
-                # they do support it so we should fallback because we don't
-                self.log.debug('set protocol version to sync-v1 (local-fallback)')
-            else:
-                # same old sync-v1-only to sync-v1-only, should be the most common path for a now
-                self.log.debug('set protocol version to sync-v1')
-            protocol.protocol_version = ProtocolVersion.V1
-        else:
-            # XXX: this shouldn't be possible to configure normally, but if you mess up setting up tests or messing
-            # with a custom capabilities it might end up here, should we raise a RuntimeError?
-            self.log.error('no protocol version configured')
-            protocol.send_error_and_close_connection('no protocol version supported')
+        my_sync_versions = self._get_sync_versions()
+        try:
+            remote_sync_versions = _parse_sync_versions(data)
+        except HathorError as e:
+            # this will only happen if the remote implementation is wrong
+            self.log.warn('invalid protocol', error=e)
+            protocol.send_error_and_close_connection('invalid protocol')
             return
+
+        common_sync_versions = my_sync_versions & remote_sync_versions
+        if not common_sync_versions:
+            # no compatible sync version to use, this is fine though we just can't connect to this peer
+            self.log.info('no compatible sync version to use')
+            protocol.send_error_and_close_connection('no compatible sync version to use')
+            return
+
+        # choose the best version, sorting is implemented in hathor.p2p.sync_versions.__lt__
+        protocol.sync_version = max(common_sync_versions)
 
         if data['app'] != self._app():
             self.log.warn('different versions', theirs=data['app'], ours=self._app())
@@ -168,3 +163,16 @@ class HelloState(BaseState):
             return
 
         protocol.change_state(protocol.PeerState.PEER_ID)
+
+
+def _parse_sync_versions(hello_data: Dict[str, Any]) -> Set[SyncVersion]:
+    """Versions that are not recognized will not be included."""
+    if settings.CAPABILITY_SYNC_VERSION in hello_data['capabilities']:
+        if 'sync_versions' not in hello_data:
+            raise HathorError('protocol error, expected sync_versions field')
+        known_values = set(x.value for x in SyncVersion)
+        recognized_values = set(hello_data['sync_versions']) & known_values
+        return set(SyncVersion(x) for x in recognized_values)
+    else:
+        # XXX: implied value when sync-version capability isn't present
+        return {SyncVersion.V1}

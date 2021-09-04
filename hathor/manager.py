@@ -48,6 +48,9 @@ logger = get_logger()
 cpu = get_cpu_profiler()
 
 
+DEFAULT_CAPABILITIES = [settings.CAPABILITY_WHITELIST, settings.CAPABILITY_SYNC_VERSION]
+
+
 class HathorManager:
     """ HathorManager manages the node with the help of other specialized classes.
 
@@ -161,12 +164,11 @@ class HathorManager:
         self.peer_discoveries: List[PeerDiscovery] = []
 
         self.ssl = ssl
-        self.server_factory = HathorServerFactory(self.network, self.my_peer, node=self, use_ssl=ssl,
-                                                  enable_sync_v1=enable_sync_v1, enable_sync_v2=enable_sync_v2)
-        self.client_factory = HathorClientFactory(self.network, self.my_peer, node=self, use_ssl=ssl,
-                                                  enable_sync_v1=enable_sync_v1, enable_sync_v2=enable_sync_v2)
+        self.server_factory = HathorServerFactory(self.network, self.my_peer, node=self, use_ssl=ssl)
+        self.client_factory = HathorClientFactory(self.network, self.my_peer, node=self, use_ssl=ssl)
         self.connections = ConnectionsManager(self.reactor, self.my_peer, self.server_factory, self.client_factory,
-                                              self.pubsub, self, ssl, whitelist_only=False, rng=self.rng)
+                                              self.pubsub, self, ssl, whitelist_only=False, rng=self.rng,
+                                              enable_sync_v1=enable_sync_v1, enable_sync_v2=enable_sync_v2)
 
         self.wallet = wallet
         if self.wallet:
@@ -200,10 +202,8 @@ class HathorManager:
         # List of capabilities of the peer
         if capabilities is not None:
             self.capabilities = capabilities
-        elif enable_sync_v2:
-            self.capabilities = [settings.CAPABILITY_WHITELIST, settings.CAPABILITY_SYNC_V2]
         else:
-            self.capabilities = [settings.CAPABILITY_WHITELIST]
+            self.capabilities = DEFAULT_CAPABILITIES
 
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
@@ -894,6 +894,9 @@ class HathorManager:
             proto, _, _ = description.partition(':')
             address = '{}://{}:{}'.format(proto, self.hostname, endpoint._port)
             self.my_peer.entrypoints.append(address)
+
+    def has_sync_version_capability(self) -> bool:
+        return settings.CAPABILITY_SYNC_VERSION in self.capabilities
 
     def add_peer_to_whitelist(self, peer_id):
         if not settings.ENABLE_PEER_WHITELIST:

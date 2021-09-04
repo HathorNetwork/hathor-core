@@ -30,6 +30,7 @@ from hathor.p2p.peer_storage import PeerStorage
 from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.states.ready import ReadyState
 from hathor.p2p.sync_factory import SyncManagerFactory
+from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import description_to_connection_string, parse_whitelist
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
@@ -57,13 +58,15 @@ class ConnectionsManager:
     connecting_peers: Dict[IStreamClientEndpoint, _ConnectingPeer]
     handshaking_peers: Set[HathorProtocol]
     whitelist_only: bool
-    sync_v1_factory: SyncManagerFactory
-    sync_v2_factory: SyncManagerFactory
+    _sync_factories: Dict[SyncVersion, SyncManagerFactory]
 
     def __init__(self, reactor: ReactorBase, my_peer: PeerId, server_factory: 'HathorServerFactory',
                  client_factory: 'HathorClientFactory', pubsub: PubSubManager, manager: 'HathorManager',
-                 ssl: bool, rng: Random, whitelist_only: bool) -> None:
+                 ssl: bool, rng: Random, whitelist_only: bool, enable_sync_v1: bool, enable_sync_v2: bool) -> None:
         from hathor.p2p.sync_v1_factory import SyncV1Factory
+
+        if not (enable_sync_v1 or enable_sync_v2):
+            raise TypeError(f'{type(self).__name__}() at least one sync version is required')
 
         self.log = logger.new()
         self.rng = rng
@@ -121,8 +124,11 @@ class ConnectionsManager:
         self.whitelist_only = whitelist_only
 
         # sync-manager factories
-        self.sync_v1_factory = SyncV1Factory(self)
-        self.sync_v2_factory = SyncV1Factory(self)
+        self._sync_factories = {}
+        if enable_sync_v1:
+            self._sync_factories[SyncVersion.V1] = SyncV1Factory(self)
+        if enable_sync_v2:
+            self._sync_factories[SyncVersion.V2] = SyncV1Factory(self)
 
     def start(self) -> None:
         self.lc_reconnect.start(5, now=False)
@@ -132,6 +138,20 @@ class ConnectionsManager:
     def stop(self) -> None:
         if self.lc_reconnect.running:
             self.lc_reconnect.stop()
+
+    def get_sync_versions(self) -> Set[SyncVersion]:
+        """Set of versions that were enabled and are supported."""
+        if self.manager.has_sync_version_capability():
+            return set(self._sync_factories.keys())
+        else:
+            assert SyncVersion.V1 in self._sync_factories, 'sync-versions capability disabled, but sync-v1 not enabled'
+            # XXX: this is to make it easy to simulate old behavior if we disable the sync-version capability
+            return {SyncVersion.V1}
+
+    def get_sync_factory(self, sync_version: SyncVersion) -> SyncManagerFactory:
+        """Get the sync factory for a given version, support MUST be checked beforehand or it will raise an assert."""
+        assert sync_version in self._sync_factories, 'get_sync_factory must be called for a supported version'
+        return self._sync_factories[sync_version]
 
     def has_synced_peer(self) -> bool:
         """ Return whether we are synced to at least one peer.

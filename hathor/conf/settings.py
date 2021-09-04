@@ -307,7 +307,7 @@ class HathorSettings(NamedTuple):
 
     # Capabilities
     CAPABILITY_WHITELIST: str = 'whitelist'
-    CAPABILITY_SYNC_V2: str = 'sync-v2'
+    CAPABILITY_SYNC_VERSION: str = 'sync-version'
 
     # Where to download whitelist from
     WHITELIST_URL: Optional[str] = None

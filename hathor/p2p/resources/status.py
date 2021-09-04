@@ -71,7 +71,7 @@ class StatusResource(resource.Resource):
                 'last_message': time.time() - conn.last_message,
                 'plugins': status,
                 'warning_flags': [flag.value for flag in conn.warning_flags],
-                'protocol_version': str(conn.protocol_version),
+                'protocol_version': str(conn.sync_version),
             })
 
         known_peers = []
