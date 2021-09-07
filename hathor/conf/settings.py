@@ -307,7 +307,7 @@ class HathorSettings(NamedTuple):
 
     # Capabilities
     CAPABILITY_WHITELIST: str = 'whitelist'
-    CAPABILITY_SYNC_V2: str = 'sync-v2'
+    CAPABILITY_SYNC_VERSION: str = 'sync-version'
 
     # Where to download whitelist from
     WHITELIST_URL: Optional[str] = None
@@ -323,3 +323,6 @@ class HathorSettings(NamedTuple):
 
     # Block checkpoints
     CHECKPOINTS: List[Checkpoint] = []
+
+    # Used on testing to enable slow asserts that help catch bugs but we don't want to run in production
+    SLOW_ASSERTS: bool = False

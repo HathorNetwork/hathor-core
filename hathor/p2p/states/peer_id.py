@@ -21,8 +21,8 @@ from twisted.internet.defer import inlineCallbacks
 from hathor.conf import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.protocol_version import ProtocolVersion
 from hathor.p2p.states.base import BaseState
+from hathor.p2p.sync_version import SyncVersion
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
@@ -153,7 +153,7 @@ class PeerIdState(BaseState):
 
         # when ENABLE_PEER_WHITELIST is set, we check if we're on sync-v1 to block non-whitelisted peers
         if settings.ENABLE_PEER_WHITELIST:
-            protocol_is_v1 = self.protocol.protocol_version is ProtocolVersion.V1
+            protocol_is_v1 = self.protocol.sync_version is SyncVersion.V1
             if protocol_is_v1 and not peer_is_whitelisted:
                 return True
 

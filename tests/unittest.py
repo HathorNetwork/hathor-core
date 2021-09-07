@@ -14,6 +14,7 @@ from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
+from hathor.p2p.sync_version import SyncVersion
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.util import Random
 from hathor.wallet import Wallet
@@ -103,7 +104,8 @@ class TestCase(unittest.TestCase):
         return wallet
 
     def create_peer(self, network, peer_id=None, wallet=None, tx_storage=None, unlock_wallet=True, wallet_index=False,
-                    capabilities=None, full_verification=True, enable_sync_v1=None, enable_sync_v2=None):
+                    capabilities=None, full_verification=True, enable_sync_v1=None, enable_sync_v2=None,
+                    checkpoints=None):
         if enable_sync_v1 is None:
             assert hasattr(self, '_enable_sync_v1'), ('`_enable_sync_v1` has no default by design, either set one on '
                                                       'the test class or pass `enable_sync_v1` by argument')
@@ -133,13 +135,18 @@ class TestCase(unittest.TestCase):
             rng=self.rng,
             enable_sync_v1=enable_sync_v1,
             enable_sync_v2=enable_sync_v2,
+            checkpoints=checkpoints,
         )
 
         # XXX: just making sure that tests set this up correctly
         if enable_sync_v2:
-            assert settings.CAPABILITY_SYNC_V2 in manager.capabilities
+            assert SyncVersion.V2 in manager.connections._sync_factories
         else:
-            assert settings.CAPABILITY_SYNC_V2 not in manager.capabilities
+            assert SyncVersion.V2 not in manager.connections._sync_factories
+        if enable_sync_v1:
+            assert SyncVersion.V1 in manager.connections._sync_factories
+        else:
+            assert SyncVersion.V1 not in manager.connections._sync_factories
 
         manager.avg_time_between_blocks = 0.0001
         manager._full_verification = full_verification

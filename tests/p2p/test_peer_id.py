@@ -149,52 +149,9 @@ class PeerIdTest(unittest.TestCase):
         self.assertEqual(p.retry_interval, 5)
         self.assertEqual(p.retry_timestamp, 0)
 
-
-class BasePeerIdTest(unittest.TestCase):
-    __test__ = False
-
-    @inlineCallbacks
-    def test_validate_entrypoint(self):
-        manager = self.create_peer('testnet', unlock_wallet=False)
-        peer_id = manager.my_peer
-        peer_id.entrypoints = ['tcp://127.0.0.1:40403']
-
-        # we consider that we are starting the connection to the peer
-        protocol = HathorProtocol('testnet', peer_id, None, node=manager, use_ssl=True, inbound=False,
-                                  enable_sync_v1=self._enable_sync_v1, enable_sync_v2=self._enable_sync_v2)
-        protocol.connection_string = 'tcp://127.0.0.1:40403'
-        result = yield peer_id.validate_entrypoint(protocol)
-        self.assertTrue(result)
-        # if entrypoint is an URI
-        peer_id.entrypoints = ['uri_name']
-        result = yield peer_id.validate_entrypoint(protocol)
-        self.assertTrue(result)
-        # test invalid. DNS in test mode will resolve to '127.0.0.1:40403'
-        protocol.connection_string = 'tcp://45.45.45.45:40403'
-        result = yield peer_id.validate_entrypoint(protocol)
-        self.assertFalse(result)
-
-        # now test when receiving the connection - i.e. the peer starts it
-        protocol.connection_string = None
-        peer_id.entrypoints = ['tcp://127.0.0.1:40403']
-
-        class FakeTransport:
-            def getPeer(self):
-                from collections import namedtuple
-                Peer = namedtuple('Peer', 'host')
-                return Peer(host='127.0.0.1')
-        protocol.transport = FakeTransport()
-        result = yield peer_id.validate_entrypoint(protocol)
-        self.assertTrue(result)
-        # if entrypoint is an URI
-        peer_id.entrypoints = ['uri_name']
-        result = yield peer_id.validate_entrypoint(protocol)
-        self.assertTrue(result)
-
     def test_validate_certificate(self):
         peer = PeerId('testnet')
-        protocol = HathorProtocol('testnet', peer, None, node=None, use_ssl=True, inbound=True,
-                                  enable_sync_v1=self._enable_sync_v1, enable_sync_v2=self._enable_sync_v2)
+        protocol = HathorProtocol('testnet', peer, None, node=None, use_ssl=True, inbound=True)
 
         class FakeTransport:
             def getPeerCertificate(self):
@@ -247,6 +204,47 @@ class BasePeerIdTest(unittest.TestCase):
         # Finally, reset it.
         peer.reset_retry_timestamp()
         self.assertTrue(peer.can_retry(0))
+
+
+class BasePeerIdTest(unittest.TestCase):
+    __test__ = False
+
+    @inlineCallbacks
+    def test_validate_entrypoint(self):
+        manager = self.create_peer('testnet', unlock_wallet=False)
+        peer_id = manager.my_peer
+        peer_id.entrypoints = ['tcp://127.0.0.1:40403']
+
+        # we consider that we are starting the connection to the peer
+        protocol = HathorProtocol('testnet', peer_id, None, node=manager, use_ssl=True, inbound=False)
+        protocol.connection_string = 'tcp://127.0.0.1:40403'
+        result = yield peer_id.validate_entrypoint(protocol)
+        self.assertTrue(result)
+        # if entrypoint is an URI
+        peer_id.entrypoints = ['uri_name']
+        result = yield peer_id.validate_entrypoint(protocol)
+        self.assertTrue(result)
+        # test invalid. DNS in test mode will resolve to '127.0.0.1:40403'
+        protocol.connection_string = 'tcp://45.45.45.45:40403'
+        result = yield peer_id.validate_entrypoint(protocol)
+        self.assertFalse(result)
+
+        # now test when receiving the connection - i.e. the peer starts it
+        protocol.connection_string = None
+        peer_id.entrypoints = ['tcp://127.0.0.1:40403']
+
+        class FakeTransport:
+            def getPeer(self):
+                from collections import namedtuple
+                Peer = namedtuple('Peer', 'host')
+                return Peer(host='127.0.0.1')
+        protocol.transport = FakeTransport()
+        result = yield peer_id.validate_entrypoint(protocol)
+        self.assertTrue(result)
+        # if entrypoint is an URI
+        peer_id.entrypoints = ['uri_name']
+        result = yield peer_id.validate_entrypoint(protocol)
+        self.assertTrue(result)
 
 
 class SyncV1PeerIdTest(unittest.SyncV1Params, BasePeerIdTest):

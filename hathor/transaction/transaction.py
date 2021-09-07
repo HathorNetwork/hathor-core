@@ -18,6 +18,7 @@ from struct import pack
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 
 from hathor import daa, protos
+from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.exception import InvalidNewTransaction
 from hathor.profiler import get_cpu_profiler
@@ -271,6 +272,16 @@ class Transaction(BaseTransaction):
         self.verify_parents_basic()
         self.verify_weight()
         self.verify_without_storage()
+
+    def verify_checkpoint(self, checkpoints: List[Checkpoint]) -> None:
+        assert self.storage is not None
+        meta = self.get_metadata()
+        # at least one child must be checkpoint validated
+        for child_tx in map(self.storage.get_transaction, meta.children):
+            if child_tx.get_metadata().validation.is_checkpoint():
+                return
+        raise InvalidNewTransaction(f'Invalid new transaction {self.hash_hex}: expected to reach a checkpoint but '
+                                    'none of its children is checkpoint-valid')
 
     def verify_parents_basic(self) -> None:
         """Verify number and non-duplicity of parents."""

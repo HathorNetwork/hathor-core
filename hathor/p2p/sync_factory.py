@@ -12,20 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import IntEnum
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
+
+from twisted.internet.task import Clock
+
+from hathor.p2p.sync_manager import SyncManager
+
+if TYPE_CHECKING:
+    from hathor.p2p.protocol import HathorProtocol
 
 
-class ProtocolVersion(IntEnum):
-    UNSET = 0
-    V1 = 1
-    V2 = 2
-
-    def __str__(self):
-        if self is ProtocolVersion.UNSET:
-            return 'unset'
-        elif self is ProtocolVersion.V1:
-            return 'sync-v1'
-        elif self is ProtocolVersion.V2:
-            return 'sync-v2'
-        else:
-            raise ValueError(f'ProtocolVersion cannot have a value of `{int(self)}`')
+class SyncManagerFactory(ABC):
+    @abstractmethod
+    def create_sync_manager(self, protocol: 'HathorProtocol', reactor: Clock = None) -> SyncManager:
+        pass

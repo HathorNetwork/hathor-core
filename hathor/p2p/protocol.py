@@ -24,9 +24,9 @@ from twisted.python.failure import Failure
 from hathor.conf import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.protocol_version import ProtocolVersion
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
+from hathor.p2p.sync_version import SyncVersion
 from hathor.profiler import get_cpu_profiler
 
 if TYPE_CHECKING:
@@ -86,15 +86,10 @@ class HathorProtocol:
     aborting: bool
     diff_timestamp: Optional[int]
     idle_timeout: int
-    protocol_version: ProtocolVersion
+    sync_version: Optional[SyncVersion]  # version chosen to be used on this connection
 
     def __init__(self, network: str, my_peer: PeerId, connections: Optional['ConnectionsManager'] = None, *,
-                 node: 'HathorManager', use_ssl: bool, inbound: bool, enable_sync_v1: bool, enable_sync_v2: bool,
-                 ) -> None:
-
-        if not (enable_sync_v1 or enable_sync_v2):
-            raise ValueError('At least one sync version is required')
-
+                 node: 'HathorManager', use_ssl: bool, inbound: bool) -> None:
         self.network = network
         self.my_peer = my_peer
         self.connections = connections
@@ -155,11 +150,9 @@ class HathorProtocol:
         self.aborting = False
 
         self.use_ssl: bool = use_ssl
-        self.enable_sync_v1: bool = enable_sync_v1
-        self.enable_sync_v2: bool = enable_sync_v2
 
         # Protocol version is initially unset
-        self.protocol_version = ProtocolVersion.UNSET
+        self.sync_version = None
 
         self.log = logger.new()
 

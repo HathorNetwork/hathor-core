@@ -86,6 +86,9 @@ class ProtocolMessages(Enum):
 
     GET_TIPS = 'GET-TIPS'
     TIPS = 'TIPS'
+    TIPS_END = 'TIPS-END'
+
+    RELAY = 'RELAY'
 
     GET_NEXT = 'GET-NEXT'
     NEXT = 'NEXT'
@@ -93,6 +96,7 @@ class ProtocolMessages(Enum):
     # Sync-v2 messages
 
     GET_NEXT_BLOCKS = 'GET-NEXT-BLOCKS'
+    GET_PREV_BLOCKS = 'GET-PREV-BLOCKS'
     BLOCKS = 'BLOCKS'
     BLOCKS_END = 'BLOCKS-END'
 

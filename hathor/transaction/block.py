@@ -17,12 +17,14 @@ from struct import pack
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from hathor import daa, protos
+from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, TxOutput, TxVersion
 from hathor.transaction.exceptions import (
     BlockWithInputs,
     BlockWithTokensError,
+    CheckpointError,
     InvalidBlockReward,
     TransactionDataError,
     WeightError,
@@ -288,6 +290,20 @@ class Block(BaseTransaction):
         if not skip_block_weight_verification:
             self.verify_weight()
         self.verify_reward()
+
+    def verify_checkpoint(self, checkpoints: List[Checkpoint]) -> None:
+        assert self.hash is not None
+        assert self.storage is not None
+        meta = self.get_metadata()
+        # XXX: it's fine to use `in` with NamedTuples
+        if Checkpoint(meta.height, self.hash) in checkpoints:
+            return
+        # otherwise at least one child must be checkpoint validated
+        for child_tx in map(self.storage.get_transaction, meta.children):
+            if child_tx.get_metadata().validation.is_checkpoint():
+                return
+        raise CheckpointError(f'Invalid new block {self.hash_hex}: expected to reach a checkpoint but none of '
+                              'its children is checkpoint-valid and its hash does not match any checkpoint')
 
     def verify_weight(self) -> None:
         """Validate minimum block difficulty."""

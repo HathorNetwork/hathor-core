@@ -55,6 +55,12 @@ class _DirDepValue(Dict[bytes, ValidationState]):
         return all(val.is_fully_connected() for val in self.values())
 
 
+class _AddToCacheItem(NamedTuple):
+    height: int
+    hash: bytes
+    timestamp: int
+
+
 class TransactionStorage(ABC):
     """Legacy sync interface, please copy @deprecated decorator when implementing methods."""
 
@@ -86,7 +92,7 @@ class TransactionStorage(ABC):
 
         # Cache for the best block tips
         # This cache is updated in the consensus algorithm.
-        self._best_block_tips = None
+        self._best_block_tips_cache = None
 
         # If should create lock when getting a transaction
         self._should_lock = False
@@ -219,6 +225,15 @@ class TransactionStorage(ABC):
         """Get all txs that depend on the given tx (i.e. its reverse depdendencies)."""
         return frozenset(self._rev_dep_index.get(tx, set()))
 
+    def children_from_deps(self, tx: bytes) -> List[bytes]:
+        """Return the hashes of all reverse dependencies that are children of the given tx.
+
+        That is, they depend on `tx` because they are children of `tx`, and not because `tx` is an input. This is
+        useful for pre-filling the children metadata, which would otherwise only be updated when
+        `update_initial_metadata` is called on the child-tx.
+        """
+        return [not_none(rev.hash) for rev in map(self.get_transaction, self.get_rev_deps(tx)) if tx in rev.parents]
+
     # needed-txs-index methods:
 
     def has_needed_tx(self) -> bool:
@@ -279,15 +294,15 @@ class TransactionStorage(ABC):
         new_score = not_none(meta).score
         cur_score = not_none(self.get_metadata(next(iter(self._parent_blocks_index)))).score
         if isclose(new_score, cur_score):
-            self.log.debug('same score: new competing parent block', block=block.hex())
+            self.log.debug('same score: new competing block', block=block.hex(), height=meta.height, score=meta.score)
             self._parent_blocks_index.add(block)
         elif new_score > cur_score and not meta.voided_by:
             # If it's a high score, then I can't add one that is voided
-            self.log.debug('high score: new best parent block', block=block.hex())
+            self.log.debug('high score: new best block', block=block.hex(), height=meta.height, score=meta.score)
             self._parent_blocks_index.clear()
             self._parent_blocks_index.add(block)
         else:
-            self.log.debug('low score: skip parent block', block=block.hex())
+            self.log.debug('low score: skip block', block=block.hex(), height=meta.height, score=meta.score)
 
     # tx-tips-index methods:
 
@@ -409,9 +424,11 @@ class TransactionStorage(ABC):
 
         block_height = height
         side_chain_block = block
-        add_to_cache: List[Tuple[int, bytes]] = []
+        add_to_cache: List[_AddToCacheItem] = []
         while self.get_from_block_height_index(block_height) != side_chain_block.hash:
-            add_to_cache.append((block_height, not_none(side_chain_block.hash)))
+            add_to_cache.append(
+                _AddToCacheItem(block_height, not_none(side_chain_block.hash), side_chain_block.timestamp)
+            )
 
             side_chain_block = side_chain_block.get_block_parent()
             new_block_height = side_chain_block.get_metadata().height
@@ -419,13 +436,24 @@ class TransactionStorage(ABC):
             block_height = new_block_height
 
         # Reverse the data because I was adding in the array from the highest block
-        reversed_add_to_cache = add_to_cache[::-1]
+        reversed_add_to_cache = reversed(add_to_cache)
 
-        for height, tx_hash in reversed_add_to_cache:
+        for item in reversed_add_to_cache:
             # Add it to the index
-            self.add_reorg_to_block_height_index(height, tx_hash)
+            self.add_reorg_to_block_height_index(item.height, item.hash, item.timestamp)
 
     # all other methods:
+
+    def update_best_block_tips_cache(self, tips_cache: List[bytes]) -> None:
+        # XXX: check that the cache update is working properly, only used in unittests
+        # XXX: this might not actually hold true in some cases, commenting out while we figure it out
+        # if settings.SLOW_ASSERTS:
+        #     calculated_tips = self.get_best_block_tips(skip_cache=True)
+        #     self.log.debug('cached best block tips must match calculated',
+        #                    calculated=[i.hex() for i in calculated_tips],
+        #                    cached=[i.hex() for i in tips_cache])
+        #     assert set(tips_cache) == set(calculated_tips)
+        self._best_block_tips_cache = tips_cache
 
     def is_empty(self) -> bool:
         """True when only genesis is present, useful for checking for a fresh database."""
@@ -440,6 +468,7 @@ class TransactionStorage(ABC):
         block_hash = self._block_height_index.get_tip()
         block = self.get_transaction(block_hash)
         assert isinstance(block, Block)
+        assert block.get_metadata().validation.is_fully_connected()
         return block
 
     def _save_or_verify_genesis(self) -> None:
@@ -512,8 +541,8 @@ class TransactionStorage(ABC):
         if tx.hash in self._rev_dep_index:
             self._update_validation(tx.hash, meta.validation)
 
-        # XXX: we can only add to cache and publish txs that are complete, having the parents and all inputs
-        if not meta.validation.is_valid():
+        # XXX: we can only add to cache and publish txs that are fully connected (which also implies it's valid)
+        if not meta.validation.is_fully_connected():
             return
 
         if self.pubsub:
@@ -641,8 +670,8 @@ class TransactionStorage(ABC):
         When more than one block is returned, it means that there are multiple best chains and
         you can choose any of them.
         """
-        if timestamp is None and not skip_cache and self._best_block_tips is not None:
-            return self._best_block_tips
+        if timestamp is None and not skip_cache and self._best_block_tips_cache is not None:
+            return self._best_block_tips_cache[:]
 
         best_score = 0.0
         best_tip_blocks: List[bytes] = []
@@ -913,14 +942,14 @@ class TransactionStorage(ABC):
         """
         return self.get_value(self._clean_db_attribute) == '1'
 
-    def add_new_to_block_height_index(self, height: int, block_hash: bytes) -> None:
+    def add_new_to_block_height_index(self, height: int, block_hash: bytes, timestamp: int) -> None:
         """Add a new block to the height index that must not result in a re-org"""
-        self._block_height_index.add(height, block_hash)
+        self._block_height_index.add(height, block_hash, timestamp)
 
-    def add_reorg_to_block_height_index(self, height: int, block_hash: bytes) -> None:
+    def add_reorg_to_block_height_index(self, height: int, block_hash: bytes, timestamp: int) -> None:
         """Add a new block to the height index that can result in a re-org"""
         # XXX: in the future we can make this more strict so that it MUST result in a re-orgr
-        self._block_height_index.add(height, block_hash, can_reorg=True)
+        self._block_height_index.add(height, block_hash, timestamp, can_reorg=True)
 
     def get_from_block_height_index(self, height: int) -> bytes:
         return self._block_height_index.get(height)

@@ -39,12 +39,14 @@ class StatusResource(resource.Resource):
         set_cors(request, 'GET')
 
         connecting_peers = []
+        # TODO: refactor as not to use a private item
         for endpoint, deferred in self.manager.connections.connecting_peers.items():
             host = getattr(endpoint, '_host', '')
             port = getattr(endpoint, '_port', '')
             connecting_peers.append({'deferred': str(deferred), 'address': '{}:{}'.format(host, port)})
 
         handshaking_peers = []
+        # TODO: refactor as not to use a private item
         for conn in self.manager.connections.handshaking_peers:
             remote = conn.transport.getPeer()
             handshaking_peers.append({
@@ -55,7 +57,7 @@ class StatusResource(resource.Resource):
             })
 
         connected_peers = []
-        for conn in self.manager.connections.connected_peers.values():
+        for conn in self.manager.connections.iter_ready_connections():
             remote = conn.transport.getPeer()
             status = {}
             status[conn.state.sync_manager.name] = conn.state.sync_manager.get_status()
@@ -69,7 +71,7 @@ class StatusResource(resource.Resource):
                 'last_message': time.time() - conn.last_message,
                 'plugins': status,
                 'warning_flags': [flag.value for flag in conn.warning_flags],
-                'protocol_version': str(conn.protocol_version),
+                'protocol_version': str(conn.sync_version),
             })
 
         known_peers = []

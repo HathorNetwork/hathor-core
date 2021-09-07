@@ -27,6 +27,7 @@ from twisted.internet.task import Clock
 from zope.interface import implementer
 
 from hathor.conf import HathorSettings
+from hathor.p2p.downloader import Downloader
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
 from hathor.p2p.sync_manager import SyncManager
 from hathor.transaction import BaseTransaction
@@ -180,7 +181,7 @@ class NodeSyncTimestamp(SyncManager):
 
     MAX_HASHES: int = 40
 
-    def __init__(self, protocol: 'HathorProtocol', reactor: Clock = None) -> None:
+    def __init__(self, protocol: 'HathorProtocol', downloader: Downloader, reactor: Clock = None) -> None:
         """
         :param protocol: Protocol of the connection.
         :type protocol: HathorProtocol
@@ -190,6 +191,7 @@ class NodeSyncTimestamp(SyncManager):
         """
         self.protocol = protocol
         self.manager = protocol.node
+        self.downloader = downloader
 
         if reactor is None:
             from twisted.internet import reactor as twisted_reactor
@@ -288,6 +290,10 @@ class NodeSyncTimestamp(SyncManager):
         """
         return self.manager.tx_storage.latest_timestamp - self.synced_timestamp <= self.sync_threshold
 
+    def is_errored(self) -> bool:
+        # XXX: this sync manager does not have an error state, this method exists for API parity with sync-v2
+        return False
+
     def send_tx_to_peer_if_possible(self, tx: BaseTransaction) -> None:
         if self.peer_timestamp is None:
             return
@@ -352,8 +358,7 @@ class NodeSyncTimestamp(SyncManager):
 
         :rtype: Deferred
         """
-        assert self.protocol.connections is not None
-        d = self.protocol.connections.get_tx(hash_bytes, self)
+        d = self.downloader.get_tx(hash_bytes, self)
         d.addCallback(self.on_tx_success)
         d.addErrback(self.on_get_data_failed, hash_bytes)
         return d
@@ -651,8 +656,7 @@ class NodeSyncTimestamp(SyncManager):
         """
         hash_hex = payload
         # We ask for the downloader to retry the request
-        assert self.protocol.connections is not None
-        self.protocol.connections.retry_get_tx(bytes.fromhex(hash_hex))
+        self.downloader.retry(bytes.fromhex(hash_hex))
 
     def send_data(self, tx: BaseTransaction) -> None:
         """ Send a DATA message.
@@ -741,8 +745,12 @@ class NodeSyncTimestamp(SyncManager):
         # the parameter of the second callback is the return of the first
         # so I need to return the same tx to guarantee that all peers will receive it
         if tx:
-            # Add tx to the DAG.
-            success = self.manager.on_new_tx(tx)
+            assert tx.hash is not None
+            if self.manager.tx_storage.transaction_exists(tx.hash):
+                success = True
+            else:
+                # Add tx to the DAG.
+                success = self.manager.on_new_tx(tx)
             # Updating stats data
             self.update_received_stats(tx, success)
         return tx
