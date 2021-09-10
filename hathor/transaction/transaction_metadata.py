@@ -122,7 +122,8 @@ class TransactionMetadata:
     _last_spent_by_hash: Optional[int]
 
     def __init__(self, spent_outputs: Optional[Dict[int, List[bytes]]] = None, hash: Optional[bytes] = None,
-                 accumulated_weight: float = 0, score: float = 0, height: int = 0, min_height: int = 0) -> None:
+                 accumulated_weight: float = 0, score: float = 0, height: int = 0, min_height: int = 0,
+                 soft_height: Optional[int] = None) -> None:
         from hathor.transaction.genesis import is_genesis
 
         # Hash of the transaction.
@@ -174,6 +175,9 @@ class TransactionMetadata:
 
         # Min height
         self.min_height = min_height
+
+        # Soft height
+        self.soft_height = soft_height
 
         # Validation
         self.validation = ValidationState.INITIAL
@@ -239,7 +243,7 @@ class TransactionMetadata:
             return False
         for field in ['hash', 'conflict_with', 'voided_by', 'received_by',
                       'children', 'accumulated_weight', 'twins', 'score',
-                      'first_block', 'validation', 'min_height']:
+                      'first_block', 'validation', 'min_height', 'soft_height']:
             if (getattr(self, field) or None) != (getattr(other, field) or None):
                 return False
 
@@ -278,6 +282,8 @@ class TransactionMetadata:
             data['first_block'] = self.first_block.hex()
         else:
             data['first_block'] = None
+        if self.soft_height is not None:
+            data['soft_height'] = self.soft_height
         data['validation'] = self.validation.name.lower()
         return data
 
@@ -319,6 +325,9 @@ class TransactionMetadata:
         else:
             meta.twins = []
 
+        if 'soft_height' in data:
+            meta.soft_height = data['soft_height']
+
         meta.accumulated_weight = data['accumulated_weight']
         meta.score = data.get('score', 0)
         meta.height = data.get('height', 0)  # XXX: should we calculate the height if it's not defined?
@@ -344,3 +353,10 @@ class TransactionMetadata:
         """
         # XXX: using json serialization for simplicity, should it use pickle? manual fields? other alternative?
         return self.create_from_json(self.to_json())
+
+    def get_soft_height(self) -> int:
+        """ Returns the soft-height, which is either the soft_height or height metadata.
+        """
+        if self.soft_height is not None:
+            return self.soft_height
+        return self.height

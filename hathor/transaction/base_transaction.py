@@ -519,6 +519,15 @@ class BaseTransaction(ABC):
         from hathor.transaction.transaction_metadata import ValidationState
 
         meta = self.get_metadata()
+
+        # XXX: blocks can have been created previously with soft_height, we'll remove it and add a proper height
+        if self.is_block:
+            soft_height = meta.soft_height
+            meta.soft_height = None
+            meta.height = self.calculate_height()
+            if soft_height is not None:
+                assert soft_height == meta.height, 'A wrong height was previously set as soft height. Sync bug?'
+
         # skip full validation when it is a checkpoint
         if meta.validation.is_checkpoint():
             meta.validation = ValidationState.CHECKPOINT_FULL
@@ -1056,6 +1065,17 @@ class BaseTransaction(ABC):
     @abstractmethod
     def get_token_uid(self, index: int) -> bytes:
         raise NotImplementedError
+
+    def is_ready_for_validation(self) -> bool:
+        """Check whether the transaction is ready to be validated: all dependencies exist and are fully connected."""
+        assert self.storage is not None
+        for dep_hash in self.get_all_dependencies():
+            dep_meta = self.storage.get_metadata(dep_hash)
+            if dep_meta is None:
+                return False
+            if not dep_meta.validation.is_fully_connected():
+                return False
+        return True
 
 
 class TxInput:

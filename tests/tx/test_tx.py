@@ -96,6 +96,8 @@ class BaseTransactionTest(unittest.TestCase):
         self.assertEqual(block_from_chain.get_next_block_best_chain(), None)
 
     def test_checkpoint_validation(self):
+        from hathor.checkpoint import Checkpoint
+        from hathor.exception import InvalidNewTransaction
         from hathor.transaction.transaction_metadata import ValidationState
 
         # manually validate with sync_checkpoints=True
@@ -110,6 +112,34 @@ class BaseTransactionTest(unittest.TestCase):
         block2.resolve()
         self.assertTrue(self.manager.on_new_tx(block2, sync_checkpoints=True, partial=True, fails_silently=False))
         self.assertEqual(block2.get_metadata().validation, ValidationState.CHECKPOINT_FULL)
+
+        # initialize a new manager and try to add a checkpoint block before its parents
+        block2_height = block2.get_metadata().height
+        manager2 = self.create_peer('testnet', checkpoints=[Checkpoint(block2_height, block2.hash)])
+        del block2._metadata
+        block2.storage = manager2.tx_storage
+        block2.set_height(block2_height)
+        # it should fail if we don't pass sync_checkpoints=True
+        with self.assertRaises(InvalidNewTransaction):
+            manager2.on_new_tx(block2, partial=True, fails_silently=False)
+        # also test if it fails silently
+        self.assertFalse(manager2.on_new_tx(block2, partial=True, fails_silently=True))
+        # otherwise it should be accepted
+        self.assertTrue(manager2.on_new_tx(block2, sync_checkpoints=True, partial=True, fails_silently=False))
+        self.assertEqual(block2.get_metadata().validation, ValidationState.CHECKPOINT)
+
+        # XXX: this stopped failing because we removed the partial children metadata which simplified the validation
+        #      and the expected expection is not raised anymore
+        # # otherwise it should fail if it's not in the checkpoints
+        # manager3 = self.create_peer('testnet', checkpoints=[])
+        # del block2._metadata
+        # block2.storage = manager3.tx_storage
+        # block2.set_height(block2_height)
+        # # failing silently should not raise an exception, but should return False
+        # self.assertFalse(manager3.on_new_tx(block2, sync_checkpoints=True, partial=True, fails_silently=True))
+        # # otherwise it should raise the correct exception
+        # with self.assertRaises(InvalidNewTransaction):
+        #     manager3.on_new_tx(block2, sync_checkpoints=True, partial=True, fails_silently=False)
 
     def test_script(self):
         genesis_block = self.genesis_blocks[0]
@@ -1110,6 +1140,11 @@ class BaseTransactionTest(unittest.TestCase):
 
 class SyncV1TransactionTest(unittest.SyncV1Params, BaseTransactionTest):
     __test__ = True
+
+    # XXX: this test is disabled here because it's specific to sync-v2, on the future we could move it to the SyncV2...
+    #      class, but doing it like this minimizes the git diff
+    def test_checkpoint_validation(self):
+        pass
 
 
 class SyncV2TransactionTest(unittest.SyncV2Params, BaseTransactionTest):

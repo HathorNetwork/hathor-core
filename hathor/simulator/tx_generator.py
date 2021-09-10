@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections import deque
-from typing import TYPE_CHECKING, Deque, List
+from typing import TYPE_CHECKING, Deque, Iterator, List
 
 from structlog import get_logger
 
@@ -136,3 +136,16 @@ class RandomTransactionGenerator:
         self.tx = tx
         self.delayedcall = self.clock.callLater(dt, self.schedule_next_transaction)
         self.log.debug('randomized step: schedule next transaction', dt=dt, hash=tx.hash_hex)
+
+    def yield_until_find_a_transaction(self, *, max_steps: int) -> Iterator[None]:
+        """ This method returns a dummy iterator that continuously yield until there's a tx or max_steps is reached.
+
+        This method is useful for avoiding an infinite loop in case there's something wrong that causes a transaction
+        to never be generated, which is common in tests.
+        """
+        for _ in range(max_steps):
+            if self.latest_transactions:
+                break
+            yield
+        else:
+            raise AssertionError('took too long to generate a transaction')

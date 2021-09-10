@@ -682,6 +682,7 @@ class TransactionStorage(ABC):
         assert self.indexes is not None
 
         if self._always_use_topological_dfs:
+            self.log.debug('force choosing DFS iterator')
             return self._topological_sort_dfs()
 
         db_last_started_at = self.get_last_started_at()
@@ -694,8 +695,10 @@ class TransactionStorage(ABC):
 
         iter_tx: Iterator[BaseTransaction]
         if can_use_timestamp_index:
+            self.log.debug('choosing timestamp-index iterator')
             iter_tx = self._topological_sort_timestamp_index()
         else:
+            self.log.debug('choosing metadata iterator')
             iter_tx = self._topological_sort_metadata()
 
         return iter_tx
@@ -919,6 +922,14 @@ class TransactionStorage(ABC):
             else:
                 assert isinstance(tx, Transaction)
                 yield tx
+
+    def iter_mempool_tips_from_best_index(self) -> Iterator[Transaction]:
+        """Get tx tips in the mempool, using the best available index (mempool_tips or tx_tips)"""
+        assert self.indexes is not None
+        if self.indexes.mempool_tips is not None:
+            yield from self.indexes.mempool_tips.iter(self)
+        else:
+            yield from self.iter_mempool_tips_from_tx_tips()
 
     def iter_mempool_from_best_index(self) -> Iterator[Transaction]:
         """Get all transactions in the mempool, using the best available index (mempool_tips or tx_tips)"""

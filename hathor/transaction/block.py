@@ -24,7 +24,6 @@ from hathor.transaction import BaseTransaction, TxOutput, TxVersion
 from hathor.transaction.exceptions import (
     BlockWithInputs,
     BlockWithTokensError,
-    CheckpointError,
     InvalidBlockReward,
     RewardLocked,
     TransactionDataError,
@@ -92,6 +91,26 @@ class Block(BaseTransaction):
         blc.storage = storage
 
         return blc
+
+    def set_height(self, height: int) -> None:
+        """This method exists to set the height metadata when we can't calculate it yet (i.e. syncing checkpoints).
+
+        `TxValidationError` will be risen if a height already exists (which is not determined by its value but by the
+        validation state, that is, a height of `None` on a full validated transaction is final) and it doesn't match
+        the given hint. This is in place in order to prevent accidentally setting the height to a wrong value after the
+        value has been validated, the height must be checked when basic-validating this tx and effort should be made to
+        always set the correct height when using this method.
+        """
+        from hathor.transaction import TransactionMetadata
+        from hathor.transaction.exceptions import TxValidationError
+        assert self.storage is not None
+        assert self.hash is not None
+        metadata = self.storage.get_metadata(self.hash)
+        if metadata is None:
+            metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight, soft_height=height)
+        elif metadata.validation.is_fully_connected() and metadata.height != height:
+            raise TxValidationError(f'wrong height hint {height}, stored height is {metadata.height}')
+        self._metadata = metadata
 
     def calculate_height(self) -> int:
         """Return the height of the block, i.e., the number of blocks since genesis"""
@@ -267,14 +286,16 @@ class Block(BaseTransaction):
         assert self.storage is not None
         meta = self.get_metadata()
         # XXX: it's fine to use `in` with NamedTuples
-        if Checkpoint(meta.height, self.hash) in checkpoints:
+        if Checkpoint(meta.get_soft_height(), self.hash) in checkpoints:
             return
         # otherwise at least one child must be checkpoint validated
-        for child_tx in map(self.storage.get_transaction, meta.children):
-            if child_tx.get_metadata().validation.is_checkpoint():
-                return
-        raise CheckpointError(f'Invalid new block {self.hash_hex}: expected to reach a checkpoint but none of '
-                              'its children is checkpoint-valid and its hash does not match any checkpoint')
+        # XXX: because we decided to remove "partial" children metadata, this won't work, we could add a new metadata
+        #      field to track this
+        # for child_tx in map(self.storage.get_transaction, meta.children):
+        #     if child_tx.get_metadata().validation.is_checkpoint():
+        #         return
+        # raise CheckpointError(f'Invalid new block {self.hash_hex}: expected to reach a checkpoint but none of '
+        #                       'its children is checkpoint-valid and its hash does not match any checkpoint')
 
     def verify_weight(self) -> None:
         """Validate minimum block difficulty."""

@@ -229,16 +229,27 @@ class Simulator:
 
     def run_until_complete(self,
                            max_interval: float,
+                           min_interval: float = 0.0,
                            step: float = DEFAULT_STEP_INTERVAL,
                            status_interval: float = DEFAULT_STATUS_INTERVAL) -> bool:
         """ Will stop when all peers have synced/errored (-> True), or when max_interval is elapsed (-> False).
 
+        Optionally keep running for at least `min_interval` ignoring the stop condition.
+
         Make sure miners/tx_generators are stopped or this will almost certainly run until max_interval.
         """
         assert self._started
+        steps = 0
+        interval = 0.0
+        initial = self._clock.seconds()
         for _ in self._run(max_interval, step, status_interval):
-            if all(not conn.can_step() for conn in self._connections):
+            steps += 1
+            latest_time = self._clock.seconds()
+            interval = latest_time - initial
+            if interval > min_interval and all(not conn.can_step() for conn in self._connections):
+                self.log.debug('run_until_complete: all done', steps=steps, dt=interval)
                 return True
+        self.log.debug('run_until_complete: max steps exceeded', steps=steps, dt=interval)
         return False
 
     def run(self,

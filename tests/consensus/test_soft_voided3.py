@@ -44,7 +44,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         gen_tx2 = simulator.create_tx_generator(manager2, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
         gen_tx2.start()
 
-        while not gen_tx2.latest_transactions:
+        for _ in gen_tx2.yield_until_find_a_transaction(max_steps=100):
             simulator.run(300)
 
         yield gen_tx2

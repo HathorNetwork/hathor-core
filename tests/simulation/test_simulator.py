@@ -27,6 +27,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         # FIXME: the setup above produces 0 new blocks and transactions
         # self.assertGreater(manager1.tx_storage.get_vertices_count(), 3)
 
+    @pytest.mark.flaky(max_runs=5, min_passes=1)
     def test_two_nodes(self):
         manager1 = self.create_peer()
         manager2 = self.create_peer()
@@ -61,6 +62,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertTrue(conn12.is_connected)
         self.assertTipsEqual(manager1, manager2)
 
+    @pytest.mark.flaky(max_runs=5, min_passes=1)
     def test_many_miners_since_beginning(self):
         nodes = []
         miners = []
@@ -132,7 +134,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         for miner in miners:
             miner.stop()
 
-        self.simulator.run_until_complete(600)
+        self.simulator.run_until_complete(2000)
 
         for idx, node in enumerate(nodes):
             self.log.debug(f'checking node {idx}')

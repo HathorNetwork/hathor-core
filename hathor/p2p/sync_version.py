@@ -23,7 +23,7 @@ class SyncVersion(Enum):
     #      example, peers using `v2-fake` (which just uses sync-v1) will not connect to peers using `v2-alpha`, and so
     #      on.
     V1 = 'v1'
-    V2 = 'v2-fake'  # uses sync-v1 to mock sync-v2
+    V2 = 'v2-alpha'
 
     def __str__(self):
         return f'sync-{self.value}'
