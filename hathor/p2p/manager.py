@@ -100,6 +100,7 @@ class ConnectionsManager:
                  enable_sync_v1_1: bool) -> None:
         from hathor.p2p.sync_v1.factory_v1_0 import SyncV10Factory
         from hathor.p2p.sync_v1.factory_v1_1 import SyncV11Factory
+        from hathor.p2p.sync_v2.factory import SyncV2Factory
 
         if not (enable_sync_v1 or enable_sync_v1_1 or enable_sync_v2):
             raise TypeError(f'{type(self).__name__}() at least one sync version is required')
@@ -185,7 +186,7 @@ class ConnectionsManager:
         if enable_sync_v1_1:
             self._sync_factories[SyncVersion.V1_1] = SyncV11Factory(self)
         if enable_sync_v2:
-            self._sync_factories[SyncVersion.V2] = SyncV10Factory(self)
+            self._sync_factories[SyncVersion.V2] = SyncV2Factory(self)
 
     def set_manager(self, manager: 'HathorManager') -> None:
         """Set the manager. This method must be called before start()."""

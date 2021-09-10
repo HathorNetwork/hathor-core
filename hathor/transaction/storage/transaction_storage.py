@@ -1043,6 +1043,14 @@ class TransactionStorage(ABC):
                 assert isinstance(tx, Transaction)
                 yield tx
 
+    def iter_mempool_tips_from_best_index(self) -> Iterator[Transaction]:
+        """Get tx tips in the mempool, using the best available index (mempool_tips or tx_tips)"""
+        assert self.indexes is not None
+        if self.indexes.mempool_tips is not None:
+            yield from self.indexes.mempool_tips.iter(self)
+        else:
+            yield from self.iter_mempool_tips_from_tx_tips()
+
     def iter_mempool_from_best_index(self) -> Iterator[Transaction]:
         """Get all transactions in the mempool, using the best available index (mempool_tips or tx_tips)"""
         assert self.indexes is not None

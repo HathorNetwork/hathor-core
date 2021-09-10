@@ -351,11 +351,6 @@ class RocksDBDepsIndex(DepsIndex, RocksDBIndexUtils):
         key_needed = self._to_key_needed(tx)
         self._db.delete((self._cf, key_needed))
 
-    def get_next_needed_tx(self) -> bytes:
-        # This strategy maximizes the chance to download multiple txs on the same stream
-        # Find the tx with highest "height"
-        # XXX: we could cache this onto `needed_txs` so we don't have to fetch txs every time
-        # TODO: improve this by using some sorted data structure to make this better than O(n)
-        height, start_hash, tx = max((h, s, t) for t, h, s in self._iter_needed())
-        self.log.debug('next needed tx start', start=start_hash.hex(), height=height, needed_tx=tx.hex())
-        return start_hash
+    def iter_next_needed_txs(self) -> Iterator[bytes]:
+        for tx_hash, _, __ in self._iter_needed():
+            yield tx_hash

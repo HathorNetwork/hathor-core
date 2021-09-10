@@ -24,7 +24,7 @@ class SyncVersion(Enum):
     #      on.
     V1 = 'v1'
     V1_1 = 'v1.1'
-    V2 = 'v2-fake'  # uses sync-v1 to mock sync-v2
+    V2 = 'v2'
 
     def __str__(self):
         return f'sync-{self.value}'
