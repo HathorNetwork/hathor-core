@@ -7,6 +7,7 @@ import urllib.parse
 from typing import List, Optional, cast
 
 import requests
+from hathorlib.scripts import DataScript
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_private_key_from_bytes
@@ -15,7 +16,6 @@ from hathor.transaction import Transaction, TxInput, TxOutput, genesis
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount
-from hathorlib.scripts import DataScript
 
 settings = HathorSettings()
 

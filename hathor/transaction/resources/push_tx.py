@@ -16,6 +16,7 @@ import struct
 from json import JSONDecodeError
 from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
+from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from twisted.web import resource
 from twisted.web.http import Request
 
@@ -27,7 +28,6 @@ from hathor.transaction import Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.exceptions import TxValidationError
 from hathor.util import json_dumpb, json_loadb
-from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
