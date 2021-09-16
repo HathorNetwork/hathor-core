@@ -15,6 +15,7 @@ from hathor.transaction import Transaction, TxInput, TxOutput, genesis
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount
+from hathorlib.scripts import DataScript
 
 settings = HathorSettings()
 
@@ -343,7 +344,7 @@ def get_genesis_key():
 
 def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, mint_amount: int = 300,
                   token_name: str = 'TestCoin', token_symbol: str = 'TTC', propagate: bool = True,
-                  use_genesis: bool = True) -> TokenCreationTransaction:
+                  use_genesis: bool = True, nft_data: Optional[str] = None) -> TokenCreationTransaction:
     """Creates a new token and propagates a tx with the following UTXOs:
     0. some tokens (already mint some tokens so they can be transferred);
     1. mint authority;
@@ -365,6 +366,9 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
     :param use_genesis: If True will use genesis outputs to create token, otherwise will use manager wallet
     :type token_symbol: bool
 
+    :param nft_data: If not None we create a first output as the NFT data script
+    :type nft_data: str
+
     :return: the propagated transaction so others can spend their outputs
     """
     wallet = manager.wallet
@@ -376,6 +380,9 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
     script = P2PKH.create_output_script(address)
 
     deposit_amount = get_deposit_amount(mint_amount)
+    if nft_data:
+        # NFT creation needs 0.01 HTR of fee
+        deposit_amount += 1
     genesis = manager.tx_storage.get_all_genesis()
     genesis_blocks = [tx for tx in genesis if tx.is_block]
     genesis_txs = [tx for tx in genesis if not tx.is_block]
@@ -409,6 +416,10 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
         parents = manager.get_new_tx_parents(timestamp)
 
     outputs = []
+    if nft_data:
+        script_data = DataScript.create_output_script(nft_data)
+        output_data = TxOutput(1, script_data, 0)
+        outputs.append(output_data)
     # mint output
     if mint_amount > 0:
         outputs.append(TxOutput(mint_amount, script, 0b00000001))
