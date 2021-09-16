@@ -17,6 +17,7 @@ from json import JSONDecodeError
 from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
+from structlog import get_logger
 from twisted.web import resource
 from twisted.web.http import Request
 
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager
 
 settings = HathorSettings()
+logger = get_logger()
 
 ARGS = ['hex_tx']
 
@@ -47,6 +49,7 @@ class PushTxResource(resource.Resource):
 
     def __init__(self, manager: 'HathorManager', max_output_script_size: Optional[int] = None,
                  allow_non_standard_script: bool = False) -> None:
+        self.log = logger.new()
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
         self.max_output_script_size: int = (
@@ -119,6 +122,7 @@ class PushTxResource(resource.Resource):
         try:
             success = self.manager.propagate_tx(tx, fails_silently=False)
         except (InvalidNewTransaction, TxValidationError) as e:
+            self.log.info('validation failed', exc_info=True)
             success = False
             message = str(e)
         data = {'success': success, 'message': message}
