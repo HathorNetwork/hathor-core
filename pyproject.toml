@@ -78,7 +78,7 @@ typing-extensions = "^3.7.4"  # indirect dependency, should not be needed on Pyt
 setproctitle = "^1.2.2"
 sentry-sdk = {version = "^1.1.0", optional = true}
 structlog-sentry = {version = "^1.4.0", optional = true}
-hathorlib = {version = "^0.1.0", extras = ["client"]}
+hathorlib = "0.1.0"
 
 [tool.poetry.extras]
 rocksdb = ["cython", "python-rocksdb"]
