@@ -27,6 +27,7 @@ from hathor.transaction import Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.exceptions import TxValidationError
 from hathor.util import json_dumpb, json_loadb
+from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
@@ -87,6 +88,12 @@ class PushTxResource(resource.Resource):
                 'can_force': False
             }
 
+        # We are using here the method from lib because the property
+        # to identify a nft creation transaction was created on the lib
+        # to be used in the full node and tx mining service
+        tx_from_lib = lib_tx_or_block_from_bytes(tx_bytes)
+        is_nft_creation = tx_from_lib.is_nft_creation
+
         # Validate outputs.
         for txout in tx.outputs:
             if len(txout.script) > self.max_output_script_size:
@@ -95,7 +102,7 @@ class PushTxResource(resource.Resource):
                     'message': 'Transaction has an output script that is too big.',
                     'can_force': False,
                 }
-            if not self.allow_non_standard_script:
+            if not self.allow_non_standard_script and not is_nft_creation:
                 if not txout.is_standard_script():
                     return {
                         'success': False,
