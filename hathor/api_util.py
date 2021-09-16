@@ -91,6 +91,9 @@ def validate_tx_hash(hash_hex: str, tx_storage: TransactionStorage) -> Tuple[boo
     else:
         try:
             tx_storage.get_transaction(bytes.fromhex(hash_hex))
+        except ValueError:
+            success = False
+            message = 'Invalid hash format'
         except TransactionDoesNotExist:
             success = False
             message = 'Transaction not found'
