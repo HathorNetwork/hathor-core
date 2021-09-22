@@ -278,7 +278,7 @@ protobuf = ">=3.5.0.post1,<4.0dev"
 
 [[package]]
 name = "hathorlib"
-version = "0.1.0"
+version = "0.1.1"
 description = "Hathor Network base objects library"
 category = "main"
 optional = false
@@ -1025,7 +1025,7 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.6,<4"
-content-hash = "4a922093698f8b5f07b427f3e8f3ea8fdcb6ad7b2d093e931b1fc2500c24a189"
+content-hash = "325385b6078c9c5f5e1858b2ee7234bf30b245cfd85f9e4204a14ce58134b4c9"
 
 [metadata.files]
 aiohttp = [
@@ -1374,8 +1374,8 @@ grpcio-tools = [
     {file = "grpcio_tools-1.34.1-cp39-cp39-win_amd64.whl", hash = "sha256:dbc8861fdf38a8b748d7b22b91224d48d94fbdb781e7103dddd9be04d471fa76"},
 ]
 hathorlib = [
-    {file = "hathorlib-0.1.0-py3-none-any.whl", hash = "sha256:2e4cff8173d282c955a6363078716f10017e7a73096c0d4afcfd92ae469e841e"},
-    {file = "hathorlib-0.1.0.tar.gz", hash = "sha256:ce6dec2227495c2723520cc2c3d86b596e775893d0502d33e9ded96d2770bdee"},
+    {file = "hathorlib-0.1.1-py3-none-any.whl", hash = "sha256:700eed982954249cff2d0dcfa80b0fb6e1638c21451e6e673ab34c2ed97b5903"},
+    {file = "hathorlib-0.1.1.tar.gz", hash = "sha256:5200d711ba719d310e76136e74208536656961d07a28af5aef49db95ec44864e"},
 ]
 hyperlink = [
     {file = "hyperlink-21.0.0-py2.py3-none-any.whl", hash = "sha256:e6b14c37ecb73e89c77d78cdb4c2cc8f3fb59a885c5b3f819ff4ed80f25af1b4"},
