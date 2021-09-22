@@ -176,7 +176,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         response = yield self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
         self.assertFalse(data['success'])
-        self.assertEqual('Transaction has an output script that is too big.', data['message'])
+        self.assertEqual('Transaction is non standard.', data['message'])
 
     @inlineCallbacks
     def test_non_standard_script(self) -> Generator:
@@ -192,7 +192,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         response = yield self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
         self.assertFalse(data['success'])
-        expected = 'Transaction has a non-standard script. Only standard scripts are allowed.'
+        expected = 'Transaction is non standard.'
         self.assertEqual(expected, data['message'])
 
 
