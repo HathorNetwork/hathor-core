@@ -42,7 +42,7 @@ First, you need to have Python 3.6 installed. If you don't, we recommend you to 
   ```
   sudo add-apt-repository ppa:deadsnakes/ppa
   sudo apt update
-  sudo apt install python3.6 python3.6-dev python3.6-pip build-essential
+  sudo apt install python3 python3-dev python3-pip build-essential python3-structlog liblz4-dev libbz2-dev libsnappy-dev
   pip install -U poetry
   ```
 
@@ -116,13 +116,13 @@ It may take a considerable amount of time for it to sync all the transactions in
 You can use database snapshots to speed things up.
 
 We provide both testnet and mainnet snapshots. You can get the link to the latest snapshots this way:
-- Testnet: `curl https://hathor-public-files.s3.amazonaws.com/temp/testnet-data-latest` 
+- Testnet: `curl https://hathor-public-files.s3.amazonaws.com/temp/testnet-data-latest`
 - Mainnet: `curl https://hathor-public-files.s3.amazonaws.com/temp/mainnet-data-latest`
 
 You should download and unpack one of them into your `data` directory before starting the full-node:
 
 ```
-wget $(curl https://hathor-public-files.s3.amazonaws.com/temp/testnet-data-latest) 
+wget $(curl https://hathor-public-files.s3.amazonaws.com/temp/testnet-data-latest)
 
 tar xzf testnet-data-*.tar.gz
 ```
