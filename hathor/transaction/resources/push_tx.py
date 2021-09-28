@@ -16,6 +16,7 @@ import struct
 from json import JSONDecodeError
 from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
+from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
 from twisted.web import resource
 from twisted.web.http import Request
@@ -90,20 +91,16 @@ class PushTxResource(resource.Resource):
                 'can_force': False
             }
 
-        # Validate outputs.
-        for txout in tx.outputs:
-            if len(txout.script) > self.max_output_script_size:
-                return {
-                    'success': False,
-                    'message': 'Transaction has an output script that is too big.',
-                    'can_force': False,
-                }
-            if not self.allow_non_standard_script:
-                if not txout.is_standard_script():
-                    return {
-                        'success': False,
-                        'message': 'Transaction has a non-standard script. Only standard scripts are allowed.',
-                    }
+        # We are using here the method from lib because the property
+        # to identify a nft creation transaction was created on the lib
+        # to be used in the full node and tx mining service
+        tx_from_lib = lib_tx_or_block_from_bytes(tx_bytes)
+        if not tx_from_lib.is_standard(self.max_output_script_size, not self.allow_non_standard_script):
+            return {
+                'success': False,
+                'message': 'Transaction is non standard.',
+                'can_force': False,
+            }
 
         # Validate tx.
         success, message = tx.validate_tx_error()
