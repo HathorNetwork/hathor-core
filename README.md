@@ -42,7 +42,7 @@ First, you need to have Python 3.6 installed. If you don't, we recommend you to 
   ```
   sudo add-apt-repository ppa:deadsnakes/ppa
   sudo apt update
-  sudo apt install python3 python3-dev python3-pip build-essential python3-structlog liblz4-dev libbz2-dev libsnappy-dev
+  sudo apt install python3 python3-dev python3-pip build-essential liblz4-dev libbz2-dev libsnappy-dev
   pip install -U poetry
   ```
 
