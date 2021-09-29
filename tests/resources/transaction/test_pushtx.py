@@ -126,6 +126,21 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         self.assertTrue(data['success'])
 
     @inlineCallbacks
+    def test_push_nft(self) -> Generator:
+        self.manager.wallet.unlock(b'MYPASS')
+        blocks = add_new_blocks(self.manager, 5, advance_clock=15)
+        add_blocks_unlock_reward(self.manager)
+        # NFT creation tx
+        script_type_out = parse_address_script(blocks[0].outputs[0].script)
+        assert script_type_out is not None
+        address = script_type_out.address
+        tx3 = create_tokens(self.manager, address, mint_amount=100, propagate=False, nft_data='test')
+        tx3_hex = tx3.get_struct().hex()
+        response = yield self.push_tx({'hex_tx': tx3_hex})
+        data = response.json_value()
+        self.assertTrue(data['success'])
+
+    @inlineCallbacks
     def test_invalid_params(self) -> Generator:
         # Missing hex
         response = yield self.push_tx()
@@ -161,7 +176,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         response = yield self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
         self.assertFalse(data['success'])
-        self.assertEqual('Transaction has an output script that is too big.', data['message'])
+        self.assertEqual('Transaction is non standard.', data['message'])
 
     @inlineCallbacks
     def test_non_standard_script(self) -> Generator:
@@ -177,7 +192,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         response = yield self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
         self.assertFalse(data['success'])
-        expected = 'Transaction has a non-standard script. Only standard scripts are allowed.'
+        expected = 'Transaction is non standard.'
         self.assertEqual(expected, data['message'])
 
 
