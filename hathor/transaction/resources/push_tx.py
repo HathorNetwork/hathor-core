@@ -114,9 +114,17 @@ class PushTxResource(resource.Resource):
                 'can_force': False,
             }
 
+        is_spending_voided_tx = tx.is_spending_voided_tx()
+        if is_spending_voided_tx:
+            return {
+                'success': False,
+                'message': 'Invalid transaction. At least one of your inputs is from a voided transaction.',
+                'can_force': False
+            }
+
         # Validate tx.
         success, message = tx.validate_tx_error()
-        if not success and not params.get('force', False):
+        if not success:
             return {'success': success, 'message': message, 'can_force': True}
 
         # Finally, propagate the tx.

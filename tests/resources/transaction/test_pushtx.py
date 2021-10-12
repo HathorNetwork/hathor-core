@@ -1,4 +1,4 @@
-from typing import Generator, Optional
+from typing import Generator, List, Optional
 
 from twisted.internet.defer import inlineCallbacks
 
@@ -7,7 +7,7 @@ from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction, TxInput
 from hathor.transaction.resources import PushTxResource
 from hathor.transaction.scripts import P2PKH, parse_address_script
-from hathor.wallet.base_wallet import WalletOutputInfo
+from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.resources import SendTokensResource
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
@@ -26,16 +26,25 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         self.web = StubSite(PushTxResource(self.manager))
         self.web_tokens = StubSite(SendTokensResource(self.manager))
 
-    def get_tx(self):
-        address = self.get_address(0)
-        outputs = [
-            WalletOutputInfo(address=decode_address(address), value=1, timelock=None),
-            WalletOutputInfo(address=decode_address(address), value=1, timelock=None)
-        ]
-        tx = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
+    def get_tx(self, inputs: Optional[List[WalletInputInfo]] = None,
+               outputs: Optional[List[WalletOutputInfo]] = None) -> Transaction:
+        if not outputs:
+            address = self.get_address(0)
+            assert address is not None
+            outputs = [
+                WalletOutputInfo(address=decode_address(address), value=1, timelock=None),
+                WalletOutputInfo(address=decode_address(address), value=1, timelock=None)
+            ]
+        if inputs:
+            tx = self.manager.wallet.prepare_transaction(Transaction, inputs, outputs)
+        else:
+            tx = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
+
+        tx.storage = self.manager.tx_storage
         tx.weight = 1
-        tx.parents = self.manager.get_new_tx_parents()
-        tx.timestamp = int(self.clock.seconds())
+        max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
+        tx.timestamp = max(max_ts_spent_tx + 1, int(self.manager.reactor.seconds()))
+        tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
         tx.resolve()
         return tx
 
@@ -195,6 +204,67 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         expected = 'Transaction is non standard.'
         self.assertEqual(expected, data['message'])
 
+    @inlineCallbacks
+    def test_spending_voided(self) -> Generator:
+        self.manager.wallet.unlock(b'MYPASS')
+        add_new_blocks(self.manager, 5, advance_clock=15)
+        add_blocks_unlock_reward(self.manager)
+
+        # Push a first tx
+        tx = self.get_tx()
+        tx_hex = tx.get_struct().hex()
+        response = yield self.push_tx({'hex_tx': tx_hex})
+        data = response.json_value()
+        self.assertTrue(data['success'])
+
+        wallet = self.manager.wallet
+
+        # Pushing a tx that spends this first tx works
+        txout = tx.outputs[0]
+        p2pkh = parse_address_script(txout.script)
+        assert p2pkh is not None
+        private_key = wallet.get_private_key(p2pkh.address)
+        assert tx.hash is not None
+        inputs = [WalletInputInfo(tx_id=tx.hash, index=0, private_key=private_key)]
+        outputs = [WalletOutputInfo(address=decode_address(p2pkh.address), value=txout.value, timelock=None), ]
+        tx2 = self.get_tx(inputs, outputs)
+        tx2_hex = tx2.get_struct().hex()
+        response = yield self.push_tx({'hex_tx': tx2_hex})
+        data = response.json_value()
+        self.assertTrue(data['success'])
+
+        # Now we set this tx2 as voided and try to push a tx3 that spends tx2
+        tx_meta = tx2.get_metadata()
+        assert tx2.hash is not None
+        tx_meta.voided_by = {tx2.hash}
+        self.manager.tx_storage.save_transaction(tx2, only_metadata=True)
+
+        inputs = [WalletInputInfo(tx_id=tx2.hash, index=0, private_key=private_key)]
+        outputs = [WalletOutputInfo(address=decode_address(p2pkh.address), value=txout.value, timelock=None), ]
+        tx3 = self.get_tx(inputs, outputs)
+        tx3_hex = tx3.get_struct().hex()
+        response = yield self.push_tx({'hex_tx': tx3_hex})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # Now we set this tx2 as voided and try to push a tx3 that spends tx2
+        tx_meta = tx2.get_metadata()
+        tx_meta.voided_by = {settings.SOFT_VOIDED_ID}
+        self.manager.tx_storage.save_transaction(tx2, only_metadata=True)
+
+        # Try to push again with soft voided id as voided by
+        response = yield self.push_tx({'hex_tx': tx3_hex})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # Now without voided_by the push tx must succeed
+        tx_meta = tx2.get_metadata()
+        tx_meta.voided_by = None
+        self.manager.tx_storage.save_transaction(tx2, only_metadata=True)
+
+        response = yield self.push_tx({'hex_tx': tx3_hex})
+        data = response.json_value()
+        self.assertTrue(data['success'])
 
 # GET
 
