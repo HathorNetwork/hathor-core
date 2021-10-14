@@ -189,8 +189,14 @@ class HathorProtocol:
 
         return ''.join(str(x) for x in parts)
 
-    def get_short_peer_id(self) -> Optional[str]:
+    def get_peer_id(self) -> Optional[str]:
         """Get peer id for logging."""
+        if self.peer and self.peer.id:
+            return self.peer.id
+        return None
+
+    def get_short_peer_id(self) -> Optional[str]:
+        """Get short peer id for logging."""
         if self.peer and self.peer.id:
             return self.peer.id[:7]
         return None
