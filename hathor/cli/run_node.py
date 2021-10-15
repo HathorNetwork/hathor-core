@@ -79,7 +79,9 @@ class RunNode:
         parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
         parser.add_argument('--recursion-limit', type=int, help='Set python recursion limit')
         parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
-        parser.add_argument('--x-fast-init-beta', action='store_true',
+        fvargs = parser.add_mutually_exclusive_group()
+        fvargs.add_argument('--x-full-verification', action='store_true', help='Fully validate the local database')
+        fvargs.add_argument('--x-fast-init-beta', action='store_true',
                             help='Execute a fast initialization, which skips some transaction verifications. '
                             'This is still a beta feature as it may cause issues when restarting the full node '
                             'after a crash.')
@@ -275,8 +277,10 @@ class RunNode:
             if self.wallet:
                 self.wallet.test_mode = True
 
-        if not args.x_fast_init_beta:
+        if args.x_full_verification:
             self.manager._full_verification = True
+        if args.x_fast_init_beta:
+            self.log.warn('--x-fast-init-beta is now the default, no need to specify it')
 
         for description in args.listen:
             self.manager.add_listen_address(description)
