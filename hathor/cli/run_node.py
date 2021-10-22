@@ -249,10 +249,21 @@ class RunNode:
         enable_sync_v1 = not args.x_sync_v2_only
         enable_sync_v2 = args.x_sync_v2_only or args.x_sync_bridge
 
-        self.manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname,
-                                     tx_storage=self.tx_storage, wallet=self.wallet, wallet_index=args.wallet_index,
-                                     stratum_port=args.stratum, ssl=True, checkpoints=settings.CHECKPOINTS,
-                                     enable_sync_v1=enable_sync_v1, enable_sync_v2=enable_sync_v2)
+        self.manager = HathorManager(
+            reactor,
+            peer_id=peer_id,
+            network=network,
+            hostname=hostname,
+            tx_storage=self.tx_storage,
+            wallet=self.wallet,
+            wallet_index=args.wallet_index,
+            stratum_port=args.stratum,
+            ssl=True,
+            checkpoints=settings.CHECKPOINTS,
+            enable_sync_v1=enable_sync_v1,
+            enable_sync_v2=enable_sync_v2,
+            soft_voided_tx_ids=set(settings.SOFT_VOIDED_TX_IDS),
+        )
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
 

@@ -220,18 +220,29 @@ class TestCase(unittest.TestCase):
             # least one conflict.
             self.assertTrue(meta.conflict_with)
 
+        is_tx_executed = bool(not meta.voided_by)
+        for h in meta.conflict_with or []:
+            tx2 = tx.storage.get_transaction(h)
+            meta2 = tx2.get_metadata()
+            is_tx2_executed = bool(not meta2.voided_by)
+            self.assertFalse(is_tx_executed and is_tx2_executed)
+
         for txin in tx.inputs:
             spent_tx = tx.get_spent_tx(txin)
             spent_meta = spent_tx.get_metadata()
 
             if spent_meta.voided_by is not None:
                 self.assertIsNotNone(meta.voided_by)
+                self.assertTrue(spent_meta.voided_by)
+                self.assertTrue(meta.voided_by)
                 self.assertTrue(spent_meta.voided_by.issubset(meta.voided_by))
 
         for parent in tx.get_parents():
             parent_meta = parent.get_metadata()
             if parent_meta.voided_by is not None:
                 self.assertIsNotNone(meta.voided_by)
+                self.assertTrue(parent_meta.voided_by)
+                self.assertTrue(meta.voided_by)
                 self.assertTrue(parent_meta.voided_by.issubset(meta.voided_by))
 
     def clean_tmpdirs(self):

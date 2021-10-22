@@ -1,6 +1,5 @@
 import random
 
-import pytest
 from mnemonic import Mnemonic
 
 from hathor.daa import TestMode, _set_test_mode
@@ -44,7 +43,6 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         wallet.unlock(words=words, tx_storage=manager.tx_storage)
         return manager
 
-    @pytest.mark.flaky(max_runs=3, min_passes=1)
     def test_split_brain(self):
         debug_pdf = False
 
@@ -68,13 +66,15 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
                 self.clock.advance(10)
         self.clock.advance(20)
 
+        if debug_pdf:
+            dot1 = GraphvizVisualizer(manager1.tx_storage, include_verifications=True).dot()
+            dot1.render('dot1-pre')
+
         self.assertTipsNotEqual(manager1, manager2)
         self.assertConsensusValid(manager1)
         self.assertConsensusValid(manager2)
 
-        if debug_pdf:
-            dot1 = GraphvizVisualizer(manager1.tx_storage, include_verifications=True).dot()
-            dot1.render('dot1-pre')
+        # input('Press enter to continue...')
 
         conn = FakeConnection(manager1, manager2)
 
@@ -108,7 +108,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(node_sync.synced_timestamp, node_sync.peer_timestamp)
         self.assertTipsEqual(manager1, manager2)
         self.assertConsensusEqual(manager1, manager2)
-        # self.assertConsensusValid(manager1)
+        self.assertConsensusValid(manager1)
         self.assertConsensusValid(manager2)
 
 

@@ -1,10 +1,9 @@
 import base64
 import os
-import random
 import subprocess
 import time
 import urllib.parse
-from typing import List, Optional, cast
+from typing import List, Optional, Tuple, cast
 
 import requests
 from hathorlib.scripts import DataScript
@@ -13,7 +12,7 @@ from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_private_key_from_bytes
 from hathor.manager import HathorManager
 from hathor.transaction import Transaction, TxInput, TxOutput, genesis
-from hathor.transaction.scripts import P2PKH, HathorScript, Opcode
+from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount
 
@@ -23,6 +22,10 @@ MIN_TIMESTAMP = genesis.GENESIS[-1].timestamp + 1
 
 # useful for adding blocks to a different wallet
 BURN_ADDRESS = bytes.fromhex('28acbfb94571417423c1ed66f706730c4aea516ac5762cccb8')
+
+
+class NoCandidatesError(Exception):
+    pass
 
 
 def resolve_block_bytes(block_bytes):
@@ -37,6 +40,72 @@ def resolve_block_bytes(block_bytes):
     return block.get_struct()
 
 
+def add_custom_tx(manager: HathorManager, tx_inputs: List[Tuple[Transaction, int]], *, n_outputs: int = 1,
+                  base_parent: Optional[Transaction] = None, weight: Optional[float] = None) -> Transaction:
+    """Add a custom tx based on the gen_custom_tx(...) method."""
+    tx = gen_custom_tx(manager, tx_inputs, n_outputs=n_outputs, base_parent=base_parent, weight=weight)
+    manager.propagate_tx(tx, fails_silently=False)
+    return tx
+
+
+def gen_custom_tx(manager: HathorManager, tx_inputs: List[Tuple[Transaction, int]], *, n_outputs: int = 1,
+                  base_parent: Optional[Transaction] = None, weight: Optional[float] = None) -> Transaction:
+    """Generate a custom tx based on the inputs and outputs. It gives full control to the
+    inputs and can be used to generate conflicts and specific patterns in the DAG."""
+    inputs = []
+    value = 0
+    parents = []
+    for tx_base, txout_index in tx_inputs:
+        assert tx_base.hash is not None
+        spent_tx = tx_base
+        spent_txout = spent_tx.outputs[txout_index]
+        p2pkh = parse_address_script(spent_txout.script)
+        assert isinstance(p2pkh, P2PKH)
+
+        from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
+        value += spent_txout.value
+        wallet = manager.wallet
+        assert wallet is not None
+        assert spent_tx.hash is not None
+        private_key = wallet.get_private_key(p2pkh.address)
+        inputs.append(WalletInputInfo(tx_id=spent_tx.hash, index=txout_index, private_key=private_key))
+        if not tx_base.is_block:
+            parents.append(tx_base.hash)
+
+    assert wallet is not None
+    address = wallet.get_unused_address(mark_as_used=True)
+    if n_outputs == 1:
+        outputs = [WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None)]
+    elif n_outputs == 2:
+        assert int(value) > 1
+        outputs = [
+            WalletOutputInfo(address=decode_address(address), value=int(value) - 1, timelock=None),
+            WalletOutputInfo(address=decode_address(address), value=1, timelock=None),
+        ]
+    else:
+        raise NotImplementedError
+
+    tx2 = wallet.prepare_transaction(Transaction, inputs, outputs)
+    tx2.storage = manager.tx_storage
+    tx2.timestamp = max(tx_base.timestamp + 1, int(manager.reactor.seconds()))
+
+    tx2.parents = parents[:2]
+    if len(tx2.parents) < 2:
+        if base_parent:
+            assert base_parent.hash is not None
+            tx2.parents.append(base_parent.hash)
+        elif not tx_base.is_block:
+            tx2.parents.append(tx_base.parents[0])
+        else:
+            tx2.parents.extend(manager.get_new_tx_parents(tx2.timestamp))
+            tx2.parents = tx2.parents[:2]
+    assert len(tx2.parents) == 2
+
+    tx2.weight = weight or 25
+    tx2.update_hash()
+    return tx2
+
+
 def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False,
                             tx: Optional[Transaction] = None) -> Transaction:
     if tx is None:
@@ -47,11 +116,13 @@ def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = 
         for genesis_tx in genesis_txs:
             if genesis_tx.hash in tx_candidates:
                 tx_candidates.remove(genesis_tx.hash)
-        assert tx_candidates, 'Must not be empty, otherwise test was wrongly set up'
-        tx_hash = random.choice(tx_candidates)
+        if not tx_candidates:
+            raise NoCandidatesError()
+        # assert tx_candidates, 'Must not be empty, otherwise test was wrongly set up'
+        tx_hash = manager.rng.choice(tx_candidates)
         tx = cast(Transaction, manager.tx_storage.get_transaction(tx_hash))
 
-    txin = random.choice(tx.inputs)
+    txin = manager.rng.choice(tx.inputs)
 
     from hathor.transaction.scripts import P2PKH, parse_address_script
     spent_tx = tx.get_spent_tx(txin)
@@ -149,7 +220,7 @@ def add_new_transactions(manager, num_txs, advance_clock=None, propagate=True):
     txs = []
     for _ in range(num_txs):
         address = 'HGov979VaeyMQ92ubYcnVooP6qPzUJU8Ro'
-        value = random.choice([5, 10, 15, 20])
+        value = manager.rng.choice([5, 10, 15, 20])
         tx = add_new_tx(manager, address, value, advance_clock, propagate)
         txs.append(tx)
     return txs

@@ -16,7 +16,7 @@ import datetime
 import sys
 import time
 from enum import Enum
-from typing import Any, Iterable, Iterator, List, NamedTuple, Optional, Tuple, Union
+from typing import Any, Iterable, Iterator, List, NamedTuple, Optional, Set, Tuple, Union
 
 from structlog import get_logger
 from twisted.internet import defer
@@ -71,7 +71,7 @@ class HathorManager:
                  stratum_port: Optional[int] = None, ssl: bool = True,
                  enable_sync_v1: bool = True, enable_sync_v2: bool = False,
                  capabilities: Optional[List[str]] = None, checkpoints: Optional[List[Checkpoint]] = None,
-                 rng: Optional[Random] = None) -> None:
+                 rng: Optional[Random] = None, soft_voided_tx_ids: Optional[Set[bytes]] = None) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node. If not given, a new one is created.
@@ -159,7 +159,8 @@ class HathorManager:
             reactor=self.reactor,
         )
 
-        self.consensus_algorithm = ConsensusAlgorithm()
+        self.soft_voided_tx_ids = soft_voided_tx_ids or set()
+        self.consensus_algorithm = ConsensusAlgorithm(self.soft_voided_tx_ids)
 
         self.peer_discoveries: List[PeerDiscovery] = []
 
@@ -350,6 +351,30 @@ class HathorManager:
         tx_count = 0
 
         self.tx_storage.pre_init()
+
+        # After introducing soft voided transactions we need to guarantee the full node is not using
+        # a database that already has the soft voided transaction before marking them in the metadata
+        # Any new sync from the beginning should work fine or starting with the latest snapshot
+        # that already has the soft voided transactions marked
+        for soft_voided_id in settings.SOFT_VOIDED_TX_IDS:
+            try:
+                soft_voided_tx = self.tx_storage.get_transaction(soft_voided_id)
+            except TransactionDoesNotExist:
+                # This database does not have this tx that should be soft voided
+                # so it's fine, we will mark it as soft voided when we get it through sync
+                pass
+            else:
+                soft_voided_meta = soft_voided_tx.get_metadata()
+                voided_set = soft_voided_meta.voided_by or set()
+                # If the tx is not marked as soft voided, then we can't continue the initialization
+                if settings.SOFT_VOIDED_ID not in voided_set:
+                    self.log.error(
+                        'Error initializing node. Your database is not compatible with the current version of the'
+                        ' full node. You must use the latest available snapshot or sync from the beginning.'
+                    )
+                    sys.exit(-1)
+
+                assert {soft_voided_id, settings.SOFT_VOIDED_ID}.issubset(voided_set)
 
         # Checkpoints as {height: hash}
         checkpoint_heights = {}
