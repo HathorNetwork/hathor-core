@@ -181,6 +181,7 @@ class Downloader:
     def add_get_downloading_deferred(self, tx_id: bytes, details: TxDetails, connection: 'NodeSyncTimestamp') -> None:
         """ Getting a downloading deferred when requesting data from a connection
         """
+        self.log.debug('requesting tx to peer', tx=tx_id.hex(), peer=connection.protocol.get_peer_id())
         assert details.downloading_deferred is None
         details.downloading_deferred = connection.request_data(tx_id)
         details.downloading_deferred.addCallback(self.on_new_tx)

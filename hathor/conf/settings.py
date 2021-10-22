@@ -326,3 +326,9 @@ class HathorSettings(NamedTuple):
 
     # Used on testing to enable slow asserts that help catch bugs but we don't want to run in production
     SLOW_ASSERTS: bool = False
+
+    # List of soft voided transaction.
+    SOFT_VOIDED_TX_IDS: List[bytes] = []
+
+    # Identifier used in metadata's voided_by.
+    SOFT_VOIDED_ID: bytes = b'tx-non-grata'

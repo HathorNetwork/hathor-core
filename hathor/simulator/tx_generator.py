@@ -21,7 +21,7 @@ from hathor.conf import HathorSettings
 from hathor.transaction.exceptions import RewardLocked
 from hathor.util import Random
 from hathor.wallet.exceptions import InsufficientFunds
-from tests.utils import gen_new_tx
+from tests.utils import NoCandidatesError, gen_new_double_spending, gen_new_tx
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
@@ -55,6 +55,8 @@ class RandomTransactionGenerator:
         self.log = logger.new()
         self.rng = rng
 
+        self.double_spending_only = False
+
     def start(self):
         """ Start generating random transactions.
         """
@@ -66,6 +68,9 @@ class RandomTransactionGenerator:
         if self.delayedcall:
             self.delayedcall.cancel()
             self.delayedcall = None
+
+    def enable_double_spending(self):
+        self.double_spending_only = True
 
     def schedule_next_transaction(self):
         """ Schedule the generation of a new transaction.
@@ -94,11 +99,19 @@ class RandomTransactionGenerator:
         value = self.rng.randint(1, balance.available)
         self.log.debug('randomized step: send to', address=address, amount=value / 100)
 
-        try:
-            tx = gen_new_tx(self.manager, address, value)
-        except (InsufficientFunds, RewardLocked):
-            self.delayedcall = self.clock.callLater(0, self.schedule_next_transaction)
-            return
+        if not self.double_spending_only:
+            try:
+                tx = gen_new_tx(self.manager, address, value)
+            except (InsufficientFunds, RewardLocked):
+                self.delayedcall = self.clock.callLater(0, self.schedule_next_transaction)
+                return
+        else:
+            try:
+                tx = gen_new_double_spending(self.manager)
+                tx.nonce = self.rng.getrandbits(32)
+            except NoCandidatesError:
+                self.delayedcall = self.clock.callLater(0, self.schedule_next_transaction)
+                return
 
         tx.weight = daa.minimum_tx_weight(tx)
         tx.update_hash()

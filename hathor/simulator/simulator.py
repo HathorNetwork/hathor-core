@@ -15,7 +15,7 @@
 import secrets
 import time
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Any, Generator, List, Optional
+from typing import TYPE_CHECKING, Any, Generator, List, Optional, Set
 
 from mnemonic import Mnemonic
 from structlog import get_logger
@@ -126,7 +126,8 @@ class Simulator:
         self._patches_rc_decrement()
 
     def create_peer(self, network: Optional[str] = None, peer_id: Optional[PeerId] = None,
-                    enable_sync_v1: bool = True, enable_sync_v2: bool = True) -> HathorManager:
+                    enable_sync_v1: bool = True, enable_sync_v2: bool = True,
+                    soft_voided_tx_ids: Optional[Set[bytes]] = None) -> HathorManager:
         assert self._started
         if network is None:
             network = self._network
@@ -147,6 +148,7 @@ class Simulator:
             enable_sync_v2=enable_sync_v2,
             tx_storage=tx_storage,
             rng=Random(self.rng.getrandbits(64)),
+            soft_voided_tx_ids=soft_voided_tx_ids,
         )
 
         manager.reactor = self._clock

@@ -79,7 +79,9 @@ class RunNode:
         parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
         parser.add_argument('--recursion-limit', type=int, help='Set python recursion limit')
         parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
-        parser.add_argument('--x-fast-init-beta', action='store_true',
+        fvargs = parser.add_mutually_exclusive_group()
+        fvargs.add_argument('--x-full-verification', action='store_true', help='Fully validate the local database')
+        fvargs.add_argument('--x-fast-init-beta', action='store_true',
                             help='Execute a fast initialization, which skips some transaction verifications. '
                             'This is still a beta feature as it may cause issues when restarting the full node '
                             'after a crash.')
@@ -247,10 +249,21 @@ class RunNode:
         enable_sync_v1 = not args.x_sync_v2_only
         enable_sync_v2 = args.x_sync_v2_only or args.x_sync_bridge
 
-        self.manager = HathorManager(reactor, peer_id=peer_id, network=network, hostname=hostname,
-                                     tx_storage=self.tx_storage, wallet=self.wallet, wallet_index=args.wallet_index,
-                                     stratum_port=args.stratum, ssl=True, checkpoints=settings.CHECKPOINTS,
-                                     enable_sync_v1=enable_sync_v1, enable_sync_v2=enable_sync_v2)
+        self.manager = HathorManager(
+            reactor,
+            peer_id=peer_id,
+            network=network,
+            hostname=hostname,
+            tx_storage=self.tx_storage,
+            wallet=self.wallet,
+            wallet_index=args.wallet_index,
+            stratum_port=args.stratum,
+            ssl=True,
+            checkpoints=settings.CHECKPOINTS,
+            enable_sync_v1=enable_sync_v1,
+            enable_sync_v2=enable_sync_v2,
+            soft_voided_tx_ids=set(settings.SOFT_VOIDED_TX_IDS),
+        )
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
 
@@ -275,8 +288,10 @@ class RunNode:
             if self.wallet:
                 self.wallet.test_mode = True
 
-        if not args.x_fast_init_beta:
+        if args.x_full_verification:
             self.manager._full_verification = True
+        if args.x_fast_init_beta:
+            self.log.warn('--x-fast-init-beta is now the default, no need to specify it')
 
         for description in args.listen:
             self.manager.add_listen_address(description)

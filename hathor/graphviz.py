@@ -18,8 +18,11 @@ from typing import Dict, Iterator, Set
 
 from graphviz import Digraph
 
+from hathor.conf import HathorSettings
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage import TransactionStorage
+
+settings = HathorSettings()
 
 
 class GraphvizVisualizer:
@@ -47,6 +50,7 @@ class GraphvizVisualizer:
         self.genesis_attrs = dict(fillcolor='#87D37C', style='filled')
         self.tx_tips_attrs = dict(style='filled', fillcolor='#F5D76E')
         self.voided_attrs = dict(style='dashed,filled', penwidth='0.25', fillcolor='#BDC3C7')
+        self.soft_voided_attrs = dict(style='dashed,filled', penwidth='0.25', fillcolor='#CCCCFF')
         self.conflict_attrs = dict(style='dashed,filled', penwidth='2.0', fillcolor='#BDC3C7')
 
         # Labels
@@ -85,9 +89,12 @@ class GraphvizVisualizer:
 
         meta = tx.get_metadata()
         if meta.voided_by and len(meta.voided_by) > 0:
-            node_attrs.update(self.voided_attrs)
             if meta.voided_by and tx.hash in meta.voided_by:
                 node_attrs.update(self.conflict_attrs)
+            if settings.SOFT_VOIDED_ID in meta.voided_by:
+                node_attrs.update(self.soft_voided_attrs)
+            else:
+                node_attrs.update(self.voided_attrs)
 
         return node_attrs
 

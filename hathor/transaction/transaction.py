@@ -594,3 +594,15 @@ class Transaction(BaseTransaction):
             if spent_by and spent_by != self.hash:
                 return True
         return False
+
+    def is_spending_voided_tx(self) -> bool:
+        """ Iterate through inputs to check if they are spending valid transactions
+            Used to prevent users from sending transactions that spend a voided transaction
+        """
+        assert self.storage is not None
+        for tx_in in self.inputs:
+            tx = self.storage.get_transaction(tx_in.tx_id)
+            meta = tx.get_metadata()
+            if meta.voided_by:
+                return True
+        return False
