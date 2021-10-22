@@ -680,6 +680,9 @@ class NodeSyncTimestamp(SyncManager):
 
         assert tx is not None
         assert tx.hash is not None
+
+        self.log.debug('tx received from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
+
         if self.protocol.node.tx_storage.get_genesis(tx.hash):
             # We just got the data of a genesis tx/block. What should we do?
             # Will it reduce peer reputation score?
@@ -699,6 +702,7 @@ class NodeSyncTimestamp(SyncManager):
             # XXX: maybe we could add a hash blacklist and punish peers propagating known bad txs
             return
         else:
+            self.log.info('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
             # If we have not requested the data, it is a new transaction being propagated
             # in the network, thus, we propagate it as well.
             result = self.manager.on_new_tx(tx, conn=self.protocol, propagate_to_peers=True)

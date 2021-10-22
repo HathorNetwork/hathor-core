@@ -59,7 +59,17 @@ class PushTxResource(resource.Resource):
         )
         self.allow_non_standard_script = allow_non_standard_script
 
-    def handle_push_tx(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _get_client_ip(self, request: 'Request') -> str:
+        x_real_ip = request.getHeader('X-Real-IP')
+        if x_real_ip:
+            return x_real_ip.strip()
+        x_forwarded_for = request.getHeader('X-Forwarded-For')
+        if x_forwarded_for:
+            return x_forwarded_for.split(',', 1)[0].strip()
+        addr = request.getClientAddress()
+        return getattr(addr, 'host', 'unknown')
+
+    def handle_push_tx(self, params: Dict[str, Any], client_addr: str) -> Dict[str, Any]:
         try:
             tx_bytes = bytes.fromhex(params['hex_tx'])
             tx = tx_or_block_from_bytes(tx_bytes)
@@ -71,6 +81,8 @@ class PushTxResource(resource.Resource):
                 'message': 'This transaction is invalid. Try to decode it first to validate it.',
                 'can_force': False
             }
+
+        self.log.info('push tx', client=client_addr, tx=tx)
 
         if tx.is_block:
             # It's a block and we can't push blocks
@@ -138,7 +150,7 @@ class PushTxResource(resource.Resource):
         data = parsed['args']
         data['force'] = b'force' in request.args and request.args[b'force'][0].decode('utf-8') == 'true'
 
-        ret = self.handle_push_tx(data)
+        ret = self.handle_push_tx(data, self._get_client_ip(request))
         return json_dumpb(ret)
 
     def render_POST(self, request: Request) -> bytes:
@@ -169,7 +181,7 @@ class PushTxResource(resource.Resource):
         if 'hex_tx' not in data:
             return error_ret
 
-        ret = self.handle_push_tx(data)
+        ret = self.handle_push_tx(data, self._get_client_ip(request))
         return json_dumpb(ret)
 
     def render_OPTIONS(self, request: Request) -> int:
