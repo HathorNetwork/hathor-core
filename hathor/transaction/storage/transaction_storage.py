@@ -114,9 +114,6 @@ class TransactionStorage(ABC):
         # Key storage attribute to save if the manager is running
         self._manager_running_attribute: str = 'manager_running'
 
-        # Key storage attribute to save if the node has clean db
-        self._clean_db_attribute: str = 'clean_db'
-
         # Cache of block hash by height
         self._block_height_index = BlockHeightIndex()
 
@@ -931,16 +928,6 @@ class TransactionStorage(ABC):
         """ Return if the manager is running or was running and a sudden crash stopped the full node
         """
         return self.get_value(self._manager_running_attribute) == '1'
-
-    def set_db_clean(self) -> None:
-        """ Save on storage that the db has clean data (without voided blocks/txs)
-        """
-        self.add_value(self._clean_db_attribute, '1')
-
-    def is_db_clean(self) -> bool:
-        """ Return if the node has a clean db (without voided blocks/txs)
-        """
-        return self.get_value(self._clean_db_attribute) == '1'
 
     def add_new_to_block_height_index(self, height: int, block_hash: bytes, timestamp: int) -> None:
         """Add a new block to the height index that must not result in a re-org"""
