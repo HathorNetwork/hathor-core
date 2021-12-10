@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from hathor.checkpoint import Checkpoint as cp
 from hathor.conf.settings import HathorSettings
 
 SETTINGS = HathorSettings(
@@ -32,4 +33,19 @@ SETTINGS = HathorSettings(
     MIN_TX_WEIGHT_K=0,
     MIN_TX_WEIGHT_COEFFICIENT=0,
     MIN_TX_WEIGHT=8,
+    CHECKPOINTS=[
+        cp(100_000, bytes.fromhex('0000007ece4c7830169f360ed11c51b776e1b72bf0060e6e5b325ca8be474ac5')),
+        cp(200_000, bytes.fromhex('00000113ecd4b666116abf3d3f05ad509d903d6b456a1e8c35e46a9e426af11a')),
+        cp(300_000, bytes.fromhex('000000e42df13e4e7490cee98f303cb3b0ca33f362af180c5f7df740c98699d9')),
+        cp(400_000, bytes.fromhex('000000e9a748b34fc4d662d88bb36ef2a033ba129960924208be14eccdac1a65')),
+        cp(500_000, bytes.fromhex('000000b5c4572d7b85e585849540ece44b73948c5cdbc6f17a9a3a77fbd0f29a')),
+        cp(600_000, bytes.fromhex('000000f6743ba3d67e51d7adc21821b8263726ce3bc86010d5e1a905bf2531dc')),
+        cp(700_000, bytes.fromhex('0000008fda01c9e5fd6f99a5461e6dbf1039cba38cc8d0fc738a097d71caa968')),
+        cp(800_000, bytes.fromhex('000000397af32fcc4eeb6985d96326c1ff4644792631872a00394688b1782af5')),
+        cp(900_000, bytes.fromhex('00000097ae405036614f4335ad0e631df8fc5f7434e82c3421627e2fea4e1830')),
+        cp(1_000_000, bytes.fromhex('000000145ba662cdee0d72034658f93a0a3a4568d5ba5083ff09013ca1e6556c')),
+        cp(1_100_000, bytes.fromhex('000000404e6ff6a23695a6ffe712ce1c4efc02e75bbc11c3129f4c2377b07743')),
+        cp(1_200_000, bytes.fromhex('0000003be5fae5bb2c9ceaed589d172bcd9e74ca6c8d7d2ca06567f65cea7c9b')),
+        cp(1_300_000, bytes.fromhex('0000000000007d39de6e781c377bc202213b0b5b60db14c13d0b16e06d6fd5ac')),
+    ],
 )
