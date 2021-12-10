@@ -345,6 +345,7 @@ class PeerId:
 
         # If has no entrypoints must be behind a NAT, so we add the flag to the connection
         if len(self.entrypoints) == 0:
+            self._log.debug('no entrypoints, assuming NAT')
             protocol.warning_flags.add(protocol.WarningFlags.NO_ENTRYPOINTS)
             # If there are no entrypoints, we don't need to validate it
             found_entrypoint = True
@@ -352,21 +353,29 @@ class PeerId:
         # Entrypoint validation with connection string and connection host
         # Entrypoints have the format tcp://IP|name:port
         for entrypoint in self.entrypoints:
+            self._log.debug('validating entrypoint', entrypoint=entrypoint)
             if protocol.connection_string:
+                self._log.debug('with connection string', connection_string=protocol.connection_string)
                 # Connection string has the format tcp://IP:port
                 # So we must consider that the entrypoint could be in name format
                 if protocol.connection_string == entrypoint:
+                    self._log.debug('matches')
                     # Found the entrypoint
                     found_entrypoint = True
                     break
+                self._log.debug('does not match, trying DNS')
                 host = connection_string_to_host(entrypoint)
                 # TODO: don't use `daa.TEST_MODE` for this
                 test_mode = not_none(DifficultyAdjustmentAlgorithm.singleton).TEST_MODE
                 result = await discover_dns(host, test_mode)
+                self._log.debug('results', results=result)
                 if protocol.connection_string in result:
+                    self._log.debug('matches')
                     # Found the entrypoint
                     found_entrypoint = True
                     break
+                else:
+                    self._log.debug('does not match')
             else:
                 # When the peer is the server part of the connection we don't have the full connection_string
                 # So we can only validate the host from the protocol
@@ -378,17 +387,27 @@ class PeerId:
                 # Connection host has only the IP
                 # So we must consider that the entrypoint could be in name format and we just validate the host
                 host = connection_string_to_host(entrypoint)
+                self._log.debug('try host', host=host, entrypoint=entrypoint,
+                                connection_remote=connection_remote, connection_host=connection_host)
                 if connection_host == host:
+                    self._log.debug('matches')
                     found_entrypoint = True
                     break
+                self._log.debug('no matches, trying DNS')
                 test_mode = not_none(DifficultyAdjustmentAlgorithm.singleton).TEST_MODE
                 result = await discover_dns(host, test_mode)
-                if connection_host in [connection_string_to_host(x) for x in result]:
+                results = [connection_string_to_host(x) for x in result]
+                self._log.debug('results', results=results)
+                if connection_host in results:
+                    self._log.debug('matches')
                     # Found the entrypoint
                     found_entrypoint = True
                     break
+                else:
+                    self._log.debug('does not match')
 
         if not found_entrypoint:
+            self._log.debug('give up')
             # In case the validation fails
             return False
 

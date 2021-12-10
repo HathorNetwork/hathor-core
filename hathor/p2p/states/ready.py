@@ -97,6 +97,9 @@ class ReadyState(BaseState):
                 ProtocolMessages.BEST_BLOCKCHAIN: self.handle_best_blockchain,
             })
 
+        # whether to relay IPV6 entrypoints
+        self.enable_ipv6_entrypoints: bool = self._settings.CAPABILITY_IPV6 in common_capabilities
+
         # Initialize sync manager and add its commands to the list of available commands.
         connections = self.protocol.connections
         assert connections is not None
@@ -164,11 +167,16 @@ class ReadyState(BaseState):
         """
         data = []
         for peer in peer_list:
-            if peer.entrypoints:
-                data.append({
-                    'id': peer.id,
-                    'entrypoints': peer.entrypoints,
-                })
+            if not peer.entrypoints:
+                self.log.debug('no entrypoints to relay', peer=peer.id)
+                continue
+            entrypoints = peer.entrypoints
+            if not self.enable_ipv6_entrypoints:
+                entrypoints = list(filter(lambda e: not e.startswith('tcp6'), entrypoints))
+            data.append({
+                'id': peer.id,
+                'entrypoints': entrypoints,
+            })
         self.send_message(ProtocolMessages.PEERS, json_dumps(data))
         self.log.debug('send peers', peers=data)
 

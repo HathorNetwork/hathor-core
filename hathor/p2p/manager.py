@@ -607,13 +607,23 @@ class ConnectionsManager:
 
         if use_ssl is None:
             use_ssl = self.use_ssl
-        connection_string, peer_id = description_to_connection_string(description)
-        # When using twisted endpoints we can't have // in the connection string
-        endpoint_url = connection_string.replace('//', '')
-        endpoint = endpoints.clientFromString(self.reactor, endpoint_url)
+        if description.startswith('tcp6'):
+            peer_id = None
+            # example: description='tcp6//[::1]:40403'
+            connection_string = description
+            host_port = description.split('//[')[1]
+            host, port = host_port.split(']:')
+            self.log.info('connnect to', description=description, host=host, port=port)
+            endpoint = endpoints.TCP6ClientEndpoint(self.reactor, host, int(port))
+        else:
+            connection_string, peer_id = description_to_connection_string(description)
+            # When using twisted endpoints we can't have // in the connection string
+            endpoint_url = connection_string.replace('//', '')
+            endpoint = endpoints.clientFromString(self.reactor, endpoint_url)
 
         if self.localhost_only:
-            if ('127.0.0.1' not in endpoint_url) and ('localhost' not in endpoint_url):
+            if ('127.0.0.1' not in description) and ('localhost' not in description) and ('::1' not in description):
+                self.log.info('skip non-localhost peer', peer=description)
                 return
 
         factory: IProtocolFactory

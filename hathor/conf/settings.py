@@ -361,6 +361,7 @@ class HathorSettings(NamedTuple):
     CAPABILITY_WHITELIST: str = 'whitelist'
     CAPABILITY_SYNC_VERSION: str = 'sync-version'
     CAPABILITY_GET_BEST_BLOCKCHAIN: str = 'get-best-blockchain'
+    CAPABILITY_IPV6: str = 'ipv6'  # peers announcing this capability will be relayed ipv6 entrypoints from other peers
 
     # Where to download whitelist from
     WHITELIST_URL: Optional[str] = None

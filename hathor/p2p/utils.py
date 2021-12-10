@@ -95,7 +95,12 @@ def get_settings_hello_dict() -> dict[str, Any]:
 def connection_string_to_host(connection_string: str) -> str:
     """ From a connection string I return the host
         tcp://127.0.0.1:40403 -> 127.0.0.1
+        tcp6://[::1]:40403 -> ::1
     """
+    if connection_string.startswith('tcp6'):
+        url_host = connection_string.split('//[')[1]
+        host = url_host.split(']:')[0]
+        return host
     return urlparse(connection_string).netloc.split(':')[0]
 
 
