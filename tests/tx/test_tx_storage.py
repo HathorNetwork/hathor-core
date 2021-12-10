@@ -425,6 +425,14 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.assertIsNone(self.tx_storage.get_value(attr))
 
 
+class BaseCacheStorageTest(BaseTransactionStorageTest):
+    def _test_remove_tx_or_block(self, tx):
+        tx_hash = tx.hash
+        super()._test_remove_tx_or_block(tx)
+        # XXX: make sure it was removed from the internal storage
+        self.assertFalse(self.tx_storage.store.transaction_exists(tx_hash))
+
+
 class TransactionBinaryStorageTest(BaseTransactionStorageTest):
     __test__ = True
 
@@ -457,7 +465,7 @@ class TransactionCompactStorageTest(BaseTransactionStorageTest):
         super().tearDown()
 
 
-class CacheBinaryStorageTest(BaseTransactionStorageTest):
+class CacheBinaryStorageTest(BaseCacheStorageTest):
     __test__ = True
 
     def setUp(self):
@@ -471,7 +479,7 @@ class CacheBinaryStorageTest(BaseTransactionStorageTest):
         super().tearDown()
 
 
-class CacheCompactStorageTest(BaseTransactionStorageTest):
+class CacheCompactStorageTest(BaseCacheStorageTest):
     __test__ = True
 
     def setUp(self):
@@ -494,7 +502,7 @@ class TransactionMemoryStorageTest(BaseTransactionStorageTest):
         super().setUp(TransactionMemoryStorage())
 
 
-class CacheMemoryStorageTest(BaseTransactionStorageTest):
+class CacheMemoryStorageTest(BaseCacheStorageTest):
     __test__ = True
 
     def setUp(self):
