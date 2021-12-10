@@ -17,7 +17,7 @@ from collections import namedtuple
 from struct import pack
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 
-from hathor import daa, protos
+from hathor import daa
 from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.exception import InvalidNewTransaction
@@ -92,46 +92,6 @@ class Transaction(BaseTransaction):
     def is_transaction(self) -> bool:
         """Returns true if this is a transaction"""
         return True
-
-    def to_proto(self, include_metadata: bool = True) -> protos.BaseTransaction:
-        tx_proto = protos.Transaction(
-            version=self.version,
-            weight=self.weight,
-            timestamp=self.timestamp,
-            parents=self.parents,
-            tokens=self.tokens,
-            inputs=map(TxInput.to_proto, self.inputs),
-            outputs=map(TxOutput.to_proto, self.outputs),
-            nonce=self.nonce,
-            hash=self.hash,
-        )
-        if include_metadata:
-            tx_proto.metadata.CopyFrom(self.get_metadata().to_proto())
-        return protos.BaseTransaction(transaction=tx_proto)
-
-    @classmethod
-    def create_from_proto(cls, tx_proto: protos.BaseTransaction,
-                          storage: Optional['TransactionStorage'] = None) -> 'Transaction':
-        transaction_proto = tx_proto.transaction
-        tx = cls(
-            version=transaction_proto.version,
-            weight=transaction_proto.weight,
-            timestamp=transaction_proto.timestamp,
-            nonce=transaction_proto.nonce,
-            hash=transaction_proto.hash or None,
-            parents=list(transaction_proto.parents),
-            tokens=list(transaction_proto.tokens),
-            inputs=list(map(TxInput.create_from_proto, transaction_proto.inputs)),
-            outputs=list(map(TxOutput.create_from_proto, transaction_proto.outputs)),
-            storage=storage,
-        )
-        if transaction_proto.HasField('metadata'):
-            from hathor.transaction import TransactionMetadata
-
-            # make sure hash is not empty
-            tx.hash = tx.hash or tx.calculate_hash()
-            tx._metadata = TransactionMetadata.create_from_proto(tx.hash, transaction_proto.metadata)
-        return tx
 
     @classmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,

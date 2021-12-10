@@ -15,7 +15,6 @@
 from struct import error as StructError, pack
 from typing import Any, Dict, List, Optional, Tuple
 
-from hathor import protos
 from hathor.conf import HathorSettings
 from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.exceptions import InvalidToken, TransactionDataError
@@ -61,48 +60,6 @@ class TokenCreationTransaction(Transaction):
         return ('TokenCreationTransaction(nonce=%d, timestamp=%s, version=%s, weight=%f, hash=%s,'
                 'token_name=%s, token_symbol=%s)' % (self.nonce, self.timestamp, int(self.version),
                                                      self.weight, self.hash_hex, self.token_name, self.token_symbol))
-
-    def to_proto(self, include_metadata: bool = True) -> protos.BaseTransaction:
-        tx_proto = protos.TokenCreationTransaction(
-            version=self.version,
-            weight=self.weight,
-            timestamp=self.timestamp,
-            parents=self.parents,
-            inputs=map(TxInput.to_proto, self.inputs),
-            outputs=map(TxOutput.to_proto, self.outputs),
-            token_info=self.serialize_token_info(),
-            nonce=self.nonce,
-            hash=self.hash,
-        )
-        if include_metadata:
-            tx_proto.metadata.CopyFrom(self.get_metadata().to_proto())
-        return protos.BaseTransaction(tokenCreationTransaction=tx_proto)
-
-    @classmethod
-    def create_from_proto(cls, tx_proto: protos.BaseTransaction,
-                          storage: Optional['TransactionStorage'] = None) -> 'Transaction':
-        transaction_proto = tx_proto.tokenCreationTransaction
-        name, symbol, _ = cls.deserialize_token_info(transaction_proto.token_info)
-        tx = cls(
-            version=transaction_proto.version,
-            weight=transaction_proto.weight,
-            timestamp=transaction_proto.timestamp,
-            nonce=transaction_proto.nonce,
-            hash=transaction_proto.hash or None,
-            parents=list(transaction_proto.parents),
-            token_name=name,
-            token_symbol=symbol,
-            inputs=list(map(TxInput.create_from_proto, transaction_proto.inputs)),
-            outputs=list(map(TxOutput.create_from_proto, transaction_proto.outputs)),
-            storage=storage,
-        )
-        if transaction_proto.HasField('metadata'):
-            from hathor.transaction import TransactionMetadata
-
-            # make sure hash is not empty
-            tx.hash = tx.hash or tx.calculate_hash()
-            tx._metadata = TransactionMetadata.create_from_proto(tx.hash, transaction_proto.metadata)
-        return tx
 
     def update_hash(self) -> None:
         """ When we update the hash, we also have to update the tokens uid list

@@ -58,8 +58,6 @@ class RunNode:
         parser.add_argument('--data', help='Data directory')
         storage = parser.add_mutually_exclusive_group()
         storage.add_argument('--rocksdb-storage', action='store_true', help='Use RocksDB storage backend (default)')
-        storage.add_argument('--old-rocksdb-storage', action='store_true',
-                             help='Use old RocksDB storage backend (deprecated)')
         storage.add_argument('--memory-storage', action='store_true', help='Do not use any storage')
         storage.add_argument('--json-storage', action='store_true', help='Use legacy JSON storage (not recommended)')
         parser.add_argument('--rocksdb-cache', type=int, help='RocksDB block-table cache size (bytes)', default=None)
@@ -115,7 +113,6 @@ class RunNode:
             TransactionCacheStorage,
             TransactionCompactStorage,
             TransactionMemoryStorage,
-            TransactionOldRocksDBStorage,
             TransactionRocksDBStorage,
             TransactionStorage,
         )
@@ -202,10 +199,6 @@ class RunNode:
         elif args.json_storage:
             check_or_exit(args.data, '--data is expected')
             tx_storage = TransactionCompactStorage(path=args.data, with_index=(not args.cache))
-        elif args.old_rocksdb_storage:
-            check_or_exit(args.data, '--data is expected')
-            self.log.warn('the old rocksdb storage is deprecated and support will be removed')
-            tx_storage = TransactionOldRocksDBStorage(path=args.data)
         else:
             check_or_exit(args.data, '--data is expected')
             if args.rocksdb_storage:

@@ -98,12 +98,6 @@ poetry install
 poetry install -E rocksdb
 ```
 
-Generate protobuf modules:
-
-```
-poetry run make protos
-```
-
 ### Running the full-node
 
 ```

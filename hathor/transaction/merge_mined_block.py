@@ -14,7 +14,6 @@
 
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from hathor import protos
 from hathor.transaction.aux_pow import BitcoinAuxPow
 from hathor.transaction.base_transaction import TxOutput, TxVersion
 from hathor.transaction.block import Block
@@ -40,29 +39,6 @@ class MergeMinedBlock(Block):
                          outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.aux_pow = aux_pow
 
-    @classmethod
-    def create_from_proto(cls, tx_proto: protos.BaseTransaction,
-                          storage: Optional['TransactionStorage'] = None) -> 'MergeMinedBlock':
-        block_proto = tx_proto.block
-        tx = cls(
-            version=block_proto.version,
-            weight=block_proto.weight,
-            timestamp=block_proto.timestamp,
-            hash=block_proto.hash or None,
-            parents=list(block_proto.parents),
-            outputs=list(map(TxOutput.create_from_proto, block_proto.outputs)),
-            storage=storage,
-            data=block_proto.data
-        )
-        tx.aux_pow = BitcoinAuxPow.create_from_proto(block_proto.aux_pow)
-        if block_proto.HasField('metadata'):
-            from hathor.transaction import TransactionMetadata
-
-            # make sure hash is not empty
-            tx.hash = tx.hash or tx.calculate_hash()
-            tx._metadata = TransactionMetadata.create_from_proto(tx.hash, block_proto.metadata)
-        return tx
-
     def _get_formatted_fields_dict(self, short: bool = True) -> Dict[str, str]:
         from hathor.util import abbrev
         d = super()._get_formatted_fields_dict(short)
@@ -70,13 +46,6 @@ class MergeMinedBlock(Block):
         if self.aux_pow is not None:
             d.update(aux_pow=abbrev(bytes(self.aux_pow).hex().encode('ascii'), 128).decode('ascii'))
         return d
-
-    def to_proto(self, include_metadata: bool = True) -> protos.BaseTransaction:
-        tx_proto = super().to_proto(include_metadata=include_metadata)
-        tx_proto.block.nonce = b''
-        assert self.aux_pow is not None
-        tx_proto.block.aux_pow.CopyFrom(self.aux_pow.to_proto())
-        return tx_proto
 
     @classmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,

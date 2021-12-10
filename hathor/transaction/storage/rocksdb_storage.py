@@ -108,20 +108,6 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             # handled by the manager after pre_init
             self._save_transaction(tx)
 
-    def pre_init(self) -> None:
-        from rocksdb.errors import RocksIOError
-        if self.is_empty():
-            # try to load the old rocksdb storage
-            from hathor.transaction.storage.old_rocksdb_storage import TransactionOldRocksDBStorage
-            try:
-                old_storage = TransactionOldRocksDBStorage(self._path)
-            except RocksIOError:
-                # old storage does not exist, no need to continue
-                return
-            self._import_from_other(old_storage)
-        else:
-            self.log.debug('new db not empty, skipping migration')
-
     def remove_transaction(self, tx: 'BaseTransaction') -> None:
         super().remove_transaction(tx)
         self._db.delete((self._cf_tx, tx.hash))

@@ -22,26 +22,7 @@ ENV POETRY_VIRTUALENVS_IN_PROJECT=true
 COPY pyproject.toml poetry.lock  ./
 RUN poetry install -n -E rocksdb -E sentry --no-root --no-dev
 
-# stage-1: install all dev dependencies and build protos, reuse .venv from stage-0
-FROM python:$PYTHON-alpine$ALPINE as stage-1
-ARG PYTHON
-WORKDIR /usr/src/app/
-RUN apk add --no-cache openssl libffi graphviz
-RUN apk add --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing rocksdb
-RUN apk add --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing rocksdb-dev
-RUN apk add openssl-dev libffi-dev build-base rust cargo
-RUN pip --no-input --no-cache-dir install --upgrade pip poetry
-ENV POETRY_VIRTUALENVS_IN_PROJECT=true
-COPY pyproject.toml poetry.lock  ./
-RUN poetry install -n -E rocksdb -E sentry --no-root --no-dev
-# up to the line above is be the same as in stage-0, and thus all layers are re-used
-RUN poetry install -n -E rocksdb -E sentry --no-root
-COPY Makefile ./
-COPY hathor/protos ./hathor/protos/
-RUN make clean-protos
-RUN poetry run make protos
-
-# finally: use production .venv (from stage-0) and compiled protos (from stage-1)
+# stage-1: use production .venv (from stage-0)
 # lean and mean: this image should be about ~110MB, would be about ~470MB if using the whole stage-1
 FROM python:$PYTHON-alpine$ALPINE
 ARG PYTHON
@@ -49,7 +30,6 @@ WORKDIR /usr/src/app/
 RUN apk add --no-cache openssl libffi graphviz
 RUN apk add --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing rocksdb
 COPY --from=stage-0 /usr/src/app/.venv/lib/python${PYTHON}/site-packages /usr/local/lib/python${PYTHON}/site-packages
-COPY --from=stage-1 /usr/src/app/hathor/protos/*.py /usr/src/app/hathor/protos/
 COPY hathor ./hathor
 EXPOSE 40403 8080
 ENTRYPOINT ["python", "-m", "hathor"]

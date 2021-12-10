@@ -88,32 +88,6 @@ isort:
 
 # generation:
 
-proto_dir = ./hathor/protos
-proto_srcs = $(wildcard $(proto_dir)/*.proto)
-proto_srcs_old = $(proto_dir)/transaction_storage.proto
-proto_outputs = $(patsubst %.proto,%_pb2.py,$(proto_srcs)) $(patsubst %.proto,%_pb2.pyi,$(proto_srcs))
-proto_outputs_old = $(patsubst %.proto,%_pb2_grpc.py,$(proto_srcs) $(proto_srcs_old))
-GRPC_TOOLS_VERSION = "$(shell python -m grpc_tools.protoc --version 2>/dev/null || true)"
-#ifdef GRPC_TOOLS_VERSION
-ifneq ($(GRPC_TOOLS_VERSION),"")
-	protoc := python -m grpc_tools.protoc
-else
-	protoc := protoc
-endif
-
-# all proto_srcs are added as deps so when a change on any of them triggers all to be rebuilt
-%_pb2.pyi %_pb2.py: %.proto $(proto_srcs)
-	$(protoc) -I. --python_out=. --mypy_out=. $<
-
-.PHONY: protos
-protos: $(proto_outputs)
-
-# cleaning:
-
-.PHONY: clean-protos
-clean-protos:
-	rm -f $(proto_outputs) $(proto_outputs_old)
-
 .PHONY: clean-pyc
 clean-pyc:
 	find hathor tests -name \*.pyc -delete

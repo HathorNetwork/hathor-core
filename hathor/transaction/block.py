@@ -16,7 +16,7 @@ import base64
 from struct import pack
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from hathor import daa, protos
+from hathor import daa
 from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.profiler import get_cpu_profiler
@@ -76,44 +76,6 @@ class Block(BaseTransaction):
     def is_transaction(self) -> bool:
         """Returns true if this is a transaction"""
         return False
-
-    def to_proto(self, include_metadata: bool = True) -> protos.BaseTransaction:
-        tx_proto = protos.Block(
-            version=self.version,
-            weight=self.weight,
-            timestamp=self.timestamp,
-            parents=self.parents,
-            outputs=map(TxOutput.to_proto, self.outputs),
-            hash=self.hash,
-            data=self.data
-        )
-        tx_proto.nonce = int_to_bytes(self.nonce, 16)
-        if include_metadata:
-            tx_proto.metadata.CopyFrom(self.get_metadata().to_proto())
-        return protos.BaseTransaction(block=tx_proto)
-
-    @classmethod
-    def create_from_proto(cls, tx_proto: protos.BaseTransaction,
-                          storage: Optional['TransactionStorage'] = None) -> 'Block':
-        block_proto = tx_proto.block
-        tx = cls(
-            version=block_proto.version,
-            weight=block_proto.weight,
-            timestamp=block_proto.timestamp,
-            hash=block_proto.hash or None,
-            parents=list(block_proto.parents),
-            outputs=list(map(TxOutput.create_from_proto, block_proto.outputs)),
-            storage=storage,
-            data=block_proto.data
-        )
-        tx.nonce = int.from_bytes(block_proto.nonce, 'big')
-        if block_proto.HasField('metadata'):
-            from hathor.transaction import TransactionMetadata
-
-            # make sure hash is not empty
-            tx.hash = tx.hash or tx.calculate_hash()
-            tx._metadata = TransactionMetadata.create_from_proto(tx.hash, block_proto.metadata)
-        return tx
 
     @classmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,

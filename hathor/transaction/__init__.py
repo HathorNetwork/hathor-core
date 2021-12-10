@@ -22,7 +22,6 @@ from hathor.transaction.base_transaction import (
     TxOutput,
     TxVersion,
     sum_weights,
-    tx_or_block_from_proto,
 )
 from hathor.transaction.block import Block
 from hathor.transaction.merge_mined_block import MergeMinedBlock
@@ -43,5 +42,4 @@ __all__ = [
     'MAX_NUM_OUTPUTS',
     'MAX_OUTPUT_VALUE',
     'sum_weights',
-    'tx_or_block_from_proto',
 ]

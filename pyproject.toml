@@ -42,8 +42,6 @@ yapf = "^0.30"
 mypy = "^0.790"
 pytest = "~6.2.1"
 pytest-cov = "~2.11.0"
-mypy-protobuf = "~1.23"
-grpcio-tools = "~1.34.1"
 flaky = "~3.7.0"
 
 [tool.poetry.dependencies]
@@ -55,12 +53,10 @@ colorama = "~0.4.4"
 configargparse = "~1.2.3"
 cryptography = "~3.3.1"
 graphviz = "~0.16"
-grpcio = {version = "~1.34.1", optional = true}
 ipython = "<7.17"  # 7.17 drops Python 3.6 compatibility
 jedi = "<0.18"  # indirect dependency restriction (0.18 breaks ipython)
 mnemonic = "~0.19"
 prometheus_client = "~0.9.0"
-protobuf = "~3.14.0"
 pyopenssl = "~20.0.1"
 pycoin = "<=0.90.20200322"
 pywin32 = {version = "300", markers = "sys_platform == 'win32'"}
@@ -82,7 +78,6 @@ hathorlib = "0.1.1"
 
 [tool.poetry.extras]
 rocksdb = ["cython", "python-rocksdb"]
-grpc = ["grpcio", "grpcio-tools"]
 sentry = ["sentry-sdk", "structlog-sentry"]
 
 [tool.isort]
@@ -92,7 +87,6 @@ include_trailing_comma = true
 known_first_party = "hathor,tests"
 line_length = 119
 multi_line_output = 3
-skip_glob = "*_pb2.py,*_pb2_grpc.py,*.pyi"
 
 [build-system]
 requires = ["poetry-core"]
