@@ -18,8 +18,8 @@ from hathor.conf.settings import HathorSettings
 SETTINGS = HathorSettings(
     P2PKH_VERSION_BYTE=b'\x49',
     MULTISIG_VERSION_BYTE=b'\x87',
-    NETWORK_NAME='testnet-foxtrot',
-    BOOTSTRAP_DNS=['foxtrot.testnet.hathor.network'],
+    NETWORK_NAME='testnet-golf',
+    BOOTSTRAP_DNS=['golf.testnet.hathor.network'],
     # Genesis stuff
     GENESIS_OUTPUT_SCRIPT=bytes.fromhex('76a914a584cf48b161e4a49223ed220df30037ab740e0088ac'),
     GENESIS_TIMESTAMP=1577836800,

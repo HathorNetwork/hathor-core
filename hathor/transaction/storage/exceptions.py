@@ -29,3 +29,7 @@ class TransactionIsNotABlock(HathorError):
 
 class AttributeDoesNotExist(HathorError):
     """You are trying to get a storage attribute that does not exist"""
+
+
+class WrongNetworkError(HathorError):
+    """You are trying to use a database for a different network"""
