@@ -16,8 +16,6 @@ from typing import List, NamedTuple
 
 from structlog import get_logger
 
-from hathor import protos
-
 logger = get_logger()
 
 
@@ -55,29 +53,6 @@ class BitcoinAuxPow(NamedTuple):
         if len(self.merkle_path) > 12:
             raise AuxPowError('`merkle_path` too long')
         # XXX: is there anything else that needs to be verified?
-
-    def to_proto(self) -> protos.BitcoinAuxPow:
-        """ Create Protobuf instance, all values are copied.
-        """
-        return protos.BitcoinAuxPow(
-            header_head=self.header_head,
-            coinbase_head=self.coinbase_head,
-            coinbase_tail=self.coinbase_tail,
-            merkle_path=self.merkle_path,
-            header_tail=self.header_tail,
-        )
-
-    @classmethod
-    def create_from_proto(cls, aux_pow_proto: protos.BitcoinAuxPow) -> 'BitcoinAuxPow':
-        """ Create a BitcionAuxPow instance from Protobuf.
-        """
-        return cls(
-            header_head=aux_pow_proto.header_head,
-            coinbase_head=aux_pow_proto.coinbase_head,
-            coinbase_tail=aux_pow_proto.coinbase_tail,
-            merkle_path=list(aux_pow_proto.merkle_path),
-            header_tail=aux_pow_proto.header_tail,
-        )
 
     def __bytes__(self) -> bytes:
         """ Convert to byte representation.

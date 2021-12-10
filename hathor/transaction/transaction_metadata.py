@@ -16,7 +16,6 @@ from collections import defaultdict
 from enum import IntEnum, unique
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
-from hathor import protos
 from hathor.util import practically_equal
 
 if TYPE_CHECKING:
@@ -315,60 +314,6 @@ class TransactionMetadata:
             meta.validation = ValidationState.FULL
 
         return meta
-
-    # XXX(jansegre): I did not put the transaction hash in the protobuf object to keep it less redundant. Is this OK?
-    @classmethod
-    def create_from_proto(cls, hash_bytes: bytes, metadata_proto: protos.Metadata) -> 'TransactionMetadata':
-        """ Create a TransactionMetadata from a protobuf Metadata object.
-
-        :param hash_bytes: hash of the transaction in bytes
-        :type hash_bytes: bytes
-
-        :param metadata_proto: Protobuf transaction object
-        :type metadata_proto: :py:class:`hathor.protos.Metadata`
-
-        :return: A transaction metadata
-        :rtype: TransactionMetadata
-        """
-        from hathor.transaction.genesis import is_genesis
-
-        metadata = cls(hash=hash_bytes)
-        for i, hashes in metadata_proto.spent_outputs.items():
-            metadata.spent_outputs[i] = list(hashes.hashes)
-        metadata.conflict_with = list(metadata_proto.conflicts_with.hashes) or None
-        metadata.voided_by = set(metadata_proto.voided_by.hashes) or None
-        metadata.twins = list(metadata_proto.twins.hashes)
-        metadata.received_by = list(metadata_proto.received_by)
-        metadata.children = list(metadata_proto.children.hashes)
-        metadata.accumulated_weight = metadata_proto.accumulated_weight
-        metadata.score = metadata_proto.score
-        metadata.first_block = metadata_proto.first_block or None
-        metadata.height = metadata_proto.height
-        metadata.validation = ValidationState(metadata_proto.validation)
-        if is_genesis(hash_bytes):
-            metadata.validation = ValidationState.FULL
-        return metadata
-
-    def to_proto(self) -> protos.Metadata:
-        """ Creates a Probuf object from self
-
-        :return: Protobuf object
-        :rtype: :py:class:`hathor.protos.Metadata`
-        """
-        return protos.Metadata(
-            spent_outputs={k: protos.Metadata.Hashes(hashes=v)
-                           for k, v in self.spent_outputs.items()},
-            conflicts_with=protos.Metadata.Hashes(hashes=self.conflict_with),
-            voided_by=protos.Metadata.Hashes(hashes=self.voided_by),
-            twins=protos.Metadata.Hashes(hashes=self.twins),
-            received_by=self.received_by,
-            children=protos.Metadata.Hashes(hashes=self.children),
-            accumulated_weight=self.accumulated_weight,
-            score=self.score,
-            first_block=self.first_block,
-            height=self.height,
-            validation=self.validation,
-        )
 
     def clone(self) -> 'TransactionMetadata':
         """Return exact copy without sharing memory.

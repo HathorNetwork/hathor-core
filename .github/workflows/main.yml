@@ -53,8 +53,6 @@ jobs:
     - name: Install Poetry dependencies (without rocksdb)
       if: matrix.os == 'windows-latest'
       run: poetry install -n --no-root
-    - name: Compile protos
-      run: poetry run make protos
     - name: Cache mypy
       uses: actions/cache@v2
       with:

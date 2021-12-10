@@ -122,24 +122,3 @@ class SyncV2StructSerializationTest(unittest.SyncV2Params, BaseStructSerializati
 # sync-bridge should behave like sync-v2
 class SyncBridgeStructSerializationTest(unittest.SyncBridgeParams, SyncV2StructSerializationTest):
     pass
-
-
-class BaseProtobufSerializationTest(_SerializationWithMetadataTest):
-    def _reserialize(self, tx):
-        from hathor.transaction import tx_or_block_from_proto
-        tx_proto = tx.to_proto()
-        tx_re = tx_or_block_from_proto(tx_proto)
-        return tx_re
-
-
-class SyncV1ProtobufSerializationTest(unittest.SyncV1Params, BaseProtobufSerializationTest):
-    __test__ = True
-
-
-class SyncV2ProtobufSerializationTest(unittest.SyncV2Params, BaseProtobufSerializationTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeProtobufSerializationTest(unittest.SyncBridgeParams, SyncV2ProtobufSerializationTest):
-    pass
