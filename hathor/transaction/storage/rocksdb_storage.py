@@ -16,7 +16,7 @@ import os
 from typing import TYPE_CHECKING, Iterator, Optional
 
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, TransactionStorage
+from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.util import json_dumpb, json_loadb
 
 if TYPE_CHECKING:
@@ -88,25 +88,6 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
 
     def _meta_to_bytes(self, meta: 'TransactionMetadata') -> bytes:
         return json_dumpb(meta.to_json())
-
-    def _import_from_other(self, other_storage: TransactionStorage) -> None:
-        """Internal method, do not run without understanding how to use it.
-
-        Effectively migrates the database to be compatible with the stateful validation that sync-v2 expects.
-        """
-
-        from hathor.transaction.transaction_metadata import ValidationState
-
-        self.log.info('importing from old database, be patient, might take a while')
-        # XXX: ordering is not important since we only load and save transactions without looking at their content
-        for tx in other_storage.get_all_transactions():
-            tx_meta = tx.get_metadata()
-            assert tx_meta.validation.is_fully_connected() or tx_meta.validation.is_initial(), \
-                'Expected either INITIAL or FULL validation.'
-            tx_meta.validation = ValidationState.FULL
-            # XXX: using _save_transaction because we don't want to trigger any cache/index mechanism, this will be
-            # handled by the manager after pre_init
-            self._save_transaction(tx)
 
     def remove_transaction(self, tx: 'BaseTransaction') -> None:
         super().remove_transaction(tx)

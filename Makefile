@@ -103,7 +103,7 @@ clean-dist:
 	rm -f requirements.txt
 
 .PHONY: clean
-clean: clean-pyc clean-protos clean-caches clean-dist
+clean: clean-pyc clean-caches clean-dist
 
 # building:
 
