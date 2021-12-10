@@ -117,6 +117,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
         super().remove_transaction(tx)
         self.cache.pop(tx.hash, None)
         self.dirty_txs.discard(tx.hash)
+        self.store.remove_transaction(tx)
         self._remove_from_weakref(tx)
 
     def save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False,
