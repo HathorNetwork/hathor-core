@@ -1,4 +1,4 @@
-name: tests
+name: lints
 on:
   push:
     branches:
@@ -62,8 +62,5 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-py${{ matrix.python }}-mypy-refs/heads/dev-
           ${{ runner.os }}-py${{ matrix.python }}-mypy-
-    - name: Run tests
-      run: poetry run make tests
-    - name: Upload coverage
-      uses: codecov/codecov-action@v1
-      if: matrix.python == 3.7 && matrix.os == 'ubuntu-latest'
+    - name: Run linters
+      run: poetry run make check
