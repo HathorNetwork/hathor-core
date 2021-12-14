@@ -120,12 +120,12 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         self.manager.tx_storage.save_transaction(tx_input)
 
         token_bytes1 = bytes.fromhex('001c382847d8440d05da95420bee2ebeb32bc437f82a9ae47b0745c8a29a7b0d')
-        status = self.manager.tx_storage.tokens_index.tokens[token_bytes1]
+        status = self.manager.tx_storage.indexes.tokens.tokens[token_bytes1]
         status.name = 'Test Coin'
         status.symbol = 'TSC'
 
         token_bytes2 = bytes.fromhex('007231eee3cb6160d95172a409d634d0866eafc8775f5729fff6a61e7850aba5')
-        status2 = self.manager.tx_storage.tokens_index.tokens[token_bytes2]
+        status2 = self.manager.tx_storage.indexes.tokens.tokens[token_bytes2]
         status2.name = 'NewCoin'
         status2.symbol = 'NCN'
 
@@ -209,7 +209,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         # Both inputs are the same as the last parent, so no need to manually add them
 
         token_bytes1 = bytes.fromhex('000023b318c91dcfd4b967b205dc938f9f5e2fd5114256caacfb8f6dd13db330')
-        status = self.manager.tx_storage.tokens_index.tokens[token_bytes1]
+        status = self.manager.tx_storage.indexes.tokens.tokens[token_bytes1]
         status.name = 'Wat wat'
         status.symbol = 'WAT'
 

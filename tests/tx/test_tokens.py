@@ -159,7 +159,7 @@ class BaseTokenTest(unittest.TestCase):
         self.run_to_completion()
 
         # check tokens index
-        tokens_index = self.manager.tx_storage.tokens_index.tokens[token_uid]
+        tokens_index = self.manager.tx_storage.indexes.tokens.tokens[token_uid]
         self.assertIn((tx2.hash, 1), tokens_index.mint)
         self.assertIn((tx.hash, 2), tokens_index.melt)
         # there should only be one element on the indexes for the token
@@ -264,7 +264,7 @@ class BaseTokenTest(unittest.TestCase):
         self.run_to_completion()
 
         # check tokens index
-        tokens_index = self.manager.tx_storage.tokens_index.tokens[token_uid]
+        tokens_index = self.manager.tx_storage.indexes.tokens.tokens[token_uid]
         self.assertIn((tx.hash, 1), tokens_index.mint)
         self.assertIn((tx2.hash, 1), tokens_index.melt)
         # there should only be one element on the indexes for the token
@@ -354,7 +354,7 @@ class BaseTokenTest(unittest.TestCase):
         # 3. HTR deposit change
         tx = create_tokens(self.manager, self.address_b58, mint_amount=100)
         token_uid = tx.tokens[0]
-        tokens_index = self.manager.tx_storage.tokens_index.tokens[tx.tokens[0]]
+        tokens_index = self.manager.tx_storage.indexes.tokens.tokens[tx.tokens[0]]
         self.assertIn((tx.hash, 1), tokens_index.mint)
         self.assertIn((tx.hash, 2), tokens_index.melt)
         # there should only be one element on the indexes for the token

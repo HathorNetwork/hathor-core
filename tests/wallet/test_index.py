@@ -42,7 +42,7 @@ class BaseWalletIndexTest(unittest.TestCase):
         self.manager.propagate_tx(tx1)
         self.run_to_completion()
 
-        wallet_data = self.manager.tx_storage.wallet_index.get_from_address(address)
+        wallet_data = self.manager.tx_storage.indexes.addresses.get_from_address(address)
         self.assertEqual(len(wallet_data), 1)
         self.assertEqual(wallet_data, [tx1.hash])
 
@@ -50,7 +50,7 @@ class BaseWalletIndexTest(unittest.TestCase):
         self.manager.propagate_tx(tx2)
         self.run_to_completion()
 
-        wallet_data = self.manager.tx_storage.wallet_index.get_from_address(address)
+        wallet_data = self.manager.tx_storage.indexes.addresses.get_from_address(address)
         self.assertEqual(len(wallet_data), 2)
         self.assertEqual(set(wallet_data), set([tx1.hash, tx2.hash]))
 
