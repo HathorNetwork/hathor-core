@@ -715,6 +715,10 @@ class TransactionStorage(ABC):
         When more than one block is returned, it means that there are multiple best chains and
         you can choose any of them.
         """
+        return self._get_best_block_tips__cur_impl(timestamp, skip_cache=skip_cache)
+
+    def _get_best_block_tips__cur_impl(self, timestamp: Optional[float] = None, *,
+                                       skip_cache: bool = False) -> List[bytes]:
         if timestamp is None and not skip_cache and self._best_block_tips_cache is not None:
             return self._best_block_tips_cache[:]
 
@@ -733,6 +737,17 @@ class TransactionStorage(ABC):
                 best_score = meta.score
                 best_tip_blocks = [block_hash]
         return best_tip_blocks
+
+    def _get_best_block_tips__new_impl(self, timestamp: Optional[float] = None, *,
+                                       skip_cache: bool = False) -> List[bytes]:
+        blocks = list(self._parent_blocks_index)
+        if timestamp is not None:
+            previous_best_block = self._block_height_index.search_previous_best_block(timestamp)
+            if previous_best_block is not None:
+                return [previous_best_block]
+            else:
+                return []
+        return blocks
 
     def get_weight_best_block(self) -> float:
         heads = [self.get_transaction(h) for h in self.get_best_block_tips()]

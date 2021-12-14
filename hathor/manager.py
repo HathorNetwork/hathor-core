@@ -40,7 +40,7 @@ from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transact
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.util import LogDuration, Random
+from hathor.util import LogDuration, Random, not_none
 from hathor.wallet import BaseWallet
 
 settings = HathorSettings()
@@ -542,6 +542,9 @@ class HathorManager:
         This method tries to return a stable result, such that for a given timestamp and storage state it will always
         return the same.
         """
+        return self._generate_parent_txs__cur_impl(timestamp)
+
+    def _generate_parent_txs__cur_impl(self, timestamp: Optional[float]) -> 'ParentTxs':
         if timestamp is None:
             timestamp = self.reactor.seconds()
         can_include_intervals = sorted(self.tx_storage.get_tx_tips(timestamp - 1))
@@ -555,6 +558,36 @@ class HathorManager:
             must_include = [must_include_interval.data]
             can_include_intervals = sorted(self.tx_storage.get_tx_tips(must_include_interval.begin - 1))
         can_include = [i.data for i in can_include_intervals]
+        return ParentTxs(max_timestamp, can_include, must_include)
+
+    def _generate_parent_txs__new_impl(self, timestamp: Optional[float]) -> 'ParentTxs':
+        # get all that are before "timestamp"
+        # XXX: maybe add some tolerance?
+        mempool_tips: List[Transaction] = list(self.tx_storage.iter_mempool_tips(timestamp))
+        must_include: List[bytes]
+        can_include: List[bytes]
+        max_timestamp: int
+        if not mempool_tips:
+            # there are no txs on mempool, repeat the same tx parents as the best block
+            must_include = []
+            # can_include = self.tx_storage.get_best_block().parents[1:]
+            best_block = self.tx_storage.get_best_block()
+            if best_block.is_genesis:
+                can_include = [settings.GENESIS_TX1_HASH, settings.GENESIS_TX2_HASH]
+            else:
+                can_include = self.tx_storage.get_best_block().parents[1:]
+            max_timestamp = max(tx.timestamp for tx in map(self.tx_storage.get_transaction, can_include) if tx)
+        elif len(mempool_tips) < 2:
+            # there is only one tx, it must be included, and either of its parents can be included
+            only_tx = mempool_tips[0]
+            must_include = [not_none(tx.hash) for tx in mempool_tips]
+            can_include = only_tx.parents[:]
+            max_timestamp = only_tx.timestamp
+        else:
+            # otherwise we can include any tx on the mempool
+            must_include = []
+            can_include = [not_none(tx.hash) for tx in mempool_tips]
+            max_timestamp = max(tx.timestamp for tx in mempool_tips)
         return ParentTxs(max_timestamp, can_include, must_include)
 
     def allow_mining_without_peers(self) -> None:
