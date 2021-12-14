@@ -29,7 +29,7 @@ from hathor.simulator.tx_generator import RandomTransactionGenerator
 from hathor.transaction.genesis import _get_genesis_transactions_unsafe
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.util import Random
-from hathor.wallet import HDWallet
+from hathor.wallet import BaseWallet, HDWallet
 
 if TYPE_CHECKING:
     from hathor.simulator.fake_connection import FakeConnection
@@ -164,8 +164,12 @@ class Simulator:
         wallet.unlock(words=words, tx_storage=manager.tx_storage)
         return manager
 
-    def create_tx_generator(self, peer: HathorManager, *args: Any, **kwargs: Any) -> RandomTransactionGenerator:
-        return RandomTransactionGenerator(peer, self.rng, *args, **kwargs)
+    def create_tx_generator(self, manager: HathorManager, *args: Any, **kwargs: Any) -> RandomTransactionGenerator:
+        assert manager.wallet is not None
+        return RandomTransactionGenerator(manager.wallet, self.rng, *args, **kwargs)
+
+    def create_tx_generator2(self, wallet: BaseWallet, *args: Any, **kwargs: Any) -> RandomTransactionGenerator:
+        return RandomTransactionGenerator(wallet, self.rng, *args, **kwargs)
 
     def create_miner(self, peer: HathorManager, *args: Any, **kwargs: Any) -> MinerSimulator:
         return MinerSimulator(peer, self.rng, *args, **kwargs)

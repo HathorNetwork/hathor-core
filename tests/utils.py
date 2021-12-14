@@ -15,6 +15,7 @@ from hathor.transaction import Transaction, TxInput, TxOutput, genesis
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount
+from hathor.wallet import BaseWallet
 
 settings = HathorSettings()
 
@@ -49,12 +50,16 @@ def add_custom_tx(manager: HathorManager, tx_inputs: List[Tuple[Transaction, int
 
 
 def gen_custom_tx(manager: HathorManager, tx_inputs: List[Tuple[Transaction, int]], *, n_outputs: int = 1,
-                  base_parent: Optional[Transaction] = None, weight: Optional[float] = None) -> Transaction:
+                  base_parent: Optional[Transaction] = None, weight: Optional[float] = None,
+                  wallet: Optional['BaseWallet'] = None) -> Transaction:
     """Generate a custom tx based on the inputs and outputs. It gives full control to the
     inputs and can be used to generate conflicts and specific patterns in the DAG."""
     inputs = []
     value = 0
     parents = []
+    if not wallet:
+        wallet = manager.wallet
+        assert wallet is not None
     for tx_base, txout_index in tx_inputs:
         assert tx_base.hash is not None
         spent_tx = tx_base
@@ -64,8 +69,6 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: List[Tuple[Transaction, int
 
         from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
         value += spent_txout.value
-        wallet = manager.wallet
-        assert wallet is not None
         assert spent_tx.hash is not None
         private_key = wallet.get_private_key(p2pkh.address)
         inputs.append(WalletInputInfo(tx_id=spent_tx.hash, index=txout_index, private_key=private_key))

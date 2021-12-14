@@ -173,8 +173,7 @@ class HathorManager:
 
         self.wallet = wallet
         if self.wallet:
-            self.wallet.pubsub = self.pubsub
-            self.wallet.reactor = self.reactor
+            self.wallet.set_manager(self)
 
         if stratum_port:
             # XXX: only import if needed
@@ -900,17 +899,13 @@ class HathorManager:
         """
         assert tx.hash is not None
 
-        # Publish to pubsub manager the new tx accepted, now that it's full validated
-        self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
-
         self.tx_storage.del_from_deps_index(tx.hash)
         self.tx_storage.update_mempool_tips(tx)
         if tx.is_block:
             self.tx_storage.add_to_parent_blocks_index(tx.hash)
 
-        if self.wallet:
-            # TODO Remove it and use pubsub instead.
-            self.wallet.on_new_tx(tx)
+        # Publish to pubsub manager the new tx accepted, now that it's full validated
+        self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx, call_now=True)
 
     def listen(self, description: str, use_ssl: Optional[bool] = None) -> None:
         endpoint = self.connections.listen(description, use_ssl)

@@ -24,7 +24,7 @@ from hathor.wallet.exceptions import InsufficientFunds
 from tests.utils import NoCandidatesError, gen_new_double_spending, gen_new_tx
 
 if TYPE_CHECKING:
-    from hathor.manager import HathorManager
+    from hathor.wallet import BaseWallet
 
 settings = HathorSettings()
 logger = get_logger()
@@ -34,19 +34,21 @@ class RandomTransactionGenerator:
     """ Generates random transactions without mining. It is supposed to be used
     with Simulator class. The mining part is simulated using the geometrical distribution.
     """
-    def __init__(self, manager: 'HathorManager', rng: Random, *,
+    def __init__(self, wallet: 'BaseWallet', rng: Random, *,
                  rate: float, hashpower: float, ignore_no_funds: bool = False):
         """
         :param: rate: Number of transactions per second
         :param: hashpower: Number of hashes per second
         """
-        self.manager = manager
+        self.wallet = wallet
+        assert wallet.manager is not None
+        self.manager = wallet.manager
 
         # List of addresses to send tokens. If this list is empty, tokens will be sent to an address
         # of its own wallet.
         self.send_to: List[str] = []
 
-        self.clock = manager.reactor
+        self.clock = self.manager.reactor
         self.rate = rate
         self.hashpower = hashpower
         self.ignore_no_funds = ignore_no_funds
