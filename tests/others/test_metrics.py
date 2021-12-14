@@ -119,7 +119,8 @@ class BaseMetricsTest(unittest.TestCase):
             b'default': 0.0,
             b'tx': 0.0,
             b'meta': 0.0,
-            b'attr': 0.0
+            b'attr': 0.0,
+            b'migrations': 0.0,
         })
 
         manager.tx_storage.pre_init()
@@ -172,7 +173,8 @@ class BaseMetricsTest(unittest.TestCase):
             b'default': 0.0,
             b'tx': 0.0,
             b'meta': 0.0,
-            b'attr': 0.0
+            b'attr': 0.0,
+            b'migrations': 0.0,
         })
 
         manager.tx_storage.pre_init()

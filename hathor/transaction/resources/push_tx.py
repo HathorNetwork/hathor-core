@@ -16,7 +16,6 @@ import struct
 from json import JSONDecodeError
 from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
-from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
 from twisted.web.http import Request
 
@@ -94,44 +93,15 @@ class PushTxResource(Resource):
         tx.storage = self.manager.tx_storage
         # If this tx is a double spending, don't even try to propagate in the network
         assert isinstance(tx, Transaction)
-        is_double_spending = tx.is_double_spending()
-        if is_double_spending:
-            return {
-                'success': False,
-                'message': 'Invalid transaction. At least one of your inputs has already been spent.',
-                'can_force': False
-            }
 
-        # We are using here the method from lib because the property
-        # to identify a nft creation transaction was created on the lib
-        # to be used in the full node and tx mining service
-        tx_from_lib = lib_tx_or_block_from_bytes(tx_bytes)
-        if not tx_from_lib.is_standard(self.max_output_script_size, not self.allow_non_standard_script):
-            return {
-                'success': False,
-                'message': 'Transaction is non standard.',
-                'can_force': False,
-            }
-
-        is_spending_voided_tx = tx.is_spending_voided_tx()
-        if is_spending_voided_tx:
-            return {
-                'success': False,
-                'message': 'Invalid transaction. At least one of your inputs is from a voided transaction.',
-                'can_force': False
-            }
-
-        # Validate tx.
-        success, message = tx.validate_tx_error()
-        if not success:
-            return {'success': success, 'message': message, 'can_force': True}
-
-        # Finally, propagate the tx.
+        # Try to push the tx.
         message = ''
+        success = True
         try:
-            success = self.manager.propagate_tx(tx, fails_silently=False)
+            self.manager.push_tx(tx, allow_non_standard_script=self.allow_non_standard_script,
+                                 max_output_script_size=self.max_output_script_size)
         except (InvalidNewTransaction, TxValidationError) as e:
-            self.log.info('validation failed', exc_info=True)
+            self.log.warn('push tx rejected', exc_info=True)
             success = False
             message = str(e)
         data = {'success': success, 'message': message}

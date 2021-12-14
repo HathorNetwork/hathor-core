@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterator, Optional
 
 from hathor.conf import HathorSettings
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.transaction_metadata import TransactionMetadata
 
@@ -44,6 +45,7 @@ class TransactionCompactStorage(BaseTransactionStorage):
         self.re_pattern = re.compile(filename_pattern)
         self.create_subfolders(self.tx_path, settings.STORAGE_SUBFOLDERS)
 
+        self.migrations_path = os.path.join(path, 'migrations.json')
         self.attributes_path = os.path.join(path, 'attributes')
         os.makedirs(self.attributes_path, exist_ok=True)
 
@@ -62,6 +64,20 @@ class TransactionCompactStorage(BaseTransactionStorage):
         for i in range(num_subfolders):
             folder = '%0.2x' % i
             os.makedirs(os.path.join(path, folder), exist_ok=True)
+
+    def pre_init(self) -> None:
+        if not os.path.exists(self.migrations_path):
+            self.save_to_json(self.migrations_path, {})
+        super().pre_init()
+
+    def get_migration_state(self, migration_name: str) -> MigrationState:
+        migrations = self.load_from_json(self.migrations_path, AssertionError('database corrupted'))
+        return MigrationState(migrations.get(migration_name, MigrationState.NOT_STARTED.value))
+
+    def set_migration_state(self, migration_name: str, state: MigrationState) -> None:
+        migrations = self.load_from_json(self.migrations_path, AssertionError('database corrupted'))
+        migrations[migration_name] = state.value
+        self.save_to_json(self.migrations_path, migrations)
 
     def remove_transaction(self, tx: 'BaseTransaction') -> None:
         assert tx.hash is not None

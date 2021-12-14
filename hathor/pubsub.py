@@ -59,6 +59,10 @@ class HathorEvents(Enum):
             Triggered when a tx is changed by the consensus algorithm
             Publishes the tx object
 
+        CONSENSUS_TX_REMOVED:
+            Triggered when a tx is removed because it became invalid (due to a reward lock check)
+            Publishes the tx hash
+
         WALLET_OUTPUT_RECEIVED:
             Triggered when a wallet receives a new output
             Publishes an UnspentTx object and the new total number of tx in the Wallet (total=int, output=UnspentTx)
@@ -119,6 +123,8 @@ class HathorEvents(Enum):
     NETWORK_NEW_TX_ACCEPTED = 'network:new_tx_accepted'
 
     CONSENSUS_TX_UPDATE = 'consensus:tx_update'
+
+    CONSENSUS_TX_REMOVED = 'consensus:tx_removed'
 
     NETWORK_NEW_TX_VOIDED = 'network:new_tx_voided'
 

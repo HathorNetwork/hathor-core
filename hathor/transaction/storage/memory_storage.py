@@ -15,6 +15,7 @@
 from typing import Any, Dict, Iterator, Optional, TypeVar
 
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.transaction import BaseTransaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
@@ -36,11 +37,27 @@ class TransactionMemoryStorage(BaseTransactionStorage):
         self._clone_if_needed = _clone_if_needed
         super().__init__(with_index=with_index)
 
+    def _check_and_set_network(self) -> None:
+        # XXX: does not apply to memory storage, can safely be ignored
+        pass
+
+    def _check_and_apply_migrations(self):
+        # XXX: does not apply to memory storage, can safely be ignored
+        pass
+
     def _clone(self, x: _Clonable) -> _Clonable:
         if self._clone_if_needed:
             return x.clone()
         else:
             return x
+
+    def get_migration_state(self, migration_name: str) -> MigrationState:
+        # XXX: migrations aren't needed for memory storage, this method shouldn't even be called
+        raise NotImplementedError
+
+    def set_migration_state(self, migration_name: str, state: MigrationState) -> None:
+        # XXX: migrations aren't needed for memory storage, this method shouldn't even be called
+        raise NotImplementedError
 
     def remove_transaction(self, tx: BaseTransaction) -> None:
         assert tx.hash is not None

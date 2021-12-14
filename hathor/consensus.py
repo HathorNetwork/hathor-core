@@ -80,6 +80,7 @@ class ConsensusAlgorithm:
 
     def __init__(self, soft_voided_tx_ids: Set[bytes], pubsub: PubSubManager) -> None:
         self.pubsub = pubsub
+        self.log = logger.new()
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory()
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
@@ -95,18 +96,37 @@ class ConsensusAlgorithm:
 
         # this context instance will live only while this update is running
         context = self.create_context()
+
+        assert base.storage is not None
+        storage = base.storage
+        assert storage.indexes is not None
+        best_height, best_tip = storage.indexes.height.get_height_tip()
+
         if isinstance(base, Transaction):
             context.transaction_algorithm.update_consensus(base)
         elif isinstance(base, Block):
             context.block_algorithm.update_consensus(base)
         else:
             raise NotImplementedError
+
+        new_best_height, new_best_tip = storage.indexes.height.get_height_tip()
+        if new_best_height < best_height:
+            self.log.warn('height decreased, re-checking mempool', prev_height=best_height, new_height=new_best_height,
+                          prev_block_tip=best_tip.hex(), new_block_tip=new_best_tip.hex())
+            to_remove = storage.indexes.mempool_tips.get_transactions_to_remove(storage)
+            if to_remove:
+                self.log.warn('some transactions on the mempool became invalid and will be removed',
+                              count=len(to_remove))
+                storage.remove_transactions(to_remove)
+                for tx_removed in to_remove:
+                    self.pubsub.publish(HathorEvents.CONSENSUS_TX_REMOVED, tx_hash=tx_removed.hash)
+
         # finally signal an index update for all affected transactions
-        for tx in context.txs_affected:
-            assert tx.storage is not None
-            assert tx.storage.indexes is not None
-            tx.storage.indexes.update(tx)
-            self.pubsub.publish(HathorEvents.CONSENSUS_TX_UPDATE, tx=tx)
+        for tx_affected in context.txs_affected:
+            assert tx_affected.storage is not None
+            assert tx_affected.storage.indexes is not None
+            tx_affected.storage.indexes.update(tx_affected)
+            self.pubsub.publish(HathorEvents.CONSENSUS_TX_UPDATE, tx=tx_affected)
 
     def filter_out_soft_voided_entries(self, tx: BaseTransaction, voided_by: Set[bytes]) -> Set[bytes]:
         if not (self.soft_voided_tx_ids & voided_by):
