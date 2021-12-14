@@ -13,12 +13,11 @@ jobs:
   test:
     name: python-${{ matrix.python }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60  # default is 360
+    timeout-minutes: 120  # default is 360
     strategy:
       fail-fast: false
       matrix:
         python:
-        - 3.6
         - 3.7
         - 3.8
         - 3.9
@@ -26,8 +25,6 @@ jobs:
         - ubuntu-latest
         - macos-latest
         include:
-        - os: windows-latest
-          python: 3.6
         - os: windows-latest
           python: 3.7
         # these still have some errors:
@@ -56,8 +53,6 @@ jobs:
     - name: Install Poetry dependencies (without rocksdb)
       if: matrix.os == 'windows-latest'
       run: poetry install -n --no-root
-    - name: Compile protos
-      run: poetry run make protos
     - name: Cache mypy
       uses: actions/cache@v2
       with:

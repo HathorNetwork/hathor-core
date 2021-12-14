@@ -17,7 +17,7 @@ import datetime
 import hashlib
 import time
 import weakref
-from abc import ABC, abstractclassmethod, abstractmethod
+from abc import ABC, abstractmethod
 from enum import IntEnum
 from itertools import chain
 from math import inf, isfinite, log
@@ -26,7 +26,6 @@ from typing import TYPE_CHECKING, Any, Callable, ClassVar, Dict, Iterator, List,
 
 from structlog import get_logger
 
-from hathor import protos
 from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.transaction.exceptions import (
@@ -256,19 +255,6 @@ class BaseTransaction(ABC):
         :return: A transaction or a block, depending on the class `cls`
 
         :raises ValueError: when the sequence of bytes is incorrect
-        """
-        raise NotImplementedError
-
-    @abstractclassmethod
-    def create_from_proto(cls, tx_proto: protos.BaseTransaction,
-                          storage: Optional['TransactionStorage'] = None) -> 'BaseTransaction':
-        """ Create a Transaction from a protobuf Transaction object.
-
-        :param transaction_proto: Protobuf transaction object
-        :type transaction_proto: :py:class:`hathor.protos.Transaction`
-
-        :return: A transaction or a block, depending on the class `cls`
-        :rtype :py:class:`hathor.transaction.BaseTransaction`
         """
         raise NotImplementedError
 
@@ -996,19 +982,6 @@ class BaseTransaction(ABC):
 
         return ret
 
-    @abstractmethod
-    def to_proto(self, include_metadata: bool = True) -> protos.BaseTransaction:
-        # TODO: make default value for include_metadata consistent with to_json
-        """ Creates a Protobuf object from self
-
-        :param include_metadata: Whether to include metadata, regardless if there is
-        :type include_metadata: bool
-
-        :return: Protobuf object
-        :rtype: :py:class:`hathor.protos.BaseTransaction`
-        """
-        raise NotImplementedError
-
     def validate_tx_error(self) -> Tuple[bool, str]:
         """ Verify if tx is valid and return success and possible error message
 
@@ -1125,31 +1098,6 @@ class TxInput:
             'index': self.index,  # int
             'data': base64.b64encode(self.data).decode('utf-8')  # string
         }
-
-    @classmethod
-    def create_from_proto(cls, input_proto: protos.TxInput) -> 'TxInput':
-        """ Creates a TxInput from a protobuf TxInput object
-
-        :param input_proto: Bytes of a serialized output
-        :return: An input
-        """
-        return cls(
-            tx_id=input_proto.tx_id,
-            index=input_proto.index,
-            data=input_proto.data,
-        )
-
-    def to_proto(self) -> protos.TxInput:
-        """ Creates a Protobuf object from self
-
-        :return: Protobuf object
-        :rtype: :py:class:`hathor.protos.TxInput`
-        """
-        return protos.TxInput(
-            tx_id=self.tx_id,
-            index=self.index,
-            data=self.data,
-        )
 
 
 class TxOutput:
@@ -1271,33 +1219,6 @@ class TxOutput:
 
         return {}
 
-    @classmethod
-    def create_from_proto(cls, output_proto: protos.TxOutput) -> 'TxOutput':
-        """ Creates a TxOutput from a protobuf TxOutput object
-
-        :param output_proto: Bytes of a serialized output
-        :type output_proto: :py:class:`hathor.protos.TxOutput`
-
-        :return: An output
-        :rtype: TxOutput
-        """
-        return cls(
-            value=output_proto.value,
-            script=output_proto.script,
-            token_data=output_proto.token_data,
-        )
-
-    def to_proto(self) -> protos.TxOutput:
-        """ Creates a Protobuf object from self
-
-        :return: Protobuf object
-        """
-        return protos.TxOutput(
-            value=self.value,
-            script=self.script,
-            token_data=self.token_data,
-        )
-
     def to_json(self, *, decode_script: bool = False) -> Dict[str, Any]:
         data: Dict[str, Any] = {}
         data['value'] = self.value
@@ -1335,25 +1256,6 @@ def output_value_to_bytes(number: int) -> bytes:
         return (-number).to_bytes(8, byteorder='big', signed=True)
     else:
         return number.to_bytes(4, byteorder='big', signed=True)  # `signed` makes no difference, but oh well
-
-
-def tx_or_block_from_proto(tx_proto: protos.BaseTransaction,
-                           storage: Optional['TransactionStorage'] = None) -> 'BaseTransaction':
-    from hathor.transaction.block import Block
-    from hathor.transaction.merge_mined_block import MergeMinedBlock
-    from hathor.transaction.token_creation_tx import TokenCreationTransaction
-    from hathor.transaction.transaction import Transaction
-    if tx_proto.HasField('transaction'):
-        return Transaction.create_from_proto(tx_proto, storage=storage)
-    elif tx_proto.HasField('block'):
-        if tx_proto.block.HasField('aux_pow'):
-            return MergeMinedBlock.create_from_proto(tx_proto, storage=storage)
-        else:
-            return Block.create_from_proto(tx_proto, storage=storage)
-    elif tx_proto.HasField('tokenCreationTransaction'):
-        return TokenCreationTransaction.create_from_proto(tx_proto, storage=storage)
-    else:
-        raise ValueError('invalid base_transaction_oneof')
 
 
 def tx_or_block_from_bytes(data: bytes,

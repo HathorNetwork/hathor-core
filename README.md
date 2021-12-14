@@ -32,7 +32,7 @@ For more information about our HTTP API, check out our [API Documentation](https
 
 ## From source-code
 
-First, you need to have Python 3.6 installed. If you don't, we recommend you to install using `pyenv` (check this
+First, you need to have Python >=3.7 installed. If you don't, we recommend you to install using `pyenv` (check this
 [link](https://github.com/pyenv/pyenv#installation)).
 
 ### System dependencies
@@ -59,11 +59,11 @@ First, you need to have Python 3.6 installed. If you don't, we recommend you to 
   brew install pyenv
   ```
 
-  then Python 3.6 (you could check the latest 3.6.x version with `pyenv install --list`):
+  then Python 3.7 (you could check the latest 3.7.x version with `pyenv install --list`):
 
   ```
-  pyenv install 3.6.11
-  pyenv local 3.6.11
+  pyenv install 3.7.11
+  pyenv local 3.7.11
   pip install -U poetry
   ```
 
@@ -75,7 +75,7 @@ First, you need to have Python 3.6 installed. If you don't, we recommend you to 
 - on Windows 10 (using [winget](https://github.com/microsoft/winget-cli)):
 
   ```
-  winget install python-3.6
+  winget install python-3.7
   pip install -U poetry
   ```
 
@@ -96,12 +96,6 @@ poetry install
 
 ```
 poetry install -E rocksdb
-```
-
-Generate protobuf modules:
-
-```
-poetry run make protos
 ```
 
 ### Running the full-node

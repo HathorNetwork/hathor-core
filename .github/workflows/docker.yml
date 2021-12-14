@@ -127,16 +127,10 @@ jobs:
       run: pip -q --no-input install poetry
     - name: Install Poetry dependencies
       run: poetry install -n --no-root
-    - name: Generate protobuf files
-      run: poetry run make protos
     - name: Build source package
-      run: |
-        rm hathor/protos/.gitignore
-        poetry build -f wheel
+      run: poetry build -f wheel
     - name: Generate requirements
-      run: |
-        poetry remove -D grpcio-tools --dry-run  # workaround for Poetry bug
-        poetry export -o requirements.txt -E rocksdb -E sentry
+      run: poetry export -o requirements.txt -E rocksdb -E sentry
     - name: Cache Docker layers
       uses: actions/cache@v2
       with:

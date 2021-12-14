@@ -108,14 +108,14 @@ class TransactionStorage(ABC):
         # Initialize cache for genesis transactions.
         self._genesis_cache: Dict[bytes, BaseTransaction] = {}
 
+        # Key storage attribute to save if the network stored is the expected network
+        self._network_attribute: str = 'network'
+
         # Key storage attribute to save if the full node is running a full verification
         self._running_full_verification_attribute: str = 'running_full_verification'
 
         # Key storage attribute to save if the manager is running
         self._manager_running_attribute: str = 'manager_running'
-
-        # Key storage attribute to save if the node has clean db
-        self._clean_db_attribute: str = 'clean_db'
 
         # Cache of block hash by height
         self._block_height_index = BlockHeightIndex()
@@ -461,7 +461,52 @@ class TransactionStorage(ABC):
 
     def pre_init(self) -> None:
         """Storages can implement this to run code before transaction loading starts"""
-        pass
+        self._check_and_set_network()
+
+    def _check_and_set_network(self) -> None:
+        """Check the network name is as expected and try to set it when none is present"""
+        from hathor.transaction.storage.exceptions import WrongNetworkError
+
+        network = settings.NETWORK_NAME
+        stored_network = self.get_network()
+
+        if stored_network is None:
+            # no network is set, let's try to infer it
+            self._checked_set_network(network)
+        elif stored_network != network:
+            # the stored network does not match, something is wrong
+            raise WrongNetworkError(f'Databases created on {stored_network}, expected {network}')
+        else:
+            # the network is what is expected, nothing to do here
+            pass
+
+    def _checked_set_network(self, network: str) -> None:
+        """Tries to set the network name on storage, while checking if we can safely do so."""
+        from hathor.transaction.storage.exceptions import WrongNetworkError
+
+        if self.is_empty():
+            # we're fresh out of a new database, let's just make sure we don't have the wrong genesis
+            for tx in self.get_all_transactions():
+                # XXX: maybe this can happen if you start a fresh database on one network and the genesis is saved
+                #      somehow (is this even possible?) and you then start on a different network, hopefully this
+                #      can be safely removed in a few releases
+                if not tx.is_genesis:
+                    raise WrongNetworkError(f'Transaction {tx.hash_hex} is not from {network}')
+            self.set_network(network)
+        else:
+            # XXX: the database IS NOT empty, what do we do?
+            #      - for the sake of compatibility we will accept this on the mainnet, and set it as mainnet,
+            #        this is mostly so everyone running on the mainnet has a no-interaction auto-migration
+            #      - for the sake of cleaning up the mess of foxtrot->golf testnet migration, we'll refuse to use
+            #        the database when it is not the mainnet
+            #      - in a few releases we can be confident that everyone running the network has made a smooth
+            #        upgrade and we should be able to remove these workarounds and refuse older databases, and
+            #        instead indiviudally assist (like suggesting a snapshot or fresh start) to anyone that is
+            #        unable to use a very old database
+            if network == 'mainnet':
+                self.set_network(network)
+            else:
+                raise WrongNetworkError(f'This database is not suitable to be used on {network}')
 
     def get_best_block(self) -> Block:
         """The block with highest score or one of the blocks with highest scores. Can be used for mining."""
@@ -901,6 +946,16 @@ class TransactionStorage(ABC):
         """
         raise NotImplementedError
 
+    def get_network(self) -> Optional[str]:
+        """ Return the stored network name
+        """
+        return self.get_value(self._network_attribute)
+
+    def set_network(self, network: str) -> None:
+        """ Save the network name
+        """
+        return self.add_value(self._network_attribute, network)
+
     def start_full_verification(self) -> None:
         """ Save full verification on storage
         """
@@ -931,16 +986,6 @@ class TransactionStorage(ABC):
         """ Return if the manager is running or was running and a sudden crash stopped the full node
         """
         return self.get_value(self._manager_running_attribute) == '1'
-
-    def set_db_clean(self) -> None:
-        """ Save on storage that the db has clean data (without voided blocks/txs)
-        """
-        self.add_value(self._clean_db_attribute, '1')
-
-    def is_db_clean(self) -> bool:
-        """ Return if the node has a clean db (without voided blocks/txs)
-        """
-        return self.get_value(self._clean_db_attribute) == '1'
 
     def add_new_to_block_height_index(self, height: int, block_hash: bytes, timestamp: int) -> None:
         """Add a new block to the height index that must not result in a re-org"""
