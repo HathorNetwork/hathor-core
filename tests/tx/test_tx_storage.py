@@ -12,7 +12,6 @@ from twisted.trial import unittest
 
 from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
-from hathor.indexes import TokensIndex, WalletIndex
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import (
@@ -69,8 +68,8 @@ class BaseTransactionStorageTest(unittest.TestCase):
         wallet.unlock(b'teste')
         self.manager = HathorManager(self.reactor, tx_storage=self.tx_storage, wallet=wallet)
 
-        self.tx_storage.wallet_index = WalletIndex(self.manager.pubsub)
-        self.tx_storage.tokens_index = TokensIndex()
+        self.tx_storage.indexes.enable_addresses_index(self.manager.pubsub)
+        self.tx_storage.indexes.enable_tokens_index()
 
         block_parents = [tx.hash for tx in chain(self.genesis_blocks, self.genesis_txs)]
         output = TxOutput(200, P2PKH.create_output_script(BURN_ADDRESS))
@@ -183,24 +182,24 @@ class BaseTransactionStorageTest(unittest.TestCase):
         # Testing add and remove from cache
         if self.tx_storage.with_index:
             if obj.is_block:
-                self.assertTrue(obj.hash in self.tx_storage.block_index.tips_index.tx_last_interval)
+                self.assertTrue(obj.hash in self.tx_storage.indexes.block_tips.tx_last_interval)
             else:
-                self.assertTrue(obj.hash in self.tx_storage.tx_index.tips_index.tx_last_interval)
+                self.assertTrue(obj.hash in self.tx_storage.indexes.tx_tips.tx_last_interval)
 
         self.tx_storage.del_from_indexes(obj)
 
         if self.tx_storage.with_index:
             if obj.is_block:
-                self.assertFalse(obj.hash in self.tx_storage.block_index.tips_index.tx_last_interval)
+                self.assertFalse(obj.hash in self.tx_storage.indexes.block_tips.tx_last_interval)
             else:
-                self.assertFalse(obj.hash in self.tx_storage.tx_index.tips_index.tx_last_interval)
+                self.assertFalse(obj.hash in self.tx_storage.indexes.tx_tips.tx_last_interval)
 
         self.tx_storage.add_to_indexes(obj)
         if self.tx_storage.with_index:
             if obj.is_block:
-                self.assertTrue(obj.hash in self.tx_storage.block_index.tips_index.tx_last_interval)
+                self.assertTrue(obj.hash in self.tx_storage.indexes.block_tips.tx_last_interval)
             else:
-                self.assertTrue(obj.hash in self.tx_storage.tx_index.tips_index.tx_last_interval)
+                self.assertTrue(obj.hash in self.tx_storage.indexes.tx_tips.tx_last_interval)
 
     def test_save_block(self):
         self.validate_save(self.block)
@@ -238,10 +237,10 @@ class BaseTransactionStorageTest(unittest.TestCase):
                 self._validate_not_in_index(tx, self.tx_storage.tx_index)
 
         # Check wallet index.
-        wallet_index = self.tx_storage.wallet_index
-        addresses = wallet_index._get_addresses(tx)
+        addresses_index = self.tx_storage.indexes.addresses
+        addresses = addresses_index._get_addresses(tx)
         for address in addresses:
-            self.assertNotIn(tx.hash, wallet_index.index[address])
+            self.assertNotIn(tx.hash, addresses_index.index[address])
 
         # TODO Check self.tx_storage.tokens_index
 

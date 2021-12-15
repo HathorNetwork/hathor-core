@@ -110,7 +110,8 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
     detailed_tokens = []
     for token_uid_hex in serialized['tokens']:
         assert tx.storage is not None
-        tokens_index = tx.storage.tokens_index
+        assert tx.storage.indexes is not None
+        tokens_index = tx.storage.indexes.tokens
         assert tokens_index is not None
         token_info = tokens_index.get_token_info(bytes.fromhex(token_uid_hex))
         detailed_tokens.append({'uid': token_uid_hex, 'name': token_info.name, 'symbol': token_info.symbol})
@@ -166,7 +167,7 @@ class TransactionResource(resource.Resource):
         """ Get 'id' (hash) from request.args
             Returns the tx with this hash or {'success': False} if hash is invalid or tx does not exist
         """
-        if not self.manager.tx_storage.tokens_index:
+        if not self.manager.tx_storage.indexes.tokens:
             request.setResponseCode(503)
             return json.dumps({'success': False}).encode('utf-8')
 

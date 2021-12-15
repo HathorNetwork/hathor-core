@@ -52,7 +52,8 @@ class TokenHistoryResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        if not self.manager.tx_storage.tokens_index:
+        tokens_index = self.manager.tx_storage.indexes.tokens
+        if not tokens_index:
             request.setResponseCode(503)
             return json.dumps({'success': False}).encode('utf-8')
 
@@ -105,13 +106,13 @@ class TokenHistoryResource(resource.Resource):
                 }).encode('utf-8')
 
             if page == 'previous':
-                elements, has_more = self.manager.tx_storage.tokens_index.get_newer_transactions(
+                elements, has_more = tokens_index.get_newer_transactions(
                         token_uid, ref_timestamp, hash_bytes, count)
             else:
-                elements, has_more = self.manager.tx_storage.tokens_index.get_older_transactions(
+                elements, has_more = tokens_index.get_older_transactions(
                         token_uid, ref_timestamp, hash_bytes, count)
         else:
-            elements, has_more = self.manager.tx_storage.tokens_index.get_newest_transactions(token_uid, count)
+            elements, has_more = tokens_index.get_newest_transactions(token_uid, count)
 
         transactions = [self.manager.tx_storage.get_transaction(element) for element in elements]
         serialized = [tx.to_json_extended() for tx in transactions]

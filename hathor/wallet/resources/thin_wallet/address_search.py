@@ -85,9 +85,9 @@ class AddressSearchResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        wallet_index = self.manager.tx_storage.wallet_index
+        addresses_index = self.manager.tx_storage.indexes.addresses
 
-        if not wallet_index:
+        if not addresses_index:
             request.setResponseCode(503)
             return json.dumps({'success': False}, indent=4).encode('utf-8')
 
@@ -128,7 +128,7 @@ class AddressSearchResource(resource.Resource):
                     'message': 'Token uid is not a valid hexadecimal value.'
                 }).encode('utf-8')
 
-        hashes = wallet_index.get_from_address(address)
+        hashes = addresses_index.get_from_address(address)
         # XXX To do a timestamp sorting, so the pagination works better
         # we must get all transactions and sort them
         # This is not optimal for performance

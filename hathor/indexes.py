@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from abc import ABC, abstractmethod
 from collections import defaultdict
 from math import inf
 from typing import TYPE_CHECKING, DefaultDict, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple, cast
@@ -37,64 +38,124 @@ class TransactionIndexElement(NamedTuple):
     hash: bytes
 
 
-class IndexesManager:
+class IndexesManager(ABC):
+    all_tips: 'TipsIndex'
+    block_tips: 'TipsIndex'
+    tx_tips: 'TipsIndex'
+
+    sorted_all: 'TimestampIndex'
+    sorted_blocks: 'TimestampIndex'
+    sorted_txs: 'TimestampIndex'
+
+    addresses: Optional['AddressesIndex']
+    tokens: Optional['TokensIndex']
+
+    @abstractmethod
+    def enable_addresses_index(self, pubsub: 'PubSubManager') -> None:
+        """Enable addresses index. It does nothing if it has already been enabled."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def enable_tokens_index(self) -> None:
+        """Enable tokens index. It does nothing if it has already been enabled."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def add_tx(self, tx: BaseTransaction) -> bool:
+        """Add a transaction to the indexes.
+
+        :param tx: Transaction to be added
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def del_tx(self, tx: BaseTransaction, *, remove_all: bool = False, relax_assert: bool = False) -> None:
+        """ Delete a transaction from the indexes
+
+        :param tx: Transaction to be deleted
+        """
+        raise NotImplementedError
+
+
+class MemoryIndexesManager(IndexesManager):
     """ IndexesManager manages all the indexes that we will have in the system
 
         The ideia is for the manager to handle all method calls to indexes,
         so it will know which index is better to use in each moment
     """
 
-    def __init__(self, with_tips_index: bool = True) -> None:
-        self.tips_index = TipsIndex() if with_tips_index else None
-        self.txs_index = TransactionsIndex()
+    def __init__(self) -> None:
+        self.all_tips = TipsIndex()
+        self.block_tips = TipsIndex()
+        self.tx_tips = TipsIndex()
+
+        self.sorted_all = TimestampIndex()
+        self.sorted_blocks = TimestampIndex()
+        self.sorted_txs = TimestampIndex()
+
+        self.addresses: Optional[AddressesIndex] = None
+        self.tokens: Optional[TokensIndex] = None
+
+    def enable_addresses_index(self, pubsub: 'PubSubManager') -> None:
+        """Enable addresses index."""
+        if self.addresses is None:
+            self.addresses = AddressesIndex(pubsub)
+
+    def enable_tokens_index(self) -> None:
+        """Enable tokens index."""
+        if self.tokens is None:
+            self.tokens = TokensIndex()
 
     def add_tx(self, tx: BaseTransaction) -> bool:
         """ Add a transaction to the indexes
 
         :param tx: Transaction to be added
         """
-        r1 = self.txs_index.add_tx(tx)
-        if self.tips_index is not None:
-            r2 = self.tips_index.add_tx(tx)
-            assert r1 == r2
-        return r1
+        # These two calls return False when a transaction changes from
+        # voided to executed and vice-versa.
+        r1 = self.all_tips.add_tx(tx)
+        r2 = self.sorted_all.add_tx(tx)
+        assert r1 == r2
 
-    def del_tx(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
+        if tx.is_block:
+            r3 = self.block_tips.add_tx(tx)
+            r4 = self.sorted_blocks.add_tx(tx)
+            assert r3 == r4
+        else:
+            r3 = self.tx_tips.add_tx(tx)
+            r4 = self.sorted_txs.add_tx(tx)
+            assert r3 == r4
+
+        if self.addresses:
+            self.addresses.add_tx(tx)
+        if self.tokens:
+            self.tokens.add_tx(tx)
+
+        return r3
+
+    def del_tx(self, tx: BaseTransaction, *, remove_all: bool = False, relax_assert: bool = False) -> None:
         """ Delete a transaction from the indexes
 
         :param tx: Transaction to be deleted
         """
-        self.txs_index.del_tx(tx)
-        if self.tips_index is not None:
-            self.tips_index.del_tx(tx, relax_assert=relax_assert)
+        if remove_all:
+            # We delete from indexes in two cases: (i) mark tx as voided, and (ii) remove tx.
+            # We only remove tx from all_tips and sorted_all when it is removed from the storage.
+            # For clarity, when a tx is marked as voided, it is not removed from all_tips and sorted_all.
+            self.all_tips.del_tx(tx, relax_assert=relax_assert)
+            self.sorted_all.del_tx(tx)
+            if self.addresses:
+                self.addresses.remove_tx(tx)
 
-    def get_newest(self, count: int) -> Tuple[List[bytes], bool]:
-        """ Get transactions or blocks in txs_index from the newest to the oldest
+        if tx.is_block:
+            self.block_tips.del_tx(tx, relax_assert=relax_assert)
+            self.sorted_blocks.del_tx(tx)
+        else:
+            self.tx_tips.del_tx(tx, relax_assert=relax_assert)
+            self.sorted_txs.del_tx(tx)
 
-        :param count: Number of transactions or blocks to be returned
-        :return: List of tx hashes and a boolean indicating if has more txs
-        """
-        return self.txs_index.get_newest(count)
-
-    def get_older(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[bytes], bool]:
-        """ Get transactions or blocks in txs_index from the timestamp/hash_bytes reference to the oldest
-
-        :param timestamp: Timestamp reference to start the search
-        :param hash_bytes: Hash reference to start the search
-        :param count: Number of transactions or blocks to be returned
-        :return: List of tx hashes and a boolean indicating if has more txs
-        """
-        return self.txs_index.get_older(timestamp, hash_bytes, count)
-
-    def get_newer(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[bytes], bool]:
-        """ Get transactions or blocks in txs_index from the timestamp/hash_bytes reference to the newest
-
-        :param timestamp: Timestamp reference to start the search
-        :param hash_bytes: Hash reference to start the search
-        :param count: Number of transactions or blocks to be returned
-        :return: List of tx hashes and a boolean indicating if has more txs
-        """
-        return self.txs_index.get_newer(timestamp, hash_bytes, count)
+        if self.tokens:
+            self.tokens.del_tx(tx)
 
 
 class TipsIndex:
@@ -256,7 +317,7 @@ def get_newer_sorted_key_list(key_list: 'SortedKeyList[TransactionIndexElement]'
     return [tx_index.hash for tx_index in txs], last_idx < len(key_list)
 
 
-class TransactionsIndex:
+class TimestampIndex:
     """ Index of transactions sorted by their timestamps.
     """
 
@@ -355,7 +416,7 @@ class TransactionsIndex:
         return idx
 
 
-class WalletIndex:
+class AddressesIndex:
     """ Index of inputs/outputs by address
     """
     def __init__(self, pubsub: Optional['PubSubManager'] = None) -> None:

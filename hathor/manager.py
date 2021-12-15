@@ -29,7 +29,6 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.exception import HathorError, InvalidNewTransaction
-from hathor.indexes import TokensIndex, WalletIndex
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
@@ -149,8 +148,9 @@ class HathorManager:
         self.tx_storage = tx_storage
         self.tx_storage.pubsub = self.pubsub
         if wallet_index and self.tx_storage.with_index:
-            self.tx_storage.wallet_index = WalletIndex(self.pubsub)
-            self.tx_storage.tokens_index = TokensIndex()
+            assert self.tx_storage.indexes is not None
+            self.tx_storage.indexes.enable_addresses_index(self.pubsub)
+            self.tx_storage.indexes.enable_tokens_index()
 
         self.metrics = Metrics(
             pubsub=self.pubsub,

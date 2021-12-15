@@ -49,11 +49,16 @@ class AddressHistoryResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
 
-        if not self.manager.tx_storage.wallet_index:
+        if not self.manager.tx_storage.indexes.addresses:
             request.setResponseCode(503)
             return json.dumps({'success': False}, indent=4).encode('utf-8')
 
-        post_data = json.loads(request.content.read().decode('utf-8'))
+        raw_body_bytes = request.content.read() or b''
+        raw_body_str = raw_body_bytes.decode('utf-8')
+        try:
+            post_data = json.loads(raw_body_str)
+        except json.JSONDecodeError:
+            return get_missing_params_msg('invalid json')
 
         if 'addresses' not in post_data:
             return get_missing_params_msg('addresses')
@@ -111,7 +116,9 @@ class AddressHistoryResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        if not self.manager.tx_storage.wallet_index:
+        addresses_index = self.manager.tx_storage.indexes.addresses
+
+        if not addresses_index:
             request.setResponseCode(503)
             return json.dumps({'success': False}, indent=4).encode('utf-8')
 
@@ -146,6 +153,8 @@ class AddressHistoryResource(resource.Resource):
                     'message': 'Invalid hash {}'.format(ref_hash)
                 }, indent=4).encode('utf-8')
 
+        addresses_index = self.manager.tx_storage.indexes.addresses
+
         # Pagination variables
         has_more = False
         first_hash = None
@@ -170,7 +179,7 @@ class AddressHistoryResource(resource.Resource):
                     'message': 'The address {} is invalid'.format(address)
                 }).encode('utf-8')
 
-            hashes = self.manager.tx_storage.wallet_index.get_sorted_from_address(address)
+            hashes = addresses_index.get_sorted_from_address(address)
             start_index = 0
             if ref_hash_bytes and idx == 0:
                 # It's not the first request, so we must continue from the hash
@@ -238,6 +247,8 @@ class AddressHistoryResource(resource.Resource):
         if b'addresses[]' not in request.args:
             return get_missing_params_msg('addresses[]')
 
+        addresses_index = self.manager.tx_storage.indexes.addresses
+
         addresses = request.args[b'addresses[]']
         history = []
         seen: Set[bytes] = set()
@@ -251,7 +262,7 @@ class AddressHistoryResource(resource.Resource):
                     'message': 'The address {} is invalid'.format(address)
                 }).encode('utf-8')
 
-            for tx_hash in self.manager.tx_storage.wallet_index.get_from_address(address):
+            for tx_hash in addresses_index.get_from_address(address):
                 tx = self.manager.tx_storage.get_transaction(tx_hash)
                 if tx_hash not in seen:
                     seen.add(tx_hash)

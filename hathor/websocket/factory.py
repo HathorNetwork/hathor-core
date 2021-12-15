@@ -23,7 +23,7 @@ from twisted.internet import reactor
 from twisted.internet.task import LoopingCall
 
 from hathor.conf import HathorSettings
-from hathor.indexes import WalletIndex
+from hathor.indexes import AddressesIndex
 from hathor.metrics import Metrics
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.pubsub import HathorEvents
@@ -82,7 +82,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
     def buildProtocol(self, addr):
         return self.protocol(self)
 
-    def __init__(self, metrics: Optional[Metrics] = None, wallet_index: Optional[WalletIndex] = None):
+    def __init__(self, metrics: Optional[Metrics] = None, addresses_index: Optional[AddressesIndex] = None):
         """
         :param metrics: If not given, a new one is created.
         :type metrics: :py:class:`hathor.metrics.Metrics`
@@ -101,7 +101,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         self.buffer_deques: Dict[str, Deque[Dict[str, Any]]] = {}
 
         self.metrics = metrics
-        self.wallet_index = wallet_index
+        self.addresses_index = addresses_index
 
         self.is_running = False
 
@@ -320,7 +320,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             payload = json.dumps({'message': 'Reached maximum number of subscribed '
                                              f'addresses ({settings.WS_MAX_SUBS_ADDRS_CONN}).',
                                   'type': 'subscribe_address', 'success': False}).encode('utf-8')
-        elif self.wallet_index and _count_empty(subs, self.wallet_index) >= settings.WS_MAX_SUBS_ADDRS_EMPTY:
+        elif self.addresses_index and _count_empty(subs, self.addresses_index) >= settings.WS_MAX_SUBS_ADDRS_EMPTY:
             payload = json.dumps({'message': 'Reached maximum number of subscribed '
                                              f'addresses without output ({settings.WS_MAX_SUBS_ADDRS_EMPTY}).',
                                   'type': 'subscribe_address', 'success': False}).encode('utf-8')
@@ -361,6 +361,6 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             self._remove_connection_from_address_dict(connection, address)
 
 
-def _count_empty(addresses: Set[str], wallet_index: WalletIndex) -> int:
+def _count_empty(addresses: Set[str], addresses_index: AddressesIndex) -> int:
     """ Count how many of the addresses given are empty (have no outputs)."""
-    return sum(1 for addr in addresses if wallet_index.is_address_empty(addr))
+    return sum(1 for addr in addresses if addresses_index.is_address_empty(addr))
