@@ -116,12 +116,6 @@ Then, install `hathor-python`:
     cd hathor-python/
     pipenv sync
 
-Generate grpc/protobuf modules:
-
-.. code-block:: shell
-
-    pipenv run make protos
-
 Then, generate your `peer_id.json`:
 
 .. code-block:: shell
@@ -141,12 +135,6 @@ Get up to date with dependencies added by new commits, after a `git pull` do:
 .. code-block:: shell
 
     pipenv sync -d
-
-And regenerate grpc/protobuf, if needed:
-
-.. code-block:: shell
-
-    pipenv run make protos
 
 For adding new runtime dependencies:
 

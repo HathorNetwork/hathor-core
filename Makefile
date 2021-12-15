@@ -80,7 +80,7 @@ fmt: yapf isort
 
 .PHONY: yapf
 yapf:
-	yapf -rip $(py_sources) -e \*_pb2.py,\*_pb2_grpc.py
+	yapf -rip $(py_sources)
 
 .PHONY: isort
 isort:
@@ -113,10 +113,8 @@ requirements.txt:
 version := $(shell poetry version -s)
 wheel_file := "dist/hathor-$(version)-py3-none-any.whl"
 
-$(wheel_file): protos
-	rm -f hathor/protos/.gitignore
+$(wheel_file):
 	poetry build -f wheel
-	git checkout hathor/protos/.gitignore
 
 .PHONY: build
 build: requirements.txt $(wheel_file)
