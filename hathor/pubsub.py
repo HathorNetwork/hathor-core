@@ -149,7 +149,7 @@ class PubSubManager:
         if fn in self._subscribers[key]:
             self._subscribers[key].remove(fn)
 
-    def publish(self, key: HathorEvents, **kwargs: Any) -> None:
+    def publish(self, key: HathorEvents, *, call_now: bool = False, **kwargs: Any) -> None:
         """Publish a new event.
 
         :param key: Key of the new event.
@@ -162,7 +162,7 @@ class PubSubManager:
 
         args = EventArguments(**kwargs)
         for fn in self._subscribers[key]:
-            if reactor_thread == ReactorThread.NOT_RUNNING:
+            if call_now or reactor_thread == ReactorThread.NOT_RUNNING:
                 fn(key, args)
             elif reactor_thread == ReactorThread.MAIN_THREAD:
                 self.reactor.callLater(0, fn, key, args)

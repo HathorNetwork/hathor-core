@@ -17,7 +17,7 @@ from collections import defaultdict
 from enum import Enum
 from itertools import chain
 from math import inf
-from typing import Any, DefaultDict, Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, DefaultDict, Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
 
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
 from pycoin.key.Key import Key
@@ -34,6 +34,9 @@ from hathor.transaction.scripts import P2PKH, create_output_script, parse_addres
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.transaction import Transaction
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager
 
 settings = HathorSettings()
 logger = get_logger()
@@ -96,6 +99,8 @@ class BaseWallet:
         """
         self.log = logger.new()
 
+        self.manager: Optional['HathorManager'] = None
+
         # Dict[token_id, Dict[Tuple[tx_id, index], UnspentTx]]
         self.unspent_txs: DefaultDict[bytes, Dict[Tuple[bytes, int], UnspentTx]] = defaultdict(dict)
 
@@ -124,6 +129,7 @@ class BaseWallet:
         self.test_mode: bool = False
 
         self.pubsub_events = [
+            HathorEvents.NETWORK_NEW_TX_ACCEPTED,
             HathorEvents.STORAGE_TX_VOIDED,
             HathorEvents.STORAGE_TX_WINNER,
         ]
@@ -132,6 +138,11 @@ class BaseWallet:
             from twisted.internet import reactor as twisted_reactor
             reactor = twisted_reactor
         self.reactor = reactor
+
+    def set_manager(self, manager: 'HathorManager') -> None:
+        self.manager = manager
+        self.pubsub = manager.pubsub
+        self.reactor = manager.reactor
 
     def _manually_initialize(self) -> None:
         pass
@@ -168,7 +179,9 @@ class BaseWallet:
 
     def handle_publish(self, key: HathorEvents, args: EventArguments) -> None:
         data = args.__dict__
-        if key == HathorEvents.STORAGE_TX_VOIDED:
+        if key == HathorEvents.NETWORK_NEW_TX_ACCEPTED:
+            self.on_new_tx(data['tx'])
+        elif key == HathorEvents.STORAGE_TX_VOIDED:
             self.on_tx_voided(data['tx'])
         elif key == HathorEvents.STORAGE_TX_WINNER:
             self.on_tx_winner(data['tx'])
