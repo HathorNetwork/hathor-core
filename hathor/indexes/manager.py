@@ -19,7 +19,9 @@ from structlog import get_logger
 
 from hathor.indexes.address_index import AddressIndex
 from hathor.indexes.memory_address_index import MemoryAddressIndex
+from hathor.indexes.memory_tokens_index import MemoryTokensIndex
 from hathor.indexes.rocksdb_address_index import RocksDBAddressIndex
+from hathor.indexes.rocksdb_tokens_index import RocksDBTokensIndex
 from hathor.indexes.timestamp_index import TimestampIndex
 from hathor.indexes.tips_index import TipsIndex
 from hathor.indexes.tokens_index import TokensIndex
@@ -34,16 +36,16 @@ logger = get_logger()
 
 
 class IndexesManager(ABC):
-    all_tips: 'TipsIndex'
-    block_tips: 'TipsIndex'
-    tx_tips: 'TipsIndex'
+    all_tips: TipsIndex
+    block_tips: TipsIndex
+    tx_tips: TipsIndex
 
-    sorted_all: 'TimestampIndex'
-    sorted_blocks: 'TimestampIndex'
-    sorted_txs: 'TimestampIndex'
+    sorted_all: TimestampIndex
+    sorted_blocks: TimestampIndex
+    sorted_txs: TimestampIndex
 
-    addresses: Optional['AddressIndex']
-    tokens: Optional['TokensIndex']
+    addresses: Optional[AddressIndex]
+    tokens: Optional[TokensIndex]
 
     @abstractmethod
     def enable_address_index(self, pubsub: 'PubSubManager') -> None:
@@ -99,7 +101,7 @@ class MemoryIndexesManager(IndexesManager):
     def enable_tokens_index(self) -> None:
         """Enable tokens index."""
         if self.tokens is None:
-            self.tokens = TokensIndex()
+            self.tokens = MemoryTokensIndex()
 
     def add_tx(self, tx: BaseTransaction) -> bool:
         """ Add a transaction to the indexes
@@ -162,3 +164,8 @@ class RocksDBIndexesManager(MemoryIndexesManager):
         """Enable address index."""
         if self.addresses is None:
             self.addresses = RocksDBAddressIndex(self._db, pubsub=pubsub)
+
+    def enable_tokens_index(self) -> None:
+        """Enable tokens index."""
+        if self.tokens is None:
+            self.tokens = RocksDBTokensIndex(self._db)

@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Iterable, List, Optional, Tuple
 from structlog import get_logger
 
 from hathor.indexes.address_index import AddressIndex
+from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
 from hathor.pubsub import HathorEvents
 from hathor.transaction import BaseTransaction
 
@@ -30,7 +31,7 @@ logger = get_logger()
 _CF_NAME_ADDRESS_INDEX = b'address-index'
 
 
-class RocksDBAddressIndex(AddressIndex):
+class RocksDBAddressIndex(AddressIndex, RocksDBIndexUtils):
     """ Index of inputs/outputs by address.
 
     This index uses rocksdb and the following key format:
@@ -38,47 +39,23 @@ class RocksDBAddressIndex(AddressIndex):
         key = [address][tx.timestamp][tx.hash]
               |--34b--||--4 bytes---||--32b--|
 
-    It works nicely because rocksdb uses a tree sorted by key under the hoods.
+    It works nicely because rocksdb uses a tree sorted by key under the hood.
 
     The timestamp must be serialized in big-endian, so ts1 > ts2 implies that bytes(ts1) > bytes(ts2),
     hence the transactions are sorted by timestamp.
     """
     def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None,
                  pubsub: Optional['PubSubManager'] = None) -> None:
+        RocksDBIndexUtils.__init__(self, db)
         self.log = logger.new()
-        self._db = db
 
         # column family stuff
         self._cf_name = cf_name or _CF_NAME_ADDRESS_INDEX
-        self._reset_cf()
+        self._cf = self._fresh_cf(self._cf_name)
 
         self.pubsub = pubsub
         if self.pubsub:
             self.subscribe_pubsub_events()
-
-    def _reset_cf(self) -> None:
-        """Ensure we have a working and fresh column family"""
-        import rocksdb
-
-        log_cf = self.log.new(cf=self._cf_name.decode('ascii'))
-        _cf = self._db.get_column_family(self._cf_name)
-        # XXX: dropping column because initialization currently expects a fresh index
-        if _cf is not None:
-            old_id = _cf.id
-            log_cf.debug('drop existing column family')
-            self._db.drop_column_family(_cf)
-        else:
-            old_id = None
-            log_cf.debug('no need to drop column family')
-        del _cf
-        log_cf.debug('create fresh column family')
-        _cf = self._db.create_column_family(self._cf_name, rocksdb.ColumnFamilyOptions())
-        new_id = _cf.id
-        assert _cf is not None
-        assert _cf.is_valid
-        assert new_id != old_id
-        self._cf = _cf
-        log_cf.debug('got column family', is_valid=_cf.is_valid, id=_cf.id, old_id=old_id)
 
     def _to_key(self, address: str, tx: Optional[BaseTransaction] = None) -> bytes:
         import struct

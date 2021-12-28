@@ -114,7 +114,11 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
         tokens_index = tx.storage.indexes.tokens
         assert tokens_index is not None
         token_info = tokens_index.get_token_info(bytes.fromhex(token_uid_hex))
-        detailed_tokens.append({'uid': token_uid_hex, 'name': token_info.name, 'symbol': token_info.symbol})
+        detailed_tokens.append({
+            'uid': token_uid_hex,
+            'name': token_info.get_name(),
+            'symbol': token_info.get_symbol(),
+        })
 
     serialized['tokens'] = detailed_tokens
 

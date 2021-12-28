@@ -11,6 +11,9 @@ from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_new_transa
 class BaseTransactionTest(_BaseResourceTest._ResourceTest):
     __test__ = False
 
+    # XXX: using memory storage so that we can more easily manipulate the tokens-index for a test
+    use_memory_storage = True
+
     def setUp(self):
         super().setUp()
         self.web = StubSite(TransactionResource(self.manager))
@@ -119,13 +122,15 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         tx_input = Transaction.create_from_struct(bytes.fromhex(tx_input_hex), self.manager.tx_storage)
         self.manager.tx_storage.save_transaction(tx_input)
 
+        # XXX: this is completely dependant on MemoryTokensIndex implementation, hence use_memory_storage=True
         token_bytes1 = bytes.fromhex('001c382847d8440d05da95420bee2ebeb32bc437f82a9ae47b0745c8a29a7b0d')
-        status = self.manager.tx_storage.indexes.tokens.tokens[token_bytes1]
+        status = self.manager.tx_storage.indexes.tokens._tokens[token_bytes1]
         status.name = 'Test Coin'
         status.symbol = 'TSC'
 
+        # XXX: this is completely dependant on MemoryTokensIndex implementation, hence use_memory_storage=True
         token_bytes2 = bytes.fromhex('007231eee3cb6160d95172a409d634d0866eafc8775f5729fff6a61e7850aba5')
-        status2 = self.manager.tx_storage.indexes.tokens.tokens[token_bytes2]
+        status2 = self.manager.tx_storage.indexes.tokens._tokens[token_bytes2]
         status2.name = 'NewCoin'
         status2.symbol = 'NCN'
 
@@ -208,8 +213,9 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
 
         # Both inputs are the same as the last parent, so no need to manually add them
 
+        # XXX: this is completely dependant on MemoryTokensIndex implementation
         token_bytes1 = bytes.fromhex('000023b318c91dcfd4b967b205dc938f9f5e2fd5114256caacfb8f6dd13db330')
-        status = self.manager.tx_storage.indexes.tokens.tokens[token_bytes1]
+        status = self.manager.tx_storage.indexes.tokens._tokens[token_bytes1]
         status.name = 'Wat wat'
         status.symbol = 'WAT'
 

@@ -107,7 +107,7 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: List[Tuple[Transaction, int
 
 
 def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False,
-                            tx: Optional[Transaction] = None) -> Transaction:
+                            tx: Optional[Transaction] = None, weight: float = 1) -> Transaction:
     if tx is None:
         tx_candidates = manager.get_new_tx_parents()
         genesis = manager.tx_storage.get_all_genesis()
@@ -142,7 +142,7 @@ def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = 
 
     tx2 = wallet.prepare_transaction(Transaction, inputs, outputs)
     tx2.storage = manager.tx_storage
-    tx2.weight = 1
+    tx2.weight = weight
     tx2.timestamp = max(tx.timestamp + 1, int(manager.reactor.seconds()))
 
     if use_same_parents:
@@ -155,8 +155,8 @@ def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = 
 
 
 def add_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False,
-                            tx: Optional[Transaction] = None) -> Transaction:
-    tx = gen_new_double_spending(manager, use_same_parents=use_same_parents, tx=tx)
+                            tx: Optional[Transaction] = None, weight: float = 1) -> Transaction:
+    tx = gen_new_double_spending(manager, use_same_parents=use_same_parents, tx=tx, weight=weight)
     manager.propagate_tx(tx, fails_silently=False)
     return tx
 

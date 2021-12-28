@@ -60,6 +60,7 @@ class SyncBridgeParams:
 class TestCase(unittest.TestCase):
     _enable_sync_v1: bool
     _enable_sync_v2: bool
+    use_memory_storage: bool = USE_MEMORY_STORAGE
 
     def setUp(self):
         _set_test_mode(TestMode.TEST_ALL_WEIGHT)
@@ -124,7 +125,7 @@ class TestCase(unittest.TestCase):
             if unlock_wallet:
                 wallet.unlock(b'MYPASS')
         if tx_storage is None:
-            if USE_MEMORY_STORAGE:
+            if self.use_memory_storage:
                 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
                 tx_storage = TransactionMemoryStorage()
             else:
