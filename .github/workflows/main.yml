@@ -39,6 +39,13 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python }}
+    - name: Prepare vars
+      shell: python
+      run: |
+        import os
+        with open(os.environ['GITHUB_ENV'], 'a') as f:
+            if '${{ matrix.os }}'.startswith('windows'):
+                print('HATHOR_TEST_MEMORY_STORAGE=true', file=f)
     - name: Install Ubuntu dependencies
       if: matrix.os == 'ubuntu-latest'
       run: sudo apt-get -y -q install graphviz librocksdb-dev libsnappy-dev liblz4-dev

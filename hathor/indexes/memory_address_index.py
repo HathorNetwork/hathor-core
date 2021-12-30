@@ -13,22 +13,21 @@
 # limitations under the License.
 
 from collections import defaultdict
-from typing import TYPE_CHECKING, DefaultDict, Iterable, List, Optional, Set
+from typing import TYPE_CHECKING, DefaultDict, List, Optional, Set
 
 from structlog import get_logger
 
+from hathor.indexes.address_index import AddressIndex
 from hathor.pubsub import HathorEvents
 from hathor.transaction import BaseTransaction
-from hathor.transaction.scripts import parse_address_script
 
 if TYPE_CHECKING:  # pragma: no cover
     from hathor.pubsub import EventArguments, PubSubManager
-    from hathor.transaction import TxOutput
 
 logger = get_logger()
 
 
-class AddressesIndex:
+class MemoryAddressIndex(AddressIndex):
     """ Index of inputs/outputs by address
     """
     def __init__(self, pubsub: Optional['PubSubManager'] = None) -> None:
@@ -46,45 +45,12 @@ class AddressesIndex:
         for event in events:
             self.pubsub.subscribe(event, self.handle_tx_event)
 
-    def _get_addresses(self, tx: BaseTransaction) -> Set[str]:
-        """ Return a set of addresses collected from tx's inputs and outputs.
-        """
-        assert tx.storage is not None
-        addresses: Set[str] = set()
-
-        def add_address_from_output(output: 'TxOutput') -> None:
-            script_type_out = parse_address_script(output.script)
-            if script_type_out:
-                address = script_type_out.address
-                addresses.add(address)
-
-        for txin in tx.inputs:
-            tx2 = tx.storage.get_transaction(txin.tx_id)
-            txout = tx2.outputs[txin.index]
-            add_address_from_output(txout)
-
-        for txout in tx.outputs:
-            add_address_from_output(txout)
-
-        return addresses
-
-    def publish_tx(self, tx: BaseTransaction, *, addresses: Optional[Iterable[str]] = None) -> None:
-        """ Publish WALLET_ADDRESS_HISTORY for all addresses of a transaction.
-        """
-        if not self.pubsub:
-            return
-        if addresses is None:
-            addresses = self._get_addresses(tx)
-        data = tx.to_json_extended()
-        for address in addresses:
-            self.pubsub.publish(HathorEvents.WALLET_ADDRESS_HISTORY, address=address, history=data)
-
     def add_tx(self, tx: BaseTransaction) -> None:
         """ Add tx inputs and outputs to the wallet index (indexed by its addresses).
         """
         assert tx.hash is not None
 
-        addresses = self._get_addresses(tx)
+        addresses = tx.get_related_addresses()
         for address in addresses:
             self.index[address].add(tx.hash)
 
@@ -95,7 +61,7 @@ class AddressesIndex:
         """
         assert tx.hash is not None
 
-        addresses = self._get_addresses(tx)
+        addresses = tx.get_related_addresses()
         for address in addresses:
             self.index[address].discard(tx.hash)
 

@@ -431,6 +431,30 @@ class BaseTransaction(ABC):
         """Set of parent tx hashes, typically used for syncing transactions."""
         return set(self.parents[1:] if self.is_block else self.parents)
 
+    def get_related_addresses(self) -> Set[str]:
+        """ Return a set of addresses collected from tx's inputs and outputs.
+        """
+        from hathor.transaction.scripts import parse_address_script
+
+        assert self.storage is not None
+        addresses: Set[str] = set()
+
+        def add_address_from_output(output: 'TxOutput') -> None:
+            script_type_out = parse_address_script(output.script)
+            if script_type_out:
+                address = script_type_out.address
+                addresses.add(address)
+
+        for txin in self.inputs:
+            tx2 = self.storage.get_transaction(txin.tx_id)
+            txout = tx2.outputs[txin.index]
+            add_address_from_output(txout)
+
+        for txout in self.outputs:
+            add_address_from_output(txout)
+
+        return addresses
+
     def can_validate_full(self) -> bool:
         """ Check if this transaction is ready to be fully validated, either all deps are full-valid or one is invalid.
         """
