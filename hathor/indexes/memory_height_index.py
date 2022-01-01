@@ -12,60 +12,49 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, NamedTuple, Optional, Tuple
+from typing import List, Optional, Tuple
 
-from hathor.transaction.genesis import BLOCK_GENESIS
-from hathor.util import not_none
-
-
-class _IndexEntry(NamedTuple):
-    hash: bytes
-    timestamp: int
+from hathor.indexes.height_index import BLOCK_GENESIS_ENTRY, HeightIndex, IndexEntry
 
 
-BLOCK_GENESIS_ENTRY: _IndexEntry = _IndexEntry(not_none(BLOCK_GENESIS.hash), BLOCK_GENESIS.timestamp)
-
-
-class BlockHeightIndex:
+class MemoryHeightIndex(HeightIndex):
     """Store the block hash for each given height
     """
 
-    _index: List[_IndexEntry]
+    _index: List[IndexEntry]
 
     def __init__(self) -> None:
         self._index = [BLOCK_GENESIS_ENTRY]
 
-    def add(self, height: int, block_hash: bytes, timestamp: int, *, can_reorg: bool = False) -> None:
-        """Add new element to the cache. Must not be called for re-orgs.
-        """
+    def _add(self, height: int, block_hash: bytes, timestamp: int, *, can_reorg: bool) -> None:
         if len(self._index) < height:
             raise ValueError(f'parent hash required (current height: {len(self._index)}, new height: {height})')
         elif len(self._index) == height:
-            self._index.append(_IndexEntry(block_hash, timestamp))
+            self._index.append(IndexEntry(block_hash, timestamp))
         elif self._index[height] != block_hash:
             if can_reorg:
                 del self._index[height:]
-                self._index.append(_IndexEntry(block_hash, timestamp))
+                self._index.append(IndexEntry(block_hash, timestamp))
             else:
                 raise ValueError('adding would cause a re-org, use can_reorg=True to accept re-orgs')
         else:
             # nothing to do (there are more blocks, but the block at height currently matches the added block)
             pass
 
+    def add_new(self, height: int, block_hash: bytes, timestamp: int) -> None:
+        self._add(height, block_hash, timestamp, can_reorg=False)
+
+    def add_reorg(self, height: int, block_hash: bytes, timestamp: int) -> None:
+        self._add(height, block_hash, timestamp, can_reorg=True)
+
     def get(self, height: int) -> Optional[bytes]:
-        """ Return the block hash for the given height, or None if it is not set.
-        """
         if len(self._index) <= height:
             return None
         return self._index[height].hash
 
     def get_tip(self) -> bytes:
-        """ Return the best block hash, it returns the genesis when there is no other block
-        """
         return self._index[-1].hash
 
     def get_height_tip(self) -> Tuple[int, bytes]:
-        """ Return the best block height and hash, it returns the genesis when there is no other block
-        """
         height = len(self._index) - 1
         return height, self._index[height].hash

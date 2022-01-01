@@ -351,6 +351,7 @@ class HathorManager:
         tx_count = 0
 
         self.tx_storage.pre_init()
+        assert self.tx_storage.indexes is not None
 
         # After introducing soft voided transactions we need to guarantee the full node is not using
         # a database that already has the soft voided transaction before marking them in the metadata
@@ -458,7 +459,7 @@ class HathorManager:
                 assert tx_meta.validation.is_at_least_basic()
                 if not tx_meta.voided_by and tx_meta.validation.is_fully_connected():
                     # XXX: this might not be needed when making a full init because the consensus should already have
-                    self.tx_storage.add_reorg_to_block_height_index(tx_meta.height, tx.hash, tx.timestamp)
+                    self.tx_storage.indexes.height.add_reorg(tx_meta.height, tx.hash, tx.timestamp)
 
                 # Check if it's a checkpoint block
                 if tx_meta.height in checkpoint_heights:

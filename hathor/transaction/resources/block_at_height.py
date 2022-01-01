@@ -45,6 +45,8 @@ class BlockAtHeightResource(resource.Resource):
 
             :rtype: string (json)
         """
+        assert self.manager.tx_storage.indexes is not None
+
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
@@ -65,7 +67,7 @@ class BlockAtHeightResource(resource.Resource):
             }).encode('utf-8')
 
         # Get hash of the block with the height
-        block_hash = self.manager.tx_storage.get_from_block_height_index(height)
+        block_hash = self.manager.tx_storage.indexes.height.get(height)
 
         # If there is no block in the index with this height, block_hash will be None
         if block_hash is None:
