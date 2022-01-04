@@ -98,8 +98,8 @@ class BaseHathorSyncMempoolTestCase(unittest.TestCase):
         # 25 blocks
         # Unlock reward blocks
         # 8 txs
-        self.assertEqual(len(manager2.tx_storage._mempool_tips_index), 1)
-        self.assertEqual(len(self.manager1.tx_storage._mempool_tips_index), 1)
+        self.assertEqual(len(manager2.tx_storage.indexes.mempool_tips.get()), 1)
+        self.assertEqual(len(self.manager1.tx_storage.indexes.mempool_tips.get()), 1)
 
 
 class SyncV1HathorSyncMempoolTestCase(unittest.SyncV1Params, BaseHathorSyncMempoolTestCase):

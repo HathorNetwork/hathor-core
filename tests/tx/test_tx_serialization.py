@@ -63,7 +63,7 @@ class _SerializationTest(unittest.TestCase):
 
     def test_serialization_tips(self):
         from itertools import chain
-        it_mempool_tips = iter(self.manager.tx_storage._mempool_tips_index)
+        it_mempool_tips = (x.hash for x in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage))
         it_block_height_entries = iter([self.tx_storage.indexes.height.get_tip()])
         for tx_hash in chain(it_mempool_tips, it_block_height_entries):
             tx = self.tx_storage.get_transaction(tx_hash)

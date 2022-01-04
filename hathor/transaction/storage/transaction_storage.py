@@ -28,7 +28,6 @@ from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction
 from hathor.transaction.block import Block
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
-from hathor.transaction.storage.traversal import BFSWalk
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata, ValidationState
 from hathor.util import not_none
@@ -112,9 +111,6 @@ class TransactionStorage(ABC):
 
         # Needed txs (key: tx missing, value: requested by)
         self._needed_txs_index: Dict[bytes, Tuple[int, bytes]] = {}
-
-        # Hold txs that have not been confirmed
-        self._mempool_tips_index: Set[bytes] = set()
 
     # rev-dep-index methods:
 
@@ -266,116 +262,6 @@ class TransactionStorage(ABC):
             # have. We should add at least one dependency, otherwise this tx should be full validated
             if not self.transaction_exists(tx_hash):
                 self._needed_txs_index[tx_hash] = (height, not_none(tx.hash))
-
-    # tx-tips-index methods:
-
-    def iter_mempool_tips(self, max_timestamp: Optional[float] = None) -> Iterator[Transaction]:
-        """
-        Iterate over txs that are tips, a subset of the mempool (i.e. not tx-parent of another tx on the mempool).
-        """
-        it = map(self.get_transaction, self._mempool_tips_index)
-        if max_timestamp is not None:
-            it = filter(lambda tx: tx.timestamp < not_none(max_timestamp), it)
-        yield from cast(Iterator[Transaction], it)
-
-    def remove_from_mempool_tips_index(self, remove_txs: Iterable[bytes]) -> None:
-        """
-        This should be called to remove a transaction from the "mempool", usually when it is confirmed by a block.
-        """
-        for tx in iter(remove_txs):
-            if tx in self._mempool_tips_index:
-                self._mempool_tips_index.remove(tx)
-
-    def get_mempool_tips_index(self) -> Set[bytes]:
-        """
-        Get the set of mempool tips indexed.
-
-        What to do with `get_tx_tips()`? They kind of do the same thing and it might be really confusing in the future.
-        """
-        return self._mempool_tips_index.copy()
-
-    def iter_mempool(self) -> Iterator[Transaction]:
-        """
-        Iterate over the transactions on the "mempool", even the ones that are not tips.
-        """
-        bfs = BFSWalk(self, is_dag_verifications=True, is_left_to_right=False)
-        for tx in bfs.run(map(self.get_transaction, self._mempool_tips_index), skip_root=False):
-            assert isinstance(tx, Transaction)
-            if tx.get_metadata().first_block is not None:
-                bfs.skip_neighbors(tx)
-            else:
-                yield tx
-
-    def update_mempool_tips(self, tx: BaseTransaction) -> None:
-        """
-        This should be called when a new `tx` is created and added to the "mempool".
-        """
-        # A new tx/block added might cause a tx in the tips to become voided. For instance,
-        # there might be a tx1 a double spending tx2, where tx1 is valid and tx2 voided. A new block
-        # confirming tx2 will make it valid while tx1 becomes voided, so it has to be removed
-        # from the tips.
-        assert tx.hash is not None
-        to_remove: Set[bytes] = set()
-        to_remove_parents: Set[bytes] = set()
-        for tip_tx in self.iter_mempool_tips():
-            assert tip_tx.hash is not None
-            # A new tx/block added might cause a tx in the tips to become voided. For instance,
-            # there might be twin txs, tx1 and tx2, where tx1 is valid and tx2 voided. A new block
-            # confirming tx2 will make it valid while tx1 becomes voided, so it has to be removed
-            # from the tips. The txs confirmed by tx1 need to be double checked, as they might
-            # themselves become tips (hence we use to_remove_parents)
-            meta = tip_tx.get_metadata()
-            if meta.voided_by:
-                to_remove.add(tip_tx.hash)
-                to_remove_parents.update(tip_tx.parents)
-                continue
-
-            # might also happen that a tip has a child that became valid, so it's not a tip anymore
-            confirmed = False
-            for child_meta in map(self.get_metadata, meta.children):
-                assert child_meta is not None
-                if not child_meta.voided_by:
-                    confirmed = True
-                    break
-            if confirmed:
-                to_remove.add(tip_tx.hash)
-
-        if to_remove:
-            self.remove_from_mempool_tips_index(to_remove)
-            self.log.debug('removed voided txs from tips', txs=[tx.hex() for tx in to_remove])
-
-        # Check if any of the txs being confirmed by the voided txs is a tip again. This happens
-        # if it doesn't have any other valid child.
-        to_add = set()
-        for tx_hash in to_remove_parents:
-            confirmed = False
-            # check if it has any valid children
-            meta = not_none(self.get_metadata(tx_hash))
-            if meta.voided_by:
-                continue
-            children = meta.children
-            for child_meta in map(self.get_metadata, children):
-                assert child_meta is not None
-                if not child_meta.voided_by:
-                    confirmed = True
-                    break
-            if not confirmed:
-                to_add.add(tx_hash)
-
-        if to_add:
-            self._mempool_tips_index.update(to_add)
-            self.log.debug('added txs to tips', txs=[tx.hex() for tx in to_add])
-
-        if tx.get_metadata().voided_by:
-            # this tx is voided, don't need to update the tips
-            self.log.debug('voided tx, won\'t add it as a tip', tx=tx.hash_hex)
-            return
-
-        self.remove_from_mempool_tips_index(set(tx.parents))
-
-        if tx.is_transaction and tx.get_metadata().first_block is None:
-            assert tx.hash is not None
-            self._mempool_tips_index.add(tx.hash)
 
     # all other methods:
 

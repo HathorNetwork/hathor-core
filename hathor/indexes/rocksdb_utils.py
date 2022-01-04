@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING
+from collections.abc import Collection
+from typing import TYPE_CHECKING, Iterable, Iterator
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -80,3 +81,48 @@ class RocksDBIndexUtils:
         assert new_id != old_id
         log_cf.debug('got column family', is_valid=_cf.is_valid, id=_cf.id, old_id=old_id)
         return _cf
+
+
+# XXX: should be `Collection[bytes]`, which only works on Python 3.9+
+class RocksDBSimpleSet(Collection, RocksDBIndexUtils):
+    def __init__(self, db: 'rocksdb.DB', log: 'structlog.stdlib.BoundLogger', *, cf_name: bytes) -> None:
+        super().__init__(db)
+        self.log = log
+        self._cf_name = cf_name
+        self._cf = self._fresh_cf(self._cf_name)
+
+    def __iter__(self) -> Iterator[bytes]:
+        it = self._db.iterkeys(self._cf)
+        it.seek_to_first()
+        for _, elem in it:
+            yield elem
+
+    # XXX: should be `elem: bytes` but mypy complains
+    def __contains__(self, elem: object) -> bool:
+        assert isinstance(elem, bytes)
+        # XXX: maybe this can be optimized with key_may_exist
+        return self._db.get((self._cf, elem)) is not None
+
+    def __len__(self) -> int:
+        # XXX: under which conditions is this estimate not accurate?
+        return int(self._db.get_property(b'rocksdb.estimate-num-keys', self._cf))
+
+    def add(self, elem: bytes) -> None:
+        self._db.put((self._cf, elem), b'')
+
+    def update(self, it_elem: Iterable[bytes]) -> None:
+        import rocksdb
+        batch = rocksdb.WriteBatch()
+        for elem in it_elem:
+            batch.put((self._cf, elem), b'')
+        self._db.write(batch)
+
+    def discard(self, elem: bytes) -> None:
+        self._db.delete((self._cf, elem))
+
+    def discard_many(self, it_elem: Iterable[bytes]) -> None:
+        import rocksdb
+        batch = rocksdb.WriteBatch()
+        for elem in it_elem:
+            batch.delete((self._cf, elem))
+        self._db.write(batch)

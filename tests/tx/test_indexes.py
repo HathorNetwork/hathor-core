@@ -44,7 +44,7 @@ class BaseIndexesTest(unittest.TestCase):
         tx1.resolve()
         self.assertTrue(self.manager.propagate_tx(tx1, False))
         self.assertEqual(
-            {tx.hash for tx in self.manager.tx_storage.iter_mempool_tips()},
+            {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
             {tx1.hash}
         )
 
@@ -58,7 +58,7 @@ class BaseIndexesTest(unittest.TestCase):
         tx2.resolve()
         self.assertTrue(self.manager.propagate_tx(tx2, False))
         self.assertEqual(
-            {tx.hash for tx in self.manager.tx_storage.iter_mempool_tips()},
+            {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
             {tx2.hash}
         )
 
@@ -70,7 +70,7 @@ class BaseIndexesTest(unittest.TestCase):
         self.assertTrue(self.manager.propagate_tx(tx3, False))
         self.assertIn(tx3.hash, tx2.get_metadata().conflict_with)
         self.assertEqual(
-            {tx.hash for tx in self.manager.tx_storage.iter_mempool_tips()},
+            {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
             # XXX: what should we expect here? I don't think we should exclude both tx2 and tx3, but maybe let the
             # function using the index decide
             # {tx1.hash, tx3.hash}
@@ -98,7 +98,7 @@ class BaseIndexesTest(unittest.TestCase):
         tx1.resolve()
         self.assertTrue(self.manager.propagate_tx(tx1, False))
         self.assertEqual(
-            {tx.hash for tx in self.manager.tx_storage.iter_mempool_tips()},
+            {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
             {tx1.hash}
         )
 
@@ -110,7 +110,7 @@ class BaseIndexesTest(unittest.TestCase):
         tx2.resolve()
         self.assertTrue(self.manager.propagate_tx(tx2, False))
         self.assertEqual(
-            {tx.hash for tx in self.manager.tx_storage.iter_mempool_tips()},
+            {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
             {tx2.hash}
         )
 
@@ -125,14 +125,14 @@ class BaseIndexesTest(unittest.TestCase):
         # self.assertIn(tx3.hash, tx2.get_metadata().voided_by)
         self.assertIn(tx3.hash, tx2.get_metadata().conflict_with)
         self.assertEqual(
-            {tx.hash for tx in self.manager.tx_storage.iter_mempool_tips()},
+            {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
             # XXX: what should we expect here? I don't think we should exclude both tx2 and tx3, but maybe let the
             # function using the index decide
             {tx1.hash, tx3.hash}
         )
 
     def test_genesis_not_in_mempool(self):
-        mempool_txs = list(self.tx_storage.iter_mempool())
+        mempool_txs = list(self.tx_storage.indexes.mempool_tips.iter_all(self.tx_storage))
         for tx in self.genesis_txs:
             self.assertNotIn(tx, mempool_txs)
 
