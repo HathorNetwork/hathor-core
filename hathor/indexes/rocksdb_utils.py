@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections.abc import Collection
-from typing import TYPE_CHECKING, Iterable, Iterator
+from typing import TYPE_CHECKING, Dict, Iterable, Iterator
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -53,6 +53,7 @@ def incr_key(key: bytes) -> bytes:
 
 class RocksDBIndexUtils:
     _db: 'rocksdb.DB'
+    _cf: 'rocksdb.ColumnFamilyHandle'
     log: 'structlog.stdlib.BoundLogger'
 
     def __init__(self, db: 'rocksdb.DB') -> None:
@@ -81,6 +82,12 @@ class RocksDBIndexUtils:
         assert new_id != old_id
         log_cf.debug('got column family', is_valid=_cf.is_valid, id=_cf.id, old_id=old_id)
         return _cf
+
+    def _clone_into_dict(self) -> Dict[bytes, bytes]:
+        """This method will make a copy of the database into a plain dict, be careful when running on large dbs."""
+        it = self._db.iteritems(self._cf)
+        it.seek_to_first()
+        return {k: v for (_, k), v in it}
 
 
 # XXX: should be `Collection[bytes]`, which only works on Python 3.9+

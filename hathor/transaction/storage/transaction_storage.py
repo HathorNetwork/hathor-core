@@ -16,7 +16,7 @@ import hashlib
 from abc import ABC, abstractmethod, abstractproperty
 from collections import deque
 from threading import Lock
-from typing import Any, Dict, FrozenSet, Iterable, Iterator, List, NamedTuple, Optional, Set, Tuple, cast
+from typing import Any, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple, cast
 from weakref import WeakValueDictionary
 
 from intervaltree.interval import Interval
@@ -29,13 +29,9 @@ from hathor.transaction.base_transaction import BaseTransaction
 from hathor.transaction.block import Block
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
 from hathor.transaction.transaction import Transaction
-from hathor.transaction.transaction_metadata import TransactionMetadata, ValidationState
-from hathor.util import not_none
+from hathor.transaction.transaction_metadata import TransactionMetadata
 
 settings = HathorSettings()
-
-
-INF_HEIGHT: int = 1_000_000_000_000
 
 
 class AllTipsCache(NamedTuple):
@@ -43,14 +39,6 @@ class AllTipsCache(NamedTuple):
     tips: Set[Interval]
     merkle_tree: bytes
     hashes: List[bytes]
-
-
-class _DirDepValue(Dict[bytes, ValidationState]):
-    """This class is used to add a handy method to values on dependency indexes."""
-
-    def is_ready(self) -> bool:
-        """True if all deps' validation are fully connected."""
-        return all(val.is_fully_connected() for val in self.values())
 
 
 class TransactionStorage(ABC):
@@ -103,167 +91,6 @@ class TransactionStorage(ABC):
 
         # Key storage attribute to save if the manager is running
         self._manager_running_attribute: str = 'manager_running'
-
-        # Direct and reverse dependency mapping (i.e. needs and needed by)
-        self._dir_dep_index: Dict[bytes, _DirDepValue] = {}
-        self._rev_dep_index: Dict[bytes, Set[bytes]] = {}
-        self._txs_with_deps_ready: Set[bytes] = set()
-
-        # Needed txs (key: tx missing, value: requested by)
-        self._needed_txs_index: Dict[bytes, Tuple[int, bytes]] = {}
-
-    # rev-dep-index methods:
-
-    def count_deps_index(self) -> int:
-        """Count total number of txs with dependencies."""
-        return len(self._dir_dep_index)
-
-    def _get_validation_state(self, tx: bytes) -> ValidationState:
-        """Query database for the validation state of a transaction, returns INITIAL when tx does not exist."""
-        tx_meta = self.get_metadata(tx)
-        if tx_meta is None:
-            return ValidationState.INITIAL
-        return tx_meta.validation
-
-    def _update_deps(self, deps: _DirDepValue) -> None:
-        """Propagate the new validation state of the given deps."""
-        for tx, validation in deps.items():
-            self._update_validation(tx, validation)
-
-    def _update_validation(self, tx: bytes, validation: ValidationState) -> None:
-        """Propagate the new validation state of a given dep."""
-        for cousin in self._rev_dep_index[tx].copy():
-            deps = self._dir_dep_index[cousin]
-            # XXX: this check serves to avoid calling is_ready() when nothing changed
-            if deps[tx] != validation:
-                deps[tx] = validation
-                if deps.is_ready():
-                    self.del_from_deps_index(cousin)
-                    self._txs_with_deps_ready.add(cousin)
-
-    def add_to_deps_index(self, tx: bytes, deps: Iterable[bytes]) -> None:
-        """Call to add all dependencies a transaction has."""
-        # deps are immutable for a given hash
-        _deps = _DirDepValue((dep, self._get_validation_state(dep)) for dep in deps)
-        # short circuit add directly to ready
-        if _deps.is_ready():
-            self._txs_with_deps_ready.add(tx)
-            return
-        # add direct deps
-        if __debug__ and tx in self._dir_dep_index:
-            # XXX: dependencies set must be immutable
-            assert self._dir_dep_index[tx].keys() == _deps.keys()
-        self._dir_dep_index[tx] = _deps
-        # add reverse dep
-        for rev_dep in _deps:
-            if rev_dep not in self._rev_dep_index:
-                self._rev_dep_index[rev_dep] = set()
-            self._rev_dep_index[rev_dep].add(tx)
-
-    def del_from_deps_index(self, tx: bytes) -> None:
-        """Call to remove tx from all reverse dependencies, for example when validation is complete."""
-        _deps = self._dir_dep_index.pop(tx, _DirDepValue())
-        for rev_dep in _deps.keys():
-            rev_deps = self._rev_dep_index[rev_dep]
-            if tx in rev_deps:
-                rev_deps.remove(tx)
-            if not rev_deps:
-                del self._rev_dep_index[rev_dep]
-
-    def is_ready_for_validation(self, tx: bytes) -> bool:
-        """ Whether a tx can be fully validated (implies fully connected).
-        """
-        return tx in self._txs_with_deps_ready
-
-    def remove_ready_for_validation(self, tx: bytes) -> None:
-        """ Removes from ready for validation set.
-        """
-        self._txs_with_deps_ready.discard(tx)
-
-    def next_ready_for_validation(self, *, dry_run: bool = False) -> Iterator[bytes]:
-        """ Yields and removes all txs ready for validation even if they become ready while iterating.
-        """
-        if dry_run:
-            cur_ready = self._txs_with_deps_ready.copy()
-        else:
-            cur_ready, self._txs_with_deps_ready = self._txs_with_deps_ready, set()
-        while cur_ready:
-            yield from iter(cur_ready)
-            if dry_run:
-                cur_ready = self._txs_with_deps_ready - cur_ready
-            else:
-                cur_ready, self._txs_with_deps_ready = self._txs_with_deps_ready, set()
-
-    def iter_deps_index(self) -> Iterator[bytes]:
-        """Iterate through all hashes depended by any tx or block."""
-        yield from self._rev_dep_index.keys()
-
-    def get_rev_deps(self, tx: bytes) -> FrozenSet[bytes]:
-        """Get all txs that depend on the given tx (i.e. its reverse depdendencies)."""
-        return frozenset(self._rev_dep_index.get(tx, set()))
-
-    def children_from_deps(self, tx: bytes) -> List[bytes]:
-        """Return the hashes of all reverse dependencies that are children of the given tx.
-
-        That is, they depend on `tx` because they are children of `tx`, and not because `tx` is an input. This is
-        useful for pre-filling the children metadata, which would otherwise only be updated when
-        `update_initial_metadata` is called on the child-tx.
-        """
-        return [not_none(rev.hash) for rev in map(self.get_transaction, self.get_rev_deps(tx)) if tx in rev.parents]
-
-    # needed-txs-index methods:
-
-    def has_needed_tx(self) -> bool:
-        """Whether there is any tx on the needed tx index."""
-        return bool(self._needed_txs_index)
-
-    def is_tx_needed(self, tx: bytes) -> bool:
-        """Whether a tx is in the requested tx list."""
-        return tx in self._needed_txs_index
-
-    def needed_index_height(self, tx: bytes) -> int:
-        """Indexed height from the needed tx index."""
-        return self._needed_txs_index[tx][0]
-
-    def remove_from_needed_index(self, tx: bytes) -> None:
-        """Remove tx from needed txs index, tx doesn't need to be in the index."""
-        self._needed_txs_index.pop(tx, None)
-
-    def get_next_needed_tx(self) -> bytes:
-        """Choose the start hash for downloading the needed txs"""
-        # This strategy maximizes the chance to download multiple txs on the same stream
-        # find the tx with highest "height"
-        # XXX: we could cache this onto `needed_txs` so we don't have to fetch txs every time
-        height, start_hash, tx = max((h, s, t) for t, (h, s) in self._needed_txs_index.items())
-        self.log.debug('next needed tx start', needed=len(self._needed_txs_index), start=start_hash.hex(),
-                       height=height, needed_tx=tx.hex())
-        return start_hash
-
-    def add_needed_deps(self, tx: BaseTransaction) -> None:
-        if isinstance(tx, Block):
-            height = tx.get_metadata().height
-        else:
-            assert isinstance(tx, Transaction)
-            first_block = tx.get_metadata().first_block
-            if first_block is None:
-                # XXX: consensus did not run yet to update first_block, what should we do?
-                #      I'm defaulting the height to `inf` (practically), this should make it heightest priority when
-                #      choosing which transactions to fetch next
-                height = INF_HEIGHT
-            else:
-                block = self.get_transaction(first_block)
-                assert isinstance(block, Block)
-                height = block.get_metadata().height
-        # get_tx_parents is used instead of get_tx_dependencies because the remote will traverse the parent
-        # tree, not # the dependency tree, eventually we should receive all tx dependencies and be able to validate
-        # this transaction
-        for tx_hash in tx.get_tx_parents():
-            # It may happen that we have one of the dependencies already, so just add the ones we don't
-            # have. We should add at least one dependency, otherwise this tx should be full validated
-            if not self.transaction_exists(tx_hash):
-                self._needed_txs_index[tx_hash] = (height, not_none(tx.hash))
-
-    # all other methods:
 
     def update_best_block_tips_cache(self, tips_cache: List[bytes]) -> None:
         # XXX: check that the cache update is working properly, only used in unittests
@@ -404,9 +231,8 @@ class TransactionStorage(ABC):
         :param only_metadata: Don't save the transaction, only the metadata of this transaction
         :param add_to_indexes: Add this transaction to the indexes
         """
+        assert tx.hash is not None
         meta = tx.get_metadata()
-        if tx.hash in self._rev_dep_index:
-            self._update_validation(tx.hash, meta.validation)
 
         # XXX: we can only add to cache and publish txs that are fully connected (which also implies it's valid)
         if not meta.validation.is_fully_connected():

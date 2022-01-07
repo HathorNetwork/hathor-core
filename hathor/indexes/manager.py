@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Optional
 from structlog import get_logger
 
 from hathor.indexes.address_index import AddressIndex
+from hathor.indexes.deps_index import DepsIndex
 from hathor.indexes.height_index import HeightIndex
 from hathor.indexes.mempool_tips_index import MempoolTipsIndex
 from hathor.indexes.timestamp_index import TimestampIndex
@@ -49,6 +50,7 @@ class IndexesManager(ABC):
     sorted_blocks: TimestampIndex
     sorted_txs: TimestampIndex
 
+    deps: DepsIndex
     height: HeightIndex
     mempool_tips: MempoolTipsIndex
     addresses: Optional[AddressIndex]
@@ -107,6 +109,9 @@ class IndexesManager(ABC):
         if self.tokens:
             self.tokens.add_tx(tx)
 
+        # XXX: this method is idempotent and has no result
+        self.deps.add_tx(tx)
+
         return r3
 
     def del_tx(self, tx: BaseTransaction, *, remove_all: bool = False, relax_assert: bool = False) -> None:
@@ -133,9 +138,12 @@ class IndexesManager(ABC):
         if self.tokens:
             self.tokens.del_tx(tx)
 
+        self.deps.del_tx(tx)
+
 
 class MemoryIndexesManager(IndexesManager):
     def __init__(self) -> None:
+        from hathor.indexes.memory_deps_index import MemoryDepsIndex
         from hathor.indexes.memory_height_index import MemoryHeightIndex
         from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
         from hathor.indexes.memory_timestamp_index import MemoryTimestampIndex
@@ -152,6 +160,7 @@ class MemoryIndexesManager(IndexesManager):
         self.tokens = None
         self.height = MemoryHeightIndex()
         self.mempool_tips = MemoryMempoolTipsIndex()
+        self.deps = MemoryDepsIndex()
 
     def enable_address_index(self, pubsub: 'PubSubManager') -> None:
         from hathor.indexes.memory_address_index import MemoryAddressIndex
@@ -166,6 +175,7 @@ class MemoryIndexesManager(IndexesManager):
 
 class RocksDBIndexesManager(IndexesManager):
     def __init__(self, db: 'rocksdb.DB') -> None:
+        from hathor.indexes.memory_deps_index import MemoryDepsIndex
         from hathor.indexes.rocksdb_height_index import RocksDBHeightIndex
         from hathor.indexes.rocksdb_mempool_tips_index import RocksDBMempoolTipsIndex
         from hathor.indexes.rocksdb_timestamp_index import RocksDBTimestampIndex
@@ -184,6 +194,7 @@ class RocksDBIndexesManager(IndexesManager):
         self.tokens = None
         self.height = RocksDBHeightIndex(self._db)
         self.mempool_tips = RocksDBMempoolTipsIndex(self._db)
+        self.deps = MemoryDepsIndex()  # use of RocksDBDepsIndex is currently suspended until it is fixed
 
     def enable_address_index(self, pubsub: 'PubSubManager') -> None:
         from hathor.indexes.rocksdb_address_index import RocksDBAddressIndex
