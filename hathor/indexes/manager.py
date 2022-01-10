@@ -18,10 +18,6 @@ from typing import TYPE_CHECKING, Optional
 from structlog import get_logger
 
 from hathor.indexes.address_index import AddressIndex
-from hathor.indexes.memory_address_index import MemoryAddressIndex
-from hathor.indexes.memory_tokens_index import MemoryTokensIndex
-from hathor.indexes.rocksdb_address_index import RocksDBAddressIndex
-from hathor.indexes.rocksdb_tokens_index import RocksDBTokensIndex
 from hathor.indexes.timestamp_index import TimestampIndex
 from hathor.indexes.tips_index import TipsIndex
 from hathor.indexes.tokens_index import TokensIndex
@@ -36,6 +32,12 @@ logger = get_logger()
 
 
 class IndexesManager(ABC):
+    """ IndexesManager manages all the indexes that we will have in the system
+
+    The idea is for the manager to handle all method calls to indexes,
+    so it will know which index is better to use in each moment
+    """
+
     all_tips: TipsIndex
     block_tips: TipsIndex
     tx_tips: TipsIndex
@@ -56,52 +58,6 @@ class IndexesManager(ABC):
     def enable_tokens_index(self) -> None:
         """Enable tokens index. It does nothing if it has already been enabled."""
         raise NotImplementedError
-
-    @abstractmethod
-    def add_tx(self, tx: BaseTransaction) -> bool:
-        """Add a transaction to the indexes.
-
-        :param tx: Transaction to be added
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def del_tx(self, tx: BaseTransaction, *, remove_all: bool = False, relax_assert: bool = False) -> None:
-        """ Delete a transaction from the indexes
-
-        :param tx: Transaction to be deleted
-        """
-        raise NotImplementedError
-
-
-class MemoryIndexesManager(IndexesManager):
-    """ IndexesManager manages all the indexes that we will have in the system
-
-        The ideia is for the manager to handle all method calls to indexes,
-        so it will know which index is better to use in each moment
-    """
-
-    def __init__(self) -> None:
-        self.all_tips = TipsIndex()
-        self.block_tips = TipsIndex()
-        self.tx_tips = TipsIndex()
-
-        self.sorted_all = TimestampIndex()
-        self.sorted_blocks = TimestampIndex()
-        self.sorted_txs = TimestampIndex()
-
-        self.addresses = None
-        self.tokens = None
-
-    def enable_address_index(self, pubsub: 'PubSubManager') -> None:
-        """Enable address index."""
-        if self.addresses is None:
-            self.addresses = MemoryAddressIndex(pubsub)
-
-    def enable_tokens_index(self) -> None:
-        """Enable tokens index."""
-        if self.tokens is None:
-            self.tokens = MemoryTokensIndex()
 
     def add_tx(self, tx: BaseTransaction) -> bool:
         """ Add a transaction to the indexes
@@ -155,17 +111,51 @@ class MemoryIndexesManager(IndexesManager):
             self.tokens.del_tx(tx)
 
 
-class RocksDBIndexesManager(MemoryIndexesManager):
-    def __init__(self, db: 'rocksdb.DB') -> None:
-        self._db = db
-        super().__init__()
+class MemoryIndexesManager(IndexesManager):
+    def __init__(self) -> None:
+        self.all_tips = TipsIndex()
+        self.block_tips = TipsIndex()
+        self.tx_tips = TipsIndex()
+
+        self.sorted_all = TimestampIndex()
+        self.sorted_blocks = TimestampIndex()
+        self.sorted_txs = TimestampIndex()
+
+        self.addresses = None
+        self.tokens = None
 
     def enable_address_index(self, pubsub: 'PubSubManager') -> None:
-        """Enable address index."""
+        from hathor.indexes.memory_address_index import MemoryAddressIndex
+        if self.addresses is None:
+            self.addresses = MemoryAddressIndex(pubsub)
+
+    def enable_tokens_index(self) -> None:
+        from hathor.indexes.memory_tokens_index import MemoryTokensIndex
+        if self.tokens is None:
+            self.tokens = MemoryTokensIndex()
+
+
+class RocksDBIndexesManager(IndexesManager):
+    def __init__(self, db: 'rocksdb.DB') -> None:
+        self._db = db
+
+        self.all_tips = TipsIndex()
+        self.block_tips = TipsIndex()
+        self.tx_tips = TipsIndex()
+
+        self.sorted_all = TimestampIndex()
+        self.sorted_blocks = TimestampIndex()
+        self.sorted_txs = TimestampIndex()
+
+        self.addresses = None
+        self.tokens = None
+
+    def enable_address_index(self, pubsub: 'PubSubManager') -> None:
+        from hathor.indexes.rocksdb_address_index import RocksDBAddressIndex
         if self.addresses is None:
             self.addresses = RocksDBAddressIndex(self._db, pubsub=pubsub)
 
     def enable_tokens_index(self) -> None:
-        """Enable tokens index."""
+        from hathor.indexes.rocksdb_tokens_index import RocksDBTokensIndex
         if self.tokens is None:
             self.tokens = RocksDBTokensIndex(self._db)
