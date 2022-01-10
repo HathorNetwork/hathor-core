@@ -129,8 +129,8 @@ class AddressBalanceResource(resource.Resource):
             else:
                 try:
                     token_info = tokens_index.get_token_info(token_uid)
-                    tokens_data[token_uid].name = token_info.name
-                    tokens_data[token_uid].symbol = token_info.symbol
+                    tokens_data[token_uid].name = token_info.get_name()
+                    tokens_data[token_uid].symbol = token_info.get_symbol()
                 except KeyError:
                     # Should never get here because this token appears in our wallet index
                     # But better than get a 500 error

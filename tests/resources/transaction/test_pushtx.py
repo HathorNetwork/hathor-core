@@ -21,6 +21,9 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
 
     is_post: Optional[bool] = None
 
+    # XXX: we will get a "two instances of the same tx in memory" otherwise
+    use_memory_storage = True
+
     def setUp(self):
         super().setUp()
         self.web = StubSite(PushTxResource(self.manager))
