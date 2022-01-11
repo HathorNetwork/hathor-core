@@ -430,8 +430,6 @@ class HathorManager:
                         self.consensus_algorithm.update(tx)
                         self.tx_storage.update_mempool_tips(tx)
                         self.step_validations([tx])
-                        if tx.is_block:
-                            self.tx_storage.add_to_parent_blocks_index(tx.hash)
                     else:
                         assert tx.validate_basic(skip_block_weight_verification=skip_block_weight_verification)
                         self.tx_storage.add_to_deps_index(tx.hash, tx.get_all_dependencies())
@@ -445,8 +443,6 @@ class HathorManager:
                         self.tx_storage.add_needed_deps(tx)
                     elif tx.is_transaction and tx_meta.first_block is None and not tx_meta.voided_by:
                         self.tx_storage.update_mempool_tips(tx)
-                    elif tx.is_block:
-                        self.tx_storage.add_to_parent_blocks_index(tx.hash)
                     self.tx_storage.add_to_indexes(tx)
                     if tx.is_transaction and tx_meta.voided_by:
                         self.tx_storage.del_from_indexes(tx)
@@ -905,8 +901,6 @@ class HathorManager:
 
         self.tx_storage.del_from_deps_index(tx.hash)
         self.tx_storage.update_mempool_tips(tx)
-        if tx.is_block:
-            self.tx_storage.add_to_parent_blocks_index(tx.hash)
 
         if self.wallet:
             # TODO Remove it and use pubsub instead.

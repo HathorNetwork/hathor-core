@@ -71,8 +71,6 @@ class TransactionStorage(ABC):
     log = get_logger()
 
     def __init__(self):
-        from hathor.transaction.genesis import BLOCK_GENESIS
-
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
         self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
         self._tx_weakref_disabled: bool = False
@@ -127,10 +125,6 @@ class TransactionStorage(ABC):
 
         # Hold txs that have not been confirmed
         self._mempool_tips_index: Set[bytes] = set()
-
-        # Hold blocks that can be used as the next parent block
-        # XXX: if there is more than one they must all have the same score, must always have at least one hash
-        self._parent_blocks_index: Set[bytes] = {BLOCK_GENESIS.hash}
 
     # rev-dep-index methods:
 
@@ -282,24 +276,6 @@ class TransactionStorage(ABC):
             # have. We should add at least one dependency, otherwise this tx should be full validated
             if not self.transaction_exists(tx_hash):
                 self._needed_txs_index[tx_hash] = (height, not_none(tx.hash))
-
-    # parent-blocks-index methods:
-
-    def add_to_parent_blocks_index(self, block: bytes) -> None:
-        from math import isclose
-        meta = not_none(self.get_metadata(block))
-        new_score = not_none(meta).score
-        cur_score = not_none(self.get_metadata(next(iter(self._parent_blocks_index)))).score
-        if isclose(new_score, cur_score):
-            self.log.debug('same score: new competing block', block=block.hex(), height=meta.height, score=meta.score)
-            self._parent_blocks_index.add(block)
-        elif new_score > cur_score and not meta.voided_by:
-            # If it's a high score, then I can't add one that is voided
-            self.log.debug('high score: new best block', block=block.hex(), height=meta.height, score=meta.score)
-            self._parent_blocks_index.clear()
-            self._parent_blocks_index.add(block)
-        else:
-            self.log.debug('low score: skip block', block=block.hex(), height=meta.height, score=meta.score)
 
     # tx-tips-index methods:
 
