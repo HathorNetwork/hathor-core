@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Optional
 from structlog import get_logger
 
 from hathor.indexes.address_index import AddressIndex
+from hathor.indexes.height_index import HeightIndex
 from hathor.indexes.timestamp_index import TimestampIndex
 from hathor.indexes.tips_index import TipsIndex
 from hathor.indexes.tokens_index import TokensIndex
@@ -46,6 +47,7 @@ class IndexesManager(ABC):
     sorted_blocks: TimestampIndex
     sorted_txs: TimestampIndex
 
+    height: HeightIndex
     addresses: Optional[AddressIndex]
     tokens: Optional[TokensIndex]
 
@@ -113,6 +115,8 @@ class IndexesManager(ABC):
 
 class MemoryIndexesManager(IndexesManager):
     def __init__(self) -> None:
+        from hathor.indexes.memory_height_index import MemoryHeightIndex
+
         self.all_tips = TipsIndex()
         self.block_tips = TipsIndex()
         self.tx_tips = TipsIndex()
@@ -123,6 +127,7 @@ class MemoryIndexesManager(IndexesManager):
 
         self.addresses = None
         self.tokens = None
+        self.height = MemoryHeightIndex()
 
     def enable_address_index(self, pubsub: 'PubSubManager') -> None:
         from hathor.indexes.memory_address_index import MemoryAddressIndex
@@ -137,6 +142,8 @@ class MemoryIndexesManager(IndexesManager):
 
 class RocksDBIndexesManager(IndexesManager):
     def __init__(self, db: 'rocksdb.DB') -> None:
+        from hathor.indexes.rocksdb_height_index import RocksDBHeightIndex
+
         self._db = db
 
         self.all_tips = TipsIndex()
@@ -149,6 +156,7 @@ class RocksDBIndexesManager(IndexesManager):
 
         self.addresses = None
         self.tokens = None
+        self.height = RocksDBHeightIndex(self._db)
 
     def enable_address_index(self, pubsub: 'PubSubManager') -> None:
         from hathor.indexes.rocksdb_address_index import RocksDBAddressIndex

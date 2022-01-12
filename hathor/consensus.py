@@ -169,6 +169,7 @@ class BlockConsensusAlgorithm:
         assert block.hash is not None
 
         storage = block.storage
+        assert storage.indexes is not None
 
         # Union of voided_by of parents
         voided_by: Set[bytes] = self.union_voided_by_from_parents(block)
@@ -204,7 +205,7 @@ class BlockConsensusAlgorithm:
             # we need to check that block is not voided.
             meta = block.get_metadata()
             if not meta.voided_by:
-                storage.add_new_to_block_height_index(meta.height, block.hash, block.timestamp)
+                storage.indexes.height.add_new(meta.height, block.hash, block.timestamp)
                 storage.update_best_block_tips_cache([block.hash])
             # The following assert must be true, but it is commented out for performance reasons.
             if settings.SLOW_ASSERTS:
@@ -266,7 +267,7 @@ class BlockConsensusAlgorithm:
                     if not meta.voided_by:
                         self.log.debug('index new winner block', height=meta.height, block=block.hash_hex)
                         # We update the height cache index with the new winner chain
-                        storage.update_block_height_cache_new_chain(meta.height, block)
+                        storage.indexes.height.update_new_chain(meta.height, block)
                         storage.update_best_block_tips_cache([block.hash])
                 else:
                     storage.update_best_block_tips_cache([not_none(blk.hash) for blk in heads])

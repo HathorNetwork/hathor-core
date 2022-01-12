@@ -27,7 +27,6 @@ from hathor.indexes import IndexesManager, MemoryIndexesManager, TimestampIndex
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction
 from hathor.transaction.block import Block
-from hathor.transaction.storage.block_height_index import BlockHeightIndex
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
 from hathor.transaction.storage.traversal import BFSWalk
 from hathor.transaction.transaction import Transaction
@@ -53,12 +52,6 @@ class _DirDepValue(Dict[bytes, ValidationState]):
     def is_ready(self) -> bool:
         """True if all deps' validation are fully connected."""
         return all(val.is_fully_connected() for val in self.values())
-
-
-class _AddToCacheItem(NamedTuple):
-    height: int
-    hash: bytes
-    timestamp: int
 
 
 class TransactionStorage(ABC):
@@ -111,9 +104,6 @@ class TransactionStorage(ABC):
 
         # Key storage attribute to save if the manager is running
         self._manager_running_attribute: str = 'manager_running'
-
-        # Cache of block hash by height
-        self._block_height_index = BlockHeightIndex()
 
         # Direct and reverse dependency mapping (i.e. needs and needed by)
         self._dir_dep_index: Dict[bytes, _DirDepValue] = {}
@@ -387,34 +377,6 @@ class TransactionStorage(ABC):
             assert tx.hash is not None
             self._mempool_tips_index.add(tx.hash)
 
-    # block height index methods:
-
-    def update_block_height_cache_new_chain(self, height: int, block: Block) -> None:
-        """ When we have a new winner chain we must update all the height index
-            until the first height with a common block
-        """
-        assert self.get_from_block_height_index(height) != block.hash
-
-        block_height = height
-        side_chain_block = block
-        add_to_cache: List[_AddToCacheItem] = []
-        while self.get_from_block_height_index(block_height) != side_chain_block.hash:
-            add_to_cache.append(
-                _AddToCacheItem(block_height, not_none(side_chain_block.hash), side_chain_block.timestamp)
-            )
-
-            side_chain_block = side_chain_block.get_block_parent()
-            new_block_height = side_chain_block.get_metadata().height
-            assert new_block_height + 1 == block_height
-            block_height = new_block_height
-
-        # Reverse the data because I was adding in the array from the highest block
-        reversed_add_to_cache = reversed(add_to_cache)
-
-        for item in reversed_add_to_cache:
-            # Add it to the index
-            self.add_reorg_to_block_height_index(item.height, item.hash, item.timestamp)
-
     # all other methods:
 
     def update_best_block_tips_cache(self, tips_cache: List[bytes]) -> None:
@@ -483,7 +445,8 @@ class TransactionStorage(ABC):
 
     def get_best_block(self) -> Block:
         """The block with highest score or one of the blocks with highest scores. Can be used for mining."""
-        block_hash = self._block_height_index.get_tip()
+        assert self.indexes is not None
+        block_hash = self.indexes.height.get_tip()
         block = self.get_transaction(block_hash)
         assert isinstance(block, Block)
         assert block.get_metadata().validation.is_fully_connected()
@@ -950,18 +913,6 @@ class TransactionStorage(ABC):
         """ Return if the manager is running or was running and a sudden crash stopped the full node
         """
         return self.get_value(self._manager_running_attribute) == '1'
-
-    def add_new_to_block_height_index(self, height: int, block_hash: bytes, timestamp: int) -> None:
-        """Add a new block to the height index that must not result in a re-org"""
-        self._block_height_index.add(height, block_hash, timestamp)
-
-    def add_reorg_to_block_height_index(self, height: int, block_hash: bytes, timestamp: int) -> None:
-        """Add a new block to the height index that can result in a re-org"""
-        # XXX: in the future we can make this more strict so that it MUST result in a re-orgr
-        self._block_height_index.add(height, block_hash, timestamp, can_reorg=True)
-
-    def get_from_block_height_index(self, height: int) -> bytes:
-        return self._block_height_index.get(height)
 
 
 class BaseTransactionStorage(TransactionStorage):
