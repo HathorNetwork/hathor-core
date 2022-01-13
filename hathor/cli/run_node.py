@@ -103,6 +103,7 @@ class RunNode:
         import hathor
         from hathor.cli.util import check_or_exit
         from hathor.conf import HathorSettings
+        from hathor.conf.get_settings import get_settings_module
         from hathor.daa import TestMode, _set_test_mode
         from hathor.manager import HathorManager
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
@@ -119,6 +120,7 @@ class RunNode:
         from hathor.wallet import HDWallet, Wallet
 
         settings = HathorSettings()
+        settings_module = get_settings_module()  # only used for logging its location
         self.log = logger.new()
 
         from setproctitle import setproctitle
@@ -156,7 +158,8 @@ class RunNode:
             genesis=genesis.GENESIS_HASH.hex()[:7],
             my_peer_id=str(peer_id.id),
             python=python,
-            platform=platform.platform()
+            platform=platform.platform(),
+            settings=settings_module.__file__,
         )
 
         def create_wallet():

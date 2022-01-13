@@ -14,6 +14,7 @@
 
 import importlib
 import os
+from types import ModuleType
 
 from hathor.conf.settings import HathorSettings as Settings
 
@@ -25,6 +26,13 @@ def HathorSettings() -> Settings:
         Get the file from environment variable 'HATHOR_CONFIG_FILE'
         If not set we return the config file of the mainnet
     """
+    settings_module = get_settings_module()
+    settings = getattr(settings_module, 'SETTINGS')
+    assert isinstance(settings, Settings)
+    return settings
+
+
+def get_settings_module() -> ModuleType:
     global _config_file
     # Import config file for network
     default_file = 'hathor.conf.mainnet'
@@ -37,4 +45,4 @@ def HathorSettings() -> Settings:
         module = importlib.import_module(config_file)
     except ModuleNotFoundError:
         module = importlib.import_module(default_file)
-    return module.SETTINGS  # type: ignore
+    return module
