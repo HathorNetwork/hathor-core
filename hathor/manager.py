@@ -215,6 +215,11 @@ class HathorManager:
         self.is_started = True
 
         self.log.info('start manager', network=self.network)
+        self.log.info(
+            'Settings configuration',
+            ws_max_subs_addrs_conn=settings.WS_MAX_SUBS_ADDRS_CONN,
+            ws_max_subs_addrs_empty=settings.WS_MAX_SUBS_ADDRS_EMPTY
+        )
         # If it's a full verification, we save on the storage that we are starting it
         # this is required because if we stop the initilization in the middle, the metadata
         # saved on the storage is not reliable anymore, only if we finish it
