@@ -302,7 +302,9 @@ class ConnectionsManager:
         if len(self.connected_peers) < 1:
             self.manager.do_discovery()
         now = int(self.reactor.seconds())
-        for peer in self.peer_storage.values():
+        # We need to use list() here because the dict might change inside connect_to_if_not_connected
+        # when the peer is disconnected and without entrypoint
+        for peer in list(self.peer_storage.values()):
             self.connect_to_if_not_connected(peer, now)
 
     def update_whitelist(self) -> Deferred:
@@ -351,6 +353,11 @@ class ConnectionsManager:
         """ Attempts to connect if it is not connected to the peer.
         """
         if not peer.entrypoints:
+            # It makes no sense to keep storing peers that have disconnected and have no entrypoints
+            # We will never be able to connect to them anymore and they will only keep spending memory
+            # and other resources when used in APIs, so we are removing them here
+            if peer.id not in self.connected_peers:
+                self.peer_storage.remove(peer)
             return
         if peer.id in self.connected_peers:
             return
