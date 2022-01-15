@@ -426,10 +426,11 @@ class HathorManager:
                         assert isinstance(tx, Transaction)
                         tx._height_cache = self.tx_storage.needed_index_height(tx.hash)
                     if tx.can_validate_full():
+                        assert self.tx_storage.indexes is not None
                         self.tx_storage.add_to_indexes(tx)
                         assert tx.validate_full(skip_block_weight_verification=skip_block_weight_verification)
                         self.consensus_algorithm.update(tx)
-                        self.tx_storage.update_mempool_tips(tx)
+                        self.tx_storage.indexes.mempool_tips.update(tx)
                         self.step_validations([tx])
                     else:
                         assert tx.validate_basic(skip_block_weight_verification=skip_block_weight_verification)
@@ -443,7 +444,8 @@ class HathorManager:
                             assert tx_meta.validation.is_at_least_basic(), f'invalid: {tx.hash_hex}'
                         self.tx_storage.add_needed_deps(tx)
                     elif tx.is_transaction and tx_meta.first_block is None and not tx_meta.voided_by:
-                        self.tx_storage.update_mempool_tips(tx)
+                        assert self.tx_storage.indexes is not None
+                        self.tx_storage.indexes.mempool_tips.update(tx)
                     self.tx_storage.add_to_indexes(tx)
                     if tx.is_transaction and tx_meta.voided_by:
                         self.tx_storage.del_from_indexes(tx)
@@ -896,12 +898,13 @@ class HathorManager:
         already. Or it might happen later.
         """
         assert tx.hash is not None
+        assert self.tx_storage.indexes is not None
 
         # Publish to pubsub manager the new tx accepted, now that it's full validated
         self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
 
         self.tx_storage.del_from_deps_index(tx.hash)
-        self.tx_storage.update_mempool_tips(tx)
+        self.tx_storage.indexes.mempool_tips.update(tx)
 
         if self.wallet:
             # TODO Remove it and use pubsub instead.

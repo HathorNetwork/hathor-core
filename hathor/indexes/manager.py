@@ -19,6 +19,7 @@ from structlog import get_logger
 
 from hathor.indexes.address_index import AddressIndex
 from hathor.indexes.height_index import HeightIndex
+from hathor.indexes.mempool_tips_index import MempoolTipsIndex
 from hathor.indexes.timestamp_index import TimestampIndex
 from hathor.indexes.tips_index import TipsIndex
 from hathor.indexes.tokens_index import TokensIndex
@@ -48,6 +49,7 @@ class IndexesManager(ABC):
     sorted_txs: TimestampIndex
 
     height: HeightIndex
+    mempool_tips: MempoolTipsIndex
     addresses: Optional[AddressIndex]
     tokens: Optional[TokensIndex]
 
@@ -116,6 +118,7 @@ class IndexesManager(ABC):
 class MemoryIndexesManager(IndexesManager):
     def __init__(self) -> None:
         from hathor.indexes.memory_height_index import MemoryHeightIndex
+        from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
 
         self.all_tips = TipsIndex()
         self.block_tips = TipsIndex()
@@ -128,6 +131,7 @@ class MemoryIndexesManager(IndexesManager):
         self.addresses = None
         self.tokens = None
         self.height = MemoryHeightIndex()
+        self.mempool_tips = MemoryMempoolTipsIndex()
 
     def enable_address_index(self, pubsub: 'PubSubManager') -> None:
         from hathor.indexes.memory_address_index import MemoryAddressIndex
@@ -143,6 +147,7 @@ class MemoryIndexesManager(IndexesManager):
 class RocksDBIndexesManager(IndexesManager):
     def __init__(self, db: 'rocksdb.DB') -> None:
         from hathor.indexes.rocksdb_height_index import RocksDBHeightIndex
+        from hathor.indexes.rocksdb_mempool_tips_index import RocksDBMempoolTipsIndex
 
         self._db = db
 
@@ -157,6 +162,7 @@ class RocksDBIndexesManager(IndexesManager):
         self.addresses = None
         self.tokens = None
         self.height = RocksDBHeightIndex(self._db)
+        self.mempool_tips = RocksDBMempoolTipsIndex(self._db)
 
     def enable_address_index(self, pubsub: 'PubSubManager') -> None:
         from hathor.indexes.rocksdb_address_index import RocksDBAddressIndex
