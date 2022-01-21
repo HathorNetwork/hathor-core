@@ -1,14 +1,17 @@
 from struct import error as StructError
 
+import pytest
+
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
+from hathor.indexes.tokens_index import TokenUtxoInfo
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import BlockWithTokensError, InputOutputMismatch, InvalidToken, TransactionDataError
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount, get_withdraw_amount, int_to_bytes
 from tests import unittest
-from tests.utils import add_blocks_unlock_reward, create_tokens, get_genesis_key
+from tests.utils import add_blocks_unlock_reward, add_new_double_spending, create_tokens, get_genesis_key
 
 settings = HathorSettings()
 
@@ -159,14 +162,16 @@ class BaseTokenTest(unittest.TestCase):
         self.run_to_completion()
 
         # check tokens index
-        tokens_index = self.manager.tx_storage.tokens_index.tokens[token_uid]
-        self.assertIn((tx2.hash, 1), tokens_index.mint)
-        self.assertIn((tx.hash, 2), tokens_index.melt)
+        tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(token_uid)
+        mint = list(tokens_index.iter_mint_utxos())
+        melt = list(tokens_index.iter_melt_utxos())
+        self.assertIn(TokenUtxoInfo(tx2.hash, 1), mint)
+        self.assertIn(TokenUtxoInfo(tx.hash, 2), melt)
         # there should only be one element on the indexes for the token
-        self.assertEqual(1, len(tokens_index.mint))
-        self.assertEqual(1, len(tokens_index.melt))
+        self.assertEqual(1, len(mint))
+        self.assertEqual(1, len(melt))
         # check total amount of tokens
-        self.assertEqual(500 + mint_amount, tokens_index.total)
+        self.assertEqual(500 + mint_amount, tokens_index.get_total())
 
         # try to mint 1 token unit without deposit
         mint_amount = 1
@@ -264,14 +269,16 @@ class BaseTokenTest(unittest.TestCase):
         self.run_to_completion()
 
         # check tokens index
-        tokens_index = self.manager.tx_storage.tokens_index.tokens[token_uid]
-        self.assertIn((tx.hash, 1), tokens_index.mint)
-        self.assertIn((tx2.hash, 1), tokens_index.melt)
+        tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(token_uid)
+        mint = list(tokens_index.iter_mint_utxos())
+        melt = list(tokens_index.iter_melt_utxos())
+        self.assertIn(TokenUtxoInfo(tx.hash, 1), mint)
+        self.assertIn(TokenUtxoInfo(tx2.hash, 1), melt)
         # there should only be one element on the indexes for the token
-        self.assertEqual(1, len(tokens_index.mint))
-        self.assertEqual(1, len(tokens_index.melt))
+        self.assertEqual(1, len(mint))
+        self.assertEqual(1, len(melt))
         # check total amount of tokens
-        self.assertEqual(new_amount, tokens_index.total)
+        self.assertEqual(new_amount, tokens_index.get_total())
 
         # melt tokens and withdraw more than what's allowed
         melt_amount = 100
@@ -354,14 +361,16 @@ class BaseTokenTest(unittest.TestCase):
         # 3. HTR deposit change
         tx = create_tokens(self.manager, self.address_b58, mint_amount=100)
         token_uid = tx.tokens[0]
-        tokens_index = self.manager.tx_storage.tokens_index.tokens[tx.tokens[0]]
-        self.assertIn((tx.hash, 1), tokens_index.mint)
-        self.assertIn((tx.hash, 2), tokens_index.melt)
+        tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(tx.tokens[0])
+        mint = list(tokens_index.iter_mint_utxos())
+        melt = list(tokens_index.iter_melt_utxos())
+        self.assertIn(TokenUtxoInfo(tx.hash, 1), mint)
+        self.assertIn(TokenUtxoInfo(tx.hash, 2), melt)
         # there should only be one element on the indexes for the token
-        self.assertEqual(1, len(tokens_index.mint))
-        self.assertEqual(1, len(tokens_index.melt))
+        self.assertEqual(1, len(mint))
+        self.assertEqual(1, len(melt))
         # check total amount of tokens
-        self.assertEqual(100, tokens_index.total)
+        self.assertEqual(100, tokens_index.get_total())
 
         # new tx minting tokens
         mint_amount = 300
@@ -399,12 +408,15 @@ class BaseTokenTest(unittest.TestCase):
         self.run_to_completion()
 
         # there should only be one element on the indexes for the token
-        self.assertEqual(1, len(tokens_index.mint))
-        self.assertEqual(1, len(tokens_index.melt))
-        self.assertIn((tx2.hash, 0), tokens_index.mint)
-        self.assertIn((tx2.hash, 1), tokens_index.melt)
+        tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(tx.tokens[0])
+        mint = list(tokens_index.iter_mint_utxos())
+        melt = list(tokens_index.iter_melt_utxos())
+        self.assertEqual(1, len(mint))
+        self.assertEqual(1, len(melt))
+        self.assertIn(TokenUtxoInfo(tx2.hash, 0), mint)
+        self.assertIn(TokenUtxoInfo(tx2.hash, 1), melt)
         # check total amount of tokens has been updated
-        self.assertEqual(400, tokens_index.total)
+        self.assertEqual(400, tokens_index.get_total())
 
         # create conflicting tx by changing parents
         tx3 = Transaction.create_from_struct(tx2.get_struct())
@@ -417,13 +429,16 @@ class BaseTokenTest(unittest.TestCase):
         self.run_to_completion()
 
         # new tx should be on tokens index. Old tx should not be present
-        self.assertIn((tx3.hash, 0), tokens_index.mint)
-        self.assertIn((tx3.hash, 1), tokens_index.melt)
+        tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(tx.tokens[0])
+        mint = list(tokens_index.iter_mint_utxos())
+        melt = list(tokens_index.iter_melt_utxos())
+        self.assertIn(TokenUtxoInfo(tx3.hash, 0), mint)
+        self.assertIn(TokenUtxoInfo(tx3.hash, 1), melt)
         # there should only be one element on the indexes for the token
-        self.assertEqual(1, len(tokens_index.mint))
-        self.assertEqual(1, len(tokens_index.melt))
+        self.assertEqual(1, len(mint))
+        self.assertEqual(1, len(melt))
         # should have same amount of tokens
-        self.assertEqual(400, tokens_index.total)
+        self.assertEqual(400, tokens_index.get_total())
 
     def test_token_info(self):
         def update_tx(tx):
@@ -582,6 +597,29 @@ class BaseTokenTest(unittest.TestCase):
         with self.assertRaises(InvalidToken):
             block.verify()
 
+    def test_voided_token_creation(self):
+        tx1 = create_tokens(self.manager, self.address_b58, mint_amount=500, use_genesis=False)
+        token_uid = tx1.tokens[0]
+
+        # check tokens index
+        tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(token_uid)
+        mint = list(tokens_index.iter_mint_utxos())
+        melt = list(tokens_index.iter_melt_utxos())
+        self.assertEqual(1, len(mint))
+        self.assertEqual(1, len(melt))
+
+        # add simple tx that will void the token created above
+        tx2 = add_new_double_spending(self.manager, tx=tx1, weight=(tx1.weight + 3), use_same_parents=True)
+        self.assertFalse(bool(tx2.get_metadata().voided_by))
+        self.assertTrue(bool(tx1.get_metadata().voided_by))
+        mint = list(tokens_index.iter_mint_utxos())
+        melt = list(tokens_index.iter_melt_utxos())
+        self.assertEqual(0, len(mint))
+        self.assertEqual(0, len(melt))
+        with self.assertRaises(KeyError):
+            tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(token_uid)
+            print(tokens_index)
+
 
 class SyncV1TokenTest(unittest.SyncV1Params, BaseTokenTest):
     __test__ = True
@@ -593,4 +631,22 @@ class SyncV2TokenTest(unittest.SyncV2Params, BaseTokenTest):
 
 # sync-bridge should behave like sync-v2
 class SyncBridgeTokenTest(unittest.SyncBridgeParams, SyncV2TokenTest):
+    pass
+
+
+@pytest.mark.skipif(unittest.USE_MEMORY_STORAGE, reason='previous tests already use memory, avoid duplication')
+class BaseMemoryTokenTest(BaseTokenTest):
+    use_memory_storage = True
+
+
+class SyncV1MemoryTokenTest(unittest.SyncV1Params, BaseMemoryTokenTest):
+    __test__ = True
+
+
+class SyncV2MemoryTokenTest(unittest.SyncV2Params, BaseMemoryTokenTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeMemoryTokenTest(unittest.SyncBridgeParams, SyncV2MemoryTokenTest):
     pass

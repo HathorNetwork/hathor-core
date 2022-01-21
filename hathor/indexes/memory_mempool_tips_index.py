@@ -12,4 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-__version__ = '0.47.0'
+from typing import Iterable, Set
+
+from structlog import get_logger
+
+from hathor.indexes.mempool_tips_index import ByteCollectionMempoolTipsIndex
+
+logger = get_logger()
+
+
+class MemoryMempoolTipsIndex(ByteCollectionMempoolTipsIndex):
+    _index: Set[bytes]
+
+    def __init__(self):
+        self.log = logger.new()
+        self._index = set()
+
+    def _discard(self, tx: bytes) -> None:
+        self._index.discard(tx)
+
+    def _add(self, tx: bytes) -> None:
+        self._index.add(tx)
+
+    def _add_many(self, txs: Iterable[bytes]) -> None:
+        self._index.update(txs)

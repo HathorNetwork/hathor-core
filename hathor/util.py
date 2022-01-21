@@ -304,3 +304,71 @@ class Random(PyRandom):
         def randbytes(self, n):
             """Generate n random bytes."""
             return self.getrandbits(n * 8).to_bytes(n, 'little')
+
+
+def collect_n(it: Iterator[_T], n: int) -> Tuple[List[_T], bool]:
+    """Collect up to n elements from an iterator into a list, returns the list and whether there were more elements.
+
+    This method will consume up to n+1 elements from the iterator because it will try to get one more element after it
+    has n elements to check if there are more.
+
+    Example:
+
+    >>> collect_n(iter(range(10)), 10)
+    ([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], False)
+
+    >>> collect_n(iter(range(10)), 11)
+    ([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], False)
+
+    >>> collect_n(iter(range(10)), 9)
+    ([0, 1, 2, 3, 4, 5, 6, 7, 8], True)
+
+    >>> collect_n(iter(range(10)), 8)
+    ([0, 1, 2, 3, 4, 5, 6, 7], True)
+    """
+    col: List[_T] = []
+    has_more = False
+    while n > 0:
+        try:
+            elem = next(it)
+            has_more = True
+        except StopIteration:
+            has_more = False
+            break
+        n -= 1
+        col.append(elem)
+    else:
+        try:
+            next(it)
+            has_more = True
+        except StopIteration:
+            has_more = False
+    return col, has_more
+
+
+def skip_n(it: Iterator[_T], n: int) -> Iterator[_T]:
+    """ Skip at least n elements if possible.
+
+    Example:
+
+    >>> list(skip_n(iter(range(10)), 0))
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+    >>> list(skip_n(iter(range(10)), 1))
+    [1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+    >>> list(skip_n(iter(range(10)), 9))
+    [9]
+
+    >>> list(skip_n(iter(range(10)), 10))
+    []
+
+    >>> list(skip_n(iter(range(10)), 11))
+    []
+    """
+    for _ in range(n):
+        try:
+            next(it)
+        except StopIteration:
+            return it
+    return it

@@ -12,4 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-__version__ = '0.47.0'
+from hathor.indexes.address_index import AddressIndex
+from hathor.indexes.manager import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
+from hathor.indexes.timestamp_index import TimestampIndex
+
+__all__ = [
+    'IndexesManager',
+    'MemoryIndexesManager',
+    'RocksDBIndexesManager',
+    'AddressIndex',
+    'TimestampIndex',
+]

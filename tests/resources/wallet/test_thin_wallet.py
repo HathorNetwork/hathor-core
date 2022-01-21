@@ -495,6 +495,22 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(response_data['success'])
 
     @inlineCallbacks
+    def test_address_history_invalid_params_post(self):
+        # missing param
+        response_history = yield self.web_address_history.post('thin_wallet/address_history')
+        response_data = response_history.json_value()
+        self.assertFalse(response_data['success'])
+
+        # invalid address
+        response_history = yield self.web_address_history.post(
+            'thin_wallet/address_history', {
+                'addresses[]': 'aaa'
+            }
+        )
+        response_data = response_history.json_value()
+        self.assertFalse(response_data['success'])
+
+    @inlineCallbacks
     def test_send_tokens_invalid_params(self):
         # missing body
         response = yield self.web.post('thin_wallet/send_tokens')

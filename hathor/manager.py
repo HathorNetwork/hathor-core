@@ -29,7 +29,6 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.exception import HathorError, InvalidNewTransaction
-from hathor.indexes import TokensIndex, WalletIndex
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
@@ -149,8 +148,10 @@ class HathorManager:
         self.tx_storage = tx_storage
         self.tx_storage.pubsub = self.pubsub
         if wallet_index and self.tx_storage.with_index:
-            self.tx_storage.wallet_index = WalletIndex(self.pubsub)
-            self.tx_storage.tokens_index = TokensIndex()
+            assert self.tx_storage.indexes is not None
+            self.log.debug('enable wallet indexes')
+            self.tx_storage.indexes.enable_address_index(self.pubsub)
+            self.tx_storage.indexes.enable_tokens_index()
 
         self.metrics = Metrics(
             pubsub=self.pubsub,
@@ -300,7 +301,6 @@ class HathorManager:
             wait_stratum = self.stratum_factory.stop()
             if wait_stratum:
                 waits.append(wait_stratum)
-
         return defer.DeferredList(waits)
 
     def do_discovery(self) -> None:
@@ -351,6 +351,7 @@ class HathorManager:
         tx_count = 0
 
         self.tx_storage.pre_init()
+        assert self.tx_storage.indexes is not None
 
         # After introducing soft voided transactions we need to guarantee the full node is not using
         # a database that already has the soft voided transaction before marking them in the metadata
@@ -425,13 +426,12 @@ class HathorManager:
                         assert isinstance(tx, Transaction)
                         tx._height_cache = self.tx_storage.needed_index_height(tx.hash)
                     if tx.can_validate_full():
+                        assert self.tx_storage.indexes is not None
                         self.tx_storage.add_to_indexes(tx)
                         assert tx.validate_full(skip_block_weight_verification=skip_block_weight_verification)
                         self.consensus_algorithm.update(tx)
-                        self.tx_storage.update_mempool_tips(tx)
+                        self.tx_storage.indexes.mempool_tips.update(tx)
                         self.step_validations([tx])
-                        if tx.is_block:
-                            self.tx_storage.add_to_parent_blocks_index(tx.hash)
                     else:
                         assert tx.validate_basic(skip_block_weight_verification=skip_block_weight_verification)
                         self.tx_storage.add_to_deps_index(tx.hash, tx.get_all_dependencies())
@@ -444,9 +444,8 @@ class HathorManager:
                             assert tx_meta.validation.is_at_least_basic(), f'invalid: {tx.hash_hex}'
                         self.tx_storage.add_needed_deps(tx)
                     elif tx.is_transaction and tx_meta.first_block is None and not tx_meta.voided_by:
-                        self.tx_storage.update_mempool_tips(tx)
-                    elif tx.is_block:
-                        self.tx_storage.add_to_parent_blocks_index(tx.hash)
+                        assert self.tx_storage.indexes is not None
+                        self.tx_storage.indexes.mempool_tips.update(tx)
                     self.tx_storage.add_to_indexes(tx)
                     if tx.is_transaction and tx_meta.voided_by:
                         self.tx_storage.del_from_indexes(tx)
@@ -462,7 +461,7 @@ class HathorManager:
                 assert tx_meta.validation.is_at_least_basic()
                 if not tx_meta.voided_by and tx_meta.validation.is_fully_connected():
                     # XXX: this might not be needed when making a full init because the consensus should already have
-                    self.tx_storage.add_reorg_to_block_height_index(tx_meta.height, tx.hash, tx.timestamp)
+                    self.tx_storage.indexes.height.add_reorg(tx_meta.height, tx.hash, tx.timestamp)
 
                 # Check if it's a checkpoint block
                 if tx_meta.height in checkpoint_heights:
@@ -899,14 +898,13 @@ class HathorManager:
         already. Or it might happen later.
         """
         assert tx.hash is not None
+        assert self.tx_storage.indexes is not None
 
         # Publish to pubsub manager the new tx accepted, now that it's full validated
         self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
 
         self.tx_storage.del_from_deps_index(tx.hash)
-        self.tx_storage.update_mempool_tips(tx)
-        if tx.is_block:
-            self.tx_storage.add_to_parent_blocks_index(tx.hash)
+        self.tx_storage.indexes.mempool_tips.update(tx)
 
         if self.wallet:
             # TODO Remove it and use pubsub instead.

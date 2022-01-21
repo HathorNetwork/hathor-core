@@ -1,0 +1,86 @@
+# Copyright 2021 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from abc import ABC, abstractmethod
+from typing import List, NamedTuple, Optional, Tuple
+
+from structlog import get_logger
+
+from hathor.transaction import BaseTransaction
+
+logger = get_logger()
+
+
+class RangeIdx(NamedTuple):
+    timestamp: int
+    offset: int
+
+
+class TimestampIndex(ABC):
+    """ Index of transactions sorted by their timestamps.
+    """
+
+    @abstractmethod
+    def add_tx(self, tx: BaseTransaction) -> bool:
+        """ Add a transaction to the index
+
+        :param tx: Transaction to be added
+        :return: Whether the key was new to the index. True means we just added it, False means it was already here.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def del_tx(self, tx: BaseTransaction) -> None:
+        """ Delete a transaction from the index
+
+        :param tx: Transaction to be deleted
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_newest(self, count: int) -> Tuple[List[bytes], bool]:
+        """ Get transactions or blocks from the newest to the oldest
+
+        :param count: Number of transactions or blocks to be returned
+        :return: List of tx hashes and a boolean indicating if has more txs
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_older(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[bytes], bool]:
+        """ Get transactions or blocks from the timestamp/hash_bytes reference to the oldest
+
+        :param timestamp: Timestamp reference to start the search
+        :param hash_bytes: Hash reference to start the search
+        :param count: Number of transactions or blocks to be returned
+        :return: List of tx hashes and a boolean indicating if has more txs
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_newer(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[bytes], bool]:
+        """ Get transactions or blocks from the timestamp/hash_bytes reference to the newest
+
+        :param timestamp: Timestamp reference to start the search
+        :param hash_bytes: Hash reference to start the search
+        :param count: Number of transactions or blocks to be returned
+        :return: List of tx hashes and a boolean indicating if has more txs
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_hashes_and_next_idx(self, from_idx: RangeIdx, count: int) -> Tuple[List[bytes], Optional[RangeIdx]]:
+        """ Get up to count hashes if available and the next range-index, this is used by sync-v1.
+        """
+        raise NotImplementedError

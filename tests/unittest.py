@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import tempfile
 import time
@@ -15,13 +16,13 @@ from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
-from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.util import Random
 from hathor.wallet import Wallet
 
 logger = get_logger()
 main = ut_main
 settings = HathorSettings()
+USE_MEMORY_STORAGE = os.environ.get('HATHOR_TEST_MEMORY_STORAGE', 'false').lower() == 'true'
 
 
 def shorten_hash(container):
@@ -59,6 +60,7 @@ class SyncBridgeParams:
 class TestCase(unittest.TestCase):
     _enable_sync_v1: bool
     _enable_sync_v2: bool
+    use_memory_storage: bool = USE_MEMORY_STORAGE
 
     def setUp(self):
         _set_test_mode(TestMode.TEST_ALL_WEIGHT)
@@ -123,7 +125,14 @@ class TestCase(unittest.TestCase):
             if unlock_wallet:
                 wallet.unlock(b'MYPASS')
         if tx_storage is None:
-            tx_storage = TransactionMemoryStorage()
+            if self.use_memory_storage:
+                from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
+                tx_storage = TransactionMemoryStorage()
+            else:
+                from hathor.transaction.storage.rocksdb_storage import TransactionRocksDBStorage
+                directory = tempfile.mkdtemp()
+                self.tmpdirs.append(directory)
+                tx_storage = TransactionRocksDBStorage(directory)
         manager = HathorManager(
             self.clock,
             peer_id=peer_id,

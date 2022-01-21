@@ -23,13 +23,11 @@ from intervaltree.interval import Interval
 from structlog import get_logger
 
 from hathor.conf import HathorSettings
-from hathor.indexes import IndexesManager, TokensIndex, TransactionsIndex, WalletIndex
+from hathor.indexes import IndexesManager, MemoryIndexesManager
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction
 from hathor.transaction.block import Block
-from hathor.transaction.storage.block_height_index import BlockHeightIndex
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
-from hathor.transaction.storage.traversal import BFSWalk
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata, ValidationState
 from hathor.util import not_none
@@ -55,27 +53,16 @@ class _DirDepValue(Dict[bytes, ValidationState]):
         return all(val.is_fully_connected() for val in self.values())
 
 
-class _AddToCacheItem(NamedTuple):
-    height: int
-    hash: bytes
-    timestamp: int
-
-
 class TransactionStorage(ABC):
     """Legacy sync interface, please copy @deprecated decorator when implementing methods."""
 
     pubsub: Optional[PubSubManager]
     with_index: bool
-    wallet_index: Optional[WalletIndex]
-    tokens_index: Optional[TokensIndex]
-    block_index: Optional[IndexesManager]
-    tx_index: Optional[IndexesManager]
-    all_index: Optional[IndexesManager]
+    indexes: Optional[IndexesManager]
+
     log = get_logger()
 
     def __init__(self):
-        from hathor.transaction.genesis import BLOCK_GENESIS
-
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
         self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
         self._tx_weakref_disabled: bool = False
@@ -117,9 +104,6 @@ class TransactionStorage(ABC):
         # Key storage attribute to save if the manager is running
         self._manager_running_attribute: str = 'manager_running'
 
-        # Cache of block hash by height
-        self._block_height_index = BlockHeightIndex()
-
         # Direct and reverse dependency mapping (i.e. needs and needed by)
         self._dir_dep_index: Dict[bytes, _DirDepValue] = {}
         self._rev_dep_index: Dict[bytes, Set[bytes]] = {}
@@ -127,13 +111,6 @@ class TransactionStorage(ABC):
 
         # Needed txs (key: tx missing, value: requested by)
         self._needed_txs_index: Dict[bytes, Tuple[int, bytes]] = {}
-
-        # Hold txs that have not been confirmed
-        self._mempool_tips_index: Set[bytes] = set()
-
-        # Hold blocks that can be used as the next parent block
-        # XXX: if there is more than one they must all have the same score, must always have at least one hash
-        self._parent_blocks_index: Set[bytes] = {BLOCK_GENESIS.hash}
 
     # rev-dep-index methods:
 
@@ -286,162 +263,6 @@ class TransactionStorage(ABC):
             if not self.transaction_exists(tx_hash):
                 self._needed_txs_index[tx_hash] = (height, not_none(tx.hash))
 
-    # parent-blocks-index methods:
-
-    def add_to_parent_blocks_index(self, block: bytes) -> None:
-        from math import isclose
-        meta = not_none(self.get_metadata(block))
-        new_score = not_none(meta).score
-        cur_score = not_none(self.get_metadata(next(iter(self._parent_blocks_index)))).score
-        if isclose(new_score, cur_score):
-            self.log.debug('same score: new competing block', block=block.hex(), height=meta.height, score=meta.score)
-            self._parent_blocks_index.add(block)
-        elif new_score > cur_score and not meta.voided_by:
-            # If it's a high score, then I can't add one that is voided
-            self.log.debug('high score: new best block', block=block.hex(), height=meta.height, score=meta.score)
-            self._parent_blocks_index.clear()
-            self._parent_blocks_index.add(block)
-        else:
-            self.log.debug('low score: skip block', block=block.hex(), height=meta.height, score=meta.score)
-
-    # tx-tips-index methods:
-
-    def iter_mempool_tips(self, max_timestamp: Optional[float] = None) -> Iterator[Transaction]:
-        """
-        Iterate over txs that are tips, a subset of the mempool (i.e. not tx-parent of another tx on the mempool).
-        """
-        it = map(self.get_transaction, self._mempool_tips_index)
-        if max_timestamp is not None:
-            it = filter(lambda tx: tx.timestamp < not_none(max_timestamp), it)
-        yield from cast(Iterator[Transaction], it)
-
-    def remove_from_mempool_tips_index(self, remove_txs: Iterable[bytes]) -> None:
-        """
-        This should be called to remove a transaction from the "mempool", usually when it is confirmed by a block.
-        """
-        for tx in iter(remove_txs):
-            if tx in self._mempool_tips_index:
-                self._mempool_tips_index.remove(tx)
-
-    def get_mempool_tips_index(self) -> Set[bytes]:
-        """
-        Get the set of mempool tips indexed.
-
-        What to do with `get_tx_tips()`? They kind of do the same thing and it might be really confusing in the future.
-        """
-        return self._mempool_tips_index.copy()
-
-    def iter_mempool(self) -> Iterator[Transaction]:
-        """
-        Iterate over the transactions on the "mempool", even the ones that are not tips.
-        """
-        bfs = BFSWalk(self, is_dag_verifications=True, is_left_to_right=False)
-        for tx in bfs.run(map(self.get_transaction, self._mempool_tips_index), skip_root=False):
-            assert isinstance(tx, Transaction)
-            if tx.get_metadata().first_block is not None:
-                bfs.skip_neighbors(tx)
-            else:
-                yield tx
-
-    def update_mempool_tips(self, tx: BaseTransaction) -> None:
-        """
-        This should be called when a new `tx` is created and added to the "mempool".
-        """
-        # A new tx/block added might cause a tx in the tips to become voided. For instance,
-        # there might be a tx1 a double spending tx2, where tx1 is valid and tx2 voided. A new block
-        # confirming tx2 will make it valid while tx1 becomes voided, so it has to be removed
-        # from the tips.
-        assert tx.hash is not None
-        to_remove: Set[bytes] = set()
-        to_remove_parents: Set[bytes] = set()
-        for tip_tx in self.iter_mempool_tips():
-            assert tip_tx.hash is not None
-            # A new tx/block added might cause a tx in the tips to become voided. For instance,
-            # there might be twin txs, tx1 and tx2, where tx1 is valid and tx2 voided. A new block
-            # confirming tx2 will make it valid while tx1 becomes voided, so it has to be removed
-            # from the tips. The txs confirmed by tx1 need to be double checked, as they might
-            # themselves become tips (hence we use to_remove_parents)
-            meta = tip_tx.get_metadata()
-            if meta.voided_by:
-                to_remove.add(tip_tx.hash)
-                to_remove_parents.update(tip_tx.parents)
-                continue
-
-            # might also happen that a tip has a child that became valid, so it's not a tip anymore
-            confirmed = False
-            for child_meta in map(self.get_metadata, meta.children):
-                assert child_meta is not None
-                if not child_meta.voided_by:
-                    confirmed = True
-                    break
-            if confirmed:
-                to_remove.add(tip_tx.hash)
-
-        if to_remove:
-            self.remove_from_mempool_tips_index(to_remove)
-            self.log.debug('removed voided txs from tips', txs=[tx.hex() for tx in to_remove])
-
-        # Check if any of the txs being confirmed by the voided txs is a tip again. This happens
-        # if it doesn't have any other valid child.
-        to_add = set()
-        for tx_hash in to_remove_parents:
-            confirmed = False
-            # check if it has any valid children
-            meta = not_none(self.get_metadata(tx_hash))
-            if meta.voided_by:
-                continue
-            children = meta.children
-            for child_meta in map(self.get_metadata, children):
-                assert child_meta is not None
-                if not child_meta.voided_by:
-                    confirmed = True
-                    break
-            if not confirmed:
-                to_add.add(tx_hash)
-
-        if to_add:
-            self._mempool_tips_index.update(to_add)
-            self.log.debug('added txs to tips', txs=[tx.hex() for tx in to_add])
-
-        if tx.get_metadata().voided_by:
-            # this tx is voided, don't need to update the tips
-            self.log.debug('voided tx, won\'t add it as a tip', tx=tx.hash_hex)
-            return
-
-        self.remove_from_mempool_tips_index(set(tx.parents))
-
-        if tx.is_transaction and tx.get_metadata().first_block is None:
-            assert tx.hash is not None
-            self._mempool_tips_index.add(tx.hash)
-
-    # block height index methods:
-
-    def update_block_height_cache_new_chain(self, height: int, block: Block) -> None:
-        """ When we have a new winner chain we must update all the height index
-            until the first height with a common block
-        """
-        assert self.get_from_block_height_index(height) != block.hash
-
-        block_height = height
-        side_chain_block = block
-        add_to_cache: List[_AddToCacheItem] = []
-        while self.get_from_block_height_index(block_height) != side_chain_block.hash:
-            add_to_cache.append(
-                _AddToCacheItem(block_height, not_none(side_chain_block.hash), side_chain_block.timestamp)
-            )
-
-            side_chain_block = side_chain_block.get_block_parent()
-            new_block_height = side_chain_block.get_metadata().height
-            assert new_block_height + 1 == block_height
-            block_height = new_block_height
-
-        # Reverse the data because I was adding in the array from the highest block
-        reversed_add_to_cache = reversed(add_to_cache)
-
-        for item in reversed_add_to_cache:
-            # Add it to the index
-            self.add_reorg_to_block_height_index(item.height, item.hash, item.timestamp)
-
     # all other methods:
 
     def update_best_block_tips_cache(self, tips_cache: List[bytes]) -> None:
@@ -510,7 +331,8 @@ class TransactionStorage(ABC):
 
     def get_best_block(self) -> Block:
         """The block with highest score or one of the blocks with highest scores. Can be used for mining."""
-        block_hash = self._block_height_index.get_tip()
+        assert self.indexes is not None
+        block_hash = self.indexes.height.get_tip()
         block = self.get_transaction(block_hash)
         assert isinstance(block, Block)
         assert block.get_metadata().validation.is_fully_connected()
@@ -606,16 +428,7 @@ class TransactionStorage(ABC):
         :param tx: Trasaction to be removed
         """
         if self.with_index:
-            assert self.all_index is not None
-
-            self.del_from_indexes(tx, relax_assert=True)
-            # TODO Move it to self.del_from_indexes. We cannot simply do it because
-            #      this method is used by the consensus algorithm which does not
-            #      expect to have it removed from self.all_index.
-            self.all_index.del_tx(tx, relax_assert=True)
-
-            if self.wallet_index:
-                self.wallet_index.remove_tx(tx)
+            self.del_from_indexes(tx, remove_all=True, relax_assert=True)
 
     @abstractmethod
     def transaction_exists(self, hash_bytes: bytes) -> bool:
@@ -884,7 +697,7 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def del_from_indexes(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
+    def del_from_indexes(self, tx: BaseTransaction, *, remove_all: bool = False, relax_assert: bool = False) -> None:
         raise NotImplementedError
 
     @abstractmethod
@@ -921,12 +734,6 @@ class TransactionStorage(ABC):
         :param hash_bytes: Starting point of the BFS.
         :param num_blocks: Number of blocks to be return.
         :return: List of transactions
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_all_sorted_txs(self, timestamp: int, count: int, offset: int) -> TransactionsIndex:
-        """ Returns ordered blocks and txs in a TransactionIndex
         """
         raise NotImplementedError
 
@@ -987,18 +794,6 @@ class TransactionStorage(ABC):
         """
         return self.get_value(self._manager_running_attribute) == '1'
 
-    def add_new_to_block_height_index(self, height: int, block_hash: bytes, timestamp: int) -> None:
-        """Add a new block to the height index that must not result in a re-org"""
-        self._block_height_index.add(height, block_hash, timestamp)
-
-    def add_reorg_to_block_height_index(self, height: int, block_hash: bytes, timestamp: int) -> None:
-        """Add a new block to the height index that can result in a re-org"""
-        # XXX: in the future we can make this more strict so that it MUST result in a re-orgr
-        self._block_height_index.add(height, block_hash, timestamp, can_reorg=True)
-
-    def get_from_block_height_index(self, height: int) -> bytes:
-        return self._block_height_index.get(height)
-
 
 class BaseTransactionStorage(TransactionStorage):
     def __init__(self, with_index: bool = True, pubsub: Optional[Any] = None) -> None:
@@ -1027,17 +822,16 @@ class BaseTransactionStorage(TransactionStorage):
     def _save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         raise NotImplementedError
 
+    def _build_indexes_manager(self) -> IndexesManager:
+        return MemoryIndexesManager()
+
     def _reset_cache(self) -> None:
         """Reset all caches. This function should not be called unless you know what you are doing."""
         assert self.with_index, 'Cannot reset cache because it has not been enabled.'
         self._cache_block_count = 0
         self._cache_tx_count = 0
 
-        self.block_index = IndexesManager()
-        self.tx_index = IndexesManager()
-        self.all_index = IndexesManager()
-        self.wallet_index = None
-        self.tokens_index = None
+        self.indexes = self._build_indexes_manager()
 
         genesis = self.get_all_genesis()
         if genesis:
@@ -1050,9 +844,7 @@ class BaseTransactionStorage(TransactionStorage):
     def remove_cache(self) -> None:
         """Remove all caches in case we don't need it."""
         self.with_index = False
-        self.block_index = None
-        self.tx_index = None
-        self.all_index = None
+        self.indexes = None
 
     def get_best_block_tips(self, timestamp: Optional[float] = None, *, skip_cache: bool = False) -> List[bytes]:
         return super().get_best_block_tips(timestamp, skip_cache=skip_cache)
@@ -1063,20 +855,18 @@ class BaseTransactionStorage(TransactionStorage):
     def get_block_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         if not self.with_index:
             raise NotImplementedError
-        assert self.block_index is not None
-        assert self.block_index.tips_index is not None
+        assert self.indexes is not None
         if timestamp is None:
             timestamp = self.latest_timestamp
-        return self.block_index.tips_index[timestamp]
+        return self.indexes.block_tips[timestamp]
 
     def get_tx_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         if not self.with_index:
             raise NotImplementedError
-        assert self.tx_index is not None
-        assert self.tx_index.tips_index is not None
+        assert self.indexes is not None
         if timestamp is None:
             timestamp = self.latest_timestamp
-        tips = self.tx_index.tips_index[timestamp]
+        tips = self.indexes.tx_tips[timestamp]
 
         if __debug__:
             # XXX: this `for` is for assert only and thus is inside `if __debug__:`
@@ -1090,7 +880,7 @@ class BaseTransactionStorage(TransactionStorage):
     def get_all_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
         if not self.with_index:
             raise NotImplementedError
-        assert self.all_index is not None
+        assert self.indexes is not None
         if timestamp is None:
             timestamp = self.latest_timestamp
 
@@ -1098,8 +888,7 @@ class BaseTransactionStorage(TransactionStorage):
             assert self._all_tips_cache.timestamp == self.latest_timestamp
             return self._all_tips_cache.tips
 
-        assert self.all_index.tips_index is not None
-        tips = self.all_index.tips_index[timestamp]
+        tips = self.indexes.all_tips[timestamp]
         if timestamp >= self.latest_timestamp:
             merkle_tree, hashes = self.calculate_merkle_tree(tips)
             self._all_tips_cache = AllTipsCache(self.latest_timestamp, tips, merkle_tree, hashes)
@@ -1109,24 +898,24 @@ class BaseTransactionStorage(TransactionStorage):
     def get_newest_blocks(self, count: int) -> Tuple[List[Block], bool]:
         if not self.with_index:
             raise NotImplementedError
-        assert self.block_index is not None
-        block_hashes, has_more = self.block_index.get_newest(count)
+        assert self.indexes is not None
+        block_hashes, has_more = self.indexes.sorted_blocks.get_newest(count)
         blocks = [cast(Block, self.get_transaction(block_hash)) for block_hash in block_hashes]
         return blocks, has_more
 
     def get_newest_txs(self, count: int) -> Tuple[List[BaseTransaction], bool]:
         if not self.with_index:
             raise NotImplementedError
-        assert self.tx_index is not None
-        tx_hashes, has_more = self.tx_index.get_newest(count)
+        assert self.indexes is not None
+        tx_hashes, has_more = self.indexes.sorted_txs.get_newest(count)
         txs = [self.get_transaction(tx_hash) for tx_hash in tx_hashes]
         return txs, has_more
 
     def get_older_blocks_after(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[Block], bool]:
         if not self.with_index:
             raise NotImplementedError
-        assert self.block_index is not None
-        block_hashes, has_more = self.block_index.get_older(timestamp, hash_bytes, count)
+        assert self.indexes is not None
+        block_hashes, has_more = self.indexes.sorted_blocks.get_older(timestamp, hash_bytes, count)
         blocks = [cast(Block, self.get_transaction(block_hash)) for block_hash in block_hashes]
         return blocks, has_more
 
@@ -1134,24 +923,24 @@ class BaseTransactionStorage(TransactionStorage):
                                count: int) -> Tuple[List[BaseTransaction], bool]:
         if not self.with_index:
             raise NotImplementedError
-        assert self.block_index is not None
-        block_hashes, has_more = self.block_index.get_newer(timestamp, hash_bytes, count)
+        assert self.indexes is not None
+        block_hashes, has_more = self.indexes.sorted_blocks.get_newer(timestamp, hash_bytes, count)
         blocks = [self.get_transaction(block_hash) for block_hash in block_hashes]
         return blocks, has_more
 
     def get_older_txs_after(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[BaseTransaction], bool]:
         if not self.with_index:
             raise NotImplementedError
-        assert self.tx_index is not None
-        tx_hashes, has_more = self.tx_index.get_older(timestamp, hash_bytes, count)
+        assert self.indexes is not None
+        tx_hashes, has_more = self.indexes.sorted_txs.get_older(timestamp, hash_bytes, count)
         txs = [self.get_transaction(tx_hash) for tx_hash in tx_hashes]
         return txs, has_more
 
     def get_newer_txs_after(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[BaseTransaction], bool]:
         if not self.with_index:
             raise NotImplementedError
-        assert self.tx_index is not None
-        tx_hashes, has_more = self.tx_index.get_newer(timestamp, hash_bytes, count)
+        assert self.indexes is not None
+        tx_hashes, has_more = self.indexes.sorted_txs.get_newer(timestamp, hash_bytes, count)
         txs = [self.get_transaction(tx_hash) for tx_hash in tx_hashes]
         return txs, has_more
 
@@ -1222,9 +1011,7 @@ class BaseTransactionStorage(TransactionStorage):
     def add_to_indexes(self, tx: BaseTransaction) -> None:
         if not self.with_index:
             raise NotImplementedError
-        assert self.all_index is not None
-        assert self.block_index is not None
-        assert self.tx_index is not None
+        assert self.indexes is not None
         self._latest_timestamp = max(self.latest_timestamp, tx.timestamp)
         if self._first_timestamp == 0:
             self._first_timestamp = tx.timestamp
@@ -1232,31 +1019,24 @@ class BaseTransactionStorage(TransactionStorage):
             self._first_timestamp = min(self.first_timestamp, tx.timestamp)
         self._first_timestamp = min(self.first_timestamp, tx.timestamp)
         self._all_tips_cache = None
-        self.all_index.add_tx(tx)
-        if self.wallet_index:
-            self.wallet_index.add_tx(tx)
-        if self.tokens_index:
-            self.tokens_index.add_tx(tx)
-        if tx.is_block:
-            if self.block_index.add_tx(tx):
+
+        success = self.indexes.add_tx(tx)
+
+        if success:
+            if tx.is_block:
                 self._cache_block_count += 1
-        else:
-            if self.tx_index.add_tx(tx):
+            else:
                 self._cache_tx_count += 1
 
-    def del_from_indexes(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
+    def del_from_indexes(self, tx: BaseTransaction, *, remove_all: bool = False, relax_assert: bool = False) -> None:
         if not self.with_index:
             raise NotImplementedError
-        assert self.block_index is not None
-        assert self.tx_index is not None
-        if self.tokens_index:
-            self.tokens_index.del_tx(tx)
+        assert self.indexes is not None
+        self.indexes.del_tx(tx, remove_all=remove_all, relax_assert=relax_assert)
         if tx.is_block:
             self._cache_block_count -= 1
-            self.block_index.del_tx(tx, relax_assert=relax_assert)
         else:
             self._cache_tx_count -= 1
-            self.tx_index.del_tx(tx, relax_assert=relax_assert)
 
     def get_block_count(self) -> int:
         if not self.with_index:
@@ -1305,16 +1085,3 @@ class BaseTransactionStorage(TransactionStorage):
                     used.add(parent_hash)
                     pending_visits.append(parent_hash)
         return result
-
-    def get_all_sorted_txs(self, timestamp: int, count: int, offset: int) -> TransactionsIndex:
-        """ Returns ordered blocks and txs in a TransactionIndex
-        """
-        assert self.all_index is not None
-
-        idx = self.all_index.txs_index.find_first_at_timestamp(timestamp)
-        txs = self.all_index.txs_index[idx:idx+offset+count]
-
-        # merge sorted txs and blocks
-        all_sorted = TransactionsIndex()
-        all_sorted.update(txs)
-        return all_sorted

@@ -4,13 +4,7 @@ import pytest
 
 from hathor.cli.shell import Shell
 from tests import unittest
-
-try:
-    import rocksdb  # noqa: F401
-except ImportError:
-    HAS_ROCKSDB = False
-else:
-    HAS_ROCKSDB = True
+from tests.utils import HAS_ROCKSDB
 
 
 class ShellTest(unittest.TestCase):

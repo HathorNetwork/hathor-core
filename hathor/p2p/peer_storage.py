@@ -42,3 +42,10 @@ class PeerStorage(Dict[str, PeerId]):
         else:
             current = self[peer.id]
             current.merge(peer)
+
+    def remove(self, peer: PeerId) -> None:
+        """ Remove a peer from the storage
+        """
+        assert peer.id is not None
+        if peer.id in self:
+            del self[peer.id]

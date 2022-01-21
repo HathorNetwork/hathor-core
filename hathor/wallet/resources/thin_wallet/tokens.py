@@ -38,35 +38,36 @@ class TokenResource(resource.Resource):
 
     def get_one_token_data(self, token_uid: bytes) -> Dict[str, Any]:
         # Get one token data specified in id
+        tokens_index = self.manager.tx_storage.indexes.tokens
         try:
-            token_info = self.manager.tx_storage.tokens_index.get_token_info(token_uid)
+            token_info = tokens_index.get_token_info(token_uid)
         except KeyError:
             return {'success': False, 'message': 'Unknown token'}
 
         mint = []
         melt = []
 
-        transactions_count = self.manager.tx_storage.tokens_index.get_transactions_count(token_uid)
+        transactions_count = tokens_index.get_transactions_count(token_uid)
 
-        for tx_hash, index in token_info.mint:
+        for tx_hash, index in token_info.iter_mint_utxos():
             mint.append({
                 'tx_id': tx_hash.hex(),
                 'index': index
             })
 
-        for tx_hash, index in token_info.melt:
+        for tx_hash, index in token_info.iter_melt_utxos():
             melt.append({
                 'tx_id': tx_hash.hex(),
                 'index': index
             })
 
         data = {
-            'name': token_info.name,
-            'symbol': token_info.symbol,
+            'name': token_info.get_name(),
+            'symbol': token_info.get_symbol(),
             'success': True,
             'mint': mint,
             'melt': melt,
-            'total': token_info.total,
+            'total': token_info.get_total(),
             'transactions_count': transactions_count,
         }
         return data
@@ -78,14 +79,14 @@ class TokenResource(resource.Resource):
         # XXX For now we only set a fixed limit of 200 tokens to return
 
         # Get all tokens
-        all_tokens = self.manager.tx_storage.tokens_index.tokens
+        all_tokens = self.manager.tx_storage.indexes.tokens.iter_all_tokens()
 
         tokens = []
         count = 0
         limit = 200
         truncated = False
-        for uid, token_info in all_tokens.items():
-            if uid is settings.HATHOR_TOKEN_UID:
+        for uid, token_info in all_tokens:
+            if uid == settings.HATHOR_TOKEN_UID:
                 continue
 
             if count >= limit:
@@ -95,8 +96,8 @@ class TokenResource(resource.Resource):
             tokens.append(
                 {
                     'uid': uid.hex(),
-                    'name': token_info.name,
-                    'symbol': token_info.symbol,
+                    'name': token_info.get_name(),
+                    'symbol': token_info.get_symbol(),
                 }
             )
 
@@ -119,7 +120,7 @@ class TokenResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        if not self.manager.tx_storage.tokens_index:
+        if not self.manager.tx_storage.indexes.tokens:
             request.setResponseCode(503)
             return json.dumps({'success': False}).encode('utf-8')
 

@@ -1,3 +1,5 @@
+import tempfile
+
 from twisted.internet.defer import succeed
 from twisted.web import server
 from twisted.web.test.requesthelper import DummyRequest
@@ -5,7 +7,6 @@ from twisted.web.test.requesthelper import DummyRequest
 from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
-from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.util import json_dumpb, json_loadb
 from tests import unittest
 
@@ -18,7 +19,14 @@ class _BaseResourceTest:
             wallet = self._create_test_wallet()
             tx_storage = getattr(self, 'tx_storage', None)
             if tx_storage is None:
-                tx_storage = TransactionMemoryStorage()
+                if self.use_memory_storage:
+                    from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
+                    tx_storage = TransactionMemoryStorage()
+                else:
+                    from hathor.transaction.storage.rocksdb_storage import TransactionRocksDBStorage
+                    directory = tempfile.mkdtemp()
+                    self.tmpdirs.append(directory)
+                    tx_storage = TransactionRocksDBStorage(directory)
             assert (
                 hasattr(self, '_enable_sync_v1') and
                 hasattr(self, '_enable_sync_v2') and

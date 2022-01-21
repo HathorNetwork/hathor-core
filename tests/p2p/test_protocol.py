@@ -311,13 +311,23 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
     def test_on_disconnect_after_peer_id(self):
         self.conn.run_one_step()  # HELLO
         self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        # No peer id in the peer_storage (known_peers)
+        self.assertNotIn(self.peer_id2.id, self.manager1.connections.peer_storage)
         # The peer READY now depends on a message exchange from both peers, so we need one more step
         self.conn.run_one_step()  # PEER-ID
         self.conn.run_one_step()  # READY
         self.assertIn(self.conn.proto1, self.manager1.connections.connected_peers.values())
+        # Peer id 2 in the peer_storage (known_peers) after connection
+        self.assertIn(self.peer_id2.id, self.manager1.connections.peer_storage)
         self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
         self.conn.disconnect(Failure(Exception('testing')))
+        # Peer id 2 in the peer_storage (known_peers) after disconnection but before looping call
+        self.assertIn(self.peer_id2.id, self.manager1.connections.peer_storage)
         self.assertNotIn(self.conn.proto1, self.manager1.connections.connected_peers.values())
+
+        self.clock.advance(10)
+        # Peer id 2 removed from peer_storage (known_peers) after disconnection and after looping call
+        self.assertNotIn(self.peer_id2.id, self.manager1.connections.peer_storage)
 
     def test_two_connections(self):
         self.conn.run_one_step()  # HELLO

@@ -51,11 +51,13 @@ class MempoolResource(resource.Resource):
         set_cors(request, 'GET')
 
         # Get a list of all txs on the mempool
+        assert self.manager.tx_storage.indexes is not None
+        it_mempool = self.manager.tx_storage.indexes.mempool_tips.iter_all(self.manager.tx_storage)
         tx_ids = map(
             # get only tx_ids
             lambda tx: tx.hash_hex,
             # order by timestamp
-            sorted(list(self.manager.tx_storage.iter_mempool()), key=lambda tx: tx.timestamp),
+            sorted(list(it_mempool), key=lambda tx: tx.timestamp),
         )
         # Only return up to settings.MEMPOOL_API_TX_LIMIT txs per call (default: 100)
         data = {'success': True, 'transactions': list(islice(tx_ids, settings.MEMPOOL_API_TX_LIMIT))}

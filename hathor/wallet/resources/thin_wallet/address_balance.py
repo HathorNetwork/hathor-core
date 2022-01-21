@@ -79,10 +79,10 @@ class AddressBalanceResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        wallet_index = self.manager.tx_storage.wallet_index
-        tokens_index = self.manager.tx_storage.tokens_index
+        addresses_index = self.manager.tx_storage.indexes.addresses
+        tokens_index = self.manager.tx_storage.indexes.tokens
 
-        if not wallet_index or not tokens_index:
+        if not addresses_index or not tokens_index:
             request.setResponseCode(503)
             return json.dumps({'success': False}, indent=4).encode('utf-8')
 
@@ -101,7 +101,7 @@ class AddressBalanceResource(resource.Resource):
             }).encode('utf-8')
 
         tokens_data: Dict[bytes, TokenData] = defaultdict(TokenData)
-        tx_hashes = wallet_index.get_from_address(requested_address)
+        tx_hashes = addresses_index.get_from_address(requested_address)
         for tx_hash in tx_hashes:
             tx = self.manager.tx_storage.get_transaction(tx_hash)
             meta = tx.get_metadata(force_reload=True)
@@ -129,8 +129,8 @@ class AddressBalanceResource(resource.Resource):
             else:
                 try:
                     token_info = tokens_index.get_token_info(token_uid)
-                    tokens_data[token_uid].name = token_info.name
-                    tokens_data[token_uid].symbol = token_info.symbol
+                    tokens_data[token_uid].name = token_info.get_name()
+                    tokens_data[token_uid].symbol = token_info.get_symbol()
                 except KeyError:
                     # Should never get here because this token appears in our wallet index
                     # But better than get a 500 error
