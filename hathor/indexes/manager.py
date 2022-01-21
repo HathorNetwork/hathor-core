@@ -119,14 +119,15 @@ class MemoryIndexesManager(IndexesManager):
     def __init__(self) -> None:
         from hathor.indexes.memory_height_index import MemoryHeightIndex
         from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
+        from hathor.indexes.memory_timestamp_index import MemoryTimestampIndex
 
         self.all_tips = TipsIndex()
         self.block_tips = TipsIndex()
         self.tx_tips = TipsIndex()
 
-        self.sorted_all = TimestampIndex()
-        self.sorted_blocks = TimestampIndex()
-        self.sorted_txs = TimestampIndex()
+        self.sorted_all = MemoryTimestampIndex()
+        self.sorted_blocks = MemoryTimestampIndex()
+        self.sorted_txs = MemoryTimestampIndex()
 
         self.addresses = None
         self.tokens = None
@@ -148,6 +149,7 @@ class RocksDBIndexesManager(IndexesManager):
     def __init__(self, db: 'rocksdb.DB') -> None:
         from hathor.indexes.rocksdb_height_index import RocksDBHeightIndex
         from hathor.indexes.rocksdb_mempool_tips_index import RocksDBMempoolTipsIndex
+        from hathor.indexes.rocksdb_timestamp_index import RocksDBTimestampIndex
 
         self._db = db
 
@@ -155,9 +157,9 @@ class RocksDBIndexesManager(IndexesManager):
         self.block_tips = TipsIndex()
         self.tx_tips = TipsIndex()
 
-        self.sorted_all = TimestampIndex()
-        self.sorted_blocks = TimestampIndex()
-        self.sorted_txs = TimestampIndex()
+        self.sorted_all = RocksDBTimestampIndex(self._db, cf_name=b'timestamp-sorted-all')
+        self.sorted_blocks = RocksDBTimestampIndex(self._db, cf_name=b'timestamp-sorted-blocks')
+        self.sorted_txs = RocksDBTimestampIndex(self._db, cf_name=b'timestamp-sorted-txs')
 
         self.addresses = None
         self.tokens = None

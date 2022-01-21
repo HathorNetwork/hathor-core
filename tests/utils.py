@@ -16,6 +16,13 @@ from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_addres
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount
 
+try:
+    import rocksdb  # noqa: F401
+except ImportError:
+    HAS_ROCKSDB = False
+else:
+    HAS_ROCKSDB = True
+
 settings = HathorSettings()
 
 MIN_TIMESTAMP = genesis.GENESIS[-1].timestamp + 1

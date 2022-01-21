@@ -344,3 +344,31 @@ def collect_n(it: Iterator[_T], n: int) -> Tuple[List[_T], bool]:
         except StopIteration:
             has_more = False
     return col, has_more
+
+
+def skip_n(it: Iterator[_T], n: int) -> Iterator[_T]:
+    """ Skip at least n elements if possible.
+
+    Example:
+
+    >>> list(skip_n(iter(range(10)), 0))
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+    >>> list(skip_n(iter(range(10)), 1))
+    [1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+    >>> list(skip_n(iter(range(10)), 9))
+    [9]
+
+    >>> list(skip_n(iter(range(10)), 10))
+    []
+
+    >>> list(skip_n(iter(range(10)), 11))
+    []
+    """
+    for _ in range(n):
+        try:
+            next(it)
+        except StopIteration:
+            return it
+    return it

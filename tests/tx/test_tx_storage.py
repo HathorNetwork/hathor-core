@@ -26,19 +26,13 @@ from hathor.transaction.transaction_metadata import ValidationState
 from hathor.wallet import Wallet
 from tests.utils import (
     BURN_ADDRESS,
+    HAS_ROCKSDB,
     MIN_TIMESTAMP,
     add_blocks_unlock_reward,
     add_new_blocks,
     add_new_transactions,
     create_tokens,
 )
-
-try:
-    import rocksdb  # noqa: F401
-except ImportError:
-    HAS_ROCKSDB = False
-else:
-    HAS_ROCKSDB = True
 
 settings = HathorSettings()
 

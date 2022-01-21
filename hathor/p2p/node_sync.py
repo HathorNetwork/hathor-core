@@ -528,28 +528,23 @@ class NodeSyncTimestamp(SyncManager):
     def send_next(self, timestamp: int, offset: int = 0) -> None:
         """ Send a NEXT message.
         """
+        from hathor.indexes.timestamp_index import RangeIdx
         count = self.MAX_HASHES
 
-        all_sorted = self.manager.tx_storage.get_all_sorted_txs(timestamp, count, offset)
-        ret_txs = all_sorted[offset:offset+count]
-        hashes = [tx.hash.hex() for tx in ret_txs]
-
-        if len(ret_txs) < count:
+        assert self.manager.tx_storage.indexes is not None
+        from_idx = RangeIdx(timestamp, offset)
+        hashes, next_idx = self.manager.tx_storage.indexes.sorted_all.get_hashes_and_next_idx(from_idx, count)
+        if next_idx is None:
             # this means we've reached the end and there's nothing else to sync
-            next_offset = 0
-            next_timestamp = inf
+            next_timestamp, next_offset = inf, 0
         else:
-            next_offset = offset + count
-            next_timestamp = ret_txs[-1].timestamp
-            if next_timestamp != timestamp:
-                next_idx = all_sorted.find_first_at_timestamp(next_timestamp)
-                next_offset -= next_idx
+            next_timestamp, next_offset = next_idx
 
         data = {
             'timestamp': timestamp,
             'next_timestamp': next_timestamp,
             'next_offset': next_offset,
-            'hashes': hashes,
+            'hashes': [i.hex() for i in hashes],
         }
         self.send_message(ProtocolMessages.NEXT, json.dumps(data))
 

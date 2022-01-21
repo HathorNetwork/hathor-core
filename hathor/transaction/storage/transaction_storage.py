@@ -23,7 +23,7 @@ from intervaltree.interval import Interval
 from structlog import get_logger
 
 from hathor.conf import HathorSettings
-from hathor.indexes import IndexesManager, MemoryIndexesManager, TimestampIndex
+from hathor.indexes import IndexesManager, MemoryIndexesManager
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction
 from hathor.transaction.block import Block
@@ -737,12 +737,6 @@ class TransactionStorage(ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
-    def get_all_sorted_txs(self, timestamp: int, count: int, offset: int) -> TimestampIndex:
-        """ Returns ordered blocks and txs in a TimestampIndex
-        """
-        raise NotImplementedError
-
     def add_value(self, key: str, value: str) -> None:
         """ Save value on storage
             Need to be a string to support all storages, including rocksdb, that needs bytes
@@ -1091,15 +1085,3 @@ class BaseTransactionStorage(TransactionStorage):
                     used.add(parent_hash)
                     pending_visits.append(parent_hash)
         return result
-
-    def get_all_sorted_txs(self, timestamp: int, count: int, offset: int) -> TimestampIndex:
-        """ Returns ordered blocks and txs in a TimestampIndex
-        """
-        assert self.indexes is not None
-        idx = self.indexes.sorted_all.find_first_at_timestamp(timestamp)
-        txs = self.indexes.sorted_all[idx:idx+offset+count]
-
-        # merge sorted txs and blocks
-        all_sorted = TimestampIndex()
-        all_sorted.update(txs)
-        return all_sorted
