@@ -1,10 +1,10 @@
-import json
 from contextlib import redirect_stdout
 from io import StringIO
 
 from structlog.testing import capture_logs
 
 from hathor.cli.peer_id import main
+from hathor.util import json_loadb
 from tests import unittest
 
 
@@ -17,7 +17,7 @@ class PeerIdTest(unittest.TestCase):
         # Transforming prints str in array
         output = f.getvalue().strip().splitlines()
 
-        peer_id = json.loads("".join(output))
+        peer_id = json_loadb(''.join(output))
         self.assertTrue('id' in peer_id)
         self.assertTrue('pubKey' in peer_id)
         self.assertTrue('entrypoints' in peer_id)

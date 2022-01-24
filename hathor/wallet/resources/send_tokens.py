@@ -12,26 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 from typing import Any, Dict, Optional, Union
 
 from twisted.internet import threads
-from twisted.web import resource
 from twisted.web.http import Request
 
-from hathor.api_util import render_options, set_cors
+from hathor.api_util import Resource, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
 from hathor.daa import minimum_tx_weight
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TxValidationError
+from hathor.util import json_dumpb, json_loadb
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, InvalidAddress, PrivateKeyNotFound
 
 
 @register_resource
-class SendTokensResource(resource.Resource):
+class SendTokensResource(Resource):
     """ Implements a web server API to send tokens.
 
     You must run with option `--status <PORT>`.
@@ -54,7 +53,7 @@ class SendTokensResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
 
-        post_data = json.loads(request.content.read().decode('utf-8'))
+        post_data = json_loadb(request.content.read())
         data = post_data['data']
 
         outputs = []
@@ -174,7 +173,7 @@ class SendTokensResource(resource.Resource):
         }
         if tx:
             ret['tx'] = tx.to_json()
-        return json.dumps(ret, indent=4).encode('utf-8')
+        return json_dumpb(ret)
 
     def render_OPTIONS(self, request):
         return render_options(request)

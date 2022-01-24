@@ -1,4 +1,3 @@
-import json
 import os
 import shutil
 import tempfile
@@ -118,14 +117,15 @@ class PeerIdTest(unittest.TestCase):
             peer_storage.add(p1)
 
     def test_save_peer_file(self):
+        import json
+
         p = PeerId()
         tmpdir = tempfile.mkdtemp()
         path = os.path.join(tmpdir, 'peer.json')
-
         p.save_to_file(path)
 
         with open(path, 'r') as f:
-            peer_from_file = json.loads(f.read())
+            peer_from_file = json.load(f)
 
         self.assertEqual(p.to_json(include_private_key=True), peer_from_file)
 

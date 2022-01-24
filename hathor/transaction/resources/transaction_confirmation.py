@@ -12,18 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 from math import log
 from typing import Any, Dict
 
-from twisted.web import resource
-
-from hathor.api_util import get_missing_params_msg, set_cors, validate_tx_hash
+from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors, validate_tx_hash
 from hathor.cli.openapi_files.register import register_resource
+from hathor.util import json_dumpb
 
 
 @register_resource
-class TransactionAccWeightResource(resource.Resource):
+class TransactionAccWeightResource(Resource):
     """ Implements a web server API to return the confirmation data of a tx
 
     You must run with option `--status <PORT>`.
@@ -73,13 +71,14 @@ class TransactionAccWeightResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        if b'id' not in request.args:
+        raw_args = get_args(request)
+        if b'id' not in raw_args:
             return get_missing_params_msg('id')
 
-        requested_hash = request.args[b'id'][0].decode('utf-8')
+        requested_hash = raw_args[b'id'][0].decode('utf-8')
         data = self._render_GET_data(requested_hash)
 
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 TransactionAccWeightResource.openapi = {

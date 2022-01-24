@@ -12,20 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
-
-from twisted.web import resource
-
 import hathor
-from hathor.api_util import set_cors
+from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
+from hathor.util import json_dumpb
 
 settings = HathorSettings()
 
 
 @register_resource
-class VersionResource(resource.Resource):
+class VersionResource(Resource):
     """ Implements a web server API with POST to return the api version and some configuration
 
     You must run with option `--status <PORT>`.
@@ -56,7 +53,7 @@ class VersionResource(resource.Resource):
             'max_number_inputs': settings.MAX_NUM_INPUTS,
             'max_number_outputs': settings.MAX_NUM_OUTPUTS,
         }
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 VersionResource.openapi = {

@@ -1,11 +1,12 @@
-import json
+from json import JSONDecodeError
 from unittest.mock import Mock
 
 from twisted.internet.defer import inlineCallbacks
-from twisted.test import proto_helpers
+from twisted.internet.testing import StringTransport
 
 from hathor.conf import HathorSettings
 from hathor.pubsub import EventArguments, HathorEvents
+from hathor.util import json_dumpb, json_dumps, json_loadb
 from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance
 from hathor.websocket import WebsocketStatsResource
 from hathor.websocket.factory import HathorAdminWebsocketFactory, HathorAdminWebsocketProtocol
@@ -30,7 +31,7 @@ class BaseWebsocketTest(_BaseResourceTest._ResourceTest):
         self.factory.openHandshakeTimeout = 0
         self.protocol = self.factory.buildProtocol(None)
 
-        self.transport = proto_helpers.StringTransport()
+        self.transport = StringTransport()
         self.protocol.makeConnection(self.transport)
 
         self.genesis = list(self.manager.tx_storage.get_all_genesis())
@@ -45,9 +46,9 @@ class BaseWebsocketTest(_BaseResourceTest._ResourceTest):
         ret = None
         while value:
             try:
-                ret = json.loads(value.decode('utf-8'))
+                ret = json_loadb(value)
                 break
-            except (UnicodeDecodeError, json.decoder.JSONDecodeError):
+            except (UnicodeDecodeError, JSONDecodeError):
                 value = value[1:]
 
         return ret
@@ -135,16 +136,16 @@ class BaseWebsocketTest(_BaseResourceTest._ResourceTest):
             args = EventArguments(**kwargs)
             self.factory.serialize_message_data(HathorEvents.NETWORK_PEER_CONNECTED, args)
 
-    def test_ping(self):
+    def test_ping_bytes(self):
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
-        payload = json.dumps({'type': 'ping'}).encode('utf-8')
+        payload = json_dumpb({'type': 'ping'})
         self.protocol.onMessage(payload, True)
         value = self._decode_value(self.transport.value())
         self.assertEqual(value['type'], 'pong')
 
     def test_ping_str(self):
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
-        payload = json.dumps({'type': 'ping'})
+        payload = json_dumps({'type': 'ping'})
         self.protocol.onMessage(payload, False)
         value = self._decode_value(self.transport.value())
         self.assertEqual(value['type'], 'pong')
@@ -154,7 +155,7 @@ class BaseWebsocketTest(_BaseResourceTest._ResourceTest):
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
         # Subscribe to address
         address = '1Q4qyTjhpUXUZXzwKs6Yvh2RNnF5J1XN9a'
-        payload = json.dumps({'type': 'subscribe_address', 'address': address}).encode('utf-8')
+        payload = json_dumpb({'type': 'subscribe_address', 'address': address})
         self.protocol.onMessage(payload, True)
         self.assertEqual(len(self.factory.address_connections), 1)
 
@@ -215,11 +216,11 @@ class BaseWebsocketTest(_BaseResourceTest._ResourceTest):
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
         # Subscribe to address
         address1 = '1Q4qyTjhpUXUZXzwKs6Yvh2RNnF5J1XN9a'
-        payload = json.dumps({'type': 'subscribe_address', 'address': address1}).encode('utf-8')
+        payload = json_dumpb({'type': 'subscribe_address', 'address': address1})
         self.protocol.onMessage(payload, True)
 
         address2 = '1Q4qyTjhpUXUZXzwKs6Yvh2RNnF5J1XN9b'
-        payload = json.dumps({'type': 'subscribe_address', 'address': address2}).encode('utf-8')
+        payload = json_dumpb({'type': 'subscribe_address', 'address': address2})
         self.protocol.onMessage(payload, True)
 
         # Test get again

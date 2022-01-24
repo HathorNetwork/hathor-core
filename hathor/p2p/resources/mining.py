@@ -14,21 +14,23 @@
 
 import base64
 import binascii
-import json
 import struct
+from json import JSONDecodeError
 
-from twisted.web import resource
+from twisted.web.http import Request
 
+from hathor.api_util import Resource, get_args
 from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
 from hathor.transaction import Block
+from hathor.util import json_dumpb, json_loadb
 from hathor.wallet.exceptions import InvalidAddress
 
 # TODO: deprecate these calls to eventually remove them on v2
 
 
 @register_resource
-class MiningResource(resource.Resource):
+class MiningResource(Resource):
     """ Implements an status web server API, which responds with a summary
     of the node state.
 
@@ -39,22 +41,27 @@ class MiningResource(resource.Resource):
     def __init__(self, manager):
         self.manager = manager
 
-    def render_POST(self, request):
+    def render_POST(self, request: Request) -> bytes:
         """ POST request /mining/
             Expects a parameter 'block_bytes' that is the block in bytes
             Create the block object from the bytes and propagate it
 
             :rtype: bytes
         """
+        if request.content is None:
+            return b'0'
+        raw_data = request.content.read()
+        if raw_data is None:
+            return b'0'
         try:
-            post_data = json.loads(request.content.read().decode('utf-8'))
+            post_data = json_loadb(raw_data)
             block_bytes_str = post_data['block_bytes']
             block_bytes = base64.b64decode(block_bytes_str)
             block = Block.create_from_struct(block_bytes, storage=self.manager.tx_storage)
-        except (AttributeError, KeyError, ValueError, json.JSONDecodeError, binascii.Error, struct.error):
+        except (AttributeError, KeyError, ValueError, JSONDecodeError, binascii.Error, struct.error):
             # XXX ideally, we should catch each error separately and send an specific error
             # message, but we only return 0 or 1 on the API
-            # AttributeError, json.JSONDecodeError: empty data or error decoding json
+            # AttributeError, JSONDecodeError: empty data or error decoding json
             # KeyError: missing 'block_bytes' on post_data
             # ValueError, struct.error: raised in create_block_from_struct
             # binascii.Error: incorrect base64 data
@@ -76,16 +83,17 @@ class MiningResource(resource.Resource):
 
         if not self.manager.can_start_mining():
             request.setResponseCode(503)
-            return json.dumps({'reason': 'Node still syncing'}).encode('utf-8')
+            return json_dumpb({'reason': 'Node still syncing'})
 
         address = None
 
-        if b'address' in request.args:
-            address_txt = request.args[b'address'][0].decode('utf-8')
+        raw_args = get_args(request)
+        if b'address' in raw_args:
+            address_txt = raw_args[b'address'][0].decode('utf-8')
             try:
                 address = decode_address(address_txt)  # bytes
             except InvalidAddress:
-                return json.dumps({'success': False, 'message': 'Invalid address'}).encode('utf-8')
+                return json_dumpb({'success': False, 'message': 'Invalid address'})
 
         block = self.manager.generate_mining_block(address=address)
         block_bytes = block.get_struct()
@@ -94,7 +102,7 @@ class MiningResource(resource.Resource):
             'parents': [x.hex() for x in block.parents],
             'block_bytes': base64.b64encode(block_bytes).decode('utf-8'),
         }
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 MiningResource.openapi = {

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from hathor.p2p.netfilter.context import NetfilterContext
     from hathor.p2p.netfilter.rule import NetfilterRule
     from hathor.p2p.netfilter.table import NetfilterTable
-    from hathor.p2p.netfilter.target import NetfilterTarget
+    from hathor.p2p.netfilter.targets import NetfilterTarget
 
 
 class NetfilterChain:

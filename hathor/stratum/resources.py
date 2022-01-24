@@ -12,17 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
-
-from twisted.web import resource
-
-from hathor.api_util import set_cors
+from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.manager import HathorManager
+from hathor.util import json_dumpb
 
 
 @register_resource
-class MiningStatsResource(resource.Resource):
+class MiningStatsResource(Resource):
     """ Implements a web server API to return an unused address of the wallet.
 
     You must run with option `--status <PORT>`.
@@ -44,9 +41,9 @@ class MiningStatsResource(resource.Resource):
 
         if not self.manager.stratum_factory:
             request.setResponseCode(503)
-            return json.dumps({'success': False}, indent=4).encode('utf-8')
+            return json_dumpb({'success': False})
 
-        return json.dumps(self.manager.stratum_factory.get_stats_resource()).encode('utf-8')
+        return json_dumpb(self.manager.stratum_factory.get_stats_resource())
 
 
 MiningStatsResource.openapi = {

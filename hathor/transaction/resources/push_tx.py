@@ -18,10 +18,9 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
-from twisted.web import resource
 from twisted.web.http import Request
 
-from hathor.api_util import parse_get_arguments, render_options, set_cors
+from hathor.api_util import Resource, get_args, parse_args, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.exception import InvalidNewTransaction
@@ -40,7 +39,7 @@ ARGS = ['hex_tx']
 
 
 @register_resource
-class PushTxResource(resource.Resource):
+class PushTxResource(Resource):
     """ Implements a web server API that receives hex form of a tx and send it to the network
 
     You must run with option `--status <PORT>`.
@@ -150,13 +149,14 @@ class PushTxResource(resource.Resource):
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
-        parsed = parse_get_arguments(request.args, ARGS)
+        args = get_args(request)
+        parsed = parse_args(args, ARGS)
         if not parsed['success']:
             data = {'success': False, 'message': 'Missing hexadecimal data', 'can_force': False}
             return json_dumpb(data)
 
         data = parsed['args']
-        data['force'] = b'force' in request.args and request.args[b'force'][0].decode('utf-8') == 'true'
+        data['force'] = b'force' in args and args[b'force'][0].decode('utf-8') == 'true'
 
         ret = self.handle_push_tx(data, self._get_client_ip(request))
         return json_dumpb(ret)
@@ -168,6 +168,7 @@ class PushTxResource(resource.Resource):
         set_cors(request, 'POST')
 
         error_ret = json_dumpb({'success': False, 'message': 'Missing hexadecimal data', 'can_force': False})
+        assert request.content is not None
         body_content = request.content.read()
         if not body_content:
             return error_ret

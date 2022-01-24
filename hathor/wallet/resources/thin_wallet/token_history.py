@@ -12,14 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
-
-from twisted.web import resource
 from twisted.web.http import Request
 
-from hathor.api_util import get_missing_params_msg, parse_get_arguments, set_cors
+from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
+from hathor.util import json_dumpb
 
 settings = HathorSettings()
 
@@ -27,7 +25,7 @@ ARGS = ['id', 'count']
 
 
 @register_resource
-class TokenHistoryResource(resource.Resource):
+class TokenHistoryResource(Resource):
     """ Implements a web server API to return history of transactions of a token.
 
     You must run with option `--status <PORT>`.
@@ -55,55 +53,56 @@ class TokenHistoryResource(resource.Resource):
         tokens_index = self.manager.tx_storage.indexes.tokens
         if not tokens_index:
             request.setResponseCode(503)
-            return json.dumps({'success': False}).encode('utf-8')
+            return json_dumpb({'success': False})
 
-        parsed = parse_get_arguments(request.args, ARGS)
+        raw_args = get_args(request)
+        parsed = parse_args(raw_args, ARGS)
         if not parsed['success']:
             return get_missing_params_msg(parsed['missing'])
 
-        if b'id' not in request.args:
+        if b'id' not in raw_args:
             return get_missing_params_msg('id')
 
         try:
             token_uid = bytes.fromhex(parsed['args']['id'])
         except (ValueError, AttributeError):
-            return json.dumps({'success': False, 'message': 'Invalid token id'}).encode('utf-8')
+            return json_dumpb({'success': False, 'message': 'Invalid token id'})
 
         try:
             count = min(int(parsed['args']['count']), settings.MAX_TX_COUNT)
         except ValueError:
-            return json.dumps({
+            return json_dumpb({
                 'success': False,
                 'message': 'Invalid \'count\' parameter, expected an int'
-            }).encode('utf-8')
+            })
 
-        if b'hash' in request.args:
-            parsed = parse_get_arguments(request.args, ['timestamp', 'page', 'hash'])
+        if b'hash' in raw_args:
+            parsed = parse_args(raw_args, ['timestamp', 'page', 'hash'])
             if not parsed['success']:
                 return get_missing_params_msg(parsed['missing'])
 
             try:
                 hash_bytes = bytes.fromhex(parsed['args']['hash'])
             except ValueError:
-                return json.dumps({
+                return json_dumpb({
                     'success': False,
                     'message': 'Invalid \'hash\' parameter, could not decode hexadecimal'
-                }).encode('utf-8')
+                })
 
             page = parsed['args']['page']
             if page != 'previous' and page != 'next':
-                return json.dumps({
+                return json_dumpb({
                     'success': False,
                     'message': 'Invalid \'page\' parameter, expected \'previous\' or \'next\''
-                }).encode('utf-8')
+                })
 
             try:
                 ref_timestamp = int(parsed['args']['timestamp'])
             except ValueError:
-                return json.dumps({
+                return json_dumpb({
                     'success': False,
                     'message': 'Invalid \'timestamp\' parameter, expected an int'
-                }).encode('utf-8')
+                })
 
             if page == 'previous':
                 elements, has_more = tokens_index.get_newer_transactions(
@@ -122,7 +121,7 @@ class TokenHistoryResource(resource.Resource):
             'transactions': serialized,
             'has_more': has_more,
         }
-        return json.dumps(data).encode('utf-8')
+        return json_dumpb(data)
 
 
 TokenHistoryResource.openapi = {

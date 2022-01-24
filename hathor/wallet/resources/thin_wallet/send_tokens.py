@@ -12,28 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import struct
+from dataclasses import dataclass
 from functools import partial
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 from structlog import get_logger
-from twisted.internet import reactor, threads
+from twisted.internet import threads
 from twisted.internet.defer import CancelledError, Deferred
 from twisted.python.failure import Failure
-from twisted.web import resource
 from twisted.web.http import Request
 
-from hathor.api_util import render_options, set_cors
+from hathor.api_util import Resource, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.exceptions import TxValidationError
-
-if TYPE_CHECKING:
-    from hathor.transaction import BaseTransaction
+from hathor.util import json_dumpb, json_loadb, reactor
 
 settings = HathorSettings()
 logger = get_logger()
@@ -42,8 +39,15 @@ logger = get_logger()
 TIMEOUT_STRATUM_RESOLVE_POW = 20
 
 
+@dataclass
+class _Context:
+    tx: Transaction
+    request: Request
+    should_stop_mining_thread: bool = False
+
+
 @register_resource
-class SendTokensResource(resource.Resource):
+class SendTokensResource(Resource):
     """ Implements a web server API to create a tx and propagate
 
     You must run with option `--status <PORT>`.
@@ -75,8 +79,18 @@ class SendTokensResource(resource.Resource):
                 return_code='max_pow_threads'
             )
 
+        assert request.content is not None
+        raw_data = request.content.read()
+
+        if raw_data is None:
+            return self.return_POST(
+                False,
+                'Missing POST data JSON',
+                return_code='missing_json'
+            )
+
         try:
-            post_data = json.loads(request.content.read().decode('utf-8'))
+            post_data = json_loadb(raw_data)
         except AttributeError:
             return self.return_POST(
                 False,
@@ -117,25 +131,28 @@ class SendTokensResource(resource.Resource):
                 return_code='double_spending'
             )
 
-        request.should_stop_mining_thread = False
+        context = _Context(tx=tx, request=request)
 
         if settings.SEND_TOKENS_STRATUM and self.manager.stratum_factory:
-            self._render_POST_stratum(tx, request)
+            self._render_POST_stratum(context)
         else:
-            self._render_POST(tx, request)
+            self._render_POST(context)
 
-        request.notifyFinish().addErrback(self._responseFailed, tx, request)
+        request.notifyFinish().addErrback(self._responseFailed, context)
 
         from twisted.web.server import NOT_DONE_YET
         return NOT_DONE_YET
 
-    def _render_POST_stratum(self, tx: Transaction, request: Request) -> None:
+    def _render_POST_stratum(self, context: _Context) -> None:
         """ Resolves the request using stratum
             Create a deferred and send it and the tx to be mined to stratum
             WHen the proof of work is completed in stratum, the callback is called
         """
+        tx = context.tx
+        request = context.request
+
         # When using stratum to solve pow, we already set timestamp and parents
-        stratum_deferred = Deferred()
+        stratum_deferred: Deferred[None] = Deferred()
         stratum_deferred.addCallback(self._stratum_deferred_resolve, request)
 
         fn_timeout = partial(self._stratum_timeout, request=request, tx=tx)
@@ -146,10 +163,12 @@ class SendTokensResource(resource.Resource):
         # process it right away
         self.manager.stratum_factory.update_jobs()
 
-    def _render_POST(self, tx: Transaction, request: Request) -> None:
+    def _render_POST(self, context: _Context) -> None:
         """ Resolves the request without stratum
             The transaction is completed and then sent to be mined in a thread
         """
+        tx = context.tx
+
         if tx.inputs:
             max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
             # Set tx timestamp as max between tx and inputs
@@ -159,12 +178,13 @@ class SendTokensResource(resource.Resource):
         tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
 
         deferred = threads.deferToThreadPool(reactor, self.manager.pow_thread_pool,
-                                             self._render_POST_thread, tx, request)
-        deferred.addCallback(self._cb_tx_resolve, request)
-        deferred.addErrback(self._err_tx_resolve, request, 'python_resolve')
+                                             self._render_POST_thread, context)
+        deferred.addCallback(self._cb_tx_resolve)
+        deferred.addErrback(self._err_tx_resolve, context, 'python_resolve')
 
-    def _responseFailed(self, err, tx, request):
+    def _responseFailed(self, err, context):
         # response failed, should stop mining
+        tx = context.tx
         self.log.warn('connection closed while resolving transaction proof of work', tx=tx)
         if settings.SEND_TOKENS_STRATUM and self.manager.stratum_factory:
             funds_hash = tx.get_funds_hash()
@@ -173,32 +193,34 @@ class SendTokensResource(resource.Resource):
             self.manager.stratum_factory.update_jobs()
         else:
             # if we're mining on a thread, stop it
-            request.should_stop_mining_thread = True
+            context.should_stop_mining_thread = True
 
-    def _stratum_deferred_resolve(self, tx: Transaction, request: Request) -> None:
+    def _stratum_deferred_resolve(self, context: _Context) -> None:
         """ Method called after stratum resolves tx proof of work
             We remove the mining data of this tx on stratum and start a new thread to verify the tx
         """
-        funds_hash = tx.get_funds_hash()
-        tx = self.manager.stratum_factory.mined_txs[funds_hash]
+        funds_hash = context.tx.get_funds_hash()
+        context.tx = self.manager.stratum_factory.mined_txs[funds_hash]
         # Delete it to avoid memory leak
         del(self.manager.stratum_factory.mined_txs[funds_hash])
 
-        deferred = threads.deferToThreadPool(reactor, self.manager.pow_thread_pool, self._stratum_thread_verify, tx)
-        deferred.addCallback(self._cb_tx_resolve, request)
-        deferred.addErrback(self._err_tx_resolve, request, 'stratum_resolve')
+        deferred = threads.deferToThreadPool(reactor, self.manager.pow_thread_pool,
+                                             self._stratum_thread_verify, context)
+        deferred.addCallback(self._cb_tx_resolve)
+        deferred.addErrback(self._err_tx_resolve, context, 'stratum_resolve')
 
-    def _stratum_thread_verify(self, tx: Transaction) -> Transaction:
+    def _stratum_thread_verify(self, context: _Context) -> _Context:
         """ Method to verify the transaction that runs in a separated thread
         """
-        tx.verify()
-        return tx
+        context.tx.verify()
+        return context
 
-    def _stratum_timeout(self, result: Failure, timeout: int, *, tx: 'BaseTransaction', request: Request) -> None:
+    def _stratum_timeout(self, result: Failure, timeout: int, *, context: _Context) -> None:
         """ Method called when stratum timeouts when trying to solve tx pow
             We remove mining data and deferred from stratum and send error as response
         """
         stratum_tx = None
+        tx = context.tx
         funds_hash = tx.get_funds_hash()
 
         # We get both tx because stratum might have updated the tx (timestamp or parents)
@@ -215,7 +237,7 @@ class SendTokensResource(resource.Resource):
         # update metrics
         self.manager.metrics.send_token_timeouts += 1
 
-        self._err_tx_resolve(result, request, 'stratum_timeout')
+        self._err_tx_resolve(result, context, 'stratum_timeout')
 
     def _cleanup_stratum(self, funds_hash: bytes) -> Optional[Transaction]:
         """ Cleans information on stratum factory related to this transaction
@@ -232,22 +254,24 @@ class SendTokensResource(resource.Resource):
 
         return stratum_tx
 
-    def _render_POST_thread(self, tx: Transaction, request: Request) -> Transaction:
+    def _render_POST_thread(self, context: _Context) -> _Context:
         """ Method called in a thread to solve tx pow without stratum
         """
         # TODO Tx should be resolved in the frontend
         def _should_stop():
-            return request.should_stop_mining_thread
-        tx.start_mining(sleep_seconds=self.sleep_seconds, should_stop=_should_stop)
-        if request.should_stop_mining_thread:
+            return context.should_stop_mining_thread
+        context.tx.start_mining(sleep_seconds=self.sleep_seconds, should_stop=_should_stop)
+        if context.should_stop_mining_thread:
             raise CancelledError()
-        tx.update_hash()
-        tx.verify()
-        return tx
+        context.tx.update_hash()
+        context.tx.verify()
+        return context
 
-    def _cb_tx_resolve(self, tx, request):
+    def _cb_tx_resolve(self, context: _Context) -> None:
         """ Called when `_render_POST_thread` finishes
         """
+        tx = context.tx
+        request = context.request
         message = ''
         return_code = ''
         try:
@@ -266,9 +290,10 @@ class SendTokensResource(resource.Resource):
         request.write(result)
         request.finish()
 
-    def _err_tx_resolve(self, reason, request, return_code):
+    def _err_tx_resolve(self, reason, context, return_code):
         """ Called when an error occur in `_render_POST_thread`
         """
+        request = context.request
         message = ''
         if hasattr(reason, 'value'):
             message = str(reason.value)
@@ -299,7 +324,7 @@ class SendTokensResource(resource.Resource):
         if tx:
             ret['tx'] = tx.to_json()
 
-        return json.dumps(ret, indent=4).encode('utf-8')
+        return json_dumpb(ret)
 
     def render_OPTIONS(self, request):
         return render_options(request)

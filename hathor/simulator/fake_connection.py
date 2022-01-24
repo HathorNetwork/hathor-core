@@ -17,10 +17,10 @@ from typing import TYPE_CHECKING, Deque
 
 from OpenSSL.crypto import X509
 from structlog import get_logger
-from twisted.test import proto_helpers
+from twisted.internet.address import HostnameAddress
+from twisted.internet.testing import StringTransport
 
 from hathor.conf import HathorSettings
-from hathor.p2p.utils import generate_certificate
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
@@ -30,15 +30,14 @@ settings = HathorSettings()
 logger = get_logger()
 
 
-class HathorStringTransport(proto_helpers.StringTransport):
+class HathorStringTransport(StringTransport):
     def __init__(self, peer: 'PeerId'):
         super().__init__()
         self.peer = peer
 
     def getPeerCertificate(self) -> X509:
-        certificate = generate_certificate(self.peer.private_key, settings.CA_FILEPATH, settings.CA_KEY_FILEPATH)
-        openssl_certificate = X509.from_cryptography(certificate)
-        return openssl_certificate
+        certificate = self.peer.get_certificate()
+        return X509.from_cryptography(certificate)
 
 
 class FakeConnection:
@@ -54,8 +53,8 @@ class FakeConnection:
         self.latency = latency
         self.is_connected = True
 
-        self._proto1 = manager1.server_factory.buildProtocol(('127.0.0.1', 0))
-        self._proto2 = manager2.client_factory.buildProtocol(('127.0.0.1', 0))
+        self._proto1 = manager1.server_factory.buildProtocol(HostnameAddress(b'fake', 0))
+        self._proto2 = manager2.client_factory.buildProtocol(HostnameAddress(b'fake', 0))
 
         self.tr1 = HathorStringTransport(self._proto2.my_peer)
         self.tr2 = HathorStringTransport(self._proto1.my_peer)

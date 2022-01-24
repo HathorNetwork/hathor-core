@@ -12,17 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import math
 
-from twisted.web import resource
-
-from hathor.api_util import set_cors
+from hathor.api_util import Resource, get_args, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.util import json_dumpb
 
 
 @register_resource
-class HistoryResource(resource.Resource):
+class HistoryResource(Resource):
     """ Implements a web server API to return the history of tx of the wallet.
 
     You must run with option `--status <PORT>`.
@@ -45,8 +43,9 @@ class HistoryResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        page = int(request.args[b'page'][0])
-        count = int(request.args[b'count'][0])
+        raw_args = get_args(request)
+        page = int(raw_args[b'page'][0])
+        count = int(raw_args[b'count'][0])
 
         history_tuple, total = self.manager.wallet.get_history(count, page)
 
@@ -59,7 +58,7 @@ class HistoryResource(resource.Resource):
             history.append(history_dict)
 
         data = {'history': history, 'total_pages': math.ceil(total / count)}
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 HistoryResource.openapi = {

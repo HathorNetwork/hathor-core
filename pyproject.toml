@@ -36,48 +36,50 @@ exclude = ["tests", "tests.*"]
 hathor-cli = 'hathor.cli.main:main'
 
 [tool.poetry.dev-dependencies]
-flake8 = "~3.8.4"
-isort = {version = "~5.7.0", extras = ["colors"]}
-yapf = "^0.30"
-mypy = "^0.790"
-pytest = "~6.2.1"
-pytest-cov = "~2.11.0"
+flake8 = "~4.0.1"
+isort = {version = "~5.10.1", extras = ["colors"]}
+yapf = "^0.32"
+mypy = {version = "^0.931", markers = "implementation_name == 'cpython'"}
+mypy-zope = {version = "^0.3", markers = "implementation_name == 'cpython'"}
+pytest = "~6.2.5"
+pytest-cov = "~3.0.0"
 flaky = "~3.7.0"
+# stubs:
+types-requests = "~2.27.7"
+types-pyopenssl = "~21.0.3"
 
 [tool.poetry.dependencies]
 python = ">=3.7,<4"
-twisted = "~20.3.0"
-autobahn = "~20.12.3"
-base58 = "~2.1.0"
+twisted = "~21.7.0"
+autobahn = "~21.11.1"
+base58 = "~2.1.1"
 colorama = "~0.4.4"
-configargparse = "~1.2.3"
-cryptography = "~3.3.1"
-graphviz = "~0.16"
-ipython = "<7.17"  # 7.17 drops Python 3.6 compatibility
-jedi = "<0.18"  # indirect dependency restriction (0.18 breaks ipython)
-mnemonic = "~0.19"
-prometheus_client = "~0.9.0"
-pyopenssl = "~20.0.1"
+configargparse = "~1.5.3"
+cryptography = "~36.0.1"
+graphviz = "~0.19.1"
+ipython = "<8"  # ipython 8.0 drops compatibility with Python 3.7
+mnemonic = "~0.20"
+prometheus_client = "~0.12.0"
+pyopenssl = "~21.0.0"
 pycoin = "<=0.90.20200322"
-pywin32 = {version = "300", markers = "sys_platform == 'win32'"}
-requests = "~2.25.1"
-service_identity = "~18.1.0"
+pywin32 = {version = "303", markers = "sys_platform == 'win32'"}
+requests = "~2.27.1"
+service_identity = "~21.1.0"
 pexpect = "~4.8.0"
 intervaltree = "~3.1.0"
-structlog = "~20.2.0"
-python-rocksdb = {version = "^0.7.0", optional = true}
-aiohttp = "~3.7.3"
-idna = "~2.10"
-# move the following to "build-system.requires" when this poetry pr is merged and released: https://github.com/python-poetry/poetry/pull/2794
-cython = {version = "<0.30", optional = true}
-typing-extensions = "^3.7.4"  # indirect dependency, should not be needed on Python >3.7 but some packages import it anyway
+structlog = "~21.5.0"
+python-rocksdb = {version = "^0.7.0", markers = "sys_platform != 'win32'"}
+aiohttp = "~3.8.1"
+idna = "~3.3"
 setproctitle = "^1.2.2"
-sentry-sdk = {version = "^1.1.0", optional = true}
+sentry-sdk = {version = "^1.5.4", optional = true}
 structlog-sentry = {version = "^1.4.0", optional = true}
 hathorlib = "0.1.1"
+# move the following to "build-system.requires" when this poetry pr is merged and released: https://github.com/python-poetry/poetry/pull/2794
+# needed to build python-rocksdb
+cython = "<0.30"
 
 [tool.poetry.extras]
-rocksdb = ["cython", "python-rocksdb"]
 sentry = ["sentry-sdk", "structlog-sentry"]
 
 [tool.isort]
@@ -87,6 +89,41 @@ include_trailing_comma = true
 known_first_party = "hathor,tests"
 line_length = 119
 multi_line_output = 3
+
+[tool.mypy]
+pretty = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_configs = true
+warn_unused_ignores = true
+namespace_packages = true
+show_error_codes = true
+show_error_context = true
+plugins = ["mypy_zope:plugin"]
+
+# these are modules which we don't have type stubs for
+[[tool.mypy.overrides]]
+module = [
+    'IPython',
+    '_hashlib',
+    'autobahn.*',
+    'colorama',
+    'configargparse',
+    'graphviz',
+    'intervaltree.*',
+    'prometheus_client',
+    'pudb.*',
+    'pycoin.*',
+    'pympler',
+    'rocksdb',
+    'sentry_sdk',
+    'setproctitle',
+    'sortedcontainers',
+    'structlog_sentry',
+    'structlog_sentry',
+]
+ignore_missing_imports = true
 
 [build-system]
 requires = ["poetry-core"]

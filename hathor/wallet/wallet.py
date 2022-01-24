@@ -20,6 +20,7 @@ from typing import Any, Dict, Optional, Tuple
 from cryptography.hazmat.backends.openssl.ec import _EllipticCurvePrivateKey
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
+from twisted.internet.interfaces import IDelayedCall
 
 from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.pubsub import HathorEvents
@@ -66,7 +67,7 @@ class Wallet(BaseWallet):
         # 0=flush every change
         self.flush_to_disk_interval = 0
         self.last_flush_time = 0
-        self.flush_schedule = None
+        self.flush_schedule: Optional[IDelayedCall] = None
 
     def _manually_initialize(self) -> None:
         if os.path.isfile(self.filepath):
@@ -82,7 +83,7 @@ class Wallet(BaseWallet):
         """
         new_keys = {}
         with open(self.filepath, 'r') as json_file:
-            json_data = json.loads(json_file.read())
+            json_data = json.load(json_file)
             for data in json_data:
                 keypair = KeyPair.from_json(data)
                 assert keypair.address is not None
@@ -105,10 +106,10 @@ class Wallet(BaseWallet):
 
     def _write_keys_to_file(self) -> None:
         self.flush_schedule = None
-        self.last_flush_time = self.reactor.seconds()
+        self.last_flush_time = int(self.reactor.seconds())
         data = [keypair.to_json() for keypair in self.keys.values()]
         with open(self.filepath, 'w') as json_file:
-            json_file.write(json.dumps(data, indent=4))
+            json.dump(data, json_file)
         self.log.info('keys successfully written to disk')
 
     def unlock(self, password: bytes) -> None:

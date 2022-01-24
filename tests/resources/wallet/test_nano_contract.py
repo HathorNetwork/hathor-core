@@ -1,9 +1,8 @@
-import json
-
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.transaction import Transaction
 from hathor.transaction.resources import DecodeTxResource, PushTxResource
+from hathor.util import json_loadb
 from hathor.wallet.resources import SignTxResource
 from hathor.wallet.resources.nano_contracts import (
     NanoContractDecodeResource,
@@ -201,7 +200,7 @@ class BaseNanoContractsTest(_BaseResourceTest._ResourceTest):
         request.content.setvalue(b'abc')
 
         response = resource.render_POST(request)
-        data_response = json.loads(response.decode('utf-8'))
+        data_response = json_loadb(response)
         self.assertFalse(data_response['success'])
 
         match_resource = NanoContractMatchValueResource(self.manager)
@@ -209,14 +208,14 @@ class BaseNanoContractsTest(_BaseResourceTest._ResourceTest):
         request_match.content.setvalue(b'abc')
 
         response_match = match_resource.render_POST(request_match)
-        data_response_match = json.loads(response_match.decode('utf-8'))
+        data_response_match = json_loadb(response_match)
         self.assertFalse(data_response_match['success'])
 
         request_match_put = TestDummyRequest('PUT', 'wallet/nano_contracts/match_values')
         request_match_put.content.setvalue(b'abc')
 
         response_match_put = match_resource.render_PUT(request_match_put)
-        data_response_match_put = json.loads(response_match_put.decode('utf-8'))
+        data_response_match_put = json_loadb(response_match_put)
         self.assertFalse(data_response_match_put['success'])
 
 

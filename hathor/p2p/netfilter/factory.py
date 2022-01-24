@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from twisted.internet.interfaces import IAddress, IProtocolFactory
 from twisted.internet.protocol import Protocol
@@ -31,7 +31,7 @@ class NetfilterFactory(WrappingFactory):
         super().__init__(wrappedFactory)
         self.connections = connections
 
-    def buildProtocol(self, addr: IAddress) -> Protocol:
+    def buildProtocol(self, addr: IAddress) -> Optional[Protocol]:
         context = NetfilterContext(
             connections=self.connections,
             addr=addr,

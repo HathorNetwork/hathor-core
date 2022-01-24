@@ -15,7 +15,6 @@
 from collections import deque
 from typing import TYPE_CHECKING, Deque, NamedTuple, Optional
 
-from twisted.internet.interfaces import IReactorCore
 from twisted.internet.task import LoopingCall
 
 from hathor.conf import HathorSettings
@@ -24,6 +23,7 @@ from hathor.transaction.base_transaction import sum_weights
 from hathor.transaction.block import Block
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
+from hathor.util import Reactor
 
 if TYPE_CHECKING:
     from hathor.stratum import StratumFactory  # noqa: F401
@@ -53,7 +53,7 @@ class Metrics:
     avg_time_between_blocks: int
     pubsub: PubSubManager
     tx_storage: TransactionStorage
-    reactor: IReactorCore
+    reactor: Reactor
     is_running: bool
     exponential_alfa: float  # XXX: "alpha"?
     tx_hash_store_interval: int
@@ -73,7 +73,7 @@ class Metrics:
             pubsub: PubSubManager,
             avg_time_between_blocks: int,
             tx_storage: Optional[TransactionStorage] = None,
-            reactor: Optional[IReactorCore] = None,
+            reactor: Optional[Reactor] = None,
     ):
         """
         :param pubsub: If not given, a new one is created.
@@ -122,7 +122,7 @@ class Metrics:
         self.tx_storage = tx_storage or TransactionMemoryStorage()
 
         if reactor is None:
-            from twisted.internet import reactor as twisted_reactor
+            from hathor.util import reactor as twisted_reactor
             reactor = twisted_reactor
         self.reactor = reactor
 

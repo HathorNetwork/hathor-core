@@ -12,16 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
-
-from twisted.web import resource
-
-from hathor.api_util import set_cors
+from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.util import json_dumpb
 
 
 @register_resource
-class WebsocketStatsResource(resource.Resource):
+class WebsocketStatsResource(Resource):
     """ Implements a web server API to return stats from Websocket
 
     You must run with option `--status <PORT>`.
@@ -44,7 +41,7 @@ class WebsocketStatsResource(resource.Resource):
             'connections': len(self.websocket_factory.connections),
             'subscribed_addresses': len(self.websocket_factory.address_connections),
         }
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 WebsocketStatsResource.openapi = {

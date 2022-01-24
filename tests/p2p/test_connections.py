@@ -1,4 +1,3 @@
-import shutil
 import sys
 import tempfile
 
@@ -12,7 +11,6 @@ from tests.utils import run_server
 
 
 class ConnectionsTest(unittest.TestCase):
-
     @pytest.mark.skipif(sys.platform == 'win32', reason='run_server is very finicky on Windows')
     def test_connections(self):
         process = run_server()
@@ -26,6 +24,7 @@ class ConnectionsTest(unittest.TestCase):
     def test_manager_connections(self):
         tx_storage = TransactionMemoryStorage()
         tmpdir = tempfile.mkdtemp()
+        self.tmpdirs.append(tmpdir)
         wallet = Wallet(directory=tmpdir)
         wallet.unlock(b'teste')
         manager = HathorManager(self.clock, tx_storage=tx_storage, wallet=wallet)
@@ -36,5 +35,3 @@ class ConnectionsTest(unittest.TestCase):
         self.assertNotIn(endpoint, manager.connections.iter_not_ready_endpoints())
         self.assertNotIn(endpoint, manager.connections.iter_ready_connections())
         self.assertNotIn(endpoint, manager.connections.iter_all_connections())
-
-        shutil.rmtree(tmpdir)

@@ -12,13 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
-
-from twisted.web import resource
-
-from hathor.api_util import get_missing_params_msg, parse_get_arguments, set_cors
+from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
+from hathor.util import json_dumpb
 
 settings = HathorSettings()
 
@@ -26,7 +23,7 @@ ARGS = ['block', 'tx']
 
 
 @register_resource
-class DashboardTransactionResource(resource.Resource):
+class DashboardTransactionResource(Resource):
     """ Implements a web server API to return dashboard data for tx.
         Returns some blocks and some transactions (quantity comes from the frontend)
 
@@ -50,7 +47,7 @@ class DashboardTransactionResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        parsed = parse_get_arguments(request.args, ARGS)
+        parsed = parse_args(get_args(request), ARGS)
         if not parsed['success']:
             return get_missing_params_msg(parsed['missing'])
 
@@ -58,18 +55,18 @@ class DashboardTransactionResource(resource.Resource):
         try:
             block_count = int(parsed['args']['block'])
         except ValueError:
-            return json.dumps({
+            return json_dumpb({
                 'success': False,
                 'message': 'Invalid parameter, cannot convert to int: block'
-            }).encode('utf-8')
+            })
 
         try:
             tx_count = int(parsed['args']['tx'])
         except ValueError:
-            return json.dumps({
+            return json_dumpb({
                 'success': False,
                 'message': 'Invalid parameter, cannot convert to int: tx'
-            }).encode('utf-8')
+            })
 
         # Restrict counts
         block_count = min(block_count, settings.MAX_DASHBOARD_COUNT)
@@ -87,7 +84,7 @@ class DashboardTransactionResource(resource.Resource):
             'blocks': serialized_blocks,
         }
 
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 DashboardTransactionResource.openapi = {

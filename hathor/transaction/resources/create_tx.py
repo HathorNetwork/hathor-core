@@ -15,9 +15,7 @@
 import base64
 from typing import Dict, List
 
-from twisted.web import resource
-
-from hathor.api_util import set_cors
+from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
 from hathor.daa import minimum_tx_weight
@@ -46,7 +44,7 @@ def from_raw_output(raw_output: Dict, tokens: List[bytes]) -> TxOutput:
 
 
 @register_resource
-class CreateTxResource(resource.Resource):
+class CreateTxResource(Resource):
     """ Implements a web server API that receives inputs and outputs, and returns an unsigned tx (both data and hex).
 
     You must run with option `--status <PORT>`.

@@ -102,12 +102,12 @@ class TransactionCompactStorage(BaseTransactionStorage):
 
     def save_to_json(self, filepath: str, data: Dict[str, Any]) -> None:
         with open(filepath, 'w') as json_file:
-            json_file.write(json.dumps(data))
+            json.dump(data, json_file)
 
     def load_from_json(self, filepath: str, error: Exception) -> Dict[str, Any]:
         if os.path.isfile(filepath):
             with open(filepath, 'r') as json_file:
-                dict_data = json.loads(json_file.read())
+                dict_data = json.load(json_file)
                 return dict_data
         else:
             raise error

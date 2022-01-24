@@ -9,7 +9,6 @@ tests_cli = tests/cli/
 tests_lib = $(filter-out ${tests_cli} tests/__pycache__/, $(dir $(wildcard tests/*/.)))
 
 pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov-report=xml --cov=hathor
-mypy_flags = --warn-unused-configs --disallow-incomplete-defs --no-implicit-optional --warn-redundant-casts --warn-unused-ignores
 
 #--strict-equality
 #--check-untyped-defs
@@ -56,7 +55,7 @@ tests-full:
 
 .PHONY: mypy
 mypy:
-	mypy $(mypy_flags) ./hathor ./tests
+	mypy -p hathor -p tests
 
 .PHONY: flake8
 flake8:
@@ -97,27 +96,8 @@ clean-pyc:
 clean-caches:
 	rm -rf .coverage .mypy_cache .pytest_cache coverage.xml coverage_html_report
 
-.PHONY: clean-dist
-clean-dist:
-	rm -rf ./dist
-	rm -f requirements.txt
-
 .PHONY: clean
-clean: clean-pyc clean-caches clean-dist
-
-# building:
-
-requirements.txt:
-	poetry export -o requirements.txt -E rocksdb
-
-version := $(shell poetry version -s)
-wheel_file := "dist/hathor-$(version)-py3-none-any.whl"
-
-$(wheel_file):
-	poetry build -f wheel
-
-.PHONY: build
-build: requirements.txt $(wheel_file)
+clean: clean-pyc clean-caches
 
 # docker:
 
@@ -139,12 +119,12 @@ ifneq ($(docker_build_arg),)
 endif
 
 .PHONY: docker
-docker: $(docker_dir)/Dockerfile $(proto_outputs) requirements.txt $(wheel_file)
-	docker build$(docker_build_flags) -f Dockerfile.github -t $(docker_tag) $(docker_dir)
+docker: $(docker_dir)/Dockerfile
+	docker build$(docker_build_flags) -t $(docker_tag) $(docker_dir)
 
 .PHONY: docker-pypy
-docker-pypy: $(docker_dir)/Dockerfile.pypy $(proto_outputs) requirements.txt $(wheel_file)
-	docker build$(docker_build_flags) -f Dockerfile.github-pypy -t $(docker_tag) $(docker_dir)
+docker-pypy: $(docker_dir)/Dockerfile.pypy
+	docker build$(docker_build_flags) -f Dockerfile.pypy -t $(docker_tag) $(docker_dir)
 
 .PHONY: docker-push
 docker-push: docker

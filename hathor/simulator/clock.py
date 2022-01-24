@@ -13,9 +13,11 @@
 # limitations under the License.
 
 import heapq
+from typing import Any, Callable, List
 
-from twisted.internet import base
-from twisted.internet.interfaces import IReactorTime
+from twisted.internet.base import DelayedCall
+from twisted.internet.interfaces import IDelayedCall, IReactorTime
+from twisted.internet.testing import MemoryReactor
 from zope.interface import implementer
 
 
@@ -32,7 +34,7 @@ class HeapClock:
     def __init__(self):
         self.calls = []
 
-    def seconds(self):
+    def seconds(self) -> float:
         """
         Pretend to be time.time().  This is used internally when an operation
         such as L{IDelayedCall.reset} needs to determine a time value
@@ -42,19 +44,19 @@ class HeapClock:
         """
         return self.rightNow
 
-    def callLater(self, when, what, *a, **kw):
+    def callLater(self, delay: float, callable: Callable[..., Any], *args: object, **kwargs: object) -> IDelayedCall:
         """
         See L{twisted.internet.interfaces.IReactorTime.callLater}.
         """
-        dc = base.DelayedCall(self.seconds() + when,
-                              what, a, kw,
-                              lambda c: None,
-                              lambda c: None,
-                              self.seconds)
+        dc = DelayedCall(self.seconds() + delay,
+                         callable, args, kwargs,
+                         lambda c: None,
+                         lambda c: None,
+                         self.seconds)
         heapq.heappush(self.calls, (dc.getTime(), dc))
         return dc
 
-    def getDelayedCalls(self):
+    def getDelayedCalls(self) -> List[IDelayedCall]:
         """
         See L{twisted.internet.interfaces.IReactorTime.getDelayedCalls}
         """
@@ -86,3 +88,9 @@ class HeapClock:
         """
         for amount in timings:
             self.advance(amount)
+
+
+class MemoryReactorHeapClock(MemoryReactor, HeapClock):
+    def __init__(self):
+        MemoryReactor.__init__(self)
+        HeapClock.__init__(self)

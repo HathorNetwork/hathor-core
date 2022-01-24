@@ -5,7 +5,7 @@ from twisted.internet.defer import inlineCallbacks
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.daa import minimum_tx_weight
-from hathor.transaction import Transaction, TxInput, TxOutput
+from hathor.transaction import Transaction, TxInput, TxOutput, genesis
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.wallet.resources.thin_wallet import (
     AddressHistoryResource,
@@ -271,11 +271,14 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(len(response_data['history']), 1)
 
     def test_error_request(self):
+        from hathor.wallet.resources.thin_wallet.send_tokens import _Context
+
         resource = SendTokensResource(self.manager)
         request = TestDummyRequest('POST', 'thin_wallet/send_tokens', {})
+        dummy_tx = genesis.BLOCK_GENESIS
 
         self.assertIsNotNone(request._finishedDeferreds)
-        resource._err_tx_resolve('Error', request, 'error')
+        resource._err_tx_resolve('Error', _Context(tx=dummy_tx, request=request), 'error')
         self.assertIsNone(request._finishedDeferreds)
 
     @inlineCallbacks

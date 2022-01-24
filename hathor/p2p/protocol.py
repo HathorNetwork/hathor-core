@@ -14,10 +14,12 @@
 
 import time
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, Generator, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, Generator, Optional, Set, cast
 
 from structlog import get_logger
-from twisted.internet.interfaces import IDelayedCall, ITransport
+from twisted.internet.defer import Deferred
+from twisted.internet.interfaces import IDelayedCall, ITCPTransport, ITransport
+from twisted.internet.protocol import connectionDone
 from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
@@ -27,6 +29,7 @@ from hathor.p2p.peer_id import PeerId
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
 from hathor.p2p.sync_version import SyncVersion
+from hathor.p2p.utils import format_address
 from hathor.profiler import get_cpu_profiler
 
 if TYPE_CHECKING:
@@ -76,7 +79,7 @@ class HathorProtocol:
     app_version: str
     last_message: float
     peer: Optional[PeerId]
-    transport: ITransport
+    transport: Optional[ITransport]
     state: Optional[BaseState]
     connection_time: float
     _state_instances: Dict[PeerState, BaseState]
@@ -99,7 +102,7 @@ class HathorProtocol:
             assert self.connections.reactor is not None
             self.reactor = self.connections.reactor
         else:
-            from twisted.internet import reactor
+            from hathor.util import reactor
             self.reactor = reactor
 
         # Indicate whether it is an inbound connection (true) or an outbound connection (false).
@@ -177,17 +180,8 @@ class HathorProtocol:
 
     def get_short_remote(self) -> str:
         """Get remote for logging."""
-        parts = []
-
-        remote = self.transport.getPeer()
-        if hasattr(remote, 'host'):
-            parts.append(remote.host)
-        parts.append(':')
-
-        if hasattr(remote, 'port'):
-            parts.append(remote.port)
-
-        return ''.join(str(x) for x in parts)
+        assert self.transport is not None
+        return format_address(self.transport.getPeer())
 
     def get_peer_id(self) -> Optional[str]:
         """Get peer id for logging."""
@@ -293,7 +287,7 @@ class HathorProtocol:
         raise NotImplementedError
 
     @cpu.profiler(key=lambda self, cmd: 'p2p-cmd!{}'.format(str(cmd)))
-    def recv_message(self, cmd: ProtocolMessages, payload: str) -> Optional[Generator[Any, Any, None]]:
+    def recv_message(self, cmd: ProtocolMessages, payload: str) -> Optional[Deferred[None]]:
         """ Executed when a new message arrives.
         """
         assert self.state is not None
@@ -335,6 +329,15 @@ class HathorProtocol:
 
     def disconnect(self, reason: str = '', *, force: bool = False) -> None:
         """Close connection."""
+        assert self.transport is not None
+        # from hathor.simulator.fake_connection import HathorStringTransport
+        # assert isinstance(self.transport, (ITCPTransport, HathorStringTransport))
+        # FIXME: we can't easily use the above strategy because ITCPTransport is a zope.interface and thus won't have
+        #        an "isinstance" relation, and HathorStringTransport does not implement the zope.interface, but does
+        #        implement the needed "sub-interface" for this method, a typing.cast is being used to fool mypy, but we
+        #        should come up with a proper solution
+        transport = cast(ITCPTransport, self.transport)
+
         # from twisted docs: "If a producer is being used with the transport, loseConnection will only close
         # the connection once the producer is unregistered." We call on_exit to make sure any producers (like
         # the one from node_sync) are unregistered
@@ -342,10 +345,10 @@ class HathorProtocol:
             self.state.prepare_to_disconnect()
         self.log.debug('disconnecting', reason=reason, force=force)
         if not force:
-            self.transport.loseConnection()
+            transport.loseConnection()
             self.aborting = True
         else:
-            self.transport.abortConnection()
+            transport.abortConnection()
 
     def handle_error(self, payload: str) -> None:
         """ Executed when an ERROR command is received.
@@ -353,7 +356,7 @@ class HathorProtocol:
         self.log.warn('remote error', payload=payload)
 
 
-class HathorLineReceiver(HathorProtocol, LineReceiver):
+class HathorLineReceiver(LineReceiver, HathorProtocol):
     """ Implements HathorProtocol in a LineReceiver protocol.
     It is simply a TCP connection which sends one message per line.
     """
@@ -364,7 +367,7 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
         self.setLineMode()
         self.on_connect()
 
-    def connectionLost(self, reason: Failure) -> None:
+    def connectionLost(self, reason: Failure = connectionDone) -> None:
         super(HathorLineReceiver, self).connectionLost()
         self.on_disconnect(reason)
 
@@ -374,6 +377,8 @@ class HathorLineReceiver(HathorProtocol, LineReceiver):
 
     @cpu.profiler(key=lambda self: 'p2p!{}'.format(self.get_short_remote()))
     def lineReceived(self, line: bytes) -> Optional[Generator[Any, Any, None]]:
+        assert self.transport is not None
+
         if self.aborting:
             # XXX: this can happen when we receive more than one line at once (normally happens when the remote buffers
             # and the next datagram contains several lines) and for any reason (like a protocol error) we decide to

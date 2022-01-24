@@ -1,4 +1,4 @@
-import json
+from json import JSONDecodeError
 
 from twisted.internet.defer import inlineCallbacks
 from twisted.python.failure import Failure
@@ -7,6 +7,7 @@ from hathor.conf import HathorSettings
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from hathor.simulator import FakeConnection
+from hathor.util import json_dumps
 from tests import unittest
 
 settings = HathorSettings()
@@ -105,7 +106,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.conn.run_one_step()  # HELLO
         self.conn.run_one_step()  # PEER-ID
         self.conn.run_one_step()  # READY
-        with self.assertRaises(json.decoder.JSONDecodeError):
+        with self.assertRaises(JSONDecodeError):
             self._send_cmd(self.conn.proto1, 'PEERS', 'abc')
 
     def test_invalid_hello1(self):
@@ -144,7 +145,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self._send_cmd(
             self.conn.proto1,
             'HELLO',
-            json.dumps(data)
+            json_dumps(data),
         )
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'ERROR')
         self.assertTrue(self.conn.tr1.disconnecting)
@@ -166,7 +167,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.conn.run_one_step()  # PEERS
         self.conn.run_one_step()  # TIPS
         invalid_payload = {'id': '123', 'entrypoints': ['tcp://localhost:1234']}
-        yield self._send_cmd(self.conn.proto1, 'PEER-ID', json.dumps(invalid_payload))
+        yield self._send_cmd(self.conn.proto1, 'PEER-ID', json_dumps(invalid_payload))
         self._check_result_only_cmd(self.conn.peek_tr1_value(), b'ERROR')
         self.assertTrue(self.conn.tr1.disconnecting)
 

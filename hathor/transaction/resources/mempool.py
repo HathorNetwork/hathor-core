@@ -12,15 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 from itertools import islice
 from typing import TYPE_CHECKING
 
-from twisted.web import resource
-
-from hathor.api_util import set_cors
+from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
+from hathor.util import json_dumpb
 
 settings = HathorSettings()
 
@@ -31,7 +29,7 @@ if TYPE_CHECKING:
 
 
 @register_resource
-class MempoolResource(resource.Resource):
+class MempoolResource(Resource):
     """ Implements a web server API to return transactions on the mempool.
 
     You must run with option `--status <PORT>`.
@@ -61,7 +59,7 @@ class MempoolResource(resource.Resource):
         )
         # Only return up to settings.MEMPOOL_API_TX_LIMIT txs per call (default: 100)
         data = {'success': True, 'transactions': list(islice(tx_ids, settings.MEMPOOL_API_TX_LIMIT))}
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 MempoolResource.openapi = {
