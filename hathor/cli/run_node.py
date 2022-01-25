@@ -97,6 +97,7 @@ class RunNode:
         v2args.add_argument('--x-sync-v2-only', action='store_true',
                             help='Disable support for running sync-v1. DO NOT ENABLE, IT WILL BREAK.')
         parser.add_argument('--x-localhost-only', action='store_true', help='Only connect to peers on localhost')
+        parser.add_argument('--x-rocksdb-indexes', action='store_true', help='Use RocksDB indexes (currently opt-in)')
         return parser
 
     def prepare(self, args: Namespace) -> None:
@@ -198,17 +199,21 @@ class RunNode:
             check_or_exit(not args.data, '--data should not be used with --memory-storage')
             # if using MemoryStorage, no need to have cache
             tx_storage = TransactionMemoryStorage()
+            assert not args.x_rocksdb_indexes, 'RocksDB indexes require RocksDB data'
             self.log.info('with storage', storage_class=type(tx_storage).__name__)
         elif args.json_storage:
             check_or_exit(args.data, '--data is expected')
+            assert not args.x_rocksdb_indexes, 'RocksDB indexes require RocksDB data'
             tx_storage = TransactionCompactStorage(path=args.data, with_index=(not args.cache))
         else:
             check_or_exit(args.data, '--data is expected')
             if args.rocksdb_storage:
                 self.log.warn('--rocksdb-storage is now implied, no need to specify it')
             cache_capacity = args.rocksdb_cache
+            use_memory_indexes = not args.x_rocksdb_indexes
             tx_storage = TransactionRocksDBStorage(path=args.data, with_index=(not args.cache),
-                                                   cache_capacity=cache_capacity)
+                                                   cache_capacity=cache_capacity,
+                                                   use_memory_indexes=use_memory_indexes)
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
         if args.cache:
             check_or_exit(not args.memory_storage, '--cache should not be used with --memory-storage')
@@ -219,6 +224,7 @@ class RunNode:
                 tx_storage.interval = args.cache_interval
             self.log.info('with cache', capacity=tx_storage.capacity, interval=tx_storage.interval)
         self.tx_storage = tx_storage
+        self.log.info('with indexes', indexes_class=type(tx_storage.indexes).__name__)
 
         if args.wallet:
             self.wallet = create_wallet()
