@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Iterator, List, Optional
 
 from structlog import get_logger
 
-from hathor.indexes import IndexesManager, RocksDBIndexesManager
+from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.util import json_dumpb, json_loadb
@@ -39,11 +39,13 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
     It uses Protobuf serialization internally.
     """
 
-    def __init__(self, path: str = './', with_index: bool = True, cache_capacity: Optional[int] = None):
+    def __init__(self, path: str = './', with_index: bool = True, cache_capacity: Optional[int] = None,
+                 use_memory_indexes: bool = False):
         import rocksdb
 
         self.log = logger.new()
         self._path = path
+        self._use_memory_indexes = use_memory_indexes
 
         tx_dir = os.path.join(path, _DB_NAME)
         lru_cache = cache_capacity and rocksdb.LRUCache(cache_capacity)
@@ -95,7 +97,10 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         return tx
 
     def _build_indexes_manager(self) -> IndexesManager:
-        return RocksDBIndexesManager(self._db)
+        if self._use_memory_indexes:
+            return MemoryIndexesManager()
+        else:
+            return RocksDBIndexesManager(self._db)
 
     def _tx_to_bytes(self, tx: 'BaseTransaction') -> bytes:
         return bytes(tx)
