@@ -1,4 +1,3 @@
-import json
 import os
 import shutil
 import tempfile
@@ -7,7 +6,6 @@ from typing import Iterator, List, Optional
 from unittest import main as ut_main
 
 from structlog import get_logger
-from twisted.internet import reactor
 from twisted.internet.task import Clock
 from twisted.trial import unittest
 
@@ -16,7 +14,7 @@ from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
-from hathor.util import Random
+from hathor.util import Random, reactor
 from hathor.wallet import Wallet
 
 logger = get_logger()
@@ -31,6 +29,7 @@ def shorten_hash(container):
 
 
 def _load_peer_id_pool(file_path: str = 'tests/peer_id_pool.json') -> Iterator[PeerId]:
+    import json
     with open(file_path) as peer_id_pool_file:
         peer_id_pool_dict = json.load(peer_id_pool_file)
         for peer_id_dict in peer_id_pool_dict:
@@ -65,6 +64,7 @@ class TestCase(unittest.TestCase):
     def setUp(self):
         _set_test_mode(TestMode.TEST_ALL_WEIGHT)
         self.tmpdirs = []
+        # XXX: changing this clock to a MemoryReactorClock will break a lot of tests
         self.clock = Clock()
         self.clock.advance(time.time())
         self.log = logger.new()

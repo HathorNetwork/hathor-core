@@ -12,14 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 from collections import defaultdict, deque
 from typing import Any, DefaultDict, Deque, Dict, Optional, Set
 
 from autobahn.exception import Disconnected
 from autobahn.twisted.websocket import WebSocketServerFactory
 from structlog import get_logger
-from twisted.internet import reactor
 from twisted.internet.task import LoopingCall
 
 from hathor.conf import HathorSettings
@@ -27,6 +25,7 @@ from hathor.indexes import AddressIndex
 from hathor.metrics import Metrics
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.pubsub import HathorEvents
+from hathor.util import json_dumpb, json_loadb, reactor
 from hathor.websocket.protocol import HathorAdminWebsocketProtocol
 
 settings = HathorSettings()
@@ -211,7 +210,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         """ Send data in ws message for the connections
         """
         try:
-            payload = json.dumps(data).encode('utf-8')
+            payload = json_dumpb(data)
         except TypeError:
             self.log.error('failed to serialize data', data=repr(data), exc_info=True)
             return
@@ -298,7 +297,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
 
     def handle_message(self, connection: HathorAdminWebsocketProtocol, data: bytes) -> None:
         """ General message handler, detects type and deletages to specific handler."""
-        message = json.loads(data)
+        message = json_loadb(data)
         # we only handle ping messages for now
         if message['type'] == 'ping':
             self._handle_ping(connection, message)
@@ -309,7 +308,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
 
     def _handle_ping(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
         """ Handler for ping message, should respond with a simple {"type": "pong"}"""
-        payload = json.dumps({'type': 'pong'}).encode('utf-8')
+        payload = json_dumpb({'type': 'pong'})
         connection.sendMessage(payload, False)
 
     def _handle_subscribe_address(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
@@ -317,17 +316,17 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         addr: str = message['address']
         subs: Set[str] = connection.subscribed_to
         if len(subs) >= settings.WS_MAX_SUBS_ADDRS_CONN:
-            payload = json.dumps({'message': 'Reached maximum number of subscribed '
+            payload = json_dumpb({'message': 'Reached maximum number of subscribed '
                                              f'addresses ({settings.WS_MAX_SUBS_ADDRS_CONN}).',
-                                  'type': 'subscribe_address', 'success': False}).encode('utf-8')
+                                  'type': 'subscribe_address', 'success': False})
         elif self.address_index and _count_empty(subs, self.address_index) >= settings.WS_MAX_SUBS_ADDRS_EMPTY:
-            payload = json.dumps({'message': 'Reached maximum number of subscribed '
+            payload = json_dumpb({'message': 'Reached maximum number of subscribed '
                                              f'addresses without output ({settings.WS_MAX_SUBS_ADDRS_EMPTY}).',
-                                  'type': 'subscribe_address', 'success': False}).encode('utf-8')
+                                  'type': 'subscribe_address', 'success': False})
         else:
             self.address_connections[addr].add(connection)
             connection.subscribed_to.add(addr)
-            payload = json.dumps({'type': 'subscribe_address', 'success': True}).encode('utf-8')
+            payload = json_dumpb({'type': 'subscribe_address', 'success': True})
         connection.sendMessage(payload, False)
 
     def _handle_unsubscribe_address(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
@@ -337,7 +336,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             connection.subscribed_to.remove(addr)
             self._remove_connection_from_address_dict(connection, addr)
             # Reply back to the client
-            payload = json.dumps({'type': 'unsubscribe_address', 'success': True}).encode('utf-8')
+            payload = json_dumpb({'type': 'unsubscribe_address', 'success': True})
             connection.sendMessage(payload, False)
 
     def _remove_connection_from_address_dict(self, connection: HathorAdminWebsocketProtocol, address: str) -> None:

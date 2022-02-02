@@ -21,7 +21,6 @@ from typing import Any, Iterable, Iterator, List, NamedTuple, Optional, Set, Tup
 from structlog import get_logger
 from twisted.internet import defer
 from twisted.internet.defer import Deferred
-from twisted.internet.interfaces import IReactorCore
 from twisted.python.threadpool import ThreadPool
 
 from hathor import daa
@@ -39,7 +38,7 @@ from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transact
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.util import LogDuration, Random
+from hathor.util import LogDuration, Random, Reactor
 from hathor.wallet import BaseWallet
 
 settings = HathorSettings()
@@ -63,10 +62,10 @@ class HathorManager:
         # This node is ready to establish new connections, sync, and exchange transactions.
         READY = 'READY'
 
-    def __init__(self, reactor: IReactorCore, peer_id: Optional[PeerId] = None, network: Optional[str] = None,
+    def __init__(self, reactor: Reactor, peer_id: Optional[PeerId] = None, network: Optional[str] = None,
                  hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
-                 peer_storage: Optional[Any] = None, default_port: int = 40403, wallet_index: bool = False,
+                 peer_storage: Optional[Any] = None, wallet_index: bool = False,
                  stratum_port: Optional[int] = None, ssl: bool = True,
                  enable_sync_v1: bool = True, enable_sync_v2: bool = False,
                  capabilities: Optional[List[str]] = None, checkpoints: Optional[List[Checkpoint]] = None,
@@ -88,9 +87,6 @@ class HathorManager:
 
         :param peer_storage: If not given, a new one is created.
         :type peer_storage: :py:class:`hathor.p2p.peer_storage.PeerStorage`
-
-        :param default_port: Network default port. It is used when only ip addresses are discovered.
-        :type default_port: int
 
         :param wallet_index: If should add a wallet index in the storage
         :type wallet_index: bool
@@ -115,8 +111,9 @@ class HathorManager:
         self.rng = rng
 
         self.reactor = reactor
-        if hasattr(self.reactor, 'addSystemEventTrigger'):
-            self.reactor.addSystemEventTrigger('after', 'shutdown', self.stop)
+        add_system_event_trigger = getattr(self.reactor, 'addSystemEventTrigger', None)
+        if add_system_event_trigger is not None:
+            add_system_event_trigger('after', 'shutdown', self.stop)
 
         self.state: Optional[HathorManager.NodeState] = None
         self.profiler: Optional[Any] = None
@@ -912,10 +909,13 @@ class HathorManager:
 
     def listen(self, description: str, use_ssl: Optional[bool] = None) -> None:
         endpoint = self.connections.listen(description, use_ssl)
+        # XXX: endpoint: IStreamServerEndpoint does not intrinsically have a port, but in practice all concrete cases
+        #      that we have will have a _port attribute
+        port = getattr(endpoint, '_port', None)
 
         if self.hostname:
             proto, _, _ = description.partition(':')
-            address = '{}://{}:{}'.format(proto, self.hostname, endpoint._port)
+            address = '{}://{}:{}'.format(proto, self.hostname, port)
             self.my_peer.entrypoints.append(address)
 
     def has_sync_version_capability(self) -> bool:

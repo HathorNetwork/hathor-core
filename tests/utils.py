@@ -7,6 +7,7 @@ from typing import List, Optional, Tuple, cast
 
 import requests
 from hathorlib.scripts import DataScript
+from twisted.internet.task import Clock
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_private_key_from_bytes
@@ -532,6 +533,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
     if propagate:
         tx.verify()
         manager.propagate_tx(tx, fails_silently=False)
+        assert isinstance(manager.reactor, Clock)
         manager.reactor.advance(8)
     return tx
 

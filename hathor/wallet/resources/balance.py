@@ -12,19 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
-
-from twisted.web import resource
-
-from hathor.api_util import set_cors
+from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
+from hathor.util import json_dumpb
 
 settings = HathorSettings()
 
 
 @register_resource
-class BalanceResource(resource.Resource):
+class BalanceResource(Resource):
     """ Implements a web server API to return the balance of the wallet.
 
     You must run with option `--status <PORT>`.
@@ -48,7 +45,7 @@ class BalanceResource(resource.Resource):
             return {'success': False, 'message': 'No wallet started on node'}
 
         data = {'success': True, 'balance': self.manager.wallet.balance[settings.HATHOR_TOKEN_UID]._asdict()}
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 BalanceResource.openapi = {

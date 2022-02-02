@@ -12,20 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import re
 import struct
 
-from twisted.web import resource
-
-from hathor.api_util import get_missing_params_msg, set_cors
+from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.daa import minimum_tx_weight
 from hathor.transaction import Transaction
+from hathor.util import json_dumpb
 
 
 @register_resource
-class SignTxResource(resource.Resource):
+class SignTxResource(Resource):
     """ Implements a web server API that receives hex form of a tx and signs the inputs
     belonging to the user's wallet.
 
@@ -46,8 +44,9 @@ class SignTxResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        if b'hex_tx' in request.args:
-            requested_decode = request.args[b'hex_tx'][0].decode('utf-8')
+        raw_args = get_args(request)
+        if b'hex_tx' in raw_args:
+            requested_decode = raw_args[b'hex_tx'][0].decode('utf-8')
         else:
             return get_missing_params_msg('hex_tx')
 
@@ -56,8 +55,8 @@ class SignTxResource(resource.Resource):
             tx_bytes = bytes.fromhex(requested_decode)
 
             prepare_to_send = False
-            if b'prepare_to_send' in request.args:
-                _prepare_to_send = request.args[b'prepare_to_send'][0].decode('utf-8')
+            if b'prepare_to_send' in raw_args:
+                _prepare_to_send = raw_args[b'prepare_to_send'][0].decode('utf-8')
                 prepare_to_send = _prepare_to_send == 'true'
 
             try:
@@ -77,7 +76,7 @@ class SignTxResource(resource.Resource):
 
         else:
             data = {'success': False, 'message': 'Transaction invalid'}
-        return json.dumps(data).encode('utf-8')
+        return json_dumpb(data)
 
 
 SignTxResource.openapi = {

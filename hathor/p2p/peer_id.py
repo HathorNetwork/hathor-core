@@ -14,9 +14,8 @@
 
 import base64
 import hashlib
-import json
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Set, cast
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
@@ -25,6 +24,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from OpenSSL.crypto import X509, PKey
 from twisted.internet.defer import inlineCallbacks
+from twisted.internet.interfaces import ISSLTransport
 from twisted.internet.ssl import Certificate, CertificateOptions, TLSVersion, trustRootFromCertificates
 
 from hathor import daa
@@ -168,12 +168,18 @@ class PeerId:
 
         if 'pubKey' in data:
             public_key_der = base64.b64decode(data['pubKey'])
-            obj.public_key = serialization.load_der_public_key(data=public_key_der, backend=default_backend())
+            public_key = serialization.load_der_public_key(data=public_key_der, backend=default_backend())
+            assert public_key is not None
+            public_key = cast(rsa.RSAPublicKey, public_key)
+            obj.public_key = public_key
 
         if 'privKey' in data:
             private_key_der = base64.b64decode(data['privKey'])
-            obj.private_key = serialization.load_der_private_key(data=private_key_der, password=None,
-                                                                 backend=default_backend())
+            private_key = serialization.load_der_private_key(data=private_key_der, password=None,
+                                                             backend=default_backend())
+            assert private_key is not None
+            private_key = cast(rsa.RSAPrivateKey, private_key)
+            obj.private_key = private_key
 
         if 'entrypoints' in data:
             obj.entrypoints = data['entrypoints']
@@ -235,6 +241,7 @@ class PeerId:
     def save_to_file(self, path: str) -> None:
         """ Save the object to a JSON file.
         """
+        import json
         data = self.to_json(include_private_key=True)
         fp = open(path, 'w')
         json.dump(data, fp, indent=4)
@@ -270,9 +277,9 @@ class PeerId:
 
     def get_certificate(self) -> x509.Certificate:
         if not self.certificate:
+            assert self.private_key is not None
             certificate = generate_certificate(self.private_key, settings.CA_FILEPATH, settings.CA_KEY_FILEPATH)
             self.certificate = certificate
-
         return self.certificate
 
     def get_certificate_options(self) -> CertificateOptions:
@@ -281,6 +288,7 @@ class PeerId:
         """
         certificate = self.get_certificate()
         openssl_certificate = X509.from_cryptography(certificate)
+        assert self.private_key is not None
         openssl_pkey = PKey.from_cryptography_key(self.private_key)
 
         with open(settings.CA_FILEPATH, 'rb') as f:
@@ -332,8 +340,11 @@ class PeerId:
             else:
                 # When the peer is the server part of the connection we don't have the full connection_string
                 # So we can only validate the host from the protocol
+                assert protocol.transport is not None
                 connection_remote = protocol.transport.getPeer()
-                connection_host = connection_remote.host
+                connection_host = getattr(connection_remote, 'host', None)
+                if connection_host is None:
+                    continue
                 # Connection host has only the IP
                 # So we must consider that the entrypoint could be in name format and we just validate the host
                 host = connection_string_to_host(entrypoint)
@@ -355,9 +366,18 @@ class PeerId:
     def validate_certificate(self, protocol: 'HathorProtocol') -> bool:
         """ Validates if the public key of the connection certificate is the public key of the peer
         """
+        assert protocol.transport is not None
+        # from hathor.simulator.fake_connection import HathorStringTransport
+        # assert isinstance(protocol.transport, (ISSLTransport, HathorStringTransport))
+        # FIXME: we can't easily use the above strategy because ISSLTransport is a zope.interface and thus won't have
+        #        an "isinstance" relation, and HathorStringTransport does not implement the zope.interface, but does
+        #        implement the needed "sub-interface" for this method, a typing.cast is being used to fool mypy, but we
+        #        should come up with a proper solution
+        transport = cast(ISSLTransport, protocol.transport)
+
         # We must validate that the public key used to generate the connection certificate
         # is the same public key from the peer
-        connection_cert = protocol.transport.getPeerCertificate()
+        connection_cert = cast(X509, transport.getPeerCertificate())
         cert_pubkey = connection_cert.to_cryptography().public_key()
         cert_pubkey_bytes = cert_pubkey.public_bytes(
             encoding=serialization.Encoding.PEM,

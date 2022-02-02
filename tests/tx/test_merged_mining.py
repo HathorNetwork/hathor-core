@@ -23,15 +23,15 @@ class BaseMergedMiningTest(unittest.TestCase):
     async def test_coordinator(self):
         from cryptography.hazmat.backends import default_backend
         from cryptography.hazmat.primitives.asymmetric import ec
-        from twisted.test.proto_helpers import MemoryReactorClock
 
         from hathor.crypto.util import get_address_b58_from_public_key
+        from hathor.simulator.clock import MemoryReactorHeapClock
 
         super().setUp()
         self.manager = self.create_peer('testnet')
         self.manager.allow_mining_without_peers()
 
-        self.reactor = MemoryReactorClock()
+        self.reactor = MemoryReactorHeapClock()
 
         self.private_key = ec.generate_private_key(ec.SECP256K1(), default_backend())
         self.public_key = self.private_key.public_key()

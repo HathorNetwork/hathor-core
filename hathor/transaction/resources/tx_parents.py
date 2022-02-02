@@ -12,16 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
-
-from twisted.web import resource
-
-from hathor.api_util import set_cors
+from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.util import json_dumpb
 
 
 @register_resource
-class TxParentsResource(resource.Resource):
+class TxParentsResource(Resource):
     """Return tx parents for new transactions
 
     You must run with option `--status <PORT>`.
@@ -49,7 +46,7 @@ class TxParentsResource(resource.Resource):
                 'success': True,
                 'tx_parents': [x.hex() for x in tx_parents],
             }
-        return json.dumps(data).encode('utf-8')
+        return json_dumpb(data)
 
 
 TxParentsResource.openapi = {

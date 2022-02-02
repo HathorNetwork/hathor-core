@@ -26,24 +26,25 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, List, NamedTupl
 from uuid import UUID, uuid4
 
 from structlog import get_logger
-from twisted.internet import reactor, task
+from twisted.internet import task
 from twisted.internet.defer import Deferred
-from twisted.internet.interfaces import IAddress, IDelayedCall, IReactorCore, IReactorTCP
-from twisted.internet.protocol import Factory
+from twisted.internet.interfaces import IAddress, IDelayedCall
+from twisted.internet.protocol import Factory, connectionDone
 from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
+from hathor.p2p.utils import format_address
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.transaction import BaseTransaction, BitcoinAuxPow, Block, MergeMinedBlock, Transaction, sum_weights
 from hathor.transaction.exceptions import PowError, ScriptError, TxValidationError
-from hathor.util import json_dumpb, json_loadb
+from hathor.util import Reactor, json_dumpb, json_loadb, reactor
 from hathor.wallet.exceptions import InvalidAddress
 
 if TYPE_CHECKING:
-    from multiprocessing.sharedctypes import _Array, _Value  # noqa: F401
+    import ctypes
 
     from hathor.manager import HathorManager  # noqa: F401
 
@@ -116,11 +117,11 @@ class ServerJob:
 
 class MinerJob(NamedTuple):
     """ Data class used to share job data between mining processes """
-    data: '_Array' = Array('B', 2048)
-    data_size: '_Value' = Value('I')
-    job_id: '_Array' = Array('B', 16)
-    nonce_size: '_Value' = Value('I')
-    weight: '_Value' = Value('d')
+    data: 'ctypes.Array[ctypes.c_ubyte]' = Array('B', 2048)
+    data_size: 'ctypes.c_uint' = Value('I')
+    job_id: 'ctypes.Array[ctypes.c_ubyte]' = Array('B', 16)
+    nonce_size: 'ctypes.c_uint' = Value('I')
+    weight: 'ctypes.c_double' = Value('d')
 
     def update_job(self, params: Dict[str, Any]) -> bool:
         """
@@ -142,9 +143,9 @@ class MinerJob(NamedTuple):
         try:
             data = bytes.fromhex(params['data'])
             data_size: int = len(data)
-            self.data[:data_size] = data  # type: ignore
+            self.data[:data_size] = list(data)
             self.data_size.value = data_size
-            self.job_id[:] = bytes.fromhex(params['job_id'])  # type: ignore
+            self.job_id[:] = list(bytes.fromhex(params['job_id']))
             self.nonce_size.value = int(params['nonce_size'])
             self.weight.value = float(params['weight'])
         except KeyError:
@@ -388,7 +389,7 @@ class StratumProtocol(JSONRPC):
         self.log = self.log.bind(miner_id=self.miner_id, conn_at=self.connection_start_time, address=self.address)
         self.log.debug('new connection')
 
-    def connectionLost(self, reason: Failure = None) -> None:
+    def connectionLost(self, reason: Failure = connectionDone) -> None:
         if self.subscribed:
             self.log.info('miner disconnected')
         assert self.miner_id is not None
@@ -444,6 +445,7 @@ class StratumProtocol(JSONRPC):
                 self.log.debug('miner with address', id=self.miner_id, address=address)
             except InvalidAddress:
                 self.send_error(INVALID_ADDRESS, msgid)
+                assert self.transport is not None
                 self.transport.loseConnection()
                 return
         if params and 'mine_txs' in params:
@@ -703,7 +705,7 @@ class StratumProtocol(JSONRPC):
         assert self.miner_id is not None
 
         return MinerStatistics(
-            address='{}:{}'.format(self.address.host, self.address.port),
+            address=format_address(self.address),
             blocks_found=self.blocks_found,
             completed_jobs=self.completed_jobs,
             connection_start_time=self.connection_start_time,
@@ -717,7 +719,7 @@ class StratumFactory(Factory):
     Twisted factory of server Hathor Stratum protocols.
     Interfaces with nodes to keep mining jobs up to date and to submit successful ones.
     """
-    reactor: IReactorTCP
+    reactor: Reactor
     jobs: Set[UUID]
     manager: 'HathorManager'
     miner_protocols: Dict[UUID, StratumProtocol]
@@ -727,7 +729,7 @@ class StratumFactory(Factory):
     mined_txs: Dict[bytes, Transaction]
     deferreds_tx: Dict[bytes, Deferred]
 
-    def __init__(self, manager: 'HathorManager', port: int, reactor: IReactorTCP = reactor):
+    def __init__(self, manager: 'HathorManager', port: int, reactor: Reactor = reactor):
         self.log = logger.new()
         self.manager = manager
         self.port = port
@@ -764,7 +766,10 @@ class StratumFactory(Factory):
                 self.update_jobs()
 
         self.manager.pubsub.subscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, on_new_block)
-        self._listen = self.reactor.listenTCP(self.port, self)
+        # XXX: self.reactor is IReactorTime, which does not guarantee listenTCP method, normally it will have that
+        #      method, but on tests we use a Clock instead, which does not have listenTCP, there shouldn't be any
+        #      issues using the "default" reactor though
+        self._listen = reactor.listenTCP(self.port, self)
 
     def stop(self) -> Optional[Deferred]:
         return self._listen.stopListening()
@@ -813,7 +818,7 @@ class StratumClient(JSONRPC):
     job: Dict
     miners: List[Process]
     loop: Optional[task.LoopingCall]
-    signal: '_Value'
+    signal: 'ctypes.c_ubyte'
     job_data: MinerJob
 
     address: Optional[bytes]
@@ -835,10 +840,12 @@ class StratumClient(JSONRPC):
         if self._iter_id:
             return str(next(self._iter_id))
 
-    def start(self, clock: IReactorCore = reactor) -> None:
+    def start(self, clock: Optional[Reactor] = None) -> None:
         """
         Starts the client, instantiating mining processes and scheduling miner supervisor calls.
         """
+        if clock is None:
+            clock = reactor
         args = (self.job_data, self.signal, self.queue)
         proc_count = self.proc_count or cast(int, cpu_count())
         self.signal.value = self.SLEEP
@@ -895,7 +902,7 @@ class StratumClient(JSONRPC):
         self.log.warn('handle_error', error=error, data=data)
 
 
-def miner_job(index: int, process_num: int, job_data: MinerJob, signal: '_Value', queue: MQueue) -> None:
+def miner_job(index: int, process_num: int, job_data: MinerJob, signal: 'ctypes.c_ubyte', queue: MQueue) -> None:
     """
     Job to be executed by the mining process.
 

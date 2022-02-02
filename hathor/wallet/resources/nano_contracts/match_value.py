@@ -14,17 +14,16 @@
 
 import base64
 import binascii
-import json
 import struct
+from json import JSONDecodeError
 from typing import Any, Dict, NamedTuple
 
-from twisted.web import resource
-
-from hathor.api_util import get_missing_params_msg, render_options, set_cors
+from hathor.api_util import Resource, get_missing_params_msg, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, NanoContractMatchValues
+from hathor.util import json_dumpb, json_loadb
 from hathor.wallet.exceptions import InvalidAddress
 
 PARAMS_POST = ['values', 'fallback_address', 'oracle_pubkey_hash', 'oracle_data_id', 'total_value', 'input_value']
@@ -49,7 +48,7 @@ class DecodedPutParams(NamedTuple):
 
 
 @register_resource
-class NanoContractMatchValueResource(resource.Resource):
+class NanoContractMatchValueResource(Resource):
     """ Implements a web server API to create/update MatchValue nano contract txs.
 
     You must run with option `--status <PORT>`.
@@ -77,9 +76,9 @@ class NanoContractMatchValueResource(resource.Resource):
         set_cors(request, 'POST')
 
         try:
-            data = json.loads(request.content.read().decode('utf-8'))
-        except json.JSONDecodeError:
-            return json.dumps({'success': False, 'message': 'Invalid format for post data'}).encode('utf-8')
+            data = json_loadb(request.content.read())
+        except JSONDecodeError:
+            return json_dumpb({'success': False, 'message': 'Invalid format for post data'})
 
         for param in PARAMS_POST:
             if param not in data:
@@ -88,7 +87,7 @@ class NanoContractMatchValueResource(resource.Resource):
         try:
             decoded_params = self.decode_post_params(data)
         except ValueError as e:
-            return json.dumps({'success': False, 'message': e.message}).encode('utf-8')
+            return json_dumpb({'success': False, 'message': e.message})
 
         nano_contract = NanoContractMatchValues(
             decoded_params.oracle_pubkey_hash, decoded_params.min_timestamp, decoded_params.oracle_data_id,
@@ -110,7 +109,7 @@ class NanoContractMatchValueResource(resource.Resource):
         tx = Transaction(inputs=tx_inputs, outputs=tx_outputs)
 
         ret = {'success': True, 'hex_tx': tx.get_struct().hex()}
-        return json.dumps(ret).encode('utf-8')
+        return json_dumpb(ret)
 
     def decode_post_params(self, data: Dict[str, Any]) -> DecodedPostParams:
         """Decode the data required on POST request. Raise an error if any of the
@@ -169,9 +168,9 @@ class NanoContractMatchValueResource(resource.Resource):
         set_cors(request, 'PUT')
 
         try:
-            data = json.loads(request.content.read().decode('utf-8'))
-        except json.JSONDecodeError:
-            return json.dumps({'success': False, 'message': 'Invalid format for post data'}).encode('utf-8')
+            data = json_loadb(request.content.read())
+        except JSONDecodeError:
+            return json_dumpb({'success': False, 'message': 'Invalid format for post data'})
 
         for param in PARAMS_PUT:
             if param not in data:
@@ -180,12 +179,12 @@ class NanoContractMatchValueResource(resource.Resource):
         try:
             decoded_params = self.decode_put_params(data)
         except ValueError as e:
-            return json.dumps({'success': False, 'message': e.message}).encode('utf-8')
+            return json_dumpb({'success': False, 'message': e.message})
 
         try:
             tx = Transaction.create_from_struct(decoded_params.tx_bytes)
         except struct.error:
-            return json.dumps({'success': False, 'message': 'Could not decode hex transaction'}).encode('utf-8')
+            return json_dumpb({'success': False, 'message': 'Could not decode hex transaction'})
 
         tx_outputs = []
         nano_contract = None
@@ -198,7 +197,7 @@ class NanoContractMatchValueResource(resource.Resource):
                 tx_outputs.append(_output)
 
         if not nano_contract:
-            return json.dumps({'success': False, 'message': 'Nano contract not found'}).encode('utf-8')
+            return json_dumpb({'success': False, 'message': 'Nano contract not found'})
 
         for address, value in decoded_params.new_value_dict.items():
             nano_contract.value_dict[address] = value
@@ -219,7 +218,7 @@ class NanoContractMatchValueResource(resource.Resource):
             tx.inputs.append(TxInput(txin.tx_id, txin.index, b''))
 
         ret = {'success': True, 'hex_tx': tx.get_struct().hex()}
-        return json.dumps(ret).encode('utf-8')
+        return json_dumpb(ret)
 
     def decode_put_params(self, data: Dict[str, Any]) -> DecodedPutParams:
         """Decode the data required on PUT request. Raise an error if any of the

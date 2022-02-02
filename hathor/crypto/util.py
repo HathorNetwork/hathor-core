@@ -28,6 +28,7 @@ from cryptography.hazmat.primitives.serialization import (
 )
 
 from hathor.conf import HathorSettings
+from hathor.util import not_none
 
 settings = HathorSettings()
 
@@ -45,7 +46,7 @@ def get_private_key_bytes(private_key: ec.EllipticCurvePrivateKeyWithSerializati
 def get_private_key_from_bytes(private_key_bytes: bytes,
                                password: Optional[bytes] = None) -> ec.EllipticCurvePrivateKeyWithSerialization:
     """Returns the cryptography ec.EllipticCurvePrivateKey from bytes"""
-    return load_der_private_key(private_key_bytes, password, _BACKEND)
+    return not_none(load_der_private_key(private_key_bytes, password, _BACKEND))
 
 
 def get_hash160(public_key_bytes: bytes) -> bytes:

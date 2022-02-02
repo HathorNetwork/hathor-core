@@ -22,8 +22,7 @@ from typing import Any, DefaultDict, Dict, Iterable, List, NamedTuple, Optional,
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
 from pycoin.key.Key import Key
 from structlog import get_logger
-from twisted.internet.interfaces import IDelayedCall, IReactorCore
-from twisted.internet.task import Clock
+from twisted.internet.interfaces import IDelayedCall
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
@@ -33,6 +32,7 @@ from hathor.transaction.base_transaction import int_to_bytes
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.transaction import Transaction
+from hathor.util import Reactor
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
 
 settings = HathorSettings()
@@ -68,7 +68,7 @@ class WalletBalanceUpdate(NamedTuple):
 
 
 class BaseWallet:
-    reactor: IReactorCore
+    reactor: Reactor
     keys: Dict[str, Any]
 
     class WalletType(Enum):
@@ -79,7 +79,7 @@ class BaseWallet:
         KEY_PAIR = 'keypair'
 
     def __init__(self, directory: str = './', pubsub: Optional[PubSubManager] = None,
-                 reactor: Optional[IReactorCore] = None) -> None:
+                 reactor: Optional[Reactor] = None) -> None:
         """ A wallet will hold the unspent and spent transactions
 
         All files will be stored in the same directory, and it should
@@ -129,7 +129,7 @@ class BaseWallet:
         ]
 
         if reactor is None:
-            from twisted.internet import reactor as twisted_reactor
+            from hathor.util import reactor as twisted_reactor
             reactor = twisted_reactor
         self.reactor = reactor
 
@@ -952,7 +952,7 @@ class UnspentTx:
         return cls(bytes.fromhex(data['tx_id']), data['index'], data['value'], data['timestamp'], data['address'],
                    data['token_data'], data['voided'], data['timelock'])
 
-    def is_locked(self, reactor: Clock) -> bool:
+    def is_locked(self, reactor: Reactor) -> bool:
         """ Returns if the unspent tx is locked or available to be spent
 
             :param reactor: reactor to get the current time

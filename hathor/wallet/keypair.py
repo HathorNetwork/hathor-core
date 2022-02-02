@@ -58,7 +58,7 @@ class KeyPair:
         """
         self._cache_priv_key_unlock = None
 
-    def get_private_key(self, password: bytes) -> ec.EllipticCurvePrivateKeyWithSerialization:
+    def get_private_key(self, password: bytes) -> ec.EllipticCurvePrivateKey:
         """
         :param password: password to decode private key
         :type password: bytes
@@ -77,8 +77,9 @@ class KeyPair:
         else:
             try:
                 assert self.private_key_bytes is not None
-                priv_key = self._cache_priv_key_unlock = get_private_key_from_bytes(self.private_key_bytes,
-                                                                                    password=password)
+                priv_key_ = get_private_key_from_bytes(self.private_key_bytes, password=password)
+                assert priv_key_ is not None
+                priv_key = self._cache_priv_key_unlock = priv_key_
             except ValueError:
                 raise IncorrectPassword
         return priv_key

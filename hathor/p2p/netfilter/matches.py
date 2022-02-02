@@ -83,7 +83,7 @@ class NetfilterMatchIPAddress(NetfilterMatch):
             return False
 
         try:
-            host = ip_address(context.addr.host)
+            host = ip_address(getattr(context.addr, 'host'))
         except ValueError:
             return False
 

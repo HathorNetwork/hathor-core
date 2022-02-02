@@ -19,12 +19,16 @@ jobs:
         python-impl:
         - python
         python-version:
-        - 3.7
-        - 3.8
-        - 3.9
+        - '3.7'
+        - '3.8'
+        - '3.9'
+        - '3.10'
         include:
         - python-impl: pypy
-          python-version: 3.7
+          python-version: '3.7'
+        # XXX: this will still fail (probably because of the code Cython generates on python-rocksdb)
+        # - python-impl: pypy
+        #   python-version: '3.8'
     steps:
     - name: Checkout
       uses: actions/checkout@v2
@@ -39,8 +43,8 @@ jobs:
                 if line.startswith('ARG PYTHON'):
                     return line.split('=')[1].strip()
         ref = '${{ github.ref }}'
-        dockerfile_cpython = 'Dockerfile.github'
-        dockerfile_pypy = 'Dockerfile.github-pypy'
+        dockerfile_cpython = 'Dockerfile'
+        dockerfile_pypy = 'Dockerfile.pypy'
         default_python = 'python' + extract_pyver(dockerfile_cpython)
         default_pypy = 'pypy' + extract_pyver(dockerfile_pypy)
         if '${{ github.event_name }}' == 'schedule':
@@ -119,18 +123,6 @@ jobs:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    - name: Set up Python ${{ matrix.python }}
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python }}
-    - name: Install Poetry
-      run: pip -q --no-input install poetry
-    - name: Install Poetry dependencies
-      run: poetry install -n --no-root
-    - name: Build source package
-      run: poetry build -f wheel
-    - name: Generate requirements
-      run: poetry export -o requirements.txt -E rocksdb -E sentry
     - name: Cache Docker layers
       uses: actions/cache@v2
       with:

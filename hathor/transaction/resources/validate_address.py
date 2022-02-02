@@ -15,9 +15,7 @@
 import base64
 from typing import Union
 
-from twisted.web import resource
-
-from hathor.api_util import set_cors
+from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.manager import HathorManager
 from hathor.transaction.scripts import create_base_script
@@ -25,7 +23,7 @@ from hathor.util import api_catch_exceptions, json_dumpb
 
 
 @register_resource
-class ValidateAddressResource(resource.Resource):
+class ValidateAddressResource(Resource):
     """ Implements a web server API that receives a string and returns whether it's a valid address and its script.
 
     The actual implementation is forwarded to _ValidateAddressResource, this only instantiates that class.
@@ -42,7 +40,7 @@ class ValidateAddressResource(resource.Resource):
         return _ValidateAddressResource(self.manager, name)
 
 
-class _ValidateAddressResource(resource.Resource):
+class _ValidateAddressResource(Resource):
     """ Actual implementation of ValidateAddressResource.
     """
     isLeaf = True

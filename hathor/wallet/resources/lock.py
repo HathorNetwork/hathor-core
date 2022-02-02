@@ -12,16 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
-
-from twisted.web import resource
-
-from hathor.api_util import render_options, set_cors
+from hathor.api_util import Resource, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.util import json_dumpb
 
 
 @register_resource
-class LockWalletResource(resource.Resource):
+class LockWalletResource(Resource):
     """ Implements a web server API with POST to lock the wallet
 
     You must run with option `--status <PORT>`.
@@ -44,7 +41,7 @@ class LockWalletResource(resource.Resource):
         self.manager.wallet.lock()
 
         ret = {'success': True}
-        return json.dumps(ret, indent=4).encode('utf-8')
+        return json_dumpb(ret)
 
     def render_OPTIONS(self, request):
         return render_options(request)

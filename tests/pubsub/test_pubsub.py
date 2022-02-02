@@ -1,10 +1,11 @@
 import threading
 import time
 
-from twisted.internet import reactor, threads
+from twisted.internet import threads
 from twisted.python import threadable
 
 from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.util import reactor
 from tests import unittest
 
 

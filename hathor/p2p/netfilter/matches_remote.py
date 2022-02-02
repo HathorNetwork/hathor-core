@@ -17,10 +17,10 @@ from typing import TYPE_CHECKING, Any, List
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred
-from twisted.internet.interfaces import IReactorCore
 from twisted.internet.task import LoopingCall
 
 from hathor.p2p.netfilter.matches import NetfilterMatch, NetfilterMatchIPAddress
+from hathor.util import Reactor
 
 if TYPE_CHECKING:
     from hathor.p2p.netfilter.context import NetfilterContext
@@ -32,7 +32,7 @@ class NetfilterMatchRemoteURL(NetfilterMatch):
     """Base class to match items in a list updated from a remote URL."""
     header: str
 
-    def __init__(self, name: str, reactor: 'IReactorCore', url: str, update_interval: int = 30) -> None:
+    def __init__(self, name: str, reactor: Reactor, url: str, update_interval: int = 30) -> None:
         self.log = logger.new()
         self.name = name
         self.reactor = reactor
@@ -66,6 +66,7 @@ class NetfilterMatchRemoteURL(NetfilterMatch):
         d.addCallback(readBody)
         d.addErrback(self._update_err)
         d.addCallback(self._update_cb)
+        return d
 
     def match(self, context: 'NetfilterContext') -> bool:
         for match in self.matches:

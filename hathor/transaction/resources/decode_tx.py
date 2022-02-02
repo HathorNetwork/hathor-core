@@ -12,21 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import struct
 
-from twisted.web import resource
-
-from hathor.api_util import get_missing_params_msg, parse_get_arguments, set_cors
+from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.resources.transaction import get_tx_extra_data
+from hathor.util import json_dumpb
 
 ARGS = ['hex_tx']
 
 
 @register_resource
-class DecodeTxResource(resource.Resource):
+class DecodeTxResource(Resource):
     """ Implements a web server API that receives hex form of a tx and returns the object
 
     You must run with option `--status <PORT>`.
@@ -47,7 +45,7 @@ class DecodeTxResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        parsed = parse_get_arguments(request.args, ARGS)
+        parsed = parse_args(get_args(request), ARGS)
         if not parsed['success']:
             return get_missing_params_msg(parsed['missing'])
 
@@ -61,7 +59,7 @@ class DecodeTxResource(resource.Resource):
         except struct.error:
             data = {'success': False, 'message': 'Could not decode transaction'}
 
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 DecodeTxResource.openapi = {

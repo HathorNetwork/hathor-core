@@ -1,10 +1,10 @@
 import base64
-import json
 
 import base58
 
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, NanoContractMatchValues, script_eval
+from hathor.util import json_dumpb
 from tests import unittest
 
 
@@ -25,7 +25,7 @@ class NanoContracts(unittest.TestCase):
         script = nc.create_output_script()
         nc2 = NanoContractMatchValues.parse_script(script)
         self.assertIsNotNone(nc2)
-        self.assertEqual(json.dumps(nc.to_human_readable()), json.dumps(nc2.to_human_readable()))
+        self.assertEqual(json_dumpb(nc.to_human_readable()), json_dumpb(nc2.to_human_readable()))
 
         # if we add some more bytes, parsing should not match
         script2 = script + b'00'

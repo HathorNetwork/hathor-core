@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Iterable, Iterator, Optional, Set, cast
 import structlog
 
 from hathor.transaction import BaseTransaction, Transaction
-from hathor.transaction.storage.traversal import BFSWalk
 from hathor.util import not_none
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -154,12 +153,13 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
             self._add(tx.hash)
 
     def iter(self, tx_storage: 'TransactionStorage', max_timestamp: Optional[float] = None) -> Iterator[Transaction]:
-        it = map(tx_storage.get_transaction, self._index)
+        it: Iterator[BaseTransaction] = map(tx_storage.get_transaction, self._index)
         if max_timestamp is not None:
             it = filter(lambda tx: tx.timestamp < not_none(max_timestamp), it)
         yield from cast(Iterator[Transaction], it)
 
     def iter_all(self, tx_storage: 'TransactionStorage') -> Iterator[Transaction]:
+        from hathor.transaction.storage.traversal import BFSWalk
         bfs = BFSWalk(tx_storage, is_dag_verifications=True, is_left_to_right=False)
         for tx in bfs.run(self.iter(tx_storage), skip_root=False):
             assert isinstance(tx, Transaction)

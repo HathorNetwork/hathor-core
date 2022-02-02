@@ -22,7 +22,6 @@ from typing import Any, Callable, Dict, List, Tuple
 
 from autobahn.twisted.resource import WebSocketResource
 from structlog import get_logger
-from twisted.internet import reactor
 from twisted.web.resource import Resource
 
 logger = get_logger()
@@ -118,11 +117,13 @@ class RunNode:
             TransactionRocksDBStorage,
             TransactionStorage,
         )
+        from hathor.util import reactor
         from hathor.wallet import HDWallet, Wallet
 
         settings = HathorSettings()
         settings_module = get_settings_module()  # only used for logging its location
         self.log = logger.new()
+        self.reactor = reactor
 
         from setproctitle import setproctitle
         setproctitle('{}hathor-core'.format(args.procname_prefix))
@@ -217,7 +218,7 @@ class RunNode:
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
         if args.cache:
             check_or_exit(not args.memory_storage, '--cache should not be used with --memory-storage')
-            tx_storage = TransactionCacheStorage(tx_storage, reactor)
+            tx_storage = TransactionCacheStorage(tx_storage, self.reactor)
             if args.cache_size:
                 tx_storage.capacity = args.cache_size
             if args.cache_interval:
@@ -252,7 +253,7 @@ class RunNode:
         enable_sync_v2 = args.x_sync_v2_only or args.x_sync_bridge
 
         self.manager = HathorManager(
-            reactor,
+            self.reactor,
             peer_id=peer_id,
             network=network,
             hostname=hostname,
@@ -515,7 +516,7 @@ class RunNode:
 
             from hathor.profiler.site import SiteProfiler
             status_server = SiteProfiler(real_root)
-            reactor.listenTCP(args.status, status_server)
+            self.reactor.listenTCP(args.status, status_server)
             self.log.info('with status', listen=args.status, with_wallet_api=with_wallet_api)
 
             # Set websocket factory in metrics
@@ -632,7 +633,7 @@ class RunNode:
         return self.parser.parse_args(argv)
 
     def run(self) -> None:
-        reactor.run()
+        self.reactor.run()
 
 
 def main():

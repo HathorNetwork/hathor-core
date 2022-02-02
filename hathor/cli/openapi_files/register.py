@@ -12,14 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List
+from typing import List, Type, TypeVar
 
-from twisted.web.resource import Resource
+from hathor.api_util import Resource
 
-_registered_resources = []
+_registered_resources: List[Type[Resource]] = []
 
 
-def register_resource(resource_class: Resource) -> Resource:
+# XXX: this type var is used to indicate that the returned class is the same as the input class
+ResourceClass = TypeVar('ResourceClass', bound=Type[Resource])
+
+
+def register_resource(resource_class: ResourceClass) -> ResourceClass:
     """ Register a resource class to be added in the openapi docs page
     """
     global _registered_resources
@@ -27,7 +31,7 @@ def register_resource(resource_class: Resource) -> Resource:
     return resource_class
 
 
-def get_registered_resources() -> List[Resource]:
+def get_registered_resources() -> List[Type[Resource]]:
     """ Returns a list with all the resources registered for the docs
     """
     import hathor.p2p.resources  # noqa: 401

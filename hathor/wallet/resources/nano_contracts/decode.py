@@ -12,20 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import re
 import struct
 
-from twisted.web import resource
-
-from hathor.api_util import get_missing_params_msg, set_cors
+from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.transaction import Transaction
 from hathor.transaction.scripts import NanoContractMatchValues
+from hathor.util import json_dumpb
 
 
 @register_resource
-class NanoContractDecodeResource(resource.Resource):
+class NanoContractDecodeResource(Resource):
     """ Implements a web server API that receives hex form of a tx and returns decoded value
 
     You must run with option `--status <PORT>`.
@@ -45,8 +43,9 @@ class NanoContractDecodeResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        if b'hex_tx' in request.args:
-            requested_decode = request.args[b'hex_tx'][0].decode('utf-8')
+        raw_args = get_args(request)
+        if b'hex_tx' in raw_args:
+            requested_decode = raw_args[b'hex_tx'][0].decode('utf-8')
         else:
             return get_missing_params_msg('hex_tx')
 
@@ -58,7 +57,7 @@ class NanoContractDecodeResource(resource.Resource):
                 tx = Transaction.create_from_struct(tx_bytes)
             except struct.error:
                 data = {'success': False, 'message': 'Invalid transaction'}
-                return json.dumps(data).encode('utf-8')
+                return json_dumpb(data)
 
             outputs = []
             nano_contract = None
@@ -85,7 +84,7 @@ class NanoContractDecodeResource(resource.Resource):
             }
         else:
             data = {'success': False, 'message': 'Invalid transaction'}
-        return json.dumps(data).encode('utf-8')
+        return json_dumpb(data)
 
 
 NanoContractDecodeResource.openapi = {

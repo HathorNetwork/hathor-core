@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Type
 
 from twisted.internet import protocol
+from twisted.internet.interfaces import IAddress
 
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
@@ -32,7 +33,7 @@ class HathorServerFactory(protocol.ServerFactory):
     """
 
     manager: Optional[ConnectionsManager]
-    protocol = MyServerProtocol
+    protocol: Optional[Type[MyServerProtocol]] = MyServerProtocol
 
     def __init__(
             self,
@@ -50,7 +51,8 @@ class HathorServerFactory(protocol.ServerFactory):
         self.node = node
         self.use_ssl = use_ssl
 
-    def buildProtocol(self, addr: Tuple[str, int]) -> MyServerProtocol:
+    def buildProtocol(self, addr: IAddress) -> MyServerProtocol:
+        assert self.protocol is not None
         p = self.protocol(
             network=self.network,
             my_peer=self.my_peer,
@@ -68,7 +70,7 @@ class HathorClientFactory(protocol.ClientFactory):
     """
 
     manager: Optional[ConnectionsManager]
-    protocol = MyClientProtocol
+    protocol: Optional[Type[MyClientProtocol]] = MyClientProtocol
 
     def __init__(
             self,
@@ -86,7 +88,8 @@ class HathorClientFactory(protocol.ClientFactory):
         self.node = node
         self.use_ssl = use_ssl
 
-    def buildProtocol(self, addr: Tuple[str, int]) -> MyClientProtocol:
+    def buildProtocol(self, addr: IAddress) -> MyClientProtocol:
+        assert self.protocol is not None
         p = self.protocol(
             network=self.network,
             my_peer=self.my_peer,

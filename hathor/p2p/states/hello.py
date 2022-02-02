@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 from typing import TYPE_CHECKING, Any, Dict, Set
 
 from structlog import get_logger
@@ -23,7 +22,8 @@ from hathor.exception import HathorError
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.states.base import BaseState
 from hathor.p2p.sync_version import SyncVersion
-from hathor.p2p.utils import get_genesis_short_hash, get_settings_hello_dict
+from hathor.p2p.utils import format_address, get_genesis_short_hash, get_settings_hello_dict
+from hathor.util import json_dumps, json_loads
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
@@ -49,11 +49,12 @@ class HelloState(BaseState):
         be sent to a peer.
         """
         protocol = self.protocol
+        assert protocol.transport is not None
         remote = protocol.transport.getPeer()
         data = {
             'app': self._app(),
             'network': protocol.network,
-            'remote_address': '{}:{}'.format(remote.host, remote.port),
+            'remote_address': format_address(remote),
             'genesis_short_hash': get_genesis_short_hash(),
             'timestamp': protocol.node.reactor.seconds(),
             'settings_dict': get_settings_hello_dict(),
@@ -78,15 +79,19 @@ class HelloState(BaseState):
         information about this node to the peer.
         """
         data = self._get_hello_data()
-        self.send_message(ProtocolMessages.HELLO, json.dumps(data))
+        self.send_message(ProtocolMessages.HELLO, json_dumps(data))
 
     def handle_hello(self, payload: str) -> None:
         """ Executed when a HELLO message is received. It basically
         checks the application compatibility.
         """
+        from hathor.p2p.netfilter import get_table
+        from hathor.p2p.netfilter.context import NetfilterContext
+
         protocol = self.protocol
+        assert protocol.transport is not None
         try:
-            data = json.loads(payload)
+            data = json_loads(payload)
         except ValueError:
             protocol.send_error_and_close_connection('Invalid payload.')
             return
@@ -143,19 +148,17 @@ class HelloState(BaseState):
             settings_dict = get_settings_hello_dict()
             if data['settings_dict'] != settings_dict:
                 protocol.send_error_and_close_connection(
-                    'Settings values are different. {}'.format(json.dumps(settings_dict))
+                    'Settings values are different. {}'.format(json_dumps(settings_dict))
                 )
                 return
 
         protocol.app_version = data['app']
         protocol.diff_timestamp = dt
 
-        from hathor.p2p.netfilter import get_table
-        from hathor.p2p.netfilter.context import NetfilterContext
         context = NetfilterContext(
-            protocol=self.protocol,
-            connections=self.protocol.connections,
-            addr=self.protocol.transport.getPeer(),
+            protocol=protocol,
+            connections=protocol.connections,
+            addr=protocol.transport.getPeer(),
         )
         verdict = get_table('filter').get_chain('post_hello').process(context)
         if not bool(verdict):

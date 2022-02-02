@@ -264,7 +264,7 @@ class Hash(bytes):
             raise TypeError(f'invalid type {value.__class__}')
         if len(_value) != 32:
             raise ValueError(f'value has invalid binary length {len(_value)}')
-        return bytes.__new__(cls, _value)  # type: ignore
+        return bytes.__new__(cls, _value)
 
     def __str__(self):
         return self.hex()

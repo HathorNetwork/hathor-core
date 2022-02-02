@@ -12,19 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import os
 
-from twisted.web import resource
 from twisted.web.http import Request
 
-from hathor.api_util import render_options, set_cors
+from hathor.api_util import Resource, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.manager import HathorManager
+from hathor.util import json_dumpb, json_loadb
 
 
 @register_resource
-class ProfilerResource(resource.Resource):
+class ProfilerResource(Resource):
     """ Implements a web server API with POST to start a profiler
 
     You must run with option `--status <PORT>`.
@@ -56,7 +55,7 @@ class ProfilerResource(resource.Resource):
         set_cors(request, 'POST')
 
         data_read = request.content.read()
-        post_data = json.loads(data_read.decode('utf-8')) if data_read else {}
+        post_data = json_loadb(data_read) if data_read else {}
         ret = {'success': True}
 
         if 'start' in post_data:
@@ -77,7 +76,7 @@ class ProfilerResource(resource.Resource):
         else:
             ret['success'] = False
 
-        return json.dumps(ret, indent=4).encode('utf-8')
+        return json_dumpb(ret)
 
     def render_OPTIONS(self, request: Request) -> int:
         return render_options(request)

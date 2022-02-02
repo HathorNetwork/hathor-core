@@ -15,9 +15,8 @@
 import enum
 
 from structlog import get_logger
-from twisted.web import resource
 
-from hathor.api_util import set_cors
+from hathor.api_util import Resource, get_args, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
 from hathor.exception import HathorError
@@ -41,7 +40,7 @@ class Capabilities(enum.Enum):
 
 
 @register_resource
-class GetBlockTemplateResource(resource.Resource):
+class GetBlockTemplateResource(Resource):
     """ Resource for generating a Block template for mining.
 
     You must run with option `--status <PORT>`.
@@ -61,12 +60,13 @@ class GetBlockTemplateResource(resource.Resource):
         set_cors(request, 'GET')
 
         # params
-        raw_address = request.args.get(b'address')
+        raw_args = get_args(request)
+        raw_address = raw_args.get(b'address')
         if raw_address:
             address = decode_address(raw_address[0].decode())
         else:
             address = b''
-        caps = set(map(lambda s: Capabilities(s.decode()), request.args.get(b'capabilities', [])))
+        caps = set(map(lambda s: Capabilities(s.decode()), raw_args.get(b'capabilities', [])))
         merged_mining = Capabilities.MERGED_MINING in caps
 
         if not self.manager.can_start_mining():
@@ -89,7 +89,7 @@ class GetBlockTemplateResource(resource.Resource):
 
 
 @register_resource
-class SubmitBlockResource(resource.Resource):
+class SubmitBlockResource(Resource):
     """ Resource for submitting a block mined from a template.
 
     Although there isn't any requirement that the mined block is generated from the get_block_template, there may be in
