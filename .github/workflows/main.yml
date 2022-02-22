@@ -70,10 +70,10 @@ jobs:
         python-version: ${{ matrix.python }}
     - name: Install Ubuntu dependencies
       if: matrix.os == 'ubuntu-latest'
-      run: sudo apt-get -y -q install graphviz librocksdb-dev libsnappy-dev liblz4-dev
+      run: 'sudo apt-get -qy update && sudo apt-get -qy install graphviz librocksdb-dev libsnappy-dev liblz4-dev'
     - name: Install macOS dependencies
       if: matrix.os == 'macos-latest'
-      run: brew install -q graphviz rocksdb
+      run: 'brew update -q && brew install -q graphviz rocksdb'
     - name: Install Poetry
       run: pip -q --no-input install poetry
     - name: Install Poetry dependencies
