@@ -32,7 +32,10 @@ class CliManager:
         self.longest_cmd: int = 0
 
         from . import (
+            db_export,
+            db_import,
             generate_valid_words,
+            mem_debug,
             merged_mining,
             mining,
             multisig_address,
@@ -74,6 +77,9 @@ class CliManager:
         self.add_cmd('oracle', 'oracle-encode-data', oracle_encode_data, 'Encode data and sign it with a private key')
         self.add_cmd('dev', 'shell', shell, 'Run a Python shell')
         self.add_cmd('dev', 'generate_nginx_config', nginx_config, 'Generate nginx config from OpenAPI json')
+        self.add_cmd('dev', 'export', db_export, 'Export database to a simple format.')
+        self.add_cmd('dev', 'import', db_import, 'Import database from exported format.')
+        self.add_cmd('dev', 'mem_debug', mem_debug, 'Debug memory usage.')
 
     def add_cmd(self, group: str, cmd: str, module: ModuleType, short_description: Optional[str] = None) -> None:
         self.command_list[cmd] = module

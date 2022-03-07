@@ -290,6 +290,14 @@ docs = ["sphinx (>=1.8)", "sphinx-autodoc-typehints", "sphinx-rtd-theme"]
 test = ["pytest (>=6)", "pytest-mock (>=3)", "mock (>=4)", "pytest-cov", "coverage"]
 
 [[package]]
+name = "guppy3"
+version = "3.1.2"
+description = "Guppy 3 -- Guppy-PE ported to Python 3"
+category = "dev"
+optional = false
+python-versions = ">=3.6"
+
+[[package]]
 name = "hathorlib"
 version = "0.1.1"
 description = "Hathor Network base objects library"
@@ -1134,7 +1142,7 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7,<4"
-content-hash = "a826f5ef61003beed25a00f86040dd957488f77840a4fc641052f31850da456f"
+content-hash = "28bd38c18fed62c1501550c2aceec0771d94fb1edae882dab057835c5a9feb93"
 
 [metadata.files]
 aiohttp = [
@@ -1511,6 +1519,39 @@ frozenlist = [
 graphviz = [
     {file = "graphviz-0.19.1-py3-none-any.whl", hash = "sha256:f34088c08be2ec16279dfa9c3b4ff3d1453c5c67597a33e2819b000e18d4c546"},
     {file = "graphviz-0.19.1.zip", hash = "sha256:09ed0cde452d015fe77c4845a210eb642f28d245f5bc250d4b97808cb8f49078"},
+]
+guppy3 = [
+    {file = "guppy3-3.1.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:e62be11076538a0bd7edc520c687af1f7adf29d73388b0c6aea1b4ae2cab6166"},
+    {file = "guppy3-3.1.2-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:35b65c8b3f05e3385039fc38a93cd4d77e182791ed765716d7f3a05654cb7c04"},
+    {file = "guppy3-3.1.2-cp310-cp310-manylinux_2_5_i686.manylinux1_i686.manylinux_2_12_i686.manylinux2010_i686.whl", hash = "sha256:209f0fb5cbdb48466efb6d359bbee1217c6975850e87c397156f0f699afee96b"},
+    {file = "guppy3-3.1.2-cp310-cp310-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:b6f3bd78b41736b02cf7b1999d55bb7cdb56188834499235ee3e090287dc9154"},
+    {file = "guppy3-3.1.2-cp310-cp310-win32.whl", hash = "sha256:f090e5e8e161d303b79dab7f2cac1ef4dd34e1445a750ed4e24d2137ca0c2b76"},
+    {file = "guppy3-3.1.2-cp310-cp310-win_amd64.whl", hash = "sha256:08dcd39b03bcfd421d4b47a7c990a05d4c74b295b1913dbb9fd372b5413b5f54"},
+    {file = "guppy3-3.1.2-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:c960e2426682d37f6023970e53a96074eddd785fd2284d084c87d3812dec2e56"},
+    {file = "guppy3-3.1.2-cp36-cp36m-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:761b8e9f66399a597196399481f37ef2ddde3ef701b92ab3121f6b24f522c709"},
+    {file = "guppy3-3.1.2-cp36-cp36m-manylinux_2_5_i686.manylinux1_i686.manylinux_2_12_i686.manylinux2010_i686.whl", hash = "sha256:b13810c923b0af1669355effa23eb46d99279ca53d8c41e5703523b0de01b144"},
+    {file = "guppy3-3.1.2-cp36-cp36m-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:f696abf521e37ccacd5998cf9a237418e86c35dc09499d549697eeead919080e"},
+    {file = "guppy3-3.1.2-cp36-cp36m-win32.whl", hash = "sha256:7aa6b3ebb04fe316b6b862520a50e211295981d36245134d5ea72a1f9b045838"},
+    {file = "guppy3-3.1.2-cp36-cp36m-win_amd64.whl", hash = "sha256:9ee1c64406bc0a0f062f8ea4816f92475f52ad72158d896cd99195a4d340b662"},
+    {file = "guppy3-3.1.2-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:3d9ba91a116f307f99017a3f6d0296ec9faa14cf7de1dda0251a65046addba83"},
+    {file = "guppy3-3.1.2-cp37-cp37m-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:b95152c530e95de656d04f39da28cae54feb22a347431a81f61cdaa48f4089fa"},
+    {file = "guppy3-3.1.2-cp37-cp37m-manylinux_2_5_i686.manylinux1_i686.manylinux_2_12_i686.manylinux2010_i686.whl", hash = "sha256:92ca5166db307b72ae392bdf464709c2fb074a69cdcf5b14258ad17b14b11117"},
+    {file = "guppy3-3.1.2-cp37-cp37m-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:9036605f12e7a276f37b25b007ec1be2a55dd617e1955890adf2426027f0de77"},
+    {file = "guppy3-3.1.2-cp37-cp37m-win32.whl", hash = "sha256:69ad8645f1bd5a7c038b4e0b0c0f8c55f9abaf48fddd7e8c548e7966f195ead7"},
+    {file = "guppy3-3.1.2-cp37-cp37m-win_amd64.whl", hash = "sha256:413b40ba376a4053556f789d87cc7d27e09386b8036e8457fe43a5a12d9a5d1f"},
+    {file = "guppy3-3.1.2-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:11331da76eb6ee09f1d3da3b67301450df9992593d41ac9cec9bb6e35c716be0"},
+    {file = "guppy3-3.1.2-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d9bc94a74fe923d22a1bf11746ef5fd3576e26219411dccba0a26056d37dfd44"},
+    {file = "guppy3-3.1.2-cp38-cp38-manylinux_2_5_i686.manylinux1_i686.manylinux_2_12_i686.manylinux2010_i686.whl", hash = "sha256:04507ad33d29a29d3cb61cdc1cc7f2949a08bbe854b6219092d499ae58cb52c8"},
+    {file = "guppy3-3.1.2-cp38-cp38-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:53b8f89bbaf861c0eb3ebc87139903f863e9c4c1b3094df8b22e9e80d959bfff"},
+    {file = "guppy3-3.1.2-cp38-cp38-win32.whl", hash = "sha256:6f4f30fb4e751ccaa3313597970eb72b555e8b184d9f748379d2bbdb899ac318"},
+    {file = "guppy3-3.1.2-cp38-cp38-win_amd64.whl", hash = "sha256:dfe0ae2b2175f76eb5cd58568173e10c52501abdd59f269fbc3859f7176003fb"},
+    {file = "guppy3-3.1.2-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:cb116d1b7e0f951cc29fb7d69d769835bdb9604d17ee4f2ee328d342ade8e5ef"},
+    {file = "guppy3-3.1.2-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:521b0eb27f6875f4237000c92c75f8e631f9c950247692e5b983c72ec0314119"},
+    {file = "guppy3-3.1.2-cp39-cp39-manylinux_2_5_i686.manylinux1_i686.manylinux_2_12_i686.manylinux2010_i686.whl", hash = "sha256:89b2056397a4f86fd96b7585d7ea3586001079423fd70c880bd8d475c30d0fe7"},
+    {file = "guppy3-3.1.2-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:cb40137aba3f50662584fafe74cfd3fb4204e48394c9dfb23d280977304ed460"},
+    {file = "guppy3-3.1.2-cp39-cp39-win32.whl", hash = "sha256:1670fcd91e61969cb9190014f557f13e051cc73a53f89fa4403a238bd2f1955a"},
+    {file = "guppy3-3.1.2-cp39-cp39-win_amd64.whl", hash = "sha256:1a1f98f9158082c5a3277661b56c7efd8b4634625f864477bb010382cebde83a"},
+    {file = "guppy3-3.1.2.tar.gz", hash = "sha256:af580bec5269b1621f45bd589d76aa1a7c1986742a84ab016f0a0de9ff06086d"},
 ]
 hathorlib = [
     {file = "hathorlib-0.1.1-py3-none-any.whl", hash = "sha256:700eed982954249cff2d0dcfa80b0fb6e1638c21451e6e673ab34c2ed97b5903"},

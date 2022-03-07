@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 from structlog import get_logger
 
@@ -43,13 +43,13 @@ class RocksDBHeightIndex(HeightIndex, RocksDBIndexUtils):
     It works nicely because rocksdb uses a tree sorted by key under the hood.
     """
 
-    def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None) -> None:
+    def __init__(self, db: 'rocksdb.DB', options: Dict[str, Any], *, cf_name: Optional[bytes] = None) -> None:
         RocksDBIndexUtils.__init__(self, db)
         self.log = logger.new()
 
         # column family stuff
         self._cf_name = cf_name or _CF_NAME_HEIGHT_INDEX
-        self._cf = self._fresh_cf(self._cf_name)
+        self._cf = self._fresh_cf(self._cf_name, options)
 
         # XXX: when we stop using a fresh column-family we have to figure-out when to not run this
         self._init_db()

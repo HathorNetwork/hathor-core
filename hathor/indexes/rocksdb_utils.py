@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections.abc import Collection
-from typing import TYPE_CHECKING, Iterable, Iterator
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -58,7 +58,7 @@ class RocksDBIndexUtils:
     def __init__(self, db: 'rocksdb.DB') -> None:
         self._db = db
 
-    def _fresh_cf(self, cf_name: bytes) -> 'rocksdb.ColumnFamilyHandle':
+    def _fresh_cf(self, cf_name: bytes, options: Dict[str, Any]) -> 'rocksdb.ColumnFamilyHandle':
         """Ensure we have a working and fresh column family"""
         import rocksdb
 
@@ -74,7 +74,9 @@ class RocksDBIndexUtils:
             log_cf.debug('no need to drop column family')
         del _cf
         log_cf.debug('create fresh column family')
-        _cf = self._db.create_column_family(cf_name, rocksdb.ColumnFamilyOptions())
+        # XXX: rocksdb.Options is a subclass of rocksdb.ColumnFamilyOptions, extra options will be ignored, this is
+        #      useful for re-using an *options dict* (since an options instance cannot be reused)
+        _cf = self._db.create_column_family(cf_name, rocksdb.Options(**options))
         new_id = _cf.id
         assert _cf is not None
         assert _cf.is_valid
@@ -85,11 +87,12 @@ class RocksDBIndexUtils:
 
 # XXX: should be `Collection[bytes]`, which only works on Python 3.9+
 class RocksDBSimpleSet(Collection, RocksDBIndexUtils):
-    def __init__(self, db: 'rocksdb.DB', log: 'structlog.stdlib.BoundLogger', *, cf_name: bytes) -> None:
+    def __init__(self, db: 'rocksdb.DB', options: Dict[str, Any], log: 'structlog.stdlib.BoundLogger',
+                 *, cf_name: bytes) -> None:
         super().__init__(db)
         self.log = log
         self._cf_name = cf_name
-        self._cf = self._fresh_cf(self._cf_name)
+        self._cf = self._fresh_cf(self._cf_name, options)
 
     def __iter__(self) -> Iterator[bytes]:
         it = self._db.iterkeys(self._cf)

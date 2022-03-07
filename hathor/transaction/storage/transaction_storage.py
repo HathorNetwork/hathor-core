@@ -952,6 +952,19 @@ class BaseTransactionStorage(TransactionStorage):
         for tx in self._topological_sort():
             self.add_to_indexes(tx)
 
+    def _topological_fast(self) -> Iterator[BaseTransaction]:
+        # Topological iterator that uses children metadata to iterate much faster than _topological_sort
+
+        from sortedcontainers import SortedKeyList
+
+        genesis_block = self.get_transaction(settings.GENESIS_BLOCK_HASH)
+        to_visit = SortedKeyList([genesis_block], key=lambda tx: (-tx.timestamp, tx.is_block))
+        while to_visit:
+            tx = to_visit.pop()
+            # XXX: assumes all children exist
+            to_visit.update(map(self.get_transaction, tx.get_metadata().children))
+            yield tx
+
     def _topological_sort(self) -> Iterator[BaseTransaction]:
         # TODO We must optimize this algorithm to remove the `visited` set.
         #      It will consume too much memory when the number of transactions is big.

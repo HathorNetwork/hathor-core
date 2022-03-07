@@ -44,6 +44,7 @@ mypy-zope = {version = "^0.3", markers = "implementation_name == 'cpython'"}
 pytest = "~6.2.5"
 pytest-cov = "~3.0.0"
 flaky = "~3.7.0"
+guppy3 = "~3.1.2"
 # stubs:
 types-requests = "~2.27.7"
 types-pyopenssl = "~21.0.3"
@@ -111,6 +112,7 @@ module = [
     'colorama',
     'configargparse',
     'graphviz',
+    'guppy',
     'intervaltree.*',
     'prometheus_client',
     'pudb.*',

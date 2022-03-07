@@ -43,20 +43,41 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
                  use_memory_indexes: bool = False):
         import rocksdb
 
+        class FullPrefix(rocksdb.interfaces.SliceTransform):
+            def name(self):
+                return b'full'
+
+            def transform(self, src):
+                return (0, len(src))
+
+            def in_domain(self, src):
+                # return len(src) >= LEN
+                return True
+
+            def in_range(self, dst):
+                # return len(dst) == LEN
+                return True
+
         self.log = logger.new()
         self._path = path
         self._use_memory_indexes = use_memory_indexes
 
         tx_dir = os.path.join(path, _DB_NAME)
         lru_cache = cache_capacity and rocksdb.LRUCache(cache_capacity)
-        table_factory = rocksdb.BlockBasedTableFactory(block_cache=lru_cache)
-        options = rocksdb.Options(
+        table_factory = rocksdb.BlockBasedTableFactory(
+            # index_type='hash_search',
+            # checksum='xxhash',
+            block_cache=lru_cache,
+        )
+        self._options = dict(
             table_factory=table_factory,
             write_buffer_size=83886080,  # 80MB (default is 4MB)
             compression=rocksdb.CompressionType.no_compression,
             allow_mmap_writes=True,  # default is False
             allow_mmap_reads=True,  # default is already True
+            # prefix_extractor=FullPrefix(),  # needed for index_type=hash_search
         )
+        options = rocksdb.Options(**self._options)
 
         cf_names: List[bytes]
         try:
@@ -100,7 +121,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         if self._use_memory_indexes:
             return MemoryIndexesManager()
         else:
-            return RocksDBIndexesManager(self._db)
+            return RocksDBIndexesManager(self._db, self._options)
 
     def _tx_to_bytes(self, tx: 'BaseTransaction') -> bytes:
         return bytes(tx)

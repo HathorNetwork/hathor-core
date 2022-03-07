@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from structlog import get_logger
 
@@ -146,32 +146,33 @@ class MemoryIndexesManager(IndexesManager):
 
 
 class RocksDBIndexesManager(IndexesManager):
-    def __init__(self, db: 'rocksdb.DB') -> None:
+    def __init__(self, db: 'rocksdb.DB', options: Dict[str, Any]) -> None:
         from hathor.indexes.rocksdb_height_index import RocksDBHeightIndex
         from hathor.indexes.rocksdb_mempool_tips_index import RocksDBMempoolTipsIndex
         from hathor.indexes.rocksdb_timestamp_index import RocksDBTimestampIndex
 
         self._db = db
+        self._options = options
 
         self.all_tips = TipsIndex()
         self.block_tips = TipsIndex()
         self.tx_tips = TipsIndex()
 
-        self.sorted_all = RocksDBTimestampIndex(self._db, cf_name=b'timestamp-sorted-all')
-        self.sorted_blocks = RocksDBTimestampIndex(self._db, cf_name=b'timestamp-sorted-blocks')
-        self.sorted_txs = RocksDBTimestampIndex(self._db, cf_name=b'timestamp-sorted-txs')
+        self.sorted_all = RocksDBTimestampIndex(self._db, self._options, cf_name=b'timestamp-sorted-all')
+        self.sorted_blocks = RocksDBTimestampIndex(self._db, self._options, cf_name=b'timestamp-sorted-blocks')
+        self.sorted_txs = RocksDBTimestampIndex(self._db, self._options, cf_name=b'timestamp-sorted-txs')
 
         self.addresses = None
         self.tokens = None
-        self.height = RocksDBHeightIndex(self._db)
-        self.mempool_tips = RocksDBMempoolTipsIndex(self._db)
+        self.height = RocksDBHeightIndex(self._db, self._options)
+        self.mempool_tips = RocksDBMempoolTipsIndex(self._db, self._options)
 
     def enable_address_index(self, pubsub: 'PubSubManager') -> None:
         from hathor.indexes.rocksdb_address_index import RocksDBAddressIndex
         if self.addresses is None:
-            self.addresses = RocksDBAddressIndex(self._db, pubsub=pubsub)
+            self.addresses = RocksDBAddressIndex(self._db, self._options, pubsub=pubsub)
 
     def enable_tokens_index(self) -> None:
         from hathor.indexes.rocksdb_tokens_index import RocksDBTokensIndex
         if self.tokens is None:
-            self.tokens = RocksDBTokensIndex(self._db)
+            self.tokens = RocksDBTokensIndex(self._db, self._options)

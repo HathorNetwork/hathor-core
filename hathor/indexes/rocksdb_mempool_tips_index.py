@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Iterable, Optional
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Optional
 
 from structlog import get_logger
 
@@ -30,10 +30,10 @@ _CF_NAME_MEMPOOL_TIPS_INDEX = b'mempool-tips-index'
 class RocksDBMempoolTipsIndex(ByteCollectionMempoolTipsIndex):
     _index: RocksDBSimpleSet
 
-    def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None) -> None:
+    def __init__(self, db: 'rocksdb.DB', options: Dict[str, Any], *, cf_name: Optional[bytes] = None) -> None:
         self.log = logger.new()
         _cf_name = cf_name or _CF_NAME_MEMPOOL_TIPS_INDEX
-        self._index = RocksDBSimpleSet(db, self.log, cf_name=_cf_name)
+        self._index = RocksDBSimpleSet(db, options, self.log, cf_name=_cf_name)
 
     def _discard(self, tx: bytes) -> None:
         self._index.discard(tx)

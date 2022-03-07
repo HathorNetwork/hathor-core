@@ -15,7 +15,7 @@
 import sys
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Iterator, List, NamedTuple, NewType, Optional, Tuple, cast
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, NamedTuple, NewType, Optional, Tuple, cast
 
 from structlog import get_logger
 
@@ -90,13 +90,13 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
     It works nicely because rocksdb uses a tree sorted by key under the hood.
     """
 
-    def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None) -> None:
+    def __init__(self, db: 'rocksdb.DB', options: Dict[str, Any], *, cf_name: Optional[bytes] = None) -> None:
         RocksDBIndexUtils.__init__(self, db)
         self.log = logger.new()
 
         # column family stuff
         self._cf_name = cf_name or _CF_NAME_TOKENS_INDEX
-        self._cf = self._fresh_cf(self._cf_name)
+        self._cf = self._fresh_cf(self._cf_name, options)
 
     def _to_internal_token_uid(self, token_uid: bytes) -> _InternalUid:
         """Normalizes a token_uid so that the native token (\x00) will have the same length as custom tokens."""
