@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import re
-from typing import Any, Dict, List, Optional, Tuple, TypeVar, cast
+from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union, cast
 
 from twisted.web.http import Request
 from twisted.web.resource import Resource as TwistedResource
@@ -78,6 +78,19 @@ def parse_args(args: Dict[bytes, List[bytes]], expected_args: List[str]) -> Dict
         ret[arg2] = first_param.decode('utf-8')
 
     return {'success': True, 'args': ret}
+
+
+def parse_int(raw: Union[str, bytes], *,
+              cap: Optional[int] = None, accept_negative: bool = False, accept_zero: bool = True) -> int:
+    """Parse int, by default rejecting negative values."""
+    value = int(raw)
+    if not accept_zero and value == 0:
+        raise ValueError('zero not accepted')
+    if not accept_negative and value < 0:
+        raise ValueError('negative value not accepted')
+    if cap is not None:
+        return min(value, cap)
+    return value
 
 
 def validate_tx_hash(hash_hex: str, tx_storage: TransactionStorage) -> Tuple[bool, str]:

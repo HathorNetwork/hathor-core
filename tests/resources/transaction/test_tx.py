@@ -418,6 +418,47 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         data = response.json_value()
         self.assertFalse(data['success'])
 
+    @inlineCallbacks
+    def test_zero_count(self):
+        response = yield self.web.get("transaction", {b'count': b'0', b'type': b'block'})
+        data = response.json_value()
+        self.assertEqual(0, len(data['transactions']))
+        self.assertFalse(data['has_more'])
+
+        response = yield self.web.get("transaction", {b'count': b'0', b'type': b'tx'})
+        data = response.json_value()
+        self.assertEqual(0, len(data['transactions']))
+        self.assertFalse(data['has_more'])
+
+    @inlineCallbacks
+    def test_negative_count(self):
+        response = yield self.web.get("transaction", {b'count': b'-1', b'type': b'block'})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        response = yield self.web.get("transaction", {b'count': b'-1', b'type': b'tx'})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+    @inlineCallbacks
+    def test_negative_timestamp(self):
+        # Add some blocks and txs and get them in timestamp order
+        blocks = add_new_blocks(self.manager, 4, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
+        add_new_transactions(self.manager, 25)
+
+        response = yield self.web.get(
+                "transaction", {
+                    b'count': b'3',
+                    b'type': b'block',
+                    # XXX: notice the negative timestamp
+                    b'timestamp': bytes(str(-blocks[-1].timestamp), 'utf-8'),
+                    b'hash': bytes(blocks[-1].hash.hex(), 'utf-8'),
+                    b'page': b'next'
+                })
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
 
 class SyncV1TransactionTest(unittest.SyncV1Params, BaseTransactionTest):
     __test__ = True

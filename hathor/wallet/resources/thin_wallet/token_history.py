@@ -14,7 +14,7 @@
 
 from twisted.web.http import Request
 
-from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, set_cors
+from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, parse_int, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.util import json_dumpb
@@ -69,11 +69,11 @@ class TokenHistoryResource(Resource):
             return json_dumpb({'success': False, 'message': 'Invalid token id'})
 
         try:
-            count = min(int(parsed['args']['count']), settings.MAX_TX_COUNT)
-        except ValueError:
+            count = parse_int(parsed['args']['count'], cap=settings.MAX_TX_COUNT)
+        except ValueError as e:
             return json_dumpb({
                 'success': False,
-                'message': 'Invalid \'count\' parameter, expected an int'
+                'message': f'Failed to parse \'count\': {e}'
             })
 
         if b'hash' in raw_args:
@@ -83,10 +83,10 @@ class TokenHistoryResource(Resource):
 
             try:
                 hash_bytes = bytes.fromhex(parsed['args']['hash'])
-            except ValueError:
+            except ValueError as e:
                 return json_dumpb({
                     'success': False,
-                    'message': 'Invalid \'hash\' parameter, could not decode hexadecimal'
+                    'message': f'Failed to parse \'hash\': {e}'
                 })
 
             page = parsed['args']['page']
@@ -97,11 +97,11 @@ class TokenHistoryResource(Resource):
                 })
 
             try:
-                ref_timestamp = int(parsed['args']['timestamp'])
-            except ValueError:
+                ref_timestamp = parse_int(parsed['args']['timestamp'])
+            except ValueError as e:
                 return json_dumpb({
                     'success': False,
-                    'message': 'Invalid \'timestamp\' parameter, expected an int'
+                    'message': f'Failed to parse \'timestamp\': {e}'
                 })
 
             if page == 'previous':

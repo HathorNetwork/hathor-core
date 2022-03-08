@@ -369,6 +369,8 @@ def collect_n(it: Iterator[_T], n: int) -> Tuple[List[_T], bool]:
     >>> collect_n(iter(range(10)), 8)
     ([0, 1, 2, 3, 4, 5, 6, 7], True)
     """
+    if n < 0:
+        raise ValueError(f'n must be non-negative, got {n}')
     col: List[_T] = []
     has_more = False
     while n > 0:

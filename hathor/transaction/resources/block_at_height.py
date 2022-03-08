@@ -14,7 +14,7 @@
 
 from typing import TYPE_CHECKING
 
-from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, set_cors
+from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, parse_int, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.util import json_dumpb
 
@@ -57,11 +57,11 @@ class BlockAtHeightResource(Resource):
 
         # Height parameter must be an integer
         try:
-            height = int(args['height'])
-        except ValueError:
+            height = parse_int(args['height'])
+        except ValueError as e:
             return json_dumpb({
                 'success': False,
-                'message': 'Invalid \'height\' parameter, expected an integer'
+                'message': f'Failed to parse \'height\': {e}'
             })
 
         # Get hash of the block with the height

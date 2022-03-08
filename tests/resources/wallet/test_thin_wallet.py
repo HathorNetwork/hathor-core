@@ -531,6 +531,41 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data['success'])
 
     @inlineCallbacks
+    def test_token_history_zero_count(self):
+        resource = StubSite(TokenHistoryResource(self.manager))
+        response = yield resource.get('thin_wallet/token_history', {
+            b'id': b'000003a3b261e142d3dfd84970d3a50a93b5bc3a66a3b6ba973956148a3eb824',
+            b'count': b'0'
+        })
+        data = response.json_value()
+        self.assertTrue(data['success'])
+        self.assertEqual(0, len(data['transactions']))
+        self.assertFalse(data['has_more'])
+
+    @inlineCallbacks
+    def test_token_history_negative_count(self):
+        resource = StubSite(TokenHistoryResource(self.manager))
+        response = yield resource.get('thin_wallet/token_history', {
+            b'id': b'000003a3b261e142d3dfd84970d3a50a93b5bc3a66a3b6ba973956148a3eb824',
+            b'count': b'-1'
+        })
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+    @inlineCallbacks
+    def test_token_history_negative_timestamp(self):
+        resource = StubSite(TokenHistoryResource(self.manager))
+        response = yield resource.get('thin_wallet/token_history', {
+            b'id': b'000003a3b261e142d3dfd84970d3a50a93b5bc3a66a3b6ba973956148a3eb824',
+            b'count': b'3',
+            b'hash': b'0000b1448893eb7efdd3c71b97b74d934a4ecaaf8a6b52f6cb5b60fdaf21497b',
+            b'timestamp': b'-1578118186',
+            b'page': b'next',
+        })
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+    @inlineCallbacks
     def test_token_history_invalid_params(self):
         resource = StubSite(TokenHistoryResource(self.manager))
 
