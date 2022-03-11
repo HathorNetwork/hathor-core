@@ -97,12 +97,13 @@ class Simulator:
             # patches not needed anymore
             cls._remove_patches()
 
-    def __init__(self, seed: Optional[int] = None):
+    def __init__(self, seed: Optional[int] = None, with_patch: bool = True):
         self.log = logger.new()
         if seed is None:
             seed = secrets.randbits(64)
         self.seed = seed
         self.rng = Random(self.seed)
+        self._with_patch = with_patch
         self._network = 'testnet'
         self._clock = HeapClock()
         self._peers: OrderedDict[str, HathorManager] = OrderedDict()
@@ -113,7 +114,8 @@ class Simulator:
         """Has to be called before any other method can be called."""
         assert not self._started
         self._started = True
-        self._patches_rc_increment()
+        if self._with_patch:
+            self._patches_rc_increment()
         first_timestamp = min(tx.timestamp for tx in _get_genesis_transactions_unsafe(None))
         dt = self.rng.randint(3600, 120 * 24 * 3600)
         self._clock.advance(first_timestamp + dt)
@@ -123,7 +125,8 @@ class Simulator:
         """Can only stop after calling start, but it doesn't matter if it's paused or not"""
         assert self._started
         self._started = False
-        self._patches_rc_decrement()
+        if self._with_patch:
+            self._patches_rc_decrement()
 
     def create_peer(self, network: Optional[str] = None, peer_id: Optional[PeerId] = None,
                     enable_sync_v1: bool = True, enable_sync_v2: bool = True,

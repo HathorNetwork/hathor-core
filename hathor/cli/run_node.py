@@ -18,11 +18,14 @@ import os
 import platform
 import sys
 from argparse import ArgumentParser, Namespace
-from typing import Any, Callable, Dict, List, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple
 
 from autobahn.twisted.resource import WebSocketResource
 from structlog import get_logger
 from twisted.web.resource import Resource
+
+if TYPE_CHECKING:
+    from hathor.util import Reactor
 
 logger = get_logger()
 # LOGGING_CAPTURE_STDOUT = True
@@ -99,6 +102,10 @@ class RunNode:
         parser.add_argument('--x-rocksdb-indexes', action='store_true', help='Use RocksDB indexes (currently opt-in)')
         return parser
 
+    def get_reactor(self) -> 'Reactor':
+        from hathor.util import reactor
+        return reactor
+
     def prepare(self, args: Namespace) -> None:
         import hathor
         from hathor.cli.util import check_or_exit
@@ -117,13 +124,12 @@ class RunNode:
             TransactionRocksDBStorage,
             TransactionStorage,
         )
-        from hathor.util import reactor
         from hathor.wallet import HDWallet, Wallet
 
         settings = HathorSettings()
         settings_module = get_settings_module()  # only used for logging its location
         self.log = logger.new()
-        self.reactor = reactor
+        self.reactor = self.get_reactor()
 
         from setproctitle import setproctitle
         setproctitle('{}hathor-core'.format(args.procname_prefix))
@@ -332,6 +338,7 @@ class RunNode:
         from hathor.debug_resources import (
             DebugCrashResource,
             DebugLogResource,
+            DebugMemoryDumpResource,
             DebugMessAroundResource,
             DebugPrintResource,
             DebugRaiseResource,
@@ -463,6 +470,7 @@ class RunNode:
                     (b'raise', DebugRaiseResource(), debug_resource),
                     (b'reject', DebugRejectResource(), debug_resource),
                     (b'print', DebugPrintResource(), debug_resource),
+                    (b'memdump', DebugMemoryDumpResource(self.manager), debug_resource),
                 ])
             if args.enable_crash_api:
                 crash_resource = Resource()

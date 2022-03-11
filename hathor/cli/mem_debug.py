@@ -17,12 +17,11 @@ import time
 from argparse import Namespace
 from typing import TYPE_CHECKING, Callable, Optional
 
-from guppy import hpy
-
 from hathor.cli.run_node import RunNode
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
+    from hathor.util import Reactor
 
 MAGIC_HEADER = b'HathDB'
 
@@ -30,7 +29,6 @@ MAGIC_HEADER = b'HathDB'
 class MemDebug(RunNode):
     def __init__(self, *, argv=None):
         super().__init__(argv=argv)
-        self._heapy = hpy()
 
     def start_manager(self, args: Namespace) -> None:
         pass
@@ -41,42 +39,50 @@ class MemDebug(RunNode):
     def register_resources(self, args: Namespace) -> None:
         pass
 
-    def heap_stats_dump(self, dump_fn_prefix: str, suffix: str = '.txt') -> None:
-        heap = self._heapy.heap()
-        self.log.info('dump memory stats', to=f'{dump_fn_prefix}*{suffix}')
+    def get_reactor(self) -> 'Reactor':
+        return self.simulator._clock  # type: ignore
 
-        def fn(name: Optional[str] = None) -> str:
-            """Generate filename"""
-            if name is not None:
-                return dump_fn_prefix + '_' + name + suffix
-            else:
-                return dump_fn_prefix + suffix
-
-        # plain status
-        heap.dump(fn())
-
-        # groups
-        groups = [
-            'bytype',  # grouped by type
-            'byrcs',  # grouped by referrers of kind (class/dict of class)
-            'bymodule',  # grouped by module
-            'bysize',  # grouped by individual size
-            'byunity',  # grouped by total size
-            # 'byid',  # grouped by memory index
-            # 'byvia',  # grouped by referred via
-        ]
-        for group in groups:
-            stats = getattr(heap, group)
-            stats.dump(fn(group))
+    def prepare(self, args: Namespace) -> None:
+        from hathor.simulator import Simulator
+        from tests.unittest import PEER_ID_POOL
+        self.simulator = Simulator(with_patch=False)
+        self.simulator.start()
+        self.rng = self.simulator.rng
+        super().prepare(args)
+        self.log.info('with simulator', seed=self.simulator.seed)
+        self.manager.rng = self.rng
+        self.manager.connections.rng = self.rng
+        self.manager.listen_addresses = []  # XXX: erase listen addresses because simulator clock cannot simulate it
+        self.manager.start()
+        self.simulator.run_to_completion()
+        self.simulator.add_peer('main', self.manager)
+        self.manager2 = self.simulator.create_peer(
+            network='mainnet',
+            peer_id=self.rng.choice(PEER_ID_POOL),
+            soft_voided_tx_ids=self.manager.soft_voided_tx_ids,
+        )
+        self.simulator.add_peer('secondary', self.manager2)
 
     def run(self) -> None:
-        self.heap_stats_dump('dump_before')
-        self.apply(self.check_noop)
+        from hathor.simulator import FakeConnection
+        self.manager.heap_stats_dump('dump_before')
+        # self.apply(self.check_noop)
         # self.apply(self.check_add_to_all_indexes)
         # self.apply(self.check_add_to_small_indexes)
         # self.apply(self.check_add_to_not_tips_indexes)
         # self.apply(self.check_add_to_only_tips_indexes)
-        self.heap_stats_dump('dump_after')
+        self.manager.heap_stats_dump('dump_just_loaded')
+        self.log.info('run simulator')
+        conn = FakeConnection(self.manager, self.manager2, latency=0.01)
+        conn.disable_idle_timeout()
+        self.simulator.add_connection(conn)
+        self.simulator.run(30.0)
+        self.simulator.run_until_complete(36000.0)
+        self.log.info('finished', tx_count=self.manager2.tx_storage.get_count_tx_blocks())
+        self.manager2.stop()
+        self.log.info('simulation complete')
+        self.manager.heap_stats_dump('dump_after')
+        self.manager.stop()
 
     def apply(self, fun: Callable[['BaseTransaction'], None]) -> None:
         from hathor.util import LogDuration
@@ -87,7 +93,8 @@ class MemDebug(RunNode):
         cnt2 = 0
         t2 = t0
         h = 0
-        max_h = 2_200_000
+        # max_h: Optional[int] = 2_200_000
+        max_h: Optional[int] = None
 
         block_count = 0
         tx_count = 0
@@ -126,7 +133,7 @@ class MemDebug(RunNode):
             if dt > 1:
                 self.log.warn('tx took too long to write', tx=tx.hash_hex, dt=dt)
 
-            if h > max_h:
+            if max_h is not None and h > max_h:
                 break
 
         self.log.debug('flush')

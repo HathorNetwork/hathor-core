@@ -214,3 +214,51 @@ class DebugCrashResource(Resource):
         code = get_arg_default(get_args(request), 'code', -1)
         reactor.callLater(1.0, self.run, code)
         return b'OK: full-node will exit and probably break database\n'
+
+
+@register_resource
+class DebugMemoryDumpResource(Resource):
+    isLeaf = True
+    openapi = {
+        '/_debug/memdump': {
+            'x-visibility': 'private',
+            'post': {
+                'operationId': 'debug_memory',
+                'summary':
+                    'Used for debugging memory usage.'
+                    '(NEVER ENABLE IN PRODUCTION)',
+            }
+        }
+    }
+
+    def __init__(self, manager: HathorManager):
+        super().__init__()
+        self.manager = manager
+
+    def render_POST(self, request: Request) -> bytes:
+        self.manager.heap_stats_dump('dump_api')
+        return b'memory dumped'
+
+
+@register_resource
+class DebugMemoryTraceResource(Resource):
+    isLeaf = True
+    openapi = {
+        '/_debug/memdump': {
+            'x-visibility': 'private',
+            'post': {
+                'operationId': 'debug_memory',
+                'summary':
+                    'Used for debugging memory usage.'
+                    '(NEVER ENABLE IN PRODUCTION)',
+            }
+        }
+    }
+
+    def __init__(self, manager: HathorManager):
+        super().__init__()
+        self.manager = manager
+
+    def render_POST(self, request: Request) -> bytes:
+        self.manager.heap_stats_dump('dump_api')
+        return b'memory dumped'

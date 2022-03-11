@@ -138,8 +138,12 @@ class HelloState(BaseState):
             protocol.send_error_and_close_connection('Different genesis.')
             return
 
-        dt = data['timestamp'] - protocol.node.reactor.seconds()
+        my_timestamp = protocol.node.reactor.seconds()
+        their_timestamp = data['timestamp']
+        dt = their_timestamp - my_timestamp
         if abs(dt) > settings.MAX_FUTURE_TIMESTAMP_ALLOWED / 2:
+            self.log.debug('timestamps too far apart', dt=dt, my_timestamp=my_timestamp,
+                           their_timestamp=their_timestamp)
             protocol.send_error_and_close_connection('Nodes timestamps too far apart.')
             return
 

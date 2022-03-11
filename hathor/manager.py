@@ -94,9 +94,13 @@ class HathorManager:
         :param stratum_port: Stratum server port. Stratum server will only be created if it is not None.
         :type stratum_port: Optional[int]
         """
+        from guppy import hpy
+
         from hathor.metrics import Metrics
         from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
         from hathor.p2p.manager import ConnectionsManager
+
+        self._heapy = hpy()
 
         if not (enable_sync_v1 or enable_sync_v2):
             raise TypeError(f'{type(self).__name__}() at least one sync version is required')
@@ -207,6 +211,8 @@ class HathorManager:
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
         """
+        self.heap_stats_dump('dump_before')
+
         if self.is_started:
             raise Exception('HathorManager is already started')
         self.is_started = True
@@ -282,6 +288,7 @@ class HathorManager:
         waits = []
 
         self.log.info('stop manager')
+        self.heap_stats_dump('dump_after')
         self.tx_storage.stop_running_manager()
         self.connections.stop()
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
@@ -938,6 +945,34 @@ class HathorManager:
             self.peers_whitelist.remove(peer_id)
             # disconnect from node
             self.connections.drop_connection_by_peer_id(peer_id)
+
+    def heap_stats_dump(self, dump_fn_prefix: str, suffix: str = '.txt') -> None:
+        heap = self._heapy.heap()
+        self.log.info('dump memory stats', to=f'{dump_fn_prefix}*{suffix}')
+
+        def fn(name: Optional[str] = None) -> str:
+            """Generate filename"""
+            if name is not None:
+                return dump_fn_prefix + '_' + name + suffix
+            else:
+                return dump_fn_prefix + suffix
+
+        # plain status
+        heap.dump(fn())
+
+        # groups
+        groups = [
+            'bytype',  # grouped by type
+            # 'byrcs',  # grouped by referrers of kind (class/dict of class)
+            'bymodule',  # grouped by module
+            'bysize',  # grouped by individual size
+            'byunity',  # grouped by total size
+            # 'byid',  # grouped by memory index
+            # 'byvia',  # grouped by referred via
+        ]
+        for group in groups:
+            stats = getattr(heap, group)
+            stats.dump(fn(group))
 
 
 class ParentTxs(NamedTuple):
