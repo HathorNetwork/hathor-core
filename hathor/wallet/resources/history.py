@@ -14,7 +14,7 @@
 
 import math
 
-from hathor.api_util import Resource, get_args, set_cors
+from hathor.api_util import Resource, get_args, parse_int, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.util import json_dumpb
 
@@ -44,8 +44,8 @@ class HistoryResource(Resource):
         set_cors(request, 'GET')
 
         raw_args = get_args(request)
-        page = int(raw_args[b'page'][0])
-        count = int(raw_args[b'count'][0])
+        page = parse_int(raw_args[b'page'][0])
+        count = parse_int(raw_args[b'count'][0])
 
         history_tuple, total = self.manager.wallet.get_history(count, page)
 

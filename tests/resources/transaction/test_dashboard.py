@@ -44,6 +44,40 @@ class BaseDashboardTest(_BaseResourceTest._ResourceTest):
         data = response.json_value()
         self.assertFalse(data['success'])
 
+    @inlineCallbacks
+    def test_zero_count(self):
+        tx_count = 0
+        block_count = 6
+        response = yield self.web.get("dashboard_tx", {
+            b'block': str(block_count).encode(),
+            b'tx': str(tx_count).encode()
+        })
+        data = response.json_value()
+
+        self.assertLessEqual(len(data['transactions']), tx_count)
+        self.assertLessEqual(len(data['blocks']), block_count)
+
+        tx_count = 6
+        block_count = 0
+        response = yield self.web.get("dashboard_tx", {
+            b'block': str(block_count).encode(),
+            b'tx': str(tx_count).encode()
+        })
+        data = response.json_value()
+
+        self.assertLessEqual(len(data['transactions']), tx_count)
+        self.assertLessEqual(len(data['blocks']), block_count)
+
+    @inlineCallbacks
+    def test_negative_count(self):
+        response = yield self.web.get("dashboard_tx", {b'block': b'-1', b'tx': b'6'})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        response = yield self.web.get("dashboard_tx", {b'block': b'6', b'tx': b'-1'})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
 
 class SyncV1DashboardTest(unittest.SyncV1Params, BaseDashboardTest):
     __test__ = True

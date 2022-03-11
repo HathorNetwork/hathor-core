@@ -14,7 +14,15 @@
 
 from typing import Any, Dict
 
-from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, set_cors, validate_tx_hash
+from hathor.api_util import (
+    Resource,
+    get_args,
+    get_missing_params_msg,
+    parse_args,
+    parse_int,
+    set_cors,
+    validate_tx_hash,
+)
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.transaction.base_transaction import BaseTransaction, TxVersion
@@ -205,9 +213,12 @@ class TransactionResource(Resource):
         error = None
 
         try:
-            count = min(int(args['count']), settings.MAX_TX_COUNT)
-        except ValueError:
-            error = {'success': False, 'message': 'Invalid \'count\' parameter, expected an integer'}
+            count = parse_int(args['count'], cap=settings.MAX_TX_COUNT)
+        except ValueError as e:
+            error = {
+                'success': False,
+                'message': f'Failed to parse \'count\': {e}'
+            }
 
         type_tx = args['type']
         if type_tx != 'tx' and type_tx != 'block':
@@ -226,11 +237,11 @@ class TransactionResource(Resource):
                 return get_missing_params_msg(parsed['missing'])
 
             try:
-                ref_timestamp = int(parsed['args']['timestamp'])
-            except ValueError:
+                ref_timestamp = parse_int(parsed['args']['timestamp'])
+            except ValueError as e:
                 return json_dumpb({
                     'success': False,
-                    'message': 'Invalid \'timestamp\' parameter, expected an integer'
+                    'message': f'Failed to parse \'timestamp\': {e}'
                 })
 
             page = parsed['args']['page']

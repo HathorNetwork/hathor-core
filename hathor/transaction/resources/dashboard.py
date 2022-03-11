@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, set_cors
+from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, parse_int, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.util import json_dumpb
@@ -53,19 +53,19 @@ class DashboardTransactionResource(Resource):
 
         # Get quantity for each
         try:
-            block_count = int(parsed['args']['block'])
-        except ValueError:
+            block_count = parse_int(parsed['args']['block'])
+        except ValueError as e:
             return json_dumpb({
                 'success': False,
-                'message': 'Invalid parameter, cannot convert to int: block'
+                'message': f'Failed to parse \'block\': {e}'
             })
 
         try:
-            tx_count = int(parsed['args']['tx'])
-        except ValueError:
+            tx_count = parse_int(parsed['args']['tx'])
+        except ValueError as e:
             return json_dumpb({
                 'success': False,
-                'message': 'Invalid parameter, cannot convert to int: tx'
+                'message': f'Failed to parse \'tx\': {e}'
             })
 
         # Restrict counts

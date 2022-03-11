@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Union
 from twisted.internet import threads
 from twisted.web.http import Request
 
-from hathor.api_util import Resource, get_args, set_cors, validate_tx_hash
+from hathor.api_util import Resource, get_args, parse_int, set_cors, validate_tx_hash
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.graphviz import GraphvizVisualizer
@@ -238,7 +238,7 @@ class GraphvizNeighboursResource(_BaseGraphvizResource):
             return json_dumpb({'success': False, 'message': message})
 
         graph_type = args[b'graph_type'][0].decode('utf-8')
-        max_level = min(int(args[b'max_level'][0]), settings.MAX_GRAPH_LEVEL)
+        max_level = parse_int(args[b'max_level'][0], cap=settings.MAX_GRAPH_LEVEL)
         tx = tx_storage.get_transaction(bytes.fromhex(tx_hex))
 
         graphviz = GraphvizVisualizer(tx_storage)

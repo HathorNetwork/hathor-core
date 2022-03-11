@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from twisted.web.http import Request
 
-from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors
+from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_int, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
@@ -108,11 +108,11 @@ class AddressSearchResource(Resource):
             })
 
         try:
-            count = min(int(raw_args[b'count'][0]), settings.MAX_TX_COUNT)
-        except ValueError:
+            count = parse_int(raw_args[b'count'][0], cap=settings.MAX_TX_COUNT)
+        except ValueError as e:
             return json_dumpb({
                 'success': False,
-                'message': 'Invalid \'count\' parameter, expected an int'
+                'message': f'Failed to parse \'count\': {e}'
             })
 
         token_uid_bytes = None
@@ -122,10 +122,10 @@ class AddressSearchResource(Resource):
 
             try:
                 token_uid_bytes = bytes.fromhex(token_uid)
-            except ValueError:
+            except ValueError as e:
                 return json_dumpb({
                     'success': False,
-                    'message': 'Token uid is not a valid hexadecimal value.'
+                    'message': f'Failed to parse \'token\': {e}'
                 })
 
         hashes = addresses_index.get_from_address(address)
