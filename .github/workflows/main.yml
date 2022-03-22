@@ -22,7 +22,9 @@ jobs:
         import json
         full_matrix = {
           'python': ['3.7', '3.8', '3.9', '3.10'],
-          'os': ['ubuntu-latest', 'macos-latest', 'windows-latest'],
+          # XXX: temporarily removing 'macos-latest' until python-rocksdb build is fixed
+          # 'os': ['ubuntu-latest', 'macos-latest', 'windows-latest'],
+          'os': ['ubuntu-latest', 'windows-latest'],
           # XXX: tests fail on these, not sure why, when running them individually each on passes, but not on `make tests`
           # 'include': [
           #   {'os': 'ubuntu-latest', 'python': 'pypy-3.7'},
