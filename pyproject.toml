@@ -68,7 +68,7 @@ service_identity = "~21.1.0"
 pexpect = "~4.8.0"
 intervaltree = "~3.1.0"
 structlog = "~21.5.0"
-python-rocksdb = {version = "^0.7.0", markers = "sys_platform != 'win32'"}
+rocksdb = {git = "https://github.com/hathornetwork/python-rocksdb.git", markers = "sys_platform != 'win32'"}
 aiohttp = "~3.8.1"
 idna = "~3.3"
 setproctitle = "^1.2.2"
