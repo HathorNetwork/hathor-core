@@ -9,7 +9,7 @@ FROM pypy:$PYTHON-slim-$DEBIAN as stage-0
 RUN apt-get -qy update
 RUN apt-get -qy install libssl1.1 graphviz librocksdb6.11
 # dev deps for this build start here
-RUN apt-get -qy install libssl-dev libffi-dev build-essential zlib1g-dev libbz2-dev libsnappy-dev liblz4-dev librocksdb-dev cargo
+RUN apt-get -qy install libssl-dev libffi-dev build-essential zlib1g-dev libbz2-dev libsnappy-dev liblz4-dev librocksdb-dev cargo git pkg-config
 # install all deps in a virtualenv so we can just copy it over to the final image
 RUN pip --no-input --no-cache-dir install --upgrade pip wheel poetry
 ENV POETRY_VIRTUALENVS_IN_PROJECT=true
