@@ -32,6 +32,8 @@ FROM python:$PYTHON-alpine$ALPINE
 ARG PYTHON
 RUN apk add --no-cache openssl libffi graphviz
 RUN apk add --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing rocksdb
+# XXX: rocksdb from edge now requires updated libstdc++, because it was built with it, no other runtime dep is affected
+RUN apk add --repository=http://dl-cdn.alpinelinux.org/alpine/edge/main -u libstdc++
 COPY --from=stage-0 /app/.venv/lib/python${PYTHON}/site-packages/ /usr/local/lib/python${PYTHON}/site-packages/
 COPY hathor ./hathor
 EXPOSE 40403 8080
