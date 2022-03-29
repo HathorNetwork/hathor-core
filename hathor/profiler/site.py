@@ -27,6 +27,7 @@ cpu = get_cpu_profiler()
 class SiteProfiler(server.Site):
     def _get_profiler_key(self, request: 'Request') -> str:
         addr = request.getClientAddress()
+        assert request.path is not None
         parts = [request.path.decode(), getattr(addr, 'host', '-')]
         key = 'http-api!' + ':'.join(parts)
         return key

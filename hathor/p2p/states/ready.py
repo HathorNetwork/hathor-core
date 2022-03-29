@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 from math import inf
 from typing import TYPE_CHECKING, Iterable, Optional
 
@@ -22,7 +21,9 @@ from twisted.internet.task import LoopingCall
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.states.base import BaseState
+from hathor.p2p.sync_manager import SyncManager
 from hathor.transaction import BaseTransaction
+from hathor.util import json_dumps, json_loads
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
@@ -76,7 +77,7 @@ class ReadyState(BaseState):
         self.log.debug(f'loading {sync_version}')
         sync_factory = connections.get_sync_factory(sync_version)
 
-        self.sync_manager = sync_factory.create_sync_manager(self.protocol, reactor=self.reactor)
+        self.sync_manager: SyncManager = sync_factory.create_sync_manager(self.protocol, reactor=self.reactor)
         self.cmd_map.update(self.sync_manager.get_cmd_dict())
 
     def on_enter(self) -> None:
@@ -128,14 +129,14 @@ class ReadyState(BaseState):
                 'entrypoints': conn.peer.entrypoints,
                 'last_message': conn.last_message,
             })
-        self.send_message(ProtocolMessages.PEERS, json.dumps(peers))
+        self.send_message(ProtocolMessages.PEERS, json_dumps(peers))
         self.log.debug('send peers', peers=peers)
 
     def handle_peers(self, payload: str) -> None:
         """ Executed when a PEERS command is received. It updates the list
         of known peers (and tries to connect to new ones).
         """
-        received_peers = json.loads(payload)
+        received_peers = json_loads(payload)
         for data in received_peers:
             peer = PeerId.create_from_json(data)
             peer.validate()

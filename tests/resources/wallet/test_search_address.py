@@ -59,7 +59,7 @@ class BaseSearchAddressTest(_BaseResourceTest._ResourceTest):
             'thin_wallet/address_search',
             {
                 b'address': self.address.encode(),
-                b'count': 3,
+                b'count': b'3',
                 b'page': b'next',
                 b'hash': data['transactions'][-1]['tx_id'].encode()
             }
@@ -115,6 +115,34 @@ class BaseSearchAddressTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(0, data['tokens_data'][settings.HATHOR_TOKEN_UID.hex()]['spent'])
         self.assertEqual(100, data['tokens_data'][self.token_uid.hex()]['received'])
         self.assertEqual(0, data['tokens_data'][self.token_uid.hex()]['spent'])
+
+    @inlineCallbacks
+    def test_zero_count(self):
+        resource = StubSite(AddressSearchResource(self.manager))
+        response = yield resource.get(
+            'thin_wallet/address_search',
+            {
+                b'address': self.address.encode(),
+                b'count': b'0',
+            }
+        )
+        data = response.json_value()
+        self.assertTrue(data['success'])
+        self.assertEqual(len(data['transactions']), 0)
+        self.assertTrue(data['has_more'])
+
+    @inlineCallbacks
+    def test_negative_count(self):
+        resource = StubSite(AddressSearchResource(self.manager))
+        response = yield resource.get(
+            'thin_wallet/address_search',
+            {
+                b'address': self.address.encode(),
+                b'count': b'-1',
+            }
+        )
+        data = response.json_value()
+        self.assertFalse(data['success'])
 
 
 class SyncV1SearchAddressTest(unittest.SyncV1Params, BaseSearchAddressTest):

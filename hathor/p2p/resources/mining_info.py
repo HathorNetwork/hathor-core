@@ -12,22 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 from math import log
 
-from twisted.web import resource
-
-from hathor.api_util import set_cors
+from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.daa import get_mined_tokens
 from hathor.difficulty import Weight
+from hathor.util import json_dumpb
 
 settings = HathorSettings()
 
 
 @register_resource
-class MiningInfoResource(resource.Resource):
+class MiningInfoResource(Resource):
     """ Implements an status web server API, which responds with mining information
 
     You must run with option `--status <PORT>`.
@@ -46,7 +44,7 @@ class MiningInfoResource(resource.Resource):
         set_cors(request, 'GET')
 
         if not self.manager.can_start_mining():
-            return json.dumps({'success': False, 'message': 'Node still syncing'}).encode('utf-8')
+            return json_dumpb({'success': False, 'message': 'Node still syncing'})
 
         # We can use any address.
         burn_address = bytes.fromhex(
@@ -69,7 +67,7 @@ class MiningInfoResource(resource.Resource):
             'mined_tokens': mined_tokens,
             'success': True,
         }
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 MiningInfoResource.openapi = {

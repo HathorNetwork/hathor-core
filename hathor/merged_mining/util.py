@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import asyncio
-from asyncio import Future
 from contextlib import suppress
 from functools import wraps
 from typing import Any, Awaitable, Callable, Dict, Optional, Tuple, Union
@@ -44,7 +43,7 @@ class Periodic:
         self.kwargs = kwargs
         self.interval = interval
         self.is_started = False
-        self._task: Optional[Future[None]] = None
+        self._task: Optional[asyncio.Future] = None
 
     async def start(self) -> None:
         if not self.is_started:
@@ -76,7 +75,7 @@ class Periodic:
                 break
 
 
-def as_future(d: Deferred) -> Callable[..., Awaitable[Any]]:
+def as_future(d: Deferred) -> asyncio.Future:
     """Convert twisted deferred to asyncio future."""
     return d.asFuture(asyncio.get_event_loop())
 

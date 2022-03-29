@@ -13,11 +13,10 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
-
-from twisted.internet.task import Clock
+from typing import TYPE_CHECKING, Optional
 
 from hathor.p2p.sync_manager import SyncManager
+from hathor.util import Reactor
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol
@@ -25,5 +24,5 @@ if TYPE_CHECKING:
 
 class SyncManagerFactory(ABC):
     @abstractmethod
-    def create_sync_manager(self, protocol: 'HathorProtocol', reactor: Clock = None) -> SyncManager:
+    def create_sync_manager(self, protocol: 'HathorProtocol', reactor: Optional[Reactor] = None) -> SyncManager:
         pass

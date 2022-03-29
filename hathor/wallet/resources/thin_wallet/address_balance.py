@@ -12,18 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Dict
 
-from twisted.web import resource
 from twisted.web.http import Request
 
-from hathor.api_util import get_missing_params_msg, set_cors
+from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.transaction.scripts import parse_address_script
+from hathor.util import json_dumpb
 from hathor.wallet.exceptions import InvalidAddress
 
 if TYPE_CHECKING:
@@ -48,7 +47,7 @@ class TokenData:
 
 
 @register_resource
-class AddressBalanceResource(resource.Resource):
+class AddressBalanceResource(Resource):
     """ Implements a web server API to return the address balance
 
     You must run with option `--status <PORT>`.
@@ -84,10 +83,11 @@ class AddressBalanceResource(resource.Resource):
 
         if not addresses_index or not tokens_index:
             request.setResponseCode(503)
-            return json.dumps({'success': False}, indent=4).encode('utf-8')
+            return json_dumpb({'success': False})
 
-        if b'address' in request.args:
-            requested_address = request.args[b'address'][0].decode('utf-8')
+        raw_args = get_args(request)
+        if b'address' in raw_args:
+            requested_address = raw_args[b'address'][0].decode('utf-8')
         else:
             return get_missing_params_msg('address')
 
@@ -95,10 +95,10 @@ class AddressBalanceResource(resource.Resource):
             # Check if address is valid
             decode_address(requested_address)
         except InvalidAddress:
-            return json.dumps({
+            return json_dumpb({
                 'success': False,
                 'message': 'Invalid \'address\' parameter'
-            }).encode('utf-8')
+            })
 
         tokens_data: Dict[bytes, TokenData] = defaultdict(TokenData)
         tx_hashes = addresses_index.get_from_address(requested_address)
@@ -143,7 +143,7 @@ class AddressBalanceResource(resource.Resource):
             'total_transactions': len(tx_hashes),
             'tokens_data': return_tokens_data
         }
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 AddressBalanceResource.openapi = {

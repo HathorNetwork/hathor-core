@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Callable, Dict, Optional, Union
 
 from structlog import get_logger
+from twisted.internet.defer import Deferred
 
 from hathor.p2p.messages import ProtocolMessages
 
@@ -26,7 +27,7 @@ logger = get_logger()
 
 class BaseState:
     protocol: 'HathorProtocol'
-    cmd_map: Dict[ProtocolMessages, Callable[[str], None]]
+    cmd_map: Dict[ProtocolMessages, Union[Callable[[str], None], Callable[[str], Deferred[None]]]]
 
     def __init__(self, protocol: 'HathorProtocol'):
         self.log = logger.new(**protocol.get_logger_context())

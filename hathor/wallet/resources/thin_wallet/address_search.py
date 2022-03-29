@@ -12,17 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 from typing import TYPE_CHECKING
 
-from twisted.web import resource
 from twisted.web.http import Request
 
-from hathor.api_util import get_missing_params_msg, set_cors
+from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_int, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.transaction.scripts import parse_address_script
+from hathor.util import json_dumpb
 from hathor.wallet.exceptions import InvalidAddress
 
 if TYPE_CHECKING:
@@ -32,7 +31,7 @@ settings = HathorSettings()
 
 
 @register_resource
-class AddressSearchResource(resource.Resource):
+class AddressSearchResource(Resource):
     """ Implements a web server API to return a paginated list of transactions address
 
     You must run with option `--status <PORT>`.
@@ -89,44 +88,45 @@ class AddressSearchResource(resource.Resource):
 
         if not addresses_index:
             request.setResponseCode(503)
-            return json.dumps({'success': False}, indent=4).encode('utf-8')
+            return json_dumpb({'success': False})
 
-        if b'address' not in request.args:
+        raw_args = get_args(request)
+        if b'address' not in raw_args:
             return get_missing_params_msg('address')
 
-        if b'count' not in request.args:
+        if b'count' not in raw_args:
             return get_missing_params_msg('count')
 
         try:
-            address = request.args[b'address'][0].decode('utf-8')
+            address = raw_args[b'address'][0].decode('utf-8')
             # Check if address is valid
             decode_address(address)
         except InvalidAddress:
-            return json.dumps({
+            return json_dumpb({
                 'success': False,
                 'message': 'Invalid \'address\' parameter'
-            }).encode('utf-8')
+            })
 
         try:
-            count = min(int(request.args[b'count'][0]), settings.MAX_TX_COUNT)
-        except ValueError:
-            return json.dumps({
+            count = parse_int(raw_args[b'count'][0], cap=settings.MAX_TX_COUNT)
+        except ValueError as e:
+            return json_dumpb({
                 'success': False,
-                'message': 'Invalid \'count\' parameter, expected an int'
-            }).encode('utf-8')
+                'message': f'Failed to parse \'count\': {e}'
+            })
 
         token_uid_bytes = None
-        if b'token' in request.args:
+        if b'token' in raw_args:
             # It's an optional parameter, we just check if it's a valid hex
-            token_uid = request.args[b'token'][0].decode('utf-8')
+            token_uid = raw_args[b'token'][0].decode('utf-8')
 
             try:
                 token_uid_bytes = bytes.fromhex(token_uid)
-            except ValueError:
-                return json.dumps({
+            except ValueError as e:
+                return json_dumpb({
                     'success': False,
-                    'message': 'Token uid is not a valid hexadecimal value.'
-                }).encode('utf-8')
+                    'message': f'Failed to parse \'token\': {e}'
+                })
 
         hashes = addresses_index.get_from_address(address)
         # XXX To do a timestamp sorting, so the pagination works better
@@ -142,30 +142,30 @@ class AddressSearchResource(resource.Resource):
             transactions.append(tx.to_json_extended())
 
         sorted_transactions = sorted(transactions, key=lambda tx: tx['timestamp'], reverse=True)
-        if b'hash' in request.args:
-            # It's a paginated request, so 'page' must also be in request.args
-            if b'page' not in request.args:
+        if b'hash' in raw_args:
+            # It's a paginated request, so 'page' must also be in raw_args
+            if b'page' not in raw_args:
                 return get_missing_params_msg('page')
 
-            page = request.args[b'page'][0].decode('utf-8')
+            page = raw_args[b'page'][0].decode('utf-8')
             if page != 'previous' and page != 'next':
                 # Invalid value for page parameter
-                return json.dumps({
+                return json_dumpb({
                     'success': False,
                     'message': 'Invalid value for \'page\' parameter',
-                }, indent=4).encode('utf-8')
+                })
 
-            ref_hash = request.args[b'hash'][0].decode('utf-8')
+            ref_hash = raw_args[b'hash'][0].decode('utf-8')
             # Index where the reference hash is
             for ref_index, tx in enumerate(sorted_transactions):
                 if tx['tx_id'] == ref_hash:
                     break
             else:
                 # ref_hash is not in the list
-                return json.dumps({
+                return json_dumpb({
                     'success': False,
                     'message': 'Invalid hash {}'.format(ref_hash)
-                }, indent=4).encode('utf-8')
+                })
 
             if page == 'next':
                 # User clicked on 'Next' button, so the ref_hash is the last hash of the list
@@ -193,7 +193,7 @@ class AddressSearchResource(resource.Resource):
             'has_more': has_more,
             'total': len(sorted_transactions),
         }
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 AddressSearchResource.openapi = {

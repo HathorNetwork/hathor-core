@@ -12,16 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
-
-from twisted.web import resource
-
-from hathor.api_util import set_cors
+from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.util import json_dumpb
 
 
 @register_resource
-class StateWalletResource(resource.Resource):
+class StateWalletResource(Resource):
     """ Implements a web server API with GET return the state of the wallet
         State says if the wallet is locked or unlocked
 
@@ -45,7 +42,7 @@ class StateWalletResource(resource.Resource):
 
         data = {'is_locked': self.manager.wallet.is_locked(), 'type': self.manager.wallet.type.value}
 
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 StateWalletResource.openapi = {

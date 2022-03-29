@@ -12,21 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 from typing import Any, Dict
 
-from twisted.web import resource
 from twisted.web.http import Request
 
-from hathor.api_util import set_cors
+from hathor.api_util import Resource, get_args, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
+from hathor.util import json_dumpb
 
 settings = HathorSettings()
 
 
 @register_resource
-class TokenResource(resource.Resource):
+class TokenResource(Resource):
     """ Implements a web server API to return token information.
 
     You must run with option `--status <PORT>`.
@@ -122,20 +121,21 @@ class TokenResource(resource.Resource):
 
         if not self.manager.tx_storage.indexes.tokens:
             request.setResponseCode(503)
-            return json.dumps({'success': False}).encode('utf-8')
+            return json_dumpb({'success': False})
 
-        if b'id' in request.args:
+        raw_args = get_args(request)
+        if b'id' in raw_args:
             try:
-                token_uid_str = request.args[b'id'][0].decode('utf-8')
+                token_uid_str = raw_args[b'id'][0].decode('utf-8')
                 token_uid = bytes.fromhex(token_uid_str)
             except (ValueError, AttributeError):
-                return json.dumps({'success': False, 'message': 'Invalid token id'}).encode('utf-8')
+                return json_dumpb({'success': False, 'message': 'Invalid token id'})
 
             data = self.get_one_token_data(token_uid)
         else:
             data = self.get_list_token_data()
 
-        return json.dumps(data).encode('utf-8')
+        return json_dumpb(data)
 
 
 TokenResource.openapi = {

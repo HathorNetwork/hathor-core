@@ -13,16 +13,14 @@
 # limitations under the License.
 
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Any, Optional, Set
+from typing import Any, Optional, Set
 
 from twisted.internet import threads
 
 from hathor.indexes import IndexesManager
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
-
-if TYPE_CHECKING:
-    from twisted.internet import Reactor
+from hathor.util import Reactor
 
 
 class TransactionCacheStorage(BaseTransactionStorage):
@@ -32,7 +30,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
     cache: 'OrderedDict[bytes, BaseTransaction]'
     dirty_txs: Set[bytes]
 
-    def __init__(self, store: 'BaseTransactionStorage', reactor: 'Reactor', interval: int = 5,
+    def __init__(self, store: 'BaseTransactionStorage', reactor: Reactor, interval: int = 5,
                  capacity: int = 10000, *, _clone_if_needed: bool = False):
         """
         :param store: a subclass of BaseTransactionStorage

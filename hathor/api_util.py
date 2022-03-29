@@ -13,12 +13,16 @@
 # limitations under the License.
 
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union, cast
 
 from twisted.web.http import Request
+from twisted.web.resource import Resource as TwistedResource
 
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.util import json_dumpb
+
+T = TypeVar('T')
 
 
 def set_cors(request: Request, method: str) -> None:
@@ -50,11 +54,10 @@ def get_missing_params_msg(param_name):
     :param param_name: the missing parameter
     :type param_name: str
     """
-    import json
-    return json.dumps({'success': False, 'message': 'Missing parameter: {}'.format(param_name)}).encode('utf-8')
+    return json_dumpb({'success': False, 'message': f'Missing parameter: {param_name}'})
 
 
-def parse_get_arguments(args: Dict[bytes, bytes], expected_args: List[str]) -> Dict[str, Any]:
+def parse_args(args: Dict[bytes, List[bytes]], expected_args: List[str]) -> Dict[str, Any]:
     """Parse all expected arguments. If there are missing arguments, returns the missing arguments
     """
     expected_set = set(expected_args)
@@ -75,6 +78,19 @@ def parse_get_arguments(args: Dict[bytes, bytes], expected_args: List[str]) -> D
         ret[arg2] = first_param.decode('utf-8')
 
     return {'success': True, 'args': ret}
+
+
+def parse_int(raw: Union[str, bytes], *,
+              cap: Optional[int] = None, accept_negative: bool = False, accept_zero: bool = True) -> int:
+    """Parse int, by default rejecting negative values."""
+    value = int(raw)
+    if not accept_zero and value == 0:
+        raise ValueError('zero not accepted')
+    if not accept_negative and value < 0:
+        raise ValueError('negative value not accepted')
+    if cap is not None:
+        return min(value, cap)
+    return value
 
 
 def validate_tx_hash(hash_hex: str, tx_storage: TransactionStorage) -> Tuple[bool, str]:
@@ -99,3 +115,46 @@ def validate_tx_hash(hash_hex: str, tx_storage: TransactionStorage) -> Tuple[boo
             message = 'Transaction not found'
 
     return success, message
+
+
+class Resource(TwistedResource):
+    openapi: Dict[str, Any] = {}
+
+
+def get_args(request: Request) -> Dict[bytes, List[bytes]]:
+    """Type-friendly way to access request.args, also always returns a dict instead of None."""
+    args = cast(Optional[Dict[bytes, List[bytes]]], request.args)
+    if args is None:
+        return {}
+    return args
+
+
+def get_arg_default(args: Dict[bytes, List[bytes]], key: str, default: T) -> T:
+    """Get a value with given key from an request.args formatted dict, return default if key was not found.
+
+    Examples:
+
+    >>> args = {b'foo': [b'10'], b'bar': [b'abc']}
+    >>> get_arg_default(args, 'foo', 4)
+    10
+    >>> get_arg_default(args, 'foo', '4')
+    '10'
+    >>> get_arg_default(args, 'bar', 4)
+    Traceback (most recent call last):
+     ...
+    ValueError: invalid literal for int() with base 10: b'abc'
+    >>> get_arg_default(args, 'bar', 'xyz')
+    'abc'
+    >>> get_arg_default(args, 'baz', 'xyz')
+    'xyz'
+    """
+    assert isinstance(default, (type(None), str, int))
+    bkey = key.encode()
+    values = args.get(bkey)
+    if not values:
+        return cast(T, default)
+    value: bytes = values[0]
+    if isinstance(default, int):
+        return cast(T, int(value))
+    else:
+        return cast(T, value.decode())

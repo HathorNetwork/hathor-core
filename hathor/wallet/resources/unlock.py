@@ -12,18 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 from typing import Any, Dict
 
-from twisted.web import resource
-
-from hathor.api_util import render_options, set_cors
+from hathor.api_util import Resource, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.util import json_dumpb, json_loadb
 from hathor.wallet.exceptions import IncorrectPassword, InvalidWords
 
 
 @register_resource
-class UnlockWalletResource(resource.Resource):
+class UnlockWalletResource(Resource):
     """ Implements a web server API a POST to unlock the wallet.
 
     You must run with option `--status <PORT>`.
@@ -46,7 +44,7 @@ class UnlockWalletResource(resource.Resource):
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
-        post_data = json.loads(request.content.read().decode('utf-8'))
+        post_data = json_loadb(request.content.read())
 
         if 'password' in post_data:
             # Wallet keypair
@@ -72,7 +70,7 @@ class UnlockWalletResource(resource.Resource):
             ret['success'] = False
             ret['message'] = 'Invalid words'
 
-        return json.dumps(ret, indent=4).encode('utf-8')
+        return json_dumpb(ret)
 
     def unlock_wallet_keypair(self, data):
         password = bytes(data['password'], 'utf-8')
@@ -86,7 +84,7 @@ class UnlockWalletResource(resource.Resource):
             ret['message'] = 'Invalid password'
 
         ret['success'] = success
-        return json.dumps(ret, indent=4).encode('utf-8')
+        return json_dumpb(ret)
 
     def render_OPTIONS(self, request):
         return render_options(request)

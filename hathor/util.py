@@ -12,25 +12,59 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 import math
 import warnings
 from collections import OrderedDict
 from enum import Enum
 from functools import partial, wraps
 from random import Random as PyRandom
-from typing import Any, Callable, Deque, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple, TypeVar, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Deque,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    cast,
+)
 
 from structlog import get_logger
-from twisted.internet.interfaces import IReactorCore
+from twisted.internet import reactor as twisted_reactor
+from twisted.internet.base import ReactorBase
+from twisted.internet.posixbase import PosixReactorBase
 from twisted.python.threadable import isInIOThread
+from zope.interface import Interface
+from zope.interface.verify import verifyObject
 
 from hathor.conf import HathorSettings
 
+if TYPE_CHECKING:
+    from hathor.simulator.clock import HeapClock
+
+# Reactor = IReactorTime
+# XXX: Ideally we would want to be able to express Reactor as IReactorTime+IReactorCore, which is what everyone using
+#      this type annotation needs, however it is not possible to express this. In practice most classes that implement
+#      these interfaces use ReactorBase as base, however that is not the case for MemoryReactorClock, which inherits
+#      IReactorTime from Clock and IReactorCore from MemoryReactor. For the lack of a better approach, a union of these
+#      types is enough for most of our uses. If we end up having to use a different reactor that does not use those
+#      bases but implement IReactorTime+IReactorCore, we could add it to the Union below
+Reactor = Union[ReactorBase, 'HeapClock']
+reactor = cast(PosixReactorBase, twisted_reactor)
 logger = get_logger()
 settings = HathorSettings()
 
 
 T = TypeVar('T')
+Z = TypeVar('Z', bound=Interface)
 
 
 def practically_equal(a: Dict[Any, Any], b: Dict[Any, Any]) -> bool:
@@ -89,11 +123,12 @@ class ReactorThread(Enum):
     NOT_RUNNING = 'NOT_RUNNING'
 
     @classmethod
-    def get_current_thread(cls, reactor: IReactorCore) -> 'ReactorThread':
+    def get_current_thread(cls, reactor: Reactor) -> 'ReactorThread':
         """ Returns if the code is being run on the reactor thread, if it's running already.
         """
-        if hasattr(reactor, 'running'):
-            if reactor.running:
+        running = getattr(reactor, 'running', None)
+        if running is not None:
+            if running:
                 return cls.MAIN_THREAD if isInIOThread() else cls.NOT_MAIN_THREAD
             else:
                 # if reactor is not running yet, there's no threading
@@ -210,7 +245,7 @@ class MaxSizeOrderedDict(OrderedDict):
 
 
 def json_loadb(raw: bytes) -> Dict:
-    """Compact loading raw as UTF-8 encoded bytes to a Python object."""
+    """Compact loading as UTF-8 encoded bytes/string to a Python object."""
     import json
 
     # XXX: from Python3.6 onwards, json.loads can take bytes
@@ -223,10 +258,18 @@ def json_loadb(raw: bytes) -> Dict:
         raise json.JSONDecodeError(msg=str(exc), doc=raw.hex(), pos=exc.start) from exc
 
 
+# XXX: cast-converting the function saves a function-call, which can make a difference
+json_loads = cast(Callable[[str], Dict], json_loadb)
+
+
 def json_dumpb(obj: object) -> bytes:
     """Compact formating obj as JSON to UTF-8 encoded bytes."""
-    import json
-    return json.dumps(obj, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
+    return json_dumps(obj).encode('utf-8')
+
+
+def json_dumps(obj: object) -> str:
+    """Compact formating obj as JSON to UTF-8 encoded string."""
+    return json.dumps(obj, separators=(',', ':'), ensure_ascii=False)
 
 
 def api_catch_exceptions(func: Callable[..., bytes]) -> Callable[..., bytes]:
@@ -326,6 +369,8 @@ def collect_n(it: Iterator[_T], n: int) -> Tuple[List[_T], bool]:
     >>> collect_n(iter(range(10)), 8)
     ([0, 1, 2, 3, 4, 5, 6, 7], True)
     """
+    if n < 0:
+        raise ValueError(f'n must be non-negative, got {n}')
     col: List[_T] = []
     has_more = False
     while n > 0:
@@ -372,3 +417,8 @@ def skip_n(it: Iterator[_T], n: int) -> Iterator[_T]:
         except StopIteration:
             return it
     return it
+
+
+def verified_cast(interface_class: Type[Z], obj: Any) -> Z:
+    verifyObject(interface_class, obj)
+    return obj

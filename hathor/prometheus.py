@@ -16,10 +16,10 @@ import os
 from typing import TYPE_CHECKING, Dict
 
 from prometheus_client import CollectorRegistry, Gauge, write_to_textfile
-from twisted.internet import reactor
 from twisted.internet.task import LoopingCall
 
 from hathor.conf import HathorSettings
+from hathor.util import reactor
 
 if TYPE_CHECKING:
     from hathor.metrics import Metrics

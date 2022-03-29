@@ -147,7 +147,7 @@ class Downloader:
                 return details.deferred
 
             # Creating a new deferred to handle the download of this tx
-            deferred = Deferred()
+            deferred: Deferred = Deferred()
             details = TxDetails(tx_id, deferred, [connection])
             self.pending_transactions[tx_id] = details
             self.waiting_deque.append(tx_id)

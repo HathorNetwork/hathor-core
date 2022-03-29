@@ -1,8 +1,8 @@
-import json
 import shutil
 import tempfile
 
 from hathor.cli.wallet import create_parser, execute
+from hathor.util import json_loadb
 from tests import unittest
 
 
@@ -17,7 +17,7 @@ class WalletTest(unittest.TestCase):
         execute(args, '1234')
 
         with open('{}/keys.json'.format(tmpdir), 'rb') as f:
-            data = json.loads(f.read())
+            data = json_loadb(f.read())
 
         self.assertEqual(len(data), 5)
 

@@ -6,12 +6,12 @@ from itertools import chain
 
 import pytest
 from twisted.internet.defer import gatherResults, inlineCallbacks
-from twisted.internet.task import Clock
 from twisted.internet.threads import deferToThread
 from twisted.trial import unittest
 
 from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
+from hathor.simulator.clock import MemoryReactorHeapClock
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import (
@@ -44,7 +44,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         from hathor.manager import HathorManager
 
         if not reactor:
-            self.reactor = Clock()
+            self.reactor = MemoryReactorHeapClock()
         else:
             self.reactor = reactor
         self.reactor.advance(time.time())
@@ -463,7 +463,7 @@ class CacheBinaryStorageTest(BaseCacheStorageTest):
     def setUp(self):
         self.directory = tempfile.mkdtemp()
         store = TransactionBinaryStorage(self.directory)
-        reactor = Clock()
+        reactor = MemoryReactorHeapClock()
         super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
 
     def tearDown(self):
@@ -479,7 +479,7 @@ class CacheCompactStorageTest(BaseCacheStorageTest):
         # Creating random file just to test specific part of code
         tempfile.NamedTemporaryFile(dir=self.directory, delete=True)
         store = TransactionCompactStorage(self.directory)
-        reactor = Clock()
+        reactor = MemoryReactorHeapClock()
         super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
 
     def tearDown(self):
@@ -499,7 +499,7 @@ class CacheMemoryStorageTest(BaseCacheStorageTest):
 
     def setUp(self):
         store = TransactionMemoryStorage()
-        reactor = Clock()
+        reactor = MemoryReactorHeapClock()
         super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
 
 

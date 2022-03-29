@@ -12,13 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 from typing import TYPE_CHECKING
 
-from twisted.web import resource
-
-from hathor.api_util import get_missing_params_msg, parse_get_arguments, set_cors
+from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, parse_int, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.util import json_dumpb
 
 if TYPE_CHECKING:
     from twisted.web.http import Request
@@ -27,7 +25,7 @@ if TYPE_CHECKING:
 
 
 @register_resource
-class BlockAtHeightResource(resource.Resource):
+class BlockAtHeightResource(Resource):
     """ Implements a web server API to return the block at specific height.
 
     You must run with option `--status <PORT>`.
@@ -51,7 +49,7 @@ class BlockAtHeightResource(resource.Resource):
         set_cors(request, 'GET')
 
         # Height parameter is required
-        parsed = parse_get_arguments(request.args, ['height'])
+        parsed = parse_args(get_args(request), ['height'])
         if not parsed['success']:
             return get_missing_params_msg(parsed['missing'])
 
@@ -59,27 +57,27 @@ class BlockAtHeightResource(resource.Resource):
 
         # Height parameter must be an integer
         try:
-            height = int(args['height'])
-        except ValueError:
-            return json.dumps({
+            height = parse_int(args['height'])
+        except ValueError as e:
+            return json_dumpb({
                 'success': False,
-                'message': 'Invalid \'height\' parameter, expected an integer'
-            }).encode('utf-8')
+                'message': f'Failed to parse \'height\': {e}'
+            })
 
         # Get hash of the block with the height
         block_hash = self.manager.tx_storage.indexes.height.get(height)
 
         # If there is no block in the index with this height, block_hash will be None
         if block_hash is None:
-            return json.dumps({
+            return json_dumpb({
                 'success': False,
                 'message': 'No block with height {}.'.format(height)
-            }).encode('utf-8')
+            })
 
         block = self.manager.tx_storage.get_transaction(block_hash)
 
         data = {'success': True, 'block': block.to_json_extended()}
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 BlockAtHeightResource.openapi = {

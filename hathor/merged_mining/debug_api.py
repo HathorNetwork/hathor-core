@@ -22,7 +22,6 @@ import logging
 import os
 import random
 import tempfile
-import tracemalloc
 from typing import Any, Callable, Optional
 
 from aiohttp import web
@@ -149,6 +148,7 @@ async def tracemalloc_start(request: web.Request) -> web.StreamResponse:
 
     curl -v -X POST 'localhost:9999/tracemalloc/start'
     """
+    import tracemalloc
     global _tracemalloc_started
     if _tracemalloc_started:
         return web.Response(status=400, text='already started\n')
@@ -170,6 +170,7 @@ async def tracemalloc_dump(request: web.Request) -> web.StreamResponse:
     curl -v -X POST 'localhost:9999/tracemalloc/dump'
     curl -v -X POST 'localhost:9999/tracemalloc/dump?download' -o tracemalloc.dump
     """
+    import tracemalloc
     global _tracemalloc_started
     if not _tracemalloc_started:
         return web.Response(status=400, text='not started\n')
@@ -193,6 +194,7 @@ async def tracemalloc_stop(request: web.Request) -> web.StreamResponse:
     curl -v -X POST 'localhost:9999/tracemalloc/stop'
     curl -v -X POST 'localhost:9999/tracemalloc/stop?download' -o tracemalloc.dump
     """
+    import tracemalloc
     global _tracemalloc_started
     if not _tracemalloc_started:
         return web.Response(status=400, text='not started\n')
@@ -211,29 +213,29 @@ async def tracemalloc_stop(request: web.Request) -> web.StreamResponse:
 
 @routes.post('/asyncio/count_all')
 async def asyncio_count_all(request: web.Request) -> web.StreamResponse:
-    """ Counts all tasks on asyncio: `len(asyncio.Task.all_tasks())`
+    """ Counts all tasks on asyncio: `len(asyncio.all_tasks())`
 
     Example:
 
     curl -v -X POST 'localhost:9999/asyncio/count_all'
     """
     log = request.app[_LOG]
-    log.info('asyncio.Task.all_tasks')
-    count = len(asyncio.Task.all_tasks())
+    log.info('asyncio.all_tasks')
+    count = len(asyncio.all_tasks())
     return web.Response(text=str(count) + '\n')
 
 
 @routes.post('/asyncio/count_running')
 async def asyncio_count_running(request: web.Request) -> web.StreamResponse:
-    """ Counts running tasks on asyncio: ~`len(t in asyncio.Task.all_tasks() if not t.done)`
+    """ Counts running tasks on asyncio: ~`len(t in asyncio.all_tasks() if not t.done)`
 
     Example:
 
     curl -v -X POST 'localhost:9999/asyncio/count_running'
     """
     log = request.app[_LOG]
-    log.info('asyncio.Task.all_tasks')
-    count = sum(1 for t in asyncio.Task.all_tasks() if not t.done())
+    log.info('asyncio.all_tasks')
+    count = sum(1 for t in asyncio.all_tasks() if not t.done())
     return web.Response(text=str(count) + '\n')
 
 

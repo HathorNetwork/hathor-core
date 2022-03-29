@@ -13,24 +13,23 @@
 # limitations under the License.
 
 import datetime
-from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Set, Tuple
+from typing import Any, Dict, Generator, List, Optional, Set, Tuple
 from urllib.parse import parse_qs, urlparse
 
 import requests
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.backends.openssl.rsa import RSAPrivateKey
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from cryptography.x509 import Certificate
 from cryptography.x509.oid import NameOID
 from twisted.internet.defer import inlineCallbacks
+from twisted.internet.interfaces import IAddress
 
 from hathor.conf import HathorSettings
 from hathor.p2p.peer_discovery import DNSPeerDiscovery
 from hathor.transaction.genesis import GENESIS_HASH
-
-if TYPE_CHECKING:
-    from cryptography.hazmat.backends.openssl.rsa import _RSAPrivateKey
-    from cryptography.x509 import Certificate
 
 settings = HathorSettings()
 
@@ -111,7 +110,7 @@ def discover_dns(host: str, test_mode: int = 0) -> Generator[Any, Any, List[str]
     return result
 
 
-def generate_certificate(private_key: '_RSAPrivateKey', ca_file: str, ca_pkey_file: str) -> 'Certificate':
+def generate_certificate(private_key: RSAPrivateKey, ca_file: str, ca_pkey_file: str) -> Certificate:
     """ Generate a certificate signed by the ca file passed as parameters
         This certificate is used to start the TLS connection between peers and contains the peer public key
     """
@@ -190,3 +189,14 @@ G2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
         if len(bpeerid) != 32:
             raise ValueError('invalid peerid size')
     return peerids
+
+
+def format_address(addr: IAddress) -> str:
+    """ Return a string with '{host}:{port}' when possible, otherwise use the addr's __str__
+    """
+    host: Optional[str] = getattr(addr, 'host', None)
+    port: Optional[str] = getattr(addr, 'port', None)
+    if host is not None and port is not None:
+        return f'{host}:{port}'
+    else:
+        return str(addr)

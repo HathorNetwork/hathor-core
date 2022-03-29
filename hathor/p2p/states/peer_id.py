@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 from typing import TYPE_CHECKING, Any, Generator
 
 from structlog import get_logger
@@ -23,6 +22,7 @@ from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.states.base import BaseState
 from hathor.p2p.sync_version import SyncVersion
+from hathor.util import json_dumps, json_loads
 
 if TYPE_CHECKING:
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
@@ -76,7 +76,7 @@ class PeerIdState(BaseState):
             'pubKey': my_peer.get_public_key(),
             'entrypoints': my_peer.entrypoints,
         }
-        self.send_message(ProtocolMessages.PEER_ID, json.dumps(hello))
+        self.send_message(ProtocolMessages.PEER_ID, json_dumps(hello))
 
     @inlineCallbacks
     def handle_peer_id(self, payload: str) -> Generator[Any, Any, None]:
@@ -84,8 +84,13 @@ class PeerIdState(BaseState):
         the identity of the peer. Only after this step, the peer connection
         is considered established and ready to communicate.
         """
+        from hathor.p2p.netfilter import get_table
+        from hathor.p2p.netfilter.context import NetfilterContext
+
         protocol = self.protocol
-        data = json.loads(payload)
+        assert protocol.transport is not None
+
+        data = json_loads(payload)
 
         peer = PeerId.create_from_json(data)
         peer.validate()
@@ -127,16 +132,14 @@ class PeerIdState(BaseState):
         # If it gets here, the peer is validated, and we are ready to start communicating.
         protocol.peer = peer
 
-        from hathor.p2p.netfilter import get_table
-        from hathor.p2p.netfilter.context import NetfilterContext
         context = NetfilterContext(
-            protocol=self.protocol,
-            connections=self.protocol.connections,
-            addr=self.protocol.transport.getPeer(),
+            protocol=protocol,
+            connections=protocol.connections,
+            addr=protocol.transport.getPeer(),
         )
         verdict = get_table('filter').get_chain('post_peerid').process(context)
         if not bool(verdict):
-            self.protocol.disconnect('rejected by netfilter: filter post_peerid', force=True)
+            protocol.disconnect('rejected by netfilter: filter post_peerid', force=True)
             return
 
         self.send_ready()

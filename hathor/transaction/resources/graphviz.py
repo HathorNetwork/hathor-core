@@ -12,18 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 from enum import Enum
 from typing import TYPE_CHECKING, Union
 
 from twisted.internet import threads
-from twisted.web import resource
 from twisted.web.http import Request
 
-from hathor.api_util import set_cors, validate_tx_hash
+from hathor.api_util import Resource, get_args, parse_int, set_cors, validate_tx_hash
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.graphviz import GraphvizVisualizer
+from hathor.util import json_dumpb
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
@@ -53,7 +52,7 @@ class FileFormat(Enum):
         return self.value
 
 
-class _BaseGraphvizResource(resource.Resource):
+class _BaseGraphvizResource(Resource):
     isLeaf = True
 
     def __init__(self, manager: 'HathorManager', *, format: Union[FileFormat, str]):
@@ -97,16 +96,17 @@ class GraphvizFullResource(_BaseGraphvizResource):
         tx_storage = self.manager.tx_storage
 
         graphviz = GraphvizVisualizer(tx_storage)
-        if b'weight' in request.args:
-            graphviz.show_weight = self.parse_bool_arg(request.args[b'weight'][0].decode('utf-8'))
-        if b'acc_weight' in request.args:
-            graphviz.show_acc_weight = self.parse_bool_arg(request.args[b'acc_weight'][0].decode('utf-8'))
-        if b'verifications' in request.args:
-            graphviz.include_verifications = self.parse_bool_arg(request.args[b'verifications'][0].decode('utf-8'))
-        if b'funds' in request.args:
-            graphviz.include_funds = self.parse_bool_arg(request.args[b'funds'][0].decode('utf-8'))
-        if b'only_blocks' in request.args:
-            graphviz.only_blocks = self.parse_bool_arg(request.args[b'only_blocks'][0].decode('utf-8'))
+        args = get_args(request)
+        if b'weight' in args:
+            graphviz.show_weight = self.parse_bool_arg(args[b'weight'][0].decode('utf-8'))
+        if b'acc_weight' in args:
+            graphviz.show_acc_weight = self.parse_bool_arg(args[b'acc_weight'][0].decode('utf-8'))
+        if b'verifications' in args:
+            graphviz.include_verifications = self.parse_bool_arg(args[b'verifications'][0].decode('utf-8'))
+        if b'funds' in args:
+            graphviz.include_funds = self.parse_bool_arg(args[b'funds'][0].decode('utf-8'))
+        if b'only_blocks' in args:
+            graphviz.only_blocks = self.parse_bool_arg(args[b'only_blocks'][0].decode('utf-8'))
         dot = graphviz.dot(format=self.format.dot)
 
         request.setHeader(b'content-type', self.format.content_type)
@@ -231,13 +231,14 @@ class GraphvizNeighboursResource(_BaseGraphvizResource):
 
         tx_storage = self.manager.tx_storage
 
-        tx_hex = request.args[b'tx'][0].decode('utf-8')
+        args = get_args(request)
+        tx_hex = args[b'tx'][0].decode('utf-8')
         success, message = validate_tx_hash(tx_hex, tx_storage)
         if not success:
-            return json.dumps({'success': False, 'message': message}, indent=4).encode('utf-8')
+            return json_dumpb({'success': False, 'message': message})
 
-        graph_type = request.args[b'graph_type'][0].decode('utf-8')
-        max_level = min(int(request.args[b'max_level'][0]), settings.MAX_GRAPH_LEVEL)
+        graph_type = args[b'graph_type'][0].decode('utf-8')
+        max_level = parse_int(args[b'max_level'][0], cap=settings.MAX_GRAPH_LEVEL)
         tx = tx_storage.get_transaction(bytes.fromhex(tx_hex))
 
         graphviz = GraphvizVisualizer(tx_storage)

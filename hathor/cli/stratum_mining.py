@@ -15,7 +15,6 @@
 import sys
 from argparse import ArgumentParser, Namespace
 
-from twisted.internet import reactor
 from twisted.internet.endpoints import TCP4ClientEndpoint, connectProtocol
 
 
@@ -32,6 +31,7 @@ def create_parser() -> ArgumentParser:
 def execute(args: Namespace) -> None:
     from hathor.crypto.util import decode_address
     from hathor.stratum import StratumClient
+    from hathor.util import reactor
     from hathor.wallet.exceptions import InvalidAddress
 
     address = None

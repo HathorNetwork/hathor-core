@@ -16,9 +16,8 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, NamedTuple, Optional, Set
 
 from structlog import get_logger
 from twisted.internet import endpoints
-from twisted.internet.base import ReactorBase
 from twisted.internet.defer import Deferred
-from twisted.internet.interfaces import IStreamClientEndpoint, IStreamServerEndpoint
+from twisted.internet.interfaces import IProtocolFactory, IStreamClientEndpoint, IStreamServerEndpoint
 from twisted.internet.task import LoopingCall
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
@@ -34,7 +33,7 @@ from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import description_to_connection_string, parse_whitelist
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
-from hathor.util import Random
+from hathor.util import Random, Reactor
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
@@ -60,7 +59,7 @@ class ConnectionsManager:
     whitelist_only: bool
     _sync_factories: Dict[SyncVersion, SyncManagerFactory]
 
-    def __init__(self, reactor: ReactorBase, my_peer: PeerId, server_factory: 'HathorServerFactory',
+    def __init__(self, reactor: Reactor, my_peer: PeerId, server_factory: 'HathorServerFactory',
                  client_factory: 'HathorClientFactory', pubsub: PubSubManager, manager: 'HathorManager',
                  ssl: bool, rng: Random, whitelist_only: bool, enable_sync_v1: bool, enable_sync_v2: bool) -> None:
         from hathor.p2p.sync_v1_factory import SyncV1Factory
@@ -307,7 +306,7 @@ class ConnectionsManager:
         for peer in list(self.peer_storage.values()):
             self.connect_to_if_not_connected(peer, now)
 
-    def update_whitelist(self) -> Deferred:
+    def update_whitelist(self) -> Deferred[None]:
         from twisted.web.client import Agent, readBody
         from twisted.web.http_headers import Headers
         assert settings.WHITELIST_URL is not None
@@ -321,6 +320,7 @@ class ConnectionsManager:
         d.addCallback(readBody)
         d.addErrback(self._update_whitelist_err)
         d.addCallback(self._update_whitelist_cb)
+        return d
 
     def _update_whitelist_err(self, *args: Any, **kwargs: Any) -> None:
         self.log.error('update whitelist failed', args=args, kwargs=kwargs)
@@ -373,6 +373,7 @@ class ConnectionsManager:
         if isinstance(protocol, HathorProtocol):
             protocol.on_outbound_connect(url_peer_id, connection_string)
         else:
+            assert isinstance(protocol.wrappedProtocol, HathorProtocol)
             protocol.wrappedProtocol.on_outbound_connect(url_peer_id, connection_string)
         self.connecting_peers.pop(endpoint)
 
@@ -393,6 +394,7 @@ class ConnectionsManager:
             if ('127.0.0.1' not in endpoint_url) and ('localhost' not in endpoint_url):
                 return
 
+        factory: IProtocolFactory
         if use_ssl:
             certificate_options = self.my_peer.get_certificate_options()
             factory = TLSMemoryBIOFactory(certificate_options, True, self.client_factory)
@@ -423,6 +425,7 @@ class ConnectionsManager:
         if use_ssl is None:
             use_ssl = self.ssl
 
+        factory: IProtocolFactory
         if use_ssl:
             certificate_options = self.my_peer.get_certificate_options()
             factory = TLSMemoryBIOFactory(certificate_options, False, self.server_factory)

@@ -14,17 +14,16 @@
 
 import base64
 import binascii
-import json
+from json import JSONDecodeError
 from typing import Any, Dict, NamedTuple
 
-from twisted.web import resource
-
-from hathor.api_util import get_missing_params_msg, render_options, set_cors
+from hathor.api_util import Resource, get_missing_params_msg, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
 from hathor.daa import minimum_tx_weight
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, NanoContractMatchValues
+from hathor.util import json_dumpb, json_loadb
 from hathor.wallet.exceptions import InvalidAddress
 
 PARAMS = ['spent_tx_id', 'spent_tx_index', 'oracle_data', 'oracle_signature', 'oracle_pubkey', 'address', 'value']
@@ -41,7 +40,7 @@ class DecodedParams(NamedTuple):
 
 
 @register_resource
-class NanoContractExecuteResource(resource.Resource):
+class NanoContractExecuteResource(Resource):
     """ Implements a web server API to execute a nano contract tx/
 
     You must run with option `--status <PORT>`.
@@ -70,12 +69,12 @@ class NanoContractExecuteResource(resource.Resource):
 
         content = request.content.read()
         if not content:
-            return json.dumps({'success': False, 'message': 'No post data received'}).encode('utf-8')
+            return json_dumpb({'success': False, 'message': 'No post data received'})
 
         try:
-            data = json.loads(content.decode('utf-8'))
-        except json.JSONDecodeError:
-            return json.dumps({'success': False, 'message': 'Invalid format for post data'}).encode('utf-8')
+            data = json_loadb(content)
+        except JSONDecodeError:
+            return json_dumpb({'success': False, 'message': 'Invalid format for post data'})
 
         for param in PARAMS:
             if param not in data:
@@ -84,7 +83,7 @@ class NanoContractExecuteResource(resource.Resource):
         try:
             decoded_data = self.decode_params(data)
         except ValueError as e:
-            return json.dumps({'success': False, 'message': e.message}).encode('utf-8')
+            return json_dumpb({'success': False, 'message': e.message})
 
         tx_outputs = []
         tx_outputs.append(TxOutput(decoded_data.value, P2PKH.create_output_script(decoded_data.address)))
@@ -105,7 +104,7 @@ class NanoContractExecuteResource(resource.Resource):
         success = self.manager.propagate_tx(tx)
 
         ret = {'success': success, 'hex_tx': tx.get_struct().hex()}
-        return json.dumps(ret).encode('utf-8')
+        return json_dumpb(ret)
 
     def render_OPTIONS(self, request):
         return render_options(request)

@@ -12,16 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 from typing import Any, Dict
 
-from twisted.web import resource
-
-from hathor.api_util import get_missing_params_msg, parse_get_arguments, set_cors, validate_tx_hash
+from hathor.api_util import (
+    Resource,
+    get_args,
+    get_missing_params_msg,
+    parse_args,
+    parse_int,
+    set_cors,
+    validate_tx_hash,
+)
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.transaction.base_transaction import BaseTransaction, TxVersion
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
+from hathor.util import json_dumpb
 
 settings = HathorSettings()
 
@@ -131,7 +137,7 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
 
 
 @register_resource
-class TransactionResource(resource.Resource):
+class TransactionResource(Resource):
     """ Implements a web server API to return the tx.
 
     You must run with option `--status <PORT>`.
@@ -158,7 +164,8 @@ class TransactionResource(resource.Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        if b'id' in request.args:
+        raw_args = get_args(request)
+        if b'id' in raw_args:
             # Get one tx
             data = self.get_one_tx(request)
         else:
@@ -173,9 +180,10 @@ class TransactionResource(resource.Resource):
         """
         if not self.manager.tx_storage.indexes.tokens:
             request.setResponseCode(503)
-            return json.dumps({'success': False}).encode('utf-8')
+            return json_dumpb({'success': False})
 
-        requested_hash = request.args[b'id'][0].decode('utf-8')
+        raw_args = get_args(request)
+        requested_hash = raw_args[b'id'][0].decode('utf-8')
         success, message = validate_tx_hash(requested_hash, self.manager.tx_storage)
         if not success:
             data = {'success': False, 'message': message}
@@ -185,7 +193,7 @@ class TransactionResource(resource.Resource):
             tx.storage = self.manager.tx_storage
             data = get_tx_extra_data(tx)
 
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
     def get_list_tx(self, request):
         """ Get parameter from request.args and return list of blocks/txs
@@ -196,7 +204,8 @@ class TransactionResource(resource.Resource):
             'timestamp': int, the timestamp reference we are in the pagination
             'page': 'previous' or 'next', to indicate if the user wants after or before the hash reference
         """
-        parsed = parse_get_arguments(request.args, GET_LIST_ARGS)
+        raw_args = get_args(request)
+        parsed = parse_args(raw_args, GET_LIST_ARGS)
         if not parsed['success']:
             return get_missing_params_msg(parsed['missing'])
 
@@ -204,40 +213,43 @@ class TransactionResource(resource.Resource):
         error = None
 
         try:
-            count = min(int(args['count']), settings.MAX_TX_COUNT)
-        except ValueError:
-            error = {'success': False, 'message': 'Invalid \'count\' parameter, expected an integer'}
+            count = parse_int(args['count'], cap=settings.MAX_TX_COUNT)
+        except ValueError as e:
+            error = {
+                'success': False,
+                'message': f'Failed to parse \'count\': {e}'
+            }
 
         type_tx = args['type']
         if type_tx != 'tx' and type_tx != 'block':
             error = {'success': False, 'message': 'Invalid \'type\' parameter, expected \'block\' or \'tx\''}
 
         if error:
-            return json.dumps(error).encode('utf-8')
+            return json_dumpb(error)
 
         ref_hash = None
         page = ''
-        if b'hash' in request.args:
-            ref_hash = request.args[b'hash'][0].decode('utf-8')
+        if b'hash' in raw_args:
+            ref_hash = raw_args[b'hash'][0].decode('utf-8')
 
-            parsed = parse_get_arguments(request.args, ['timestamp', 'page'])
+            parsed = parse_args(raw_args, ['timestamp', 'page'])
             if not parsed['success']:
                 return get_missing_params_msg(parsed['missing'])
 
             try:
-                ref_timestamp = int(parsed['args']['timestamp'])
-            except ValueError:
-                return json.dumps({
+                ref_timestamp = parse_int(parsed['args']['timestamp'])
+            except ValueError as e:
+                return json_dumpb({
                     'success': False,
-                    'message': 'Invalid \'timestamp\' parameter, expected an integer'
-                }).encode('utf-8')
+                    'message': f'Failed to parse \'timestamp\': {e}'
+                })
 
             page = parsed['args']['page']
             if page != 'previous' and page != 'next':
-                return json.dumps({
+                return json_dumpb({
                     'success': False,
                     'message': 'Invalid \'page\' parameter, expected \'previous\' or \'next\''
-                }).encode('utf-8')
+                })
 
             if type_tx == 'block':
                 if page == 'previous':
@@ -263,7 +275,7 @@ class TransactionResource(resource.Resource):
         serialized = [element.to_json_extended() for element in elements]
 
         data = {'transactions': serialized, 'has_more': has_more}
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 TransactionResource.openapi = {

@@ -14,12 +14,12 @@
 
 from typing import Dict, NamedTuple, Optional
 
-from twisted.internet.interfaces import IReactorCore
+from hathor.util import Reactor
 
 
 class RateLimiterLimit(NamedTuple):
     max_hits: int
-    window_seconds: int
+    window_seconds: float
 
 
 class RateLimiter:
@@ -32,11 +32,11 @@ class RateLimiter:
     # Stores the last hit for each key
     hits: Dict[str, RateLimiterLimit]
 
-    def __init__(self, reactor: Optional[IReactorCore] = None):
+    def __init__(self, reactor: Optional[Reactor] = None):
         self.keys = {}
         self.hits = {}
         if reactor is None:
-            from twisted.internet import reactor as twisted_reactor
+            from hathor.util import reactor as twisted_reactor
             reactor = twisted_reactor
         self.reactor = reactor
 
@@ -68,9 +68,11 @@ class RateLimiter:
 
         :param weight: How many hits this 'hit' means
         """
+        assert self.reactor is not None
+
         if key not in self.keys:
             return True
-        (max_hits, window_seconds) = self.keys[key]
+        max_hits, window_seconds = self.keys[key]
 
         if key not in self.hits:
             self.hits[key] = RateLimiterLimit(weight, self.reactor.seconds())
@@ -87,10 +89,10 @@ class RateLimiter:
 
         # leaked_hits * window_seconds + remainder = dt * max_hits
         # dt - remainder / max_hits = leaked_hits / rate
-        new_time = latest_time + dt - remainder / float(max_hits)
+        new_time: float = latest_time + dt - remainder / float(max_hits)
 
         # First, update the bucket subtracting the leakage amount.
-        new_hits = hits - leaked_hits
+        new_hits: int = hits - int(leaked_hits)
         if new_hits < 0:
             new_hits = 0
 

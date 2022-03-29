@@ -21,17 +21,17 @@ jobs:
         import os
         import json
         full_matrix = {
-          'python': ['3.7', '3.8', '3.9'],
-          'os': ['ubuntu-latest', 'macos-latest'],
-          'include': [
-            {'os': 'windows-latest', 'python': '3.7'},
-            # these still have some errors:
-            # {'os': 'windows-latest', 'python': '3.8'},
-            # {'os': 'windows-latest', 'python': '3.9'},
-          ],
+          'python': ['3.7', '3.8', '3.9', '3.10'],
+          'os': ['ubuntu-latest', 'macos-latest', 'windows-latest'],
+          # XXX: tests fail on these, not sure why, when running them individually each on passes, but not on `make tests`
+          # 'include': [
+          #   {'os': 'ubuntu-latest', 'python': 'pypy-3.7'},
+          #   {'os': 'ubuntu-latest', 'python': 'pypy-3.8'},
+          # ],
         }
+        # this is the fastest one:
         reduced_matrix = {
-          'python': ['3.7'],
+          'python': ['3.9'],
           'os': ['ubuntu-latest'],
         }
         github_repository = os.environ['GITHUB_REPOSITORY']
@@ -68,26 +68,15 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python }}
-    - name: Prepare vars
-      shell: python
-      run: |
-        import os
-        with open(os.environ['GITHUB_ENV'], 'a') as f:
-            if '${{ matrix.os }}'.startswith('windows'):
-                print('HATHOR_TEST_MEMORY_STORAGE=true', file=f)
     - name: Install Ubuntu dependencies
       if: matrix.os == 'ubuntu-latest'
-      run: sudo apt-get -y -q install graphviz librocksdb-dev libsnappy-dev liblz4-dev
+      run: 'sudo apt-get -qy update && sudo apt-get -qy install graphviz librocksdb-dev libsnappy-dev liblz4-dev'
     - name: Install macOS dependencies
       if: matrix.os == 'macos-latest'
-      run: brew install -q graphviz rocksdb
+      run: 'brew update -q && brew install -q graphviz rocksdb'
     - name: Install Poetry
       run: pip -q --no-input install poetry
-    - name: Install Poetry dependencies (with rocksdb)
-      if: matrix.os != 'windows-latest'
-      run: poetry install -n -E rocksdb --no-root
-    - name: Install Poetry dependencies (without rocksdb)
-      if: matrix.os == 'windows-latest'
+    - name: Install Poetry dependencies
       run: poetry install -n --no-root
     - name: Cache mypy
       uses: actions/cache@v2
@@ -104,4 +93,4 @@ jobs:
       run: poetry run make tests
     - name: Upload coverage
       uses: codecov/codecov-action@v1
-      if: matrix.python == 3.7 && matrix.os == 'ubuntu-latest'
+      if: matrix.python == 3.9 && matrix.os == 'ubuntu-latest'

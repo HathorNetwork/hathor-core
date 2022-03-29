@@ -5,7 +5,7 @@ from twisted.internet.defer import inlineCallbacks
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.daa import minimum_tx_weight
-from hathor.transaction import Transaction, TxInput, TxOutput
+from hathor.transaction import Transaction, TxInput, TxOutput, genesis
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.wallet.resources.thin_wallet import (
     AddressHistoryResource,
@@ -271,11 +271,14 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(len(response_data['history']), 1)
 
     def test_error_request(self):
+        from hathor.wallet.resources.thin_wallet.send_tokens import _Context
+
         resource = SendTokensResource(self.manager)
         request = TestDummyRequest('POST', 'thin_wallet/send_tokens', {})
+        dummy_tx = genesis.BLOCK_GENESIS
 
         self.assertIsNotNone(request._finishedDeferreds)
-        resource._err_tx_resolve('Error', request, 'error')
+        resource._err_tx_resolve('Error', _Context(tx=dummy_tx, request=request), 'error')
         self.assertIsNone(request._finishedDeferreds)
 
     @inlineCallbacks
@@ -524,6 +527,41 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
 
         # missing param
         response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': 'aaa'})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+    @inlineCallbacks
+    def test_token_history_zero_count(self):
+        resource = StubSite(TokenHistoryResource(self.manager))
+        response = yield resource.get('thin_wallet/token_history', {
+            b'id': b'000003a3b261e142d3dfd84970d3a50a93b5bc3a66a3b6ba973956148a3eb824',
+            b'count': b'0'
+        })
+        data = response.json_value()
+        self.assertTrue(data['success'])
+        self.assertEqual(0, len(data['transactions']))
+        self.assertFalse(data['has_more'])
+
+    @inlineCallbacks
+    def test_token_history_negative_count(self):
+        resource = StubSite(TokenHistoryResource(self.manager))
+        response = yield resource.get('thin_wallet/token_history', {
+            b'id': b'000003a3b261e142d3dfd84970d3a50a93b5bc3a66a3b6ba973956148a3eb824',
+            b'count': b'-1'
+        })
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+    @inlineCallbacks
+    def test_token_history_negative_timestamp(self):
+        resource = StubSite(TokenHistoryResource(self.manager))
+        response = yield resource.get('thin_wallet/token_history', {
+            b'id': b'000003a3b261e142d3dfd84970d3a50a93b5bc3a66a3b6ba973956148a3eb824',
+            b'count': b'3',
+            b'hash': b'0000b1448893eb7efdd3c71b97b74d934a4ecaaf8a6b52f6cb5b60fdaf21497b',
+            b'timestamp': b'-1578118186',
+            b'page': b'next',
+        })
         data = response.json_value()
         self.assertFalse(data['success'])
 

@@ -132,7 +132,8 @@ class RocksDBTimestampIndex(TimestampIndex, RocksDBIndexUtils):
         return collect_n(it, count)
 
     def get_hashes_and_next_idx(self, from_idx: RangeIdx, count: int) -> Tuple[List[bytes], Optional[RangeIdx]]:
-        assert count > 0, 'count<=0 not allowed'
+        if count <= 0:
+            raise ValueError(f'count must be positive, got {count}')
         timestamp, offset = from_idx
         it = skip_n(self._iter(timestamp), offset)
         hashes: List[bytes] = []

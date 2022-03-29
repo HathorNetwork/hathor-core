@@ -14,12 +14,11 @@
 
 from collections import defaultdict
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, cast
 
-from hathor.util import ReactorThread
+from twisted.internet.interfaces import IReactorFromThreads
 
-if TYPE_CHECKING:
-    from twisted.internet.interfaces import IReactorCore  # noqa: F401
+from hathor.util import Reactor, ReactorThread
 
 
 class HathorEvents(Enum):
@@ -127,7 +126,7 @@ class PubSubManager:
 
     _subscribers: Dict[HathorEvents, List[PubSubCallable]]
 
-    def __init__(self, reactor: 'IReactorCore') -> None:
+    def __init__(self, reactor: Reactor) -> None:
         self._subscribers = defaultdict(list)
         self.reactor = reactor
 
@@ -167,6 +166,8 @@ class PubSubManager:
             elif reactor_thread == ReactorThread.MAIN_THREAD:
                 self.reactor.callLater(0, fn, key, args)
             elif reactor_thread == ReactorThread.NOT_MAIN_THREAD:
+                # XXX: does this always hold true? an assert could be tricky because it is a zope.interface
+                reactor = cast(IReactorFromThreads, self.reactor)
                 # We're taking a conservative approach, since not all functions might need to run
                 # on the main thread [yan 2019-02-20]
-                self.reactor.callFromThread(fn, key, args)
+                reactor.callFromThread(fn, key, args)

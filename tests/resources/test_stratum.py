@@ -1,10 +1,11 @@
 import pytest
 from twisted.internet.address import IPv4Address
 from twisted.internet.defer import inlineCallbacks
-from twisted.test.proto_helpers import StringTransportWithDisconnection
+from twisted.internet.testing import StringTransportWithDisconnection
 
 from hathor.stratum import JSONRPC
 from hathor.stratum.resources import MiningStatsResource
+from hathor.util import json_dumpb, json_loads
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
@@ -28,7 +29,6 @@ class StratumResourceTest(_BaseResourceTest._ResourceTest):
     @pytest.mark.skip(reason='broken')
     @inlineCallbacks
     def test_subscribe_and_mine(self):
-        import json
         from hashlib import sha256
 
         # boilerplate needed to exchange bytes
@@ -45,7 +45,7 @@ class StratumResourceTest(_BaseResourceTest._ResourceTest):
             'id': '1',
             'method': 'subscribe'
         }
-        protocol.lineReceived(json.dumps(req).encode())
+        protocol.lineReceived(json_dumpb(req))
         res = transport.value().split(JSONRPC.delimiter)
         self.assertEqual(len(res), 3)
 
@@ -66,7 +66,7 @@ class StratumResourceTest(_BaseResourceTest._ResourceTest):
         # mine a block
 
         # TODO: use predictable work instead of always repeating this work
-        job = json.loads(res[1])['params']
+        job = json_loads(res[1])['params']
         job_id = job['job_id']
         job_hash1 = sha256(bytes.fromhex(job['data']))
         job_nonce_size = job['nonce_size']
@@ -84,7 +84,7 @@ class StratumResourceTest(_BaseResourceTest._ResourceTest):
         # submit our work
 
         req = {'job_id': job_id, 'nonce': nonce}
-        protocol.lineReceived(json.dumps(req).encode())
+        protocol.lineReceived(json_dumpb(req))
         res = transport.value().split(JSONRPC.delimiter)
         self.assertEqual(len(res), 4)
         self.assertTrue(False)

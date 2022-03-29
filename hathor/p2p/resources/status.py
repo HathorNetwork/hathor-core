@@ -12,18 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import time
 
-from twisted.web import resource
-
 import hathor
-from hathor.api_util import set_cors
+from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
+from hathor.util import json_dumpb
 
 
 @register_resource
-class StatusResource(resource.Resource):
+class StatusResource(Resource):
     """ Implements an status web server API, which responds with a summary
     of the node state.
 
@@ -104,7 +102,7 @@ class StatusResource(resource.Resource):
                 'latest_timestamp': self.manager.tx_storage.latest_timestamp,
             }
         }
-        return json.dumps(data, indent=4).encode('utf-8')
+        return json_dumpb(data)
 
 
 StatusResource.openapi = {

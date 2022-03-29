@@ -30,6 +30,11 @@ def get_newest_sorted_key_list(key_list: 'SortedKeyList[TransactionIndexElement]
     """ Get newest data from a sorted key list
         Return the elements (quantity is the 'count' parameter) and a boolean indicating if has more
     """
+    if count < 0:
+        raise ValueError(f'count must be non-negative, got {count}')
+    # XXX: count=0 is supported, this if prevents doing key_list[-0:] which would return all transactions
+    if count == 0:
+        return [], False
     newest = key_list[-count:]
     newest.reverse()
     if count >= len(key_list):
@@ -44,6 +49,8 @@ def get_older_sorted_key_list(key_list: 'SortedKeyList[TransactionIndexElement]'
     """ Get sorted key list data from the timestamp/hash_bytes reference to the oldest
         Return the elements (quantity is the 'count' parameter) and a boolean indicating if has more
     """
+    if count < 0:
+        raise ValueError(f'count must be non-negative, got {count}')
     # Get idx of element
     idx = key_list.bisect_key_left((timestamp, hash_bytes))
     first_idx = max(0, idx - count)
@@ -58,6 +65,8 @@ def get_newer_sorted_key_list(key_list: 'SortedKeyList[TransactionIndexElement]'
     """ Get sorted key list data from the timestamp/hash_bytes reference to the newest
         Return the elements (quantity is the 'count' parameter) and a boolean indicating if has more
     """
+    if count < 0:
+        raise ValueError(f'count must be non-negative, got {count}')
     # Get idx of element
     idx = key_list.bisect_key_left((timestamp, hash_bytes))
     last_idx = min(len(key_list), idx + 1 + count)

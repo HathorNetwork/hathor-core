@@ -5,8 +5,9 @@ from typing import Optional
 from uuid import uuid4
 
 import pytest
-from twisted.test.proto_helpers import MemoryReactorClock, StringTransportWithDisconnection
+from twisted.internet.testing import StringTransportWithDisconnection
 
+from hathor.simulator.clock import MemoryReactorHeapClock
 from hathor.stratum import (
     INVALID_PARAMS,
     INVALID_REQUEST,
@@ -37,7 +38,7 @@ class _BaseStratumTest(unittest.TestCase):
         super().setUp()
         self.manager = self.create_peer('testnet')
         self.manager.allow_mining_without_peers()
-        self.factory = StratumFactory(self.manager, port=8123, reactor=MemoryReactorClock())
+        self.factory = StratumFactory(self.manager, port=8123, reactor=MemoryReactorHeapClock())
         self.factory.start()
         self.protocol = self.factory.buildProtocol('127.0.0.1')
         self.transport = StringTransportWithDisconnection()
@@ -53,7 +54,9 @@ class _BaseStratumTest(unittest.TestCase):
         self.factory.stop()
 
     def _get_latest_message(self):
-        data = self.transport.value().split(JSONRPC.delimiter)[-2]
+        value = self.transport.value()
+        data = value.split(JSONRPC.delimiter)[-2]
+        self.log.debug('get_latest_message', value=value, data=data)
         return json_loads(data)
 
 
