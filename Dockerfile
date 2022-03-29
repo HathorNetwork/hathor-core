@@ -15,7 +15,7 @@ RUN apk add --no-cache openssl libffi graphviz
 #      making the python binding try to load the updated lib, this pattern will prevent that)
 RUN apk add --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing rocksdb
 RUN apk add --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing rocksdb-dev
-RUN apk add openssl-dev libffi-dev build-base cargo
+RUN apk add openssl-dev libffi-dev build-base cargo git pkgconfig
 RUN pip --no-input --no-cache-dir install --upgrade pip wheel poetry
 ENV POETRY_VIRTUALENVS_IN_PROJECT=true
 WORKDIR /app/
