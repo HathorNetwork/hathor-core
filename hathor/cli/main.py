@@ -44,6 +44,7 @@ class CliManager:
             oracle_encode_data,
             oracle_get_pubkey,
             peer_id,
+            quick_test,
             run_node,
             shell,
             stratum_mining,
@@ -73,6 +74,7 @@ class CliManager:
                      'Read an oracle private key and output public key hash')
         self.add_cmd('oracle', 'oracle-encode-data', oracle_encode_data, 'Encode data and sign it with a private key')
         self.add_cmd('dev', 'shell', shell, 'Run a Python shell')
+        self.add_cmd('dev', 'quick_test', quick_test, 'Similar to run_node but will quit after receiving a tx')
         self.add_cmd('dev', 'generate_nginx_config', nginx_config, 'Generate nginx config from OpenAPI json')
 
     def add_cmd(self, group: str, cmd: str, module: ModuleType, short_description: Optional[str] = None) -> None:
