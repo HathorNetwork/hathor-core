@@ -14,6 +14,7 @@ from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
+from hathor.transaction import BaseTransaction
 from hathor.util import Random, reactor
 from hathor.wallet import Wallet
 
@@ -169,6 +170,22 @@ class TestCase(unittest.TestCase):
         for call in self.clock.getDelayedCalls():
             amount = call.getTime() - self.clock.seconds()
             self.clock.advance(amount)
+
+    def assertIsTopological(self, tx_sequence: Iterator[BaseTransaction], message: Optional[str] = None,
+                            *, initial: Optional[Iterator[bytes]] = None) -> None:
+        """Will check if a given sequence is in topological order.
+
+        An initial set can be optionally provided.
+        """
+        from hathor.transaction.genesis import GENESIS_HASHES
+
+        valid_deps = set(GENESIS_HASHES if initial is None else initial)
+
+        for tx in tx_sequence:
+            assert tx.hash is not None
+            for dep in tx.get_all_dependencies():
+                self.assertIn(dep, valid_deps, message)
+            valid_deps.add(tx.hash)
 
     def assertTipsEqual(self, manager1, manager2):
         s1 = set(manager1.tx_storage.get_all_tips())
