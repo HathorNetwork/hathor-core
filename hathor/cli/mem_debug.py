@@ -54,35 +54,40 @@ class MemDebug(RunNode):
         self.manager.connections.rng = self.rng
         self.manager.listen_addresses = []  # XXX: erase listen addresses because simulator clock cannot simulate it
         self.manager.start()
-        self.simulator.run_to_completion()
-        self.simulator.add_peer('main', self.manager)
-        self.manager2 = self.simulator.create_peer(
-            network='mainnet',
-            peer_id=self.rng.choice(PEER_ID_POOL),
-            soft_voided_tx_ids=self.manager.soft_voided_tx_ids,
-        )
-        self.simulator.add_peer('secondary', self.manager2)
+        # self.simulator.run_to_completion()
+        # self.simulator.add_peer('main', self.manager)
+        # self.manager2 = self.simulator.create_peer(
+        #     network='mainnet',
+        #     peer_id=self.rng.choice(PEER_ID_POOL),
+        #     soft_voided_tx_ids=self.manager.soft_voided_tx_ids,
+        # )
+        # self.simulator.add_peer('secondary', self.manager2)
 
     def run(self) -> None:
         from hathor.simulator import FakeConnection
-        self.manager.heap_stats_dump('dump_before')
+        # self.manager.heap_stats_dump('dump_before')
         # self.apply(self.check_noop)
         # self.apply(self.check_add_to_all_indexes)
         # self.apply(self.check_add_to_small_indexes)
         # self.apply(self.check_add_to_not_tips_indexes)
         # self.apply(self.check_add_to_only_tips_indexes)
-        self.manager.heap_stats_dump('dump_just_loaded')
-        self.log.info('run simulator')
-        conn = FakeConnection(self.manager, self.manager2, latency=0.01)
-        conn.disable_idle_timeout()
-        self.simulator.add_connection(conn)
-        self.simulator.run(30.0)
-        self.simulator.run_until_complete(36000.0)
-        self.log.info('finished', tx_count=self.manager2.tx_storage.get_count_tx_blocks())
-        self.manager2.stop()
-        self.log.info('simulation complete')
-        self.manager.heap_stats_dump('dump_after')
-        self.manager.stop()
+        # self.manager.heap_stats_dump('dump_just_loaded')
+        # self.log.info('run simulator')
+        # conn = FakeConnection(self.manager, self.manager2, latency=0.01)
+        # conn.disable_idle_timeout()
+        # self.simulator.add_connection(conn)
+        # self.simulator.run(30.0)
+        # self.simulator.run_until_complete(36000.0)
+        # self.log.info('finished', tx_count=self.manager2.tx_storage.get_count_tx_blocks())
+        # self.manager2.stop()
+        # self.log.info('simulation complete')
+        # self.manager.heap_stats_dump('dump_after')
+        # self.manager.stop()
+        import tracemalloc
+        snapshot = tracemalloc.take_snapshot()
+        from hathor.cli.shell import get_ipython
+        self.shell = get_ipython([], {'snapshot': snapshot, 'manager': self.manager, 'tx_storage': self.tx_storage})
+        self.shell()
 
     def apply(self, fun: Callable[['BaseTransaction'], None]) -> None:
         from hathor.util import LogDuration

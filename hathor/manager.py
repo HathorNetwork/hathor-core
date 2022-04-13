@@ -211,7 +211,7 @@ class HathorManager:
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
         """
-        self.heap_stats_dump('dump_before')
+        # self.heap_stats_dump('dump_before')
 
         if self.is_started:
             raise Exception('HathorManager is already started')
@@ -288,7 +288,7 @@ class HathorManager:
         waits = []
 
         self.log.info('stop manager')
-        self.heap_stats_dump('dump_after')
+        # self.heap_stats_dump('dump_after')
         self.tx_storage.stop_running_manager()
         self.connections.stop()
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
@@ -393,7 +393,8 @@ class HathorManager:
                 tx.reset_metadata()
 
         self.log.debug('load blocks and transactions')
-        for tx in self.tx_storage._topological_sort():
+        # for tx in self.tx_storage._topological_sort():
+        for tx in self.tx_storage._topological_fast():
             if self._full_verification:
                 tx.update_initial_metadata()
 

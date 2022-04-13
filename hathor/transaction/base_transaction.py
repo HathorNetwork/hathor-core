@@ -362,7 +362,7 @@ class BaseTransaction(ABC):
         """
         (self.weight, self.timestamp, parents_len), buf = unpack(_GRAPH_FORMAT_STRING, buf)
         if verbose:
-            verbose('weigth', self.weight)
+            verbose('weight', self.weight)
             verbose('timestamp', self.timestamp)
             verbose('parents_len', parents_len)
 
