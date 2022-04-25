@@ -29,6 +29,7 @@ if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
 
     from hathor.pubsub import PubSubManager
+    from hathor.transaction.storage import TransactionStorage
 
 logger = get_logger()
 
@@ -62,6 +63,24 @@ class IndexesManager(ABC):
     def enable_tokens_index(self) -> None:
         """Enable tokens index. It does nothing if it has already been enabled."""
         raise NotImplementedError
+
+    def _manually_initialize_tips_indexes(self, tx_storage: 'TransactionStorage') -> None:
+        """ Initialize the tips indexes, populating them from a tx_storage that is otherwise complete.
+
+        XXX: this method requires timestamp indexes to be complete and up-to-date with the rest of the database
+        XXX: this method is not yet being used
+        """
+        for tx in tx_storage._topological_fast():
+            tx_meta = tx.get_metadata()
+            if not tx_meta.validation.is_final():
+                continue
+
+            self.all_tips.add_tx(tx)
+
+            if tx.is_block:
+                self.block_tips.add_tx(tx)
+            elif not tx_meta.voided_by:
+                self.tx_tips.add_tx(tx)
 
     def add_tx(self, tx: BaseTransaction) -> bool:
         """ Add a transaction to the indexes

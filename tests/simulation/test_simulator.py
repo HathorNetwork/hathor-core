@@ -6,58 +6,6 @@ from tests.simulation.base import SimulatorTestCase
 
 
 class BaseRandomSimulatorTestCase(SimulatorTestCase):
-    def test_topological_iterators(self):
-        # BEGIN: build random blockchain
-        manager1 = self.create_peer()
-
-        # FIXME: this second peer is only needed because of some problem on the simulator
-        manager2 = self.create_peer()
-        conn12 = FakeConnection(manager1, manager2, latency=0.150)
-        self.simulator.add_connection(conn12)
-        self.simulator.run(10)
-
-        miner1 = self.simulator.create_miner(manager1, hashpower=100e6)
-        miner1.start()
-        self.simulator.run(10)
-
-        miner2 = self.simulator.create_miner(manager1, hashpower=100e6)
-        miner2.start()
-        self.simulator.run(10)
-
-        gen_tx1 = self.simulator.create_tx_generator(manager1, rate=2 / 60., hashpower=1e6, ignore_no_funds=True)
-        gen_tx1.start()
-        self.simulator.run(10)
-
-        gen_tx2 = self.simulator.create_tx_generator(manager1, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
-        gen_tx2.start()
-        self.simulator.run(10 * 60)
-
-        miner1.stop()
-        miner2.stop()
-        gen_tx1.stop()
-        gen_tx2.stop()
-
-        self.simulator.run(5 * 60)
-        # END: build random blockchain
-
-        # XXX: sanity check that we've at least produced something
-        self.assertGreater(manager1.tx_storage.get_count_tx_blocks(), 3)
-
-        # test iterators, name is used to aid in assert messages
-        iterators = [
-            ('traditional', manager1.tx_storage._topological_sort()),
-            ('fast', manager1.tx_storage._topological_fast()),
-        ]
-        for name, it in iterators:
-            # collect all transactions
-            txs = list(it)
-            # must be complete
-            self.assertEqual(len(txs), manager1.tx_storage.get_count_tx_blocks(),
-                             f'iterator "{name}" does not cover all txs')
-            # must be topological
-            self.assertIsTopological(iter(txs),
-                                     f'iterator "{name}" is not topological')
-
     def test_one_node(self):
         manager1 = self.create_peer()
 
