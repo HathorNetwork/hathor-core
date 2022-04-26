@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Iterator, List, NamedTuple, Optional, Tuple
 
 from structlog import get_logger
 
+from hathor.indexes.base_index import BaseIndex
 from hathor.transaction import BaseTransaction
 
 logger = get_logger()
@@ -27,9 +28,12 @@ class RangeIdx(NamedTuple):
     offset: int
 
 
-class TimestampIndex(ABC):
+class TimestampIndex(BaseIndex):
     """ Index of transactions sorted by their timestamps.
     """
+
+    def init_loop_step(self, tx: BaseTransaction) -> None:
+        self.add_tx(tx)
 
     @abstractmethod
     def add_tx(self, tx: BaseTransaction) -> bool:

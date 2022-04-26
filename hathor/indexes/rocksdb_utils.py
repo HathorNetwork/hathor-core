@@ -56,32 +56,37 @@ class RocksDBIndexUtils:
     _cf: 'rocksdb.ColumnFamilyHandle'
     log: 'structlog.stdlib.BoundLogger'
 
-    def __init__(self, db: 'rocksdb.DB') -> None:
+    def __init__(self, db: 'rocksdb.DB', cf_name: bytes) -> None:
+        self._log = self.log.new(cf=cf_name.decode('ascii'))
         self._db = db
+        self._cf_name = cf_name
+        self._ensure_cf_exists(cf_name)
 
-    def _fresh_cf(self, cf_name: bytes) -> 'rocksdb.ColumnFamilyHandle':
-        """Ensure we have a working and fresh column family"""
+    def _init_db(self):
+        """ Inheritors of this class may implement this to initialize a column family when it is just created."""
+        pass
+
+    def _ensure_cf_exists(self, cf_name: bytes) -> None:
+        """Ensure we have a working and column family, loading the previous one if it exists"""
         import rocksdb
 
-        log_cf = self.log.new(cf=cf_name.decode('ascii'))
-        _cf = self._db.get_column_family(cf_name)
-        # XXX: dropping column because initialization currently expects a fresh index
-        if _cf is not None:
-            old_id = _cf.id
-            log_cf.debug('drop existing column family')
-            self._db.drop_column_family(_cf)
-        else:
-            old_id = None
-            log_cf.debug('no need to drop column family')
-        del _cf
-        log_cf.debug('create fresh column family')
-        _cf = self._db.create_column_family(cf_name, rocksdb.ColumnFamilyOptions())
-        new_id = _cf.id
-        assert _cf is not None
-        assert _cf.is_valid
+        self._cf = self._db.get_column_family(cf_name)
+        if self._cf is None:
+            self._cf = self._db.create_column_family(cf_name, rocksdb.ColumnFamilyOptions())
+            self._init_db()
+        self._log.debug('got column family', is_valid=self._cf.is_valid, id=self._cf.id)
+
+    def clear(self) -> None:
+        old_id = self._cf.id
+        self._log.debug('drop existing column family')
+        self._db.drop_column_family(self._cf)
+        del self._cf
+        self._ensure_cf_exists(self._cf_name)
+        new_id = self._cf.id
+        assert self._cf is not None
+        assert self._cf.is_valid
         assert new_id != old_id
-        log_cf.debug('got column family', is_valid=_cf.is_valid, id=_cf.id, old_id=old_id)
-        return _cf
+        self._log.debug('got new column family', id=new_id, old_id=old_id)
 
     def _clone_into_dict(self) -> Dict[bytes, bytes]:
         """This method will make a copy of the database into a plain dict, be careful when running on large dbs."""
@@ -93,10 +98,8 @@ class RocksDBIndexUtils:
 # XXX: should be `Collection[bytes]`, which only works on Python 3.9+
 class RocksDBSimpleSet(Collection, RocksDBIndexUtils):
     def __init__(self, db: 'rocksdb.DB', log: 'structlog.stdlib.BoundLogger', *, cf_name: bytes) -> None:
-        super().__init__(db)
         self.log = log
-        self._cf_name = cf_name
-        self._cf = self._fresh_cf(self._cf_name)
+        super().__init__(db, cf_name)
 
     def __iter__(self) -> Iterator[bytes]:
         it = self._db.iterkeys(self._cf)

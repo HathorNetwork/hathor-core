@@ -68,6 +68,12 @@ class MemoryTokenIndexInfo(TokenIndexInfo):
 class MemoryTokensIndex(TokensIndex):
     def __init__(self) -> None:
         self.log = logger.new()
+        self.force_clear()
+
+    def get_db_name(self) -> Optional[str]:
+        return None
+
+    def force_clear(self) -> None:
         self._tokens: Dict[bytes, MemoryTokenIndexInfo] = defaultdict(MemoryTokenIndexInfo)
 
     def _add_to_index(self, tx: BaseTransaction, index: int) -> None:

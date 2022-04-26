@@ -15,6 +15,7 @@
 from abc import ABC, abstractmethod
 from typing import Iterator, List, NamedTuple, Optional, Tuple
 
+from hathor.indexes.base_index import BaseIndex
 from hathor.transaction import BaseTransaction
 
 
@@ -57,9 +58,15 @@ class TokenIndexInfo(ABC):
         raise NotImplementedError
 
 
-class TokensIndex(ABC):
+class TokensIndex(BaseIndex):
     """ Index of tokens by token uid
     """
+
+    def init_loop_step(self, tx: BaseTransaction) -> None:
+        tx_meta = tx.get_metadata()
+        if tx_meta.voided_by:
+            return
+        self.add_tx(tx)
 
     @abstractmethod
     def add_tx(self, tx: BaseTransaction) -> None:

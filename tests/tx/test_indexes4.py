@@ -1,53 +1,65 @@
-import pytest
-
-from hathor.simulator import FakeConnection
+from hathor.crypto.util import decode_address
+from hathor.transaction import Transaction
+from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.wallet.base_wallet import WalletOutputInfo
 from tests import unittest
-from tests.simulation.base import SimulatorTestCase
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, gen_new_tx
 
 
-class BaseSimulatorIndexesTestCase(SimulatorTestCase):
-    def _build_randomized_blockchain(self):
-        manager = self.create_peer()
-
-        # FIXME: this second peer is only needed because of some problem on the simulator
-        manager2 = self.create_peer()
-        conn12 = FakeConnection(manager, manager2, latency=0.150)
-        self.simulator.add_connection(conn12)
-        self.simulator.run(10)
-
-        miner1 = self.simulator.create_miner(manager, hashpower=100e6)
-        miner1.start()
-        self.simulator.run(10)
-
-        miner2 = self.simulator.create_miner(manager, hashpower=100e6)
-        miner2.start()
-        self.simulator.run(10)
-
-        gen_tx1 = self.simulator.create_tx_generator(manager, rate=2 / 60., hashpower=1e6, ignore_no_funds=True)
-        gen_tx1.start()
-        self.simulator.run(10)
-
-        gen_tx2 = self.simulator.create_tx_generator(manager, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
-        gen_tx2.start()
-        self.simulator.run(10 * 60)
-
-        miner1.stop()
-        miner2.stop()
-        gen_tx1.stop()
-        gen_tx2.stop()
-
-        self.simulator.run(5 * 60)
-        return manager
+class BaseSimulatorIndexesTestCase(unittest.TestCase):
+    __test__ = False
 
     def setUp(self):
         super().setUp()
 
-        # XXX: having this on the setUp makes it so when this fails it's an error (E) and not a failure (F), which has
-        #      slightly different meaning
         self.manager = self._build_randomized_blockchain()
 
-    @pytest.mark.flaky(max_runs=3, min_passes=1)
-    def test_tips_index_initialization(self):
+    def _build_randomized_blockchain(self):
+        tx_storage = TransactionMemoryStorage()
+        manager = self.create_peer('testnet', tx_storage=tx_storage, unlock_wallet=True, wallet_index=True)
+
+        add_new_blocks(manager, 50, advance_clock=15)
+
+        add_blocks_unlock_reward(manager)
+        address1 = self.get_address(0)
+        address2 = self.get_address(1)
+        address3 = self.get_address(2)
+        output1 = WalletOutputInfo(address=decode_address(address1), value=123, timelock=None)
+        output2 = WalletOutputInfo(address=decode_address(address2), value=234, timelock=None)
+        output3 = WalletOutputInfo(address=decode_address(address3), value=345, timelock=None)
+        outputs = [output1, output2, output3]
+
+        tx1 = manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, manager.tx_storage)
+        tx1.weight = 2.0
+        tx1.parents = manager.get_new_tx_parents()
+        tx1.timestamp = int(self.clock.seconds())
+        tx1.resolve()
+        assert manager.propagate_tx(tx1, False)
+
+        tx2 = manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, manager.tx_storage)
+        tx2.weight = 2.0
+        tx2.parents = [tx1.hash] + manager.get_new_tx_parents()[1:]
+        self.assertIn(tx1.hash, tx2.parents)
+        tx2.timestamp = int(self.clock.seconds()) + 1
+        tx2.resolve()
+        assert manager.propagate_tx(tx2, False)
+
+        tx3 = Transaction.create_from_struct(tx2.get_struct())
+        tx3.weight = 3.0
+        tx3.parents = tx1.parents
+        tx3.resolve()
+        assert manager.propagate_tx(tx3, False)
+
+        for _ in range(100):
+            address = self.get_address(0)
+            value = 500
+            tx = gen_new_tx(manager, address, value)
+            assert manager.propagate_tx(tx)
+        return manager
+
+    def test_index_initialization(self):
+        from copy import deepcopy
+
         # XXX: this test makes use of the internals of TipsIndex
         tx_storage = self.manager.tx_storage
         assert tx_storage.indexes is not None
@@ -55,34 +67,48 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         # XXX: sanity check that we've at least produced something
         self.assertGreater(tx_storage.get_count_tx_blocks(), 3)
 
+        for tx in tx_storage.get_all_transactions():
+            if tx.is_transaction and tx.get_metadata().voided_by:
+                break
+        else:
+            raise AssertionError('no voided tx found')
+
         # base tips indexes
         base_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
         base_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
         base_tx_tips_tree = tx_storage.indexes.tx_tips.tree.copy()
+        base_address_index = deepcopy(tx_storage.indexes.addresses.index)
 
-        # reset the indexes, which will force a re-initialization of all indexes
+        # reset the indexes and force a re-initialization of all indexes
         tx_storage._manually_initialize()
+        tx_storage.indexes.enable_address_index(self.manager.pubsub)
+        tx_storage._manually_initialize_indexes()
 
         reinit_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
         reinit_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
         reinit_tx_tips_tree = tx_storage.indexes.tx_tips.tree.copy()
+        reinit_address_index = deepcopy(tx_storage.indexes.addresses.index)
 
         self.assertEqual(reinit_all_tips_tree, base_all_tips_tree)
         self.assertEqual(reinit_block_tips_tree, base_block_tips_tree)
         self.assertEqual(reinit_tx_tips_tree, base_tx_tips_tree)
+        self.assertEqual(reinit_address_index, base_address_index)
 
         # reset again
         tx_storage._manually_initialize()
+        tx_storage.indexes.enable_address_index(self.manager.pubsub)
+        tx_storage._manually_initialize_indexes()
 
         newinit_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
         newinit_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
         newinit_tx_tips_tree = tx_storage.indexes.tx_tips.tree.copy()
+        newinit_address_index = deepcopy(tx_storage.indexes.addresses.index)
 
         self.assertEqual(newinit_all_tips_tree, base_all_tips_tree)
         self.assertEqual(newinit_block_tips_tree, base_block_tips_tree)
         self.assertEqual(newinit_tx_tips_tree, base_tx_tips_tree)
+        self.assertEqual(newinit_address_index, base_address_index)
 
-    @pytest.mark.flaky(max_runs=3, min_passes=1)
     def test_topological_iterators(self):
         tx_storage = self.manager.tx_storage
 

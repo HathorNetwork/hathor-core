@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Iterable, Set
+from typing import Iterable, Optional, Set
 
 from structlog import get_logger
 
@@ -26,6 +26,12 @@ class MemoryMempoolTipsIndex(ByteCollectionMempoolTipsIndex):
 
     def __init__(self):
         self.log = logger.new()
+        self.force_clear()
+
+    def get_db_name(self) -> Optional[str]:
+        return None
+
+    def force_clear(self) -> None:
         self._index = set()
 
     def _discard(self, tx: bytes) -> None:

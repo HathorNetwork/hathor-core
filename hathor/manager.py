@@ -27,7 +27,7 @@ from hathor import daa
 from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
-from hathor.exception import HathorError, InvalidNewTransaction
+from hathor.exception import HathorError, InitializationError, InvalidNewTransaction
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
@@ -248,11 +248,14 @@ class HathorManager:
         # Disable get transaction lock when initializing components
         self.tx_storage.disable_lock()
         # Initialize manager's components.
-        self._initialize_components()
         if self._full_verification:
+            self.tx_storage.reset_indexes()
+            self._initialize_components()
             # Before calling self._initialize_components() I start 'full verification' mode and after that I need to
             # finish it. It's just to know if the full node has stopped a full initialization in the middle
             self.tx_storage.finish_full_verification()
+        else:
+            self._initialize_components_new()
         self.tx_storage.enable_lock()
 
         # Metric starts to capture data
@@ -506,6 +509,128 @@ class HathorManager:
         tdt = LogDuration(t2 - t0)
         tx_rate = '?' if tdt == 0 else cnt / tdt
         self.log.info('ready', tx_count=cnt, tx_rate=tx_rate, total_dt=tdt, height=h, blocks=block_count, txs=tx_count)
+
+    def _initialize_components_new(self) -> None:
+        """You are not supposed to run this method manually. You should run `doStart()` to initialize the
+        manager.
+
+        This method runs through all transactions, verifying them and updating our wallet.
+        """
+        self.log.info('initialize')
+        if self.wallet:
+            self.wallet._manually_initialize()
+
+        self.tx_storage.pre_init()
+        assert self.tx_storage.indexes is not None
+
+        started_at = int(time.time())
+        last_started_at = self.tx_storage.get_last_started_at()
+        if last_started_at >= started_at:
+            # XXX: although last_started_at==started_at is not _techincally_ to the future, it's strange enough to
+            #      deserve a warning, but not special enough to deserve a customized message IMO
+            self.log.warn('The last started time is to the future of the current time',
+                          started_at=started_at, last_started_at=last_started_at)
+
+        # TODO: this could be either refactored into a migration or at least into it's own method
+        # After introducing soft voided transactions we need to guarantee the full node is not using
+        # a database that already has the soft voided transaction before marking them in the metadata
+        # Any new sync from the beginning should work fine or starting with the latest snapshot
+        # that already has the soft voided transactions marked
+        for soft_voided_id in settings.SOFT_VOIDED_TX_IDS:
+            try:
+                soft_voided_tx = self.tx_storage.get_transaction(soft_voided_id)
+            except TransactionDoesNotExist:
+                # This database does not have this tx that should be soft voided
+                # so it's fine, we will mark it as soft voided when we get it through sync
+                pass
+            else:
+                soft_voided_meta = soft_voided_tx.get_metadata()
+                voided_set = soft_voided_meta.voided_by or set()
+                # If the tx is not marked as soft voided, then we can't continue the initialization
+                if settings.SOFT_VOIDED_ID not in voided_set:
+                    self.log.error(
+                        'Error initializing node. Your database is not compatible with the current version of the'
+                        ' full node. You must use the latest available snapshot or sync from the beginning.'
+                    )
+                    sys.exit(-1)
+
+                assert {soft_voided_id, settings.SOFT_VOIDED_ID}.issubset(voided_set)
+
+        # TODO: move support for full-verification here, currently we rely on the original _initialize_components
+        #       method for full-verification to work, if we implement it here we'll reduce a lot of duplicate and
+        #       complex code
+        self.tx_storage.indexes._manually_initialize(self.tx_storage)
+
+        # Verify if all checkpoints that exist in the database are correct
+        try:
+            self._verify_checkpoints()
+        except InitializationError:
+            self.log.exception('Initialization error when checking checkpoints, cannot continue.')
+            sys.exit()
+
+        # restart all validations possible
+        self._resume_validations()
+
+        # XXX: last step before actually starting is updating the last started at timestamps
+        self.tx_storage.update_last_started_at(started_at)
+        self.state = self.NodeState.READY
+        self.log.info('ready')
+
+    def _verify_checkpoints(self) -> None:
+        """ Method to verify if all checkpoints that exist in the database have the correct hash and are winners.
+
+        This method needs the essential indexes to be already initialized.
+        """
+        assert self.tx_storage.indexes is not None
+        # based on the current best-height, filter-out checkpoints that aren't expected to exist in the database
+        best_height = self.tx_storage.get_height_best_block()
+        expected_checkpoints = [cp for cp in self.checkpoints if cp.height <= best_height]
+        for checkpoint in expected_checkpoints:
+            # XXX: query the database from checkpoint.hash and verify what comes out
+            try:
+                tx = self.tx_storage.get_transaction(checkpoint.hash)
+            except TransactionDoesNotExist as e:
+                raise InitializationError(f'Expected checkpoint does not exist in database: {checkpoint}') from e
+            assert tx.hash is not None
+            tx_meta = tx.get_metadata()
+            if tx_meta.height != checkpoint.height:
+                raise InitializationError(
+                    f'Expected checkpoint of hash {tx.hash_hex} to have height {checkpoint.height}, but instead it has'
+                    f'height {tx_meta.height}'
+                )
+            if tx_meta.voided_by:
+                pretty_voided_by = list(i.hex() for i in tx_meta.voided_by)
+                raise InitializationError(
+                    f'Expected checkpoint {checkpoint} to *NOT* be voided, but it is being voided by: '
+                    f'{pretty_voided_by}'
+                )
+            # XXX: query the height index from checkpoint.height and check that the hash matches
+            tx_hash = self.tx_storage.indexes.height.get(checkpoint.height)
+            if tx_hash is None:
+                raise InitializationError(
+                    f'Expected checkpoint {checkpoint} to be found in the height index, but it was not found'
+                )
+            if tx_hash != tx.hash:
+                raise InitializationError(
+                    f'Expected checkpoint {checkpoint} to be found in the height index, but it instead the block with '
+                    f'hash {tx_hash.hex()} was found'
+                )
+
+    def _resume_validations(self) -> None:
+        """ This method will resume running validations that did not run because the node exited.
+        """
+        assert self.tx_storage.indexes is not None
+        if self.tx_storage.indexes.deps.has_needed_tx():
+            self.log.debug('run pending validations')
+            depended_final_txs: List[BaseTransaction] = []
+            for tx_hash in self.tx_storage.indexes.deps.iter():
+                if not self.tx_storage.transaction_exists(tx_hash):
+                    continue
+                tx = self.tx_storage.get_transaction(tx_hash)
+                if tx.get_metadata().validation.is_final():
+                    depended_final_txs.append(tx)
+            self.step_validations(depended_final_txs)
+            self.log.debug('pending validations finished')
 
     def add_listen_address(self, addr: str) -> None:
         self.listen_addresses.append(addr)

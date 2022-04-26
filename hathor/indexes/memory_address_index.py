@@ -30,11 +30,20 @@ logger = get_logger()
 class MemoryAddressIndex(AddressIndex):
     """ Index of inputs/outputs by address
     """
+
+    index: DefaultDict[str, Set[bytes]]
+
     def __init__(self, pubsub: Optional['PubSubManager'] = None) -> None:
-        self.index: DefaultDict[str, Set[bytes]] = defaultdict(set)
         self.pubsub = pubsub
+        self.force_clear()
         if self.pubsub:
             self.subscribe_pubsub_events()
+
+    def get_db_name(self) -> Optional[str]:
+        return None
+
+    def force_clear(self) -> None:
+        self.index = defaultdict(set)
 
     def subscribe_pubsub_events(self) -> None:
         """ Subscribe wallet index to receive voided/winner tx pubsub events

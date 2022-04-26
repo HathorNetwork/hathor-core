@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 logger = get_logger()
 
 _CF_NAME_DEPS_INDEX = b'deps-index'
+_DB_NAME: str = 'deps'
 
 
 class _Tag(Enum):
@@ -73,12 +74,15 @@ class RocksDBDepsIndex(DepsIndex, RocksDBIndexUtils):
         if not _force:
             # See: https://github.com/HathorNetwork/hathor-core/issues/412
             raise TypeError('This class should not be used')
-        RocksDBIndexUtils.__init__(self, db)
         self.log = logger.new()
+        RocksDBIndexUtils.__init__(self, db, cf_name or _CF_NAME_DEPS_INDEX)
 
-        # column family stuff
-        self._cf_name = cf_name or _CF_NAME_DEPS_INDEX
-        self._cf = self._fresh_cf(self._cf_name)
+    def get_db_name(self) -> Optional[str]:
+        # XXX: we don't need it to be parametrizable, so this is fine
+        return _DB_NAME
+
+    def force_clear(self) -> None:
+        self.clear()
 
     def _to_key_ready(self, tx_hash: Optional[bytes] = None) -> bytes:
         """Make a key for accessing READY txs 'set'"""

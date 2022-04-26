@@ -24,6 +24,12 @@ class MemoryHeightIndex(HeightIndex):
     _index: List[IndexEntry]
 
     def __init__(self) -> None:
+        self.force_clear()
+
+    def get_db_name(self) -> Optional[str]:
+        return None
+
+    def force_clear(self) -> None:
         self._index = [BLOCK_GENESIS_ENTRY]
 
     def _add(self, height: int, block_hash: bytes, timestamp: int, *, can_reorg: bool) -> None:

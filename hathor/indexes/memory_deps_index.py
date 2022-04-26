@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Dict, FrozenSet, Iterator, List, Set, Tuple
+from typing import TYPE_CHECKING, Dict, FrozenSet, Iterator, List, Optional, Set, Tuple
 
 from structlog import get_logger
 
@@ -27,17 +27,26 @@ logger = get_logger()
 
 
 class MemoryDepsIndex(DepsIndex):
+    # Reverse dependency mapping
+    _rev_dep_index: Dict[bytes, Set[bytes]]
+
+    # Ready to be validated cache
+    _txs_with_deps_ready: Set[bytes]
+
+    # Next to be downloaded
+    _needed_txs_index: Dict[bytes, Tuple[int, bytes]]
+
     def __init__(self):
         self.log = logger.new()
+        self.force_clear()
 
-        # Reverse dependency mapping
-        self._rev_dep_index: Dict[bytes, Set[bytes]] = {}
+    def get_db_name(self) -> Optional[str]:
+        return None
 
-        # Ready to be validated cache
-        self._txs_with_deps_ready: Set[bytes] = set()
-
-        # Next to be downloaded
-        self._needed_txs_index: Dict[bytes, Tuple[int, bytes]] = {}
+    def force_clear(self) -> None:
+        self._rev_dep_index = {}
+        self._txs_with_deps_ready = set()
+        self._needed_txs_index = {}
 
     def add_tx(self, tx: BaseTransaction, partial: bool = True) -> None:
         assert tx.hash is not None
