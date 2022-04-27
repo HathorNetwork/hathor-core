@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Optional, Tuple
+from typing import Iterator, List, Optional, Tuple
 
 from sortedcontainers import SortedKeyList
 from structlog import get_logger
@@ -79,3 +79,7 @@ class MemoryTimestampIndex(TimestampIndex):
                 next_idx = txs.bisect_key_left((next_timestamp, b''))
                 next_offset -= next_idx
         return hashes, RangeIdx(next_timestamp, next_offset)
+
+    def iter(self) -> Iterator[bytes]:
+        for element in self._index:
+            yield element.hash

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import List, NamedTuple, Optional, Tuple
+from typing import Iterator, List, NamedTuple, Optional, Tuple
 
 from structlog import get_logger
 
@@ -82,5 +82,11 @@ class TimestampIndex(ABC):
     @abstractmethod
     def get_hashes_and_next_idx(self, from_idx: RangeIdx, count: int) -> Tuple[List[bytes], Optional[RangeIdx]]:
         """ Get up to count hashes if available and the next range-index, this is used by sync-v1.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def iter(self) -> Iterator[bytes]:
+        """ Iterate over the transactions in the index order, that is, sorted by timestamp.
         """
         raise NotImplementedError

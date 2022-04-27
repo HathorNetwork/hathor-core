@@ -6,8 +6,8 @@ from hathor.transaction import BaseTransaction
 from hathor.transaction.genesis import genesis_transactions
 from hathor.wallet import HDWallet
 from tests import unittest
-from tests.utils import FakeConnection, MinerSimulator, RandomTransactionGenerator, Simulator
 from tests.clock import HeapClock
+from tests.utils import FakeConnection, MinerSimulator, RandomTransactionGenerator, Simulator
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):
