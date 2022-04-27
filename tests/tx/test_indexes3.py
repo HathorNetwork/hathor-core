@@ -1,3 +1,5 @@
+import pytest
+
 from hathor.simulator import FakeConnection
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
@@ -37,6 +39,7 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         self.simulator.run(5 * 60)
         return manager
 
+    @pytest.mark.flaky(max_runs=3, min_passes=1)
     def test_tips_index_initialization(self):
         from intervaltree import IntervalTree
 
@@ -80,6 +83,7 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         self.assertEqual(newinit_block_tips_tree, base_block_tips_tree)
         self.assertEqual(newinit_tx_tips_tree, base_tx_tips_tree)
 
+    @pytest.mark.flaky(max_runs=3, min_passes=1)
     def test_topological_iterators(self):
         manager = self._build_randomized_blockchain()
         tx_storage = manager.tx_storage
