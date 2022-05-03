@@ -154,3 +154,10 @@ class RocksDBTimestampIndex(TimestampIndex, RocksDBIndexUtils):
                 next_offset += 1
             n -= 1
         return hashes, RangeIdx(next_timestamp, next_offset)
+
+    def iter(self) -> Iterator[bytes]:
+        it = self._db.iterkeys(self._cf)
+        it.seek_to_first()
+        for _, key in it:
+            __, tx_hash = self._from_key(key)
+            yield tx_hash

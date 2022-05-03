@@ -551,3 +551,78 @@ def create_script_with_sigops(nops: int) -> bytes:
     hscript.addOpcode(getattr(Opcode, 'OP_{}'.format(nops % 16)))
     hscript.addOpcode(Opcode.OP_CHECKMULTISIG)
     return hscript.data
+
+
+def add_tx_with_data_script(manager: 'HathorManager', data: List[str], propagate: bool = True) -> Transaction:
+    """ This method will create and propagate a transaction with only data script outputs
+    """
+    wallet = manager.wallet
+    assert wallet is not None
+
+    # Get address to send the change and mined blocks reward
+    address_b58 = wallet.get_unused_address(mark_as_used=True)
+    address = decode_address(address_b58)
+    script = P2PKH.create_output_script(address)
+
+    # Each data script output requires 0.01 HTR to burn
+    burn_amount = len(data)
+
+    # Get the inputs to be used to burn the HTR
+    total_reward = 0
+    burn_input = []
+    while total_reward < burn_amount:
+        block = add_new_block(manager, advance_clock=1, address=address)
+        burn_input.append(TxInput(block.hash, 0, b''))
+        total_reward += block.outputs[0].value
+
+    # Create the change output, if needed
+    change_output: Optional[TxOutput]
+    if total_reward > burn_amount:
+        change_output = TxOutput(total_reward - burn_amount, script, 0)
+    else:
+        change_output = None
+
+    # Unlock the rewards to be used
+    add_blocks_unlock_reward(manager)
+
+    # Calculate tx timestamp and parents
+    timestamp = int(manager.reactor.seconds())
+    parents = manager.get_new_tx_parents(timestamp)
+
+    # Create the outputs with data script
+    outputs = []
+    for d in data:
+        script_data = DataScript.create_output_script(d)
+        output_data = TxOutput(1, script_data, 0)
+        outputs.append(output_data)
+
+    # Add change output to array
+    if change_output:
+        outputs.append(change_output)
+
+    tx = Transaction(
+        weight=1,
+        parents=parents,
+        storage=manager.tx_storage,
+        inputs=burn_input,
+        outputs=outputs,
+        timestamp=timestamp
+    )
+
+    # Sign the inputs
+    data_to_sign = tx.get_sighash_all()
+    private_key = wallet.get_private_key(address_b58)
+    public_bytes, signature = wallet.get_input_aux_data(data_to_sign, private_key)
+
+    for input_ in tx.inputs:
+        input_.data = P2PKH.create_input_data(public_bytes, signature)
+
+    tx.resolve()
+
+    if propagate:
+        tx.verify()
+        manager.propagate_tx(tx, fails_silently=False)
+        assert isinstance(manager.reactor, Clock)
+        manager.reactor.advance(8)
+
+    return tx

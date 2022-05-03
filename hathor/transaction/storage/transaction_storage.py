@@ -683,12 +683,25 @@ class TransactionStorage(ABC):
         pass
 
     @abstractmethod
-    def _topological_sort(self) -> Iterator[BaseTransaction]:
-        """Return an iterable of the transactions in topological ordering, i.e., from
-        genesis to the most recent transactions. The order is important because the
-        transactions are always valid---their parents and inputs exist.
+    def _topological_fast(self) -> Iterator[BaseTransaction]:
+        """Return an iterable of the transactions in topological ordering, i.e., from genesis to the most recent
+        transactions. The order is important because the transactions are always valid --- their parents and inputs
+        exist. This method makes use of the timestamp index, so it is crucial that that index is correct and complete.
 
-        :return: An iterable with the sorted transactions
+        XXX: blocks are still prioritized over transactions, but only within the same timestamp, which means that it
+        will yield a different sequence than _topological_sort, but the sequence is still topological.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def _topological_sort(self) -> Iterator[BaseTransaction]:
+        """Return an iterable of the transactions in topological ordering, i.e., from genesis to the most recent
+        transactions. The order is important because the transactions are always valid --- their parents and inputs
+        exist. This method is designed to be used for rebuilding metadata or indexes, that is, it does not make use of
+        any metadata, only the transactions parents data is used and no index is used.
+
+        XXX: blocks are prioritized so as soon as a block can be yielded it will, which means that it is possible for a
+        block to be yielded much sooner than an older transaction that isn't being confirmed by that block.
         """
         raise NotImplementedError
 
@@ -951,6 +964,29 @@ class BaseTransactionStorage(TransactionStorage):
         # genesis to tips.
         for tx in self._topological_sort():
             self.add_to_indexes(tx)
+
+    def _topological_fast(self) -> Iterator[BaseTransaction]:
+        assert self.indexes is not None
+
+        cur_timestamp: Optional[int] = None
+        cur_blocks: List[Block] = []
+        cur_txs: List[Transaction] = []
+        for tx_hash in self.indexes.sorted_all.iter():
+            tx = self.get_transaction(tx_hash)
+            if tx.timestamp != cur_timestamp:
+                yield from cur_blocks
+                cur_blocks.clear()
+                yield from cur_txs
+                cur_txs.clear()
+                cur_timestamp = tx.timestamp
+            if tx.is_block:
+                assert isinstance(tx, Block)
+                cur_blocks.append(tx)
+            else:
+                assert isinstance(tx, Transaction)
+                cur_txs.append(tx)
+        yield from cur_blocks
+        yield from cur_txs
 
     def _topological_sort(self) -> Iterator[BaseTransaction]:
         # TODO We must optimize this algorithm to remove the `visited` set.

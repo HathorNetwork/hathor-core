@@ -11,7 +11,7 @@ from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.resources import SendTokensResource
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, add_new_blocks, create_tokens
+from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_tx_with_data_script, create_tokens
 
 settings = HathorSettings()
 
@@ -268,6 +268,44 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         response = yield self.push_tx({'hex_tx': tx3_hex})
         data = response.json_value()
         self.assertTrue(data['success'])
+
+    @inlineCallbacks
+    def test_push_standard_script_data(self) -> Generator:
+        # We accept transaction with at most 25 script data outputs
+        # as standard
+        self.manager.wallet.unlock(b'MYPASS')
+
+        # First a tx with one data script output
+        tx1 = add_tx_with_data_script(self.manager, ['test'], propagate=False)
+        tx1_hex = tx1.get_struct().hex()
+
+        response = yield self.push_tx({'hex_tx': tx1_hex})
+        data = response.json_value()
+        self.assertTrue(data['success'])
+
+        self.manager.reactor.advance(1)
+
+        # Now a tx with 25 data script outputs
+        data25 = ['test{}'.format(i) for i in range(25)]
+        tx25 = add_tx_with_data_script(self.manager, data25, propagate=False)
+        tx25_hex = tx25.get_struct().hex()
+
+        response = yield self.push_tx({'hex_tx': tx25_hex})
+        data = response.json_value()
+        self.assertTrue(data['success'])
+
+        self.manager.reactor.advance(1)
+
+        # Now a tx with 26 data script outputs and it must fail
+        data26 = ['test{}'.format(i) for i in range(26)]
+        tx26 = add_tx_with_data_script(self.manager, data26, propagate=False)
+        tx26_hex = tx26.get_struct().hex()
+
+        response = yield self.push_tx({'hex_tx': tx26_hex})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+        expected = 'Transaction is non standard.'
+        self.assertEqual(expected, data['message'])
 
 # GET
 

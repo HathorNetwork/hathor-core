@@ -291,7 +291,7 @@ test = ["pytest (>=6)", "pytest-mock (>=3)", "mock (>=4)", "pytest-cov", "covera
 
 [[package]]
 name = "hathorlib"
-version = "0.1.1"
+version = "0.2.0"
 description = "Hathor Network base objects library"
 category = "main"
 optional = false
@@ -1134,7 +1134,7 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7,<4"
-content-hash = "a826f5ef61003beed25a00f86040dd957488f77840a4fc641052f31850da456f"
+content-hash = "9b33846b1b84afbf667769995867c868cf5c3060fdb6c79d3fa5c0a74b1e38d9"
 
 [metadata.files]
 aiohttp = [
@@ -1513,8 +1513,8 @@ graphviz = [
     {file = "graphviz-0.19.1.zip", hash = "sha256:09ed0cde452d015fe77c4845a210eb642f28d245f5bc250d4b97808cb8f49078"},
 ]
 hathorlib = [
-    {file = "hathorlib-0.1.1-py3-none-any.whl", hash = "sha256:700eed982954249cff2d0dcfa80b0fb6e1638c21451e6e673ab34c2ed97b5903"},
-    {file = "hathorlib-0.1.1.tar.gz", hash = "sha256:5200d711ba719d310e76136e74208536656961d07a28af5aef49db95ec44864e"},
+    {file = "hathorlib-0.2.0-py3-none-any.whl", hash = "sha256:39b500c61aba556a404707f442ca29c17d816b9590e9b3b91d350c26dfd6d4bd"},
+    {file = "hathorlib-0.2.0.tar.gz", hash = "sha256:7c62a93de6599a9b8f36a09da69f5892eefc83017e70ca0bcf0084a28e02309e"},
 ]
 hyperlink = [
     {file = "hyperlink-21.0.0-py2.py3-none-any.whl", hash = "sha256:e6b14c37ecb73e89c77d78cdb4c2cc8f3fb59a885c5b3f819ff4ed80f25af1b4"},

@@ -47,5 +47,8 @@ SETTINGS = HathorSettings(
         cp(1_100_000, bytes.fromhex('000000404e6ff6a23695a6ffe712ce1c4efc02e75bbc11c3129f4c2377b07743')),
         cp(1_200_000, bytes.fromhex('0000003be5fae5bb2c9ceaed589d172bcd9e74ca6c8d7d2ca06567f65cea7c9b')),
         cp(1_300_000, bytes.fromhex('0000000000007d39de6e781c377bc202213b0b5b60db14c13d0b16e06d6fd5ac')),
+        cp(1_400_000, bytes.fromhex('000000000df9cb786c68a643a52a67c22ab54e8b8e41cbe9b761133f6c8abbfe')),
+        cp(1_500_000, bytes.fromhex('000000000c3591805f4748480b59ac1788f754fc004930985a487580e2b5de8f')),
+        cp(1_600_000, bytes.fromhex('00000000060adfdfd7d488d4d510b5779cf35a3c50df7bcff941fbb6957be4d2')),
     ],
 )

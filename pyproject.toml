@@ -14,7 +14,7 @@
 
 [tool.poetry]
 name = "hathor"
-version = "0.47.2"
+version = "0.48.0"
 description = "Hathor Network full-node"
 authors = ["Hathor Team <contact@hathor.network>"]
 license = "Apache-2.0"
@@ -74,7 +74,7 @@ idna = "~3.3"
 setproctitle = "^1.2.2"
 sentry-sdk = {version = "^1.5.4", optional = true}
 structlog-sentry = {version = "^1.4.0", optional = true}
-hathorlib = "0.1.1"
+hathorlib = "0.2.0"
 # move the following to "build-system.requires" when this poetry pr is merged and released: https://github.com/python-poetry/poetry/pull/2794
 # needed to build python-rocksdb
 cython = "<0.30"
