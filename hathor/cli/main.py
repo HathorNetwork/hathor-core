@@ -48,7 +48,6 @@ class CliManager:
             run_node,
             shell,
             stratum_mining,
-            top,
             twin_tx,
             tx_generator,
             wallet,
@@ -60,7 +59,9 @@ class CliManager:
         self.add_cmd('mining', 'run_stratum_miner', stratum_mining, 'Run a mining process (running node required)')
         self.add_cmd('hathor', 'run_node', run_node, 'Run a node')
         self.add_cmd('hathor', 'gen_peer_id', peer_id, 'Generate a new random peer-id')
-        self.add_cmd('hathor', 'top', top, 'CPU profiler viewer')
+        if sys.platform != 'win32':
+            from . import top
+            self.add_cmd('hathor', 'top', top, 'CPU profiler viewer')
         self.add_cmd('docs', 'generate_openapi_json', openapi_json, 'Generate OpenAPI json for API docs')
         self.add_cmd('multisig', 'gen_multisig_address', multisig_address, 'Generate a new multisig address')
         self.add_cmd('multisig', 'spend_multisig_output', multisig_spend, 'Generate tx that spends a multisig output')

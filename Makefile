@@ -75,11 +75,7 @@ check: check-version flake8 isort-check mypy
 # formatting:
 
 .PHONY: fmt
-fmt: yapf isort
-
-.PHONY: yapf
-yapf:
-	yapf -rip $(py_sources)
+fmt: isort
 
 .PHONY: isort
 isort:

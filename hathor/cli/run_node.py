@@ -133,11 +133,8 @@ class RunNode:
         else:
             sys.setrecursionlimit(5000)
 
-        try:
+        if sys.platform != 'win32':
             import resource
-        except ModuleNotFoundError:
-            pass
-        else:
             (nofile_soft, _) = resource.getrlimit(resource.RLIMIT_NOFILE)
             if nofile_soft < 256:
                 print('Maximum number of open file descriptors is too low. Minimum required is 256.')
