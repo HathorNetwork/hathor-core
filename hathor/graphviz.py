@@ -123,7 +123,8 @@ class GraphvizVisualizer:
     def get_nodes_iterator(self) -> Iterator[BaseTransaction]:
         """ Return an iterator.
         """
-        return self.storage._topological_sort()
+        # TODO: check if it's safe to use one of the two faster iterators
+        return self.storage._topological_sort_dfs()
 
     def dot(self, format: str = 'pdf') -> Digraph:
         """Return a Graphviz object of the DAG of verifications.

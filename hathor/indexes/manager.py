@@ -70,7 +70,7 @@ class IndexesManager(ABC):
         XXX: this method requires timestamp indexes to be complete and up-to-date with the rest of the database
         XXX: this method is not yet being used
         """
-        for tx in tx_storage._topological_fast():
+        for tx in tx_storage._topological_sort_timestamp_index():
             tx_meta = tx.get_metadata()
             if not tx_meta.validation.is_final():
                 continue

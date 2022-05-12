@@ -358,7 +358,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         add_new_transactions(self.manager, 1, advance_clock=1)
 
         total = 0
-        for tx in self.tx_storage._topological_sort():
+        for tx in self.tx_storage._topological_sort_dfs():
             total += 1
 
         # added blocks + genesis txs + added tx

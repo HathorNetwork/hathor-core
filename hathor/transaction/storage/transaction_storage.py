@@ -683,18 +683,7 @@ class TransactionStorage(ABC):
         pass
 
     @abstractmethod
-    def _topological_fast(self) -> Iterator[BaseTransaction]:
-        """Return an iterable of the transactions in topological ordering, i.e., from genesis to the most recent
-        transactions. The order is important because the transactions are always valid --- their parents and inputs
-        exist. This method makes use of the timestamp index, so it is crucial that that index is correct and complete.
-
-        XXX: blocks are still prioritized over transactions, but only within the same timestamp, which means that it
-        will yield a different sequence than _topological_sort, but the sequence is still topological.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def _topological_sort(self) -> Iterator[BaseTransaction]:
+    def _topological_sort_dfs(self) -> Iterator[BaseTransaction]:
         """Return an iterable of the transactions in topological ordering, i.e., from genesis to the most recent
         transactions. The order is important because the transactions are always valid --- their parents and inputs
         exist. This method is designed to be used for rebuilding metadata or indexes, that is, it does not make use of
@@ -702,6 +691,27 @@ class TransactionStorage(ABC):
 
         XXX: blocks are prioritized so as soon as a block can be yielded it will, which means that it is possible for a
         block to be yielded much sooner than an older transaction that isn't being confirmed by that block.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def _topological_sort_timestamp_index(self) -> Iterator[BaseTransaction]:
+        """Return an iterable of the transactions in topological ordering, i.e., from genesis to the most recent
+        transactions. The order is important because the transactions are always valid --- their parents and inputs
+        exist. This method makes use of the timestamp index, so it is crucial that that index is correct and complete.
+
+        XXX: blocks are still prioritized over transactions, but only within the same timestamp, which means that it
+        will yield a different sequence than _topological_sort_dfs, but the sequence is still topological.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def _topological_sort_metadata(self) -> Iterator[BaseTransaction]:
+        """Return an iterable of the transactions in topological ordering, using only info from metadata.
+
+        This is about as good as _topological_sort_timestamp_index but only needs the transaction's metadata to be
+        consistent and up-to-date. It could replace _topological_sort_timestamp_index if we can show it is faster or at
+        least not slower by most practical cases.
         """
         raise NotImplementedError
 
@@ -962,10 +972,10 @@ class BaseTransactionStorage(TransactionStorage):
 
         # We need to construct a topological sort, then iterate from
         # genesis to tips.
-        for tx in self._topological_sort():
+        for tx in self._topological_sort_dfs():
             self.add_to_indexes(tx)
 
-    def _topological_fast(self) -> Iterator[BaseTransaction]:
+    def _topological_sort_timestamp_index(self) -> Iterator[BaseTransaction]:
         assert self.indexes is not None
 
         cur_timestamp: Optional[int] = None
@@ -988,7 +998,41 @@ class BaseTransactionStorage(TransactionStorage):
         yield from cur_blocks
         yield from cur_txs
 
-    def _topological_sort(self) -> Iterator[BaseTransaction]:
+    def _topological_sort_metadata(self) -> Iterator[BaseTransaction]:
+        import heapq
+        from dataclasses import dataclass, field
+
+        @dataclass(order=True)
+        class Item:
+            timestamp: int
+            # XXX: because bools are ints, and False==0, True==1, is_transaction=False < is_transaction=True, which
+            #      will make blocks be prioritized over transactions with the same timestamp
+            is_transaction: bool
+            tx: BaseTransaction = field(compare=False)
+
+            def __init__(self, tx: BaseTransaction):
+                self.timestamp = tx.timestamp
+                self.is_transaction = tx.is_transaction
+                self.tx = tx
+
+        to_visit: List[Item] = list(map(Item, self.get_all_genesis()))
+        seen: Set[bytes] = set()
+        heapq.heapify(to_visit)
+        while to_visit:
+            item = heapq.heappop(to_visit)
+            assert item.tx.hash is not None
+            yield item.tx
+            # XXX: We can safely discard because no other tx will try to visit this one, since timestamps are strictly
+            #      higher in children, meaning we cannot possibly have item.tx as a descendant of any tx in to_visit.
+            seen.discard(item.tx.hash)
+            for child_tx_hash in item.tx.get_metadata().children:
+                if child_tx_hash in seen:
+                    continue
+                child_tx = self.get_transaction(child_tx_hash)
+                heapq.heappush(to_visit, Item(child_tx))
+                seen.add(child_tx_hash)
+
+    def _topological_sort_dfs(self) -> Iterator[BaseTransaction]:
         # TODO We must optimize this algorithm to remove the `visited` set.
         #      It will consume too much memory when the number of transactions is big.
         #      A solution would be to store the ordering in disk, probably indexing by tx's height.
@@ -999,11 +1043,11 @@ class BaseTransactionStorage(TransactionStorage):
         for tx in self.get_all_transactions():
             if not tx.is_block:
                 continue
-            yield from self._topological_sort_dfs(tx, visited)
+            yield from self._run_topological_sort_dfs(tx, visited)
         for tx in self.get_all_transactions():
-            yield from self._topological_sort_dfs(tx, visited)
+            yield from self._run_topological_sort_dfs(tx, visited)
 
-    def _topological_sort_dfs(self, root: BaseTransaction, visited: Dict[bytes, int]) -> Iterator[BaseTransaction]:
+    def _run_topological_sort_dfs(self, root: BaseTransaction, visited: Dict[bytes, int]) -> Iterator[BaseTransaction]:
         if root.hash in visited:
             return
 
@@ -1096,7 +1140,7 @@ class BaseTransactionStorage(TransactionStorage):
                                 num_blocks: int = 100) -> List[BaseTransaction]:  # pragma: no cover
         ref_tx = self.get_transaction(hash_bytes)
         visited: Dict[bytes, int] = dict()  # Dict[bytes, int]
-        result = [x for x in self._topological_sort_dfs(ref_tx, visited) if not x.is_block]
+        result = [x for x in self._run_topological_sort_dfs(ref_tx, visited) if not x.is_block]
         result = result[-num_blocks:]
         return result
 
