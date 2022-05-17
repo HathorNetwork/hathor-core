@@ -57,7 +57,7 @@ class Simulator:
         """
         from hathor.transaction import BaseTransaction
 
-        def verify_pow(self: BaseTransaction) -> None:
+        def verify_pow(self: BaseTransaction, *args: Any, **kwargs: Any) -> None:
             assert self.hash is not None
 
         cls._original_verify_pow = BaseTransaction.verify_pow
