@@ -386,7 +386,7 @@ class HathorManager:
                 tx.reset_metadata()
 
         self.log.debug('load blocks and transactions')
-        for tx in self.tx_storage._topological_sort():
+        for tx in self.tx_storage._topological_sort_dfs():
             if self._full_verification:
                 tx.update_initial_metadata()
 
