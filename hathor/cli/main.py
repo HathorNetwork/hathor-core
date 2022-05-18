@@ -32,6 +32,8 @@ class CliManager:
         self.longest_cmd: int = 0
 
         from . import (
+            db_export,
+            db_import,
             generate_valid_words,
             merged_mining,
             mining,
@@ -77,6 +79,8 @@ class CliManager:
         self.add_cmd('dev', 'shell', shell, 'Run a Python shell')
         self.add_cmd('dev', 'quick_test', quick_test, 'Similar to run_node but will quit after receiving a tx')
         self.add_cmd('dev', 'generate_nginx_config', nginx_config, 'Generate nginx config from OpenAPI json')
+        self.add_cmd('dev', 'x-export', db_export, 'EXPERIMENTAL: Export database to a simple format.')
+        self.add_cmd('dev', 'x-import', db_import, 'EXPERIMENTAL: Import database from exported format.')
 
     def add_cmd(self, group: str, cmd: str, module: ModuleType, short_description: Optional[str] = None) -> None:
         self.command_list[cmd] = module

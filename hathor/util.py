@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import datetime
 import json
 import math
+import time
 import warnings
 from collections import OrderedDict
 from enum import Enum
@@ -48,7 +50,10 @@ from zope.interface.verify import verifyObject
 from hathor.conf import HathorSettings
 
 if TYPE_CHECKING:
+    import structlog
+
     from hathor.simulator.clock import HeapClock
+    from hathor.transaction.base_transaction import BaseTransaction
 
 # Reactor = IReactorTime
 # XXX: Ideally we would want to be able to express Reactor as IReactorTime+IReactorCore, which is what everyone using
@@ -422,3 +427,79 @@ def skip_n(it: Iterator[_T], n: int) -> Iterator[_T]:
 def verified_cast(interface_class: Type[Z], obj: Any) -> Z:
     verifyObject(interface_class, obj)
     return obj
+
+
+_DT_ITER_NEXT_WARN = 3  # time in seconds to warn when `next(iter_tx)` takes too long
+_DT_LOG_PROGRESS = 30  # time in seconds after which a progress will be logged (it can take longer, but not shorter)
+_DT_YIELD_WARN = 1  # time in seconds to warn when `yield tx` takes too long (which is when processing happens)
+
+
+def progress(iter_tx: Iterator['BaseTransaction'], *, log: Optional['structlog.stdlib.BoundLogger'] = None,
+             total: Optional[int] = None) -> Iterator['BaseTransaction']:
+    """ Log the progress of a transaction iterator while iterating.
+    """
+    if log is None:
+        log = logger.new()
+
+    t_start = time.time()
+    h = 0
+    ts_tx = 0
+
+    count = 0
+    count_log_prev = 0
+    block_count = 0
+    tx_count = 0
+
+    log.debug('load will start')
+    t_log_prev = t_start
+    while True:
+        t_before_next = time.time()
+        try:
+            tx: 'BaseTransaction' = next(iter_tx)
+        except StopIteration:
+            break
+        t_after_next = time.time()
+        dt_next = LogDuration(t_after_next - t_before_next)
+        if dt_next > _DT_ITER_NEXT_WARN:
+            log.warn('iterator was slow to yield', took_sec=dt_next)
+
+        assert tx.hash is not None
+        tx_meta = tx.get_metadata()
+        h = max(h, tx_meta.height)
+        ts_tx = max(ts_tx, tx.timestamp)
+
+        t_log = time.time()
+        dt_log = LogDuration(t_log - t_log_prev)
+        if dt_log > _DT_LOG_PROGRESS:
+            t_log_prev = t_log
+            dcount = count - count_log_prev
+            tx_rate = '?' if dt_log == 0 else dcount / dt_log
+            ts = datetime.datetime.fromtimestamp(ts_tx)
+            kwargs = dict(tx_rate=tx_rate, tx_new=dcount, dt=dt_log, total=count, latest_ts=ts, height=h)
+            if total is not None:
+                progress = count / total
+                # TODO: we could add an ETA since we know the total
+                log.info(f'loading... {math.floor(progress * 100):2.0f}%', progress=progress, **kwargs)
+            else:
+                log.info('loading...', **kwargs)
+            count_log_prev = count
+        count += 1
+
+        t_before_yield = time.time()
+        yield tx
+        t_after_yield = time.time()
+
+        if tx.is_block:
+            block_count += 1
+        else:
+            tx_count += 1
+
+        dt_yield = t_after_yield - t_before_yield
+        if dt_yield > _DT_YIELD_WARN:
+            dt = LogDuration(dt_yield)
+            log.warn('tx took too long to be processed', tx=tx.hash_hex, dt=dt)
+
+    t_final = time.time()
+    dt_total = LogDuration(t_final - t_start)
+    tx_rate = '?' if dt_total == 0 else count / dt_total
+    log.info('loaded', tx_count=count, tx_rate=tx_rate, total_dt=dt_total, height=h, blocks=block_count, txs=tx_count)
