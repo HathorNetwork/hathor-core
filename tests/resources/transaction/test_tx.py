@@ -164,6 +164,10 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data['tx']['outputs'][5]['token_data'], 2)
         self.assertEqual(data['tx']['outputs'][5]['decoded']['token_data'], 2)
 
+        # First block data
+        self.assertEqual(data['meta']['first_block'], None)
+        self.assertEqual(data['meta']['first_block_height'], None)
+
     @inlineCallbacks
     def test_get_one_known_tx_with_authority(self):
         # Tx tesnet 00005f234469407614bf0abedec8f722bb5e534949ad37650f6077c899741ed7
@@ -238,6 +242,27 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data['tx']['outputs'][0]['decoded']['token_data'], 0)
         self.assertEqual(data['tx']['outputs'][1]['token_data'], 129)
         self.assertEqual(data['tx']['outputs'][1]['decoded']['token_data'], 129)
+
+    @inlineCallbacks
+    def test_first_block(self):
+        # add some txs and blocks
+        add_new_blocks(self.manager, 4, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
+        add_new_transactions(self.manager, 10, advance_clock=1)
+        add_new_blocks(self.manager, 20, advance_clock=10)
+        # finally add a tx and a block that will confirm that tx
+        tx, = add_new_transactions(self.manager, 1, advance_clock=5)
+        block, = add_new_blocks(self.manager, 1, advance_clock=5)
+
+        # get the transaction data from the api
+        response = yield self.web.get("transaction", {b'id': tx.hash_hex.encode()})
+        data = response.json_value()
+
+        # check that it has the correct first block hash
+        self.assertEqual(data['meta']['first_block'], block.hash_hex)
+
+        # now check that the first_block_height was correctly included
+        self.assertEqual(data['meta']['first_block_height'], block.get_metadata().height)
 
     @inlineCallbacks
     def test_get_many(self):
