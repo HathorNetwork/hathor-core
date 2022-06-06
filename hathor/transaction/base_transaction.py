@@ -832,7 +832,8 @@ class BaseTransaction(ABC):
             #        which requires the use of a storage, this is a workaround that should be fixed, places where this
             #        happens include generating new mining blocks and some tests
             height = self.calculate_height() if self.storage else 0
-            metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight, height=height)
+            score = self.weight if self.is_genesis else 0
+            metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight, height=height, score=score)
             self._metadata = metadata
         if not metadata.hash:
             metadata.hash = self.hash
@@ -844,7 +845,8 @@ class BaseTransaction(ABC):
         recalculating all metadata.
         """
         assert self.storage is not None
-        self._metadata = TransactionMetadata(hash=self.hash,
+        score = self.weight if self.is_genesis else 0
+        self._metadata = TransactionMetadata(hash=self.hash, score=score,
                                              accumulated_weight=self.weight,
                                              height=self.calculate_height())
         self._metadata._tx_ref = weakref.ref(self)

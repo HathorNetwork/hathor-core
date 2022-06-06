@@ -436,6 +436,10 @@ class TransactionBinaryStorageTest(BaseTransactionStorageTest):
         shutil.rmtree(self.directory)
         super().tearDown()
 
+    def test_storage_new_blocks(self):
+        self.tx_storage._always_use_topological_dfs = True
+        super().test_storage_new_blocks()
+
 
 class TransactionCompactStorageTest(BaseTransactionStorageTest):
     __test__ = True
@@ -451,6 +455,10 @@ class TransactionCompactStorageTest(BaseTransactionStorageTest):
         subfolders_path = os.path.join(self.directory, 'tx')
         subfolders = os.listdir(subfolders_path)
         self.assertEqual(settings.STORAGE_SUBFOLDERS, len(subfolders))
+
+    def test_storage_new_blocks(self):
+        self.tx_storage._always_use_topological_dfs = True
+        super().test_storage_new_blocks()
 
     def tearDown(self):
         shutil.rmtree(self.directory)
@@ -510,6 +518,25 @@ class TransactionRocksDBStorageTest(BaseTransactionStorageTest):
     def setUp(self):
         self.directory = tempfile.mkdtemp()
         super().setUp(TransactionRocksDBStorage(self.directory))
+
+    def tearDown(self):
+        shutil.rmtree(self.directory)
+        super().tearDown()
+
+    def test_storage_new_blocks(self):
+        self.tx_storage._always_use_topological_dfs = True
+        super().test_storage_new_blocks()
+
+
+@pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
+class CacheRocksDBStorageTest(BaseCacheStorageTest):
+    __test__ = True
+
+    def setUp(self):
+        self.directory = tempfile.mkdtemp()
+        store = TransactionRocksDBStorage(self.directory)
+        reactor = MemoryReactorHeapClock()
+        super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
 
     def tearDown(self):
         shutil.rmtree(self.directory)

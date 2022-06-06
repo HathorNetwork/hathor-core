@@ -25,6 +25,7 @@ if TYPE_CHECKING:  # pragma: no cover
 logger = get_logger()
 
 _CF_NAME_MEMPOOL_TIPS_INDEX = b'mempool-tips-index'
+_DB_NAME: str = 'mempool_tips'
 
 
 class RocksDBMempoolTipsIndex(ByteCollectionMempoolTipsIndex):
@@ -34,6 +35,13 @@ class RocksDBMempoolTipsIndex(ByteCollectionMempoolTipsIndex):
         self.log = logger.new()
         _cf_name = cf_name or _CF_NAME_MEMPOOL_TIPS_INDEX
         self._index = RocksDBSimpleSet(db, self.log, cf_name=_cf_name)
+
+    def get_db_name(self) -> Optional[str]:
+        # XXX: we don't need it to be parametrizable, so this is fine
+        return _DB_NAME
+
+    def force_clear(self) -> None:
+        self._index.clear()
 
     def _discard(self, tx: bytes) -> None:
         self._index.discard(tx)

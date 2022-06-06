@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import List, NamedTuple, Optional, Tuple
 
-from hathor.transaction import Block
+from hathor.indexes.base_index import BaseIndex
+from hathor.transaction import BaseTransaction, Block
 from hathor.transaction.genesis import BLOCK_GENESIS
 from hathor.util import not_none
 
@@ -35,9 +36,21 @@ class _AddToIndexItem(NamedTuple):
     timestamp: int
 
 
-class HeightIndex(ABC):
+class HeightIndex(BaseIndex):
     """Store the block hash for each given height
     """
+
+    def init_loop_step(self, tx: BaseTransaction) -> None:
+        if not tx.is_block:
+            return
+        if tx.is_genesis:
+            return
+        assert isinstance(tx, Block)
+        assert tx.hash is not None
+        tx_meta = tx.get_metadata()
+        if tx_meta.voided_by:
+            return
+        self.add_new(tx_meta.height, tx.hash, tx.timestamp)
 
     @abstractmethod
     def add_new(self, height: int, block_hash: bytes, timestamp: int) -> None:

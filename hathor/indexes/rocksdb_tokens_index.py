@@ -39,6 +39,7 @@ settings = HathorSettings()
 logger = get_logger()
 
 _CF_NAME_TOKENS_INDEX = b'tokens-index'
+_DB_NAME: str = 'tokens'
 
 # the following type is used to help a little bit to distinguish when we're using a byte sequence that should only be
 # internally used
@@ -91,12 +92,15 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
     """
 
     def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None) -> None:
-        RocksDBIndexUtils.__init__(self, db)
         self.log = logger.new()
+        RocksDBIndexUtils.__init__(self, db, cf_name or _CF_NAME_TOKENS_INDEX)
 
-        # column family stuff
-        self._cf_name = cf_name or _CF_NAME_TOKENS_INDEX
-        self._cf = self._fresh_cf(self._cf_name)
+    def get_db_name(self) -> Optional[str]:
+        # XXX: we don't need it to be parametrizable, so this is fine
+        return _DB_NAME
+
+    def force_clear(self) -> None:
+        self.clear()
 
     def _to_internal_token_uid(self, token_uid: bytes) -> _InternalUid:
         """Normalizes a token_uid so that the native token (\x00) will have the same length as custom tokens."""

@@ -33,6 +33,13 @@ from hathor.transaction.transaction_metadata import TransactionMetadata
 
 settings = HathorSettings()
 
+# these are the timestamp values to be used when resetting them, 1 is used for the node instead of 0, so it can be
+# greater, that way if both are reset (which also happens on a database that never run this implementation before) we
+# guarantee that indexes will be initialized (because they would be "older" than the node timestamp).
+NULL_INDEX_LAST_STARTED_AT = 0
+NULL_LAST_STARTED_AT = 1
+INDEX_ATTR_PREFIX = 'index_'
+
 
 class AllTipsCache(NamedTuple):
     timestamp: int
@@ -49,6 +56,18 @@ class TransactionStorage(ABC):
     indexes: Optional[IndexesManager]
 
     log = get_logger()
+
+    # Key storage attribute to save if the network stored is the expected network
+    _network_attribute: str = 'network'
+
+    # Key storage attribute to save if the full node is running a full verification
+    _running_full_verification_attribute: str = 'running_full_verification'
+
+    # Key storage attribute to save if the manager is running
+    _manager_running_attribute: str = 'manager_running'
+
+    # Ket storage attribute to save the last time the node started
+    _last_start_attribute: str = 'last_start'
 
     def __init__(self):
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
@@ -83,14 +102,18 @@ class TransactionStorage(ABC):
         # Initialize cache for genesis transactions.
         self._genesis_cache: Dict[bytes, BaseTransaction] = {}
 
-        # Key storage attribute to save if the network stored is the expected network
-        self._network_attribute: str = 'network'
+        # Internal toggle to choose when to select topological DFS iterator, used only on some tests
+        self._always_use_topological_dfs = False
 
-        # Key storage attribute to save if the full node is running a full verification
-        self._running_full_verification_attribute: str = 'running_full_verification'
+    @abstractmethod
+    def _update_caches(self, block_count: int, tx_count: int, latest_timestamp: int, first_timestamp: int) -> None:
+        """Update ephemeral caches, should only be used internally."""
+        raise NotImplementedError
 
-        # Key storage attribute to save if the manager is running
-        self._manager_running_attribute: str = 'manager_running'
+    @abstractmethod
+    def reset_indexes(self) -> None:
+        """Reset all the indexes, making sure that no persisted value is reused."""
+        raise NotImplementedError
 
     def update_best_block_tips_cache(self, tips_cache: List[bytes]) -> None:
         # XXX: check that the cache update is working properly, only used in unittests
@@ -508,6 +531,40 @@ class TransactionStorage(ABC):
         """
         pass
 
+    def topological_iterator(self) -> Iterator[BaseTransaction]:
+        """This method will return the fastest topological iterator available based on the database state.
+
+        This will be:
+
+        - self._topological_sort_timestamp_index() when the timestamp index is up-to-date
+        - self._topological_sort_metadata() otherwise, metadata is assumed to be up-to-date
+        - self._topological_sort_dfs() when the private property `_always_use_topological_dfs` is set to `True`
+        """
+        # TODO: we currently assume that metadata is up-to-date, and thus this method can only run when that assumption
+        #       is known to be true, but we could add a mechanism similar to what indexes use to know they're
+        #       up-to-date and get rid of that assumption so this method can be used without having to make any
+        #       assumptions
+        assert self.indexes is not None
+
+        if self._always_use_topological_dfs:
+            return self._topological_sort_dfs()
+
+        db_last_started_at = self.get_last_started_at()
+        sorted_all_db_name = self.indexes.sorted_all.get_db_name()
+        if sorted_all_db_name is None:
+            can_use_timestamp_index = False
+        else:
+            sorted_all_index_last_started_at = self.get_index_last_started_at(sorted_all_db_name)
+            can_use_timestamp_index = db_last_started_at == sorted_all_index_last_started_at
+
+        iter_tx: Iterator[BaseTransaction]
+        if can_use_timestamp_index:
+            iter_tx = self._topological_sort_timestamp_index()
+        else:
+            iter_tx = self._topological_sort_metadata()
+
+        return iter_tx
+
     @abstractmethod
     def _topological_sort_dfs(self) -> Iterator[BaseTransaction]:
         """Return an iterable of the transactions in topological ordering, i.e., from genesis to the most recent
@@ -643,6 +700,42 @@ class TransactionStorage(ABC):
         """
         return self.get_value(self._manager_running_attribute) == '1'
 
+    def get_last_started_at(self) -> int:
+        """ Return the timestamp when the database was last started.
+        """
+        # XXX: defaults to 1 just to force indexes initialization, by being higher than 0
+        return int(self.get_value(self._last_start_attribute) or NULL_LAST_STARTED_AT)
+
+    def set_last_started_at(self, timestamp: int) -> None:
+        """ Update the timestamp when the database was last started.
+        """
+        self.add_value(self._last_start_attribute, str(timestamp))
+
+    def get_index_last_started_at(self, index_db_name: str) -> int:
+        """ Return the timestamp when an index was last started.
+        """
+        attr_name = INDEX_ATTR_PREFIX + index_db_name
+        return int(self.get_value(attr_name) or NULL_INDEX_LAST_STARTED_AT)
+
+    def set_index_last_started_at(self, index_db_name: str, timestamp: int) -> None:
+        """ Update the timestamp when a specific index was last started.
+        """
+        attr_name = INDEX_ATTR_PREFIX + index_db_name
+        self.add_value(attr_name, str(timestamp))
+
+    def update_last_started_at(self, timestamp: int) -> None:
+        """ Updates the respective timestamps of when the node was last started.
+
+        Using this mehtod ensures that the same timestamp is being used and the correct indexes are being selected.
+        """
+        assert self.indexes is not None
+        self.set_last_started_at(timestamp)
+        for index in self.indexes.iter_all_indexes():
+            index_db_name = index.get_db_name()
+            if index_db_name is None:
+                continue
+            self.set_index_last_started_at(index_db_name, timestamp)
+
 
 class BaseTransactionStorage(TransactionStorage):
     def __init__(self, with_index: bool = True, pubsub: Optional[Any] = None) -> None:
@@ -654,10 +747,17 @@ class BaseTransactionStorage(TransactionStorage):
         # Initialize index if needed.
         self.with_index = with_index
         if with_index:
-            self._reset_cache()
+            self.indexes = self._build_indexes_manager()
+            self._reset_cache(clear_indexes=False)
 
         # Either save or verify all genesis.
         self._save_or_verify_genesis()
+
+    def _update_caches(self, block_count: int, tx_count: int, latest_timestamp: int, first_timestamp: int) -> None:
+        self._cache_block_count = block_count
+        self._cache_tx_count = tx_count
+        self._latest_timestamp = latest_timestamp
+        self._first_timestamp = first_timestamp
 
     @property
     def latest_timestamp(self) -> int:
@@ -674,13 +774,20 @@ class BaseTransactionStorage(TransactionStorage):
     def _build_indexes_manager(self) -> IndexesManager:
         return MemoryIndexesManager()
 
-    def _reset_cache(self) -> None:
+    def reset_indexes(self) -> None:
+        self._reset_cache(clear_indexes=True)
+
+    def _reset_cache(self, *, clear_indexes: bool = True) -> None:
         """Reset all caches. This function should not be called unless you know what you are doing."""
         assert self.with_index, 'Cannot reset cache because it has not been enabled.'
+
+        # XXX: these fields would be better of being migrated to the IndexesManager, and probably as proper indexes
         self._cache_block_count = 0
         self._cache_tx_count = 0
 
-        self.indexes = self._build_indexes_manager()
+        if clear_indexes:
+            assert self.indexes is not None
+            self.indexes.force_clear_all()
 
         genesis = self.get_all_genesis()
         if genesis:
@@ -794,12 +901,12 @@ class BaseTransactionStorage(TransactionStorage):
         return txs, has_more
 
     def _manually_initialize(self) -> None:
-        self._reset_cache()
+        self._reset_cache(clear_indexes=False)
+        self._manually_initialize_indexes()
 
-        # We need to construct a topological sort, then iterate from
-        # genesis to tips.
-        for tx in self._topological_sort_dfs():
-            self.add_to_indexes(tx)
+    def _manually_initialize_indexes(self) -> None:
+        if self.indexes is not None:
+            self.indexes._manually_initialize(self)
 
     def _topological_sort_timestamp_index(self) -> Iterator[BaseTransaction]:
         assert self.indexes is not None

@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import TYPE_CHECKING, Iterator, List
 
+from hathor.indexes.base_index import BaseIndex
 from hathor.transaction import BaseTransaction, Block
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -48,7 +49,7 @@ def get_requested_from_height(tx: BaseTransaction) -> int:
     return block.get_metadata().height
 
 
-class DepsIndex(ABC):
+class DepsIndex(BaseIndex):
     """ Index of dependencies between transactions
 
     This index exists to accelerate queries related to the partial validation mechanism needed by sync-v2. More
@@ -103,6 +104,12 @@ class DepsIndex(ABC):
     - The "needed" and "ready" concepts should be easier to understand, but are harder to ascii-draw, thus I skipped
       them.
     """
+
+    def init_loop_step(self, tx: BaseTransaction) -> None:
+        tx_meta = tx.get_metadata()
+        if tx_meta.voided_by:
+            return
+        self.add_tx(tx, partial=False)
 
     @abstractmethod
     def add_tx(self, tx: BaseTransaction, partial: bool = True) -> None:

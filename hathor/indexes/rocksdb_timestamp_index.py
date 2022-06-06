@@ -38,13 +38,16 @@ class RocksDBTimestampIndex(TimestampIndex, RocksDBIndexUtils):
     It works nicely because rocksdb uses a tree sorted by key under the hood.
     """
 
-    def __init__(self, db: 'rocksdb.DB', *, cf_name: bytes) -> None:
-        RocksDBIndexUtils.__init__(self, db)
+    def __init__(self, db: 'rocksdb.DB', name: str) -> None:
         self.log = logger.new()
+        RocksDBIndexUtils.__init__(self, db, f'timestamp-sorted-{name}'.encode())
+        self._name = name
 
-        # column family stuff
-        self._cf_name = cf_name
-        self._cf = self._fresh_cf(self._cf_name)
+    def get_db_name(self) -> Optional[str]:
+        return f'timestamp_{self._name}'
+
+    def force_clear(self) -> None:
+        self.clear()
 
     def _to_key(self, timestamp: int, tx_hash: Optional[bytes] = None) -> bytes:
         """Make a key for a timestamp and optionally tx_hash, the key represents the membership itself."""

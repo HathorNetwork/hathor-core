@@ -27,6 +27,7 @@ settings = HathorSettings()
 logger = get_logger()
 
 _CF_NAME_HEIGHT_INDEX = b'height-index'
+_DB_NAME: str = 'height'
 
 
 class RocksDBHeightIndex(HeightIndex, RocksDBIndexUtils):
@@ -44,15 +45,15 @@ class RocksDBHeightIndex(HeightIndex, RocksDBIndexUtils):
     """
 
     def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None) -> None:
-        RocksDBIndexUtils.__init__(self, db)
         self.log = logger.new()
+        RocksDBIndexUtils.__init__(self, db, cf_name or _CF_NAME_HEIGHT_INDEX)
 
-        # column family stuff
-        self._cf_name = cf_name or _CF_NAME_HEIGHT_INDEX
-        self._cf = self._fresh_cf(self._cf_name)
+    def get_db_name(self) -> Optional[str]:
+        # XXX: we don't need it to be parametrizable, so this is fine
+        return _DB_NAME
 
-        # XXX: when we stop using a fresh column-family we have to figure-out when to not run this
-        self._init_db()
+    def force_clear(self) -> None:
+        self.clear()
 
     def _init_db(self) -> None:
         """ Initialize the database with the genesis entry."""
