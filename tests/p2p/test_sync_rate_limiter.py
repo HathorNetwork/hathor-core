@@ -11,6 +11,8 @@ from tests.simulation.base import SimulatorTestCase
 class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
     __test__ = True
 
+    seed_config = 1
+
     def test_sync_rate_limiter(self):
         manager1 = self.create_peer()
 

@@ -31,6 +31,8 @@ from hathor.feature_activation.feature_service import FeatureService
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.nanocontracts import NCMemoryStorageFactory
+from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.pubsub import PubSubManager
@@ -140,6 +142,7 @@ class Builder:
         self._enable_address_index: bool = False
         self._enable_tokens_index: bool = False
         self._enable_utxo_index: bool = False
+        self._enable_nc_history_index: bool = False
 
         self._enable_sync_v1: bool = True
         self._enable_sync_v2: bool = False
@@ -164,7 +167,8 @@ class Builder:
         peer_id = self._get_peer_id()
 
         soft_voided_tx_ids = self._get_soft_voided_tx_ids()
-        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub)
+        nc_storage_factory = NCMemoryStorageFactory()
+        consensus_algorithm = ConsensusAlgorithm(nc_storage_factory, soft_voided_tx_ids, pubsub)
 
         p2p_manager = self._get_p2p_manager()
 
@@ -178,6 +182,9 @@ class Builder:
         daa = self._get_or_create_daa()
         cpu_mining_service = self._get_or_create_cpu_mining_service()
 
+        if settings.ENABLE_NANO_CONTRACTS:
+            tx_storage.nc_catalog = self._get_nc_catalog()
+
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
 
@@ -186,6 +193,9 @@ class Builder:
 
         if self._enable_utxo_index:
             indexes.enable_utxo_index()
+
+        if self._enable_nc_history_index:
+            indexes.enable_nc_history_index()
 
         kwargs: dict[str, Any] = {}
 
@@ -305,6 +315,11 @@ class Builder:
         if self._peer_id is not None:
             return self._peer_id
         raise ValueError('peer_id not set')
+
+    def _get_nc_catalog(self) -> NCBlueprintCatalog:
+        from hathor.nanocontracts.catalog import generate_catalog_from_settings
+        settings = self._get_or_create_settings()
+        return generate_catalog_from_settings(settings)
 
     def _get_or_create_pubsub(self) -> PubSubManager:
         if self._pubsub is None:
@@ -576,6 +591,11 @@ class Builder:
     def enable_utxo_index(self) -> 'Builder':
         self.check_if_can_modify()
         self._enable_utxo_index = True
+        return self
+
+    def enable_nc_history_index(self) -> 'Builder':
+        self.check_if_can_modify()
+        self._enable_nc_history_index = True
         return self
 
     def enable_wallet_index(self) -> 'Builder':

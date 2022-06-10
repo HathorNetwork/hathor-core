@@ -77,3 +77,4 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     x_asyncio_reactor: bool
     x_ipython_kernel: bool
     nano_testnet: bool
+    nc_history_index: bool

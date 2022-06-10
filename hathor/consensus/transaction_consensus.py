@@ -49,6 +49,15 @@ class TransactionConsensusAlgorithm:
         self.mark_inputs_as_used(tx)
         self.update_voided_info(tx)
         self.set_conflict_twins(tx)
+        self.execute_nano_contracts(tx)
+
+    def execute_nano_contracts(self, tx: Transaction) -> None:
+        """This method is called when the transaction is added to the mempool.
+
+        The method is currently only executed when the transaction is confirmed by a block.
+        Hence, we do nothing here.
+        """
+        pass
 
     def mark_inputs_as_used(self, tx: Transaction) -> None:
         """ Mark all its inputs as used
@@ -180,6 +189,7 @@ class TransactionConsensusAlgorithm:
             parent_meta = parent.get_metadata()
             if parent_meta.voided_by:
                 voided_by.update(self.context.consensus.filter_out_soft_voided_entries(parent, parent_meta.voided_by))
+                voided_by.discard(self._settings.NC_EXECUTION_FAIL_ID)
         assert self._settings.SOFT_VOIDED_ID not in voided_by
         assert not (self.context.consensus.soft_voided_tx_ids & voided_by)
 
@@ -190,6 +200,7 @@ class TransactionConsensusAlgorithm:
             if spent_meta.voided_by:
                 voided_by.update(spent_meta.voided_by)
                 voided_by.discard(self._settings.SOFT_VOIDED_ID)
+                voided_by.discard(self._settings.NC_EXECUTION_FAIL_ID)
         assert self._settings.SOFT_VOIDED_ID not in voided_by
 
         # Update accumulated weight of the transactions voiding us.

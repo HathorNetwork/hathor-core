@@ -43,6 +43,7 @@ class VersionResource(Resource):
         data = {
             'version': hathor.__version__,
             'network': self.manager.network,
+            'nano_contracts_enabled': self._settings.ENABLE_NANO_CONTRACTS,
             'min_weight': self._settings.MIN_TX_WEIGHT,  # DEPRECATED
             'min_tx_weight': self._settings.MIN_TX_WEIGHT,
             'min_tx_weight_coefficient': self._settings.MIN_TX_WEIGHT_COEFFICIENT,
