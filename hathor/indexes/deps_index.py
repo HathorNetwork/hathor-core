@@ -111,6 +111,12 @@ class DepsIndex(BaseIndex):
             return
         self.add_tx(tx, partial=False)
 
+    def update(self, tx: BaseTransaction) -> None:
+        assert tx.hash is not None
+        tx_meta = tx.get_metadata()
+        if tx_meta.validation.is_fully_connected():
+            self.remove_ready_for_validation(tx.hash)
+
     @abstractmethod
     def add_tx(self, tx: BaseTransaction, partial: bool = True) -> None:
         """Update 'deps' and 'needed' sub-indexes, removing them when necessary (i.e. validation is complete).

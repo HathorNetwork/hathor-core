@@ -26,6 +26,7 @@ from hathor.indexes.mempool_tips_index import MempoolTipsIndex
 from hathor.indexes.timestamp_index import TimestampIndex
 from hathor.indexes.tips_index import TipsIndex
 from hathor.indexes.tokens_index import TokensIndex
+from hathor.indexes.utxo_index import UtxoIndex
 from hathor.transaction import BaseTransaction
 from hathor.util import progress
 
@@ -66,6 +67,7 @@ class IndexesManager(ABC):
     mempool_tips: MempoolTipsIndex
     addresses: Optional[AddressIndex]
     tokens: Optional[TokensIndex]
+    utxo: Optional[UtxoIndex]
 
     def __init_checks__(self):
         """ Implementations must call this at the **end** of their __init__ for running ValueError checks."""
@@ -99,6 +101,8 @@ class IndexesManager(ABC):
             yield _IndexFilter.ALL, self.addresses
         if self.tokens is not None:
             yield _IndexFilter.ALL, self.tokens
+        if self.utxo is not None:
+            yield _IndexFilter.ALL, self.utxo
 
     @abstractmethod
     def enable_address_index(self, pubsub: 'PubSubManager') -> None:
@@ -108,6 +112,11 @@ class IndexesManager(ABC):
     @abstractmethod
     def enable_tokens_index(self) -> None:
         """Enable tokens index. It does nothing if it has already been enabled."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def enable_utxo_index(self) -> None:
+        """Enable UTXO index. It does nothing if it has already been enabled."""
         raise NotImplementedError
 
     def force_clear_all(self) -> None:
@@ -179,6 +188,15 @@ class IndexesManager(ABC):
 
         tx_storage._update_caches(block_count, tx_count, latest_timestamp, first_timestamp)
 
+    def update(self, tx: BaseTransaction) -> None:
+        """ This is the new update method that indexes should use instead of add_tx/del_tx
+        """
+        # XXX: this _should_ be here, but it breaks some tests, for now this is done explicitly in hathor.manager
+        # self.mempool_tips.update(tx)
+        self.deps.update(tx)
+        if self.utxo:
+            self.utxo.update(tx)
+
     def add_tx(self, tx: BaseTransaction) -> bool:
         """ Add a transaction to the indexes
 
@@ -222,6 +240,8 @@ class IndexesManager(ABC):
             self.sorted_all.del_tx(tx)
             if self.addresses:
                 self.addresses.remove_tx(tx)
+            if self.utxo:
+                self.utxo.del_tx(tx)
 
         if tx.is_block:
             self.block_tips.del_tx(tx, relax_assert=relax_assert)
@@ -233,6 +253,7 @@ class IndexesManager(ABC):
         if self.tokens:
             self.tokens.del_tx(tx)
 
+        # XXX: this method is idempotent and has no result
         self.deps.del_tx(tx)
 
 
@@ -253,6 +274,7 @@ class MemoryIndexesManager(IndexesManager):
 
         self.addresses = None
         self.tokens = None
+        self.utxo = None
         self.height = MemoryHeightIndex()
         self.mempool_tips = MemoryMempoolTipsIndex()
         self.deps = MemoryDepsIndex()
@@ -269,6 +291,11 @@ class MemoryIndexesManager(IndexesManager):
         from hathor.indexes.memory_tokens_index import MemoryTokensIndex
         if self.tokens is None:
             self.tokens = MemoryTokensIndex()
+
+    def enable_utxo_index(self) -> None:
+        from hathor.indexes.memory_utxo_index import MemoryUtxoIndex
+        if self.utxo is None:
+            self.utxo = MemoryUtxoIndex()
 
 
 class RocksDBIndexesManager(IndexesManager):
@@ -290,6 +317,7 @@ class RocksDBIndexesManager(IndexesManager):
 
         self.addresses = None
         self.tokens = None
+        self.utxo = None
         self.height = RocksDBHeightIndex(self._db)
         self.mempool_tips = MemoryMempoolTipsIndex()  # use of RocksDBMempoolTipsIndex is very slow and was suspended
         self.deps = MemoryDepsIndex()  # use of RocksDBDepsIndex is currently suspended until it is fixed
@@ -306,3 +334,8 @@ class RocksDBIndexesManager(IndexesManager):
         from hathor.indexes.rocksdb_tokens_index import RocksDBTokensIndex
         if self.tokens is None:
             self.tokens = RocksDBTokensIndex(self._db)
+
+    def enable_utxo_index(self) -> None:
+        from hathor.indexes.rocksdb_utxo_index import RocksDBUtxoIndex
+        if self.utxo is None:
+            self.utxo = RocksDBUtxoIndex(self._db)

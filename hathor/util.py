@@ -503,3 +503,156 @@ def progress(iter_tx: Iterator['BaseTransaction'], *, log: Optional['structlog.s
     dt_total = LogDuration(t_final - t_start)
     tx_rate = '?' if dt_total == 0 else count / dt_total
     log.info('loaded', tx_count=count, tx_rate=tx_rate, total_dt=dt_total, height=h, blocks=block_count, txs=tx_count)
+
+
+class peekable(Iterator[T]):
+    """Adaptor class to peek what will be returned by next(iterator)
+
+
+    >>> it = peekable(range(10))
+    >>> iter(it) is it
+    True
+    >>> it.peek()
+    0
+    >>> next(it)
+    0
+    >>> next(it)
+    1
+    >>> it.peek()
+    2
+    >>> bool(it)
+    True
+    >>> next(it)
+    2
+    >>> list(it)
+    [3, 4, 5, 6, 7, 8, 9]
+    >>> bool(it)
+    False
+    >>> it.peek()
+    Traceback (most recent call last):
+    ...
+    ValueError: iterator was exhausted
+
+    """
+
+    def __init__(self, it: Iterable[T]) -> None:
+        self._it: Optional[Iterator[T]] = iter(it)
+        # XXX: using Optional[Tuple[T]] makes it so the iterator can yield None, and it would be correctly peekable,
+        #      which is different from not having a next element to peek into
+        self._head: Optional[Tuple[T]] = None
+
+    def _peek(self) -> Optional[Tuple[T]]:
+        if self._head is None and self._it is None:
+            return None
+        if self._head is None:
+            assert self._it is not None
+            try:
+                self._head = next(self._it),
+            except StopIteration:
+                self._it = None
+                return None
+        return self._head
+
+    def __iter__(self) -> Iterator[T]:
+        return self
+
+    def __next__(self) -> T:
+        if self._head is not None:
+            (x,), self._head = self._head, None
+            return x
+        elif self._it is not None:
+            try:
+                return next(self._it)
+            except StopIteration:
+                self.it = None
+                raise
+        else:
+            raise StopIteration()
+
+    def peek(self) -> T:
+        x = self._peek()
+        if x is None:
+            raise ValueError('iterator was exhausted')
+        y, = x
+        return y
+
+    def __bool__(self) -> bool:
+        return self._peek() is not None
+
+
+def _identity(x: T) -> T:
+    return x
+
+
+class sorted_merger(Iterator[T]):
+    """ Adaptor class to merge multiple sorted iterators into a single iterator that is also sorted.
+
+    Note: for this adaptor to work as expected the input iterators have to already be sorted, but if they aren't, the
+    resulting iterator won't crash, or unexpecetdly stop working, however it will not be sorted.
+
+    A custom key function can be supplied to customize the sort order, and the
+    reverse flag can be set to request the result in descending order.
+
+    The implemented logic is really simple:
+
+    - Peek the next element in each iterator, and yield from the "smallest" one (according to the key function and the
+      reversed flag), when an iterator is exhausted it's just removed from the list until the list is empty, in which
+      point the resulting iterator will stop.
+
+    For example:
+
+    >>> list(sorted_merger([1,3,4,100,101,105], [104], [2,50,99,106]))
+    [1, 2, 3, 4, 50, 99, 100, 101, 104, 105, 106]
+
+    For descending order, use reverse=True
+
+    >>> list(sorted_merger([105,101,100,4,3,1], [104], [106,99,50,2], reverse=True))
+    [106, 105, 104, 101, 100, 99, 50, 4, 3, 2, 1]
+
+    But using a negating key also works
+
+    >>> list(sorted_merger([105,101,100,4,3,1], [104], [106,99,50,2], key=lambda i: -i))
+    [106, 105, 104, 101, 100, 99, 50, 4, 3, 2, 1]
+
+    Empty stuff will just yield empty stuff
+
+    >>> list(sorted_merger([]))
+    []
+
+    >>> list(sorted_merger())
+    []
+
+    All elements will eventually be yielded, it doesn't matter if they are "repeated"
+
+    >>> list(sorted_merger([], [1,1,1], [1,1], [1,1,1,1]))
+    [1, 1, 1, 1, 1, 1, 1, 1, 1]
+
+    Even if they are not sorted, they will still be yielded eventually, but there are no guarantees about the order
+    they will come out
+
+    >>> list(sorted_merger([1,2,3],[4,3,2]))
+    [1, 2, 3, 4, 3, 2]
+    """
+
+    def __init__(self, *iterators: Iterator[T], key: Optional[Callable[[T], Any]] = None,
+                 reverse: bool = False) -> None:
+        self._iterators = [peekable(it) for it in iterators]
+        self._key = key or _identity
+        self._reverse = reverse
+
+    def _clear_empty(self):
+        for it in self._iterators[:]:
+            if not it:
+                self._iterators.remove(it)
+
+    def __iter__(self) -> Iterator[T]:
+        return self
+
+    def __next__(self) -> T:
+        self._clear_empty()
+        if not self._iterators:
+            raise StopIteration
+        cmp = max if self._reverse else min
+        # XXX: this line bellow is correct, but it's just really hard to convince mypy of that, ignoring for now
+        best_it = cmp(self._iterators, key=lambda it: self._key(it.peek()))  # type: ignore
+        return next(best_it)

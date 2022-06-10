@@ -1,10 +1,24 @@
 import pytest
 
+from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
+from hathor.graphviz import GraphvizVisualizer
 from hathor.transaction import Transaction
+from hathor.util import iwindows
 from hathor.wallet import Wallet
 from tests import unittest
-from tests.utils import HAS_ROCKSDB, add_blocks_unlock_reward, add_new_blocks, gen_new_tx, get_genesis_key
+from tests.utils import (
+    HAS_ROCKSDB,
+    add_blocks_unlock_reward,
+    add_custom_tx,
+    add_new_block,
+    add_new_blocks,
+    add_new_tx,
+    gen_new_tx,
+    get_genesis_key,
+)
+
+settings = HathorSettings()
 
 
 class BaseIndexesTest(unittest.TestCase):
@@ -283,6 +297,310 @@ class BaseIndexesTest(unittest.TestCase):
         )
         # END TEST INDEX BEHAVIOR
 
+    def test_utxo_index_genesis(self):
+        from hathor.indexes.utxo_index import UtxoIndexItem
+        from tests.utils import GENESIS_ADDRESS_B58
+
+        HTR_UID = settings.HATHOR_TOKEN_UID
+
+        assert self.tx_storage.indexes is not None
+        utxo_index = self.tx_storage.indexes.utxo
+
+        # let's check everything is alright, all UTXOs should currently be from just the mined blocks and genesis
+        expected_genesis_utxos = [
+            UtxoIndexItem(
+                token_uid=HTR_UID,
+                tx_id=settings.GENESIS_BLOCK_HASH,
+                index=0,
+                address=GENESIS_ADDRESS_B58,
+                amount=settings.GENESIS_TOKENS,
+                timelock=None,
+                heightlock=settings.REWARD_SPEND_MIN_BLOCKS,
+            ),
+        ]
+
+        # height just not enough should be empty
+        self.assertEqual(
+            list(utxo_index.iter_utxos(address=GENESIS_ADDRESS_B58, token_uid=settings.HATHOR_TOKEN_UID,
+                                       target_amount=settings.GENESIS_TOKEN_UNITS,
+                                       target_height=settings.REWARD_SPEND_MIN_BLOCKS - 1)),
+            [],
+        )
+
+        # height is now enough
+        self.assertEqual(
+            list(utxo_index.iter_utxos(address=GENESIS_ADDRESS_B58, token_uid=settings.HATHOR_TOKEN_UID,
+                                       target_amount=settings.GENESIS_TOKEN_UNITS,
+                                       target_height=settings.REWARD_SPEND_MIN_BLOCKS)),
+            expected_genesis_utxos,
+        )
+
+        # otherwise we can leave out the height and it should give the utxos
+        self.assertEqual(
+            list(utxo_index.iter_utxos(address=GENESIS_ADDRESS_B58, token_uid=settings.HATHOR_TOKEN_UID,
+                                       target_amount=settings.GENESIS_TOKEN_UNITS)),
+            expected_genesis_utxos,
+        )
+
+    def test_utxo_index_reorg(self):
+        from hathor.indexes.utxo_index import UtxoIndexItem
+
+        assert self.tx_storage.indexes is not None
+        utxo_index = self.tx_storage.indexes.utxo
+
+        add_new_blocks(self.manager, 5, advance_clock=15)
+        add_blocks_unlock_reward(self.manager)
+
+        address = self.manager.wallet.get_unused_address(mark_as_used=True)
+        value = 10
+
+        def check_utxos(*args):
+            """Pass a values of tuples (tx_id, index, amount, heightlock)"""
+            # target_amount doesn't really matter as long as it is large enough, since we want to see the most UTXOs
+            # for the given address that we can
+            actual = list(utxo_index.iter_utxos(address=address, target_amount=9999999))
+            expected = [
+                UtxoIndexItem(
+                    token_uid=settings.HATHOR_TOKEN_UID,
+                    tx_id=tx_id,
+                    index=index,
+                    address=address,
+                    amount=amount,
+                    timelock=None,
+                    heightlock=heightlock,
+                ) for tx_id, index, amount, heightlock in args
+            ]
+            # print('expected = [')
+            # for x in expected:
+            #     print(f'\t{x!r},')
+            # print(']')
+            # print('actual = [')
+            # for x in actual:
+            #     print(f'\t{x!r},')
+            # print(']')
+            self.assertEqual(actual, expected)
+
+        tx_base = add_new_tx(self.manager, address, value)
+        # there will be 2 outputs, the first one is the change, the second one is what we want
+        self.assertEqual(len(tx_base.outputs), 2)
+        check_utxos((tx_base.hash, 1, value, None))
+
+        # this tx is fine, nothing unusual, it should be added with no problem
+        txA1 = add_custom_tx(self.manager, [(tx_base, 1)], n_outputs=1, weight=1.0, resolve=True, address=address)
+        self.graphviz.labels[txA1.hash] = 'txA1'
+        self.assertFalse(bool(txA1.get_metadata().voided_by))
+        check_utxos((txA1.hash, 0, value, None))
+
+        # this is also fine
+        txB1 = add_custom_tx(self.manager, [(txA1, 0)], n_outputs=1, weight=1.0, resolve=True, address=address)
+        self.graphviz.labels[txB1.hash] = 'txB1'
+        self.assertFalse(bool(txB1.get_metadata().voided_by))
+        check_utxos((txB1.hash, 0, value, None))
+
+        # add a block to put weight on this branch and force a re-org later with a heavier block
+        block1 = add_new_block(self.manager, weight=1.1, address=decode_address(address))
+        self.graphviz.labels[block1.hash] = 'block1'
+        self.assertFalse(bool(block1.get_metadata().voided_by))
+        check_utxos((block1.hash, 0, 6400, 36), (txB1.hash, 0, value, None))
+
+        # this is now in conflict with A1, it should be voided right out of the box
+        txA2 = add_custom_tx(self.manager, [(tx_base, 1)], n_outputs=1, weight=1.0, resolve=True, address=address)
+        self.graphviz.labels[txA2.hash] = 'txA2'
+        self.assertTrue(bool(txA2.get_metadata().voided_by))
+        check_utxos((block1.hash, 0, 6400, 36), (txB1.hash, 0, value, None))
+
+        # this one too, although it could also be a tie
+        txB2 = add_custom_tx(self.manager, [(txA2, 0)], n_outputs=1, weight=1.0, resolve=True, address=address)
+        self.graphviz.labels[txB2.hash] = 'txB2'
+        self.assertTrue(bool(txB2.get_metadata().voided_by))
+
+        # double-check that everything is as expected before adding a block that will cause a re-org
+        check_utxos((block1.hash, 0, 6400, 36), (txB1.hash, 0, value, None))
+        self.assertFalse(bool(txA1.get_metadata().voided_by))
+        self.assertFalse(bool(txB1.get_metadata().voided_by))
+        self.assertFalse(bool(block1.get_metadata().voided_by))
+        self.assertTrue(bool(txA2.get_metadata().voided_by))
+        self.assertTrue(bool(txB2.get_metadata().voided_by))
+
+        # now add a block that will cause a re-org
+        block2 = self.manager.generate_mining_block(parent_block_hash=block1.parents[0],
+                                                    address=decode_address(address))
+        block2.parents[1:] = [txA2.hash, txB2.hash]
+        block2.timestamp = block1.timestamp
+        block2.weight = 1.2
+        block2.resolve()
+        block2.validate_full()
+        self.manager.propagate_tx(block2, fails_silently=False)
+        self.graphviz.labels[block2.hash] = 'block2'
+
+        # make sure a reorg did happen as expected
+        check_utxos((block2.hash, 0, 6400, 36), (txB2.hash, 0, value, None))
+        self.assertTrue(bool(txA1.get_metadata().voided_by))
+        self.assertTrue(bool(txB1.get_metadata().voided_by))
+        self.assertTrue(bool(block1.get_metadata().voided_by))
+        self.assertFalse(bool(block2.get_metadata().voided_by))
+        self.assertFalse(bool(txA2.get_metadata().voided_by))
+        self.assertFalse(bool(txB2.get_metadata().voided_by))
+
+    def test_utxo_index_simple(self):
+        from hathor.indexes.utxo_index import UtxoIndexItem
+
+        assert self.tx_storage.indexes is not None
+        utxo_index = self.tx_storage.indexes.utxo
+
+        address = self.get_address(0)
+
+        add_new_blocks(self.manager, 4, advance_clock=1)
+
+        self.assertEqual(
+            list(utxo_index.iter_utxos(address=address, target_amount=1)),
+            []
+        )
+
+        # Add some blocks with the address that we have, we'll have 4 outputs of 64.00 HTR each, 256.00 HTR in total
+        blocks = add_new_blocks(self.manager, 4, advance_clock=1, address=decode_address(address))
+        add_blocks_unlock_reward(self.manager)
+
+        self.assertEqual(
+            list(utxo_index.iter_utxos(address=address, target_amount=1)),
+            [
+                UtxoIndexItem(
+                    token_uid=settings.HATHOR_TOKEN_UID,
+                    tx_id=b.hash,
+                    index=0,
+                    address=address,
+                    amount=6400,
+                    timelock=None,
+                    heightlock=b.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS,
+                ) for b in blocks[:1]
+            ]
+        )
+
+        self.assertEqual(
+            list(utxo_index.iter_utxos(address=address, target_amount=6500)),
+            [
+                UtxoIndexItem(
+                    token_uid=settings.HATHOR_TOKEN_UID,
+                    tx_id=b.hash,
+                    index=0,
+                    address=address,
+                    amount=6400,
+                    timelock=None,
+                    heightlock=b.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS,
+                ) for b in blocks[4:1:-1]
+            ]
+        )
+
+        self.assertEqual(
+            list(utxo_index.iter_utxos(address=address, target_amount=25600)),
+            [
+                UtxoIndexItem(
+                    token_uid=settings.HATHOR_TOKEN_UID,
+                    tx_id=b.hash,
+                    index=0,
+                    address=address,
+                    amount=6400,
+                    timelock=None,
+                    heightlock=b.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS,
+                ) for b in blocks[::-1]
+            ]
+        )
+
+        self.assertEqual(
+            list(utxo_index.iter_utxos(address=address, target_amount=30000)),
+            [
+                UtxoIndexItem(
+                    token_uid=settings.HATHOR_TOKEN_UID,
+                    tx_id=b.hash,
+                    index=0,
+                    address=address,
+                    amount=6400,
+                    timelock=None,
+                    heightlock=b.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS,
+                ) for b in blocks[::-1]
+            ]
+        )
+
+    def test_utxo_index_limits(self):
+        from hathor.indexes.utxo_index import UtxoIndexItem
+
+        _debug = False
+
+        assert self.tx_storage.indexes is not None
+        utxo_index = self.tx_storage.indexes.utxo
+
+        address = self.get_address(0)
+        self.assertEqual(
+            list(utxo_index.iter_utxos(address=address, target_amount=1)),
+            []
+        )
+
+        # generate outputs ranging from 1 to 300, we'll need 1+2+...+300 = 45150, which we can do with 7 blocks, but
+        # using 8 just to be safe
+        add_new_blocks(self.manager, 8, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
+
+        txs = []
+        values = list(range(1, 301))
+        for value in values:
+            txs.append(add_new_tx(self.manager, address, value))
+        assert len(txs) == len(values)
+        txs_and_values = list(zip(txs, values))
+
+        # starting from 3, up to 300, we should always get 3 outputs, the one with the exact value and the two next
+        # lower values, for example, for target_amount=10, we should get outputs with values 10, 9, 8 in this order,
+        # this checks make sure all UTXOs are in the index
+        for txs_window in iwindows(txs_and_values, 3):
+            target_amount = txs_window[-1][1]
+            print('check target_amount =', target_amount)
+            expected = [
+                UtxoIndexItem(
+                    token_uid=settings.HATHOR_TOKEN_UID,
+                    tx_id=tx.hash,
+                    index=1,
+                    address=address,
+                    amount=amount,
+                    timelock=None,
+                    heightlock=None,
+                ) for tx, amount in reversed(txs_window)
+            ]
+            actual = list(utxo_index.iter_utxos(address=address, target_amount=target_amount))
+            if _debug:
+                print('expected = [')
+                for x in expected:
+                    print(f'\t{x!r},')
+                print(']')
+                print('actual = [')
+                for x in actual:
+                    print(f'\t{x!r},')
+                print(']')
+            self.assertEqual(actual, expected)
+
+        # now check that at most 255 utxos will be returned when we check for a large enough amount
+        max_outputs = settings.MAX_NUM_OUTPUTS
+        actual = list(utxo_index.iter_utxos(address=address, target_amount=sum(range(301))))
+        expected = [
+            UtxoIndexItem(
+                token_uid=settings.HATHOR_TOKEN_UID,
+                tx_id=tx.hash,
+                index=1,
+                address=address,
+                amount=amount,
+                timelock=None,
+                heightlock=None,
+            ) for tx, amount in txs_and_values[-1:-(max_outputs + 1):-1]  # these are the last 255 utxos
+        ]
+        if _debug:
+            print('expected = [')
+            for x in expected:
+                print(f'\t{x!r},')
+            print(']')
+            print('actual = [')
+            for x in actual:
+                print(f'\t{x!r},')
+            print(']')
+        self.assertEqual(actual, expected)
+
 
 class BaseMemoryIndexesTest(BaseIndexesTest):
     def setUp(self):
@@ -300,9 +618,12 @@ class BaseMemoryIndexesTest(BaseIndexesTest):
         self.genesis_public_key = self.genesis_private_key.public_key()
 
         # this makes sure we can spend the genesis outputs
-        self.manager = self.create_peer('testnet', tx_storage=self.tx_storage, unlock_wallet=True, wallet_index=True)
-        blocks = add_blocks_unlock_reward(self.manager)
-        self.last_block = blocks[-1]
+        self.manager = self.create_peer('testnet', tx_storage=self.tx_storage, unlock_wallet=True, wallet_index=True,
+                                        utxo_index=True)
+        self.blocks = add_blocks_unlock_reward(self.manager)
+        self.last_block = self.blocks[-1]
+
+        self.graphviz = GraphvizVisualizer(self.tx_storage, include_verifications=True, include_funds=True)
 
     def test_deps_index(self):
         from hathor.indexes.memory_deps_index import MemoryDepsIndex
@@ -358,9 +679,12 @@ class BaseRocksDBIndexesTest(BaseIndexesTest):
         self.genesis_public_key = self.genesis_private_key.public_key()
 
         # this makes sure we can spend the genesis outputs
-        self.manager = self.create_peer('testnet', tx_storage=self.tx_storage, unlock_wallet=True, wallet_index=True)
-        blocks = add_blocks_unlock_reward(self.manager)
-        self.last_block = blocks[-1]
+        self.manager = self.create_peer('testnet', tx_storage=self.tx_storage, unlock_wallet=True, wallet_index=True,
+                                        utxo_index=True)
+        self.blocks = add_blocks_unlock_reward(self.manager)
+        self.last_block = self.blocks[-1]
+
+        self.graphviz = GraphvizVisualizer(self.tx_storage, include_verifications=True, include_funds=True)
 
     def test_deps_index(self):
         from hathor.indexes.rocksdb_deps_index import RocksDBDepsIndex

@@ -161,7 +161,8 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.assertEqual(set(tx_parents_hash), {self.genesis_txs[0].hash, self.genesis_txs[1].hash})
 
     def validate_save(self, obj):
-        self.tx_storage.save_transaction(obj, add_to_indexes=True)
+        self.tx_storage.save_transaction(obj)
+        self.tx_storage.add_to_indexes(obj)
 
         loaded_obj1 = self.tx_storage.get_transaction(obj.hash)
 
@@ -330,10 +331,12 @@ class BaseTransactionStorageTest(unittest.TestCase):
         # 2 token uids
         tx.tokens.append(bytes.fromhex('00001c5c0b69d13b05534c94a69b2c8272294e6b0c536660a3ac264820677024'))
         tx.resolve()
+        tx._metadata.hash = tx.hash
         self.validate_save(tx)
         # no tokens
         tx.tokens = []
         tx.resolve()
+        tx._metadata.hash = tx.hash
         self.validate_save(tx)
 
     def _add_new_block(self, parents=None):
