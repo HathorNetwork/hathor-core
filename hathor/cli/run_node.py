@@ -70,6 +70,8 @@ class RunNode:
         parser.add_argument('--unlock-wallet', action='store_true', help='Ask for password to unlock wallet')
         parser.add_argument('--wallet-index', action='store_true',
                             help='Create an index of transactions by address and allow searching queries')
+        parser.add_argument('--utxo-index', action='store_true',
+                            help='Create an index of UTXOs by token/address/amount and allow searching queries')
         parser.add_argument('--prometheus', action='store_true', help='Send metric data to Prometheus')
         parser.add_argument('--cache', action='store_true', help='Use cache for tx storage')
         parser.add_argument('--cache-size', type=int, help='Number of txs to keep on cache')
@@ -257,6 +259,7 @@ class RunNode:
             tx_storage=self.tx_storage,
             wallet=self.wallet,
             wallet_index=args.wallet_index,
+            utxo_index=args.utxo_index,
             stratum_port=args.stratum,
             ssl=True,
             checkpoints=settings.CHECKPOINTS,
@@ -353,6 +356,7 @@ class RunNode:
             TransactionAccWeightResource,
             TransactionResource,
             TxParentsResource,
+            UtxoSearchResource,
             ValidateAddressResource,
         )
         from hathor.version_resource import VersionResource
@@ -451,6 +455,11 @@ class RunNode:
                 # /p2p
                 (b'peers', AddPeersResource(self.manager), p2p_resource),
             ]
+            # XXX: only enable UTXO search API if the index is enabled
+            if args.utxo_index:
+                resources.extend([
+                    (b'utxo_search', UtxoSearchResource(self.manager), root),
+                ])
 
             if args.enable_debug_api:
                 debug_resource = Resource()

@@ -68,7 +68,7 @@ def parse_args(args: Dict[bytes, List[bytes]], expected_args: List[str]) -> Dict
     # if there are expected args missing, we return None
     diff = expected_set.difference(args_set)
     if diff:
-        return {'success': False, 'missing': ', '.join(diff)}
+        return {'success': False, 'missing': ', '.join(sorted(diff))}
 
     ret: Dict[str, str] = dict()
     for arg2 in expected_args:
