@@ -196,7 +196,8 @@ class TransactionStorage(ABC):
                 tx2 = self.get_transaction(tx.hash)
                 assert tx == tx2
             except TransactionDoesNotExist:
-                self.save_transaction(tx, add_to_indexes=True)
+                self.save_transaction(tx)
+                self.add_to_indexes(tx)
                 tx2 = tx
             assert tx2.hash is not None
             self._genesis_cache[tx2.hash] = tx2
@@ -244,15 +245,13 @@ class TransactionStorage(ABC):
         self._tx_weakref_disabled = True
 
     @abstractmethod
-    def save_transaction(self: 'TransactionStorage', tx: BaseTransaction, *, only_metadata: bool = False,
-                         add_to_indexes: bool = False) -> None:
+    def save_transaction(self: 'TransactionStorage', tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         # XXX: although this method is abstract (because a subclass must implement it) the implementer
         #      should call the base implementation for correctly interacting with the index
         """Saves the tx.
 
         :param tx: Transaction to save
         :param only_metadata: Don't save the transaction, only the metadata of this transaction
-        :param add_to_indexes: Add this transaction to the indexes
         """
         assert tx.hash is not None
         meta = tx.get_metadata()
@@ -266,9 +265,6 @@ class TransactionStorage(ABC):
                 self.pubsub.publish(HathorEvents.STORAGE_TX_WINNER, tx=tx)
             else:
                 self.pubsub.publish(HathorEvents.STORAGE_TX_VOIDED, tx=tx)
-
-        if self.with_index and add_to_indexes:
-            self.add_to_indexes(tx)
 
     @abstractmethod
     def remove_transaction(self, tx: BaseTransaction) -> None:

@@ -13,11 +13,37 @@
 # limitations under the License.
 
 from collections.abc import Collection
-from typing import TYPE_CHECKING, Dict, Iterable, Iterator
+from typing import TYPE_CHECKING, Dict, Iterable, Iterator, NewType
+
+from hathor.conf import HathorSettings
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
     import structlog
+
+
+settings = HathorSettings()
+
+# the following type is used to help a little bit to distinguish when we're using a byte sequence that should only be
+# internally used
+InternalUid = NewType('InternalUid', bytes)
+_INTERNAL_HATHOR_TOKEN_UID = InternalUid(b'\x00' * 32)
+
+
+def to_internal_token_uid(token_uid: bytes) -> InternalUid:
+    """Normalizes a token_uid so that the native token (\x00) will have the same length as custom tokens."""
+    if token_uid == settings.HATHOR_TOKEN_UID:
+        return _INTERNAL_HATHOR_TOKEN_UID
+    assert len(token_uid) == 32
+    return InternalUid(token_uid)
+
+
+def from_internal_token_uid(token_uid: InternalUid) -> bytes:
+    """De-normalizes the token_uid so that the native token is b'\x00' as expected"""
+    assert len(token_uid) == 32
+    if token_uid == _INTERNAL_HATHOR_TOKEN_UID:
+        return settings.HATHOR_TOKEN_UID
+    return token_uid
 
 
 def incr_key(key: bytes) -> bytes:

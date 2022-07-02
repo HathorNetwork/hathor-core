@@ -10,9 +10,9 @@ from hathorlib.scripts import DataScript
 from twisted.internet.task import Clock
 
 from hathor.conf import HathorSettings
-from hathor.crypto.util import decode_address, get_private_key_from_bytes
+from hathor.crypto.util import decode_address, get_address_b58_from_public_key, get_private_key_from_bytes
 from hathor.manager import HathorManager
-from hathor.transaction import Transaction, TxInput, TxOutput, genesis
+from hathor.transaction import BaseTransaction, Transaction, TxInput, TxOutput, genesis
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount
@@ -48,18 +48,24 @@ def resolve_block_bytes(block_bytes):
     return block.get_struct()
 
 
-def add_custom_tx(manager: HathorManager, tx_inputs: List[Tuple[Transaction, int]], *, n_outputs: int = 1,
-                  base_parent: Optional[Transaction] = None, weight: Optional[float] = None) -> Transaction:
+def add_custom_tx(manager: HathorManager, tx_inputs: List[Tuple[BaseTransaction, int]], *, n_outputs: int = 1,
+                  base_parent: Optional[Transaction] = None, weight: Optional[float] = None,
+                  resolve: bool = False, address: Optional[str] = None) -> Transaction:
     """Add a custom tx based on the gen_custom_tx(...) method."""
-    tx = gen_custom_tx(manager, tx_inputs, n_outputs=n_outputs, base_parent=base_parent, weight=weight)
+    tx = gen_custom_tx(manager, tx_inputs, n_outputs=n_outputs, base_parent=base_parent, weight=weight,
+                       resolve=resolve, address=address)
     manager.propagate_tx(tx, fails_silently=False)
     return tx
 
 
-def gen_custom_tx(manager: HathorManager, tx_inputs: List[Tuple[Transaction, int]], *, n_outputs: int = 1,
-                  base_parent: Optional[Transaction] = None, weight: Optional[float] = None) -> Transaction:
+def gen_custom_tx(manager: HathorManager, tx_inputs: List[Tuple[BaseTransaction, int]], *, n_outputs: int = 1,
+                  base_parent: Optional[Transaction] = None, weight: Optional[float] = None,
+                  resolve: bool = False, address: Optional[str] = None) -> Transaction:
     """Generate a custom tx based on the inputs and outputs. It gives full control to the
     inputs and can be used to generate conflicts and specific patterns in the DAG."""
+    wallet = manager.wallet
+    assert wallet is not None
+
     inputs = []
     value = 0
     parents = []
@@ -72,23 +78,24 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: List[Tuple[Transaction, int
 
         from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
         value += spent_txout.value
-        wallet = manager.wallet
-        assert wallet is not None
         assert spent_tx.hash is not None
         private_key = wallet.get_private_key(p2pkh.address)
         inputs.append(WalletInputInfo(tx_id=spent_tx.hash, index=txout_index, private_key=private_key))
         if not tx_base.is_block:
             parents.append(tx_base.hash)
 
-    assert wallet is not None
-    address = wallet.get_unused_address(mark_as_used=True)
+    output_address: str
+    if address is None:
+        output_address = wallet.get_unused_address(mark_as_used=True)
+    else:
+        output_address = address
     if n_outputs == 1:
-        outputs = [WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None)]
+        outputs = [WalletOutputInfo(address=decode_address(output_address), value=int(value), timelock=None)]
     elif n_outputs == 2:
         assert int(value) > 1
         outputs = [
-            WalletOutputInfo(address=decode_address(address), value=int(value) - 1, timelock=None),
-            WalletOutputInfo(address=decode_address(address), value=1, timelock=None),
+            WalletOutputInfo(address=decode_address(output_address), value=int(value) - 1, timelock=None),
+            WalletOutputInfo(address=decode_address(output_address), value=1, timelock=None),
         ]
     else:
         raise NotImplementedError
@@ -110,7 +117,10 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: List[Tuple[Transaction, int
     assert len(tx2.parents) == 2
 
     tx2.weight = weight or 25
-    tx2.update_hash()
+    if resolve:
+        tx2.resolve()
+    else:
+        tx2.update_hash()
     return tx2
 
 
@@ -419,6 +429,11 @@ def get_genesis_key():
         'NCAAQ/XSOK+qniIY0F3X+lDrb55VQx5jWeBLhhzZnH6IzGVTtlAj9Ki73DVBm5+VXK400Idd6ddzS7FahBYYC7IaTl'
     )
     return get_private_key_from_bytes(private_key_bytes)
+
+
+GENESIS_PRIVATE_KEY = get_genesis_key()
+GENESIS_PUBLIC_KEY = GENESIS_PRIVATE_KEY.public_key()
+GENESIS_ADDRESS_B58 = get_address_b58_from_public_key(GENESIS_PUBLIC_KEY)
 
 
 def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, mint_amount: int = 300,

@@ -9,14 +9,10 @@ from tests.utils import add_blocks_unlock_reward, add_new_blocks, gen_new_tx
 class BaseSimulatorIndexesTestCase(unittest.TestCase):
     __test__ = False
 
-    def setUp(self):
-        super().setUp()
-
-        self.manager = self._build_randomized_blockchain()
-
-    def _build_randomized_blockchain(self):
+    def _build_randomized_blockchain(self, *, utxo_index=False):
         tx_storage = TransactionMemoryStorage()
-        manager = self.create_peer('testnet', tx_storage=tx_storage, unlock_wallet=True, wallet_index=True)
+        manager = self.create_peer('testnet', tx_storage=tx_storage, unlock_wallet=True, wallet_index=True,
+                                   utxo_index=utxo_index)
 
         add_new_blocks(manager, 50, advance_clock=15)
 
@@ -60,7 +56,9 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
     def test_index_initialization(self):
         from copy import deepcopy
 
-        # XXX: this test makes use of the internals of TipsIndex
+        self.manager = self._build_randomized_blockchain(utxo_index=True)
+
+        # XXX: this test makes use of the internals of TipsIndex, AddressIndex and UtxoIndex
         tx_storage = self.manager.tx_storage
         assert tx_storage.indexes is not None
 
@@ -78,6 +76,7 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         base_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
         base_tx_tips_tree = tx_storage.indexes.tx_tips.tree.copy()
         base_address_index = deepcopy(tx_storage.indexes.addresses.index)
+        base_utxo_index = deepcopy(tx_storage.indexes.utxo._index)
 
         # reset the indexes and force a re-initialization of all indexes
         tx_storage._manually_initialize()
@@ -88,11 +87,13 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         reinit_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
         reinit_tx_tips_tree = tx_storage.indexes.tx_tips.tree.copy()
         reinit_address_index = deepcopy(tx_storage.indexes.addresses.index)
+        reinit_utxo_index = deepcopy(tx_storage.indexes.utxo._index)
 
         self.assertEqual(reinit_all_tips_tree, base_all_tips_tree)
         self.assertEqual(reinit_block_tips_tree, base_block_tips_tree)
         self.assertEqual(reinit_tx_tips_tree, base_tx_tips_tree)
         self.assertEqual(reinit_address_index, base_address_index)
+        self.assertEqual(reinit_utxo_index, base_utxo_index)
 
         # reset again
         tx_storage._manually_initialize()
@@ -103,13 +104,16 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         newinit_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
         newinit_tx_tips_tree = tx_storage.indexes.tx_tips.tree.copy()
         newinit_address_index = deepcopy(tx_storage.indexes.addresses.index)
+        newinit_utxo_index = deepcopy(tx_storage.indexes.utxo._index)
 
         self.assertEqual(newinit_all_tips_tree, base_all_tips_tree)
         self.assertEqual(newinit_block_tips_tree, base_block_tips_tree)
         self.assertEqual(newinit_tx_tips_tree, base_tx_tips_tree)
         self.assertEqual(newinit_address_index, base_address_index)
+        self.assertEqual(newinit_utxo_index, base_utxo_index)
 
     def test_topological_iterators(self):
+        self.manager = self._build_randomized_blockchain()
         tx_storage = self.manager.tx_storage
 
         # XXX: sanity check that we've at least produced something

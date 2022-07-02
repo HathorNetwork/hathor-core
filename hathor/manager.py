@@ -65,7 +65,7 @@ class HathorManager:
     def __init__(self, reactor: Reactor, peer_id: Optional[PeerId] = None, network: Optional[str] = None,
                  hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
-                 peer_storage: Optional[Any] = None, wallet_index: bool = False,
+                 peer_storage: Optional[Any] = None, wallet_index: bool = False, utxo_index: bool = False,
                  stratum_port: Optional[int] = None, ssl: bool = True,
                  enable_sync_v1: bool = True, enable_sync_v2: bool = False,
                  capabilities: Optional[List[str]] = None, checkpoints: Optional[List[Checkpoint]] = None,
@@ -149,6 +149,10 @@ class HathorManager:
             self.log.debug('enable wallet indexes')
             self.tx_storage.indexes.enable_address_index(self.pubsub)
             self.tx_storage.indexes.enable_tokens_index()
+        if utxo_index and self.tx_storage.with_index:
+            assert self.tx_storage.indexes is not None
+            self.log.debug('enable utxo index')
+            self.tx_storage.indexes.enable_utxo_index()
 
         self.metrics = Metrics(
             pubsub=self.pubsub,
@@ -426,7 +430,8 @@ class HathorManager:
                         self.tx_storage.add_to_indexes(tx)
                         assert tx.validate_full(skip_block_weight_verification=skip_block_weight_verification)
                         self.consensus_algorithm.update(tx)
-                        self.tx_storage.indexes.mempool_tips.update(tx)
+                        self.tx_storage.indexes.update(tx)
+                        self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
                         self.step_validations([tx])
                     else:
                         assert tx.validate_basic(skip_block_weight_verification=skip_block_weight_verification)
@@ -909,7 +914,8 @@ class HathorManager:
             # in the tx parents even if the tx was invalid (failing the verifications above)
             # then I would have a children that was not in the storage
             tx.update_initial_metadata()
-            self.tx_storage.save_transaction(tx, add_to_indexes=True)
+            self.tx_storage.save_transaction(tx)
+            self.tx_storage.add_to_indexes(tx)
             try:
                 self.consensus_algorithm.update(tx)
             except HathorError as e:
@@ -919,6 +925,8 @@ class HathorManager:
                 return False
             else:
                 assert tx.validate_full(skip_block_weight_verification=True)
+                self.tx_storage.indexes.update(tx)
+                self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
                 self.tx_fully_validated(tx)
         elif sync_checkpoints:
             metadata.children = self.tx_storage.indexes.deps.known_children(tx)
@@ -993,11 +1001,11 @@ class HathorManager:
                 # TODO
                 raise
             else:
-                self.tx_storage.save_transaction(tx, only_metadata=True, add_to_indexes=True)
+                self.tx_storage.save_transaction(tx, only_metadata=True)
+                self.tx_storage.add_to_indexes(tx)
                 self.consensus_algorithm.update(tx)
-                # save and process its dependencies even if it became invalid
-                # because invalidation state also has to propagate to children
-                self.tx_storage.indexes.deps.remove_ready_for_validation(tx.hash)
+                self.tx_storage.indexes.update(tx)
+                self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
                 self.tx_fully_validated(tx)
 
     def tx_fully_validated(self, tx: BaseTransaction) -> None:
