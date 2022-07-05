@@ -1307,7 +1307,7 @@ class MergedMiningCoordinator:
             # self.log.debug('hathor.get_block_template response', block=block, height=height)
             self.hathor_coord_job = HathorCoordJob(block, height)
             self.log.debug('new Hathor block template', height=height, weight=block.weight)
-            self.update_merged_block()
+            await self.update_merged_block()
 
     def is_next_job_clean(self) -> bool:
         """ Used to determine if the current job must be immediatly stopped in favor of the next job.

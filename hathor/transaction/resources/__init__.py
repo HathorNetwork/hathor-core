@@ -23,21 +23,23 @@ from hathor.transaction.resources.push_tx import PushTxResource
 from hathor.transaction.resources.transaction import TransactionResource
 from hathor.transaction.resources.transaction_confirmation import TransactionAccWeightResource
 from hathor.transaction.resources.tx_parents import TxParentsResource
+from hathor.transaction.resources.utxo_search import UtxoSearchResource
 from hathor.transaction.resources.validate_address import ValidateAddressResource
 
 __all__ = [
     'BlockAtHeightResource',
     'CreateTxResource',
+    'DashboardTransactionResource',
     'DecodeTxResource',
-    'PushTxResource',
     'GetBlockTemplateResource',
     'GraphvizFullResource',
     'GraphvizNeighboursResource',
+    'MempoolResource',
+    'PushTxResource',
     'SubmitBlockResource',
     'TransactionAccWeightResource',
     'TransactionResource',
-    'DashboardTransactionResource',
     'TxParentsResource',
+    'UtxoSearchResource',
     'ValidateAddressResource',
-    'MempoolResource',
 ]

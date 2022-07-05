@@ -22,3 +22,8 @@ class InvalidNewTransaction(HathorError):
     """Raised when a new received tx/block is not valid.
     """
     pass
+
+
+class InitializationError(HathorError):
+    """Raised when there's anything wrong during initialization that should cause it to be aborted.
+    """

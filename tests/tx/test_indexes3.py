@@ -39,13 +39,17 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         self.simulator.run(5 * 60)
         return manager
 
+    def setUp(self):
+        super().setUp()
+
+        # XXX: having this on the setUp makes it so when this fails it's an error (E) and not a failure (F), which has
+        #      slightly different meaning
+        self.manager = self._build_randomized_blockchain()
+
     @pytest.mark.flaky(max_runs=3, min_passes=1)
     def test_tips_index_initialization(self):
-        from intervaltree import IntervalTree
-
         # XXX: this test makes use of the internals of TipsIndex
-        manager = self._build_randomized_blockchain()
-        tx_storage = manager.tx_storage
+        tx_storage = self.manager.tx_storage
         assert tx_storage.indexes is not None
 
         # XXX: sanity check that we've at least produced something
@@ -56,9 +60,8 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         base_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
         base_tx_tips_tree = tx_storage.indexes.tx_tips.tree.copy()
 
-        # reset the indexes and force a manual initialization
-        tx_storage._reset_cache()
-        manager._initialize_components()
+        # reset the indexes, which will force a re-initialization of all indexes
+        tx_storage._manually_initialize()
 
         reinit_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
         reinit_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
@@ -68,12 +71,8 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         self.assertEqual(reinit_block_tips_tree, base_block_tips_tree)
         self.assertEqual(reinit_tx_tips_tree, base_tx_tips_tree)
 
-        # reset again but now initilize from the new function
-        # XXX: manually reset each index, because we're using MemoryTimestampIndex and we need that for the new init
-        for tip_index in [tx_storage.indexes.all_tips, tx_storage.indexes.block_tips, tx_storage.indexes.tx_tips]:
-            tip_index.tx_last_interval = {}
-            tip_index.tree = IntervalTree()
-        tx_storage.indexes._manually_initialize_tips_indexes(tx_storage)
+        # reset again
+        tx_storage._manually_initialize()
 
         newinit_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
         newinit_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
@@ -85,26 +84,31 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
 
     @pytest.mark.flaky(max_runs=3, min_passes=1)
     def test_topological_iterators(self):
-        manager = self._build_randomized_blockchain()
-        tx_storage = manager.tx_storage
+        tx_storage = self.manager.tx_storage
 
         # XXX: sanity check that we've at least produced something
-        self.assertGreater(tx_storage.get_count_tx_blocks(), 3)
+        total_count = tx_storage.get_count_tx_blocks()
+        self.assertGreater(total_count, 3)
+
+        # XXX: sanity check that the children metadata is properly set (this is needed for one of the iterators)
+        for tx in tx_storage.get_all_transactions():
+            assert tx.hash is not None
+            for parent_tx in map(tx_storage.get_transaction, tx.parents):
+                self.assertIn(tx.hash, parent_tx.get_metadata().children)
 
         # test iterators, name is used to aid in assert messages
         iterators = [
-            ('traditional', tx_storage._topological_sort()),
-            ('fast', tx_storage._topological_fast()),
+            ('dfs', tx_storage._topological_sort_dfs()),
+            ('timestamp_index', tx_storage._topological_sort_timestamp_index()),
+            ('metadata', tx_storage._topological_sort_metadata()),
         ]
         for name, it in iterators:
-            # collect all transactions
+            # collect all transactions, while checking that inputs/parents are consistent
             txs = list(it)
             # must be complete
-            self.assertEqual(len(txs), tx_storage.get_count_tx_blocks(),
-                             f'iterator "{name}" does not cover all txs')
+            self.assertEqual(len(txs), total_count, f'iterator "{name}" does not cover all txs')
             # must be topological
-            self.assertIsTopological(iter(txs),
-                                     f'iterator "{name}" is not topological')
+            self.assertIsTopological(iter(txs), f'iterator "{name}" is not topological')
 
 
 class SyncV1SimulatorIndexesTestCase(unittest.SyncV1Params, BaseSimulatorIndexesTestCase):

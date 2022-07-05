@@ -29,6 +29,7 @@ if TYPE_CHECKING:  # pragma: no cover
 logger = get_logger()
 
 _CF_NAME_ADDRESS_INDEX = b'address-index'
+_DB_NAME: str = 'address'
 
 
 class RocksDBAddressIndex(AddressIndex, RocksDBIndexUtils):
@@ -46,16 +47,19 @@ class RocksDBAddressIndex(AddressIndex, RocksDBIndexUtils):
     """
     def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None,
                  pubsub: Optional['PubSubManager'] = None) -> None:
-        RocksDBIndexUtils.__init__(self, db)
         self.log = logger.new()
-
-        # column family stuff
-        self._cf_name = cf_name or _CF_NAME_ADDRESS_INDEX
-        self._cf = self._fresh_cf(self._cf_name)
+        RocksDBIndexUtils.__init__(self, db, cf_name or _CF_NAME_ADDRESS_INDEX)
 
         self.pubsub = pubsub
         if self.pubsub:
             self.subscribe_pubsub_events()
+
+    def get_db_name(self) -> Optional[str]:
+        # XXX: we don't need it to be parametrizable, so this is fine
+        return _DB_NAME
+
+    def force_clear(self) -> None:
+        self.clear()
 
     def _to_key(self, address: str, tx: Optional[BaseTransaction] = None) -> bytes:
         import struct

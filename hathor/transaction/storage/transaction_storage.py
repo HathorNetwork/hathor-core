@@ -16,7 +16,7 @@ import hashlib
 from abc import ABC, abstractmethod, abstractproperty
 from collections import deque
 from threading import Lock
-from typing import Any, Dict, FrozenSet, Iterable, Iterator, List, NamedTuple, Optional, Set, Tuple, cast
+from typing import Any, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple, cast
 from weakref import WeakValueDictionary
 
 from intervaltree.interval import Interval
@@ -29,13 +29,16 @@ from hathor.transaction.base_transaction import BaseTransaction
 from hathor.transaction.block import Block
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
 from hathor.transaction.transaction import Transaction
-from hathor.transaction.transaction_metadata import TransactionMetadata, ValidationState
-from hathor.util import not_none
+from hathor.transaction.transaction_metadata import TransactionMetadata
 
 settings = HathorSettings()
 
-
-INF_HEIGHT: int = 1_000_000_000_000
+# these are the timestamp values to be used when resetting them, 1 is used for the node instead of 0, so it can be
+# greater, that way if both are reset (which also happens on a database that never run this implementation before) we
+# guarantee that indexes will be initialized (because they would be "older" than the node timestamp).
+NULL_INDEX_LAST_STARTED_AT = 0
+NULL_LAST_STARTED_AT = 1
+INDEX_ATTR_PREFIX = 'index_'
 
 
 class AllTipsCache(NamedTuple):
@@ -43,14 +46,6 @@ class AllTipsCache(NamedTuple):
     tips: Set[Interval]
     merkle_tree: bytes
     hashes: List[bytes]
-
-
-class _DirDepValue(Dict[bytes, ValidationState]):
-    """This class is used to add a handy method to values on dependency indexes."""
-
-    def is_ready(self) -> bool:
-        """True if all deps' validation are fully connected."""
-        return all(val.is_fully_connected() for val in self.values())
 
 
 class TransactionStorage(ABC):
@@ -61,6 +56,18 @@ class TransactionStorage(ABC):
     indexes: Optional[IndexesManager]
 
     log = get_logger()
+
+    # Key storage attribute to save if the network stored is the expected network
+    _network_attribute: str = 'network'
+
+    # Key storage attribute to save if the full node is running a full verification
+    _running_full_verification_attribute: str = 'running_full_verification'
+
+    # Key storage attribute to save if the manager is running
+    _manager_running_attribute: str = 'manager_running'
+
+    # Ket storage attribute to save the last time the node started
+    _last_start_attribute: str = 'last_start'
 
     def __init__(self):
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
@@ -95,175 +102,18 @@ class TransactionStorage(ABC):
         # Initialize cache for genesis transactions.
         self._genesis_cache: Dict[bytes, BaseTransaction] = {}
 
-        # Key storage attribute to save if the network stored is the expected network
-        self._network_attribute: str = 'network'
+        # Internal toggle to choose when to select topological DFS iterator, used only on some tests
+        self._always_use_topological_dfs = False
 
-        # Key storage attribute to save if the full node is running a full verification
-        self._running_full_verification_attribute: str = 'running_full_verification'
+    @abstractmethod
+    def _update_caches(self, block_count: int, tx_count: int, latest_timestamp: int, first_timestamp: int) -> None:
+        """Update ephemeral caches, should only be used internally."""
+        raise NotImplementedError
 
-        # Key storage attribute to save if the manager is running
-        self._manager_running_attribute: str = 'manager_running'
-
-        # Direct and reverse dependency mapping (i.e. needs and needed by)
-        self._dir_dep_index: Dict[bytes, _DirDepValue] = {}
-        self._rev_dep_index: Dict[bytes, Set[bytes]] = {}
-        self._txs_with_deps_ready: Set[bytes] = set()
-
-        # Needed txs (key: tx missing, value: requested by)
-        self._needed_txs_index: Dict[bytes, Tuple[int, bytes]] = {}
-
-    # rev-dep-index methods:
-
-    def count_deps_index(self) -> int:
-        """Count total number of txs with dependencies."""
-        return len(self._dir_dep_index)
-
-    def _get_validation_state(self, tx: bytes) -> ValidationState:
-        """Query database for the validation state of a transaction, returns INITIAL when tx does not exist."""
-        tx_meta = self.get_metadata(tx)
-        if tx_meta is None:
-            return ValidationState.INITIAL
-        return tx_meta.validation
-
-    def _update_deps(self, deps: _DirDepValue) -> None:
-        """Propagate the new validation state of the given deps."""
-        for tx, validation in deps.items():
-            self._update_validation(tx, validation)
-
-    def _update_validation(self, tx: bytes, validation: ValidationState) -> None:
-        """Propagate the new validation state of a given dep."""
-        for cousin in self._rev_dep_index[tx].copy():
-            deps = self._dir_dep_index[cousin]
-            # XXX: this check serves to avoid calling is_ready() when nothing changed
-            if deps[tx] != validation:
-                deps[tx] = validation
-                if deps.is_ready():
-                    self.del_from_deps_index(cousin)
-                    self._txs_with_deps_ready.add(cousin)
-
-    def add_to_deps_index(self, tx: bytes, deps: Iterable[bytes]) -> None:
-        """Call to add all dependencies a transaction has."""
-        # deps are immutable for a given hash
-        _deps = _DirDepValue((dep, self._get_validation_state(dep)) for dep in deps)
-        # short circuit add directly to ready
-        if _deps.is_ready():
-            self._txs_with_deps_ready.add(tx)
-            return
-        # add direct deps
-        if __debug__ and tx in self._dir_dep_index:
-            # XXX: dependencies set must be immutable
-            assert self._dir_dep_index[tx].keys() == _deps.keys()
-        self._dir_dep_index[tx] = _deps
-        # add reverse dep
-        for rev_dep in _deps:
-            if rev_dep not in self._rev_dep_index:
-                self._rev_dep_index[rev_dep] = set()
-            self._rev_dep_index[rev_dep].add(tx)
-
-    def del_from_deps_index(self, tx: bytes) -> None:
-        """Call to remove tx from all reverse dependencies, for example when validation is complete."""
-        _deps = self._dir_dep_index.pop(tx, _DirDepValue())
-        for rev_dep in _deps.keys():
-            rev_deps = self._rev_dep_index[rev_dep]
-            if tx in rev_deps:
-                rev_deps.remove(tx)
-            if not rev_deps:
-                del self._rev_dep_index[rev_dep]
-
-    def is_ready_for_validation(self, tx: bytes) -> bool:
-        """ Whether a tx can be fully validated (implies fully connected).
-        """
-        return tx in self._txs_with_deps_ready
-
-    def remove_ready_for_validation(self, tx: bytes) -> None:
-        """ Removes from ready for validation set.
-        """
-        self._txs_with_deps_ready.discard(tx)
-
-    def next_ready_for_validation(self, *, dry_run: bool = False) -> Iterator[bytes]:
-        """ Yields and removes all txs ready for validation even if they become ready while iterating.
-        """
-        if dry_run:
-            cur_ready = self._txs_with_deps_ready.copy()
-        else:
-            cur_ready, self._txs_with_deps_ready = self._txs_with_deps_ready, set()
-        while cur_ready:
-            yield from iter(cur_ready)
-            if dry_run:
-                cur_ready = self._txs_with_deps_ready - cur_ready
-            else:
-                cur_ready, self._txs_with_deps_ready = self._txs_with_deps_ready, set()
-
-    def iter_deps_index(self) -> Iterator[bytes]:
-        """Iterate through all hashes depended by any tx or block."""
-        yield from self._rev_dep_index.keys()
-
-    def get_rev_deps(self, tx: bytes) -> FrozenSet[bytes]:
-        """Get all txs that depend on the given tx (i.e. its reverse depdendencies)."""
-        return frozenset(self._rev_dep_index.get(tx, set()))
-
-    def children_from_deps(self, tx: bytes) -> List[bytes]:
-        """Return the hashes of all reverse dependencies that are children of the given tx.
-
-        That is, they depend on `tx` because they are children of `tx`, and not because `tx` is an input. This is
-        useful for pre-filling the children metadata, which would otherwise only be updated when
-        `update_initial_metadata` is called on the child-tx.
-        """
-        return [not_none(rev.hash) for rev in map(self.get_transaction, self.get_rev_deps(tx)) if tx in rev.parents]
-
-    # needed-txs-index methods:
-
-    def has_needed_tx(self) -> bool:
-        """Whether there is any tx on the needed tx index."""
-        return bool(self._needed_txs_index)
-
-    def is_tx_needed(self, tx: bytes) -> bool:
-        """Whether a tx is in the requested tx list."""
-        return tx in self._needed_txs_index
-
-    def needed_index_height(self, tx: bytes) -> int:
-        """Indexed height from the needed tx index."""
-        return self._needed_txs_index[tx][0]
-
-    def remove_from_needed_index(self, tx: bytes) -> None:
-        """Remove tx from needed txs index, tx doesn't need to be in the index."""
-        self._needed_txs_index.pop(tx, None)
-
-    def get_next_needed_tx(self) -> bytes:
-        """Choose the start hash for downloading the needed txs"""
-        # This strategy maximizes the chance to download multiple txs on the same stream
-        # find the tx with highest "height"
-        # XXX: we could cache this onto `needed_txs` so we don't have to fetch txs every time
-        height, start_hash, tx = max((h, s, t) for t, (h, s) in self._needed_txs_index.items())
-        self.log.debug('next needed tx start', needed=len(self._needed_txs_index), start=start_hash.hex(),
-                       height=height, needed_tx=tx.hex())
-        return start_hash
-
-    def add_needed_deps(self, tx: BaseTransaction) -> None:
-        if isinstance(tx, Block):
-            height = tx.get_metadata().height
-        else:
-            assert isinstance(tx, Transaction)
-            first_block = tx.get_metadata().first_block
-            if first_block is None:
-                # XXX: consensus did not run yet to update first_block, what should we do?
-                #      I'm defaulting the height to `inf` (practically), this should make it heightest priority when
-                #      choosing which transactions to fetch next
-                height = INF_HEIGHT
-            else:
-                block = self.get_transaction(first_block)
-                assert isinstance(block, Block)
-                height = block.get_metadata().height
-        # get_tx_parents is used instead of get_tx_dependencies because the remote will traverse the parent
-        # tree, not # the dependency tree, eventually we should receive all tx dependencies and be able to validate
-        # this transaction
-        for tx_hash in tx.get_tx_parents():
-            # It may happen that we have one of the dependencies already, so just add the ones we don't
-            # have. We should add at least one dependency, otherwise this tx should be full validated
-            if not self.transaction_exists(tx_hash):
-                self._needed_txs_index[tx_hash] = (height, not_none(tx.hash))
-
-    # all other methods:
+    @abstractmethod
+    def reset_indexes(self) -> None:
+        """Reset all the indexes, making sure that no persisted value is reused."""
+        raise NotImplementedError
 
     def update_best_block_tips_cache(self, tips_cache: List[bytes]) -> None:
         # XXX: check that the cache update is working properly, only used in unittests
@@ -346,7 +196,8 @@ class TransactionStorage(ABC):
                 tx2 = self.get_transaction(tx.hash)
                 assert tx == tx2
             except TransactionDoesNotExist:
-                self.save_transaction(tx, add_to_indexes=True)
+                self.save_transaction(tx)
+                self.add_to_indexes(tx)
                 tx2 = tx
             assert tx2.hash is not None
             self._genesis_cache[tx2.hash] = tx2
@@ -394,19 +245,16 @@ class TransactionStorage(ABC):
         self._tx_weakref_disabled = True
 
     @abstractmethod
-    def save_transaction(self: 'TransactionStorage', tx: BaseTransaction, *, only_metadata: bool = False,
-                         add_to_indexes: bool = False) -> None:
+    def save_transaction(self: 'TransactionStorage', tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         # XXX: although this method is abstract (because a subclass must implement it) the implementer
         #      should call the base implementation for correctly interacting with the index
         """Saves the tx.
 
         :param tx: Transaction to save
         :param only_metadata: Don't save the transaction, only the metadata of this transaction
-        :param add_to_indexes: Add this transaction to the indexes
         """
+        assert tx.hash is not None
         meta = tx.get_metadata()
-        if tx.hash in self._rev_dep_index:
-            self._update_validation(tx.hash, meta.validation)
 
         # XXX: we can only add to cache and publish txs that are fully connected (which also implies it's valid)
         if not meta.validation.is_fully_connected():
@@ -417,9 +265,6 @@ class TransactionStorage(ABC):
                 self.pubsub.publish(HathorEvents.STORAGE_TX_WINNER, tx=tx)
             else:
                 self.pubsub.publish(HathorEvents.STORAGE_TX_VOIDED, tx=tx)
-
-        if self.with_index and add_to_indexes:
-            self.add_to_indexes(tx)
 
     @abstractmethod
     def remove_transaction(self, tx: BaseTransaction) -> None:
@@ -682,19 +527,42 @@ class TransactionStorage(ABC):
         """
         pass
 
-    @abstractmethod
-    def _topological_fast(self) -> Iterator[BaseTransaction]:
-        """Return an iterable of the transactions in topological ordering, i.e., from genesis to the most recent
-        transactions. The order is important because the transactions are always valid --- their parents and inputs
-        exist. This method makes use of the timestamp index, so it is crucial that that index is correct and complete.
+    def topological_iterator(self) -> Iterator[BaseTransaction]:
+        """This method will return the fastest topological iterator available based on the database state.
 
-        XXX: blocks are still prioritized over transactions, but only within the same timestamp, which means that it
-        will yield a different sequence than _topological_sort, but the sequence is still topological.
+        This will be:
+
+        - self._topological_sort_timestamp_index() when the timestamp index is up-to-date
+        - self._topological_sort_metadata() otherwise, metadata is assumed to be up-to-date
+        - self._topological_sort_dfs() when the private property `_always_use_topological_dfs` is set to `True`
         """
-        raise NotImplementedError
+        # TODO: we currently assume that metadata is up-to-date, and thus this method can only run when that assumption
+        #       is known to be true, but we could add a mechanism similar to what indexes use to know they're
+        #       up-to-date and get rid of that assumption so this method can be used without having to make any
+        #       assumptions
+        assert self.indexes is not None
+
+        if self._always_use_topological_dfs:
+            return self._topological_sort_dfs()
+
+        db_last_started_at = self.get_last_started_at()
+        sorted_all_db_name = self.indexes.sorted_all.get_db_name()
+        if sorted_all_db_name is None:
+            can_use_timestamp_index = False
+        else:
+            sorted_all_index_last_started_at = self.get_index_last_started_at(sorted_all_db_name)
+            can_use_timestamp_index = db_last_started_at == sorted_all_index_last_started_at
+
+        iter_tx: Iterator[BaseTransaction]
+        if can_use_timestamp_index:
+            iter_tx = self._topological_sort_timestamp_index()
+        else:
+            iter_tx = self._topological_sort_metadata()
+
+        return iter_tx
 
     @abstractmethod
-    def _topological_sort(self) -> Iterator[BaseTransaction]:
+    def _topological_sort_dfs(self) -> Iterator[BaseTransaction]:
         """Return an iterable of the transactions in topological ordering, i.e., from genesis to the most recent
         transactions. The order is important because the transactions are always valid --- their parents and inputs
         exist. This method is designed to be used for rebuilding metadata or indexes, that is, it does not make use of
@@ -702,6 +570,27 @@ class TransactionStorage(ABC):
 
         XXX: blocks are prioritized so as soon as a block can be yielded it will, which means that it is possible for a
         block to be yielded much sooner than an older transaction that isn't being confirmed by that block.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def _topological_sort_timestamp_index(self) -> Iterator[BaseTransaction]:
+        """Return an iterable of the transactions in topological ordering, i.e., from genesis to the most recent
+        transactions. The order is important because the transactions are always valid --- their parents and inputs
+        exist. This method makes use of the timestamp index, so it is crucial that that index is correct and complete.
+
+        XXX: blocks are still prioritized over transactions, but only within the same timestamp, which means that it
+        will yield a different sequence than _topological_sort_dfs, but the sequence is still topological.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def _topological_sort_metadata(self) -> Iterator[BaseTransaction]:
+        """Return an iterable of the transactions in topological ordering, using only info from metadata.
+
+        This is about as good as _topological_sort_timestamp_index but only needs the transaction's metadata to be
+        consistent and up-to-date. It could replace _topological_sort_timestamp_index if we can show it is faster or at
+        least not slower by most practical cases.
         """
         raise NotImplementedError
 
@@ -807,6 +696,42 @@ class TransactionStorage(ABC):
         """
         return self.get_value(self._manager_running_attribute) == '1'
 
+    def get_last_started_at(self) -> int:
+        """ Return the timestamp when the database was last started.
+        """
+        # XXX: defaults to 1 just to force indexes initialization, by being higher than 0
+        return int(self.get_value(self._last_start_attribute) or NULL_LAST_STARTED_AT)
+
+    def set_last_started_at(self, timestamp: int) -> None:
+        """ Update the timestamp when the database was last started.
+        """
+        self.add_value(self._last_start_attribute, str(timestamp))
+
+    def get_index_last_started_at(self, index_db_name: str) -> int:
+        """ Return the timestamp when an index was last started.
+        """
+        attr_name = INDEX_ATTR_PREFIX + index_db_name
+        return int(self.get_value(attr_name) or NULL_INDEX_LAST_STARTED_AT)
+
+    def set_index_last_started_at(self, index_db_name: str, timestamp: int) -> None:
+        """ Update the timestamp when a specific index was last started.
+        """
+        attr_name = INDEX_ATTR_PREFIX + index_db_name
+        self.add_value(attr_name, str(timestamp))
+
+    def update_last_started_at(self, timestamp: int) -> None:
+        """ Updates the respective timestamps of when the node was last started.
+
+        Using this mehtod ensures that the same timestamp is being used and the correct indexes are being selected.
+        """
+        assert self.indexes is not None
+        self.set_last_started_at(timestamp)
+        for index in self.indexes.iter_all_indexes():
+            index_db_name = index.get_db_name()
+            if index_db_name is None:
+                continue
+            self.set_index_last_started_at(index_db_name, timestamp)
+
 
 class BaseTransactionStorage(TransactionStorage):
     def __init__(self, with_index: bool = True, pubsub: Optional[Any] = None) -> None:
@@ -818,10 +743,17 @@ class BaseTransactionStorage(TransactionStorage):
         # Initialize index if needed.
         self.with_index = with_index
         if with_index:
-            self._reset_cache()
+            self.indexes = self._build_indexes_manager()
+            self._reset_cache(clear_indexes=False)
 
         # Either save or verify all genesis.
         self._save_or_verify_genesis()
+
+    def _update_caches(self, block_count: int, tx_count: int, latest_timestamp: int, first_timestamp: int) -> None:
+        self._cache_block_count = block_count
+        self._cache_tx_count = tx_count
+        self._latest_timestamp = latest_timestamp
+        self._first_timestamp = first_timestamp
 
     @property
     def latest_timestamp(self) -> int:
@@ -838,13 +770,20 @@ class BaseTransactionStorage(TransactionStorage):
     def _build_indexes_manager(self) -> IndexesManager:
         return MemoryIndexesManager()
 
-    def _reset_cache(self) -> None:
+    def reset_indexes(self) -> None:
+        self._reset_cache(clear_indexes=True)
+
+    def _reset_cache(self, *, clear_indexes: bool = True) -> None:
         """Reset all caches. This function should not be called unless you know what you are doing."""
         assert self.with_index, 'Cannot reset cache because it has not been enabled.'
+
+        # XXX: these fields would be better of being migrated to the IndexesManager, and probably as proper indexes
         self._cache_block_count = 0
         self._cache_tx_count = 0
 
-        self.indexes = self._build_indexes_manager()
+        if clear_indexes:
+            assert self.indexes is not None
+            self.indexes.force_clear_all()
 
         genesis = self.get_all_genesis()
         if genesis:
@@ -958,14 +897,14 @@ class BaseTransactionStorage(TransactionStorage):
         return txs, has_more
 
     def _manually_initialize(self) -> None:
-        self._reset_cache()
+        self._reset_cache(clear_indexes=False)
+        self._manually_initialize_indexes()
 
-        # We need to construct a topological sort, then iterate from
-        # genesis to tips.
-        for tx in self._topological_sort():
-            self.add_to_indexes(tx)
+    def _manually_initialize_indexes(self) -> None:
+        if self.indexes is not None:
+            self.indexes._manually_initialize(self)
 
-    def _topological_fast(self) -> Iterator[BaseTransaction]:
+    def _topological_sort_timestamp_index(self) -> Iterator[BaseTransaction]:
         assert self.indexes is not None
 
         cur_timestamp: Optional[int] = None
@@ -988,7 +927,41 @@ class BaseTransactionStorage(TransactionStorage):
         yield from cur_blocks
         yield from cur_txs
 
-    def _topological_sort(self) -> Iterator[BaseTransaction]:
+    def _topological_sort_metadata(self) -> Iterator[BaseTransaction]:
+        import heapq
+        from dataclasses import dataclass, field
+
+        @dataclass(order=True)
+        class Item:
+            timestamp: int
+            # XXX: because bools are ints, and False==0, True==1, is_transaction=False < is_transaction=True, which
+            #      will make blocks be prioritized over transactions with the same timestamp
+            is_transaction: bool
+            tx: BaseTransaction = field(compare=False)
+
+            def __init__(self, tx: BaseTransaction):
+                self.timestamp = tx.timestamp
+                self.is_transaction = tx.is_transaction
+                self.tx = tx
+
+        to_visit: List[Item] = list(map(Item, self.get_all_genesis()))
+        seen: Set[bytes] = set()
+        heapq.heapify(to_visit)
+        while to_visit:
+            item = heapq.heappop(to_visit)
+            assert item.tx.hash is not None
+            yield item.tx
+            # XXX: We can safely discard because no other tx will try to visit this one, since timestamps are strictly
+            #      higher in children, meaning we cannot possibly have item.tx as a descendant of any tx in to_visit.
+            seen.discard(item.tx.hash)
+            for child_tx_hash in item.tx.get_metadata().children:
+                if child_tx_hash in seen:
+                    continue
+                child_tx = self.get_transaction(child_tx_hash)
+                heapq.heappush(to_visit, Item(child_tx))
+                seen.add(child_tx_hash)
+
+    def _topological_sort_dfs(self) -> Iterator[BaseTransaction]:
         # TODO We must optimize this algorithm to remove the `visited` set.
         #      It will consume too much memory when the number of transactions is big.
         #      A solution would be to store the ordering in disk, probably indexing by tx's height.
@@ -999,11 +972,11 @@ class BaseTransactionStorage(TransactionStorage):
         for tx in self.get_all_transactions():
             if not tx.is_block:
                 continue
-            yield from self._topological_sort_dfs(tx, visited)
+            yield from self._run_topological_sort_dfs(tx, visited)
         for tx in self.get_all_transactions():
-            yield from self._topological_sort_dfs(tx, visited)
+            yield from self._run_topological_sort_dfs(tx, visited)
 
-    def _topological_sort_dfs(self, root: BaseTransaction, visited: Dict[bytes, int]) -> Iterator[BaseTransaction]:
+    def _run_topological_sort_dfs(self, root: BaseTransaction, visited: Dict[bytes, int]) -> Iterator[BaseTransaction]:
         if root.hash in visited:
             return
 
@@ -1096,7 +1069,7 @@ class BaseTransactionStorage(TransactionStorage):
                                 num_blocks: int = 100) -> List[BaseTransaction]:  # pragma: no cover
         ref_tx = self.get_transaction(hash_bytes)
         visited: Dict[bytes, int] = dict()  # Dict[bytes, int]
-        result = [x for x in self._topological_sort_dfs(ref_tx, visited) if not x.is_block]
+        result = [x for x in self._run_topological_sort_dfs(ref_tx, visited) if not x.is_block]
         result = result[-num_blocks:]
         return result
 

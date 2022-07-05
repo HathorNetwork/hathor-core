@@ -37,6 +37,12 @@ class MemoryTimestampIndex(TimestampIndex):
 
     def __init__(self) -> None:
         self.log = logger.new()
+        self.force_clear()
+
+    def get_db_name(self) -> Optional[str]:
+        return None
+
+    def force_clear(self) -> None:
         self._index = SortedKeyList(key=lambda x: (x.timestamp, x.hash))
 
     def add_tx(self, tx: BaseTransaction) -> bool:

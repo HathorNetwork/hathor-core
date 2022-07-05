@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from weakref import ReferenceType  # noqa: F401
 
     from hathor.transaction import BaseTransaction
+    from hathor.transaction.storage import TransactionStorage
 
 
 @unique
@@ -270,6 +271,17 @@ class TransactionMetadata:
         else:
             data['first_block'] = None
         data['validation'] = self.validation.name.lower()
+        return data
+
+    def to_json_extended(self, tx_storage: 'TransactionStorage') -> Dict[str, Any]:
+        data = self.to_json()
+        first_block_height: Optional[int]
+        if self.first_block is not None:
+            first_block = tx_storage.get_transaction(self.first_block)
+            first_block_height = first_block.get_metadata().height
+        else:
+            first_block_height = None
+        data['first_block_height'] = first_block_height
         return data
 
     @classmethod

@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import datetime
 import json
 import math
+import time
 import warnings
 from collections import OrderedDict
 from enum import Enum
@@ -48,7 +50,10 @@ from zope.interface.verify import verifyObject
 from hathor.conf import HathorSettings
 
 if TYPE_CHECKING:
+    import structlog
+
     from hathor.simulator.clock import HeapClock
+    from hathor.transaction.base_transaction import BaseTransaction
 
 # Reactor = IReactorTime
 # XXX: Ideally we would want to be able to express Reactor as IReactorTime+IReactorCore, which is what everyone using
@@ -422,3 +427,232 @@ def skip_n(it: Iterator[_T], n: int) -> Iterator[_T]:
 def verified_cast(interface_class: Type[Z], obj: Any) -> Z:
     verifyObject(interface_class, obj)
     return obj
+
+
+_DT_ITER_NEXT_WARN = 3  # time in seconds to warn when `next(iter_tx)` takes too long
+_DT_LOG_PROGRESS = 30  # time in seconds after which a progress will be logged (it can take longer, but not shorter)
+_DT_YIELD_WARN = 1  # time in seconds to warn when `yield tx` takes too long (which is when processing happens)
+
+
+def progress(iter_tx: Iterator['BaseTransaction'], *, log: Optional['structlog.stdlib.BoundLogger'] = None,
+             total: Optional[int] = None) -> Iterator['BaseTransaction']:
+    """ Log the progress of a transaction iterator while iterating.
+    """
+    if log is None:
+        log = logger.new()
+
+    t_start = time.time()
+    h = 0
+    ts_tx = 0
+
+    count = 0
+    count_log_prev = 0
+    block_count = 0
+    tx_count = 0
+
+    log.debug('load will start')
+    t_log_prev = t_start
+    while True:
+        t_before_next = time.time()
+        try:
+            tx: 'BaseTransaction' = next(iter_tx)
+        except StopIteration:
+            break
+        t_after_next = time.time()
+        dt_next = LogDuration(t_after_next - t_before_next)
+        if dt_next > _DT_ITER_NEXT_WARN:
+            log.warn('iterator was slow to yield', took_sec=dt_next)
+
+        assert tx.hash is not None
+        tx_meta = tx.get_metadata()
+        h = max(h, tx_meta.height)
+        ts_tx = max(ts_tx, tx.timestamp)
+
+        t_log = time.time()
+        dt_log = LogDuration(t_log - t_log_prev)
+        if dt_log > _DT_LOG_PROGRESS:
+            t_log_prev = t_log
+            dcount = count - count_log_prev
+            tx_rate = '?' if dt_log == 0 else dcount / dt_log
+            ts = datetime.datetime.fromtimestamp(ts_tx)
+            kwargs = dict(tx_rate=tx_rate, tx_new=dcount, dt=dt_log, total=count, latest_ts=ts, height=h)
+            if total is not None:
+                progress = count / total
+                # TODO: we could add an ETA since we know the total
+                log.info(f'loading... {math.floor(progress * 100):2.0f}%', progress=progress, **kwargs)
+            else:
+                log.info('loading...', **kwargs)
+            count_log_prev = count
+        count += 1
+
+        t_before_yield = time.time()
+        yield tx
+        t_after_yield = time.time()
+
+        if tx.is_block:
+            block_count += 1
+        else:
+            tx_count += 1
+
+        dt_yield = t_after_yield - t_before_yield
+        if dt_yield > _DT_YIELD_WARN:
+            dt = LogDuration(dt_yield)
+            log.warn('tx took too long to be processed', tx=tx.hash_hex, dt=dt)
+
+    t_final = time.time()
+    dt_total = LogDuration(t_final - t_start)
+    tx_rate = '?' if dt_total == 0 else count / dt_total
+    log.info('loaded', tx_count=count, tx_rate=tx_rate, total_dt=dt_total, height=h, blocks=block_count, txs=tx_count)
+
+
+class peekable(Iterator[T]):
+    """Adaptor class to peek what will be returned by next(iterator)
+
+
+    >>> it = peekable(range(10))
+    >>> iter(it) is it
+    True
+    >>> it.peek()
+    0
+    >>> next(it)
+    0
+    >>> next(it)
+    1
+    >>> it.peek()
+    2
+    >>> bool(it)
+    True
+    >>> next(it)
+    2
+    >>> list(it)
+    [3, 4, 5, 6, 7, 8, 9]
+    >>> bool(it)
+    False
+    >>> it.peek()
+    Traceback (most recent call last):
+    ...
+    ValueError: iterator was exhausted
+
+    """
+
+    def __init__(self, it: Iterable[T]) -> None:
+        self._it: Optional[Iterator[T]] = iter(it)
+        # XXX: using Optional[Tuple[T]] makes it so the iterator can yield None, and it would be correctly peekable,
+        #      which is different from not having a next element to peek into
+        self._head: Optional[Tuple[T]] = None
+
+    def _peek(self) -> Optional[Tuple[T]]:
+        if self._head is None and self._it is None:
+            return None
+        if self._head is None:
+            assert self._it is not None
+            try:
+                self._head = next(self._it),
+            except StopIteration:
+                self._it = None
+                return None
+        return self._head
+
+    def __iter__(self) -> Iterator[T]:
+        return self
+
+    def __next__(self) -> T:
+        if self._head is not None:
+            (x,), self._head = self._head, None
+            return x
+        elif self._it is not None:
+            try:
+                return next(self._it)
+            except StopIteration:
+                self.it = None
+                raise
+        else:
+            raise StopIteration()
+
+    def peek(self) -> T:
+        x = self._peek()
+        if x is None:
+            raise ValueError('iterator was exhausted')
+        y, = x
+        return y
+
+    def __bool__(self) -> bool:
+        return self._peek() is not None
+
+
+def _identity(x: T) -> T:
+    return x
+
+
+class sorted_merger(Iterator[T]):
+    """ Adaptor class to merge multiple sorted iterators into a single iterator that is also sorted.
+
+    Note: for this adaptor to work as expected the input iterators have to already be sorted, but if they aren't, the
+    resulting iterator won't crash, or unexpecetdly stop working, however it will not be sorted.
+
+    A custom key function can be supplied to customize the sort order, and the
+    reverse flag can be set to request the result in descending order.
+
+    The implemented logic is really simple:
+
+    - Peek the next element in each iterator, and yield from the "smallest" one (according to the key function and the
+      reversed flag), when an iterator is exhausted it's just removed from the list until the list is empty, in which
+      point the resulting iterator will stop.
+
+    For example:
+
+    >>> list(sorted_merger([1,3,4,100,101,105], [104], [2,50,99,106]))
+    [1, 2, 3, 4, 50, 99, 100, 101, 104, 105, 106]
+
+    For descending order, use reverse=True
+
+    >>> list(sorted_merger([105,101,100,4,3,1], [104], [106,99,50,2], reverse=True))
+    [106, 105, 104, 101, 100, 99, 50, 4, 3, 2, 1]
+
+    But using a negating key also works
+
+    >>> list(sorted_merger([105,101,100,4,3,1], [104], [106,99,50,2], key=lambda i: -i))
+    [106, 105, 104, 101, 100, 99, 50, 4, 3, 2, 1]
+
+    Empty stuff will just yield empty stuff
+
+    >>> list(sorted_merger([]))
+    []
+
+    >>> list(sorted_merger())
+    []
+
+    All elements will eventually be yielded, it doesn't matter if they are "repeated"
+
+    >>> list(sorted_merger([], [1,1,1], [1,1], [1,1,1,1]))
+    [1, 1, 1, 1, 1, 1, 1, 1, 1]
+
+    Even if they are not sorted, they will still be yielded eventually, but there are no guarantees about the order
+    they will come out
+
+    >>> list(sorted_merger([1,2,3],[4,3,2]))
+    [1, 2, 3, 4, 3, 2]
+    """
+
+    def __init__(self, *iterators: Iterator[T], key: Optional[Callable[[T], Any]] = None,
+                 reverse: bool = False) -> None:
+        self._iterators = [peekable(it) for it in iterators]
+        self._key = key or _identity
+        self._reverse = reverse
+
+    def _clear_empty(self):
+        for it in self._iterators[:]:
+            if not it:
+                self._iterators.remove(it)
+
+    def __iter__(self) -> Iterator[T]:
+        return self
+
+    def __next__(self) -> T:
+        self._clear_empty()
+        if not self._iterators:
+            raise StopIteration
+        cmp = max if self._reverse else min
+        # XXX: this line bellow is correct, but it's just really hard to convince mypy of that, ignoring for now
+        best_it = cmp(self._iterators, key=lambda it: self._key(it.peek()))  # type: ignore
+        return next(best_it)

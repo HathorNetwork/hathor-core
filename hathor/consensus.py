@@ -29,6 +29,28 @@ cpu = get_cpu_profiler()
 _base_transaction_log = logger.new()
 
 
+class ConsensusAlgorithmContext:
+    """ An instance of this class holds all the relevant information related to a single run of a consensus update.
+    """
+
+    consensus: 'ConsensusAlgorithm'
+    block_algorithm: 'BlockConsensusAlgorithm'
+    transaction_algorithm: 'TransactionConsensusAlgorithm'
+    txs_affected: Set[BaseTransaction]
+
+    def __init__(self, consensus: 'ConsensusAlgorithm') -> None:
+        self.consensus = consensus
+        self.block_algorithm = consensus.block_algorithm_factory(self)
+        self.transaction_algorithm = consensus.transaction_algorithm_factory(self)
+        self.txs_affected = set()
+
+    def save(self, tx: BaseTransaction) -> None:
+        """Only metadata is ever saved in a consensus update."""
+        assert tx.storage is not None
+        self.txs_affected.add(tx)
+        tx.storage.save_transaction(tx, only_metadata=True)
+
+
 class ConsensusAlgorithm:
     """Execute the consensus algorithm marking blocks and transactions as either executed or voided.
 
@@ -56,19 +78,32 @@ class ConsensusAlgorithm:
     """
 
     def __init__(self, soft_voided_tx_ids: Set[bytes]) -> None:
-        self.soft_voided_tx_ids = soft_voided_tx_ids
-        self.block_algorithm = BlockConsensusAlgorithm(self, soft_voided_tx_ids)
-        self.transaction_algorithm = TransactionConsensusAlgorithm(self, soft_voided_tx_ids)
+        self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
+        self.block_algorithm_factory = BlockConsensusAlgorithmFactory()
+        self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
+
+    def create_context(self) -> ConsensusAlgorithmContext:
+        """Handy method to create a context that can be used to access block and transaction algorithms."""
+        return ConsensusAlgorithmContext(self)
 
     @cpu.profiler(key=lambda self, base: 'consensus!{}'.format(base.hash.hex()))
     def update(self, base: BaseTransaction) -> None:
+        """Run a consensus update with its own context, indexes will be updated accordingly."""
         from hathor.transaction import Block, Transaction
+
+        # this context instance will live only while this update is running
+        context = self.create_context()
         if isinstance(base, Transaction):
-            self.transaction_algorithm.update_consensus(base)
+            context.transaction_algorithm.update_consensus(base)
         elif isinstance(base, Block):
-            self.block_algorithm.update_consensus(base)
+            context.block_algorithm.update_consensus(base)
         else:
             raise NotImplementedError
+        # finally signal an index update for all affecetd transactions
+        for tx in context.txs_affected:
+            assert tx.storage is not None
+            assert tx.storage.indexes is not None
+            tx.storage.indexes.update(tx)
 
     def filter_out_soft_voided_entries(self, tx: BaseTransaction, voided_by: Set[bytes]) -> Set[bytes]:
         if not (self.soft_voided_tx_ids & voided_by):
@@ -93,9 +128,8 @@ class ConsensusAlgorithm:
 class BlockConsensusAlgorithm:
     """Implement the consensus algorithm for blocks."""
 
-    def __init__(self, consensus: ConsensusAlgorithm, soft_voided_tx_ids: Set[bytes]) -> None:
-        self.consensus = consensus
-        self.soft_voided_tx_ids = soft_voided_tx_ids
+    def __init__(self, context: ConsensusAlgorithmContext) -> None:
+        self.context = context
 
     @classproperty
     def log(cls):
@@ -180,14 +214,14 @@ class BlockConsensusAlgorithm:
             tx = storage.get_transaction(h)
             tx_meta = tx.get_metadata()
             tx_meta.accumulated_weight = sum_weights(tx_meta.accumulated_weight, block.weight)
-            storage.save_transaction(tx, only_metadata=True)
+            self.context.save(tx)
 
         # Check conflicts of the transactions voiding us.
         for h in voided_by:
             tx = storage.get_transaction(h)
             if not tx.is_block:
                 assert isinstance(tx, Transaction)
-                self.consensus.transaction_algorithm.check_conflicts(tx)
+                self.context.transaction_algorithm.check_conflicts(tx)
 
         parent = block.get_block_parent()
         parent_meta = parent.get_metadata()
@@ -293,7 +327,7 @@ class BlockConsensusAlgorithm:
                     # the blocks themselves.
                     voided_by2 = voided_by2.copy()
                     voided_by2.discard(parent.hash)
-                voided_by.update(self.consensus.filter_out_soft_voided_entries(parent, voided_by2))
+                voided_by.update(self.context.consensus.filter_out_soft_voided_entries(parent, voided_by2))
         return voided_by
 
     def update_voided_by_from_parents(self, block: Block) -> bool:
@@ -307,7 +341,7 @@ class BlockConsensusAlgorithm:
                 meta.voided_by.update(voided_by)
             else:
                 meta.voided_by = voided_by.copy()
-            block.storage.save_transaction(block, only_metadata=True)
+            self.context.save(block)
             block.storage.del_from_indexes(block, relax_assert=True)
             return True
         return False
@@ -437,13 +471,13 @@ class BlockConsensusAlgorithm:
         self.log.debug('add_voided_by', block=block.hash_hex, voided_hash=voided_hash.hex())
 
         meta.voided_by.add(voided_hash)
-        storage.save_transaction(block, only_metadata=True)
+        self.context.save(block)
 
         spent_by: Iterable[bytes] = chain(*meta.spent_outputs.values())
         for tx_hash in spent_by:
             tx = storage.get_transaction(tx_hash)
             assert isinstance(tx, Transaction)
-            self.consensus.transaction_algorithm.add_voided_by(tx, voided_hash)
+            self.context.transaction_algorithm.add_voided_by(tx, voided_hash)
         return True
 
     def remove_voided_by(self, block: Block, voided_hash: Optional[bytes] = None) -> bool:
@@ -469,13 +503,13 @@ class BlockConsensusAlgorithm:
         meta.voided_by.remove(voided_hash)
         if not meta.voided_by:
             meta.voided_by = None
-        block.storage.save_transaction(block, only_metadata=True)
+        self.context.save(block)
 
         spent_by: Iterable[bytes] = chain(*meta.spent_outputs.values())
         for tx_hash in spent_by:
             tx = storage.get_transaction(tx_hash)
             assert isinstance(tx, Transaction)
-            self.consensus.transaction_algorithm.remove_voided_by(tx, voided_hash)
+            self.context.transaction_algorithm.remove_voided_by(tx, voided_hash)
         return True
 
     def remove_first_block_markers(self, block: Block) -> None:
@@ -497,7 +531,7 @@ class BlockConsensusAlgorithm:
                 continue
 
             meta.first_block = None
-            storage.save_transaction(tx, only_metadata=True)
+            self.context.save(tx)
 
     def _score_block_dfs(self, block: BaseTransaction, used: Set[bytes],
                          mark_as_best_chain: bool, newest_timestamp: int) -> float:
@@ -543,7 +577,7 @@ class BlockConsensusAlgorithm:
                     if mark_as_best_chain:
                         assert meta.first_block is None
                         meta.first_block = block.hash
-                        storage.save_transaction(tx, only_metadata=True)
+                        self.context.save(tx)
 
                     score = sum_weights(score, tx.weight)
 
@@ -551,7 +585,7 @@ class BlockConsensusAlgorithm:
         meta = block.get_metadata()
         if not meta.score:
             meta.score = score
-            storage.save_transaction(block, only_metadata=True)
+            self.context.save(block)
         else:
             # The score of a block is immutable since the sub-DAG behind it is immutable as well.
             # Thus, if we have already calculated it, we just check the consistency of the calculation.
@@ -573,7 +607,7 @@ class BlockConsensusAlgorithm:
             if mark_as_best_chain:
                 meta = block.get_metadata()
                 meta.score = block.weight
-                block.storage.save_transaction(block, only_metadata=True)
+                self.context.save(block)
             return block.weight
 
         parent = self._find_first_parent_in_best_chain(block)
@@ -583,12 +617,16 @@ class BlockConsensusAlgorithm:
         return self._score_block_dfs(block, used, mark_as_best_chain, newest_timestamp)
 
 
+class BlockConsensusAlgorithmFactory:
+    def __call__(self, context: ConsensusAlgorithmContext) -> BlockConsensusAlgorithm:
+        return BlockConsensusAlgorithm(context)
+
+
 class TransactionConsensusAlgorithm:
     """Implement the consensus algorithm for transactions."""
 
-    def __init__(self, consensus: ConsensusAlgorithm, soft_voided_tx_ids: Set[bytes]) -> None:
-        self.consensus = consensus
-        self.soft_voided_tx_ids = soft_voided_tx_ids
+    def __init__(self, context: ConsensusAlgorithmContext) -> None:
+        self.context = context
 
     @classproperty
     def log(cls):
@@ -632,7 +670,7 @@ class TransactionConsensusAlgorithm:
                 meta.conflict_with.extend(set(spent_by) - set(meta.conflict_with))
             else:
                 meta.conflict_with = spent_by.copy()
-        tx.storage.save_transaction(tx, only_metadata=True)
+        self.context.save(tx)
 
         for h in spent_by:
             # Update meta.conflict_with of our conflict transactions.
@@ -644,11 +682,11 @@ class TransactionConsensusAlgorithm:
                     tx_meta.conflict_with.append(tx.hash)
             else:
                 tx_meta.conflict_with = [tx.hash]
-            tx.storage.save_transaction(conflict_tx, only_metadata=True)
+            self.context.save(conflict_tx)
 
         # Add ourselves to meta.spent_by of our input.
         spent_by.append(tx.hash)
-        tx.storage.save_transaction(spent_tx, only_metadata=True)
+        self.context.save(spent_tx)
 
     def set_conflict_twins(self, tx: Transaction) -> None:
         """ Get all transactions that conflict with self
@@ -716,9 +754,9 @@ class TransactionConsensusAlgorithm:
                 meta.twins.append(candidate.hash)
                 tx_meta = candidate.get_metadata()
                 tx_meta.twins.append(tx.hash)
-                tx.storage.save_transaction(candidate, only_metadata=True)
+                self.context.save(candidate)
 
-        tx.storage.save_transaction(tx, only_metadata=True)
+        self.context.save(tx)
 
     def update_voided_info(self, tx: Transaction) -> None:
         """ This method should be called only once when the transactions is added to the DAG.
@@ -732,9 +770,9 @@ class TransactionConsensusAlgorithm:
         for parent in tx.get_parents():
             parent_meta = parent.get_metadata()
             if parent_meta.voided_by:
-                voided_by.update(self.consensus.filter_out_soft_voided_entries(parent, parent_meta.voided_by))
+                voided_by.update(self.context.consensus.filter_out_soft_voided_entries(parent, parent_meta.voided_by))
         assert settings.SOFT_VOIDED_ID not in voided_by
-        assert not (self.soft_voided_tx_ids & voided_by)
+        assert not (self.context.consensus.soft_voided_tx_ids & voided_by)
 
         # Union of voided_by of inputs
         for txin in tx.inputs:
@@ -753,14 +791,13 @@ class TransactionConsensusAlgorithm:
             tx2 = tx.storage.get_transaction(h)
             tx2_meta = tx2.get_metadata()
             tx2_meta.accumulated_weight = sum_weights(tx2_meta.accumulated_weight, tx.weight)
-            assert tx2.storage is not None
-            tx2.storage.save_transaction(tx2, only_metadata=True)
+            self.context.save(tx2)
 
         # Then, we add ourselves.
         meta = tx.get_metadata()
         assert not meta.voided_by or meta.voided_by == {tx.hash}
         assert meta.accumulated_weight == tx.weight
-        if tx.hash in self.soft_voided_tx_ids:
+        if tx.hash in self.context.consensus.soft_voided_tx_ids:
             voided_by.add(settings.SOFT_VOIDED_ID)
             voided_by.add(tx.hash)
         if meta.conflict_with:
@@ -770,7 +807,7 @@ class TransactionConsensusAlgorithm:
         # the conflicting tx might affect this tx's voided_by metadata.
         if voided_by:
             meta.voided_by = voided_by.copy()
-            tx.storage.save_transaction(tx, only_metadata=True)
+            self.context.save(tx)
             tx.storage.del_from_indexes(tx)
 
         # Check conflicts of the transactions voiding us.
@@ -880,7 +917,7 @@ class TransactionConsensusAlgorithm:
         meta = tx.get_metadata()
         assert bool(meta.conflict_with)  # FIXME: this looks like a runtime guarantee, MUST NOT be an assert
         assert meta.voided_by == {tx.hash}
-        assert tx.hash not in self.soft_voided_tx_ids
+        assert tx.hash not in self.context.consensus.soft_voided_tx_ids
         self.remove_voided_by(tx, tx.hash)
         self.assert_valid_consensus(tx)
 
@@ -917,7 +954,7 @@ class TransactionConsensusAlgorithm:
             if not meta2.voided_by:
                 meta2.voided_by = None
                 tx.storage.add_to_indexes(tx2)
-            tx2.storage.save_transaction(tx2, only_metadata=True)
+            self.context.save(tx2)
             self.assert_valid_consensus(tx2)
 
         from hathor.transaction import Transaction
@@ -954,7 +991,7 @@ class TransactionConsensusAlgorithm:
         self.log.debug('add_voided_by', tx=tx.hash_hex, voided_hash=voided_hash.hex())
 
         is_dag_verifications = True
-        if meta.voided_by and bool(self.soft_voided_tx_ids & meta.voided_by):
+        if meta.voided_by and bool(self.context.consensus.soft_voided_tx_ids & meta.voided_by):
             # If tx is soft voided, we can only walk through the DAG of funds.
             is_dag_verifications = False
 
@@ -968,7 +1005,7 @@ class TransactionConsensusAlgorithm:
 
             if tx2.is_block:
                 assert isinstance(tx2, Block)
-                self.consensus.block_algorithm.mark_as_voided(tx2)
+                self.context.block_algorithm.mark_as_voided(tx2)
 
             assert not meta2.voided_by or voided_hash not in meta2.voided_by
             if tx2.hash != tx.hash and meta2.conflict_with and not meta2.voided_by:
@@ -982,10 +1019,15 @@ class TransactionConsensusAlgorithm:
                 self.mark_as_voided(tx2)
                 # All voided transactions with conflicts must have their accumulated weight calculated.
                 tx2.update_accumulated_weight(save_file=False)
-            tx2.storage.save_transaction(tx2, only_metadata=True)
+            self.context.save(tx2)
             tx2.storage.del_from_indexes(tx2, relax_assert=True)
             self.assert_valid_consensus(tx2)
 
         for tx2 in check_list:
             self.check_conflicts(tx2)
         return True
+
+
+class TransactionConsensusAlgorithmFactory:
+    def __call__(self, context: ConsensusAlgorithmContext) -> TransactionConsensusAlgorithm:
+        return TransactionConsensusAlgorithm(context)

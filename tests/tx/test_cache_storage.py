@@ -146,7 +146,7 @@ class BaseCacheStorageTest(unittest.TestCase):
         tx = add_new_transactions(self.manager, 1, advance_clock=1)[0]
 
         total = 0
-        for tx in self.cache_storage._topological_sort_dfs(root=tx, visited=dict()):
+        for tx in self.cache_storage._run_topological_sort_dfs(root=tx, visited=dict()):
             total += 1
         self.assertEqual(total, 5)
 

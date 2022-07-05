@@ -60,7 +60,8 @@ class BaseBlockchainTestCase(unittest.TestCase):
             meta = block.get_metadata()
             score = sum_weights(score, block.weight)
             self.assertAlmostEqual(score, meta.score)
-            self.assertAlmostEqual(manager.consensus_algorithm.block_algorithm.calculate_score(block), meta.score)
+            consensus_context = manager.consensus_algorithm.create_context()
+            self.assertAlmostEqual(consensus_context.block_algorithm.calculate_score(block), meta.score)
 
         # Mine 15 more blocks with 10 transactions between each block
         for _ in range(15):
@@ -73,7 +74,8 @@ class BaseBlockchainTestCase(unittest.TestCase):
                 meta = block.get_metadata()
                 score = sum_weights(score, block.weight)
                 self.assertAlmostEqual(score, meta.score)
-                self.assertAlmostEqual(manager.consensus_algorithm.block_algorithm.calculate_score(block), meta.score)
+                consensus_context = manager.consensus_algorithm.create_context()
+                self.assertAlmostEqual(consensus_context.block_algorithm.calculate_score(block), meta.score)
 
         self.assertConsensusValid(manager)
 

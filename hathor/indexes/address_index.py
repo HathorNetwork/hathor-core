@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import TYPE_CHECKING, Iterable, List, Optional
 
 from structlog import get_logger
 
+from hathor.indexes.base_index import BaseIndex
 from hathor.transaction import BaseTransaction
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -25,10 +26,13 @@ if TYPE_CHECKING:  # pragma: no cover
 logger = get_logger()
 
 
-class AddressIndex(ABC):
+class AddressIndex(BaseIndex):
     """ Index of inputs/outputs by address
     """
     pubsub: Optional['PubSubManager']
+
+    def init_loop_step(self, tx: BaseTransaction) -> None:
+        self.add_tx(tx)
 
     def publish_tx(self, tx: BaseTransaction, *, addresses: Optional[Iterable[str]] = None) -> None:
         """ Publish WALLET_ADDRESS_HISTORY for all addresses of a transaction.

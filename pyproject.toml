@@ -14,7 +14,7 @@
 
 [tool.poetry]
 name = "hathor"
-version = "0.48.0"
+version = "0.49.0"
 description = "Hathor Network full-node"
 authors = ["Hathor Team <contact@hathor.network>"]
 license = "Apache-2.0"
@@ -26,6 +26,7 @@ classifiers = [
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
     "Operating System :: OS Independent",
     "License :: OSI Approved :: Apache Software License",
     "Private :: Do Not Upload",
@@ -38,32 +39,31 @@ hathor-cli = 'hathor.cli.main:main'
 [tool.poetry.dev-dependencies]
 flake8 = "~4.0.1"
 isort = {version = "~5.10.1", extras = ["colors"]}
-yapf = "^0.32"
-mypy = {version = "^0.931", markers = "implementation_name == 'cpython'"}
+mypy = {version = "^0.950", markers = "implementation_name == 'cpython'"}
 mypy-zope = {version = "^0.3", markers = "implementation_name == 'cpython'"}
-pytest = "~6.2.5"
+pytest = "~7.1.2"
 pytest-cov = "~3.0.0"
 flaky = "~3.7.0"
 # stubs:
-types-requests = "~2.27.7"
-types-pyopenssl = "~21.0.3"
+types-requests = "=2.27.25"
+types-pyopenssl = "=22.0.3"
 
 [tool.poetry.dependencies]
 python = ">=3.7,<4"
-twisted = "~21.7.0"
-autobahn = "~21.11.1"
+twisted = "~22.4.0"
+autobahn = "~22.4.2"
 base58 = "~2.1.1"
 colorama = "~0.4.4"
 configargparse = "~1.5.3"
-cryptography = "~36.0.1"
-graphviz = "~0.19.1"
+cryptography = "~37.0.2"
+graphviz = "~0.20"
 ipython = "<8"  # ipython 8.0 drops compatibility with Python 3.7
 mnemonic = "~0.20"
-prometheus_client = "~0.12.0"
-pyopenssl = "~21.0.0"
+prometheus_client = "~0.14.1"
+pyopenssl = "=22.0.0"
 pycoin = "<=0.90.20200322"
-pywin32 = {version = "303", markers = "sys_platform == 'win32'"}
-requests = "~2.27.1"
+pywin32 = {version = "304", markers = "sys_platform == 'win32'"}
+requests = "=2.27.1"
 service_identity = "~21.1.0"
 pexpect = "~4.8.0"
 intervaltree = "~3.1.0"
@@ -72,7 +72,7 @@ rocksdb = {git = "https://github.com/hathornetwork/python-rocksdb.git", markers 
 aiohttp = "~3.8.1"
 idna = "~3.3"
 setproctitle = "^1.2.2"
-sentry-sdk = {version = "^1.5.4", optional = true}
+sentry-sdk = {version = "^1.5.11", optional = true}
 structlog-sentry = {version = "^1.4.0", optional = true}
 hathorlib = "0.2.0"
 # move the following to "build-system.requires" when this poetry pr is merged and released: https://github.com/python-poetry/poetry/pull/2794

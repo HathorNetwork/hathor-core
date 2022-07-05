@@ -48,6 +48,9 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
     """ Get the data of a tx to be returned to the frontend
         Returns success, tx serializes, metadata and spent outputs
     """
+    assert tx.storage is not None
+    assert tx.storage.indexes is not None
+
     serialized = tx.to_json(decode_script=True)
     serialized['raw'] = tx.get_struct().hex()
     serialized['nonce'] = str(tx.nonce)
@@ -115,8 +118,6 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
 
     detailed_tokens = []
     for token_uid_hex in serialized['tokens']:
-        assert tx.storage is not None
-        assert tx.storage.indexes is not None
         tokens_index = tx.storage.indexes.tokens
         assert tokens_index is not None
         token_info = tokens_index.get_token_info(bytes.fromhex(token_uid_hex))
@@ -131,7 +132,7 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
     return {
         'success': True,
         'tx': serialized,
-        'meta': meta.to_json(),
+        'meta': meta.to_json_extended(tx.storage),
         'spent_outputs': spent_outputs,
     }
 

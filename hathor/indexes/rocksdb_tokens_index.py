@@ -15,12 +15,18 @@
 import sys
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Iterator, List, NamedTuple, NewType, Optional, Tuple, cast
+from typing import TYPE_CHECKING, Iterator, List, NamedTuple, Optional, Tuple, cast
 
 from structlog import get_logger
 
 from hathor.conf import HathorSettings
-from hathor.indexes.rocksdb_utils import RocksDBIndexUtils, incr_key
+from hathor.indexes.rocksdb_utils import (
+    InternalUid,
+    RocksDBIndexUtils,
+    from_internal_token_uid,
+    incr_key,
+    to_internal_token_uid,
+)
 from hathor.indexes.tokens_index import TokenIndexInfo, TokensIndex, TokenUtxoInfo
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.base_transaction import TxVersion
@@ -39,11 +45,7 @@ settings = HathorSettings()
 logger = get_logger()
 
 _CF_NAME_TOKENS_INDEX = b'tokens-index'
-
-# the following type is used to help a little bit to distinguish when we're using a byte sequence that should only be
-# internally used
-_InternalUid = NewType('_InternalUid', bytes)
-_INTERNAL_HATHOR_TOKEN_UID = _InternalUid(b'\x00' * 32)
+_DB_NAME: str = 'tokens'
 
 
 class _Tag(Enum):
@@ -55,7 +57,7 @@ class _Tag(Enum):
 
 @dataclass
 class _KeyAny:
-    token_uid_internal: _InternalUid
+    token_uid_internal: InternalUid
     tag: _Tag
     timestamp: Optional[int] = None
     tx_hash: Optional[bytes] = None
@@ -91,30 +93,19 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
     """
 
     def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None) -> None:
-        RocksDBIndexUtils.__init__(self, db)
         self.log = logger.new()
+        RocksDBIndexUtils.__init__(self, db, cf_name or _CF_NAME_TOKENS_INDEX)
 
-        # column family stuff
-        self._cf_name = cf_name or _CF_NAME_TOKENS_INDEX
-        self._cf = self._fresh_cf(self._cf_name)
+    def get_db_name(self) -> Optional[str]:
+        # XXX: we don't need it to be parametrizable, so this is fine
+        return _DB_NAME
 
-    def _to_internal_token_uid(self, token_uid: bytes) -> _InternalUid:
-        """Normalizes a token_uid so that the native token (\x00) will have the same length as custom tokens."""
-        if token_uid == settings.HATHOR_TOKEN_UID:
-            return _INTERNAL_HATHOR_TOKEN_UID
-        assert len(token_uid) == 32
-        return _InternalUid(token_uid)
-
-    def _from_internal_token_uid(self, token_uid: _InternalUid) -> bytes:
-        """De-normalizes the token_uid so that the native token is b'\x00' as expected"""
-        assert len(token_uid) == 32
-        if token_uid == _INTERNAL_HATHOR_TOKEN_UID:
-            return settings.HATHOR_TOKEN_UID
-        return token_uid
+    def force_clear(self) -> None:
+        self.clear()
 
     def _to_key_info(self, token_uid: bytes) -> bytes:
         """Make a key for accessing a token's info"""
-        token_uid_internal = self._to_internal_token_uid(token_uid)
+        token_uid_internal = to_internal_token_uid(token_uid)
         key = bytearray()
         key.append(_Tag.INFO.value)
         key.extend(token_uid_internal)
@@ -124,7 +115,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
     def _to_key_txs(self, token_uid: bytes, tx: Optional[_TxIndex]) -> bytes:
         """Make a key for a token's transactions, if `tx` is given, the key represents the membership itself."""
         import struct
-        token_uid_internal = self._to_internal_token_uid(token_uid)
+        token_uid_internal = to_internal_token_uid(token_uid)
         key = bytearray()
         key.append(_Tag.TXS.value)
         key.extend(token_uid_internal)
@@ -139,7 +130,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
 
     def _to_key_authority(self, token_uid: bytes, utxo: Optional[TokenUtxoInfo] = None, *, is_mint: bool) -> bytes:
         """Make a key for a token's mint/melt txs, if `utxo` is given, the key represents the membership itself."""
-        token_uid_internal = self._to_internal_token_uid(token_uid)
+        token_uid_internal = to_internal_token_uid(token_uid)
         key = bytearray()
         key.append(_Tag.MINT.value if is_mint else _Tag.MELT.value)
         key.extend(token_uid_internal)
@@ -157,7 +148,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         import struct
         assert len(key) >= 1
         tag = _Tag(key[0])
-        token_uid = _InternalUid(key[1:33])
+        token_uid = InternalUid(key[1:33])
         assert len(token_uid) == 32
         if tag is _Tag.INFO:
             assert len(key) == 32 + 1
@@ -356,7 +347,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                 break
             self.log.debug('seek found', token=key_any.token_uid_internal.hex())
             info = self._from_value_info(value)
-            token_uid = self._from_internal_token_uid(key_any.token_uid_internal)
+            token_uid = from_internal_token_uid(key_any.token_uid_internal)
             token_index_info = RocksDBTokenIndexInfo(self, token_uid, info)
             yield token_uid, token_index_info
         self.log.debug('seek end')
@@ -385,7 +376,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         first = True
         for _, key in it:
             key_any = self._from_key_any(key)
-            this_token_uid = self._from_internal_token_uid(key_any.token_uid_internal)
+            this_token_uid = from_internal_token_uid(key_any.token_uid_internal)
             if key_any.tag is not _Tag.TXS or this_token_uid != token_uid:
                 break
             tx_hash = key_any.tx_hash
@@ -447,7 +438,7 @@ class RocksDBTokenIndexInfo(TokenIndexInfo):
         it.seek(seek_key)
         for _, key in it:
             key_any = self._index._from_key_any(key)
-            token_uid = self._index._from_internal_token_uid(key_any.token_uid_internal)
+            token_uid = from_internal_token_uid(key_any.token_uid_internal)
             if key_any.tag is not tag or token_uid != self._token_uid:
                 break
             assert key_any.tx_hash is not None

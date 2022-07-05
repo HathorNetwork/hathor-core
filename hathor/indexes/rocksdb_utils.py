@@ -13,11 +13,37 @@
 # limitations under the License.
 
 from collections.abc import Collection
-from typing import TYPE_CHECKING, Iterable, Iterator
+from typing import TYPE_CHECKING, Dict, Iterable, Iterator, NewType
+
+from hathor.conf import HathorSettings
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
     import structlog
+
+
+settings = HathorSettings()
+
+# the following type is used to help a little bit to distinguish when we're using a byte sequence that should only be
+# internally used
+InternalUid = NewType('InternalUid', bytes)
+_INTERNAL_HATHOR_TOKEN_UID = InternalUid(b'\x00' * 32)
+
+
+def to_internal_token_uid(token_uid: bytes) -> InternalUid:
+    """Normalizes a token_uid so that the native token (\x00) will have the same length as custom tokens."""
+    if token_uid == settings.HATHOR_TOKEN_UID:
+        return _INTERNAL_HATHOR_TOKEN_UID
+    assert len(token_uid) == 32
+    return InternalUid(token_uid)
+
+
+def from_internal_token_uid(token_uid: InternalUid) -> bytes:
+    """De-normalizes the token_uid so that the native token is b'\x00' as expected"""
+    assert len(token_uid) == 32
+    if token_uid == _INTERNAL_HATHOR_TOKEN_UID:
+        return settings.HATHOR_TOKEN_UID
+    return token_uid
 
 
 def incr_key(key: bytes) -> bytes:
@@ -53,43 +79,53 @@ def incr_key(key: bytes) -> bytes:
 
 class RocksDBIndexUtils:
     _db: 'rocksdb.DB'
+    _cf: 'rocksdb.ColumnFamilyHandle'
     log: 'structlog.stdlib.BoundLogger'
 
-    def __init__(self, db: 'rocksdb.DB') -> None:
+    def __init__(self, db: 'rocksdb.DB', cf_name: bytes) -> None:
+        self._log = self.log.new(cf=cf_name.decode('ascii'))
         self._db = db
+        self._cf_name = cf_name
+        self._ensure_cf_exists(cf_name)
 
-    def _fresh_cf(self, cf_name: bytes) -> 'rocksdb.ColumnFamilyHandle':
-        """Ensure we have a working and fresh column family"""
+    def _init_db(self):
+        """ Inheritors of this class may implement this to initialize a column family when it is just created."""
+        pass
+
+    def _ensure_cf_exists(self, cf_name: bytes) -> None:
+        """Ensure we have a working and column family, loading the previous one if it exists"""
         import rocksdb
 
-        log_cf = self.log.new(cf=cf_name.decode('ascii'))
-        _cf = self._db.get_column_family(cf_name)
-        # XXX: dropping column because initialization currently expects a fresh index
-        if _cf is not None:
-            old_id = _cf.id
-            log_cf.debug('drop existing column family')
-            self._db.drop_column_family(_cf)
-        else:
-            old_id = None
-            log_cf.debug('no need to drop column family')
-        del _cf
-        log_cf.debug('create fresh column family')
-        _cf = self._db.create_column_family(cf_name, rocksdb.ColumnFamilyOptions())
-        new_id = _cf.id
-        assert _cf is not None
-        assert _cf.is_valid
+        self._cf = self._db.get_column_family(cf_name)
+        if self._cf is None:
+            self._cf = self._db.create_column_family(cf_name, rocksdb.ColumnFamilyOptions())
+            self._init_db()
+        self._log.debug('got column family', is_valid=self._cf.is_valid, id=self._cf.id)
+
+    def clear(self) -> None:
+        old_id = self._cf.id
+        self._log.debug('drop existing column family')
+        self._db.drop_column_family(self._cf)
+        del self._cf
+        self._ensure_cf_exists(self._cf_name)
+        new_id = self._cf.id
+        assert self._cf is not None
+        assert self._cf.is_valid
         assert new_id != old_id
-        log_cf.debug('got column family', is_valid=_cf.is_valid, id=_cf.id, old_id=old_id)
-        return _cf
+        self._log.debug('got new column family', id=new_id, old_id=old_id)
+
+    def _clone_into_dict(self) -> Dict[bytes, bytes]:
+        """This method will make a copy of the database into a plain dict, be careful when running on large dbs."""
+        it = self._db.iteritems(self._cf)
+        it.seek_to_first()
+        return {k: v for (_, k), v in it}
 
 
 # XXX: should be `Collection[bytes]`, which only works on Python 3.9+
 class RocksDBSimpleSet(Collection, RocksDBIndexUtils):
     def __init__(self, db: 'rocksdb.DB', log: 'structlog.stdlib.BoundLogger', *, cf_name: bytes) -> None:
-        super().__init__(db)
         self.log = log
-        self._cf_name = cf_name
-        self._cf = self._fresh_cf(self._cf_name)
+        super().__init__(db, cf_name)
 
     def __iter__(self) -> Iterator[bytes]:
         it = self._db.iterkeys(self._cf)

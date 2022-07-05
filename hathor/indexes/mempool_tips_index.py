@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from collections.abc import Collection
 from typing import TYPE_CHECKING, Iterable, Iterator, Optional, Set, cast
 
 import structlog
 
+from hathor.indexes.base_index import BaseIndex
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.util import not_none
 
@@ -25,8 +26,11 @@ if TYPE_CHECKING:  # pragma: no cover
     from hathor.transaction.storage import TransactionStorage
 
 
-class MempoolTipsIndex(ABC):
+class MempoolTipsIndex(BaseIndex):
     """Index to access the tips of the mempool transactions, which haven't been confirmed by a block."""
+
+    def init_loop_step(self, tx: BaseTransaction) -> None:
+        self.update(tx)
 
     # originally tx_storage.update_mempool_tips
     @abstractmethod

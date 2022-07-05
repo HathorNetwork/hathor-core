@@ -17,20 +17,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180  # default is 360
     strategy:
+      fail-fast: false
       matrix:
         python-impl:
         - python
+        - pypy
         python-version:
         - '3.7'
         - '3.8'
         - '3.9'
         - '3.10'
-        include:
+        exclude:
+        # XXX: pypy-3.7 is not compatible with Dockerfile.pypy anymore
         - python-impl: pypy
           python-version: '3.7'
-        # XXX: this will still fail (probably because of the code Cython generates on python-rocksdb)
-        # - python-impl: pypy
-        #   python-version: '3.8'
+        # XXX: pypy-3.10 does not exist yet
+        - python-impl: pypy
+          python-version: '3.10'
     steps:
     - name: Checkout
       uses: actions/checkout@v2
@@ -103,11 +106,9 @@ jobs:
         print('::set-output name=created::' + datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'))
         print('::set-output name=dockerfile::' + dockerfile)
     - name: Set up QEMU  # arm64 is not available natively
-      uses: docker/setup-qemu-action@v1
-      with:
-        platforms: arm64
+      uses: docker/setup-qemu-action@v2
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v1
+      uses: docker/setup-buildx-action@v2
       with:
         version: latest
         install: true
@@ -126,7 +127,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     - name: Cache Docker layers
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       with:
         path: /tmp/.buildx-cache
         # this key is setup such that every branch has its cache and new branches can reuse dev's cache, but not the other way around
@@ -137,12 +138,18 @@ jobs:
       uses: docker/build-push-action@v2
       with:
         context: .
+        file: ${{ steps.prep.outputs.dockerfile }}
+        build-args: PYTHON=${{ matrix.python-version }}
+        pull: true
         load: true
         tags: ${{ env.TEST_TAG }}
+        cache-from: type=local,src=/tmp/.buildx-cache
+        cache-to: type=local,dest=/tmp/.buildx-cache
     - name: Test image
       run: docker run --rm ${{ env.TEST_TAG }} quick_test --data / --testnet
     - name: Build and push
       uses: docker/build-push-action@v2
+      continue-on-error: ${{ matrix.python-impl == 'pypy' }}  # PyPy is not first-class and has been causing some build failures
       with:
         context: .
         file: ${{ steps.prep.outputs.dockerfile }}

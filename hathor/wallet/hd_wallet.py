@@ -297,7 +297,7 @@ class HDWallet(BaseWallet):
             :param tx_storage: storage from where I should load the txs
             :type tx_storage: :py:class:`hathor.transaction.storage.transaction_storage.TransactionStorage`
         """
-        for tx in tx_storage._topological_sort():
+        for tx in tx_storage._topological_sort_dfs():
             self.on_new_tx(tx)
 
     def validate_words(self):

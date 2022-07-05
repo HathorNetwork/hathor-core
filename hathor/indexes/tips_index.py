@@ -13,17 +13,18 @@
 # limitations under the License.
 
 from math import inf
-from typing import Dict, Set
+from typing import Dict, Optional, Set
 
 from intervaltree import Interval, IntervalTree
 from structlog import get_logger
 
+from hathor.indexes.base_index import BaseIndex
 from hathor.transaction import BaseTransaction
 
 logger = get_logger()
 
 
-class TipsIndex:
+class TipsIndex(BaseIndex):
     """ Use an interval tree to quick get the tips at a given timestamp.
 
     The interval of a transaction is in the form [begin, end), where `begin` is
@@ -48,8 +49,20 @@ class TipsIndex:
 
     def __init__(self) -> None:
         self.log = logger.new()
+        self.force_clear()
+
+    def get_db_name(self) -> Optional[str]:
+        return None
+
+    def force_clear(self) -> None:
         self.tree = IntervalTree()
-        self.tx_last_interval = {}  # Dict[bytes(hash), Interval]
+        self.tx_last_interval = {}
+
+    def init_loop_step(self, tx: BaseTransaction) -> None:
+        tx_meta = tx.get_metadata()
+        if not tx_meta.validation.is_final():
+            return
+        self.add_tx(tx)
 
     def add_tx(self, tx: BaseTransaction) -> bool:
         """ Add a new transaction to the index
