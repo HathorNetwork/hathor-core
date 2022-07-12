@@ -199,6 +199,14 @@ class HathorManager:
         # Can be activated on the command line with --full-verification
         self._full_verification = False
 
+        # Activated with --enable-event-queue flag
+        # It activates the event mechanism inside full node
+        self.enable_event_queue = False
+
+        # Activated with --retain-events flag. It will be ignored if --enable-event-queue is not provided
+        # It tells full node to retain all generated events. Otherwise, they will be deleted after retrieval
+        self.retain_events = False
+
         # List of whitelisted peers
         self.peers_whitelist: List[str] = []
 
