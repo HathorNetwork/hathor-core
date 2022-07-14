@@ -23,13 +23,13 @@ jobs:
         full_matrix = {
           'python': ['3.7', '3.8', '3.9', '3.10'],
           # available OS's: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idruns-on
-          # XXX: ubuntu-22.04 comes with an OpenSSL version that has disabled RIPEMD-160, this breaks hathor.crypto.util.get_hash160, which require code workarounds
-          'os': ['ubuntu-20.04', 'macos-12', 'windows-2022'],
-          # XXX: tests fail on these, not sure why, when running them individually each on passes, but not on `make tests`
-          # 'include': [
-          #   {'os': 'ubuntu-22.04', 'python': 'pypy-3.7'},
-          #   {'os': 'ubuntu-22.04', 'python': 'pypy-3.8'},
-          # ],
+          'os': ['ubuntu-22.04', 'macos-12', 'windows-2022'],
+          'include': [
+            {'os': 'ubuntu-20.04', 'python': '3.7'},
+            # XXX: tests fail on these, not sure why, when running them individually each on passes, but not on `make tests`
+            # {'os': 'ubuntu-22.04', 'python': 'pypy-3.7'},
+            # {'os': 'ubuntu-22.04', 'python': 'pypy-3.8'},
+          ],
         }
         # this is the fastest one:
         reduced_matrix = {
