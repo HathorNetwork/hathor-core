@@ -105,6 +105,9 @@ class TransactionStorage(ABC):
         # Internal toggle to choose when to select topological DFS iterator, used only on some tests
         self._always_use_topological_dfs = False
 
+        # Only used in self.add_to_indexes to bypass raising an exception
+        self._saving_genesis = False
+
     @abstractmethod
     def _update_caches(self, block_count: int, tx_count: int, latest_timestamp: int, first_timestamp: int) -> None:
         """Update ephemeral caches, should only be used internally."""
@@ -190,6 +193,7 @@ class TransactionStorage(ABC):
 
     def _save_or_verify_genesis(self) -> None:
         """Save all genesis in the storage."""
+        self._saving_genesis = True
         for tx in self._get_genesis_from_settings():
             try:
                 assert tx.hash is not None
@@ -201,6 +205,7 @@ class TransactionStorage(ABC):
                 tx2 = tx
             assert tx2.hash is not None
             self._genesis_cache[tx2.hash] = tx2
+        self._saving_genesis = False
 
     def _get_genesis_from_settings(self) -> List[BaseTransaction]:
         """Return all genesis from settings."""
@@ -1019,7 +1024,12 @@ class BaseTransactionStorage(TransactionStorage):
 
     def add_to_indexes(self, tx: BaseTransaction) -> None:
         if not self.with_index:
-            raise NotImplementedError
+            if self._saving_genesis:
+                # XXX: avoid failing on some situations where this is called before we know it's OK to skip
+                #      see: https://github.com/HathorNetwork/hathor-core/pull/436
+                return
+            else:
+                raise NotImplementedError
         assert self.indexes is not None
         self._latest_timestamp = max(self.latest_timestamp, tx.timestamp)
         if self._first_timestamp == 0:
