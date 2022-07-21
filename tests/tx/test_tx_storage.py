@@ -473,7 +473,7 @@ class CacheBinaryStorageTest(BaseCacheStorageTest):
 
     def setUp(self):
         self.directory = tempfile.mkdtemp()
-        store = TransactionBinaryStorage(self.directory)
+        store = TransactionBinaryStorage(self.directory, with_index=False)
         reactor = MemoryReactorHeapClock()
         super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
 
@@ -489,7 +489,7 @@ class CacheCompactStorageTest(BaseCacheStorageTest):
         self.directory = tempfile.mkdtemp()
         # Creating random file just to test specific part of code
         tempfile.NamedTemporaryFile(dir=self.directory, delete=True)
-        store = TransactionCompactStorage(self.directory)
+        store = TransactionCompactStorage(self.directory, with_index=False)
         reactor = MemoryReactorHeapClock()
         super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
 
@@ -509,7 +509,7 @@ class CacheMemoryStorageTest(BaseCacheStorageTest):
     __test__ = True
 
     def setUp(self):
-        store = TransactionMemoryStorage()
+        store = TransactionMemoryStorage(with_index=False)
         reactor = MemoryReactorHeapClock()
         super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
 
@@ -537,7 +537,7 @@ class CacheRocksDBStorageTest(BaseCacheStorageTest):
 
     def setUp(self):
         self.directory = tempfile.mkdtemp()
-        store = TransactionRocksDBStorage(self.directory)
+        store = TransactionRocksDBStorage(self.directory, with_index=False)
         reactor = MemoryReactorHeapClock()
         super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
 

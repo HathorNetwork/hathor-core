@@ -13,7 +13,7 @@ class BaseCacheStorageTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
-        store = TransactionMemoryStorage()
+        store = TransactionMemoryStorage(with_index=False)
         self.cache_storage = TransactionCacheStorage(store, self.clock, capacity=5)
         self.cache_storage._manually_initialize()
         self.cache_storage.pre_init()
