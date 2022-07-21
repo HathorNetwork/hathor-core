@@ -14,7 +14,7 @@
 
 [tool.poetry]
 name = "hathor"
-version = "0.49.0"
+version = "0.49.1"
 description = "Hathor Network full-node"
 authors = ["Hathor Team <contact@hathor.network>"]
 license = "Apache-2.0"
@@ -61,7 +61,7 @@ ipython = "<8"  # ipython 8.0 drops compatibility with Python 3.7
 mnemonic = "~0.20"
 prometheus_client = "~0.14.1"
 pyopenssl = "=22.0.0"
-pycoin = "<=0.90.20200322"
+pycoin = "~0.92"
 pywin32 = {version = "304", markers = "sys_platform == 'win32'"}
 requests = "=2.27.1"
 service_identity = "~21.1.0"

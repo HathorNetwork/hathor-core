@@ -49,17 +49,24 @@ def get_private_key_from_bytes(private_key_bytes: bytes,
     return not_none(load_der_private_key(private_key_bytes, password, _BACKEND))
 
 
-def get_hash160(public_key_bytes: bytes) -> bytes:
-    """The input is hashed twice: first with SHA-256 and then with RIPEMD-160
+try:
+    hashlib.new('ripemd160', b'')
+except Exception:
+    # XXX: the source says "Test-only pure Python RIPEMD160 implementation", however for our case this is acceptable
+    #      for more details see: https://github.com/bitcoin/bitcoin/pull/23716/files which has a copy of the same code
+    import pycoin.contrib.ripemd160
 
-    :type: bytes
-
-    :rtype: bytes
-    """
-    key_hash = hashlib.sha256(public_key_bytes)
-    h = hashlib.new('ripemd160')
-    h.update(key_hash.digest())
-    return h.digest()
+    def get_hash160(public_key_bytes: bytes) -> bytes:
+        """The input is hashed twice: first with SHA-256 and then with RIPEMD-160"""
+        key_hash = hashlib.sha256(public_key_bytes)
+        return pycoin.contrib.ripemd160.ripemd160(key_hash.digest())
+else:
+    def get_hash160(public_key_bytes: bytes) -> bytes:
+        """The input is hashed twice: first with SHA-256 and then with RIPEMD-160"""
+        key_hash = hashlib.sha256(public_key_bytes)
+        h = hashlib.new('ripemd160')
+        h.update(key_hash.digest())
+        return h.digest()
 
 
 def get_address_from_public_key(public_key):
