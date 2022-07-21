@@ -207,6 +207,10 @@ class HathorManager:
         # It tells full node to retain all generated events. Otherwise, they will be deleted after retrieval
         self.retain_events = False
 
+        # Activated with --skip-load-events flag. It will be ignored if --enable-event-queue is not provided
+        # It tell full node to skip event generation when full node is loading local data
+        self.skip_load_events = False
+
         # List of whitelisted peers
         self.peers_whitelist: List[str] = []
 
