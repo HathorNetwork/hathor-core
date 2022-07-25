@@ -601,6 +601,13 @@ class BaseIndexesTest(unittest.TestCase):
             print(']')
         self.assertEqual(actual, expected)
 
+    def test_addresses_index_empty(self):
+        addresses_indexes = self.manager.tx_storage.indexes.addresses
+        address = self.get_address(10)
+        assert address is not None
+        self.assertTrue(addresses_indexes.is_address_empty(address))
+        self.assertEqual(addresses_indexes.get_sorted_from_address(address), [])
+
 
 class BaseMemoryIndexesTest(BaseIndexesTest):
     def setUp(self):
