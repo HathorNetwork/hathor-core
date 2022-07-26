@@ -160,8 +160,9 @@ class IndexesManager(ABC):
         tx_count = 0
         latest_timestamp = BLOCK_GENESIS.timestamp
         first_timestamp = BLOCK_GENESIS.timestamp
+        total = tx_storage.get_count_tx_blocks()
 
-        for tx in progress(tx_storage.topological_iterator(), log=self.log):
+        for tx in progress(tx_storage.topological_iterator(), log=self.log, total=total):
             # XXX: these would probably make more sense to be their own simple "indexes" instead of how it is here
             latest_timestamp = max(tx.timestamp, latest_timestamp)
             first_timestamp = min(tx.timestamp, first_timestamp)
