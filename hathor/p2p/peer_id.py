@@ -75,6 +75,7 @@ class PeerId:
         self.retry_interval = 5
         self.retry_attempts = 0
         self.flags = set()
+        self._certificate_options: Optional[CertificateOptions] = None
 
         if auto_generate_keys:
             self.generate_keys()
@@ -283,9 +284,17 @@ class PeerId:
         return self.certificate
 
     def get_certificate_options(self) -> CertificateOptions:
-        """ Return certificate options
-            With certificate generated and signed with peer private key
+        """ Return certificate options With certificate generated and signed with peer private key
+
+        The result is cached so subsequent calls are really cheap.
         """
+        if self._certificate_options is None:
+            self._certificate_options = self._get_certificate_options()
+        return self._certificate_options
+
+    def _get_certificate_options(self) -> CertificateOptions:
+        """Implementation of get_certificate_options, this should be cached to avoid opening the same static file
+        multiple times"""
         certificate = self.get_certificate()
         openssl_certificate = X509.from_cryptography(certificate)
         assert self.private_key is not None
