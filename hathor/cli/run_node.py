@@ -644,22 +644,23 @@ class RunNode:
                 sys.exit(-1)
 
     def check_python_version(self) -> None:
-        MIN_STABLE = (3, 8)
+        MIN_VER = (3, 8)
         RECOMMENDED_VER = (3, 9)
         cur = sys.version_info
-        min_pretty = '.'.join(map(str, MIN_STABLE))
+        min_pretty = '.'.join(map(str, MIN_VER))
         cur_pretty = '.'.join(map(str, cur))
         recommended_pretty = '.'.join(map(str, RECOMMENDED_VER))
-        if cur < MIN_STABLE:
-            self.log.warning('\n'.join([
+        if cur < MIN_VER:
+            self.log.critical('\n'.join([
                 '',
                 '********************************************************',
-                f'The detected Python version {cur_pretty} is deprecated and support for it will be removed soon.',
-                f'The minimum supported Python version will be {min_pretty}',
+                f'The detected Python version {cur_pretty} is not supported anymore.',
+                f'The minimum supported Python version is be {min_pretty}',
                 f'The recommended Python version is {recommended_pretty}',
                 '********************************************************',
                 '',
             ]))
+            sys.exit(-1)
 
     def __init__(self, *, argv=None):
         if argv is None:

@@ -23,14 +23,10 @@ jobs:
         - python
         - pypy
         python-version:
-        - '3.7'
         - '3.8'
         - '3.9'
         - '3.10'
         exclude:
-        # XXX: pypy-3.7 is not compatible with Dockerfile.pypy anymore
-        - python-impl: pypy
-          python-version: '3.7'
         # XXX: pypy-3.10 does not exist yet
         - python-impl: pypy
           python-version: '3.10'
