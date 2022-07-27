@@ -111,6 +111,7 @@ class RunNode:
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
         from hathor.p2p.peer_id import PeerId
         from hathor.p2p.utils import discover_hostname
+        from hathor.storage import RocksDBStorage
         from hathor.transaction import genesis
         from hathor.transaction.storage import (
             TransactionCacheStorage,
@@ -195,6 +196,7 @@ class RunNode:
                 raise ValueError('Invalid type for wallet')
 
         tx_storage: TransactionStorage
+        rocksdb_storage: RocksDBStorage
         if args.memory_storage:
             check_or_exit(not args.data, '--data should not be used with --memory-storage')
             # if using MemoryStorage, no need to have cache
@@ -211,8 +213,9 @@ class RunNode:
                 self.log.warn('--rocksdb-storage is now implied, no need to specify it')
             cache_capacity = args.rocksdb_cache
             use_memory_indexes = not args.x_rocksdb_indexes
-            tx_storage = TransactionRocksDBStorage(path=args.data, with_index=(not args.cache),
-                                                   cache_capacity=cache_capacity,
+            rocksdb_storage = RocksDBStorage(path=args.data, cache_capacity=cache_capacity)
+            tx_storage = TransactionRocksDBStorage(rocksdb_storage=rocksdb_storage,
+                                                   with_index=(not args.cache),
                                                    use_memory_indexes=use_memory_indexes)
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
         if args.cache:

@@ -14,6 +14,7 @@ from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
+from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import BaseTransaction
 from hathor.util import Random, reactor
 from hathor.wallet import Wallet
@@ -133,7 +134,8 @@ class TestCase(unittest.TestCase):
                 from hathor.transaction.storage.rocksdb_storage import TransactionRocksDBStorage
                 directory = tempfile.mkdtemp()
                 self.tmpdirs.append(directory)
-                tx_storage = TransactionRocksDBStorage(directory)
+                rocksdb_storage = RocksDBStorage(path=directory)
+                tx_storage = TransactionRocksDBStorage(rocksdb_storage=rocksdb_storage)
         manager = HathorManager(
             self.clock,
             peer_id=peer_id,

@@ -12,6 +12,7 @@ from twisted.trial import unittest
 from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
 from hathor.simulator.clock import MemoryReactorHeapClock
+from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import (
@@ -520,7 +521,8 @@ class TransactionRocksDBStorageTest(BaseTransactionStorageTest):
 
     def setUp(self):
         self.directory = tempfile.mkdtemp()
-        super().setUp(TransactionRocksDBStorage(self.directory))
+        rocksdb_storage = RocksDBStorage(path=self.directory)
+        super().setUp(TransactionRocksDBStorage(rocksdb_storage=rocksdb_storage))
 
     def tearDown(self):
         shutil.rmtree(self.directory)
@@ -537,7 +539,8 @@ class CacheRocksDBStorageTest(BaseCacheStorageTest):
 
     def setUp(self):
         self.directory = tempfile.mkdtemp()
-        store = TransactionRocksDBStorage(self.directory, with_index=False)
+        rocksdb_storage = RocksDBStorage(path=self.directory)
+        store = TransactionRocksDBStorage(rocksdb_storage=rocksdb_storage, with_index=False)
         reactor = MemoryReactorHeapClock()
         super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
 
