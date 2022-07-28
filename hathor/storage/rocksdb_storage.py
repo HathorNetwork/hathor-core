@@ -20,7 +20,7 @@ from structlog import get_logger
 logger = get_logger()
 _DB_NAME = 'data_v2.db'
 
-# Maybe this should be a singleton
+
 class RocksDBStorage:
     def __init__(self, path, cache_capacity: Optional[int] = None):
         import rocksdb
