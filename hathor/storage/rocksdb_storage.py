@@ -23,7 +23,7 @@ _DB_NAME = 'data_v2.db'
 
 class RocksDBStorage:
     """ Creates a RocksDB database
-        Give clients the option to create column families 
+        Give clients the option to create column families
     """
     def __init__(self, path: str = './', cache_capacity: Optional[int] = None):
         import rocksdb
