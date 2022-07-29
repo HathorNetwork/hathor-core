@@ -101,7 +101,6 @@ class RunNode:
         parser.add_argument('--x-rocksdb-indexes', action='store_true', help='Use RocksDB indexes (currently opt-in)')
         parser.add_argument('--enable-event-queue', action='store_true', help='Enable event queue mechanism')
         parser.add_argument('--retain-events', action='store_true', help='Retain all events in the local database')
-        parser.add_argument('--skip-load-events', action='store_true', help='Skip events during full-node loading')
         return parser
 
     def prepare(self, args: Namespace) -> None:
@@ -308,7 +307,6 @@ class RunNode:
                            The events detected by the full node will be stored and retrieved to clients')
 
             self.manager.retain_events = args.retain_events is True
-            self.manager.skip_load_events = args.skip_load_events is True
 
         for description in args.listen:
             self.manager.add_listen_address(description)
