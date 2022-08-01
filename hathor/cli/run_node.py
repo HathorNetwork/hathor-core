@@ -214,7 +214,7 @@ class RunNode:
             cache_capacity = args.rocksdb_cache
             use_memory_indexes = not args.x_rocksdb_indexes
             rocksdb_storage = RocksDBStorage(path=args.data, cache_capacity=cache_capacity)
-            tx_storage = TransactionRocksDBStorage(rocksdb_storage=rocksdb_storage,
+            tx_storage = TransactionRocksDBStorage(rocksdb_storage,
                                                    with_index=(not args.cache),
                                                    use_memory_indexes=use_memory_indexes)
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)

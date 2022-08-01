@@ -522,7 +522,7 @@ class TransactionRocksDBStorageTest(BaseTransactionStorageTest):
     def setUp(self):
         self.directory = tempfile.mkdtemp()
         rocksdb_storage = RocksDBStorage(path=self.directory)
-        super().setUp(TransactionRocksDBStorage(rocksdb_storage=rocksdb_storage))
+        super().setUp(TransactionRocksDBStorage(rocksdb_storage))
 
     def tearDown(self):
         shutil.rmtree(self.directory)
@@ -540,7 +540,7 @@ class CacheRocksDBStorageTest(BaseCacheStorageTest):
     def setUp(self):
         self.directory = tempfile.mkdtemp()
         rocksdb_storage = RocksDBStorage(path=self.directory)
-        store = TransactionRocksDBStorage(rocksdb_storage=rocksdb_storage, with_index=False)
+        store = TransactionRocksDBStorage(rocksdb_storage, with_index=False)
         reactor = MemoryReactorHeapClock()
         super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
 

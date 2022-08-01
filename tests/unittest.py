@@ -135,7 +135,7 @@ class TestCase(unittest.TestCase):
                 directory = tempfile.mkdtemp()
                 self.tmpdirs.append(directory)
                 rocksdb_storage = RocksDBStorage(path=directory)
-                tx_storage = TransactionRocksDBStorage(rocksdb_storage=rocksdb_storage)
+                tx_storage = TransactionRocksDBStorage(rocksdb_storage)
         manager = HathorManager(
             self.clock,
             peer_id=peer_id,

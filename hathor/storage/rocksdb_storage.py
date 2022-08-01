@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
+import os, rocksdb
 from typing import List, Optional
 
 from structlog import get_logger
@@ -26,7 +26,6 @@ class RocksDBStorage:
         Give clients the option to create column families
     """
     def __init__(self, path: str = './', cache_capacity: Optional[int] = None):
-        import rocksdb
         self.log = logger.new()
         self._path = path
 
@@ -57,10 +56,10 @@ class RocksDBStorage:
         self._db = rocksdb.DB(db_path, options, column_families=column_families)
         self.log.debug('open db', cf_list=[cf.name.decode('ascii') for cf in self._db.column_families])
 
-    def get_db(self):
+    def get_db(self) -> 'rocksdb.DB':
         return self._db
 
-    def get_or_create_column_family(self, cf_name):
+    def get_or_create_column_family(self, cf_name) -> 'rocksdb.ColumnFamilyHandle':
         import rocksdb
         cf = self._db.get_column_family(cf_name)
         if cf is None:

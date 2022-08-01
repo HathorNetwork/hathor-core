@@ -678,7 +678,7 @@ class BaseRocksDBIndexesTest(BaseIndexesTest):
         directory = tempfile.mkdtemp()
         self.tmpdirs.append(directory)
         rocksdb_storage = RocksDBStorage(path=directory)
-        self.tx_storage = TransactionRocksDBStorage(rocksdb_storage=rocksdb_storage)
+        self.tx_storage = TransactionRocksDBStorage(rocksdb_storage)
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]

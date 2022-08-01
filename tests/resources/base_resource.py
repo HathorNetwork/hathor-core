@@ -28,7 +28,7 @@ class _BaseResourceTest:
                     directory = tempfile.mkdtemp()
                     self.tmpdirs.append(directory)
                     rocksdb_storage = RocksDBStorage(path=directory)
-                    tx_storage = TransactionRocksDBStorage(rocksdb_storage=rocksdb_storage)
+                    tx_storage = TransactionRocksDBStorage(rocksdb_storage)
             assert (
                 hasattr(self, '_enable_sync_v1') and
                 hasattr(self, '_enable_sync_v2') and
