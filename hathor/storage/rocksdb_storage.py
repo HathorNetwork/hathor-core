@@ -13,9 +13,11 @@
 # limitations under the License.
 
 import os
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
-import rocksdb
+if TYPE_CHECKING:
+    import rocksdb
+
 from structlog import get_logger
 
 logger = get_logger()
