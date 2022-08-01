@@ -27,6 +27,7 @@ from hathor.indexes.utils import (
 )
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.base_transaction import TxVersion
+from hathor.util import is_token_uid_valid
 
 logger = get_logger()
 
@@ -168,18 +169,21 @@ class MemoryTokensIndex(TokensIndex):
         yield from self._tokens.items()
 
     def get_token_info(self, token_uid: bytes) -> TokenIndexInfo:
+        assert is_token_uid_valid(token_uid)
         if token_uid not in self._tokens:
             raise KeyError('unknown token')
         info = self._tokens[token_uid]
         return info
 
     def get_transactions_count(self, token_uid: bytes) -> int:
+        assert is_token_uid_valid(token_uid)
         if token_uid not in self._tokens:
             return 0
         info = self._tokens[token_uid]
         return len(info._transactions)
 
     def get_newest_transactions(self, token_uid: bytes, count: int) -> Tuple[List[bytes], bool]:
+        assert is_token_uid_valid(token_uid)
         if token_uid not in self._tokens:
             return [], False
         transactions = self._tokens[token_uid]._transactions
@@ -187,6 +191,7 @@ class MemoryTokensIndex(TokensIndex):
 
     def get_older_transactions(self, token_uid: bytes, timestamp: int, hash_bytes: bytes, count: int
                                ) -> Tuple[List[bytes], bool]:
+        assert is_token_uid_valid(token_uid)
         if token_uid not in self._tokens:
             return [], False
         transactions = self._tokens[token_uid]._transactions
@@ -194,6 +199,7 @@ class MemoryTokensIndex(TokensIndex):
 
     def get_newer_transactions(self, token_uid: bytes, timestamp: int, hash_bytes: bytes, count: int
                                ) -> Tuple[List[bytes], bool]:
+        assert is_token_uid_valid(token_uid)
         if token_uid not in self._tokens:
             return [], False
         transactions = self._tokens[token_uid]._transactions
