@@ -60,7 +60,7 @@ class RocksDBStorage:
     def get_db(self) -> 'rocksdb.DB':
         return self._db
 
-    def get_or_create_column_family(self, cf_name) -> 'rocksdb.ColumnFamilyHandle':
+    def get_or_create_column_family(self, cf_name: bytes) -> 'rocksdb.ColumnFamilyHandle':
         import rocksdb
         cf = self._db.get_column_family(cf_name)
         if cf is None:
