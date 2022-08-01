@@ -29,6 +29,7 @@ class RocksDBStorage:
         Give clients the option to create column families
     """
     def __init__(self, path: str = './', cache_capacity: Optional[int] = None):
+        import rocksdb
         self.log = logger.new()
         self._path = path
 
