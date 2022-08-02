@@ -303,10 +303,13 @@ class RunNode:
 
         if args.enable_event_queue:
             self.manager.enable_event_queue = True
-            self.log.info('--enable-event-queue flag provided." \
-                           The events detected by the full node will be stored and retrieved to clients')
+            self.log.info('--enable-event-queue flag provided. ' \
+                          'The events detected by the full node will be stored and retrieved to clients')
 
             self.manager.retain_events = args.retain_events is True
+        elif args.retain_events:
+            self.log.error('You cannot use --retain-events without --enable-event-queue.')
+            sys.exit(-1)
 
         for description in args.listen:
             self.manager.add_listen_address(description)
