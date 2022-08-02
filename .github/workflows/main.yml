@@ -20,12 +20,11 @@ jobs:
           import os
           import json
           full_matrix = {
-            'python': ['3.8', '3.9', '3.10', '3.11'],
+            'python': ['3.9', '3.10', '3.11'],
             # available OS's: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idruns-on
             'os': ['ubuntu-22.04', 'macos-12', 'windows-2022'],
             'include': [
               # XXX: tests fail on these, not sure why, when running them individually each on passes, but not on `make tests`
-              # {'os': 'ubuntu-22.04', 'python': 'pypy-3.8'},
               # {'os': 'ubuntu-22.04', 'python': 'pypy-3.9'},
             ],
           }
