@@ -99,8 +99,8 @@ class RunNode:
                             help='Disable support for running sync-v1. DO NOT ENABLE, IT WILL BREAK.')
         parser.add_argument('--x-localhost-only', action='store_true', help='Only connect to peers on localhost')
         parser.add_argument('--x-rocksdb-indexes', action='store_true', help='Use RocksDB indexes (currently opt-in)')
-        parser.add_argument('--enable-event-queue', action='store_true', help='Enable event queue mechanism')
-        parser.add_argument('--retain-events', action='store_true', help='Retain all events in the local database')
+        parser.add_argument('--x-enable-event-queue', action='store_true', help='Enable event queue mechanism')
+        parser.add_argument('--x-retain-events', action='store_true', help='Retain all events in the local database')
         return parser
 
     def prepare(self, args: Namespace) -> None:
@@ -301,14 +301,18 @@ class RunNode:
         if args.x_fast_init_beta:
             self.log.warn('--x-fast-init-beta is now the default, no need to specify it')
 
-        if args.enable_event_queue:
+        if args.x_enable_event_queue:
+            if not settings.ENABLE_EVENT_QUEUE_FEATURE:
+                self.log.error('The event queue feature is not available yet')
+                sys.exit(-1)
+
             self.manager.enable_event_queue = True
-            self.log.info('--enable-event-queue flag provided. '
+            self.log.info('--x-enable-event-queue flag provided. '
                           'The events detected by the full node will be stored and retrieved to clients')
 
-            self.manager.retain_events = args.retain_events is True
-        elif args.retain_events:
-            self.log.error('You cannot use --retain-events without --enable-event-queue.')
+            self.manager.retain_events = args.x_retain_events is True
+        elif args.x_retain_events:
+            self.log.error('You cannot use --x-retain-events without --x-enable-event-queue.')
             sys.exit(-1)
 
         for description in args.listen:
