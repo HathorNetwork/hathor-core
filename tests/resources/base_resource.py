@@ -7,6 +7,7 @@ from twisted.web.test.requesthelper import DummyRequest
 from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
+from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.util import json_dumpb, json_loadb
 from tests import unittest
 
@@ -26,7 +27,8 @@ class _BaseResourceTest:
                     from hathor.transaction.storage.rocksdb_storage import TransactionRocksDBStorage
                     directory = tempfile.mkdtemp()
                     self.tmpdirs.append(directory)
-                    tx_storage = TransactionRocksDBStorage(directory)
+                    rocksdb_storage = RocksDBStorage(path=directory)
+                    tx_storage = TransactionRocksDBStorage(rocksdb_storage)
             assert (
                 hasattr(self, '_enable_sync_v1') and
                 hasattr(self, '_enable_sync_v2') and

@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-from typing import TYPE_CHECKING, Any, Iterator, List, Optional
+from typing import TYPE_CHECKING, Iterator, Optional
 
 from structlog import get_logger
 
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
+from hathor.storage import RocksDBStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.util import json_dumpb, json_loadb
@@ -39,53 +39,15 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
     It uses Protobuf serialization internally.
     """
 
-    def __init__(self, path: str = './', with_index: bool = True, cache_capacity: Optional[int] = None,
-                 use_memory_indexes: bool = False):
-        import rocksdb
-
-        self.log = logger.new()
-        self._path = path
+    def __init__(self, rocksdb_storage: RocksDBStorage, with_index: bool = True, use_memory_indexes: bool = False):
         self._use_memory_indexes = use_memory_indexes
 
-        tx_dir = os.path.join(path, _DB_NAME)
-        lru_cache = cache_capacity and rocksdb.LRUCache(cache_capacity)
-        table_factory = rocksdb.BlockBasedTableFactory(block_cache=lru_cache)
-        options = rocksdb.Options(
-            table_factory=table_factory,
-            write_buffer_size=83886080,  # 80MB (default is 4MB)
-            compression=rocksdb.CompressionType.no_compression,
-            allow_mmap_writes=True,  # default is False
-            allow_mmap_reads=True,  # default is already True
-        )
+        self._cf_tx = rocksdb_storage.get_or_create_column_family(_CF_NAME_TX)
+        self._cf_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_META)
+        self._cf_attr = rocksdb_storage.get_or_create_column_family(_CF_NAME_ATTR)
 
-        cf_names: List[bytes]
-        try:
-            # get the list of existing column families
-            cf_names = rocksdb.list_column_families(tx_dir, options)
-        except rocksdb.errors.RocksIOError:
-            # this means the db doesn't exist, a repair will create one
-            rocksdb.repair_db(tx_dir, options)
-            cf_names = []
-
-        # we need to open all column families
-        column_families = {cf: rocksdb.ColumnFamilyOptions() for cf in cf_names}
-
-        # finally, open the database
-        self._db = rocksdb.DB(tx_dir, options, column_families=column_families)
-        self.log.debug('open db', cf_list=[cf.name.decode('ascii') for cf in self._db.column_families])
-
-        self._cf_tx = self._get_or_create_column_family(_CF_NAME_TX)
-        self._cf_meta = self._get_or_create_column_family(_CF_NAME_META)
-        self._cf_attr = self._get_or_create_column_family(_CF_NAME_ATTR)
-
+        self._db = rocksdb_storage.get_db()
         super().__init__(with_index=with_index)
-
-    def _get_or_create_column_family(self, cf_name: bytes) -> Any:  # TODO: typing
-        import rocksdb
-        cf = self._db.get_column_family(cf_name)
-        if cf is None:
-            cf = self._db.create_column_family(cf_name, rocksdb.ColumnFamilyOptions())
-        return cf
 
     def _load_from_bytes(self, tx_data: bytes, meta_data: bytes) -> 'BaseTransaction':
         from hathor.transaction.base_transaction import tx_or_block_from_bytes
