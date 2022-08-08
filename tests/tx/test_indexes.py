@@ -609,6 +609,41 @@ class BaseIndexesTest(unittest.TestCase):
         self.assertTrue(addresses_indexes.is_address_empty(address))
         self.assertEqual(addresses_indexes.get_sorted_from_address(address), [])
 
+    def test_addresses_index_last(self):
+        """
+        See these for more context on why this test was added:
+        - https://github.com/HathorNetwork/hathor-core/pull/455
+        - https://github.com/HathorNetwork/on-call-incidents/issues/50
+
+        To summarize, the RocksDB implementation had a bug caused by how the key iterator works when it reaches the
+        end. It will basically return the "seek key" instead of a "database key", and implementation was expecting only
+        a database key, which triggered an assertion error.
+
+        The error can be reproduced using addresses for which the seek would reach the end of the index. Which is
+        caused by addresses where the byte values are high, in practice this happens for some multisig addresses.
+        """
+        from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script
+
+        addresses_indexes = self.manager.tx_storage.indexes.addresses
+
+        # XXX: this artificial address should major (be greater byte-wise) any possible "natural" address
+        address = '\x7f' * 34
+        self.assertTrue(addresses_indexes.is_address_empty(address))
+        self.assertEqual(addresses_indexes.get_sorted_from_address(address), [])
+
+        # XXX: since we didn't add any multisig address, this is guaranteed to be reach the tail end of the index
+        assert settings.P2PKH_VERSION_BYTE[0] < settings.MULTISIG_VERSION_BYTE[0]
+
+        # generating a multisig address:
+        address = generate_multisig_address(generate_multisig_redeem_script(2, [
+            bytes.fromhex('0250bf5890c9c6e9b4ab7f70375d31b827d45d0b7b4e3ba1918bcbe71b412c11d7'),
+            bytes.fromhex('02d83dd1e9e0ac7976704eedab43fe0b79309166a47d70ec3ce8bbb08b8414db46'),
+        ]))
+        assert address is not None
+
+        self.assertTrue(addresses_indexes.is_address_empty(address))
+        self.assertEqual(addresses_indexes.get_sorted_from_address(address), [])
+
 
 class BaseMemoryIndexesTest(BaseIndexesTest):
     def setUp(self):
