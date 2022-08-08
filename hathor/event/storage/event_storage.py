@@ -28,3 +28,13 @@ class EventStorage(ABC):
     def get_event(self, key: int) -> Optional[BaseEvent]:
         """ Get a stored event by key"""
         raise NotImplementedError
+
+    @abstractmethod
+    def get_last_event(self) -> Optional[BaseEvent]:
+        """ Get the last event that was emitted, this is used to help resume when restarting."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_last_group_id(self) -> Optional[int]:
+        """ Get the last group-id that was emitted, this is used to help resume when restarting."""
+        raise NotImplementedError

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Optional
+from typing import List, Optional
 
 from hathor.event.base_event import BaseEvent
 from hathor.event.storage.event_storage import EventStorage
@@ -20,16 +20,31 @@ from hathor.event.storage.event_storage import EventStorage
 
 class EventMemoryStorage(EventStorage):
     def __init__(self):
-        self.events: Dict[int, BaseEvent] = {}
+        self._events: List[BaseEvent] = []
+        self._last_event: Optional[BaseEvent] = None
+        self._last_group_id: Optional[int] = None
 
     def save_event(self, event: BaseEvent) -> None:
-        self.events[event.id] = event
+        if event.id < 0:
+            raise ValueError('event.id must be non-negative')
+        if event.id != len(self._events):
+            raise ValueError('invalid event.id, ids must be sequential and leave no gaps')
+        self._last_event = event
+        if event.group_id is not None:
+            self._last_group_id = event.group_id
+        self._events.append(event)
 
     def get_event(self, key: int) -> Optional[BaseEvent]:
         if key < 0:
             raise ValueError('key must be non-negative')
-
-        if key not in self.events:
+        if key >= len(self._events):
             return None
+        event = self._events[key]
+        assert event.id == key
+        return event
 
-        return self.events[key]
+    def get_last_event(self) -> Optional[BaseEvent]:
+        return self._last_event
+
+    def get_last_group_id(self) -> Optional[int]:
+        return self._last_group_id
