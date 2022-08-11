@@ -36,9 +36,10 @@ from hathor.transaction import BaseTransaction
 from hathor.util import Random, Reactor
 
 if TYPE_CHECKING:
+    from twisted.internet.interfaces import IDelayedCall
+
     from hathor.manager import HathorManager
     from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
-    from twisted.internet.interfaces import IDelayedCall
 
 logger = get_logger()
 settings = HathorSettings()
@@ -147,7 +148,7 @@ class ConnectionsManager:
             and ends up stopping the looping call.
             We log the error and start the looping call again.
         """
-        self.log.error('whitelist reconnect had an exception. Will start looping call again.', args=args, kwargs=kwargs)
+        self.log.error('whitelist reconnect had an exception. Start looping call again.', args=args, kwargs=kwargs)
         self.reactor.callLater(30, self.start_whitelist_reconnect)
 
     def stop(self) -> None:
@@ -343,12 +344,14 @@ class ConnectionsManager:
         d.addCallback(self._update_whitelist_cb)
         return d
 
-    def _update_whitelist_cancel_timeout(self, param: Union[Failure, Optional[bytes]], timeout_call: 'IDelayedCall') -> None:
+    def _update_whitelist_cancel_timeout(self, param: Union[Failure, Optional[bytes]],
+                                         timeout_call: 'IDelayedCall') -> Union[Failure, Optional[bytes]]:
         """ This method is always called for both cb and errback in the update whitelist get request deferred.
-            Because of that, the first parameter type will depend, will be a failure in case of errback or optional bytes
-            in case of cb (see _update_whitelist_cb).
+            Because of that, the first parameter type will depend, will be a failure in case of errback
+            or optional bytes in case of cb (see _update_whitelist_cb).
 
-            We just need to cancel the timeout call later and return the first parameter, to continue the cb/errback sequence.
+            We just need to cancel the timeout call later and return the first parameter,
+            to continue the cb/errback sequence.
         """
         if timeout_call.active():
             timeout_call.cancel()
