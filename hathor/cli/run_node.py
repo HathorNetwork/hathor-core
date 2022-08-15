@@ -154,6 +154,7 @@ class RunNode:
         python = f'{platform.python_version()}-{platform.python_implementation()}'
 
         self.check_unsafe_arguments(args)
+        self.check_python_version()
 
         self.log.info(
             'hathor-core v{hathor}',
@@ -641,6 +642,24 @@ class RunNode:
             self.log.critical('\n'.join(message))
             if fail:
                 sys.exit(-1)
+
+    def check_python_version(self) -> None:
+        MIN_STABLE = (3, 8)
+        RECOMMENDED_VER = (3, 9)
+        cur = sys.version_info
+        min_pretty = '.'.join(map(str, MIN_STABLE))
+        cur_pretty = '.'.join(map(str, cur))
+        recommended_pretty = '.'.join(map(str, RECOMMENDED_VER))
+        if cur < MIN_STABLE:
+            self.log.warning('\n'.join([
+                '',
+                '********************************************************',
+                f'The detected Python version {cur_pretty} is deprecated and support for it will be removed soon.',
+                f'The minimum supported Python version will be {min_pretty}',
+                f'The recommended Python version is {recommended_pretty}',
+                '********************************************************',
+                '',
+            ]))
 
     def __init__(self, *, argv=None):
         if argv is None:
