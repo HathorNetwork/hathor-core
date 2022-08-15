@@ -207,7 +207,9 @@ class Simulator:
                 real_elapsed_time = t1 - t0
                 # Rate is the number of simulated seconds per real second.
                 # For example, a rate of 60 means that we can simulate 1 minute per second.
-                rate = (self._clock.seconds() - initial) / real_elapsed_time
+                rate: Optional[float] = None
+                if real_elapsed_time != 0:
+                    rate = (self._clock.seconds() - initial) / real_elapsed_time
                 # Simulation now.
                 sim_now = self._clock.seconds()
                 # Simulation dt.
