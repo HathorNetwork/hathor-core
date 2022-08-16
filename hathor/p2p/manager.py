@@ -44,6 +44,9 @@ if TYPE_CHECKING:
 logger = get_logger()
 settings = HathorSettings()
 
+# The timeout in seconds for the whitelist GET request
+WHITELIST_REQUEST_TIMEOUT = 45
+
 
 class _ConnectingPeer(NamedTuple):
     connection_string: str
@@ -335,16 +338,18 @@ class ConnectionsManager:
             Headers({'User-Agent': ['hathor-core']}),
             None)
         # Twisted Agent does not have a direct way to configure the HTTP client timeout
-        # only a TCP connection timeout. The callLater below is a manual client timeout
-        # that will cancel the deferred in case it's called
-        timeout_call = self.reactor.callLater(10, d.cancel)
-        d.addBoth(self._update_whitelist_cancel_timeout, timeout_call)
+        # only a TCP connection timeout.
+        # In this request we need a timeout that encompasses the connection and download time.
+        # The callLater below is a manual client timeout that includes it and
+        # will cancel the deferred in case it's called
+        timeout_call = self.reactor.callLater(WHITELIST_REQUEST_TIMEOUT, d.cancel)
+        d.addBoth(self._update_whitelist_timeout, timeout_call)
         d.addCallback(readBody)
         d.addErrback(self._update_whitelist_err)
         d.addCallback(self._update_whitelist_cb)
         return d
 
-    def _update_whitelist_cancel_timeout(self, param: Union[Failure, Optional[bytes]],
+    def _update_whitelist_timeout(self, param: Union[Failure, Optional[bytes]],
                                          timeout_call: 'IDelayedCall') -> Union[Failure, Optional[bytes]]:
         """ This method is always called for both cb and errback in the update whitelist get request deferred.
             Because of that, the first parameter type will depend, will be a failure in case of errback
