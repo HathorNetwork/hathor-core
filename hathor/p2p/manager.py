@@ -137,9 +137,9 @@ class ConnectionsManager:
     def start(self) -> None:
         self.lc_reconnect.start(5, now=False)
         if settings.ENABLE_PEER_WHITELIST:
-            self.start_whitelist_reconnect()
+            self._start_whitelist_reconnect()
 
-    def start_whitelist_reconnect(self) -> None:
+    def _start_whitelist_reconnect(self) -> None:
         # The deferred returned by the LoopingCall start method
         # executes when the looping call stops running
         # https://docs.twistedmatrix.com/en/stable/api/twisted.internet.task.LoopingCall.html
@@ -152,7 +152,7 @@ class ConnectionsManager:
             We log the error and start the looping call again.
         """
         self.log.error('whitelist reconnect had an exception. Start looping call again.', args=args, kwargs=kwargs)
-        self.reactor.callLater(30, self.start_whitelist_reconnect)
+        self.reactor.callLater(30, self._start_whitelist_reconnect)
 
     def stop(self) -> None:
         if self.lc_reconnect.running:
@@ -350,7 +350,7 @@ class ConnectionsManager:
         return d
 
     def _update_whitelist_timeout(self, param: Union[Failure, Optional[bytes]],
-                                         timeout_call: 'IDelayedCall') -> Union[Failure, Optional[bytes]]:
+                                  timeout_call: 'IDelayedCall') -> Union[Failure, Optional[bytes]]:
         """ This method is always called for both cb and errback in the update whitelist get request deferred.
             Because of that, the first parameter type will depend, will be a failure in case of errback
             or optional bytes in case of cb (see _update_whitelist_cb).
