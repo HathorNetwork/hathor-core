@@ -36,11 +36,16 @@ from hathor.transaction import BaseTransaction
 from hathor.util import Random, Reactor
 
 if TYPE_CHECKING:
+    from twisted.internet.interfaces import IDelayedCall
+
     from hathor.manager import HathorManager
     from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
 
 logger = get_logger()
 settings = HathorSettings()
+
+# The timeout in seconds for the whitelist GET request
+WHITELIST_REQUEST_TIMEOUT = 45
 
 
 class _ConnectingPeer(NamedTuple):
@@ -132,7 +137,22 @@ class ConnectionsManager:
     def start(self) -> None:
         self.lc_reconnect.start(5, now=False)
         if settings.ENABLE_PEER_WHITELIST:
-            self.wl_reconnect.start(30)
+            self._start_whitelist_reconnect()
+
+    def _start_whitelist_reconnect(self) -> None:
+        # The deferred returned by the LoopingCall start method
+        # executes when the looping call stops running
+        # https://docs.twistedmatrix.com/en/stable/api/twisted.internet.task.LoopingCall.html
+        d = self.wl_reconnect.start(30)
+        d.addErrback(self._handle_whitelist_reconnect_err)
+
+    def _handle_whitelist_reconnect_err(self, *args: Any, **kwargs: Any) -> None:
+        """ This method will be called when an exception happens inside the whitelist update
+            and ends up stopping the looping call.
+            We log the error and start the looping call again.
+        """
+        self.log.error('whitelist reconnect had an exception. Start looping call again.', args=args, kwargs=kwargs)
+        self.reactor.callLater(30, self._start_whitelist_reconnect)
 
     def stop(self) -> None:
         if self.lc_reconnect.running:
@@ -317,10 +337,30 @@ class ConnectionsManager:
             settings.WHITELIST_URL.encode(),
             Headers({'User-Agent': ['hathor-core']}),
             None)
+        # Twisted Agent does not have a direct way to configure the HTTP client timeout
+        # only a TCP connection timeout.
+        # In this request we need a timeout that encompasses the connection and download time.
+        # The callLater below is a manual client timeout that includes it and
+        # will cancel the deferred in case it's called
+        timeout_call = self.reactor.callLater(WHITELIST_REQUEST_TIMEOUT, d.cancel)
+        d.addBoth(self._update_whitelist_timeout, timeout_call)
         d.addCallback(readBody)
         d.addErrback(self._update_whitelist_err)
         d.addCallback(self._update_whitelist_cb)
         return d
+
+    def _update_whitelist_timeout(self, param: Union[Failure, Optional[bytes]],
+                                  timeout_call: 'IDelayedCall') -> Union[Failure, Optional[bytes]]:
+        """ This method is always called for both cb and errback in the update whitelist get request deferred.
+            Because of that, the first parameter type will depend, will be a failure in case of errback
+            or optional bytes in case of cb (see _update_whitelist_cb).
+
+            We just need to cancel the timeout call later and return the first parameter,
+            to continue the cb/errback sequence.
+        """
+        if timeout_call.active():
+            timeout_call.cancel()
+        return param
 
     def _update_whitelist_err(self, *args: Any, **kwargs: Any) -> None:
         self.log.error('update whitelist failed', args=args, kwargs=kwargs)
