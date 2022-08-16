@@ -99,6 +99,8 @@ class RunNode:
                             help='Disable support for running sync-v1. DO NOT ENABLE, IT WILL BREAK.')
         parser.add_argument('--x-localhost-only', action='store_true', help='Only connect to peers on localhost')
         parser.add_argument('--x-rocksdb-indexes', action='store_true', help='Use RocksDB indexes (currently opt-in)')
+        parser.add_argument('--x-enable-event-queue', action='store_true', help='Enable event queue mechanism')
+        parser.add_argument('--x-retain-events', action='store_true', help='Retain all events in the local database')
         return parser
 
     def prepare(self, args: Namespace) -> None:
@@ -111,6 +113,7 @@ class RunNode:
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
         from hathor.p2p.peer_id import PeerId
         from hathor.p2p.utils import discover_hostname
+        from hathor.storage import RocksDBStorage
         from hathor.transaction import genesis
         from hathor.transaction.storage import (
             TransactionCacheStorage,
@@ -151,6 +154,7 @@ class RunNode:
         python = f'{platform.python_version()}-{platform.python_implementation()}'
 
         self.check_unsafe_arguments(args)
+        self.check_python_version()
 
         self.log.info(
             'hathor-core v{hathor}',
@@ -195,6 +199,7 @@ class RunNode:
                 raise ValueError('Invalid type for wallet')
 
         tx_storage: TransactionStorage
+        rocksdb_storage: RocksDBStorage
         if args.memory_storage:
             check_or_exit(not args.data, '--data should not be used with --memory-storage')
             # if using MemoryStorage, no need to have cache
@@ -211,8 +216,9 @@ class RunNode:
                 self.log.warn('--rocksdb-storage is now implied, no need to specify it')
             cache_capacity = args.rocksdb_cache
             use_memory_indexes = not args.x_rocksdb_indexes
-            tx_storage = TransactionRocksDBStorage(path=args.data, with_index=(not args.cache),
-                                                   cache_capacity=cache_capacity,
+            rocksdb_storage = RocksDBStorage(path=args.data, cache_capacity=cache_capacity)
+            tx_storage = TransactionRocksDBStorage(rocksdb_storage,
+                                                   with_index=(not args.cache),
                                                    use_memory_indexes=use_memory_indexes)
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
         if args.cache:
@@ -295,6 +301,20 @@ class RunNode:
             self.manager._full_verification = True
         if args.x_fast_init_beta:
             self.log.warn('--x-fast-init-beta is now the default, no need to specify it')
+
+        if args.x_enable_event_queue:
+            if not settings.ENABLE_EVENT_QUEUE_FEATURE:
+                self.log.error('The event queue feature is not available yet')
+                sys.exit(-1)
+
+            self.manager.enable_event_queue = True
+            self.log.info('--x-enable-event-queue flag provided. '
+                          'The events detected by the full node will be stored and retrieved to clients')
+
+            self.manager.retain_events = args.x_retain_events is True
+        elif args.x_retain_events:
+            self.log.error('You cannot use --x-retain-events without --x-enable-event-queue.')
+            sys.exit(-1)
 
         for description in args.listen:
             self.manager.add_listen_address(description)
@@ -622,6 +642,24 @@ class RunNode:
             self.log.critical('\n'.join(message))
             if fail:
                 sys.exit(-1)
+
+    def check_python_version(self) -> None:
+        MIN_STABLE = (3, 8)
+        RECOMMENDED_VER = (3, 9)
+        cur = sys.version_info
+        min_pretty = '.'.join(map(str, MIN_STABLE))
+        cur_pretty = '.'.join(map(str, cur))
+        recommended_pretty = '.'.join(map(str, RECOMMENDED_VER))
+        if cur < MIN_STABLE:
+            self.log.warning('\n'.join([
+                '',
+                '********************************************************',
+                f'The detected Python version {cur_pretty} is deprecated and support for it will be removed soon.',
+                f'The minimum supported Python version will be {min_pretty}',
+                f'The recommended Python version is {recommended_pretty}',
+                '********************************************************',
+                '',
+            ]))
 
     def __init__(self, *, argv=None):
         if argv is None:

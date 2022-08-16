@@ -13,11 +13,13 @@
 # limitations under the License.
 
 import datetime
+import gc
 import json
 import math
 import time
 import warnings
 from collections import OrderedDict
+from contextlib import AbstractContextManager
 from enum import Enum
 from functools import partial, wraps
 from random import Random as PyRandom
@@ -441,6 +443,14 @@ def progress(iter_tx: Iterator['BaseTransaction'], *, log: Optional['structlog.s
     if log is None:
         log = logger.new()
 
+    with manualgc():
+        yield from _progress(iter_tx, log=log, total=total)
+
+
+def _progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib.BoundLogger', total: Optional[int]
+              ) -> Iterator['BaseTransaction']:
+    """ Inner implementation of progress helper, it expects the gc to be disabled.
+    """
     t_start = time.time()
     h = 0
     ts_tx = 0
@@ -482,6 +492,11 @@ def progress(iter_tx: Iterator['BaseTransaction'], *, log: Optional['structlog.s
                 log.info(f'loading... {math.floor(progress * 100):2.0f}%', progress=progress, **kwargs)
             else:
                 log.info('loading...', **kwargs)
+            # XXX: this collections will happen every _DT_LOG_PROGRESS (=30s) on average, which is good, and because
+            #      automatic collection should be disabled, it won't happen during processing of transactions, which
+            #      can make it seem like a transaction took more time to be processed when has nothing to do with the
+            #      transaction itself
+            gc.collect()
             count_log_prev = count
         count += 1
 
@@ -498,6 +513,9 @@ def progress(iter_tx: Iterator['BaseTransaction'], *, log: Optional['structlog.s
         if dt_yield > _DT_YIELD_WARN:
             dt = LogDuration(dt_yield)
             log.warn('tx took too long to be processed', tx=tx.hash_hex, dt=dt)
+
+    # one final collection before finishing the loading process
+    gc.collect()
 
     t_final = time.time()
     dt_total = LogDuration(t_final - t_start)
@@ -656,3 +674,88 @@ class sorted_merger(Iterator[T]):
         # XXX: this line bellow is correct, but it's just really hard to convince mypy of that, ignoring for now
         best_it = cmp(self._iterators, key=lambda it: self._key(it.peek()))  # type: ignore
         return next(best_it)
+
+
+class manualgc(AbstractContextManager):
+    """This context is useful for making a region where the garbage collection will be disabled (not automatic).
+
+    The main advantage for using a context is not having to worry about how exceptions will affect the state
+    consistency. The gc will be correctly re-enabled after exiting regardless if the context was exited because of an
+    exception.
+
+    >>> gc.isenabled()
+    True
+    >>> with manualgc():
+    ...     gc.isenabled()
+    False
+    >>> gc.isenabled()
+    True
+
+    Nesting should work as expected:
+
+    >>> with manualgc():
+    ...     with manualgc():
+    ...         gc.isenabled()
+    ...     gc.isenabled()
+    False
+    False
+    >>> gc.isenabled()
+    True
+
+    As well as exiting from an exception:
+
+    >>> with manualgc():
+    ...     raise RuntimeError('foo')
+    Traceback (most recent call last):
+    ...
+    RuntimeError: foo
+    >>> gc.isenabled()
+    True
+
+    Even if exception is nested:
+
+    >>> with manualgc():
+    ...     with manualgc():
+    ...         raise RuntimeError('bar')
+    Traceback (most recent call last):
+    ...
+    RuntimeError: bar
+    >>> gc.isenabled()
+    True
+
+    """
+
+    _nest_count: int = 0
+
+    def __enter__(self):
+        if type(self)._nest_count == 0:
+            gc.disable()
+        type(self)._nest_count += 1
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        type(self)._nest_count -= 1
+        if type(self)._nest_count == 0:
+            gc.enable()
+
+
+def is_token_uid_valid(token_uid: bytes) -> bool:
+    """ Checks whether a byte sequence can be a valid token UID.
+
+    >>> is_token_uid_valid(bytes.fromhex('00'))
+    True
+
+    >>> is_token_uid_valid(bytes.fromhex('1234'))
+    False
+
+    >>> is_token_uid_valid(bytes.fromhex('000003a3b261e142d3dfd84970d3a50a93b5bc3a66a3b6ba973956148a3eb824'))
+    True
+
+    >>> is_token_uid_valid(bytes.fromhex('000003a3b261e142d3dfd84970d3a50a93b5bc3a66a3b6ba973956148a3eb82400'))
+    False
+    """
+    if token_uid == settings.HATHOR_TOKEN_UID:
+        return True
+    elif len(token_uid) == 32:
+        return True
+    else:
+        return False

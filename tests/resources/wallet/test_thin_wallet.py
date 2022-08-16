@@ -297,6 +297,11 @@ class BaseSendTokensTest(_BaseResourceTest._ResourceTest):
         data = response.json_value()
         self.assertFalse(data['success'])
 
+        # test invalid token id
+        response = yield resource.get('thin_wallet/token', {b'id': '1234'.encode()})
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
         # test unknown token id
         unknown_uid = '00000000228ed1dd74a2e1b920c1d64bf81dc63875dce4fac486001073b45a27'.encode()
         response = yield resource.get('thin_wallet/token', {b'id': unknown_uid})

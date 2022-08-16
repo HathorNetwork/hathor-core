@@ -332,3 +332,5 @@ class HathorSettings(NamedTuple):
 
     # Identifier used in metadata's voided_by.
     SOFT_VOIDED_ID: bytes = b'tx-non-grata'
+
+    ENABLE_EVENT_QUEUE_FEATURE: bool = False

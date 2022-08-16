@@ -19,7 +19,7 @@ from twisted.web.http import Request
 from hathor.api_util import Resource, get_args, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
-from hathor.util import json_dumpb
+from hathor.util import is_token_uid_valid, json_dumpb
 
 settings = HathorSettings()
 
@@ -130,6 +130,9 @@ class TokenResource(Resource):
                 token_uid = bytes.fromhex(token_uid_str)
             except (ValueError, AttributeError):
                 return json_dumpb({'success': False, 'message': 'Invalid token id'})
+
+            if not is_token_uid_valid(token_uid):
+                return json_dumpb({'success': False, 'message': 'Invalid token id format'})
 
             data = self.get_one_token_data(token_uid)
         else:

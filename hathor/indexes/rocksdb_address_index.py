@@ -148,11 +148,15 @@ class RocksDBAddressIndex(AddressIndex, RocksDBIndexUtils):
     def is_address_empty(self, address: str) -> bool:
         self.log.debug('seek to', address=address)
         it = self._db.iterkeys(self._cf)
-        it.seek(self._to_key(address))
-        res = it.get()
-        if not res:
+        seek_key = self._to_key(address)
+        it.seek(seek_key)
+        cf_key = it.get()
+        if not cf_key:
             return True
-        _cf, key = res
+        _cf, key = cf_key
+        # XXX: this means we reached the end it did not found any key
+        if key == seek_key:
+            return True
         addr, _, _ = self._from_key(key)
         is_empty = addr != address
         self.log.debug('seek empty', is_empty=is_empty)
