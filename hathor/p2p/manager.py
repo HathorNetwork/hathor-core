@@ -233,7 +233,7 @@ class ConnectionsManager:
 
         # we emit the event even if it's a duplicate peer as a matching
         # NETWORK_PEER_DISCONNECTED will be emmited regardless
-        self.pubsub.publish(HathorEvents.NETWORK_PEER_CONNECTED, protocol=protocol)
+        self.pubsub.publish(HathorEvents.NETWORK_PEER_CONNECTED, protocol=protocol, connected_peers_count=len(self.connected_peers))
 
         if protocol.peer.id in self.connected_peers:
             # connected twice to same peer
@@ -274,7 +274,7 @@ class ConnectionsManager:
                 # chance it can happen if both connections start at the same time and none of them has
                 # reached READY state while the other is on PEER_ID state
                 self.connected_peers[protocol.peer.id] = existing_protocol
-        self.pubsub.publish(HathorEvents.NETWORK_PEER_DISCONNECTED, protocol=protocol)
+        self.pubsub.publish(HathorEvents.NETWORK_PEER_DISCONNECTED, protocol=protocol, connected_peers_count=len(self.connected_peers))
 
     def iter_all_connections(self) -> Iterable[HathorProtocol]:
         """Iterate over all connections."""

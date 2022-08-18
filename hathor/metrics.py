@@ -213,12 +213,9 @@ class Metrics:
             else:
                 self.transactions = self.tx_storage.get_tx_count()
         elif key == HathorEvents.NETWORK_PEER_CONNECTED:
-            self.peers += 1
+            self.peers = data["connected_peers_count"]
         elif key == HathorEvents.NETWORK_PEER_DISCONNECTED:
-            # Check if peer was ready before disconnecting
-            protocol_state = data['protocol'].state
-            if protocol_state is not None and protocol_state.state_name == HathorProtocol.PeerState.READY.name:
-                self.peers -= 1
+            self.peers = data["connected_peers_count"]
         else:
             raise ValueError('Invalid key')
 
