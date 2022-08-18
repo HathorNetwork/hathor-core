@@ -42,7 +42,10 @@ class Metrics:
     blocks: int
     best_block_height: int
     hash_rate: float
-    peers: int
+    connected_peers: int
+    handshaking_peers: int
+    connecting_peers: int
+    known_peers: int
     tx_hash_rate: float
     block_hash_rate: float
     best_block_weight: float
@@ -95,7 +98,16 @@ class Metrics:
         self.hash_rate = 0.0
 
         # Peers connected
-        self.peers = 0
+        self.connected_peers = 0
+
+        # Peers connecting
+        self.connecting_peers = 0
+
+        # Peers handshaking
+        self.handshaking_peers = 0
+
+        # Peers known
+        self.known_peers = 0
 
         # Hash rate of tx
         self.tx_hash_rate = 0.0
@@ -191,8 +203,10 @@ class Metrics:
         """
         events = [
             HathorEvents.NETWORK_NEW_TX_ACCEPTED,
+            HathorEvents.NETWORK_PEER_READY,
             HathorEvents.NETWORK_PEER_CONNECTED,
             HathorEvents.NETWORK_PEER_DISCONNECTED,
+            HathorEvents.NETWORK_PEER_CONNECTION_FAILED
         ]
 
         for event in events:
@@ -212,10 +226,16 @@ class Metrics:
                 self.best_block_height = self.tx_storage.get_height_best_block()
             else:
                 self.transactions = self.tx_storage.get_tx_count()
-        elif key == HathorEvents.NETWORK_PEER_CONNECTED:
-            self.peers = data["connected_peers_count"]
-        elif key == HathorEvents.NETWORK_PEER_DISCONNECTED:
-            self.peers = data["connected_peers_count"]
+        elif key in (
+            HathorEvents.NETWORK_PEER_READY,
+            HathorEvents.NETWORK_PEER_CONNECTED,
+            HathorEvents.NETWORK_PEER_DISCONNECTED,
+            HathorEvents.NETWORK_PEER_CONNECTION_FAILED
+        ):
+            self.connected_peers = data["peers_count"]["connected_peers_count"]
+            self.connecting_peers = data["peers_count"]["connecting_peers_count"]
+            self.handshaking_peers = data["peers_count"]["handshaking_peers_count"]
+            self.known_peers = data["peers_count"]["known_peers_count"]
         else:
             raise ValueError('Invalid key')
 

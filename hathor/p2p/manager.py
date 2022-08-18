@@ -158,6 +158,16 @@ class ConnectionsManager:
         if self.lc_reconnect.running:
             self.lc_reconnect.stop()
 
+    def _get_peers_count(self) -> Dict[str, int]:
+        """Get a dict containing the count of peers in each state"""
+
+        return {
+            "connecting_peers_count": len(self.connecting_peers),
+            "handshaking_peers_count": len(self.handshaking_peers),
+            "connected_peers_count": len(self.connected_peers),
+            "known_peers_count": len(self.peer_storage)
+        }
+
     def get_sync_versions(self) -> Set[SyncVersion]:
         """Set of versions that were enabled and are supported."""
         if self.manager.has_sync_version_capability():
@@ -212,6 +222,12 @@ class ConnectionsManager:
             now = int(self.reactor.seconds())
             peer.increment_retry_attempt(now)
 
+        self.pubsub.publish(
+            HathorEvents.NETWORK_PEER_CONNECTION_FAILED,
+            peer=peer,
+            peers_count=self._get_peers_count()
+        )
+
     def on_peer_connect(self, protocol: HathorProtocol) -> None:
         """Called when a new connection is established."""
         if len(self.connections) >= self.max_connections:
@@ -220,6 +236,12 @@ class ConnectionsManager:
             return
         self.connections.add(protocol)
         self.handshaking_peers.add(protocol)
+
+        self.pubsub.publish(
+            HathorEvents.NETWORK_PEER_CONNECTED,
+            protocol=protocol,
+            peers_count=self._get_peers_count()
+        )
 
     def on_peer_ready(self, protocol: HathorProtocol) -> None:
         """Called when a peer is ready."""
@@ -233,7 +255,11 @@ class ConnectionsManager:
 
         # we emit the event even if it's a duplicate peer as a matching
         # NETWORK_PEER_DISCONNECTED will be emmited regardless
-        self.pubsub.publish(HathorEvents.NETWORK_PEER_CONNECTED, protocol=protocol, connected_peers_count=len(self.connected_peers))
+        self.pubsub.publish(
+            HathorEvents.NETWORK_PEER_READY,
+            protocol=protocol,
+            peers_count=self._get_peers_count()
+        )
 
         if protocol.peer.id in self.connected_peers:
             # connected twice to same peer
@@ -274,7 +300,11 @@ class ConnectionsManager:
                 # chance it can happen if both connections start at the same time and none of them has
                 # reached READY state while the other is on PEER_ID state
                 self.connected_peers[protocol.peer.id] = existing_protocol
-        self.pubsub.publish(HathorEvents.NETWORK_PEER_DISCONNECTED, protocol=protocol, connected_peers_count=len(self.connected_peers))
+        self.pubsub.publish(
+            HathorEvents.NETWORK_PEER_DISCONNECTED,
+            protocol=protocol,
+            peers_count=self._get_peers_count()
+        )
 
     def iter_all_connections(self) -> Iterable[HathorProtocol]:
         """Iterate over all connections."""

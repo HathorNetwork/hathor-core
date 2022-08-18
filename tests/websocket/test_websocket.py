@@ -126,7 +126,7 @@ class BaseWebsocketTest(_BaseResourceTest._ResourceTest):
     def test_invalid_publish(self):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
-        self.manager.pubsub.publish(HathorEvents.NETWORK_PEER_CONNECTED)
+        self.manager.pubsub.publish(HathorEvents.NETWORK_PEER_READY)
         self.run_to_completion()
         value = self._decode_value(self.transport.value())
         self.assertIsNone(value)
@@ -134,7 +134,7 @@ class BaseWebsocketTest(_BaseResourceTest._ResourceTest):
         with self.assertRaises(ValueError):
             kwargs = {}
             args = EventArguments(**kwargs)
-            self.factory.serialize_message_data(HathorEvents.NETWORK_PEER_CONNECTED, args)
+            self.factory.serialize_message_data(HathorEvents.NETWORK_PEER_READY, args)
 
     def test_ping_bytes(self):
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
