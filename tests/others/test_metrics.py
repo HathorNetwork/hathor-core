@@ -1,8 +1,5 @@
 import tempfile
-import time
 from unittest.mock import Mock
-
-from twisted.internet import threads
 
 from hathor.manager import HathorManager
 from hathor.metrics import Metrics
@@ -14,15 +11,6 @@ from tests import unittest
 
 
 class MetricsTest(unittest.TestCase):
-    def _waitForThread(self):
-        """
-        The reactor's threadpool is only available when the reactor is running,
-        so to have a sane behavior during the tests we make a dummy
-        L{threads.deferToThread} call.
-        """
-        # copied from twisted/test/test_threads.py [yan]
-        return threads.deferToThread(time.sleep, 0)
-
     def test_p2p_network_events(self):
         """Simulates publishing an event to pubsub the same way as done
            by the ConnectionsManager class.
