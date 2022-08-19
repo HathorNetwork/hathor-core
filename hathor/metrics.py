@@ -215,8 +215,6 @@ class Metrics:
     def handle_publish(self, key: HathorEvents, args: EventArguments) -> None:
         """ This method is called when pubsub publishes an event that we subscribed
         """
-        from hathor.p2p.protocol import HathorProtocol
-
         data = args.__dict__
         if key == HathorEvents.NETWORK_NEW_TX_ACCEPTED:
             if data['tx'].is_block:
