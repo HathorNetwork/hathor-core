@@ -26,6 +26,9 @@ if TYPE_CHECKING:
 
 settings = HathorSettings()
 
+# Having a prefix makes it easier in Prometheus to know the origin of each metric
+METRICS_PREFIX = 'hathor_core:'
+
 # Define prometheus metrics and it's explanation
 METRIC_INFO = {
     'transactions': 'Number of transactions',
@@ -40,6 +43,8 @@ METRIC_INFO = {
     'blocks_found': 'Number of blocks found by the miner in stratum',
     'estimated_hash_rate': 'Estimated hash rate for stratum miners',
     'send_token_timeouts': 'Number of times send_token API has timed-out',
+    'transaction_cache_hits': 'Number of hits in the transactions cache',
+    'transaction_cache_misses': 'Number of misses in the transactions cache',
 }
 
 
@@ -90,7 +95,7 @@ class PrometheusMetricsExporter:
         self.registry = CollectorRegistry()
 
         for name, comment in METRIC_INFO.items():
-            self.metric_gauges[name] = Gauge(name, comment, registry=self.registry)
+            self.metric_gauges[name] = Gauge(METRICS_PREFIX + name, comment, registry=self.registry)
 
     def start(self) -> None:
         """ Starts exporter
