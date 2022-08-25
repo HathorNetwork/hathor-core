@@ -19,7 +19,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
             self.assertNotIn(settings.SOFT_VOIDED_ID, tx2_voided_by)
 
     def test_soft_voided(self):
-        txA_hash = bytes.fromhex('4586c5428e8d666ea59684c1cd9286d2b9d9e89b4939207db47412eeaabc48b2')
+        txA_hash = bytes.fromhex('1ae4ce163495279dafddca041b7c99abd71af55f29568746f3a20deead15f14d')
         soft_voided_tx_ids = set([
             txA_hash,
         ])
