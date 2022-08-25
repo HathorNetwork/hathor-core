@@ -46,8 +46,6 @@ class Metrics:
     best_block_height: int
     hash_rate: float
     peers: int
-    tx_hash_rate: float
-    block_hash_rate: float
     best_block_weight: float
     weight_tx_deque_len: int
     weight_block_deque_len: int
@@ -101,12 +99,6 @@ class Metrics:
 
         # Peers connected
         self.peers = 0
-
-        # Hash rate of tx
-        self.tx_hash_rate = 0.0
-
-        # Hash rate of block
-        self.block_hash_rate = 0
 
         # Length of the tx deque
         self.weight_tx_deque_len = 60
