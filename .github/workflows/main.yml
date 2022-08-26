@@ -23,7 +23,7 @@ jobs:
         full_matrix = {
           'python': ['3.7', '3.8', '3.9', '3.10'],
           # available OS's: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idruns-on
-          'os': ['ubuntu-22.04', 'macos-12', 'windows-2022'],
+          'os': ['ubuntu-22.04', 'macos-11', 'windows-2022'],
           'include': [
             {'os': 'ubuntu-20.04', 'python': '3.7'},
             # XXX: tests fail on these, not sure why, when running them individually each on passes, but not on `make tests`
