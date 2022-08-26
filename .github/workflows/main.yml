@@ -80,7 +80,7 @@ jobs:
       run: |
         brew cleanup -q
         brew update -q
-        brew install -q graphviz rocksdb
+        brew install -q graphviz rocksdb@7.4.5
     - name: Install Poetry
       run: |
         pip --no-input --no-cache-dir install --upgrade pip wheel
