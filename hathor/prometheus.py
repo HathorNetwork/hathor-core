@@ -26,6 +26,8 @@ if TYPE_CHECKING:
 
 settings = HathorSettings()
 
+METRIC_PREFIX = 'hathor_core:'
+
 # Define prometheus metrics and it's explanation
 METRIC_INFO = {
     'transactions': 'Number of transactions',
@@ -40,6 +42,50 @@ METRIC_INFO = {
     'blocks_found': 'Number of blocks found by the miner in stratum',
     'estimated_hash_rate': 'Estimated hash rate for stratum miners',
     'send_token_timeouts': 'Number of times send_token API has timed-out',
+}
+
+# Defines the metrics related to peer connections
+PEER_CONNECTION_METRICS = {
+    "received_messages": Gauge(
+        METRIC_PREFIX + "peer_connection_received_messages",
+        "Counts how many messages the node received from a peer",
+        labelnames=["network", "connection_string", "peer_id"],
+    ),
+    "sent_messages": Gauge(
+        METRIC_PREFIX + "peer_connection_sent_messages",
+        "Counts how many messages the node sent to a peer",
+        labelnames=["network", "connection_string", "peer_id"],
+    ),
+    "received_bytes": Gauge(
+        METRIC_PREFIX + "peer_connection_received_bytes",
+        "Counts how many bytes the node received from a peer",
+        labelnames=["network", "connection_string", "peer_id"],
+    ),
+    "sent_bytes": Gauge(
+        METRIC_PREFIX + "peer_connection_sent_bytes",
+        "Counts how many bytes the node sent to a peer",
+        labelnames=["network", "connection_string", "peer_id"],
+    ),
+    "received_txs": Gauge(
+        METRIC_PREFIX + "peer_connection_received_txs",
+        "Counts how many txs the node received from a peer",
+        labelnames=["network", "connection_string", "peer_id"],
+    ),
+    "discarded_txs": Gauge(
+        METRIC_PREFIX + "peer_connection_discarded_txs",
+        "Counts how many txs the node discarded from a peer",
+        labelnames=["network", "connection_string", "peer_id"],
+    ),
+    "received_blocks": Gauge(
+        METRIC_PREFIX + "peer_connection_received_blocks",
+        "Counts how many blocks the node received from a peer",
+        labelnames=["network", "connection_string", "peer_id"],
+    ),
+    "discarded_blocks": Gauge(
+        METRIC_PREFIX + "peer_connection_discarded_blocks",
+        "Counts how many blocks the node discarded from a peer",
+        labelnames=["network", "connection_string", "peer_id"],
+    ),
 }
 
 
@@ -92,6 +138,9 @@ class PrometheusMetricsExporter:
         for name, comment in METRIC_INFO.items():
             self.metric_gauges[name] = Gauge(name, comment, registry=self.registry)
 
+        for _, metric in PEER_CONNECTION_METRICS.items():
+            self.registry.register(metric)
+
     def start(self) -> None:
         """ Starts exporter
         """
@@ -103,6 +152,14 @@ class PrometheusMetricsExporter:
         """
         for metric_name in METRIC_INFO.keys():
             self.metric_gauges[metric_name].set(getattr(self.metrics, metric_name))
+
+        for metric in PEER_CONNECTION_METRICS.keys():
+            for connection_metric in self.metrics.peer_connection_metrics:
+                PEER_CONNECTION_METRICS[metric].labels(
+                    network=connection_metric.network,
+                    peer_id=connection_metric.peer_id,
+                    connection_string=connection_metric.connection_string
+                ).set(getattr(connection_metric, metric))
 
         write_to_textfile(self.filepath, self.registry)
 
