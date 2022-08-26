@@ -26,9 +26,6 @@ if TYPE_CHECKING:
 
 settings = HathorSettings()
 
-# Having a prefix makes it easier in Prometheus to know the origin of each metric
-METRICS_PREFIX = 'hathor_core:'
-
 # Define prometheus metrics and it's explanation
 METRIC_INFO = {
     'transactions': 'Number of transactions',
@@ -52,7 +49,7 @@ class PrometheusMetricsExporter:
     """ Class that sends hathor metrics to a node exporter that will be read by Prometheus
     """
 
-    def __init__(self, metrics: 'Metrics', path: str, filename: str = 'hathor.prom'):
+    def __init__(self, metrics: 'Metrics', path: str, filename: str = 'hathor.prom', metrics_prefix: str = ''):
         """
         :param metrics: Metric object that stores all the hathor metrics
         :type metrics: :py:class:`hathor.metrics.Metrics`
@@ -64,6 +61,7 @@ class PrometheusMetricsExporter:
         :type filename: str
         """
         self.metrics = metrics
+        self.metrics_prefix = metrics_prefix
 
         # Create full directory, if does not exist
         os.makedirs(path, exist_ok=True)
@@ -95,7 +93,7 @@ class PrometheusMetricsExporter:
         self.registry = CollectorRegistry()
 
         for name, comment in METRIC_INFO.items():
-            self.metric_gauges[name] = Gauge(METRICS_PREFIX + name, comment, registry=self.registry)
+            self.metric_gauges[name] = Gauge(self.metrics_prefix + name, comment, registry=self.registry)
 
     def start(self) -> None:
         """ Starts exporter
