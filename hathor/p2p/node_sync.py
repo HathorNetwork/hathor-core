@@ -694,6 +694,7 @@ class NodeSyncTimestamp(SyncManager):
         elif self.manager.tx_storage.transaction_exists(tx.hash):
             # transaction already added to the storage, ignore it
             # XXX: maybe we could add a hash blacklist and punish peers propagating known bad txs
+            self.manager.tx_storage.compare_bytes_with_local_tx(tx)
             return
         else:
             self.log.info('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
@@ -745,6 +746,7 @@ class NodeSyncTimestamp(SyncManager):
         if tx:
             assert tx.hash is not None
             if self.manager.tx_storage.transaction_exists(tx.hash):
+                self.manager.tx_storage.compare_bytes_with_local_tx(tx)
                 success = True
             else:
                 # Add tx to the DAG.
