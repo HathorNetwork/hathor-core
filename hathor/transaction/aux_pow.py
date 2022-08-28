@@ -19,6 +19,9 @@ from structlog import get_logger
 logger = get_logger()
 
 
+MAX_MERKLE_PATH_LENGTH: int = 12
+
+
 class BitcoinAuxPow(NamedTuple):
     header_head: bytes  # 36 bytes
     coinbase_head: bytes  # variable length (at least 47 bytes)
@@ -45,14 +48,18 @@ class BitcoinAuxPow(NamedTuple):
         """ Check for inconsistencies, raises instance of TxValidationError on error.
         """
         from hathor.merged_mining import MAGIC_NUMBER
-        from hathor.transaction.exceptions import AuxPowError
-        if not self.coinbase_head.endswith(MAGIC_NUMBER):
-            raise AuxPowError('cannot find MAGIC_NUMBER')
-        if MAGIC_NUMBER in self.coinbase_head[42:len(MAGIC_NUMBER)]:  # 42 first bytes can be ignored
-            raise AuxPowError('multiple instances of MAGIC_NUMBER')
-        if len(self.merkle_path) > 12:
-            raise AuxPowError('`merkle_path` too long')
-        # XXX: is there anything else that needs to be verified?
+        from hathor.transaction.exceptions import (
+            AuxPowLongMerklePathError,
+            AuxPowNoMagicError,
+            AuxPowUnexpectedMagicError,
+        )
+        magic_index = self.coinbase_head.find(MAGIC_NUMBER)
+        if magic_index == -1:
+            raise AuxPowNoMagicError('cannot find MAGIC_NUMBER')
+        if magic_index < len(self.coinbase_head) - len(MAGIC_NUMBER):
+            raise AuxPowUnexpectedMagicError('unexpected MAGIC_NUMBER')
+        if len(self.merkle_path) > MAX_MERKLE_PATH_LENGTH:
+            raise AuxPowLongMerklePathError('`merkle_path` too long')
 
     def __bytes__(self) -> bytes:
         """ Convert to byte representation.
