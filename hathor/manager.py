@@ -877,6 +877,7 @@ class HathorManager:
         """
         assert tx.hash is not None
         if self.tx_storage.transaction_exists(tx.hash):
+            self.tx_storage.compare_bytes_with_local_tx(tx)
             if not fails_silently:
                 raise InvalidNewTransaction('Transaction already exists {}'.format(tx.hash_hex))
             self.log.warn('on_new_tx(): Transaction already exists', tx=tx.hash_hex)

@@ -237,6 +237,132 @@ class BaseTransactionTest(unittest.TestCase):
         with self.assertRaises(BlockWithInputs):
             block.verify()
 
+    def test_merge_mined_no_magic(self):
+        from hathor.merged_mining import MAGIC_NUMBER
+        from hathor.transaction.aux_pow import BitcoinAuxPow
+        from hathor.transaction.exceptions import AuxPowNoMagicError
+        from hathor.transaction.merge_mined_block import MergeMinedBlock
+
+        parents = [tx.hash for tx in self.genesis]
+        address = decode_address(self.get_address(1))
+        outputs = [TxOutput(100, P2PKH.create_output_script(address))]
+
+        b = MergeMinedBlock(
+            timestamp=self.genesis_blocks[0].timestamp + 1,
+            weight=1,
+            outputs=outputs,
+            parents=parents,
+            aux_pow=BitcoinAuxPow(
+                b'\x00' * 32,
+                b'\x00' * 42,  # no MAGIC_NUMBER
+                b'\x00' * 18,
+                [b'\x00' * 32],
+                b'\x00' * 12,
+            )
+        )
+
+        with self.assertRaises(AuxPowNoMagicError):
+            b.verify_aux_pow()
+
+        # adding the MAGIC_NUMBER makes it work:
+        b.aux_pow = b.aux_pow._replace(coinbase_head=b.aux_pow.coinbase_head + MAGIC_NUMBER)
+        b.verify_aux_pow()
+
+    def test_merge_mined_multiple_magic(self):
+        from hathor.merged_mining import MAGIC_NUMBER
+        from hathor.transaction.aux_pow import BitcoinAuxPow
+        from hathor.transaction.exceptions import AuxPowUnexpectedMagicError
+        from hathor.transaction.merge_mined_block import MergeMinedBlock
+
+        parents = [tx.hash for tx in self.genesis]
+        address1 = decode_address(self.get_address(1))
+        address2 = decode_address(self.get_address(2))
+        assert address1 != address2
+        outputs1 = [TxOutput(100, P2PKH.create_output_script(address1))]
+        outputs2 = [TxOutput(100, P2PKH.create_output_script(address2))]
+
+        b1 = MergeMinedBlock(
+            timestamp=self.genesis_blocks[0].timestamp + 1,
+            weight=1,
+            outputs=outputs1,
+            parents=parents,
+        )
+
+        b2 = MergeMinedBlock(
+            timestamp=self.genesis_blocks[0].timestamp + 1,
+            weight=1,
+            outputs=outputs2,
+            parents=parents,
+        )
+
+        assert b1.get_base_hash() != b2.get_base_hash()
+
+        header_head = b'\x00' * 32
+        header_tail = b'\x00' * 12
+        merkle_path = [b'\x00' * 32]
+        coinbase_parts = [
+            b'\x00' * 42,
+            MAGIC_NUMBER,
+            b1.get_base_hash(),
+            MAGIC_NUMBER,
+            b2.get_base_hash(),
+            b'\x00' * 18,
+        ]
+
+        b1.aux_pow = BitcoinAuxPow(
+            header_head,
+            b''.join(coinbase_parts[:2]),
+            b''.join(coinbase_parts[3:]),
+            merkle_path,
+            header_tail,
+        )
+
+        b2.aux_pow = BitcoinAuxPow(
+            header_head,
+            b''.join(coinbase_parts[:4]),
+            b''.join(coinbase_parts[5:]),
+            merkle_path,
+            header_tail,
+        )
+
+        assert bytes(b1) != bytes(b2)
+        assert b1.calculate_hash() == b2.calculate_hash()
+
+        b1.verify_aux_pow()  # OK
+        with self.assertRaises(AuxPowUnexpectedMagicError):
+            b2.verify_aux_pow()
+
+    def test_merge_mined_long_merkle_path(self):
+        from hathor.merged_mining import MAGIC_NUMBER
+        from hathor.transaction.aux_pow import BitcoinAuxPow
+        from hathor.transaction.exceptions import AuxPowLongMerklePathError
+        from hathor.transaction.merge_mined_block import MergeMinedBlock
+
+        parents = [tx.hash for tx in self.genesis]
+        address = decode_address(self.get_address(1))
+        outputs = [TxOutput(100, P2PKH.create_output_script(address))]
+
+        b = MergeMinedBlock(
+            timestamp=self.genesis_blocks[0].timestamp + 1,
+            weight=1,
+            outputs=outputs,
+            parents=parents,
+            aux_pow=BitcoinAuxPow(
+                b'\x00' * 32,
+                b'\x00' * 42 + MAGIC_NUMBER,
+                b'\x00' * 18,
+                [b'\x00' * 32] * 13,  # 1 too long
+                b'\x00' * 12,
+            )
+        )
+
+        with self.assertRaises(AuxPowLongMerklePathError):
+            b.verify_aux_pow()
+
+        # removing one path makes it work
+        b.aux_pow.merkle_path.pop()
+        b.verify_aux_pow()
+
     def test_block_outputs(self):
         from hathor.transaction import MAX_NUM_OUTPUTS
         from hathor.transaction.exceptions import TooManyOutputs
