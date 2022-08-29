@@ -38,6 +38,8 @@ if TYPE_CHECKING:  # pragma: no cover
 
 logger = get_logger()
 
+MAX_CACHE_SIZE_DURING_LOAD = 1000
+
 
 class _IndexFilter(Enum):
     ALL = auto()  # block or tx, voided or not
@@ -162,6 +164,14 @@ class IndexesManager(ABC):
         first_timestamp = BLOCK_GENESIS.timestamp
         total = tx_storage.get_count_tx_blocks()
 
+        cache_capacity = None
+
+        # Reduce cache size during initialization.
+        from hathor.transaction.storage import TransactionCacheStorage
+        if isinstance(tx_storage, TransactionCacheStorage):
+            cache_capacity = tx_storage.capacity
+            tx_storage.set_capacity(min(MAX_CACHE_SIZE_DURING_LOAD, cache_capacity))
+
         for tx in progress(tx_storage.topological_iterator(), log=self.log, total=total):
             # XXX: these would probably make more sense to be their own simple "indexes" instead of how it is here
             latest_timestamp = max(tx.timestamp, latest_timestamp)
@@ -188,6 +198,11 @@ class IndexesManager(ABC):
                     assert False, 'impossible filter'
 
         tx_storage._update_caches(block_count, tx_count, latest_timestamp, first_timestamp)
+
+        # Restore cache capacity.
+        if isinstance(tx_storage, TransactionCacheStorage):
+            assert cache_capacity is not None
+            tx_storage.set_capacity(cache_capacity)
 
     def update(self, tx: BaseTransaction) -> None:
         """ This is the new update method that indexes should use instead of add_tx/del_tx

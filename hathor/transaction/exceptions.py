@@ -94,6 +94,18 @@ class AuxPowError(PowError):
     """Auxiliary Proof-of-work is not correct"""
 
 
+class AuxPowNoMagicError(AuxPowError):
+    """Auxiliary Proof-of-work is not correct, magic number not found"""
+
+
+class AuxPowUnexpectedMagicError(AuxPowError):
+    """Auxiliary Proof-of-work is not correct, multiple magic numbers found"""
+
+
+class AuxPowLongMerklePathError(AuxPowError):
+    """Auxiliary Proof-of-work is not correct, merkle_path too long"""
+
+
 class WeightError(TxValidationError):
     """Transaction not using correct weight"""
 
