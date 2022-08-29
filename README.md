@@ -92,12 +92,6 @@ git clone git@github.com:HathorNetwork/hathor-core.git && cd hathor-core
 poetry install
 ```
 
-*Optionally* if you've installed the RocksDB lib:
-
-```
-poetry install -E rocksdb
-```
-
 ### Running the full-node
 
 ```
