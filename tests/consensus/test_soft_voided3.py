@@ -55,14 +55,17 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         txA = manager2.tx_storage.get_transaction(txA_hash)
         metaA = txA.get_metadata()
         self.assertEqual({settings.SOFT_VOIDED_ID, txA.hash}, metaA.voided_by)
+        graphviz.labels[txA.hash] = 'txA'
 
         txB = add_custom_tx(manager2, [(txA, 0)])
         metaB = txB.get_metadata()
         self.assertEqual({txA.hash}, metaB.voided_by)
+        graphviz.labels[txB.hash] = 'txB'
 
         txD1 = add_custom_tx(manager2, [(txB, 0)])
         metaD1 = txD1.get_metadata()
         self.assertEqual({txA.hash}, metaD1.voided_by)
+        graphviz.labels[txD1.hash] = 'txD1'
 
         blk1 = manager2.generate_mining_block()
         self.assertNoParentsAreSoftVoided(blk1)
