@@ -126,7 +126,10 @@ class BaseWebsocketTest(_BaseResourceTest._ResourceTest):
     def test_invalid_publish(self):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
-        self.manager.pubsub.publish(HathorEvents.NETWORK_PEER_READY)
+        self.manager.pubsub.publish(
+            HathorEvents.NETWORK_PEER_READY,
+            peers_count=self.manager.connections._get_peers_count()
+        )
         self.run_to_completion()
         value = self._decode_value(self.transport.value())
         self.assertIsNone(value)
