@@ -288,6 +288,18 @@ class TransactionStorage(ABC):
         """
         raise NotImplementedError
 
+    def compare_bytes_with_local_tx(self, tx: BaseTransaction) -> bool:
+        """Compare byte-per-byte `tx` with the local transaction."""
+        assert tx.hash is not None
+        local_tx = self.get_transaction(tx.hash)
+        local_tx_bytes = bytes(local_tx)
+        tx_bytes = bytes(tx)
+        if tx_bytes == local_tx_bytes:
+            return True
+        self.log.critical('non-equal transactions with same id', tx_id=tx.hash.hex(),
+                          local_tx=local_tx_bytes.hex(), tx=tx_bytes.hex())
+        return False
+
     @abstractmethod
     def _get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
         """Returns the transaction with hash `hash_bytes`.
