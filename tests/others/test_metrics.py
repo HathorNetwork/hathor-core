@@ -49,6 +49,8 @@ class MetricsTest(unittest.TestCase):
         self.assertEquals(metrics.connected_peers, 5)
         self.assertEquals(metrics.known_peers, 6)
 
+        metrics.stop()
+
     def test_connections_manager_integration(self):
         """Tests the integration with the ConnectionsManager class
 
@@ -81,3 +83,5 @@ class MetricsTest(unittest.TestCase):
         self.assertEquals(manager.metrics.connected_peers, 2)
         self.assertEquals(manager.metrics.handshaking_peers, 1)
         self.assertEquals(manager.metrics.connecting_peers, 0)
+
+        manager.metrics.stop()
