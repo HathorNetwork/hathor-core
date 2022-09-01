@@ -69,6 +69,13 @@ class TransactionCacheStorage(BaseTransactionStorage):
         super().__init__()
         self._tx_weakref = store._tx_weakref
 
+    def set_capacity(self, capacity: int) -> None:
+        """Change the max number of items in cache."""
+        assert capacity >= 0
+        self.capacity = capacity
+        while len(self.cache) > self.capacity:
+            self._cache_popitem()
+
     def _clone(self, x: BaseTransaction) -> BaseTransaction:
         if self._clone_if_needed:
             return x.clone()
@@ -141,6 +148,15 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self._update_cache(tx)
         self.dirty_txs.add(tx.hash)
 
+    def _cache_popitem(self) -> BaseTransaction:
+        """Pop the last recently used cache item."""
+        (_, removed_tx) = self.cache.popitem(last=False)
+        if removed_tx.hash in self.dirty_txs:
+            # write to disk so we don't lose the last update
+            self.dirty_txs.discard(removed_tx.hash)
+            self.store.save_transaction(removed_tx)
+        return removed_tx
+
     def _update_cache(self, tx: BaseTransaction) -> None:
         """Updates the cache making sure it has at most the number of elements configured
         as its capacity.
@@ -151,11 +167,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
         _tx = self.cache.get(tx.hash, None)
         if not _tx:
             if len(self.cache) >= self.capacity:
-                (_, removed_tx) = self.cache.popitem(last=False)
-                if removed_tx.hash in self.dirty_txs:
-                    # write to disk so we don't lose the last update
-                    self.dirty_txs.discard(removed_tx.hash)
-                    self.store.save_transaction(removed_tx)
+                self._cache_popitem()
             self.cache[tx.hash] = self._clone(tx)
         else:
             # Tx might have been updated
