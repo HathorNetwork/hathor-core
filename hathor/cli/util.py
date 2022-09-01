@@ -19,10 +19,104 @@ from datetime import datetime
 from typing import Any, List
 
 import configargparse
+import structlog
 
 
 def create_parser() -> ArgumentParser:
     return configargparse.ArgumentParser(auto_env_var_prefix='hathor_')
+
+
+# docs at http://www.structlog.org/en/stable/api.html#structlog.dev.ConsoleRenderer
+class ConsoleRenderer(structlog.dev.ConsoleRenderer):
+    def __call__(self, _, __, event_dict):
+        from io import StringIO
+
+        from structlog.dev import _pad
+
+        sio = StringIO()
+
+        ts = event_dict.pop('timestamp', None)
+        if ts is not None:
+            sio.write(
+                # can be a number if timestamp is UNIXy
+                self._styles.timestamp
+                + str(ts)
+                + self._styles.reset
+                + ' '
+            )
+        level = event_dict.pop('level', None)
+        if level is not None:
+            sio.write(
+                '['
+                + self._level_to_color[level]
+                + _pad(level, self._longest_level)
+                + self._styles.reset
+                + '] '
+            )
+
+        logger_name = event_dict.pop('logger', None)
+        if logger_name is not None:
+            sio.write(
+                '['
+                + self._styles.logger_name
+                + self._styles.bright
+                + logger_name
+                + self._styles.reset
+                + '] '
+            )
+
+        event = str(event_dict.pop('event'))
+        if event_dict:
+            event = _pad(event, self._pad_event) + self._styles.reset + ' '
+        else:
+            event += self._styles.reset
+        sio.write(self._styles.bright + event)
+
+        stack = event_dict.pop('stack', None)
+        exc = event_dict.pop('exception', None)
+        sio.write(
+            ' '.join(
+                self._styles.kv_key
+                + key
+                + self._styles.reset
+                + '='
+                + self._styles.kv_value
+                + self._repr(event_dict[key])
+                + self._styles.reset
+                for key in sorted(event_dict.keys())
+            )
+        )
+
+        if stack is not None:
+            sio.write('\n' + stack)
+            if exc is not None:
+                sio.write('\n\n' + '=' * 79 + '\n')
+        if exc is not None:
+            sio.write('\n' + exc)
+
+        return sio.getvalue()
+
+    @staticmethod
+    def get_default_level_styles(colors=True):
+        import colorama
+        if not colors:
+            return structlog.dev.ConsoleRenderer.get_default_level_styles(False)
+        return {
+            'critical': colorama.Style.BRIGHT + colorama.Fore.RED,
+            'exception': colorama.Fore.RED,
+            'error': colorama.Fore.RED,
+            'warn': colorama.Fore.YELLOW,
+            'warning': colorama.Fore.YELLOW,
+            'info': colorama.Fore.GREEN,
+            'debug': colorama.Style.BRIGHT + colorama.Fore.CYAN,
+            'notset': colorama.Back.RED,
+        }
+
+    def _repr(self, val):
+        if isinstance(val, datetime):
+            return str(val)
+        else:
+            return super()._repr(val)
 
 
 def setup_logging(
@@ -36,7 +130,6 @@ def setup_logging(
     import logging
     import logging.config
 
-    import structlog
     import twisted
     from twisted.logger import LogLevel
 
@@ -58,98 +151,6 @@ def setup_logging(
         structlog.stdlib.add_logger_name,
         timestamper,
     ]
-
-    # docs at http://www.structlog.org/en/stable/api.html#structlog.dev.ConsoleRenderer
-    class ConsoleRenderer(structlog.dev.ConsoleRenderer):
-        def __call__(self, _, __, event_dict):
-            from io import StringIO
-
-            from structlog.dev import _pad
-
-            sio = StringIO()
-
-            ts = event_dict.pop('timestamp', None)
-            if ts is not None:
-                sio.write(
-                    # can be a number if timestamp is UNIXy
-                    self._styles.timestamp
-                    + str(ts)
-                    + self._styles.reset
-                    + ' '
-                )
-            level = event_dict.pop('level', None)
-            if level is not None:
-                sio.write(
-                    '['
-                    + self._level_to_color[level]
-                    + _pad(level, self._longest_level)
-                    + self._styles.reset
-                    + '] '
-                )
-
-            logger_name = event_dict.pop('logger', None)
-            if logger_name is not None:
-                sio.write(
-                    '['
-                    + self._styles.logger_name
-                    + self._styles.bright
-                    + logger_name
-                    + self._styles.reset
-                    + '] '
-                )
-
-            event = str(event_dict.pop('event'))
-            if event_dict:
-                event = _pad(event, self._pad_event) + self._styles.reset + ' '
-            else:
-                event += self._styles.reset
-            sio.write(self._styles.bright + event)
-
-            stack = event_dict.pop('stack', None)
-            exc = event_dict.pop('exception', None)
-            sio.write(
-                ' '.join(
-                    self._styles.kv_key
-                    + key
-                    + self._styles.reset
-                    + '='
-                    + self._styles.kv_value
-                    + self._repr(event_dict[key])
-                    + self._styles.reset
-                    for key in sorted(event_dict.keys())
-                )
-            )
-
-            if stack is not None:
-                sio.write('\n' + stack)
-                if exc is not None:
-                    sio.write('\n\n' + '=' * 79 + '\n')
-            if exc is not None:
-                sio.write('\n' + exc)
-
-            return sio.getvalue()
-
-        @staticmethod
-        def get_default_level_styles(colors=True):
-            import colorama
-            if not colors:
-                return structlog.dev.ConsoleRenderer.get_default_level_styles(False)
-            return {
-                'critical': colorama.Style.BRIGHT + colorama.Fore.RED,
-                'exception': colorama.Fore.RED,
-                'error': colorama.Fore.RED,
-                'warn': colorama.Fore.YELLOW,
-                'warning': colorama.Fore.YELLOW,
-                'info': colorama.Fore.GREEN,
-                'debug': colorama.Style.BRIGHT + colorama.Fore.CYAN,
-                'notset': colorama.Back.RED,
-            }
-
-        def _repr(self, val):
-            if isinstance(val, datetime):
-                return str(val)
-            else:
-                return super()._repr(val)
 
     if json_logging:
         handlers = ['json']
