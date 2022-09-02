@@ -1,11 +1,16 @@
 import random
 
+from twisted.python.failure import Failure
+
+from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.p2p.protocol import PeerIdState
 from hathor.p2p.sync_version import SyncVersion
 from hathor.simulator import FakeConnection
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
 from tests import unittest
+
+settings = HathorSettings()
 
 
 class BaseHathorSyncMethodsTestCase(unittest.TestCase):
@@ -129,6 +134,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(manager2.state, manager2.NodeState.READY)
 
         conn = FakeConnection(self.manager1, manager2)
+        conn.disable_idle_timeout()
 
         while not conn.is_empty():
             conn.run_one_step(debug=True)
@@ -177,6 +183,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
         self.manager2 = self.create_peer(self.network)
         self.conn1 = FakeConnection(self.manager1, self.manager2)
+        self.conn1.disable_idle_timeout()
 
         for _ in range(1000):
             if self.conn1.is_empty():
@@ -196,6 +203,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
 
         self.manager3 = self.create_peer(self.network)
         self.conn2 = FakeConnection(self.manager2, self.manager3)
+        self.conn2.disable_idle_timeout()
 
         for _ in range(1000):
             if self.conn1.is_empty() and self.conn2.is_empty():
@@ -304,6 +312,150 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
         # And try again
         downloader.check_downloading_queue()
         self.assertEqual(len(downloader.downloading_deque), 0)
+
+    def _downloader_bug_setup(self):
+        """ This is an auxiliary method to setup a bug scenario."""
+        from hathor.p2p.sync_version import SyncVersion
+
+        # ## premise setup
+        #
+        # - peer_X will be self.manager
+        # - peer_Y will be manager2
+        # - and manager_bug will be where the bug will happen
+        # add blocks
+        self.blocks = self._add_new_blocks(10)
+        self.tx_A = self.blocks[0]
+        self.tx_B = self.blocks[1]
+
+        # create second peer
+        self.manager2 = self.create_peer(self.network)
+
+        # connect them and sync all blocks
+        self.conn0 = FakeConnection(self.manager1, self.manager2)
+        for _ in range(1000):
+            if self.conn0.is_empty():
+                break
+            self.conn0.run_one_step()
+            self.clock.advance(0.1)
+        else:
+            self.fail('expected to break out of loop')
+        self.assertTipsEqual(self.manager1, self.manager2)
+        self.assertEqual(self.manager1.tx_storage.get_best_block(), self.blocks[-1])
+        self.assertEqual(self.manager2.tx_storage.get_best_block(), self.blocks[-1])
+
+        # create the peer that will experience the bug
+        self.manager_bug = self.create_peer(self.network)
+        self.downloader = self.manager_bug.connections._sync_factories[SyncVersion.V1].downloader
+        self.downloader.window_size = 1
+        self.conn1 = FakeConnection(self.manager_bug, self.manager1)
+        self.conn2 = FakeConnection(self.manager_bug, self.manager2)
+
+        # put that peer in a situation where sync advanced to the point that tx_A and tx_B are requested
+        for _ in range(50):
+            self.conn1.run_one_step()
+            if self.tx_A.hash in self.downloader.pending_transactions and \
+                    self.tx_B.hash in self.downloader.pending_transactions:
+                break
+        else:
+            self.fail('expected to break out of loop')
+
+        # force second download after clock is advanced, this will give us enough time in between the timeouts
+        self.clock.advance(10.0)
+        self.downloader.start_next_download()
+
+        for _ in range(50):
+            self.conn2.run_one_step()
+            details_A = self.downloader.pending_transactions.get(self.tx_A.hash)
+            details_B = self.downloader.pending_transactions.get(self.tx_B.hash)
+            details_A_has_conns = details_A is not None and len(details_A.connections) >= 2
+            details_B_has_conns = details_B is not None and len(details_B.connections) >= 2
+            if details_A_has_conns and details_B_has_conns:
+                break
+        else:
+            self.fail('expected to break out of loop')
+
+        # by this point everything should be set to so we can trigger the bug, any issues that happen before this
+        # comment are an issue in setting up the scenario, not related to the problem itself
+
+    def test_downloader_retry_reorder(self):
+        """ Reproduce the bug that causes a reorder in the downloader queue.
+
+        The tracking issue for this bug is #465
+
+
+        In order for the bug to be triggered, the following events must happen in the following order:
+
+        - premise:
+          - be connected to two nodes which are ahead of our node (we'll call them peer_X and peer_Y)
+          - sync timestamp must have requested two transactions, tx_A and tx_B, of which tx_B depends on tx_A (tx_A can
+            be parent of tx_B)
+        - while tx_A and tx_B are in the downloader, these are the key events that trigger the issue:
+          - tx_A is requested for download to peer_X
+          - tx_B is requested for download to peer_X
+          - peer_X disconnects
+          - peer_Y disconnects
+          - download of tx_A timeouts, since there are no nodes to download it from it is removed from the downloader,
+            and it is not retried
+          - peer_X re-connects, sync starts and tx_A and tx_B are added to the downloader
+          - peer_Y re-connects, sync starts and tx_A and tx_B are added to the downloader
+          - download of tx_B timeouts, since now there are peers to download it from, it isn't removed and a retry is
+            triggered
+          - tx_B is downloaded, and now it will be processed before tx_A
+          - tx_A is eventually downloaded (or not, this doesn't have to happen)
+          - tx_B is processed, but it will fail because tx_A has not been added yet
+        """
+        self._downloader_bug_setup()
+
+        # disconnect and wait for the download of tx_A to timeout but not yet the download of tx_B
+        self.conn1.disconnect(Failure(Exception('testing')))
+        self.conn2.disconnect(Failure(Exception('testing')))
+        self.clock.advance(settings.GET_DATA_TIMEOUT - 10.0)
+
+        # reconnect peer_X and peer_Y
+        self.conn1 = FakeConnection(self.manager_bug, self.manager1)
+        self.conn2 = FakeConnection(self.manager_bug, self.manager2)
+
+        # proceed as normal until both peers are back to the connections list
+        for _ in range(50):
+            self.conn1.run_one_step()
+            self.conn2.run_one_step()
+            self.clock.advance(0.1)
+            details_A = self.downloader.pending_transactions.get(self.tx_A.hash)
+            details_B = self.downloader.pending_transactions.get(self.tx_B.hash)
+            details_A_has_conns = details_A is not None and len(details_A.connections) >= 2
+            details_B_has_conns = details_B is not None and len(details_B.connections) >= 2
+            if details_A_has_conns and details_B_has_conns:
+                break
+        else:
+            self.fail('expected to break out of loop')
+
+        # wait for the download of B to be retried
+        self.clock.advance(11.0)
+
+        # this situation should cause the bug before the fix
+        # just advancing the connection a little bit should be enough to finish syncing without the bug
+        for _ in range(20):
+            self.conn2.run_one_step()
+            self.clock.advance(0.1)
+
+        # if the fix is applied, we would see tx_A in storage by this point
+        self.assertTrue(self.manager_bug.tx_storage.transaction_exists(self.tx_A.hash))
+
+    def test_downloader_disconnect(self):
+        """ This is related to test_downloader_retry_reorder, but it basically tests the change in behavior instead.
+
+        When a peer disconnects it should be immediately remvoed from the tx-detail's connections list.
+        """
+        self._downloader_bug_setup()
+
+        # disconnect and check if the connections were removed from the tx-details (which also means the tx-details
+        # will be removed from pending_transactions)
+        self.assertIn(self.tx_A.hash, self.downloader.pending_transactions)
+        self.assertIn(self.tx_B.hash, self.downloader.pending_transactions)
+        self.conn1.disconnect(Failure(Exception('testing')))
+        self.conn2.disconnect(Failure(Exception('testing')))
+        self.assertNotIn(self.tx_A.hash, self.downloader.pending_transactions)
+        self.assertNotIn(self.tx_B.hash, self.downloader.pending_transactions)
 
 
 class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMethodsTestCase):
