@@ -88,8 +88,9 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertNotIn(tx2.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
 
         # new indexes
-        self.assertNotIn(tx1.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
-        self.assertNotIn(tx2.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
+        if self.manager1.tx_storage.indexes.mempool_tips is not None:
+            self.assertNotIn(tx1.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
+            self.assertNotIn(tx2.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
 
         # Propagate another conflicting transaction, but with higher weight.
         self.manager1.propagate_tx(tx3)
@@ -118,9 +119,10 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertIn(tx3.hash, [x.data for x in self.manager1.tx_storage.get_tx_tips()])
 
         # new indexes
-        self.assertNotIn(tx1.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
-        self.assertNotIn(tx2.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
-        self.assertIn(tx3.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
+        if self.manager1.tx_storage.indexes.mempool_tips is not None:
+            self.assertNotIn(tx1.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
+            self.assertNotIn(tx2.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
+            self.assertIn(tx3.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
 
         self.assertConsensusValid(self.manager1)
 

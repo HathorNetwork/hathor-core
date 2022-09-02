@@ -22,6 +22,7 @@ from hathor.indexes.address_index import AddressIndex
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.deps_index import DepsIndex
 from hathor.indexes.height_index import HeightIndex
+from hathor.indexes.info_index import InfoIndex
 from hathor.indexes.mempool_tips_index import MempoolTipsIndex
 from hathor.indexes.timestamp_index import TimestampIndex
 from hathor.indexes.tips_index import TipsIndex
@@ -56,6 +57,7 @@ class IndexesManager(ABC):
 
     log = get_logger()
 
+    info: InfoIndex
     all_tips: TipsIndex
     block_tips: TipsIndex
     tx_tips: TipsIndex
@@ -90,6 +92,7 @@ class IndexesManager(ABC):
 
     def _iter_all_indexes_with_filter(self) -> Iterator[Tuple[_IndexFilter, BaseIndex]]:
         """ Same as `iter_all_indexes()`, but includes a filter for what transactions an index is interested in."""
+        yield _IndexFilter.ALL, self.info
         yield _IndexFilter.ALL, self.all_tips
         yield _IndexFilter.ALL_BLOCKS, self.block_tips
         yield _IndexFilter.VALID_TXS, self.tx_tips
@@ -130,7 +133,6 @@ class IndexesManager(ABC):
     def _manually_initialize(self, tx_storage: 'TransactionStorage') -> None:
         """ Initialize the indexes, checking the indexes that need initialization, and the optimal iterator to use.
         """
-        from hathor.transaction.genesis import BLOCK_GENESIS
         from hathor.transaction.storage.transaction_storage import NULL_INDEX_LAST_STARTED_AT
 
         db_last_started_at = tx_storage.get_last_started_at()
@@ -158,12 +160,6 @@ class IndexesManager(ABC):
                 tx_storage.set_index_last_started_at(index_db_name, NULL_INDEX_LAST_STARTED_AT)
             index.force_clear()
 
-        block_count = 0
-        tx_count = 0
-        latest_timestamp = BLOCK_GENESIS.timestamp
-        first_timestamp = BLOCK_GENESIS.timestamp
-        total = tx_storage.get_count_tx_blocks()
-
         cache_capacity = None
 
         # Reduce cache size during initialization.
@@ -172,17 +168,13 @@ class IndexesManager(ABC):
             cache_capacity = tx_storage.capacity
             tx_storage.set_capacity(min(MAX_CACHE_SIZE_DURING_LOAD, cache_capacity))
 
-        for tx in progress(tx_storage.topological_iterator(), log=self.log, total=total):
-            # XXX: these would probably make more sense to be their own simple "indexes" instead of how it is here
-            latest_timestamp = max(tx.timestamp, latest_timestamp)
-            first_timestamp = min(tx.timestamp, first_timestamp)
-            if tx.is_block:
-                block_count += 1
-            else:
-                tx_count += 1
+        self.log.debug('indexes pre-init')
+        for index in self.iter_all_indexes():
+            index.init_start()
 
+        self.log.debug('indexes init')
+        for tx in progress(tx_storage.topological_iterator(), log=self.log, total=tx_storage.get_count_tx_blocks()):
             tx_meta = tx.get_metadata()
-
             # feed each transaction to the indexes that they are interested in
             for index_filter, index in indexes_to_init:
                 if index_filter is _IndexFilter.ALL:
@@ -196,8 +188,6 @@ class IndexesManager(ABC):
                         index.init_loop_step(tx)
                 else:
                     assert False, 'impossible filter'
-
-        tx_storage._update_caches(block_count, tx_count, latest_timestamp, first_timestamp)
 
         # Restore cache capacity.
         if isinstance(tx_storage, TransactionCacheStorage):
@@ -218,6 +208,8 @@ class IndexesManager(ABC):
 
         :param tx: Transaction to be added
         """
+        self.info.update_timestamps(tx)
+
         # These two calls return False when a transaction changes from
         # voided to executed and vice-versa.
         r1 = self.all_tips.add_tx(tx)
@@ -241,6 +233,9 @@ class IndexesManager(ABC):
         # XXX: this method is idempotent and has no result
         self.deps.add_tx(tx)
 
+        if r3:
+            self.info.update_counts(tx)
+
         return r3
 
     def del_tx(self, tx: BaseTransaction, *, remove_all: bool = False, relax_assert: bool = False) -> None:
@@ -258,6 +253,7 @@ class IndexesManager(ABC):
                 self.addresses.remove_tx(tx)
             if self.utxo:
                 self.utxo.del_tx(tx)
+            self.info.update_counts(tx, remove=True)
 
         if tx.is_block:
             self.block_tips.del_tx(tx, relax_assert=relax_assert)
@@ -277,12 +273,15 @@ class MemoryIndexesManager(IndexesManager):
     def __init__(self) -> None:
         from hathor.indexes.memory_deps_index import MemoryDepsIndex
         from hathor.indexes.memory_height_index import MemoryHeightIndex
+        from hathor.indexes.memory_info_index import MemoryInfoIndex
         from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
         from hathor.indexes.memory_timestamp_index import MemoryTimestampIndex
+        from hathor.indexes.memory_tips_index import MemoryTipsIndex
 
-        self.all_tips = TipsIndex()
-        self.block_tips = TipsIndex()
-        self.tx_tips = TipsIndex()
+        self.info = MemoryInfoIndex()
+        self.all_tips = MemoryTipsIndex()
+        self.block_tips = MemoryTipsIndex()
+        self.tx_tips = MemoryTipsIndex()
 
         self.sorted_all = MemoryTimestampIndex()
         self.sorted_blocks = MemoryTimestampIndex()
@@ -318,14 +317,17 @@ class RocksDBIndexesManager(IndexesManager):
     def __init__(self, db: 'rocksdb.DB') -> None:
         from hathor.indexes.memory_deps_index import MemoryDepsIndex
         from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
+        from hathor.indexes.partial_rocksdb_tips_index import PartialRocksDBTipsIndex
         from hathor.indexes.rocksdb_height_index import RocksDBHeightIndex
+        from hathor.indexes.rocksdb_info_index import RocksDBInfoIndex
         from hathor.indexes.rocksdb_timestamp_index import RocksDBTimestampIndex
 
         self._db = db
 
-        self.all_tips = TipsIndex()
-        self.block_tips = TipsIndex()
-        self.tx_tips = TipsIndex()
+        self.info = RocksDBInfoIndex(self._db)
+        self.all_tips = PartialRocksDBTipsIndex(self._db, 'all')
+        self.block_tips = PartialRocksDBTipsIndex(self._db, 'blocks')
+        self.tx_tips = PartialRocksDBTipsIndex(self._db, 'txs')
 
         self.sorted_all = RocksDBTimestampIndex(self._db, 'all')
         self.sorted_blocks = RocksDBTimestampIndex(self._db, 'blocks')
