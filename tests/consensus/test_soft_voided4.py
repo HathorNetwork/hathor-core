@@ -47,7 +47,11 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         miner2.stop()
         gen_tx2.stop()
 
+        txA = manager2.tx_storage.get_transaction(txA_hash)
+        self.graphviz.labels[txA.hash] = 'txA'
+
         txB = manager2.tx_storage.get_transaction(txB_hash)
+        self.graphviz.labels[txB.hash] = 'txB'
 
         # Get the tx confirmed by the soft voided that will be voided
         tx_base = manager2.tx_storage.get_transaction(txB.parents[0])
@@ -94,6 +98,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
 
         self.simulator.run(10)
         txD = add_custom_tx(manager2, [(txC, 0)], base_parent=txB)
+        self.graphviz.labels[txD.hash] = 'txD'
 
         # dot = self.graphviz.dot()
         # dot.render('test_soft_voided4')
