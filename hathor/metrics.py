@@ -16,6 +16,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Deque, List, NamedTuple, Optional
 
+from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
 from hathor.conf import HathorSettings
@@ -24,6 +25,7 @@ from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.transaction.base_transaction import sum_weights
 from hathor.transaction.block import Block
 from hathor.transaction.storage import TransactionStorage
+from hathor.transaction.storage.cache_storage import TransactionCacheStorage
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.util import Reactor
 
@@ -31,6 +33,7 @@ if TYPE_CHECKING:
     from hathor.stratum import StratumFactory  # noqa: F401
     from hathor.websocket.factory import HathorAdminWebsocketFactory  # noqa: F401
 
+logger = get_logger()
 settings = HathorSettings()
 
 
@@ -60,8 +63,6 @@ class Metrics:
     best_block_height: int
     hash_rate: float
     peers: int
-    tx_hash_rate: float
-    block_hash_rate: float
     best_block_weight: float
     weight_tx_deque_len: int
     weight_block_deque_len: int
@@ -100,6 +101,8 @@ class Metrics:
         :param tx_storage: Transaction storage
         :param reactor: Twisted reactor that handles the time and callLater
         """
+        self.log = logger.new()
+
         # Transactions count in the network
         self.transactions = 0
 
@@ -114,12 +117,6 @@ class Metrics:
 
         # Peers connected
         self.peers = 0
-
-        # Hash rate of tx
-        self.tx_hash_rate = 0.0
-
-        # Hash rate of block
-        self.block_hash_rate = 0
 
         # Length of the tx deque
         self.weight_tx_deque_len = 60
@@ -176,6 +173,10 @@ class Metrics:
         self.connections = connections
         self.peer_connection_metrics: List[PeerConnectionMetrics] = []
 
+        # TxCache Data
+        self.transaction_cache_hits = 0
+        self.transaction_cache_misses = 0
+
         # Send-token timeouts counter
         self.send_token_timeouts = 0
 
@@ -188,6 +189,8 @@ class Metrics:
 
     def _start_initial_values(self) -> None:
         """ When we start the metrics object we set the transaction and block count already in the network
+
+            We also log some values that we just need to collect once, like the cache hits during initialization.
         """
         self.transactions = self.tx_storage.get_tx_count()
         self.blocks = self.tx_storage.get_block_count()
@@ -196,6 +199,10 @@ class Metrics:
         if last_block:
             self.hash_rate = self.calculate_new_hashrate(last_block[0])
             self.best_block_height = self.tx_storage.get_height_best_block()
+
+        if isinstance(self.tx_storage, TransactionCacheStorage):
+            self.log.info("Transaction cache hits during initialization", hits=self.tx_storage.stats.get("hit"))
+            self.log.info("Transaction cache misses during initialization", misses=self.tx_storage.stats.get("miss"))
 
     def start(self) -> None:
         self._start_initial_values()
@@ -304,9 +311,21 @@ class Metrics:
 
             self.peer_connection_metrics.append(metric)
 
+    def set_cache_data(self) -> None:
+        """ Collect and set data related to the transactions cache.
+        """
+        if isinstance(self.tx_storage, TransactionCacheStorage):
+            hits = self.tx_storage.stats.get("hit")
+            misses = self.tx_storage.stats.get("miss")
+            if hits:
+                self.transaction_cache_hits = hits
+            if misses:
+                self.transaction_cache_misses = misses
+
     def _collect_data(self) -> None:
         """ Call methods that collect data to metrics
         """
         self.set_websocket_data()
         self.set_stratum_data()
+        self.set_cache_data()
         self.collect_peer_connection_metrics()

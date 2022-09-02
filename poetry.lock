@@ -9,12 +9,10 @@ python-versions = ">=3.6"
 [package.dependencies]
 aiosignal = ">=1.1.2"
 async-timeout = ">=4.0.0a3,<5.0"
-asynctest = {version = "0.13.0", markers = "python_version < \"3.8\""}
 attrs = ">=17.3.0"
 charset-normalizer = ">=2.0,<3.0"
 frozenlist = ">=1.1.1"
 multidict = ">=4.5,<7.0"
-typing-extensions = {version = ">=3.7.4", markers = "python_version < \"3.8\""}
 yarl = ">=1.0,<2.0"
 
 [package.extras]
@@ -40,23 +38,26 @@ optional = false
 python-versions = "*"
 
 [[package]]
+name = "asttokens"
+version = "2.0.5"
+description = "Annotate AST trees with source code positions"
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+six = "*"
+
+[package.extras]
+test = ["astroid", "pytest"]
+
+[[package]]
 name = "async-timeout"
 version = "4.0.2"
 description = "Timeout context manager for asyncio programs"
 category = "main"
 optional = false
 python-versions = ">=3.6"
-
-[package.dependencies]
-typing-extensions = {version = ">=3.6.5", markers = "python_version < \"3.8\""}
-
-[[package]]
-name = "asynctest"
-version = "0.13.0"
-description = "Enhance the standard unittest package with features for testing asyncio libraries"
-category = "main"
-optional = false
-python-versions = ">=3.5"
 
 [[package]]
 name = "atomicwrites"
@@ -248,6 +249,14 @@ optional = false
 python-versions = ">=3.5"
 
 [[package]]
+name = "executing"
+version = "0.9.1"
+description = "Get the currently executing AST node of a frame, and other information"
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
 name = "flake8"
 version = "4.0.1"
 description = "the modular source code checker: pep8 pyflakes and co"
@@ -256,7 +265,6 @@ optional = false
 python-versions = ">=3.6"
 
 [package.dependencies]
-importlib-metadata = {version = "<4.3", markers = "python_version < \"3.8\""}
 mccabe = ">=0.6.0,<0.7.0"
 pycodestyle = ">=2.8.0,<2.9.0"
 pyflakes = ">=2.4.0,<2.5.0"
@@ -325,22 +333,6 @@ optional = false
 python-versions = ">=3.5"
 
 [[package]]
-name = "importlib-metadata"
-version = "4.2.0"
-description = "Read metadata from Python packages"
-category = "dev"
-optional = false
-python-versions = ">=3.6"
-
-[package.dependencies]
-typing-extensions = {version = ">=3.6.4", markers = "python_version < \"3.8\""}
-zipp = ">=0.5"
-
-[package.extras]
-docs = ["sphinx", "jaraco.packaging (>=8.2)", "rst.linker (>=1.9)"]
-testing = ["pytest (>=4.6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-cov", "pytest-enabler (>=1.0.1)", "packaging", "pep517", "pyfakefs", "flufl.flake8", "pytest-black (>=0.3.7)", "pytest-mypy", "importlib-resources (>=1.3)"]
-
-[[package]]
 name = "incremental"
 version = "21.3.0"
 description = "A small library that versions your Python projects."
@@ -372,11 +364,11 @@ sortedcontainers = ">=2.0,<3.0"
 
 [[package]]
 name = "ipython"
-version = "7.33.0"
+version = "8.4.0"
 description = "IPython: Productive Interactive Computing"
 category = "main"
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=3.8"
 
 [package.dependencies]
 appnope = {version = "*", markers = "sys_platform == \"darwin\""}
@@ -388,19 +380,22 @@ matplotlib-inline = "*"
 pexpect = {version = ">4.3", markers = "sys_platform != \"win32\""}
 pickleshare = "*"
 prompt-toolkit = ">=2.0.0,<3.0.0 || >3.0.0,<3.0.1 || >3.0.1,<3.1.0"
-pygments = "*"
-traitlets = ">=4.2"
+pygments = ">=2.4.0"
+stack-data = "*"
+traitlets = ">=5"
 
 [package.extras]
-all = ["Sphinx (>=1.3)", "ipykernel", "ipyparallel", "ipywidgets", "nbconvert", "nbformat", "nose (>=0.10.1)", "notebook", "numpy (>=1.17)", "pygments", "qtconsole", "requests", "testpath"]
+all = ["black", "Sphinx (>=1.3)", "ipykernel", "nbconvert", "nbformat", "ipywidgets", "notebook", "ipyparallel", "qtconsole", "pytest (<7.1)", "pytest-asyncio", "testpath", "curio", "matplotlib (!=3.2.0)", "numpy (>=1.19)", "pandas", "trio"]
+black = ["black"]
 doc = ["Sphinx (>=1.3)"]
 kernel = ["ipykernel"]
 nbconvert = ["nbconvert"]
 nbformat = ["nbformat"]
-notebook = ["notebook", "ipywidgets"]
+notebook = ["ipywidgets", "notebook"]
 parallel = ["ipyparallel"]
 qtconsole = ["qtconsole"]
-test = ["nose (>=0.10.1)", "requests", "testpath", "pygments", "nbformat", "ipykernel", "numpy (>=1.17)"]
+test = ["pytest (<7.1)", "pytest-asyncio", "testpath"]
+test_extra = ["pytest (<7.1)", "pytest-asyncio", "testpath", "curio", "matplotlib (!=3.2.0)", "nbformat", "numpy (>=1.19)", "pandas", "trio"]
 
 [[package]]
 name = "isort"
@@ -480,7 +475,6 @@ python-versions = ">=3.6"
 [package.dependencies]
 mypy-extensions = ">=0.4.3"
 tomli = {version = ">=1.1.0", markers = "python_version < \"3.11\""}
-typed-ast = {version = ">=1.4.0,<2", markers = "python_version < \"3.8\""}
 typing-extensions = ">=3.10"
 
 [package.extras]
@@ -562,9 +556,6 @@ category = "dev"
 optional = false
 python-versions = ">=3.6"
 
-[package.dependencies]
-importlib-metadata = {version = ">=0.12", markers = "python_version < \"3.8\""}
-
 [package.extras]
 dev = ["pre-commit", "tox"]
 testing = ["pytest", "pytest-benchmark"]
@@ -598,6 +589,17 @@ description = "Run a subprocess in a pseudo terminal"
 category = "main"
 optional = false
 python-versions = "*"
+
+[[package]]
+name = "pure-eval"
+version = "0.2.2"
+description = "Safely evaluate AST nodes without side effects"
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.extras]
+tests = ["pytest"]
 
 [[package]]
 name = "py"
@@ -704,7 +706,6 @@ python-versions = ">=3.7"
 atomicwrites = {version = ">=1.0", markers = "sys_platform == \"win32\""}
 attrs = ">=19.2.0"
 colorama = {version = "*", markers = "sys_platform == \"win32\""}
-importlib-metadata = {version = ">=0.12", markers = "python_version < \"3.8\""}
 iniconfig = "*"
 packaging = "*"
 pluggy = ">=0.12,<2.0"
@@ -853,15 +854,28 @@ optional = false
 python-versions = "*"
 
 [[package]]
+name = "stack-data"
+version = "0.3.0"
+description = "Extract data from python stack frames and tracebacks for informative displays"
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+asttokens = "*"
+executing = "*"
+pure-eval = "*"
+
+[package.extras]
+tests = ["cython", "littleutils", "pygments", "typeguard", "pytest"]
+
+[[package]]
 name = "structlog"
 version = "21.5.0"
 description = "Structured Logging for Python"
 category = "main"
 optional = false
 python-versions = ">=3.6"
-
-[package.dependencies]
-typing-extensions = {version = "*", markers = "python_version < \"3.8\""}
 
 [package.extras]
 dev = ["pre-commit", "rich", "cogapp", "tomli", "coverage", "freezegun (>=0.2.8)", "pretend", "pytest-asyncio", "pytest (>=6.0)", "simplejson", "furo", "sphinx", "sphinx-notfound-page", "sphinxcontrib-mermaid", "twisted"]
@@ -954,14 +968,6 @@ dev = ["wheel", "pytest (>=2.6.4)", "pytest-cov (>=1.8.1)", "pep8 (>=1.6.2)", "s
 twisted = ["zope.interface (>=5.2.0)", "twisted (>=20.3.0)"]
 
 [[package]]
-name = "typed-ast"
-version = "1.5.3"
-description = "a fork of Python 2 and 3 ast modules with type comment support"
-category = "dev"
-optional = false
-python-versions = ">=3.6"
-
-[[package]]
 name = "types-cryptography"
 version = "3.3.21"
 description = "Typing stubs for cryptography"
@@ -1039,19 +1045,6 @@ python-versions = ">=3.6"
 [package.dependencies]
 idna = ">=2.0"
 multidict = ">=4.0"
-typing-extensions = {version = ">=3.7.4", markers = "python_version < \"3.8\""}
-
-[[package]]
-name = "zipp"
-version = "3.8.0"
-description = "Backport of pathlib-compatible object wrapper for zip files"
-category = "dev"
-optional = false
-python-versions = ">=3.7"
-
-[package.extras]
-docs = ["sphinx", "jaraco.packaging (>=9)", "rst.linker (>=1.9)"]
-testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-cov", "pytest-enabler (>=1.0.1)", "jaraco.itertools", "func-timeout", "pytest-black (>=0.3.7)", "pytest-mypy (>=0.9.1)"]
 
 [[package]]
 name = "zope.event"
@@ -1099,8 +1092,8 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 
 [metadata]
 lock-version = "1.1"
-python-versions = ">=3.7,<4"
-content-hash = "bcd805b4a78c443b4a93ee4e9f01e1b616b741ad7b00e0d097bd2ee68df0733f"
+python-versions = ">=3.8,<4"
+content-hash = "d330f32a60d4bbfa23b867a41176139d666b02e523290f27c61061201bf98351"
 
 [metadata.files]
 aiohttp = [
@@ -1185,13 +1178,10 @@ appnope = [
     {file = "appnope-0.1.3-py2.py3-none-any.whl", hash = "sha256:265a455292d0bd8a72453494fa24df5a11eb18373a60c7c0430889f22548605e"},
     {file = "appnope-0.1.3.tar.gz", hash = "sha256:02bd91c4de869fbb1e1c50aafc4098827a7a54ab2f39d9dcba6c9547ed920e24"},
 ]
+asttokens = []
 async-timeout = [
     {file = "async-timeout-4.0.2.tar.gz", hash = "sha256:2163e1640ddb52b7a8c80d0a67a08587e5d245cc9c553a74a847056bc2976b15"},
     {file = "async_timeout-4.0.2-py3-none-any.whl", hash = "sha256:8ca1e4fcf50d07413d66d1a5e416e42cfdf5851c981d679a09851a6853383b3c"},
-]
-asynctest = [
-    {file = "asynctest-0.13.0-py3-none-any.whl", hash = "sha256:5da6118a7e6d6b54d83a8f7197769d046922a44d2a99c21382f0a6e4fadae676"},
-    {file = "asynctest-0.13.0.tar.gz", hash = "sha256:c27862842d15d83e6a34eb0b2866c323880eb3a75e4485b079ea11748fd77fac"},
 ]
 atomicwrites = [
     {file = "atomicwrites-1.4.0-py2.py3-none-any.whl", hash = "sha256:6d1784dea7c0c8d4a5172b6c620f40b6e4cbfdf96d783691f2e1302a7b88e197"},
@@ -1355,6 +1345,7 @@ decorator = [
     {file = "decorator-5.1.1-py3-none-any.whl", hash = "sha256:b8c3f85900b9dc423225913c5aace94729fe1fa9763b38939a95226f02d37186"},
     {file = "decorator-5.1.1.tar.gz", hash = "sha256:637996211036b6385ef91435e4fae22989472f9d571faba8927ba8253acbc330"},
 ]
+executing = []
 flake8 = [
     {file = "flake8-4.0.1-py2.py3-none-any.whl", hash = "sha256:479b1304f72536a55948cb40a32dce8bb0ffe3501e26eaf292c7e60eb5e0428d"},
     {file = "flake8-4.0.1.tar.gz", hash = "sha256:806e034dda44114815e23c16ef92f95c91e4c71100ff52813adf7132a6ad870d"},
@@ -1440,10 +1431,6 @@ idna = [
     {file = "idna-3.3-py3-none-any.whl", hash = "sha256:84d9dd047ffa80596e0f246e2eab0b391788b0503584e8945f2368256d2735ff"},
     {file = "idna-3.3.tar.gz", hash = "sha256:9d643ff0a55b762d5cdb124b8eaa99c66322e2157b69160bc32796e824360e6d"},
 ]
-importlib-metadata = [
-    {file = "importlib_metadata-4.2.0-py3-none-any.whl", hash = "sha256:057e92c15bc8d9e8109738a48db0ccb31b4d9d5cfbee5a8670879a30be66304b"},
-    {file = "importlib_metadata-4.2.0.tar.gz", hash = "sha256:b7e52a1f8dec14a75ea73e0891f3060099ca1d8e6a462a4dff11c3e119ea1b31"},
-]
 incremental = [
     {file = "incremental-21.3.0-py2.py3-none-any.whl", hash = "sha256:92014aebc6a20b78a8084cdd5645eeaa7f74b8933f70fa3ada2cfbd1e3b54321"},
     {file = "incremental-21.3.0.tar.gz", hash = "sha256:02f5de5aff48f6b9f665d99d48bfc7ec03b6e3943210de7cfc88856d755d6f57"},
@@ -1455,10 +1442,7 @@ iniconfig = [
 intervaltree = [
     {file = "intervaltree-3.1.0.tar.gz", hash = "sha256:902b1b88936918f9b2a19e0e5eb7ccb430ae45cde4f39ea4b36932920d33952d"},
 ]
-ipython = [
-    {file = "ipython-7.33.0-py3-none-any.whl", hash = "sha256:916a3126896e4fd78dd4d9cf3e21586e7fd93bae3f1cd751588b75524b64bf94"},
-    {file = "ipython-7.33.0.tar.gz", hash = "sha256:bcffb865a83b081620301ba0ec4d95084454f26b91d6d66b475bff3dfb0218d4"},
-]
+ipython = []
 isort = [
     {file = "isort-5.10.1-py3-none-any.whl", hash = "sha256:6f62d78e2f89b4500b080fe3a81690850cd254227f27f75c3a0c491a1f351ba7"},
     {file = "isort-5.10.1.tar.gz", hash = "sha256:e8443a5e7a020e9d7f97f1d7d9cd17c88bcb3bc7e218bf9cf5095fe550be2951"},
@@ -1605,6 +1589,7 @@ ptyprocess = [
     {file = "ptyprocess-0.7.0-py2.py3-none-any.whl", hash = "sha256:4b41f3967fce3af57cc7e94b888626c18bf37a083e3651ca8feeb66d492fef35"},
     {file = "ptyprocess-0.7.0.tar.gz", hash = "sha256:5c5d0a3b48ceee0b48485e0c26037c0acd7d29765ca3fbb5cb3831d347423220"},
 ]
+pure-eval = []
 py = [
     {file = "py-1.11.0-py2.py3-none-any.whl", hash = "sha256:607c53218732647dff4acdfcd50cb62615cedf612e72d1724fb1a0cc6405b378"},
     {file = "py-1.11.0.tar.gz", hash = "sha256:51c75c4126074b472f746a24399ad32f6053d1b34b68d2fa41e558e6f4a98719"},
@@ -1782,6 +1767,7 @@ sortedcontainers = [
     {file = "sortedcontainers-2.4.0-py2.py3-none-any.whl", hash = "sha256:a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0"},
     {file = "sortedcontainers-2.4.0.tar.gz", hash = "sha256:25caa5a06cc30b6b83d11423433f65d1f9d76c4c6a0c90e3379eaa43b9bfdb88"},
 ]
+stack-data = []
 structlog = [
     {file = "structlog-21.5.0-py3-none-any.whl", hash = "sha256:fd7922e195262b337da85c2a91c84be94ccab1f8fd1957bd6986f6904e3761c8"},
     {file = "structlog-21.5.0.tar.gz", hash = "sha256:68c4c29c003714fe86834f347cb107452847ba52414390a7ee583472bde00fc9"},
@@ -1819,32 +1805,6 @@ twisted-iocpsupport = [
 txaio = [
     {file = "txaio-22.2.1-py2.py3-none-any.whl", hash = "sha256:41223af4a9d5726e645a8ee82480f413e5e300dd257db94bc38ae12ea48fb2e5"},
     {file = "txaio-22.2.1.tar.gz", hash = "sha256:2e4582b70f04b2345908254684a984206c0d9b50e3074a24a4c55aba21d24d01"},
-]
-typed-ast = [
-    {file = "typed_ast-1.5.3-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:9ad3b48cf2b487be140072fb86feff36801487d4abb7382bb1929aaac80638ea"},
-    {file = "typed_ast-1.5.3-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:542cd732351ba8235f20faa0fc7398946fe1a57f2cdb289e5497e1e7f48cfedb"},
-    {file = "typed_ast-1.5.3-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:5dc2c11ae59003d4a26dda637222d9ae924387f96acae9492df663843aefad55"},
-    {file = "typed_ast-1.5.3-cp310-cp310-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:fd5df1313915dbd70eaaa88c19030b441742e8b05e6103c631c83b75e0435ccc"},
-    {file = "typed_ast-1.5.3-cp310-cp310-win_amd64.whl", hash = "sha256:e34f9b9e61333ecb0f7d79c21c28aa5cd63bec15cb7e1310d7d3da6ce886bc9b"},
-    {file = "typed_ast-1.5.3-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:f818c5b81966d4728fec14caa338e30a70dfc3da577984d38f97816c4b3071ec"},
-    {file = "typed_ast-1.5.3-cp36-cp36m-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:3042bfc9ca118712c9809201f55355479cfcdc17449f9f8db5e744e9625c6805"},
-    {file = "typed_ast-1.5.3-cp36-cp36m-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:4fff9fdcce59dc61ec1b317bdb319f8f4e6b69ebbe61193ae0a60c5f9333dc49"},
-    {file = "typed_ast-1.5.3-cp36-cp36m-win_amd64.whl", hash = "sha256:8e0b8528838ffd426fea8d18bde4c73bcb4167218998cc8b9ee0a0f2bfe678a6"},
-    {file = "typed_ast-1.5.3-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:8ef1d96ad05a291f5c36895d86d1375c0ee70595b90f6bb5f5fdbee749b146db"},
-    {file = "typed_ast-1.5.3-cp37-cp37m-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ed44e81517364cb5ba367e4f68fca01fba42a7a4690d40c07886586ac267d9b9"},
-    {file = "typed_ast-1.5.3-cp37-cp37m-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:f60d9de0d087454c91b3999a296d0c4558c1666771e3460621875021bf899af9"},
-    {file = "typed_ast-1.5.3-cp37-cp37m-win_amd64.whl", hash = "sha256:9e237e74fd321a55c90eee9bc5d44be976979ad38a29bbd734148295c1ce7617"},
-    {file = "typed_ast-1.5.3-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:ee852185964744987609b40aee1d2eb81502ae63ee8eef614558f96a56c1902d"},
-    {file = "typed_ast-1.5.3-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:27e46cdd01d6c3a0dd8f728b6a938a6751f7bd324817501c15fb056307f918c6"},
-    {file = "typed_ast-1.5.3-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d64dabc6336ddc10373922a146fa2256043b3b43e61f28961caec2a5207c56d5"},
-    {file = "typed_ast-1.5.3-cp38-cp38-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:8cdf91b0c466a6c43f36c1964772918a2c04cfa83df8001ff32a89e357f8eb06"},
-    {file = "typed_ast-1.5.3-cp38-cp38-win_amd64.whl", hash = "sha256:9cc9e1457e1feb06b075c8ef8aeb046a28ec351b1958b42c7c31c989c841403a"},
-    {file = "typed_ast-1.5.3-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:e20d196815eeffb3d76b75223e8ffed124e65ee62097e4e73afb5fec6b993e7a"},
-    {file = "typed_ast-1.5.3-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:37e5349d1d5de2f4763d534ccb26809d1c24b180a477659a12c4bde9dd677d74"},
-    {file = "typed_ast-1.5.3-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:c9f1a27592fac87daa4e3f16538713d705599b0a27dfe25518b80b6b017f0a6d"},
-    {file = "typed_ast-1.5.3-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:8831479695eadc8b5ffed06fdfb3e424adc37962a75925668deeb503f446c0a3"},
-    {file = "typed_ast-1.5.3-cp39-cp39-win_amd64.whl", hash = "sha256:20d5118e494478ef2d3a2702d964dae830aedd7b4d3b626d003eea526be18718"},
-    {file = "typed_ast-1.5.3.tar.gz", hash = "sha256:27f25232e2dd0edfe1f019d6bfaaf11e86e657d9bdb7b0956db95f560cceb2b3"},
 ]
 types-cryptography = [
     {file = "types-cryptography-3.3.21.tar.gz", hash = "sha256:ad1b9c63159c009f8676c7e41a4d595dfb96e8c03affa2e693e1617908bb409e"},
@@ -1947,10 +1907,6 @@ yarl = [
     {file = "yarl-1.7.2-cp39-cp39-win32.whl", hash = "sha256:1edc172dcca3f11b38a9d5c7505c83c1913c0addc99cd28e993efeaafdfaa18d"},
     {file = "yarl-1.7.2-cp39-cp39-win_amd64.whl", hash = "sha256:797c2c412b04403d2da075fb93c123df35239cd7b4cc4e0cd9e5839b73f52c58"},
     {file = "yarl-1.7.2.tar.gz", hash = "sha256:45399b46d60c253327a460e99856752009fcee5f5d3c80b2f7c0cae1c38d56dd"},
-]
-zipp = [
-    {file = "zipp-3.8.0-py3-none-any.whl", hash = "sha256:c4f6e5bbf48e74f7a38e7cc5b0480ff42b0ae5178957d564d18932525d5cf099"},
-    {file = "zipp-3.8.0.tar.gz", hash = "sha256:56bf8aadb83c24db6c4b577e13de374ccfb67da2078beba1d037c17980bf43ad"},
 ]
 "zope.event" = [
     {file = "zope.event-4.5.0-py2.py3-none-any.whl", hash = "sha256:2666401939cdaa5f4e0c08cf7f20c9b21423b95e88f4675b1443973bdb080c42"},

@@ -42,60 +42,27 @@ METRIC_INFO = {
     'blocks_found': 'Number of blocks found by the miner in stratum',
     'estimated_hash_rate': 'Estimated hash rate for stratum miners',
     'send_token_timeouts': 'Number of times send_token API has timed-out',
+    'transaction_cache_hits': 'Number of hits in the transactions cache',
+    'transaction_cache_misses': 'Number of misses in the transactions cache',
 }
-
-# Defines the metrics related to peer connections
-PEER_CONNECTION_LABELS = ["network", "connection_string", "peer_id"]
 
 PEER_CONNECTION_METRICS = {
-    "received_messages": Gauge(
-        METRIC_PREFIX + "peer_connection_received_messages",
-        "Counts how many messages the node received from a peer",
-        labelnames=PEER_CONNECTION_LABELS,
-    ),
-    "sent_messages": Gauge(
-        METRIC_PREFIX + "peer_connection_sent_messages",
-        "Counts how many messages the node sent to a peer",
-        labelnames=PEER_CONNECTION_LABELS,
-    ),
-    "received_bytes": Gauge(
-        METRIC_PREFIX + "peer_connection_received_bytes",
-        "Counts how many bytes the node received from a peer",
-        labelnames=PEER_CONNECTION_LABELS,
-    ),
-    "sent_bytes": Gauge(
-        METRIC_PREFIX + "peer_connection_sent_bytes",
-        "Counts how many bytes the node sent to a peer",
-        labelnames=PEER_CONNECTION_LABELS,
-    ),
-    "received_txs": Gauge(
-        METRIC_PREFIX + "peer_connection_received_txs",
-        "Counts how many txs the node received from a peer",
-        labelnames=PEER_CONNECTION_LABELS,
-    ),
-    "discarded_txs": Gauge(
-        METRIC_PREFIX + "peer_connection_discarded_txs",
-        "Counts how many txs the node discarded from a peer",
-        labelnames=PEER_CONNECTION_LABELS,
-    ),
-    "received_blocks": Gauge(
-        METRIC_PREFIX + "peer_connection_received_blocks",
-        "Counts how many blocks the node received from a peer",
-        labelnames=PEER_CONNECTION_LABELS,
-    ),
-    "discarded_blocks": Gauge(
-        METRIC_PREFIX + "peer_connection_discarded_blocks",
-        "Counts how many blocks the node discarded from a peer",
-        labelnames=PEER_CONNECTION_LABELS,
-    ),
+    # The keys here need to match the field names of class hathor.metrics.PeerConnectionMetrics
+    "received_messages": "Counts how many messages the node received from a peer",
+    "sent_messages": "Counts how many messages the node sent to a peer",
+    "received_bytes": "Counts how many bytes the node received from a peer",
+    "sent_bytes": "Counts how many bytes the node sent to a peer",
+    "received_txs": "Counts how many txs the node received from a peer",
+    "discarded_txs": "Counts how many txs the node discarded from a peer",
+    "received_blocks": "Counts how many blocks the node received from a peer",
+    "discarded_blocks": "Counts how many blocks the node discarded from a peer",
 }
-
 
 class PrometheusMetricsExporter:
     """ Class that sends hathor metrics to a node exporter that will be read by Prometheus
     """
 
-    def __init__(self, metrics: 'Metrics', path: str, filename: str = 'hathor.prom'):
+    def __init__(self, metrics: 'Metrics', path: str, filename: str = 'hathor.prom', metrics_prefix: str = ''):
         """
         :param metrics: Metric object that stores all the hathor metrics
         :type metrics: :py:class:`hathor.metrics.Metrics`
@@ -107,6 +74,7 @@ class PrometheusMetricsExporter:
         :type filename: str
         """
         self.metrics = metrics
+        self.metrics_prefix = metrics_prefix
 
         # Create full directory, if does not exist
         os.makedirs(path, exist_ok=True)
@@ -137,10 +105,26 @@ class PrometheusMetricsExporter:
         """
         self.registry = CollectorRegistry()
 
-        for name, comment in METRIC_INFO.items():
-            self.metric_gauges[name] = Gauge(name, comment, registry=self.registry)
+        self._initialize_peer_connection_metrics()
 
-        for _, metric in PEER_CONNECTION_METRICS.items():
+        for name, comment in METRIC_INFO.items():
+            self.metric_gauges[name] = Gauge(self.metrics_prefix + name, comment, registry=self.registry)
+
+    def _initialize_peer_connection_metrics(self) -> None:
+        # Defines the metrics related to peer connections
+        peer_connection_labels = ["network", "connection_string", "peer_id"]
+
+        prefix = self.metrics_prefix + "peer_connection_"
+
+        self.peer_connection_metrics = {
+            name: Gauge(
+                prefix + name,
+                description,
+                labelnames=peer_connection_labels
+            ) for name,description in PEER_CONNECTION_METRICS.items()
+        }
+
+        for metric in self.peer_connection_metrics.values():
             self.registry.register(metric)
 
     def start(self) -> None:
@@ -155,15 +139,18 @@ class PrometheusMetricsExporter:
         for metric_name in METRIC_INFO.keys():
             self.metric_gauges[metric_name].set(getattr(self.metrics, metric_name))
 
-        for metric in PEER_CONNECTION_METRICS.keys():
+        self._set_new_peer_connection_metrics()
+
+        write_to_textfile(self.filepath, self.registry)
+
+    def _set_new_peer_connection_metrics(self) -> None:
+        for name,metric in self.peer_connection_metrics.items():
             for connection_metric in self.metrics.peer_connection_metrics:
-                PEER_CONNECTION_METRICS[metric].labels(
+                metric.labels(
                     network=connection_metric.network,
                     peer_id=connection_metric.peer_id,
                     connection_string=connection_metric.connection_string
-                ).set(getattr(connection_metric, metric))
-
-        write_to_textfile(self.filepath, self.registry)
+                ).set(getattr(connection_metric, name))
 
     def _write_data(self) -> None:
         """ Update all metric data with new values

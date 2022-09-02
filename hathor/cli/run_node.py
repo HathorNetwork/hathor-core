@@ -73,6 +73,8 @@ class RunNode:
         parser.add_argument('--utxo-index', action='store_true',
                             help='Create an index of UTXOs by token/address/amount and allow searching queries')
         parser.add_argument('--prometheus', action='store_true', help='Send metric data to Prometheus')
+        parser.add_argument('--prometheus-prefix', default='',
+                            help='A prefix that will be added in all Prometheus metrics')
         parser.add_argument('--cache', action='store_true', help='Use cache for tx storage')
         parser.add_argument('--cache-size', type=int, help='Number of txs to keep on cache')
         parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
@@ -409,7 +411,10 @@ class RunNode:
         cpu = get_cpu_profiler()
 
         if args.prometheus:
-            kwargs: Dict[str, Any] = {'metrics': self.manager.metrics}
+            kwargs: Dict[str, Any] = {
+                'metrics': self.manager.metrics,
+                'metrics_prefix': args.prometheus_prefix
+            }
 
             if args.data:
                 kwargs['path'] = os.path.join(args.data, 'prometheus')
@@ -644,22 +649,23 @@ class RunNode:
                 sys.exit(-1)
 
     def check_python_version(self) -> None:
-        MIN_STABLE = (3, 8)
+        MIN_VER = (3, 8)
         RECOMMENDED_VER = (3, 9)
         cur = sys.version_info
-        min_pretty = '.'.join(map(str, MIN_STABLE))
+        min_pretty = '.'.join(map(str, MIN_VER))
         cur_pretty = '.'.join(map(str, cur))
         recommended_pretty = '.'.join(map(str, RECOMMENDED_VER))
-        if cur < MIN_STABLE:
-            self.log.warning('\n'.join([
+        if cur < MIN_VER:
+            self.log.critical('\n'.join([
                 '',
                 '********************************************************',
-                f'The detected Python version {cur_pretty} is deprecated and support for it will be removed soon.',
-                f'The minimum supported Python version will be {min_pretty}',
+                f'The detected Python version {cur_pretty} is not supported anymore.',
+                f'The minimum supported Python version is be {min_pretty}',
                 f'The recommended Python version is {recommended_pretty}',
                 '********************************************************',
                 '',
             ]))
+            sys.exit(-1)
 
     def __init__(self, *, argv=None):
         if argv is None:
