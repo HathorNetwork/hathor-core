@@ -53,6 +53,13 @@ class _ConnectingPeer(NamedTuple):
     endpoint_deferred: Deferred
 
 
+class PeerConnectionsMetrics(NamedTuple):
+    connecting_peers_count: int
+    handshaking_peers_count: int
+    connected_peers_count: int
+    known_peers_count: int
+
+
 class ConnectionsManager:
     """ It manages all peer-to-peer connections and events related to control messages.
     """
@@ -158,15 +165,15 @@ class ConnectionsManager:
         if self.lc_reconnect.running:
             self.lc_reconnect.stop()
 
-    def _get_peers_count(self) -> Dict[str, int]:
+    def _get_peers_count(self) -> PeerConnectionsMetrics:
         """Get a dict containing the count of peers in each state"""
 
-        return {
-            "connecting_peers_count": len(self.connecting_peers),
-            "handshaking_peers_count": len(self.handshaking_peers),
-            "connected_peers_count": len(self.connected_peers),
-            "known_peers_count": len(self.peer_storage)
-        }
+        return PeerConnectionsMetrics(
+            len(self.connecting_peers),
+            len(self.handshaking_peers),
+            len(self.connected_peers),
+            len(self.peer_storage)
+        )
 
     def get_sync_versions(self) -> Set[SyncVersion]:
         """Set of versions that were enabled and are supported."""

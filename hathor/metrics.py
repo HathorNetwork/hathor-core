@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Deque, NamedTuple, Optional
 from twisted.internet.task import LoopingCall
 
 from hathor.conf import HathorSettings
+from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.transaction.base_transaction import sum_weights
 from hathor.transaction.block import Block
@@ -230,10 +231,12 @@ class Metrics:
             HathorEvents.NETWORK_PEER_DISCONNECTED,
             HathorEvents.NETWORK_PEER_CONNECTION_FAILED
         ):
-            self.connected_peers = data["peers_count"]["connected_peers_count"]
-            self.connecting_peers = data["peers_count"]["connecting_peers_count"]
-            self.handshaking_peers = data["peers_count"]["handshaking_peers_count"]
-            self.known_peers = data["peers_count"]["known_peers_count"]
+            peers_connection_metrics: PeerConnectionsMetrics = data["peers_count"]
+
+            self.connected_peers = peers_connection_metrics.connected_peers_count
+            self.connecting_peers = peers_connection_metrics.connecting_peers_count
+            self.handshaking_peers = peers_connection_metrics.handshaking_peers_count
+            self.known_peers = peers_connection_metrics.known_peers_count
         else:
             raise ValueError('Invalid key')
 

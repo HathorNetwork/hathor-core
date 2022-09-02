@@ -3,6 +3,7 @@ from unittest.mock import Mock
 
 from hathor.manager import HathorManager
 from hathor.metrics import Metrics
+from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.util import reactor
@@ -35,12 +36,7 @@ class MetricsTest(unittest.TestCase):
         pubsub.publish(
             HathorEvents.NETWORK_PEER_CONNECTED,
             protocol=Mock(),
-            peers_count={
-                "connecting_peers_count": 3,
-                "handshaking_peers_count": 4,
-                "connected_peers_count": 5,
-                "known_peers_count": 6
-            }
+            peers_count=PeerConnectionsMetrics(3, 4, 5, 6)
         )
 
         # Assertion
