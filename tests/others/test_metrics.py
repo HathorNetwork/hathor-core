@@ -1,9 +1,8 @@
 from hathor.manager import HathorManager
+from hathor.metrics import Metrics
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import PubSubManager
-from hathor.transaction.storage import TransactionMemoryStorage
-from hathor.metrics import Metrics
 from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
 from hathor.util import reactor
 from tests import unittest

@@ -58,6 +58,7 @@ PEER_CONNECTION_METRICS = {
     "discarded_blocks": "Counts how many blocks the node discarded from a peer",
 }
 
+
 class PrometheusMetricsExporter:
     """ Class that sends hathor metrics to a node exporter that will be read by Prometheus
     """
@@ -121,7 +122,7 @@ class PrometheusMetricsExporter:
                 prefix + name,
                 description,
                 labelnames=peer_connection_labels
-            ) for name,description in PEER_CONNECTION_METRICS.items()
+            ) for name, description in PEER_CONNECTION_METRICS.items()
         }
 
         for metric in self.peer_connection_metrics.values():
@@ -144,7 +145,7 @@ class PrometheusMetricsExporter:
         write_to_textfile(self.filepath, self.registry)
 
     def _set_new_peer_connection_metrics(self) -> None:
-        for name,metric in self.peer_connection_metrics.items():
+        for name, metric in self.peer_connection_metrics.items():
             for connection_metric in self.metrics.peer_connection_metrics:
                 metric.labels(
                     network=connection_metric.network,
