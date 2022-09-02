@@ -278,7 +278,7 @@ class Metrics:
 
     def collect_peer_connection_metrics(self) -> None:
         """Collect metrics for each connected peer.
-            The list is cleated every time to avoid memory leak.
+            The list is cleared every time to avoid memory leak.
         """
         self.peer_connection_metrics.clear()
 

@@ -45,46 +45,48 @@ METRIC_INFO = {
 }
 
 # Defines the metrics related to peer connections
+PEER_CONNECTION_LABELS = ["network", "connection_string", "peer_id"]
+
 PEER_CONNECTION_METRICS = {
     "received_messages": Gauge(
         METRIC_PREFIX + "peer_connection_received_messages",
         "Counts how many messages the node received from a peer",
-        labelnames=["network", "connection_string", "peer_id"],
+        labelnames=PEER_CONNECTION_LABELS,
     ),
     "sent_messages": Gauge(
         METRIC_PREFIX + "peer_connection_sent_messages",
         "Counts how many messages the node sent to a peer",
-        labelnames=["network", "connection_string", "peer_id"],
+        labelnames=PEER_CONNECTION_LABELS,
     ),
     "received_bytes": Gauge(
         METRIC_PREFIX + "peer_connection_received_bytes",
         "Counts how many bytes the node received from a peer",
-        labelnames=["network", "connection_string", "peer_id"],
+        labelnames=PEER_CONNECTION_LABELS,
     ),
     "sent_bytes": Gauge(
         METRIC_PREFIX + "peer_connection_sent_bytes",
         "Counts how many bytes the node sent to a peer",
-        labelnames=["network", "connection_string", "peer_id"],
+        labelnames=PEER_CONNECTION_LABELS,
     ),
     "received_txs": Gauge(
         METRIC_PREFIX + "peer_connection_received_txs",
         "Counts how many txs the node received from a peer",
-        labelnames=["network", "connection_string", "peer_id"],
+        labelnames=PEER_CONNECTION_LABELS,
     ),
     "discarded_txs": Gauge(
         METRIC_PREFIX + "peer_connection_discarded_txs",
         "Counts how many txs the node discarded from a peer",
-        labelnames=["network", "connection_string", "peer_id"],
+        labelnames=PEER_CONNECTION_LABELS,
     ),
     "received_blocks": Gauge(
         METRIC_PREFIX + "peer_connection_received_blocks",
         "Counts how many blocks the node received from a peer",
-        labelnames=["network", "connection_string", "peer_id"],
+        labelnames=PEER_CONNECTION_LABELS,
     ),
     "discarded_blocks": Gauge(
         METRIC_PREFIX + "peer_connection_discarded_blocks",
         "Counts how many blocks the node discarded from a peer",
-        labelnames=["network", "connection_string", "peer_id"],
+        labelnames=PEER_CONNECTION_LABELS,
     ),
 }
 
