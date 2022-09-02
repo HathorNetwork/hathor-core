@@ -73,6 +73,8 @@ class RunNode:
         parser.add_argument('--utxo-index', action='store_true',
                             help='Create an index of UTXOs by token/address/amount and allow searching queries')
         parser.add_argument('--prometheus', action='store_true', help='Send metric data to Prometheus')
+        parser.add_argument('--prometheus-prefix', default='',
+                            help='A prefix that will be added in all Prometheus metrics')
         parser.add_argument('--cache', action='store_true', help='Use cache for tx storage')
         parser.add_argument('--cache-size', type=int, help='Number of txs to keep on cache')
         parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
@@ -409,7 +411,10 @@ class RunNode:
         cpu = get_cpu_profiler()
 
         if args.prometheus:
-            kwargs: Dict[str, Any] = {'metrics': self.manager.metrics}
+            kwargs: Dict[str, Any] = {
+                'metrics': self.manager.metrics,
+                'metrics_prefix': args.prometheus_prefix
+            }
 
             if args.data:
                 kwargs['path'] = os.path.join(args.data, 'prometheus')
