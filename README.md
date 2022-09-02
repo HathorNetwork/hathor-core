@@ -32,7 +32,7 @@ For more information about our HTTP API, check out our [API Documentation](https
 
 ## From source-code
 
-First, you need to have Python >=3.7 installed. If you don't, we recommend you to install using `pyenv` (check this
+First, you need to have Python >=3.8 installed. If you don't, we recommend you to install using `pyenv` (check this
 [link](https://github.com/pyenv/pyenv#installation)).
 
 ### System dependencies
@@ -59,11 +59,11 @@ First, you need to have Python >=3.7 installed. If you don't, we recommend you t
   brew install pyenv
   ```
 
-  then Python 3.7 (you could check the latest 3.7.x version with `pyenv install --list`):
+  then Python 3.10 (you could check the latest 3.10.x version with `pyenv install --list`):
 
   ```
-  pyenv install 3.7.11
-  pyenv local 3.7.11
+  pyenv install 3.10.6
+  pyenv local 3.10.6
   pip install -U poetry
   ```
 
@@ -75,7 +75,7 @@ First, you need to have Python >=3.7 installed. If you don't, we recommend you t
 - on Windows 10 (using [winget](https://github.com/microsoft/winget-cli)):
 
   ```
-  winget install python-3.7
+  winget install python-3.10
   pip install -U poetry
   ```
 
@@ -90,12 +90,6 @@ git clone git@github.com:HathorNetwork/hathor-core.git && cd hathor-core
 
 ```
 poetry install
-```
-
-*Optionally* if you've installed the RocksDB lib:
-
-```
-poetry install -E rocksdb
 ```
 
 ### Running the full-node
