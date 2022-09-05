@@ -5,9 +5,9 @@ from hathor.manager import HathorManager
 from hathor.metrics import Metrics
 from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
 from hathor.util import reactor
 from hathor.wallet import Wallet
-from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
 from tests import unittest
 
 
