@@ -42,10 +42,11 @@ class BaseIndexesTest(unittest.TestCase):
         tx1.timestamp = int(self.clock.seconds())
         tx1.resolve()
         self.assertTrue(self.manager.propagate_tx(tx1, False))
-        self.assertEqual(
-            {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
-            {tx1.hash}
-        )
+        if self.manager.tx_storage.indexes.mempool_tips is not None:
+            self.assertEqual(
+                {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
+                {tx1.hash}
+            )
 
         outputs = [WalletOutputInfo(address=decode_address(address), value=value, timelock=None)]
 
@@ -56,10 +57,11 @@ class BaseIndexesTest(unittest.TestCase):
         tx2.timestamp = int(self.clock.seconds()) + 1
         tx2.resolve()
         self.assertTrue(self.manager.propagate_tx(tx2, False))
-        self.assertEqual(
-            {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
-            {tx2.hash}
-        )
+        if self.manager.tx_storage.indexes.mempool_tips is not None:
+            self.assertEqual(
+                {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
+                {tx2.hash}
+            )
 
         tx3 = Transaction.create_from_struct(tx2.get_struct())
         tx3.timestamp = tx2.timestamp + 1
@@ -68,13 +70,14 @@ class BaseIndexesTest(unittest.TestCase):
         self.assertNotEqual(tx2.hash, tx3.hash)
         self.assertTrue(self.manager.propagate_tx(tx3, False))
         self.assertIn(tx3.hash, tx2.get_metadata().conflict_with)
-        self.assertEqual(
-            {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
-            # XXX: what should we expect here? I don't think we should exclude both tx2 and tx3, but maybe let the
-            # function using the index decide
-            # {tx1.hash, tx3.hash}
-            {tx1.hash}
-        )
+        if self.manager.tx_storage.indexes.mempool_tips is not None:
+            self.assertEqual(
+                {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
+                # XXX: what should we expect here? I don't think we should exclude both tx2 and tx3, but maybe let the
+                # function using the index decide
+                # {tx1.hash, tx3.hash}
+                {tx1.hash}
+            )
 
     def test_tx_tips_voided(self):
         from hathor.wallet.base_wallet import WalletOutputInfo
@@ -96,10 +99,11 @@ class BaseIndexesTest(unittest.TestCase):
         tx1.timestamp = int(self.clock.seconds())
         tx1.resolve()
         self.assertTrue(self.manager.propagate_tx(tx1, False))
-        self.assertEqual(
-            {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
-            {tx1.hash}
-        )
+        if self.manager.tx_storage.indexes.mempool_tips is not None:
+            self.assertEqual(
+                {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
+                {tx1.hash}
+            )
 
         tx2 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
         tx2.weight = 2.0
@@ -108,10 +112,11 @@ class BaseIndexesTest(unittest.TestCase):
         tx2.timestamp = int(self.clock.seconds()) + 1
         tx2.resolve()
         self.assertTrue(self.manager.propagate_tx(tx2, False))
-        self.assertEqual(
-            {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
-            {tx2.hash}
-        )
+        if self.manager.tx_storage.indexes.mempool_tips is not None:
+            self.assertEqual(
+                {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
+                {tx2.hash}
+            )
 
         tx3 = Transaction.create_from_struct(tx2.get_struct())
         tx3.weight = 3.0
@@ -123,15 +128,19 @@ class BaseIndexesTest(unittest.TestCase):
         self.assertTrue(self.manager.propagate_tx(tx3, False))
         # self.assertIn(tx3.hash, tx2.get_metadata().voided_by)
         self.assertIn(tx3.hash, tx2.get_metadata().conflict_with)
-        self.assertEqual(
-            {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
-            # XXX: what should we expect here? I don't think we should exclude both tx2 and tx3, but maybe let the
-            # function using the index decide
-            {tx1.hash, tx3.hash}
-        )
+        if self.manager.tx_storage.indexes.mempool_tips is not None:
+            self.assertEqual(
+                {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
+                # XXX: what should we expect here? I don't think we should exclude both tx2 and tx3, but maybe let the
+                # function using the index decide
+                {tx1.hash, tx3.hash}
+            )
 
     def test_genesis_not_in_mempool(self):
-        mempool_txs = list(self.tx_storage.indexes.mempool_tips.iter_all(self.tx_storage))
+        if self.tx_storage.indexes.mempool_tips is not None:
+            mempool_txs = list(self.tx_storage.indexes.mempool_tips.iter_all(self.tx_storage))
+        else:
+            mempool_txs = list(self.tx_storage.iter_mempool_from_tx_tips())
         for tx in self.genesis_txs:
             self.assertNotIn(tx, mempool_txs)
 
@@ -857,6 +866,44 @@ class BaseMemoryIndexesTest(BaseIndexesTest):
 
         self.graphviz = GraphvizVisualizer(self.tx_storage, include_verifications=True, include_funds=True)
 
+
+@pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
+class BaseRocksDBIndexesTest(BaseIndexesTest):
+    def setUp(self):
+        import tempfile
+
+        from hathor.transaction.storage import TransactionRocksDBStorage
+
+        super().setUp()
+        self.wallet = Wallet()
+        directory = tempfile.mkdtemp()
+        self.tmpdirs.append(directory)
+        rocksdb_storage = RocksDBStorage(path=directory)
+        self.tx_storage = TransactionRocksDBStorage(rocksdb_storage)
+        self.genesis = self.tx_storage.get_all_genesis()
+        self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
+        self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
+
+        # read genesis keys
+        self.genesis_private_key = get_genesis_key()
+        self.genesis_public_key = self.genesis_private_key.public_key()
+
+        # this makes sure we can spend the genesis outputs
+        self.manager = self.create_peer('testnet', tx_storage=self.tx_storage, unlock_wallet=True, wallet_index=True,
+                                        utxo_index=True)
+        self.blocks = add_blocks_unlock_reward(self.manager)
+        self.last_block = self.blocks[-1]
+
+        self.graphviz = GraphvizVisualizer(self.tx_storage, include_verifications=True, include_funds=True)
+
+
+class SyncV1MemoryIndexesTest(unittest.SyncV1Params, BaseMemoryIndexesTest):
+    __test__ = True
+
+
+class SyncV2MemoryIndexesTest(unittest.SyncV2Params, BaseMemoryIndexesTest):
+    __test__ = True
+
     def test_deps_index(self):
         from hathor.indexes.memory_deps_index import MemoryDepsIndex
 
@@ -890,34 +937,17 @@ class BaseMemoryIndexesTest(BaseIndexesTest):
         self._test_confirmed_tx_that_spends_unconfirmed_tx()
 
 
-@pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
-class BaseRocksDBIndexesTest(BaseIndexesTest):
-    def setUp(self):
-        import tempfile
+# sync-bridge should behave like sync-v2
+class SyncBridgeMemoryIndexesTest(unittest.SyncBridgeParams, SyncV2MemoryIndexesTest):
+    pass
 
-        from hathor.transaction.storage import TransactionRocksDBStorage
 
-        super().setUp()
-        self.wallet = Wallet()
-        directory = tempfile.mkdtemp()
-        self.tmpdirs.append(directory)
-        rocksdb_storage = RocksDBStorage(path=directory)
-        self.tx_storage = TransactionRocksDBStorage(rocksdb_storage)
-        self.genesis = self.tx_storage.get_all_genesis()
-        self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
-        self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
+class SyncV1RocksDBIndexesTest(unittest.SyncV1Params, BaseRocksDBIndexesTest):
+    __test__ = True
 
-        # read genesis keys
-        self.genesis_private_key = get_genesis_key()
-        self.genesis_public_key = self.genesis_private_key.public_key()
 
-        # this makes sure we can spend the genesis outputs
-        self.manager = self.create_peer('testnet', tx_storage=self.tx_storage, unlock_wallet=True, wallet_index=True,
-                                        utxo_index=True)
-        self.blocks = add_blocks_unlock_reward(self.manager)
-        self.last_block = self.blocks[-1]
-
-        self.graphviz = GraphvizVisualizer(self.tx_storage, include_verifications=True, include_funds=True)
+class SyncV2RocksDBIndexesTest(unittest.SyncV2Params, BaseRocksDBIndexesTest):
+    __test__ = True
 
     def test_deps_index(self):
         from hathor.indexes.rocksdb_deps_index import RocksDBDepsIndex
@@ -954,27 +984,6 @@ class BaseRocksDBIndexesTest(BaseIndexesTest):
         indexes = self.manager.tx_storage.indexes
         indexes.deps = RocksDBDepsIndex(indexes._db, _force=True)
         self._test_confirmed_tx_that_spends_unconfirmed_tx()
-
-
-class SyncV1MemoryIndexesTest(unittest.SyncV1Params, BaseMemoryIndexesTest):
-    __test__ = True
-
-
-class SyncV2MemoryIndexesTest(unittest.SyncV2Params, BaseMemoryIndexesTest):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeMemoryIndexesTest(unittest.SyncBridgeParams, SyncV2MemoryIndexesTest):
-    pass
-
-
-class SyncV1RocksDBIndexesTest(unittest.SyncV1Params, BaseRocksDBIndexesTest):
-    __test__ = True
-
-
-class SyncV2RocksDBIndexesTest(unittest.SyncV2Params, BaseRocksDBIndexesTest):
-    __test__ = True
 
 
 # sync-bridge should behave like sync-v2

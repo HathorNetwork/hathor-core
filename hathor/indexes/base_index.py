@@ -13,9 +13,12 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from hathor.transaction.base_transaction import BaseTransaction
+
+if TYPE_CHECKING:  # pragma: no cover
+    from hathor.indexes.manager import IndexesManager
 
 
 class BaseIndex(ABC):
@@ -25,7 +28,7 @@ class BaseIndex(ABC):
     created to generalize how we initialize indexes and keep track of which ones are up-to-date.
     """
 
-    def init_start(self) -> None:
+    def init_start(self, indexes_manager: 'IndexesManager') -> None:
         """ This method will always be called when starting the index manager, regardless of initialization state.
 
         It comes with a no-op implementation by default because usually indexes will not need this.

@@ -14,13 +14,12 @@
 
 from abc import abstractmethod
 from collections.abc import Collection
-from typing import TYPE_CHECKING, Iterable, Iterator, List, Optional, Set, cast
+from typing import TYPE_CHECKING, Iterable, Iterator, Optional, Set, cast
 
 import structlog
 
 from hathor.indexes.base_index import BaseIndex
 from hathor.transaction import BaseTransaction, Transaction
-from hathor.transaction.transaction_metadata import ValidationState
 from hathor.util import not_none
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -68,16 +67,6 @@ class MempoolTipsIndex(BaseIndex):
         What to do with `get_tx_tips()`? They kind of do the same thing and it might be really confusing in the future.
         """
         raise NotImplementedError
-
-    def get_transactions_to_remove(self, tx_storage: 'TransactionStorage') -> List[BaseTransaction]:
-        """ This method will look for transactions in the mempool that have became invalid due to the reward lock.
-        """
-        to_remove: List[BaseTransaction] = []
-        for tx in self.iter_all(tx_storage):
-            if tx.is_spent_reward_locked():
-                tx.get_metadata().validation = ValidationState.INVALID
-                to_remove.append(tx)
-        return to_remove
 
 
 class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):

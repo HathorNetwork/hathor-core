@@ -23,6 +23,8 @@ from hathor.transaction import BaseTransaction
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
 
+    from hathor.indexes.manager import IndexesManager
+
 logger = get_logger()
 
 _CF_NAME_ADDRESS_INDEX = b'info-index'
@@ -40,7 +42,7 @@ class RocksDBInfoIndex(MemoryInfoIndex, RocksDBIndexUtils):
         RocksDBIndexUtils.__init__(self, db, cf_name or _CF_NAME_ADDRESS_INDEX)
         MemoryInfoIndex.__init__(self)
 
-    def init_start(self) -> None:
+    def init_start(self, indexes_manager: 'IndexesManager') -> None:
         self._load_all_values()
         self.log.info('loaded info-index', block_count=self._block_count, tx_count=self._tx_count,
                       first_timestamp=self._first_timestamp, latest_timestamp=self._latest_timestamp)

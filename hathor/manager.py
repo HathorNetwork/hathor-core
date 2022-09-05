@@ -125,6 +125,9 @@ class HathorManager:
         if tx_storage is None:
             raise TypeError(f'{type(self).__name__}() missing 1 required positional argument: \'tx_storage\'')
 
+        self._enable_sync_v1 = enable_sync_v1
+        self._enable_sync_v2 = enable_sync_v2
+
         self.log = logger.new()
 
         if rng is None:
@@ -178,6 +181,11 @@ class HathorManager:
         if event_storage is not None:
             self.event_manager = EventManager(event_storage, self.reactor, not_none(self.my_peer.id))
             self.event_manager.subscribe(self.pubsub)
+        if enable_sync_v2:
+            assert self.tx_storage.indexes is not None
+            self.log.debug('enable sync-v2 indexes')
+            self.tx_storage.indexes.enable_deps_index()
+            self.tx_storage.indexes.enable_mempool_index()
 
         self.soft_voided_tx_ids = soft_voided_tx_ids or set()
         self.consensus_algorithm = ConsensusAlgorithm(self.soft_voided_tx_ids, pubsub=self.pubsub)
@@ -481,8 +489,10 @@ class HathorManager:
                         assert tx.validate_full(skip_block_weight_verification=skip_block_weight_verification)
                         self.consensus_algorithm.update(tx)
                         self.tx_storage.indexes.update(tx)
-                        self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
-                        self.step_validations([tx])
+                        if self.tx_storage.indexes.mempool_tips is not None:
+                            self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
+                        if self.tx_storage.indexes.deps is not None:
+                            self.sync_v2_step_validations([tx])
                     else:
                         assert tx.validate_basic(skip_block_weight_verification=skip_block_weight_verification)
                     self.tx_storage.save_transaction(tx, only_metadata=True)
@@ -493,7 +503,8 @@ class HathorManager:
                             assert tx_meta.validation.is_at_least_basic(), f'invalid: {tx.hash_hex}'
                     elif tx.is_transaction and tx_meta.first_block is None and not tx_meta.voided_by:
                         assert self.tx_storage.indexes is not None
-                        self.tx_storage.indexes.mempool_tips.update(tx)
+                        if self.tx_storage.indexes.mempool_tips:
+                            self.tx_storage.indexes.mempool_tips.update(tx)
                     self.tx_storage.add_to_indexes(tx)
                     if tx.is_transaction and tx_meta.voided_by:
                         self.tx_storage.del_from_indexes(tx)
@@ -543,7 +554,7 @@ class HathorManager:
                 sys.exit()
 
         # restart all validations possible
-        if self.tx_storage.indexes.deps.has_needed_tx():
+        if self.tx_storage.indexes.deps and self.tx_storage.indexes.deps.has_needed_tx():
             self.log.debug('run pending validations')
             depended_final_txs: List[BaseTransaction] = []
             for tx_hash in self.tx_storage.indexes.deps.iter():
@@ -552,7 +563,8 @@ class HathorManager:
                 tx = self.tx_storage.get_transaction(tx_hash)
                 if tx.get_metadata().validation.is_final():
                     depended_final_txs.append(tx)
-            self.step_validations(depended_final_txs)
+            if self.tx_storage.indexes.deps is not None:
+                self.sync_v2_step_validations(depended_final_txs)
             self.log.debug('pending validations finished')
 
         best_height = self.tx_storage.get_height_best_block()
@@ -632,7 +644,8 @@ class HathorManager:
             sys.exit()
 
         # restart all validations possible
-        self._resume_validations()
+        if self.tx_storage.indexes.deps is not None:
+            self._sync_v2_resume_validations()
 
         # XXX: last step before actually starting is updating the last started at timestamps
         self.tx_storage.update_last_started_at(started_at)
@@ -689,10 +702,11 @@ class HathorManager:
                     f'hash {tx_hash.hex()} was found'
                 )
 
-    def _resume_validations(self) -> None:
+    def _sync_v2_resume_validations(self) -> None:
         """ This method will resume running validations that did not run because the node exited.
         """
         assert self.tx_storage.indexes is not None
+        assert self.tx_storage.indexes.deps is not None
         if self.tx_storage.indexes.deps.has_needed_tx():
             self.log.debug('run pending validations')
             depended_final_txs: List[BaseTransaction] = []
@@ -702,7 +716,7 @@ class HathorManager:
                 tx = self.tx_storage.get_transaction(tx_hash)
                 if tx.get_metadata().validation.is_final():
                     depended_final_txs.append(tx)
-            self.step_validations(depended_final_txs)
+            self.sync_v2_step_validations(depended_final_txs)
             self.log.debug('pending validations finished')
 
     def add_listen_address(self, addr: str) -> None:
@@ -1026,9 +1040,11 @@ class HathorManager:
             else:
                 assert tx.validate_full(skip_block_weight_verification=True, reject_locked_reward=reject_locked_reward)
                 self.tx_storage.indexes.update(tx)
-                self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
+                if self.tx_storage.indexes.mempool_tips:
+                    self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
                 self.tx_fully_validated(tx)
         elif sync_checkpoints:
+            assert self.tx_storage.indexes.deps is not None
             metadata.children = self.tx_storage.indexes.deps.known_children(tx)
             try:
                 tx.validate_checkpoint(self.checkpoints)
@@ -1057,16 +1073,17 @@ class HathorManager:
             tx.update_initial_metadata(save=False)
             self.tx_storage.save_transaction(tx)
 
-        if tx.is_transaction:
+        if tx.is_transaction and self.tx_storage.indexes.deps is not None:
             self.tx_storage.indexes.deps.remove_from_needed_index(tx.hash)
 
-        try:
-            self.step_validations([tx])
-        except (AssertionError, HathorError) as e:
-            if not fails_silently:
-                raise InvalidNewTransaction('step validations failed') from e
-            self.log.warn('on_new_tx(): step validations failed', tx=tx.hash_hex, exc_info=True)
-            return False
+        if self.tx_storage.indexes.deps is not None:
+            try:
+                self.sync_v2_step_validations([tx])
+            except (AssertionError, HathorError) as e:
+                if not fails_silently:
+                    raise InvalidNewTransaction('step validations failed') from e
+                self.log.warn('on_new_tx(): step validations failed', tx=tx.hash_hex, exc_info=True)
+                return False
 
         if not quiet:
             ts_date = datetime.datetime.fromtimestamp(tx.timestamp)
@@ -1082,10 +1099,11 @@ class HathorManager:
 
         return True
 
-    def step_validations(self, txs: Iterable[BaseTransaction]) -> None:
+    def sync_v2_step_validations(self, txs: Iterable[BaseTransaction]) -> None:
         """ Step all validations until none can be stepped anymore.
         """
         assert self.tx_storage.indexes is not None
+        assert self.tx_storage.indexes.deps is not None
         # cur_txs will be empty when there are no more new txs that reached full
         # validation because of an initial trigger
         for ready_tx in txs:
@@ -1106,7 +1124,8 @@ class HathorManager:
                 self.tx_storage.add_to_indexes(tx)
                 self.consensus_algorithm.update(tx)
                 self.tx_storage.indexes.update(tx)
-                self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
+                if self.tx_storage.indexes.mempool_tips:
+                    self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
                 self.tx_fully_validated(tx)
 
     def tx_fully_validated(self, tx: BaseTransaction) -> None:
@@ -1121,7 +1140,8 @@ class HathorManager:
         # Publish to pubsub manager the new tx accepted, now that it's full validated
         self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
 
-        self.tx_storage.indexes.mempool_tips.update(tx)
+        if self.tx_storage.indexes.mempool_tips:
+            self.tx_storage.indexes.mempool_tips.update(tx)
 
         if self.wallet:
             # TODO Remove it and use pubsub instead.

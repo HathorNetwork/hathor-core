@@ -12,10 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from hathor.indexes.info_index import InfoIndex
 from hathor.transaction import BaseTransaction
+
+if TYPE_CHECKING:  # pragma: no cover
+    from hathor.indexes.manager import IndexesManager
 
 
 class MemoryInfoIndex(InfoIndex):
@@ -25,7 +28,7 @@ class MemoryInfoIndex(InfoIndex):
         self._first_timestamp = 0
         self._latest_timestamp = 0
 
-    def init_start(self) -> None:
+    def init_start(self, indexes_manager: 'IndexesManager') -> None:
         self.force_clear()
 
     def get_db_name(self) -> Optional[str]:

@@ -880,6 +880,66 @@ class TransactionStorage(ABC):
         """
         raise NotImplementedError
 
+    def iter_mempool_tips_from_tx_tips(self) -> Iterator[Transaction]:
+        """ Same behavior as the mempool index for iterating over the tips.
+
+        This basically means that the returned iterator will yield all transactions that are tips and have not been
+        confirmed by a block on the best chain.
+
+        This method requires indexes to be enabled.
+        """
+        assert self.indexes is not None
+        tx_tips = self.indexes.tx_tips
+
+        for interval in tx_tips[self.latest_timestamp + 1]:
+            tx = self.get_transaction(interval.data)
+            tx_meta = tx.get_metadata()
+            assert isinstance(tx, Transaction)  # XXX: tx_tips only has transactions
+            # XXX: skip txs that have already been confirmed
+            if tx_meta.first_block:
+                continue
+            yield tx
+
+    def iter_mempool_from_tx_tips(self) -> Iterator[Transaction]:
+        """ Same behavior as the mempool index for iterating over all mempool transactions.
+
+        This basically means that the returned iterator will yield all transactions that have not been confirmed by a
+        block on the best chain. Order is not guaranteed to be the same as in the mempool index.
+
+        This method requires indexes to be enabled.
+        """
+        from hathor.transaction.storage.traversal import BFSWalk
+
+        root = self.iter_mempool_tips_from_tx_tips()
+        walk = BFSWalk(self, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=False)
+        for tx in walk.run(root):
+            tx_meta = tx.get_metadata()
+            # XXX: skip blocks and tx-tips that have already been confirmed
+            if tx_meta.first_block is not None or tx.is_block:
+                walk.skip_neighbors(tx)
+            else:
+                assert isinstance(tx, Transaction)
+                yield tx
+
+    def iter_mempool_from_best_index(self) -> Iterator[Transaction]:
+        """Get all transactions in the mempool, using the best available index (mempool_tips or tx_tips)"""
+        assert self.indexes is not None
+        if self.indexes.mempool_tips is not None:
+            yield from self.indexes.mempool_tips.iter_all(self)
+        else:
+            yield from self.iter_mempool_from_tx_tips()
+
+    def get_transactions_that_became_invalid(self) -> List[BaseTransaction]:
+        """ This method will look for transactions in the mempool that have became invalid due to the reward lock.
+        """
+        from hathor.transaction.transaction_metadata import ValidationState
+        to_remove: List[BaseTransaction] = []
+        for tx in self.iter_mempool_from_best_index():
+            if tx.is_spent_reward_locked():
+                tx.get_metadata().validation = ValidationState.INVALID
+                to_remove.append(tx)
+        return to_remove
+
 
 class BaseTransactionStorage(TransactionStorage):
     def __init__(self, with_index: bool = True, pubsub: Optional[Any] = None) -> None:
