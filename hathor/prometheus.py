@@ -43,6 +43,8 @@ METRIC_INFO = {
     'blocks_found': 'Number of blocks found by the miner in stratum',
     'estimated_hash_rate': 'Estimated hash rate for stratum miners',
     'send_token_timeouts': 'Number of times send_token API has timed-out',
+    'transaction_cache_hits': 'Number of hits in the transactions cache',
+    'transaction_cache_misses': 'Number of misses in the transactions cache',
 }
 
 
@@ -50,7 +52,7 @@ class PrometheusMetricsExporter:
     """ Class that sends hathor metrics to a node exporter that will be read by Prometheus
     """
 
-    def __init__(self, metrics: 'Metrics', path: str, filename: str = 'hathor.prom'):
+    def __init__(self, metrics: 'Metrics', path: str, filename: str = 'hathor.prom', metrics_prefix: str = ''):
         """
         :param metrics: Metric object that stores all the hathor metrics
         :type metrics: :py:class:`hathor.metrics.Metrics`
@@ -62,6 +64,7 @@ class PrometheusMetricsExporter:
         :type filename: str
         """
         self.metrics = metrics
+        self.metrics_prefix = metrics_prefix
 
         # Create full directory, if does not exist
         os.makedirs(path, exist_ok=True)
@@ -93,7 +96,7 @@ class PrometheusMetricsExporter:
         self.registry = CollectorRegistry()
 
         for name, comment in METRIC_INFO.items():
-            self.metric_gauges[name] = Gauge(name, comment, registry=self.registry)
+            self.metric_gauges[name] = Gauge(self.metrics_prefix + name, comment, registry=self.registry)
 
     def start(self) -> None:
         """ Starts exporter

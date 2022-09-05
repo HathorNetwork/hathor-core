@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Iterator, List, NamedTuple, Optional, Tuple, cast
+from typing import TYPE_CHECKING, Iterator, List, NamedTuple, Optional, Tuple, TypedDict, cast
 
 from structlog import get_logger
 
@@ -31,12 +30,6 @@ from hathor.indexes.tokens_index import TokenIndexInfo, TokensIndex, TokenUtxoIn
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.base_transaction import TxVersion
 from hathor.util import collect_n, json_dumpb, json_loadb
-
-# TypedDict not available on Python 3.7, but is available from typing_extensions
-if sys.version_info < (3,) or sys.version_info >= (3, 8):
-    from typing import TypedDict
-else:
-    from typing_extensions import TypedDict
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
