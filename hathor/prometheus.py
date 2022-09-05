@@ -26,8 +26,6 @@ if TYPE_CHECKING:
 
 settings = HathorSettings()
 
-METRIC_PREFIX = 'hathor_core:'
-
 # Define prometheus metrics and it's explanation
 METRIC_INFO = {
     'transactions': 'Number of transactions',
