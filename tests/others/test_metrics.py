@@ -75,19 +75,14 @@ class MetricsTest(unittest.TestCase):
         tx_storage = TransactionCacheStorage(base_storage, reactor)
         pubsub = PubSubManager(reactor)
 
-        metrics = Metrics(
-            pubsub=pubsub,
-            avg_time_between_blocks=30,
-            tx_storage=tx_storage,
-            reactor=reactor
-        )
+        manager = HathorManager(reactor=reactor, tx_storage=tx_storage, pubsub=pubsub)
 
         tx_storage.stats["hit"] = 10
         tx_storage.stats["miss"] = 20
 
         # Execution
-        metrics._collect_data()
+        manager.metrics._collect_data()
 
         # Assertion
-        self.assertEquals(metrics.transaction_cache_hits, 10)
-        self.assertEquals(metrics.transaction_cache_misses, 20)
+        self.assertEquals(manager.metrics.transaction_cache_hits, 10)
+        self.assertEquals(manager.metrics.transaction_cache_misses, 20)
