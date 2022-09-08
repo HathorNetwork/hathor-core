@@ -1067,6 +1067,28 @@ class HathorManager:
             # disconnect from node
             self.connections.drop_connection_by_peer_id(peer_id)
 
+    def has_recent_activity(self) -> bool:
+        current_timestamp = time.time()
+        latest_blockchain_timestamp = self.tx_storage.latest_timestamp
+
+        # We use the avg time between blocks as a basis to know how much time we should use to consider the fullnode
+        # as not synced.
+        maximum_timestamp_delta = settings.P2P_RECENT_ACTIVITY_THRESHOLD_MULTIPLIER * settings.AVG_TIME_BETWEEN_BLOCKS
+
+        if current_timestamp - latest_blockchain_timestamp > maximum_timestamp_delta:
+            return False
+
+        return True
+
+    def is_healthy(self) -> Tuple[bool, Optional[str]]:
+        if not self.has_recent_activity():
+            return False, "Node doesn't have recent blocks"
+
+        if not self.connections.has_synced_peer():
+            return False, "Node doesn't have a synced peer"
+
+        return True, None
+
 
 class ParentTxs(NamedTuple):
     """ Tuple where the `must_include` hash, when present (at most 1), must be included in a pair, and a list of hashes

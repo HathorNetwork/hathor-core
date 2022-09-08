@@ -360,7 +360,13 @@ class RunNode:
             DebugRejectResource,
         )
         from hathor.mining.ws import MiningWebsocketFactory
-        from hathor.p2p.resources import AddPeersResource, MiningInfoResource, MiningResource, StatusResource
+        from hathor.p2p.resources import (
+            AddPeersResource,
+            HealthcheckReadinessResource,
+            MiningInfoResource,
+            MiningResource,
+            StatusResource,
+        )
         from hathor.profiler import get_cpu_profiler
         from hathor.profiler.resources import CPUProfilerResource, ProfilerResource
         from hathor.prometheus import PrometheusMetricsExporter
@@ -479,6 +485,7 @@ class RunNode:
                 (b'execute', NanoContractExecuteResource(self.manager), contracts_resource),
                 # /p2p
                 (b'peers', AddPeersResource(self.manager), p2p_resource),
+                (b'readiness', HealthcheckReadinessResource(self.manager), p2p_resource),
             ]
             # XXX: only enable UTXO search API if the index is enabled
             if args.utxo_index:
