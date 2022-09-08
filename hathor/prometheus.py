@@ -119,12 +119,10 @@ class PrometheusMetricsExporter:
             name: Gauge(
                 prefix + name,
                 description,
-                labelnames=peer_connection_labels
+                labelnames=peer_connection_labels,
+                registry=self.registry
             ) for name, description in PEER_CONNECTION_METRICS.items()
         }
-
-        for metric in self.peer_connection_metrics.values():
-            self.registry.register(metric)
 
     def start(self) -> None:
         """ Starts exporter
