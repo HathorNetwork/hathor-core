@@ -6,6 +6,8 @@ from hathor.util import json_dumpb
 
 @register_resource
 class HealthcheckReadinessResource(Resource):
+    isLeaf = True
+
     def __init__(self, manager: HathorManager):
         self.manager = manager
 

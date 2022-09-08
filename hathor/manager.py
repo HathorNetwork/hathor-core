@@ -62,6 +62,10 @@ class HathorManager:
         # This node is ready to establish new connections, sync, and exchange transactions.
         READY = 'READY'
 
+    class UnhealthinessReason(str, Enum):
+        NO_RECENT_ACTIVITY = "Node doesn't have recent blocks"
+        NO_SYNCED_PEER = "Node doesn't have a synced peer"
+
     def __init__(self, reactor: Reactor, peer_id: Optional[PeerId] = None, network: Optional[str] = None,
                  hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
@@ -1082,10 +1086,10 @@ class HathorManager:
 
     def is_healthy(self) -> Tuple[bool, Optional[str]]:
         if not self.has_recent_activity():
-            return False, "Node doesn't have recent blocks"
+            return False, HathorManager.UnhealthinessReason.NO_RECENT_ACTIVITY
 
         if not self.connections.has_synced_peer():
-            return False, "Node doesn't have a synced peer"
+            return False, HathorManager.UnhealthinessReason.NO_SYNCED_PEER
 
         return True, None
 
