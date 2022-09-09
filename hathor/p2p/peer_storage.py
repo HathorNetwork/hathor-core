@@ -32,16 +32,18 @@ class PeerStorage(Dict[str, PeerId]):
             raise ValueError('Peer has already been added')
         self[peer.id] = peer
 
-    def add_or_merge(self, peer: PeerId) -> None:
+    def add_or_merge(self, peer: PeerId) -> PeerId:
         """ Add a peer to the storage if it has not been added yet.
         Otherwise, merge the current peer with the given one.
         """
         assert peer.id is not None
         if peer.id not in self:
             self.add(peer)
+            return peer
         else:
             current = self[peer.id]
             current.merge(peer)
+            return current
 
     def remove(self, peer: PeerId) -> None:
         """ Remove a peer from the storage
