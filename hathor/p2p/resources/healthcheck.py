@@ -27,7 +27,7 @@ class HealthcheckReadinessResource(Resource):
 
 
 HealthcheckReadinessResource.openapi = {
-    '/p2p/status': {
+    '/p2p/readiness': {
         'x-visibility': 'public',
         'x-rate-limit': {
             'global': [
