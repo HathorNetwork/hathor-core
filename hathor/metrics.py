@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
 from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Deque, List, NamedTuple, Optional
@@ -27,6 +28,7 @@ from hathor.transaction.block import Block
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.cache_storage import TransactionCacheStorage
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
+from hathor.transaction.storage.rocksdb_storage import TransactionRocksDBStorage
 from hathor.util import Reactor
 
 if TYPE_CHECKING:
@@ -199,6 +201,18 @@ class Metrics:
         self._lc_collect_data = LoopingCall(self._collect_data)
         self._lc_collect_data.clock = reactor
 
+        # The time interval to control periodic collection of RocksDB data
+        self.txstorage_data_interval = settings.METRICS_COLLECT_ROCKSDB_DATA_INTERVAL
+
+        # The number of blocks interval to control periodic collection of RocksDB data
+        # We try to use it if possible, instead of the time interval, because it's better to make sure we update the
+        # storage during sync, otherwise we would only get the real storage metric after 24h (the default value)
+        self.txstorage_data_block_interval = self.txstorage_data_interval / settings.AVG_TIME_BETWEEN_BLOCKS
+
+        # Variables to store the last timestamp or last block when we updated the RocksDB storage metrics
+        self.last_txstorage_data_timestamp: Optional[float] = None
+        self.last_txstorage_data_block: Optional[int] = None
+
     def _start_initial_values(self) -> None:
         """ When we start the metrics object we set the transaction and block count already in the network
 
@@ -339,6 +353,39 @@ class Metrics:
             if misses:
                 self.transaction_cache_misses = misses
 
+    def set_tx_storage_data(self) -> None:
+        self.log.info("Set tx storage data")
+        store = self.tx_storage
+
+        if isinstance(self.tx_storage, TransactionCacheStorage):
+            store = self.tx_storage.store
+
+        if not isinstance(store, TransactionRocksDBStorage):
+            return
+
+        try:
+            # Try to use the number of blocks to decide when we should update the tx storage data
+            block_count = self.tx_storage.get_height_best_block()
+
+            if self.last_txstorage_data_block and (
+                block_count - self.last_txstorage_data_block
+            ) < self.txstorage_data_block_interval:
+                return
+
+            self.last_txstorage_data_block = block_count
+        except NotImplementedError:
+            # If we couldn't use the number of blocks, fallback to timestamps
+            now = time.time()
+
+            if self.last_txstorage_data_timestamp and (
+                now - self.last_txstorage_data_timestamp
+            ) < self.txstorage_data_interval:
+                return
+
+            self.last_txstorage_data_timestamp = now
+
+        self.rocksdb_cfs_sizes = store.get_sst_files_sizes_by_cf()
+
     def _collect_data(self) -> None:
         """ Call methods that collect data to metrics
         """
@@ -346,3 +393,4 @@ class Metrics:
         self.set_stratum_data()
         self.set_cache_data()
         self.collect_peer_connection_metrics()
+        self.set_tx_storage_data()

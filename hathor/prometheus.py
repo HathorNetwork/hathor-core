@@ -59,6 +59,10 @@ PEER_CONNECTION_METRICS = {
     "discarded_blocks": "Counts how many blocks the node discarded from a peer",
 }
 
+TX_STORAGE_METRICS = {
+    'total_sst_files_size': 'Storage size in bytes of all SST files of a certain column-family in RocksDB'
+}
+
 
 class PrometheusMetricsExporter:
     """ Class that sends hathor metrics to a node exporter that will be read by Prometheus
@@ -108,6 +112,7 @@ class PrometheusMetricsExporter:
         self.registry = CollectorRegistry()
 
         self._initialize_peer_connection_metrics()
+        self._initialize_tx_storage_metrics()
 
         for name, comment in METRIC_INFO.items():
             self.metric_gauges[name] = Gauge(self.metrics_prefix + name, comment, registry=self.registry)
@@ -127,6 +132,22 @@ class PrometheusMetricsExporter:
             ) for name, description in PEER_CONNECTION_METRICS.items()
         }
 
+    def _initialize_tx_storage_metrics(self) -> None:
+        """Initializes the metrics related to tx storage (RocksDB)
+        """
+        tx_storage_labels = ["column_family"]
+
+        prefix = self.metrics_prefix + "tx_storage_"
+
+        self.tx_storage_metrics = {
+            name: Gauge(
+                prefix + name,
+                description,
+                labelnames=tx_storage_labels,
+                registry=self.registry
+            ) for name, description in TX_STORAGE_METRICS.items()
+        }
+
     def start(self) -> None:
         """ Starts exporter
         """
@@ -140,6 +161,7 @@ class PrometheusMetricsExporter:
             self.metric_gauges[metric_name].set(getattr(self.metrics, metric_name))
 
         self._set_new_peer_connection_metrics()
+        self._set_new_tx_storage_metrics()
 
         write_to_textfile(self.filepath, self.registry)
 
@@ -151,6 +173,13 @@ class PrometheusMetricsExporter:
                     peer_id=connection_metric.peer_id,
                     connection_string=connection_metric.connection_string
                 ).set(getattr(connection_metric, name))
+
+    def _set_new_tx_storage_metrics(self) -> None:
+        if hasattr(self.metrics, 'rocksdb_cfs_sizes'):
+            for cf, size in self.metrics.rocksdb_cfs_sizes.items():
+                self.tx_storage_metrics['total_sst_files_size'].labels(
+                    column_family=cf
+                ).set(size)
 
     def _write_data(self) -> None:
         """ Update all metric data with new values

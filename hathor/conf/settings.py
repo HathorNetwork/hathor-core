@@ -346,6 +346,9 @@ class HathorSettings(NamedTuple):
     # Interval (in seconds) to collect metrics data
     METRICS_COLLECT_DATA_INTERVAL: int = 5
 
+    # Interval (in seconds) to collect metrics data from rocksdb
+    METRICS_COLLECT_ROCKSDB_DATA_INTERVAL: int = 86400  # 1 day
+
     # Block checkpoints
     CHECKPOINTS: List[Checkpoint] = []
 
