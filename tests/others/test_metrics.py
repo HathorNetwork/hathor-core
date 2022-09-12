@@ -121,7 +121,7 @@ class MetricsTest(unittest.TestCase):
         add_new_blocks(manager, 10)
         # XXX: I had to close the DB and reinitialize the classes to force a flush of RocksDB memtables to disk
         # But I think we could do this in a better way if we had a python-binding for this Flush method in
-        # https://github.com/facebook/rocksdb/blob/v7.5.3/include/rocksdb/db.h#L1396 ?
+        # https://github.com/facebook/rocksdb/blob/v7.5.3/include/rocksdb/db.h#L1396
         manager.tx_storage._db.close()
 
         manager = _init_manager()
@@ -174,7 +174,7 @@ class MetricsTest(unittest.TestCase):
 
         # XXX: I had to close the DB and reinitialize the classes to force a flush of RocksDB memtables to disk
         # But I think we could do this in a better way if we had a python-binding for this Flush method in
-        # https://github.com/facebook/rocksdb/blob/v7.5.3/include/rocksdb/db.h#L1396 ?
+        # https://github.com/facebook/rocksdb/blob/v7.5.3/include/rocksdb/db.h#L1396
         manager.tx_storage.store._db.close()
 
         manager = _init_manager()
