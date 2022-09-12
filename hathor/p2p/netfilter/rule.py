@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 if TYPE_CHECKING:
     from hathor.p2p.netfilter.chain import NetfilterChain
@@ -27,6 +27,28 @@ class NetfilterRule:
         self.chain: Optional['NetfilterChain'] = None
         self.match = match
         self.target = target
+
+    def __eq__(self, other: 'NetfilterRule') -> bool:
+        match_chain = ((self.chain is None and other.chain is None) or self.chain.name == other.chain.name)
+        return match_chain and self.match == other.match and self.target == other.target
+
+    def to_json(self) -> Dict[str, Any]:
+        data = {}
+
+        if self.chain:
+            data['chain'] = self.chain.name
+
+        data_target = {}
+        data_target['type'] = type(self.target).__name__
+        data_target['parameters'] = self.target.__dict__
+        data['target'] = data_target
+
+        data_match = {}
+        data_match['type'] = type(self.match).__name__
+        data_match['parameters'] = self.match.__dict__
+        data['match'] = data_match
+
+        return data
 
     def get_target_if_match(self, context: 'NetfilterContext') -> Optional['NetfilterTarget']:
         if not self.match.match(context):

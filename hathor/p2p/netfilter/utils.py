@@ -26,6 +26,8 @@ def add_peer_id_blacklist(peer_id_blacklist: List[str]) -> None:
     post_peerid = get_table('filter').get_chain('post_peerid')
 
     for peer_id in peer_id_blacklist:
+        if not peer_id:
+            continue
         match = NetfilterMatchPeerId(peer_id)
         rule = NetfilterRule(match, NetfilterReject())
         post_peerid.add_rule(rule)

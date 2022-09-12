@@ -27,6 +27,16 @@ class NetfilterMatch(ABC):
     def match(self, context: 'NetfilterContext') -> bool:
         raise NotImplementedError
 
+    def __eq__(self, other: 'NetfilterMatch') -> bool:
+        eq_type = type(self) == type(other)
+        eq_attrs = True
+        for key in self.__dict__.keys():
+            if self.__dict__.get(key) != other.__dict__.get(key):
+                eq_attrs = False
+                break
+
+        return eq_type and eq_attrs
+
 
 class NetfilterMatchAll(NetfilterMatch):
     """Always match."""

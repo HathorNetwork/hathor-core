@@ -25,6 +25,16 @@ class NetfilterTarget:
     def execute(self, rule: 'NetfilterRule', context: 'NetfilterContext') -> None:
         pass
 
+    def __eq__(self, other: 'NetfilterTarget') -> bool:
+        eq_type = type(self) == type(other)
+        eq_attrs = True
+        for key in self.__dict__.keys():
+            if self.__dict__.get(key) != other.__dict__.get(key):
+                eq_attrs = False
+                break
+
+        return eq_type and eq_attrs
+
 
 class NetfilterAccept(NetfilterTarget):
     terminate = True

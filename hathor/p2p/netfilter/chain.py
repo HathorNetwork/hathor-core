@@ -30,11 +30,26 @@ class NetfilterChain:
         self.rules: List['NetfilterRule'] = []
         self.policy = policy
 
-    def add_rule(self, rule: 'NetfilterRule') -> 'NetfilterChain':
+    def add_rule(self, rule: 'NetfilterRule') -> Optional['NetfilterChain']:
         """Add a new rule to this chain."""
-        self.rules.append(rule)
         rule.chain = self
+        if rule in self.rules:
+            # We already have this rule
+            return None
+
+        self.rules.append(rule)
         return self
+
+    def delete_rule(self, rule: 'NetfilterRule') -> bool:
+        """Delete a rule from this chain.
+           Returns a bool that shows if the rule has been removed
+        """
+        rule.chain = self
+        if rule in self.rules:
+            self.rules.remove(rule)
+            return True
+
+        return False
 
     def process(self, context: 'NetfilterContext') -> 'NetfilterTarget':
         """Process the rules of this chain."""
