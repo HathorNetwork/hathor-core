@@ -34,8 +34,8 @@ class BasePrometheusTest(unittest.TestCase):
                 lambda x: len(x) == 0 or x[0] != '#',  # Exclude empty and commented lines
                 f.read().split('\n')
             ))
-            self.assertEqual(text[1], 'blocks 1.0')
-            self.assertEqual(text[0], 'transactions 2.0')
+            self.assertEqual(text[9], 'blocks 1.0')
+            self.assertEqual(text[8], 'transactions 2.0')
 
         add_new_blocks(self.manager, 30, advance_clock=1)
         add_new_transactions(self.manager, 5, advance_clock=1)
@@ -45,8 +45,8 @@ class BasePrometheusTest(unittest.TestCase):
                 lambda x: len(x) == 0 or x[0] != '#',  # Exclude empty and commented lines
                 f.read().split('\n')
             ))
-            self.assertEqual(text[1], 'blocks 1.0')
-            self.assertEqual(text[0], 'transactions 2.0')
+            self.assertEqual(text[9], 'blocks 1.0')
+            self.assertEqual(text[8], 'transactions 2.0')
 
         self.run_to_completion()
         prometheus.set_new_metrics()
@@ -55,8 +55,8 @@ class BasePrometheusTest(unittest.TestCase):
                 lambda x: len(x) == 0 or x[0] != '#',  # Exclude empty and commented lines
                 f.read().split('\n')
             ))
-            self.assertEqual(text[1], 'blocks 31.0')
-            self.assertEqual(text[0], 'transactions 7.0')
+            self.assertEqual(text[9], 'blocks 31.0')
+            self.assertEqual(text[8], 'transactions 7.0')
 
         # Removing tmpdir
         shutil.rmtree(tmpdir)
