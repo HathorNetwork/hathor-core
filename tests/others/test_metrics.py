@@ -24,15 +24,9 @@ class MetricsTest(unittest.TestCase):
         # Preparation
         tx_storage = TransactionMemoryStorage()
         pubsub = PubSubManager(reactor)
+        manager = HathorManager(self.clock, tx_storage=tx_storage, pubsub=pubsub)
 
-        metrics = Metrics(
-            pubsub=pubsub,
-            avg_time_between_blocks=30,
-            tx_storage=tx_storage,
-            reactor=reactor
-        )
-
-        metrics.start()
+        manager.metrics.start()
 
         # Execution
         pubsub.publish(
@@ -42,12 +36,12 @@ class MetricsTest(unittest.TestCase):
         )
 
         # Assertion
-        self.assertEquals(metrics.connecting_peers, 3)
-        self.assertEquals(metrics.handshaking_peers, 4)
-        self.assertEquals(metrics.connected_peers, 5)
-        self.assertEquals(metrics.known_peers, 6)
+        self.assertEquals(manager.metrics.connecting_peers, 3)
+        self.assertEquals(manager.metrics.handshaking_peers, 4)
+        self.assertEquals(manager.metrics.connected_peers, 5)
+        self.assertEquals(manager.metrics.known_peers, 6)
 
-        metrics.stop()
+        manager.metrics.stop()
 
     def test_connections_manager_integration(self):
         """Tests the integration with the ConnectionsManager class
