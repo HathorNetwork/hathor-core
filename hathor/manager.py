@@ -158,13 +158,6 @@ class HathorManager:
             self.log.debug('enable utxo index')
             self.tx_storage.indexes.enable_utxo_index()
 
-        self.metrics = Metrics(
-            pubsub=self.pubsub,
-            avg_time_between_blocks=settings.AVG_TIME_BETWEEN_BLOCKS,
-            tx_storage=self.tx_storage,
-            reactor=self.reactor,
-        )
-
         self.soft_voided_tx_ids = soft_voided_tx_ids or set()
         self.consensus_algorithm = ConsensusAlgorithm(self.soft_voided_tx_ids)
 
@@ -176,6 +169,14 @@ class HathorManager:
         self.connections = ConnectionsManager(self.reactor, self.my_peer, self.server_factory, self.client_factory,
                                               self.pubsub, self, ssl, whitelist_only=False, rng=self.rng,
                                               enable_sync_v1=enable_sync_v1, enable_sync_v2=enable_sync_v2)
+
+        self.metrics = Metrics(
+            pubsub=self.pubsub,
+            avg_time_between_blocks=settings.AVG_TIME_BETWEEN_BLOCKS,
+            connections=self.connections,
+            tx_storage=self.tx_storage,
+            reactor=self.reactor,
+        )
 
         self.wallet = wallet
         if self.wallet:

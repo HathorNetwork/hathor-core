@@ -47,6 +47,7 @@ class CliManager:
             oracle_get_pubkey,
             peer_id,
             quick_test,
+            replay_logs,
             run_node,
             shell,
             stratum_mining,
@@ -81,6 +82,7 @@ class CliManager:
         self.add_cmd('dev', 'generate_nginx_config', nginx_config, 'Generate nginx config from OpenAPI json')
         self.add_cmd('dev', 'x-export', db_export, 'EXPERIMENTAL: Export database to a simple format.')
         self.add_cmd('dev', 'x-import', db_import, 'EXPERIMENTAL: Import database from exported format.')
+        self.add_cmd('dev', 'replay-logs', replay_logs, 'EXPERIMENTAL: re-play json logs as console printted')
 
     def add_cmd(self, group: str, cmd: str, module: ModuleType, short_description: Optional[str] = None) -> None:
         self.command_list[cmd] = module

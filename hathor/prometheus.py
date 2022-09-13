@@ -44,6 +44,18 @@ METRIC_INFO = {
     'transaction_cache_misses': 'Number of misses in the transactions cache',
 }
 
+PEER_CONNECTION_METRICS = {
+    # The keys here need to match the field names of class hathor.metrics.PeerConnectionMetrics
+    "received_messages": "Counts how many messages the node received from a peer",
+    "sent_messages": "Counts how many messages the node sent to a peer",
+    "received_bytes": "Counts how many bytes the node received from a peer",
+    "sent_bytes": "Counts how many bytes the node sent to a peer",
+    "received_txs": "Counts how many txs the node received from a peer",
+    "discarded_txs": "Counts how many txs the node discarded from a peer",
+    "received_blocks": "Counts how many blocks the node received from a peer",
+    "discarded_blocks": "Counts how many blocks the node discarded from a peer",
+}
+
 
 class PrometheusMetricsExporter:
     """ Class that sends hathor metrics to a node exporter that will be read by Prometheus
@@ -92,8 +104,25 @@ class PrometheusMetricsExporter:
         """
         self.registry = CollectorRegistry()
 
+        self._initialize_peer_connection_metrics()
+
         for name, comment in METRIC_INFO.items():
             self.metric_gauges[name] = Gauge(self.metrics_prefix + name, comment, registry=self.registry)
+
+    def _initialize_peer_connection_metrics(self) -> None:
+        # Defines the metrics related to peer connections
+        peer_connection_labels = ["network", "connection_string", "peer_id"]
+
+        prefix = self.metrics_prefix + "peer_connection_"
+
+        self.peer_connection_metrics = {
+            name: Gauge(
+                prefix + name,
+                description,
+                labelnames=peer_connection_labels,
+                registry=self.registry
+            ) for name, description in PEER_CONNECTION_METRICS.items()
+        }
 
     def start(self) -> None:
         """ Starts exporter
@@ -107,7 +136,18 @@ class PrometheusMetricsExporter:
         for metric_name in METRIC_INFO.keys():
             self.metric_gauges[metric_name].set(getattr(self.metrics, metric_name))
 
+        self._set_new_peer_connection_metrics()
+
         write_to_textfile(self.filepath, self.registry)
+
+    def _set_new_peer_connection_metrics(self) -> None:
+        for name, metric in self.peer_connection_metrics.items():
+            for connection_metric in self.metrics.peer_connection_metrics:
+                metric.labels(
+                    network=connection_metric.network,
+                    peer_id=connection_metric.peer_id,
+                    connection_string=connection_metric.connection_string
+                ).set(getattr(connection_metric, name))
 
     def _write_data(self) -> None:
         """ Update all metric data with new values
