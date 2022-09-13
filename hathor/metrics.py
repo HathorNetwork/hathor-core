@@ -13,13 +13,14 @@
 # limitations under the License.
 
 from collections import deque
-from typing import TYPE_CHECKING, Deque, NamedTuple, Optional
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Deque, List, NamedTuple, Optional
 
 from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
 from hathor.conf import HathorSettings
-from hathor.p2p.manager import PeerConnectionsMetrics
+from hathor.p2p.manager import ConnectionsManager, PeerConnectionsMetrics
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.transaction.base_transaction import sum_weights
 from hathor.transaction.block import Block
@@ -39,6 +40,21 @@ settings = HathorSettings()
 class WeightValue(NamedTuple):
     time: int
     value: float
+
+
+@dataclass
+class PeerConnectionMetrics:
+    connection_string: str
+    network: str
+    peer_id: str
+    received_messages: int = 0
+    sent_messages: int = 0
+    received_bytes: int = 0
+    sent_bytes: int = 0
+    received_txs: int = 0
+    discarded_txs: int = 0
+    received_blocks: int = 0
+    discarded_blocks: int = 0
 
 
 class Metrics:
@@ -77,6 +93,7 @@ class Metrics:
             self,
             pubsub: PubSubManager,
             avg_time_between_blocks: int,
+            connections: ConnectionsManager,
             tx_storage: Optional[TransactionStorage] = None,
             reactor: Optional[Reactor] = None,
     ):
@@ -163,6 +180,10 @@ class Metrics:
 
         # Stratum factory
         self.stratum_factory = None
+
+        # Peer Connection data
+        self.connections = connections
+        self.peer_connection_metrics: List[PeerConnectionMetrics] = []
 
         # TxCache Data
         self.transaction_cache_hits = 0
@@ -279,6 +300,34 @@ class Metrics:
         self.blocks_found = blocks_found
         self.estimated_hash_rate = estimated_hash_rate
 
+    def collect_peer_connection_metrics(self) -> None:
+        """Collect metrics for each connected peer.
+            The list is cleared every time to avoid memory leak.
+        """
+        self.peer_connection_metrics.clear()
+
+        for connection in self.connections.connections:
+            if not connection.peer or not connection.peer.id:
+                # A connection without peer will not be able to communicate
+                # So we can just discard it for the sake of the metrics
+                continue
+
+            metric = PeerConnectionMetrics(
+                connection_string=connection.connection_string if connection.connection_string else "",
+                peer_id=connection.peer.id,
+                network=connection.network,
+                received_messages=connection.metrics.received_messages,
+                sent_messages=connection.metrics.sent_messages,
+                received_bytes=connection.metrics.received_bytes,
+                sent_bytes=connection.metrics.sent_bytes,
+                received_txs=connection.metrics.received_txs,
+                discarded_txs=connection.metrics.discarded_txs,
+                received_blocks=connection.metrics.received_blocks,
+                discarded_blocks=connection.metrics.discarded_blocks,
+            )
+
+            self.peer_connection_metrics.append(metric)
+
     def set_cache_data(self) -> None:
         """ Collect and set data related to the transactions cache.
         """
@@ -296,3 +345,4 @@ class Metrics:
         self.set_websocket_data()
         self.set_stratum_data()
         self.set_cache_data()
+        self.collect_peer_connection_metrics()

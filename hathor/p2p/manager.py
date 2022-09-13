@@ -223,11 +223,10 @@ class ConnectionsManager:
             conn.disconnect(force=force)
 
     def on_connection_failure(self, failure: Failure, peer: Optional[PeerId], endpoint: IStreamClientEndpoint) -> None:
-        self.log.warn('connection failure', endpoint=endpoint, failure=failure.getErrorMessage())
+        connecting_peer = self.connecting_peers[endpoint]
+        connection_string = connecting_peer.connection_string
+        self.log.warn('connection failure', endpoint=connection_string, failure=failure.getErrorMessage())
         self.connecting_peers.pop(endpoint)
-        if peer is not None:
-            now = int(self.reactor.seconds())
-            peer.increment_retry_attempt(now)
 
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_CONNECTION_FAILED,
@@ -253,12 +252,11 @@ class ConnectionsManager:
     def on_peer_ready(self, protocol: HathorProtocol) -> None:
         """Called when a peer is ready."""
         assert protocol.peer is not None
+        protocol.peer = self.peer_storage.add_or_merge(protocol.peer)
         assert protocol.peer.id is not None
 
         self.handshaking_peers.remove(protocol)
         self.received_peer_storage.pop(protocol.peer.id, None)
-
-        self.peer_storage.add_or_merge(protocol.peer)
 
         # we emit the event even if it's a duplicate peer as a matching
         # NETWORK_PEER_DISCONNECTED will be emmited regardless
@@ -345,7 +343,7 @@ class ConnectionsManager:
         """
         if peer.id == self.my_peer.id:
             return
-        self.received_peer_storage.add_or_merge(peer)
+        peer = self.received_peer_storage.add_or_merge(peer)
         self.connect_to_if_not_connected(peer, 0)
 
     def reconnect_to_all(self) -> None:
@@ -460,6 +458,11 @@ class ConnectionsManager:
 
         If `use_ssl` is True, then the connection will be wraped by a TLS.
         """
+        for connecting_peer in self.connecting_peers.values():
+            if connecting_peer.connection_string == description:
+                self.log.debug('skipping because we are already connecting to this endpoint', endpoint=description)
+                return
+
         if use_ssl is None:
             use_ssl = self.ssl
         connection_string, peer_id = description_to_connection_string(description)
@@ -478,12 +481,16 @@ class ConnectionsManager:
         else:
             factory = self.client_factory
 
+        if peer is not None:
+            now = int(self.reactor.seconds())
+            peer.increment_retry_attempt(now)
+
         deferred = endpoint.connect(factory)
         self.connecting_peers[endpoint] = _ConnectingPeer(connection_string, deferred)
 
         deferred.addCallback(self._connect_to_callback, peer, endpoint, connection_string, peer_id)
         deferred.addErrback(self.on_connection_failure, peer, endpoint)
-        self.log.info('connect to ', endpoint=description)
+        self.log.info('connect to ', endpoint=description, peer=str(peer))
 
     def listen(self, description: str, use_ssl: Optional[bool] = None) -> IStreamServerEndpoint:
         """ Start to listen to new connection according to the description.
