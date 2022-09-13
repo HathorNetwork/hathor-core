@@ -25,7 +25,9 @@ class NetfilterTarget:
     def execute(self, rule: 'NetfilterRule', context: 'NetfilterContext') -> None:
         pass
 
-    def __eq__(self, other: 'NetfilterTarget') -> bool:
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, NetfilterTarget):
+            return NotImplemented
         eq_type = type(self) == type(other)
         eq_attrs = True
         for key in self.__dict__.keys():

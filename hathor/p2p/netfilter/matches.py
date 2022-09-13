@@ -27,7 +27,9 @@ class NetfilterMatch(ABC):
     def match(self, context: 'NetfilterContext') -> bool:
         raise NotImplementedError
 
-    def __eq__(self, other: 'NetfilterMatch') -> bool:
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, NetfilterMatch):
+            return NotImplemented
         eq_type = type(self) == type(other)
         eq_attrs = True
         for key in self.__dict__.keys():

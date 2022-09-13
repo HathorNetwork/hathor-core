@@ -114,6 +114,7 @@ class BaseNetfilterTest(_BaseResourceTest._ResourceTest):
         data = response.json_value()
         self.assertEqual(len(data['rules']), 0)
 
+
 class SyncV1NetfilterTest(unittest.SyncV1Params, BaseNetfilterTest):
     __test__ = True
 

@@ -28,22 +28,26 @@ class NetfilterRule:
         self.match = match
         self.target = target
 
-    def __eq__(self, other: 'NetfilterRule') -> bool:
-        match_chain = ((self.chain is None and other.chain is None) or self.chain.name == other.chain.name)
-        return match_chain and self.match == other.match and self.target == other.target
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, NetfilterRule):
+            return NotImplemented
+
+        self_chain_name = self.chain.name if self.chain else None
+        other_chain_name = other.chain.name if other.chain else None
+        return self_chain_name == other_chain_name and self.match == other.match and self.target == other.target
 
     def to_json(self) -> Dict[str, Any]:
-        data = {}
+        data: Dict[str, Any] = {}
 
         if self.chain:
             data['chain'] = self.chain.name
 
-        data_target = {}
+        data_target: Dict[str, Any] = {}
         data_target['type'] = type(self.target).__name__
         data_target['parameters'] = self.target.__dict__
         data['target'] = data_target
 
-        data_match = {}
+        data_match: Dict[str, Any] = {}
         data_match['type'] = type(self.match).__name__
         data_match['parameters'] = self.match.__dict__
         data['match'] = data_match

@@ -13,14 +13,20 @@
 # limitations under the License.
 
 from json import JSONDecodeError
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict
 
-from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, set_cors, render_options
+from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.p2p.netfilter import get_table
-from hathor.p2p.netfilter.matches import NetfilterMatchAll, NetfilterMatchAnd, NetfilterMatchOr, NetfilterMatchIPAddress, NetfilterMatchPeerId
+from hathor.p2p.netfilter.matches import (
+    NetfilterMatchAll,
+    NetfilterMatchAnd,
+    NetfilterMatchIPAddress,
+    NetfilterMatchOr,
+    NetfilterMatchPeerId,
+)
 from hathor.p2p.netfilter.rule import NetfilterRule
-from hathor.p2p.netfilter.targets import NetfilterReject, NetfilterAccept, NetfilterJump, NetfilterLog
+from hathor.p2p.netfilter.targets import NetfilterAccept, NetfilterJump, NetfilterLog, NetfilterReject
 from hathor.util import json_dumpb, json_loadb
 
 if TYPE_CHECKING:
@@ -29,10 +35,13 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager
 
 
-def handle_request(request: 'Request'):
+def handle_request(request: 'Request') -> Dict[str, Any]:
     """ Auxiliar method to be used by POST and DELETE requests
         to handle the parameters validation
     """
+    if request.content is None:
+        return {'success': False, 'message': 'No body data'}
+
     raw_data = request.content.read()
     if raw_data is None:
         return {'success': False, 'message': 'No body data'}
@@ -70,8 +79,8 @@ def handle_request(request: 'Request'):
 
     if match_value not in matches:
         return {'success': False, 'message': 'Invalid netfilter match.'}
-    
-    match_class = matches.get(match_value)
+
+    match_class = matches[match_value]
 
     try:
         match = match_class(**match_params)
@@ -85,7 +94,7 @@ def handle_request(request: 'Request'):
     if target_value not in targets:
         return {'success': False, 'message': 'Invalid netfilter target.'}
 
-    target_class = targets.get(target_value)
+    target_class = targets[target_value]
 
     try:
         target = target_class(**target_params)
@@ -110,7 +119,7 @@ class NetfilterRuleResource(Resource):
     def __init__(self, manager: 'HathorManager'):
         self.manager = manager
 
-    def render_GET(self, request: 'Request'):
+    def render_GET(self, request: 'Request') -> bytes:
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
@@ -130,7 +139,7 @@ class NetfilterRuleResource(Resource):
         }
         return json_dumpb(data)
 
-    def render_POST(self, request: 'Request'):
+    def render_POST(self, request: 'Request') -> bytes:
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
 
@@ -150,7 +159,7 @@ class NetfilterRuleResource(Resource):
         ret = {'success': True}
         return json_dumpb(ret)
 
-    def render_DELETE(self, request: 'Request'):
+    def render_DELETE(self, request: 'Request') -> bytes:
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'DELETE')
 
@@ -170,7 +179,7 @@ class NetfilterRuleResource(Resource):
         ret = {'success': True}
         return json_dumpb(ret)
 
-    def render_OPTIONS(self, request: 'Request'):
+    def render_OPTIONS(self, request: 'Request') -> int:
         return render_options(request)
 
 
@@ -214,7 +223,8 @@ NetfilterRuleResource.openapi = {
                                                 'match': {
                                                     'type': 'NetfilterMatchPeerId',
                                                     'parameters': {
-                                                        'peer_id': 'f7397705bc07aabf6fc3f68de6605d93b560bc832d9ebbdfb0d3bd41e1f9480b'
+                                                        'peer_id': ('f7397705bc07aabf6fc3f68de6605d93b'
+                                                                    '560bc832d9ebbdfb0d3bd41e1f9480b')
                                                     }
                                                 }
                                             },
@@ -229,7 +239,8 @@ NetfilterRuleResource.openapi = {
                                                 'match': {
                                                     'type': 'NetfilterMatchPeerId',
                                                     'parameters': {
-                                                        'peer_id': 'f7397705bc07aabf6fc3f68de6605d93b560bc832d9ebbdfb0d3bd41e1f9480b'
+                                                        'peer_id': ('f7397705bc07aabf6fc3f68de6605d93b'
+                                                                    '560bc832d9ebbdfb0d3bd41e1f9480b')
                                                     }
                                                 }
                                             }
