@@ -1,6 +1,8 @@
 import tempfile
 from unittest.mock import Mock
 
+import pytest
+
 from hathor.manager import HathorManager
 from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.p2p.peer_id import PeerId
@@ -17,7 +19,7 @@ from hathor.transaction.storage import (
 )
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from tests import unittest
-from tests.utils import add_new_blocks
+from tests.utils import HAS_ROCKSDB, add_new_blocks
 
 
 class MetricsTest(unittest.TestCase):
@@ -85,6 +87,7 @@ class MetricsTest(unittest.TestCase):
 
         manager.metrics.stop()
 
+    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_tx_storage_data_collection_with_rocksdb_storage_and_no_cache(self):
         """Tests storage data collection when using RocksDB Storage
            with cache disabled.
@@ -110,12 +113,11 @@ class MetricsTest(unittest.TestCase):
         manager = _init_manager()
         manager.metrics._collect_data()
 
-        self.assertTrue(hasattr(manager.metrics, 'rocksdb_cfs_sizes'))
         self.assertEqual(manager.metrics.rocksdb_cfs_sizes, {
-            b'default': b'0',
-            b'tx': b'0',
-            b'meta': b'0',
-            b'attr': b'0'
+            b'default': 0.0,
+            b'tx': 0.0,
+            b'meta': 0.0,
+            b'attr': 0.0
         })
 
         add_new_blocks(manager, 10)
@@ -129,9 +131,10 @@ class MetricsTest(unittest.TestCase):
 
         # We don't know exactly the sizes of each column family,
         # but we know empirically that they should be higher than these values
-        self.assertTrue(int(manager.metrics.rocksdb_cfs_sizes[b'tx']) > 500)
-        self.assertTrue(int(manager.metrics.rocksdb_cfs_sizes[b'meta']) > 1000)
+        self.assertTrue(manager.metrics.rocksdb_cfs_sizes[b'tx'] > 500)
+        self.assertTrue(manager.metrics.rocksdb_cfs_sizes[b'meta'] > 1000)
 
+    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_tx_storage_data_collection_with_rocksdb_storage_and_cache(self):
         """Tests storage data collection when using RocksDB Storage
            with cache enabled.
@@ -159,12 +162,11 @@ class MetricsTest(unittest.TestCase):
         manager.metrics._collect_data()
 
         # Assert that the metrics are really zero
-        self.assertTrue(hasattr(manager.metrics, 'rocksdb_cfs_sizes'))
         self.assertEqual(manager.metrics.rocksdb_cfs_sizes, {
-            b'default': b'0',
-            b'tx': b'0',
-            b'meta': b'0',
-            b'attr': b'0'
+            b'default': 0.0,
+            b'tx': 0.0,
+            b'meta': 0.0,
+            b'attr': 0.0
         })
 
         manager.tx_storage.pre_init()
@@ -182,8 +184,8 @@ class MetricsTest(unittest.TestCase):
 
         # We don't know exactly the sizes of each column family,
         # but we know empirically that they should be higher than these values
-        self.assertTrue(int(manager.metrics.rocksdb_cfs_sizes[b'tx']) > 500)
-        self.assertTrue(int(manager.metrics.rocksdb_cfs_sizes[b'meta']) > 1000)
+        self.assertTrue(manager.metrics.rocksdb_cfs_sizes[b'tx'] > 500)
+        self.assertTrue(manager.metrics.rocksdb_cfs_sizes[b'meta'] > 1000)
 
     def test_tx_storage_data_collection_with_compact_storage(self):
         """Tests storage data collection when using JSON Storage.
@@ -210,12 +212,12 @@ class MetricsTest(unittest.TestCase):
         # With cache
         manager = _init_manager(cache_enabled=True)
         manager.metrics._collect_data()
-        self.assertFalse(hasattr(manager.metrics, 'rocksdb_cfs_sizes'))
+        self.assertEqual(manager.metrics.rocksdb_cfs_sizes, {})
 
         # Without cache
         manager = _init_manager(cache_enabled=False)
         manager.metrics._collect_data()
-        self.assertFalse(hasattr(manager.metrics, 'rocksdb_cfs_sizes'))
+        self.assertEqual(manager.metrics.rocksdb_cfs_sizes, {})
 
     def test_tx_storage_data_collection_with_memory_storage(self):
         """Tests storage data collection when using Memory Storage using no cache
@@ -233,7 +235,7 @@ class MetricsTest(unittest.TestCase):
 
         manager.metrics._collect_data()
 
-        self.assertFalse(hasattr(manager.metrics, 'rocksdb_cfs_sizes'))
+        self.assertEqual(manager.metrics.rocksdb_cfs_sizes, {})
 
     def test_peer_connections_data_collection(self):
         """Test if peer connections data is correctly being collected from the

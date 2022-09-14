@@ -161,10 +161,10 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         """
         column_families = cfs or self._db.column_families
 
-        sizes = {}
+        sizes: Dict[str, float] = {}
 
         for cf in column_families:
-            sizes[cf.name] = self._db.get_property(b'rocksdb.total-sst-files-size', cf)
+            sizes[cf.name] = float(self._db.get_property(b'rocksdb.total-sst-files-size', cf))
 
         return sizes
 

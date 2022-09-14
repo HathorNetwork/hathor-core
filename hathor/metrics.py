@@ -15,7 +15,7 @@
 import time
 from collections import deque
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Deque, List, NamedTuple, Optional
+from typing import TYPE_CHECKING, Deque, Dict, List, NamedTuple, Optional
 
 from structlog import get_logger
 from twisted.internet.task import LoopingCall
@@ -25,7 +25,7 @@ from hathor.p2p.manager import ConnectionsManager, PeerConnectionsMetrics
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.transaction.base_transaction import sum_weights
 from hathor.transaction.block import Block
-from hathor.transaction.storage import TransactionStorage
+from hathor.transaction.storage import TransactionRocksDBStorage, TransactionStorage
 from hathor.transaction.storage.cache_storage import TransactionCacheStorage
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.util import Reactor
@@ -89,6 +89,7 @@ class Metrics:
     estimated_hash_rate: float  # log(H/s)
     stratum_factory: Optional['StratumFactory']
     send_token_timeouts: int
+    rocksdb_cfs_sizes: Dict[str, float]
 
     def __init__(
             self,
@@ -199,6 +200,9 @@ class Metrics:
         # A timer to periodically collect data
         self._lc_collect_data = LoopingCall(self._collect_data)
         self._lc_collect_data.clock = reactor
+
+        # Dict that stores the sizes of each column-family in RocksDB
+        self.rocksdb_cfs_sizes = {}
 
         # The time interval to control periodic collection of RocksDB data
         self.txstorage_data_interval = settings.METRICS_COLLECT_ROCKSDB_DATA_INTERVAL
@@ -359,7 +363,7 @@ class Metrics:
         if isinstance(self.tx_storage, TransactionCacheStorage):
             store = self.tx_storage.store
 
-        if not store.is_rocksdb_storage():
+        if not isinstance(store, TransactionRocksDBStorage):
             # We currently only collect metrics for RocksDB
             return
 
