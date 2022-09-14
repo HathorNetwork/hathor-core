@@ -84,14 +84,14 @@ class Simulator:
         """ This is used by when starting instances of Simulator to determine when to run _apply_patches"""
         assert cls._patches_rc >= 0
         cls._patches_rc += 1
-        if cls._patches_rc < 2:
+        if cls._patches_rc == 1:
             # patches not yet applied
             cls._apply_patches()
 
     @classmethod
     def _patches_rc_decrement(cls):
         """ This is used by when stopping instances of Simulator to determine when to run _remove_patches"""
-        assert cls._patches_rc >= 0
+        assert cls._patches_rc > 0
         cls._patches_rc -= 1
         if cls._patches_rc == 0:
             # patches not needed anymore

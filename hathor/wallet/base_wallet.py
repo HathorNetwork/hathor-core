@@ -124,8 +124,7 @@ class BaseWallet:
         self.test_mode: bool = False
 
         self.pubsub_events = [
-            HathorEvents.STORAGE_TX_VOIDED,
-            HathorEvents.STORAGE_TX_WINNER,
+            HathorEvents.CONSENSUS_TX_UPDATE,
         ]
 
         if reactor is None:
@@ -168,10 +167,8 @@ class BaseWallet:
 
     def handle_publish(self, key: HathorEvents, args: EventArguments) -> None:
         data = args.__dict__
-        if key == HathorEvents.STORAGE_TX_VOIDED:
-            self.on_tx_voided(data['tx'])
-        elif key == HathorEvents.STORAGE_TX_WINNER:
-            self.on_tx_winner(data['tx'])
+        if key == HathorEvents.CONSENSUS_TX_UPDATE:
+            self.on_tx_update(data['tx'])
         else:
             raise NotImplementedError
 
@@ -514,6 +511,11 @@ class BaseWallet:
         """
         assert tx.hash is not None
 
+        meta = tx.get_metadata()
+        if meta.voided_by is not None:
+            # Nothing to do!
+            return
+
         updated = False
 
         # check outputs
@@ -574,6 +576,14 @@ class BaseWallet:
             # TODO update history file?
             # XXX should wallet always update it or it will be called externally?
             self.update_balance()
+
+    def on_tx_update(self, tx: Transaction) -> None:
+        """This method is called when a tx is updated by the consensus algorithm."""
+        meta = tx.get_metadata()
+        if not meta.voided_by:
+            self.on_tx_winner(tx)
+        else:
+            self.on_tx_voided(tx)
 
     def on_tx_voided(self, tx: Transaction) -> None:
         """ This method is called when a tx is voided in a conflict
