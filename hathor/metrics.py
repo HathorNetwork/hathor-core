@@ -28,7 +28,6 @@ from hathor.transaction.block import Block
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.cache_storage import TransactionCacheStorage
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
-from hathor.transaction.storage.rocksdb_storage import TransactionRocksDBStorage
 from hathor.util import Reactor
 
 if TYPE_CHECKING:
@@ -360,7 +359,8 @@ class Metrics:
         if isinstance(self.tx_storage, TransactionCacheStorage):
             store = self.tx_storage.store
 
-        if not isinstance(store, TransactionRocksDBStorage):
+        if not store.is_rocksdb_storage():
+            # We currently only collect metrics for RocksDB
             return
 
         try:
