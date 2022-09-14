@@ -36,7 +36,7 @@ from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion, sum_weights
 from hathor.transaction.exceptions import TxValidationError
-from hathor.transaction.storage import TransactionStorage
+from hathor.transaction.storage import TransactionStorage, TransactionCacheStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.util import LogDuration, Random, Reactor
 from hathor.wallet import BaseWallet
@@ -318,6 +318,10 @@ class HathorManager:
             wait_stratum = self.stratum_factory.stop()
             if wait_stratum:
                 waits.append(wait_stratum)
+
+        if isinstance(self.tx_storage, TransactionCacheStorage):
+            self.tx_storage.flush()
+
         return defer.DeferredList(waits)
 
     def do_discovery(self) -> None:
