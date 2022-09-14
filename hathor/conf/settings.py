@@ -154,6 +154,31 @@ class HathorSettings(NamedTuple):
     # that the peer is synced (in seconds).
     P2P_SYNC_THRESHOLD: int = 60
 
+    # This multiplier will be used to decide whether the fullnode has had recent activity in the p2p sync.
+    # This info will be used in the readiness endpoint as one of the checks.
+    #
+    # We will multiply it by the AVG_TIME_BETWEEN_BLOCKS, and compare the result with the gap between the
+    # current time and the latest timestamp in the database.
+    #
+    # If the gap is bigger than the calculated threshold, than we will say the fullnode is not ready (unhealthy).
+    #
+    # Using (P2P_RECENT_ACTIVITY_THRESHOLD_MULTIPLIER * AVG_TIME_BETWEEN_BLOCKS) as threshold will have false
+    # positives.
+    # The probability of a false positive is exp(-N), assuming the hash rate is constant during the period.
+    # In other words, a false positive is likely to occur every exp(N) blocks. If the hash rate decreases
+    # quickly, this probability gets bigger.
+    #
+    # For instance, P2P_RECENT_ACTIVITY_THRESHOLD_MULTIPLIER=5 would get a false positive every 90 minutes.
+    # For P2P_RECENT_ACTIVITY_THRESHOLD_MULTIPLIER=10, we would have a false positive every 8 days.
+    # For P2P_RECENT_ACTIVITY_THRESHOLD_MULTIPLIER=15, we would have a false positive every 3 years.
+    #
+    # On the other side, using higher numbers will lead to a higher delay for the fullnode to start reporting
+    # as not ready.
+    #
+    # So for use cases that may need more reponsiveness on this readiness check, at the cost of some eventual false
+    # positive, it could be a good idea to decrease the value in this setting.
+    P2P_RECENT_ACTIVITY_THRESHOLD_MULTIPLIER: int = 15
+
     # Whether to warn the other peer of the reason for closing the connection
     WHITELIST_WARN_BLOCKED_PEERS: bool = False
 
