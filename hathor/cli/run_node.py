@@ -372,6 +372,9 @@ class RunNode:
             MiningInfoResource,
             MiningResource,
             NetfilterRuleResource,
+            HealthcheckReadinessResource,
+            MiningInfoResource,
+            MiningResource,
             StatusResource,
         )
         from hathor.profiler import get_cpu_profiler
@@ -493,6 +496,7 @@ class RunNode:
                 # /p2p
                 (b'peers', AddPeersResource(self.manager), p2p_resource),
                 (b'netfilter', NetfilterRuleResource(self.manager), p2p_resource),
+                (b'readiness', HealthcheckReadinessResource(self.manager), p2p_resource),
             ]
             # XXX: only enable UTXO search API if the index is enabled
             if args.utxo_index:
