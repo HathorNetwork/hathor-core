@@ -212,8 +212,7 @@ class Metrics:
         # storage during sync, otherwise we would only get the real storage metric after 24h (the default value)
         self.txstorage_data_block_interval = self.txstorage_data_interval / settings.AVG_TIME_BETWEEN_BLOCKS
 
-        # Variables to store the last timestamp or last block when we updated the RocksDB storage metrics
-        self.last_txstorage_data_timestamp: Optional[float] = None
+        # Variables to store the last block when we updated the RocksDB storage metrics
         self.last_txstorage_data_block: Optional[int] = None
 
     def _start_initial_values(self) -> None:
@@ -357,7 +356,6 @@ class Metrics:
                 self.transaction_cache_misses = misses
 
     def set_tx_storage_data(self) -> None:
-        self.log.info("Set tx storage data")
         store = self.tx_storage
 
         if isinstance(self.tx_storage, TransactionCacheStorage):
@@ -367,26 +365,15 @@ class Metrics:
             # We currently only collect metrics for RocksDB
             return
 
-        try:
-            # Try to use the number of blocks to decide when we should update the tx storage data
-            block_count = self.tx_storage.get_height_best_block()
+        # Try to use the number of blocks to decide when we should update the tx storage data
+        block_count = self.tx_storage.get_height_best_block()
 
-            if self.last_txstorage_data_block and (
-                block_count - self.last_txstorage_data_block
-            ) < self.txstorage_data_block_interval:
-                return
+        if self.last_txstorage_data_block and (
+            block_count - self.last_txstorage_data_block
+        ) < self.txstorage_data_block_interval:
+            return
 
-            self.last_txstorage_data_block = block_count
-        except NotImplementedError:
-            # If we couldn't use the number of blocks, fallback to timestamps
-            now = time.time()
-
-            if self.last_txstorage_data_timestamp and (
-                now - self.last_txstorage_data_timestamp
-            ) < self.txstorage_data_interval:
-                return
-
-            self.last_txstorage_data_timestamp = now
+        self.last_txstorage_data_block = block_count
 
         self.rocksdb_cfs_sizes = store.get_sst_files_sizes_by_cf()
 
