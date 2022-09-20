@@ -89,7 +89,7 @@ class Metrics:
     estimated_hash_rate: float  # log(H/s)
     stratum_factory: Optional['StratumFactory']
     send_token_timeouts: int
-    rocksdb_cfs_sizes: Dict[str, float]
+    rocksdb_cfs_sizes: Dict[bytes, float]
 
     def __init__(
             self,
@@ -201,8 +201,8 @@ class Metrics:
         self._lc_collect_data = LoopingCall(self._collect_data)
         self._lc_collect_data.clock = reactor
 
-        # Dict that stores the sizes of each column-family in RocksDB
-        self.rocksdb_cfs_sizes = {}
+        # Dict that stores the sizes of each column-family in RocksDB, in bytes
+        self.rocksdb_cfs_sizes: Dict[bytes, float] = {}
 
         # The time interval to control periodic collection of RocksDB data
         self.txstorage_data_interval = settings.METRICS_COLLECT_ROCKSDB_DATA_INTERVAL

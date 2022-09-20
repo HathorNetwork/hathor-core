@@ -153,7 +153,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         keys_count = int(keys_bcount)
         return keys_count
 
-    def get_sst_files_sizes_by_cf(self, cfs: Optional[List[Any]] = None) -> Dict[str, float]:
+    def get_sst_files_sizes_by_cf(self, cfs: Optional[List[Any]] = None) -> Dict[bytes, float]:
         """Get the SST files sizes of each Column Family in bytes
 
         :param cfs: The list of column families, defaults to None, in which case all of them are returned
@@ -161,7 +161,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         """
         column_families = cfs or self._db.column_families
 
-        sizes: Dict[str, float] = {}
+        sizes: Dict[bytes, float] = {}
 
         for cf in column_families:
             sizes[cf.name] = float(self._db.get_property(b'rocksdb.total-sst-files-size', cf))
