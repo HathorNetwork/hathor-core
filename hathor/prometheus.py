@@ -175,11 +175,10 @@ class PrometheusMetricsExporter:
                 ).set(getattr(connection_metric, name))
 
     def _set_new_tx_storage_metrics(self) -> None:
-        if hasattr(self.metrics, 'rocksdb_cfs_sizes'):
-            for cf, size in self.metrics.rocksdb_cfs_sizes.items():
-                self.tx_storage_metrics['total_sst_files_size'].labels(
-                    column_family=cf
-                ).set(size)
+        for cf, size in self.metrics.rocksdb_cfs_sizes.items():
+            self.tx_storage_metrics['total_sst_files_size'].labels(
+                column_family=cf
+            ).set(size)
 
     def _write_data(self) -> None:
         """ Update all metric data with new values
