@@ -749,6 +749,13 @@ class TransactionStorage(ABC):
                 continue
             self.set_index_last_started_at(index_db_name, timestamp)
 
+    def flush(self) -> None:
+        """Flushes the storage. It's called during shutdown of the node, for instance.
+
+           Should be implemented by storages that provide some kind of in-memory cache
+        """
+        raise NotImplementedError
+
 
 class BaseTransactionStorage(TransactionStorage):
     def __init__(self, with_index: bool = True, pubsub: Optional[Any] = None) -> None:
@@ -1116,3 +1123,10 @@ class BaseTransactionStorage(TransactionStorage):
                     used.add(parent_hash)
                     pending_visits.append(parent_hash)
         return result
+
+    def flush(self) -> None:
+        """Flushes the storage. It's called during shutdown of the node, for instance.
+
+           Should be implemented by storages that provide some kind of in-memory cache
+        """
+        pass

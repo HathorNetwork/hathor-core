@@ -319,8 +319,7 @@ class HathorManager:
             if wait_stratum:
                 waits.append(wait_stratum)
 
-        if isinstance(self.tx_storage, TransactionCacheStorage):
-            self.tx_storage.flush()
+        self.tx_storage.flush()
 
         return defer.DeferredList(waits)
 
