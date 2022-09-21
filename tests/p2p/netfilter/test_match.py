@@ -1,4 +1,5 @@
 from ipaddress import ip_network
+
 from twisted.internet.address import HostnameAddress, IPv4Address, IPv6Address, UNIXAddress
 
 from hathor.p2p.netfilter.context import NetfilterContext
