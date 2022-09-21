@@ -369,12 +369,10 @@ class RunNode:
         from hathor.mining.ws import MiningWebsocketFactory
         from hathor.p2p.resources import (
             AddPeersResource,
-            MiningInfoResource,
-            MiningResource,
-            NetfilterRuleResource,
             HealthcheckReadinessResource,
             MiningInfoResource,
             MiningResource,
+            NetfilterRuleResource,
             StatusResource,
         )
         from hathor.profiler import get_cpu_profiler

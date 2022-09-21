@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from typing import TYPE_CHECKING, Any, Dict, Optional
+from uuid import uuid4
 
 if TYPE_CHECKING:
     from hathor.p2p.netfilter.chain import NetfilterChain
@@ -28,31 +29,16 @@ class NetfilterRule:
         self.match = match
         self.target = target
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, NetfilterRule):
-            return NotImplemented
-
-        self_chain_name = self.chain.name if self.chain else None
-        other_chain_name = other.chain.name if other.chain else None
-        return self_chain_name == other_chain_name and self.match == other.match and self.target == other.target
+        # UUID used to find the rule, in order to delete it
+        self.uuid = str(uuid4())
 
     def to_json(self) -> Dict[str, Any]:
-        data: Dict[str, Any] = {}
-
-        if self.chain:
-            data['chain'] = self.chain.name
-
-        data_target: Dict[str, Any] = {}
-        data_target['type'] = type(self.target).__name__
-        data_target['parameters'] = self.target.__dict__
-        data['target'] = data_target
-
-        data_match: Dict[str, Any] = {}
-        data_match['type'] = type(self.match).__name__
-        data_match['parameters'] = self.match.__dict__
-        data['match'] = data_match
-
-        return data
+        return {
+            'uuid': self.uuid,
+            'chain': self.chain.to_json() if self.chain else None,
+            'target': self.target.to_json(),
+            'match': self.match.to_json()
+        }
 
     def get_target_if_match(self, context: 'NetfilterContext') -> Optional['NetfilterTarget']:
         if not self.match.match(context):
