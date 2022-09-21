@@ -20,7 +20,7 @@ class NetfilterUtilsTest(unittest.TestCase):
         # Check that the rules are what we expect
         for rule in post_peerid.rules:
             data = rule.to_json()
-            self.assertEqual(data['chain'], 'post_peerid')
+            self.assertEqual(data['chain']['name'], 'post_peerid')
             self.assertEqual(data['match']['type'], 'NetfilterMatchPeerId')
-            self.assertIn(data['match']['parameters']['peer_id'], blacklist)
+            self.assertIn(data['match']['match_params']['peer_id'], blacklist)
             self.assertEqual(data['target']['type'], 'NetfilterReject')

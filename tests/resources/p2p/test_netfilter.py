@@ -36,76 +36,140 @@ class BaseNetfilterTest(_BaseResourceTest._ResourceTest):
 
         # invalid chain
         response_post = yield self.web.post('netfilter', {
-            'chain': 'xxx',
+            'chain': {
+                'name': 'xxx'
+            },
             'match': 'peer_id',
             'match_params': {
                 'peer_id': '1234'
             },
-            'target': 'reject'
+            "target": {
+                "type": "NetfilterReject",
+                "target_params": {}
+            },
         })
         data = response_post.json_value()
         self.assertEqual(data['success'], False)
 
         # invalid match
         response_post = yield self.web.post('netfilter', {
-            'chain': 'post_peerid',
-            'match': 'xxx',
-            'match_params': {
-                'peer_id': '1234'
+            'chain': {
+                'name': 'post_peerid',
             },
-            'target': 'reject'
+            'match': {
+                'type': 'xxx',
+                'match_params': {
+                    'peer_id': '1234'
+                },
+            },
+            "target": {
+                "type": "NetfilterReject",
+                "target_params": {}
+            },
         })
         data = response_post.json_value()
         self.assertEqual(data['success'], False)
 
         # invalid match params
         response_post = yield self.web.post('netfilter', {
-            'chain': 'post_peerid',
-            'match': 'peer_id',
-            'match_params': {
-                'xxx': '1234'
+            'chain': {
+                'name': 'post_peerid',
             },
-            'target': 'reject'
+            'match': {
+                'type': 'NetfilterMatchPeerId',
+                'match_params': {
+                    'xxx': '1234'
+                },
+            },
+            "target": {
+                "type": "NetfilterReject",
+                "target_params": {}
+            },
         })
         data = response_post.json_value()
         self.assertEqual(data['success'], False)
 
         # invalid target
         response_post = yield self.web.post('netfilter', {
-            'chain': 'post_peerid',
-            'match': 'peer_id',
-            'match_params': {
-                'peer_id': '1234'
+            'chain': {
+                'name': 'post_peerid',
             },
-            'target': 'xxx'
+            'match': {
+                'type': 'NetfilterMatchPeerId',
+                'match_params': {
+                    'peer_id': '1234',
+                },
+            },
+            "target": {
+                "type": "xxx",
+                "target_params": {}
+            },
         })
         data = response_post.json_value()
         self.assertEqual(data['success'], False)
 
         # Success
         response_post = yield self.web.post('netfilter', {
-            'chain': 'post_peerid',
-            'match': 'peer_id',
-            'match_params': {
-                'peer_id': '1234'
+            'chain': {
+                'name': 'post_peerid',
             },
-            'target': 'reject'
+            'match': {
+                'type': 'NetfilterMatchPeerId',
+                'match_params': {
+                    'peer_id': '1234'
+                },
+            },
+            "target": {
+                "type": "NetfilterReject",
+                "target_params": {}
+            },
         })
-        data = response_post.json_value()
+        data_post_success1 = response_post.json_value()
+        self.assertEqual(data_post_success1['success'], True)
+
+        response = yield self.web.get('netfilter', {b'chain': bytes('post_peerid', 'utf-8')})
+        data_get = response.json_value()
+        self.assertEqual(len(data_get['rules']), 1)
+
+        # Add IP Address rule
+        response_post = yield self.web.post('netfilter', {
+            'chain': {
+                'name': 'post_peerid',
+            },
+            'match': {
+                'type': 'NetfilterMatchIPAddress',
+                'match_params': {
+                    'host': '127.0.0.1'
+                },
+            },
+            "target": {
+                "type": "NetfilterAccept",
+                "target_params": {}
+            },
+        })
+        data_post_success2 = response_post.json_value()
+        self.assertEqual(data_post_success2['success'], True)
+
+        response = yield self.web.get('netfilter', {b'chain': bytes('post_peerid', 'utf-8')})
+        data_get = response.json_value()
+        self.assertEqual(len(data_get['rules']), 2)
+
+        # Delete peer ID rule
+        response_delete = yield self.web.delete('netfilter', {
+            'chain': 'post_peerid',
+            'rule_uuid': data_post_success1['rule']['uuid']
+        })
+        data = response_delete.json_value()
         self.assertEqual(data['success'], True)
 
         response = yield self.web.get('netfilter', {b'chain': bytes('post_peerid', 'utf-8')})
         data = response.json_value()
         self.assertEqual(len(data['rules']), 1)
 
-        # Delete
+        # Delete ip address rule
         response_delete = yield self.web.delete('netfilter', {
             'chain': 'post_peerid',
-            'match': 'peer_id',
-            'match_params': {
-                'peer_id': '1234'
-            },
-            'target': 'reject'
+            'rule_uuid': data_post_success2['rule']['uuid']
         })
         data = response_delete.json_value()
         self.assertEqual(data['success'], True)
@@ -113,6 +177,14 @@ class BaseNetfilterTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.get('netfilter', {b'chain': bytes('post_peerid', 'utf-8')})
         data = response.json_value()
         self.assertEqual(len(data['rules']), 0)
+
+        # Validate we can do dump -> reload
+        for d in data_get['rules']:
+            response_post = yield self.web.post('netfilter', d)
+
+        response = yield self.web.get('netfilter', {b'chain': bytes('post_peerid', 'utf-8')})
+        data_get = response.json_value()
+        self.assertEqual(len(data_get['rules']), 2)
 
 
 class SyncV1NetfilterTest(unittest.SyncV1Params, BaseNetfilterTest):
