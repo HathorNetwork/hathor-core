@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from argparse import Namespace
+from dataclasses import asdict, dataclass
 import datetime
 import gc
 import json
@@ -52,6 +54,10 @@ from zope.interface import Interface
 from zope.interface.verify import verifyObject
 
 import hathor
+<<<<<<< HEAD
+=======
+
+>>>>>>> 17acaf7 (chore: measure sync and load times)
 from hathor.conf import HathorSettings
 
 if TYPE_CHECKING:
@@ -763,34 +769,26 @@ def is_token_uid_valid(token_uid: bytes) -> bool:
     else:
         return False
 
-
 @dataclass
 class EnvironmentInfo:
     # Changing these names could impact logging collectors that parse them
     python_implementation: str
     hathor_core_args: str
     hathor_core_version: str
-    peer_id: Optional[str]
-    network: str
-    network_full: str
+    peer_id: str
 
     def as_dict(self):
         return asdict(self)
 
-
-def get_environment_info(args: str, peer_id: Optional[str]) -> EnvironmentInfo:
+def get_environment_info(args: Namespace, peer_id: str) -> EnvironmentInfo:
     environment_info = EnvironmentInfo(
         python_implementation=str(sys.implementation),
-        hathor_core_args=args,
+        hathor_core_args=str(args),
         hathor_core_version=get_hathor_core_version(),
-        peer_id=peer_id,
-        network_full=settings.NETWORK_NAME,
-        # We want to ignore the testnet suffixes here. "testnet-golf" should be reported only as "testnet".
-        network=settings.NETWORK_NAME.split("-")[0]
+        peer_id=peer_id
     )
 
     return environment_info
-
 
 def get_hathor_core_version():
     return hathor.__version__
