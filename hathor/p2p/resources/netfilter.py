@@ -25,6 +25,7 @@ from hathor.p2p.netfilter.matches import (
     NetfilterMatchOr,
     NetfilterMatchPeerId,
 )
+from hathor.p2p.netfilter.matches_remote import NetfilterMatchRemoteURL
 from hathor.p2p.netfilter.rule import NetfilterRule
 from hathor.p2p.netfilter.targets import NetfilterAccept, NetfilterJump, NetfilterLog, NetfilterReject
 from hathor.util import json_dumpb, json_loadb
@@ -35,7 +36,7 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager
 
 
-def handle_request(request: 'Request') -> Dict[str, Any]:
+def handle_body_validation(request: 'Request') -> Dict[str, Any]:
     """ Auxiliar method to be used by POST and DELETE requests
         to handle the parameters validation
     """
@@ -51,59 +52,7 @@ def handle_request(request: 'Request') -> Dict[str, Any]:
     except (JSONDecodeError, AttributeError):
         return {'success': False, 'message': 'Invalid format for body data'}
 
-    # Map of available matches and targets with their classes
-    matches = {
-        'all': NetfilterMatchAll,
-        'and': NetfilterMatchAnd,
-        'or': NetfilterMatchOr,
-        'ip': NetfilterMatchIPAddress,
-        'peer_id': NetfilterMatchPeerId,
-    }
-
-    targets = {
-        'accept': NetfilterAccept,
-        'reject': NetfilterReject,
-        'jump': NetfilterJump,
-        'log': NetfilterLog,
-    }
-
-    # First we get the filter table chain
-    try:
-        chain = get_table('filter').get_chain(data.get('chain'))
-    except KeyError:
-        return {'success': False, 'message': 'Invalid netfilter chain.'}
-
-    # Then we get the match
-    match_value = data.get('match')
-    match_params = data.get('match_params', {})
-
-    if match_value not in matches:
-        return {'success': False, 'message': 'Invalid netfilter match.'}
-
-    match_class = matches[match_value]
-
-    try:
-        match = match_class(**match_params)
-    except TypeError:
-        return {'success': False, 'message': 'Invalid netfilter match parameters.'}
-
-    # Finally we get the target
-    target_value = data.get('target')
-    target_params = data.get('target_params', {})
-
-    if target_value not in targets:
-        return {'success': False, 'message': 'Invalid netfilter target.'}
-
-    target_class = targets[target_value]
-
-    try:
-        target = target_class(**target_params)
-    except TypeError:
-        return {'success': False, 'message': 'Invalid netfilter target parameters.'}
-
-    rule = NetfilterRule(match, target)
-
-    return {'success': True, 'chain': chain, 'rule': rule}
+    return {'success': True, 'body': data}
 
 
 @register_resource
@@ -143,35 +92,104 @@ class NetfilterRuleResource(Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
 
-        data = handle_request(request)
+        data = handle_body_validation(request)
 
         if not data['success']:
             return json_dumpb(data)
 
-        chain = data['chain']
-        rule = data['rule']
+        body = data['body']
 
-        updated_chain = chain.add_rule(rule)
+        chain = body.get('chain')
+        if not chain:
+            return json_dumpb({'success': False, 'message': 'Invalid chain data'})
 
-        if updated_chain is None:
-            return json_dumpb({'success': False, 'message': 'Duplicated rule.'})
+        # Get the filter table chain
+        try:
+            chain = get_table('filter').get_chain(chain.get('name'))
+        except KeyError:
+            return json_dumpb({'success': False, 'message': 'Invalid netfilter chain.'})
 
-        ret = {'success': True}
+        # Map of classes string with classes for targets and matches
+        # The class name is used in the to_json for the GET API
+        # so we expect the same format in the POST in order to allow dump -> reload
+        # XXX The dump -> reload won't work for matchAnd, matchOr, and remote URL
+        # because their constructor parameters are more complex
+        match_classes = [
+            NetfilterMatchAll,
+            NetfilterMatchAnd,
+            NetfilterMatchOr,
+            NetfilterMatchIPAddress,
+            NetfilterMatchPeerId,
+            NetfilterMatchRemoteURL
+        ]
+        matches = {}
+        for match_class in match_classes:
+            matches[match_class.__name__] = match_class
+
+        target_classes = [NetfilterAccept, NetfilterReject, NetfilterJump, NetfilterLog]
+        targets = {}
+        for target_class in target_classes:
+            targets[target_class.__name__] = target_class
+
+        # Then we get the match
+        match_data = body.get('match')
+        match_type = match_data.get('type')
+        match_params = match_data.get('match_params', {})
+
+        if match_type not in matches:
+            return json_dumpb({'success': False, 'message': 'Invalid netfilter match.'})
+
+        match_class = matches[match_type]
+
+        try:
+            match = match_class(**match_params)
+        except TypeError:
+            return json_dumpb({'success': False, 'message': 'Invalid netfilter match parameters.'})
+
+        # Finally we get the target
+        target_data = body.get('target')
+        target_type = target_data.get('type')
+        target_params = target_data.get('target_params', {})
+
+        if target_type not in targets:
+            return json_dumpb({'success': False, 'message': 'Invalid netfilter target.'})
+
+        target_class = targets[target_type]
+
+        try:
+            target = target_class(**target_params)
+        except TypeError:
+            return json_dumpb({'success': False, 'message': 'Invalid netfilter target parameters.'})
+
+        rule = NetfilterRule(match, target)
+
+        chain.add_rule(rule)
+
+        ret = {'success': True, 'rule': rule.to_json()}
         return json_dumpb(ret)
 
     def render_DELETE(self, request: 'Request') -> bytes:
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'DELETE')
 
-        data = handle_request(request)
+        data = handle_body_validation(request)
 
         if not data['success']:
             return json_dumpb(data)
 
-        chain = data['chain']
-        rule = data['rule']
+        body = data['body']
 
-        removed = chain.delete_rule(rule)
+        # Get the filter table chain
+        try:
+            chain = get_table('filter').get_chain(body.get('chain'))
+        except KeyError:
+            return json_dumpb({'success': False, 'message': 'Invalid netfilter chain.'})
+
+        uuid = body.get('rule_uuid')
+        if not uuid:
+            return json_dumpb({'success': False, 'message': 'Invalid uuid for rule.'})
+
+        removed = chain.delete_rule(uuid)
 
         if not removed:
             return json_dumpb({'success': False, 'message': 'Rule not found.'})
@@ -213,36 +231,54 @@ NetfilterRuleResource.openapi = {
                                     'value': {
                                         'rules': [
                                             {
-                                                'chain': 'post_peerid',
-                                                'target': {
-                                                    'type': 'NetfilterLog',
-                                                    'parameters': {
-                                                        'msg': 'Test'
+                                                'uuid': '93095688-8ad5-4b9a-ab6b-c9e7b6d1fab5',
+                                                'chain': {
+                                                    'name': 'post_peerid',
+                                                    'table': {
+                                                        'name': 'filter'
+                                                    },
+                                                    'policy': {
+                                                        'type': 'NetfilterAccept',
+                                                        'target_params': {}
                                                     }
+                                                },
+                                                'target': {
+                                                    'type': 'NetfilterReject',
+                                                    'target_params': {}
                                                 },
                                                 'match': {
                                                     'type': 'NetfilterMatchPeerId',
-                                                    'parameters': {
+                                                    'match_params': {
                                                         'peer_id': ('f7397705bc07aabf6fc3f68de6605d93b'
                                                                     '560bc832d9ebbdfb0d3bd41e1f9480b')
                                                     }
-                                                }
+                                                },
                                             },
                                             {
-                                                'chain': 'post_peerid',
+                                                'uuid': '93095688-8ad5-4b9a-ab6b-c9e7b6d1fab5',
+                                                'chain': {
+                                                    'name': 'post_peerid',
+                                                    'table': {
+                                                        'name': 'filter'
+                                                    },
+                                                    'policy': {
+                                                        'type': 'NetfilterAccept',
+                                                        'target_params': {}
+                                                    }
+                                                },
                                                 'target': {
                                                     'type': 'NetfilterLog',
-                                                    'parameters': {
+                                                    'target_params': {
                                                         'msg': 'Wat'
                                                     }
                                                 },
                                                 'match': {
                                                     'type': 'NetfilterMatchPeerId',
-                                                    'parameters': {
+                                                    'match_params': {
                                                         'peer_id': ('f7397705bc07aabf6fc3f68de6605d93b'
                                                                     '560bc832d9ebbdfb0d3bd41e1f9480b')
                                                     }
-                                                }
+                                                },
                                             }
                                         ]
                                     }
@@ -285,12 +321,20 @@ NetfilterRuleResource.openapi = {
                             'peer_id_reject': {
                                 'summary': 'Add rule to reject a peer id',
                                 'value': {
-                                    'chain': 'post_peerid',
-                                    'match': 'peer_id',
-                                    'match_params': {
-                                        'peer_id': 'f7397705bc07aabf6fc3f68de6605d93b560bc832d9ebbdfb0d3bd41e1f9480b'
+                                    'chain': {
+                                        'name': 'post_peerid',
                                     },
-                                    'target': 'reject',
+                                    'target': {
+                                        'type': 'NetfilterReject',
+                                        'target_params': {}
+                                    },
+                                    'match': {
+                                        'type': 'NetfilterMatchPeerId',
+                                        'match_params': {
+                                            'peer_id': ('f7397705bc07aabf6fc3f68de6605d93b'
+                                                        '560bc832d9ebbdfb0d3bd41e1f9480b')
+                                        }
+                                    },
                                 }
                             },
                         }
@@ -306,7 +350,29 @@ NetfilterRuleResource.openapi = {
                                 'success': {
                                     'summary': 'Rule added',
                                     'value': {
-                                        'success': True
+                                        'success': True,
+                                        'uuid': '93095688-8ad5-4b9a-ab6b-c9e7b6d1fab5',
+                                        'chain': {
+                                            'name': 'post_peerid',
+                                            'table': {
+                                                'name': 'filter'
+                                            },
+                                            'policy': {
+                                                'type': 'NetfilterAccept',
+                                                'target_params': {}
+                                            }
+                                        },
+                                        'target': {
+                                            'type': 'NetfilterReject',
+                                            'target_params': {}
+                                        },
+                                        'match': {
+                                            'type': 'NetfilterMatchPeerId',
+                                            'match_params': {
+                                                'peer_id': ('f7397705bc07aabf6fc3f68de6605d93b'
+                                                            '560bc832d9ebbdfb0d3bd41e1f9480b')
+                                            }
+                                        },
                                     }
                                 },
                                 'error': {
@@ -355,11 +421,7 @@ NetfilterRuleResource.openapi = {
                                 'summary': 'Delete rule to reject a peer id',
                                 'value': {
                                     'chain': 'post_peerid',
-                                    'match': 'peer_id',
-                                    'match_params': {
-                                        'peer_id': 'f7397705bc07aabf6fc3f68de6605d93b560bc832d9ebbdfb0d3bd41e1f9480b'
-                                    },
-                                    'target': 'reject',
+                                    'rule_uuid': '93095688-8ad5-4b9a-ab6b-c9e7b6d1fab5',
                                 }
                             },
                         }
