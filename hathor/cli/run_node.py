@@ -24,6 +24,8 @@ from autobahn.twisted.resource import WebSocketResource
 from structlog import get_logger
 from twisted.web.resource import Resource
 
+from hathor.util import get_environment_info
+
 logger = get_logger()
 # LOGGING_CAPTURE_STDOUT = True
 
@@ -276,6 +278,8 @@ class RunNode:
             enable_sync_v2=enable_sync_v2,
             soft_voided_tx_ids=set(settings.SOFT_VOIDED_TX_IDS),
         )
+        self.manager.environment_info = get_environment_info(args=args, peer_id=peer_id.id)
+
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
 

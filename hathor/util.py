@@ -12,10 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from argparse import Namespace
+from dataclasses import asdict, dataclass
 import datetime
 import gc
 import json
 import math
+import sys
 import time
 import warnings
 from collections import OrderedDict
@@ -48,6 +51,8 @@ from twisted.internet.posixbase import PosixReactorBase
 from twisted.python.threadable import isInIOThread
 from zope.interface import Interface
 from zope.interface.verify import verifyObject
+
+import hathor
 
 from hathor.conf import HathorSettings
 
@@ -759,3 +764,27 @@ def is_token_uid_valid(token_uid: bytes) -> bool:
         return True
     else:
         return False
+
+@dataclass
+class EnvironmentInfo:
+    # Changing these names could impact logging collectors that parse them
+    python_implementation: str
+    hathor_core_args: str
+    hathor_core_version: str
+    peer_id: str
+
+    def as_dict(self):
+        return asdict(self)
+
+def get_environment_info(args: Namespace, peer_id: str) -> EnvironmentInfo:
+    environment_info = EnvironmentInfo(
+        python_implementation=str(sys.implementation),
+        hathor_core_args=str(args),
+        hathor_core_version=get_hathor_core_version(),
+        peer_id=peer_id
+    )
+
+    return environment_info
+
+def get_hathor_core_version():
+    return hathor.__version__

@@ -21,6 +21,7 @@ from typing import Any, Iterable, Iterator, List, NamedTuple, Optional, Set, Tup
 from structlog import get_logger
 from twisted.internet import defer
 from twisted.internet.defer import Deferred
+from twisted.internet.task import LoopingCall
 from twisted.python.threadpool import ThreadPool
 
 from hathor import daa
@@ -38,7 +39,7 @@ from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transact
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.util import LogDuration, Random, Reactor
+from hathor.util import EnvironmentInfo, LogDuration, Random, Reactor
 from hathor.wallet import BaseWallet
 
 settings = HathorSettings()
@@ -221,6 +222,14 @@ class HathorManager:
         else:
             self.capabilities = DEFAULT_CAPABILITIES
 
+        # Is set during node initialization
+        self.environment_info: Optional[EnvironmentInfo] = None
+
+        # Task that will count the total sync time
+        self.lc_check_sync_state = LoopingCall(self.check_sync_state)
+        self.lc_check_sync_state.clock = self.reactor
+        self.lc_check_sync_state_interval = 30 # seconds
+
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
         """
@@ -285,6 +294,8 @@ class HathorManager:
 
         self.start_time = time.time()
 
+        self.lc_check_sync_state.start(self.lc_check_sync_state_interval, now=False)
+
         if self.wallet:
             self.wallet.start()
 
@@ -310,6 +321,9 @@ class HathorManager:
 
         # Metric stops to capture data
         self.metrics.stop()
+
+        if self.lc_check_sync_state.running:
+            self.lc_check_sync_state.stop()
 
         if self.wallet:
             self.wallet.stop()
@@ -529,7 +543,10 @@ class HathorManager:
         self.state = self.NodeState.READY
         tdt = LogDuration(t2 - t0)
         tx_rate = '?' if tdt == 0 else cnt / tdt
-        self.log.info('ready', tx_count=cnt, tx_rate=tx_rate, total_dt=tdt, height=h, blocks=block_count, txs=tx_count)
+
+        # Changing the field names in this log could impact log collectors that parse them
+        # TODO: Should we use vertex_count instead of tx_count in the first field?
+        self.log.info('ready', tx_count=cnt, tx_rate=tx_rate, total_load_time=tdt, height=h, blocks=block_count, txs=tx_count, **self.environment_info.as_dict())
 
     def _initialize_components_new(self) -> None:
         """You are not supposed to run this method manually. You should run `doStart()` to initialize the
@@ -538,6 +555,9 @@ class HathorManager:
         This method runs through all transactions, verifying them and updating our wallet.
         """
         self.log.info('initialize')
+        t0 = time.time()
+        t1 = t0
+
         if self.wallet:
             self.wallet._manually_initialize()
 
@@ -595,7 +615,12 @@ class HathorManager:
         # XXX: last step before actually starting is updating the last started at timestamps
         self.tx_storage.update_last_started_at(started_at)
         self.state = self.NodeState.READY
-        self.log.info('ready')
+
+        t1 = time.time()
+        tdt = LogDuration(t1 - t0)
+
+        # Changing the field names in this log could impact log collectors that parse them
+        self.log.info('ready', tx_count=self.tx_storage.get_count_tx_blocks(), total_load_time=tdt, **self.environment_info.as_dict())
 
     def _verify_checkpoints(self) -> None:
         """ Method to verify if all checkpoints that exist in the database have the correct hash and are winners.
@@ -1096,6 +1121,20 @@ class HathorManager:
             return False, HathorManager.UnhealthinessReason.NO_SYNCED_PEER
 
         return True, None
+
+    def check_sync_state(self):
+           now = time.time()
+
+           if self.has_recent_activity():
+               self.first_time_fully_synced = now
+
+               total_sync_time = LogDuration(self.first_time_fully_synced - self.start_time)
+               vertex_count = self.tx_storage.get_tx_count() + self.tx_storage.get_block_count()
+
+               # TODO: Should we use vertex_count instead of tx_count?
+               self.log.info('reached synced state for the first time', total_sync_time=total_sync_time, tx_count=vertex_count, **self.environment_info.as_dict())
+
+               self.lc_check_sync_state.stop()
 
 
 class ParentTxs(NamedTuple):
