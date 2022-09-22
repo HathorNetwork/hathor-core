@@ -37,7 +37,7 @@ class NetfilterChain:
             'policy': self.policy.to_json()
         }
 
-    def add_rule(self, rule: 'NetfilterRule') -> Optional['NetfilterChain']:
+    def add_rule(self, rule: 'NetfilterRule') -> 'NetfilterChain':
         """Add a new rule to this chain."""
         self.rules.append(rule)
         rule.chain = self
