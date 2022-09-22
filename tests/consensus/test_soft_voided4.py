@@ -12,8 +12,8 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
     seed_config = 5988775361793628169
 
     def test_soft_voided(self):
-        txA_hash = bytes.fromhex('1ae4ce163495279dafddca041b7c99abd71af55f29568746f3a20deead15f14d')
-        txB_hash = bytes.fromhex('6343d6549f6743bd1718d92919f5dabf6705762953aaec2b14e68cb048b4207a')
+        txA_hash = bytes.fromhex('4586c5428e8d666ea59684c1cd9286d2b9d9e89b4939207db47412eeaabc48b2')
+        txB_hash = bytes.fromhex('d19bee149abdce63bbfd523c90c3cf110563970a34100b2a62583a1eba48dfc8')
         soft_voided_tx_ids = set([
             txA_hash,
             txB_hash,
@@ -43,15 +43,11 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
 
         gen_tx2 = self.simulator.create_tx_generator(manager2, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
         gen_tx2.start()
-        self.simulator.run(950)
+        self.simulator.run(900)
         miner2.stop()
         gen_tx2.stop()
 
-        txA = manager2.tx_storage.get_transaction(txA_hash)
-        self.graphviz.labels[txA.hash] = 'txA'
-
         txB = manager2.tx_storage.get_transaction(txB_hash)
-        self.graphviz.labels[txB.hash] = 'txB'
 
         # Get the tx confirmed by the soft voided that will be voided
         tx_base = manager2.tx_storage.get_transaction(txB.parents[0])
@@ -98,10 +94,9 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
 
         self.simulator.run(10)
         txD = add_custom_tx(manager2, [(txC, 0)], base_parent=txB)
-        self.graphviz.labels[txD.hash] = 'txD'
 
         # dot = self.graphviz.dot()
-        # dot.render('test_soft_voided4')
+        # dot.render('dot0')
 
         blk3meta = blk3.get_metadata()
         self.assertEqual(blk3meta.voided_by, {tx_base.hash, blk3meta.hash})

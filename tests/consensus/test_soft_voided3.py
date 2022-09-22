@@ -1,5 +1,4 @@
 from hathor.conf import HathorSettings
-from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator import FakeConnection
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
@@ -19,7 +18,7 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
             self.assertNotIn(settings.SOFT_VOIDED_ID, tx2_voided_by)
 
     def test_soft_voided(self):
-        txA_hash = bytes.fromhex('1ae4ce163495279dafddca041b7c99abd71af55f29568746f3a20deead15f14d')
+        txA_hash = bytes.fromhex('4586c5428e8d666ea59684c1cd9286d2b9d9e89b4939207db47412eeaabc48b2')
         soft_voided_tx_ids = set([
             txA_hash,
         ])
@@ -38,8 +37,6 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         manager2 = self.create_peer(soft_voided_tx_ids=soft_voided_tx_ids)
         manager2.soft_voided_tx_ids = soft_voided_tx_ids
 
-        graphviz = GraphvizVisualizer(manager2.tx_storage, include_verifications=True, include_funds=True)
-
         conn12 = FakeConnection(manager1, manager2, latency=0.001)
         self.simulator.add_connection(conn12)
 
@@ -55,17 +52,14 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         txA = manager2.tx_storage.get_transaction(txA_hash)
         metaA = txA.get_metadata()
         self.assertEqual({settings.SOFT_VOIDED_ID, txA.hash}, metaA.voided_by)
-        graphviz.labels[txA.hash] = 'txA'
 
         txB = add_custom_tx(manager2, [(txA, 0)])
         metaB = txB.get_metadata()
         self.assertEqual({txA.hash}, metaB.voided_by)
-        graphviz.labels[txB.hash] = 'txB'
 
         txD1 = add_custom_tx(manager2, [(txB, 0)])
         metaD1 = txD1.get_metadata()
         self.assertEqual({txA.hash}, metaD1.voided_by)
-        graphviz.labels[txD1.hash] = 'txD1'
 
         blk1 = manager2.generate_mining_block()
         self.assertNoParentsAreSoftVoided(blk1)
@@ -98,10 +92,6 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         self.assertIsNone(blk1meta.voided_by)
         metaC = txC.get_metadata()
         self.assertIsNone(metaC.voided_by)
-
-        # Uncomment lines below to visualize the DAG and the blockchain.
-        # dot = graphviz.dot()
-        # dot.render('test_soft_voided3')
 
 
 class SyncV1SoftVoidedTestCase(unittest.SyncV1Params, BaseSoftVoidedTestCase):
