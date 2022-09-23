@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Deque, Dict, List, NamedTuple, Optional
 
 from structlog import get_logger
@@ -57,162 +57,89 @@ class PeerConnectionMetrics:
     discarded_blocks: int = 0
 
 
+@dataclass
 class Metrics:
-    transactions: int
-    blocks: int
-    best_block_height: int
-    hash_rate: float
-    connected_peers: int
-    handshaking_peers: int
-    connecting_peers: int
-    known_peers: int
-    best_block_weight: float
-    weight_tx_deque_len: int
-    weight_block_deque_len: int
-    weight_tx_deque: Deque[WeightValue]
-    weight_block_deque: Deque[WeightValue]
-    avg_time_between_blocks: int
     pubsub: PubSubManager
-    tx_storage: TransactionStorage
-    reactor: Reactor
-    is_running: bool
-    exponential_alfa: float  # XXX: "alpha"?
-    tx_hash_store_interval: int
-    block_hash_store_interval: int
-    collect_data_interval: int
-    websocket_connections: int
-    subscribed_addresses: int
-    websocket_factory: Optional['HathorAdminWebsocketFactory']
-    completed_jobs: int
-    blocks_found: int
-    estimated_hash_rate: float  # log(H/s)
-    stratum_factory: Optional['StratumFactory']
-    send_token_timeouts: int
-    rocksdb_cfs_sizes: Dict[bytes, float]
+    avg_time_between_blocks: int
+    connections: ConnectionsManager
+    tx_storage: TransactionStorage = TransactionMemoryStorage()
+    # Twisted reactor that handles the time and callLater
+    reactor: Optional[Reactor] = None
 
-    def __init__(
-            self,
-            pubsub: PubSubManager,
-            avg_time_between_blocks: int,
-            connections: ConnectionsManager,
-            tx_storage: Optional[TransactionStorage] = None,
-            reactor: Optional[Reactor] = None,
-    ):
-        """
-        :param pubsub: If not given, a new one is created.
-        :param tx_storage: If not given, a new one is created.
-        :param avg_time_between_blocks: Seconds between blocks (comes from manager)
-        :param tx_storage: Transaction storage
-        :param reactor: Twisted reactor that handles the time and callLater
-        """
+    # Transactions count in the network
+    transactions: int = 0
+    # Blocks count in the network
+    blocks: int = 0
+    # Height of the best chain of the network
+    best_block_height: int = 0
+    # Hash rate of the network
+    hash_rate: float = 0.0
+    # Peers connected
+    peers: int = 0
+    # weight of the head of the best blockchain
+    best_block_weight: float = 0
+    # Length of the tx deque
+    weight_tx_deque_len: int = 60
+    # Length of the block deque
+    weight_block_deque_len: int = 450
+    # If metric capture data is running
+    is_running: bool = False
+    # Time between method call to collect data
+    collect_data_interval: int = settings.METRICS_COLLECT_DATA_INTERVAL
+    # Websocket data stored
+    websocket_connections: int = 0
+    subscribed_addresses: int = 0
+    # Websocket factory
+    websocket_factory: Optional['HathorAdminWebsocketFactory'] = None
+    # Stratum data
+    completed_jobs: int = 0
+    blocks_found: int = 0
+    estimated_hash_rate: float = 0  # log(H/s)
+    stratum_factory: Optional['StratumFactory'] = None
+    # Peer Connection data
+    peer_connection_metrics: List[PeerConnectionMetrics] = field(default_factory=list)
+    # Send-token timeouts counter
+    send_token_timeouts: int = 0
+    # Dict that stores the sizes of each column-family in RocksDB, in bytes
+    rocksdb_cfs_sizes: Dict[bytes, float] = field(default_factory=dict)
+    # TxCache Data
+    transaction_cache_hits: int = 0
+    transaction_cache_misses: int = 0
+    # The time interval to control periodic collection of RocksDB data
+    txstorage_data_interval = settings.METRICS_COLLECT_ROCKSDB_DATA_INTERVAL
+    # Variables to store the last block when we updated the RocksDB storage metrics
+    last_txstorage_data_block: Optional[int] = None
+
+    # Peers connected
+    connected_peers: int = 0
+    # Peers handshaking
+    handshaking_peers: int = 0
+    # Peers connecting
+    connecting_peers: int = 0
+    # Peers known
+    known_peers: int = 0
+
+    def __post_init__(self):
         self.log = logger.new()
 
-        # Transactions count in the network
-        self.transactions = 0
-
-        # Blocks count in the network
-        self.blocks = 0
-
-        # Height of the best chain of the network
-        self.best_block_height = 0
-
-        # Hash rate of the network
-        self.hash_rate = 0.0
-
-        # Peers connected
-        self.connected_peers = 0
-
-        # Peers connecting
-        self.connecting_peers = 0
-
-        # Peers handshaking
-        self.handshaking_peers = 0
-
-        # Peers known
-        self.known_peers = 0
-
-        # Length of the tx deque
-        self.weight_tx_deque_len = 60
-
-        # Length of the block deque
-        self.weight_block_deque_len = 450
-
         # Stores caculated tx weights saved in tx storage
-        self.weight_tx_deque = deque(maxlen=self.weight_tx_deque_len)
+        self.weight_tx_deque: Deque[WeightValue] = deque(maxlen=self.weight_tx_deque_len)
 
         # Stores caculated block weights saved in tx storage
-        self.weight_block_deque = deque(maxlen=self.weight_block_deque_len)
+        self.weight_block_deque: Deque[WeightValue] = deque(maxlen=self.weight_block_deque_len)
 
-        self.avg_time_between_blocks = avg_time_between_blocks
-
-        self.pubsub = pubsub
-
-        self.tx_storage = tx_storage or TransactionMemoryStorage()
-
-        if reactor is None:
+        if self.reactor is None:
             from hathor.util import reactor as twisted_reactor
-            reactor = twisted_reactor
-        self.reactor = reactor
-
-        # If metric capture data is running
-        self.is_running = False
-
-        # Coefficient of exponential calculus
-        self.exponential_alfa = 0.7
-
-        # Time between method call to store hash count
-        self.tx_hash_store_interval = 1
-        self.block_hash_store_interval = 1
-
-        # Websocket data stored
-        self.websocket_connections = 0
-        self.subscribed_addresses = 0
-
-        # Websocket factory
-        self.websocket_factory = None
-
-        # weight of the head of the best blockchain
-        self.best_block_weight = 0
-
-        # Stratum data
-        self.completed_jobs = 0
-        self.blocks_found = 0
-        self.estimated_hash_rate = 0
-
-        # Stratum factory
-        self.stratum_factory = None
-
-        # Peer Connection data
-        self.connections = connections
-        self.peer_connection_metrics: List[PeerConnectionMetrics] = []
-
-        # TxCache Data
-        self.transaction_cache_hits = 0
-        self.transaction_cache_misses = 0
-
-        # Send-token timeouts counter
-        self.send_token_timeouts = 0
-
-        # Time between method call to collect data
-        self.collect_data_interval = settings.METRICS_COLLECT_DATA_INTERVAL
+            self.reactor = twisted_reactor
 
         # A timer to periodically collect data
         self._lc_collect_data = LoopingCall(self._collect_data)
-        self._lc_collect_data.clock = reactor
-
-        # Dict that stores the sizes of each column-family in RocksDB, in bytes
-        self.rocksdb_cfs_sizes: Dict[bytes, float] = {}
-
-        # The time interval to control periodic collection of RocksDB data
-        self.txstorage_data_interval = settings.METRICS_COLLECT_ROCKSDB_DATA_INTERVAL
+        self._lc_collect_data.clock = self.reactor
 
         # The number of blocks interval to control periodic collection of RocksDB data
         # We try to use it if possible, instead of the time interval, because it's better to make sure we update the
         # storage during sync, otherwise we would only get the real storage metric after 24h (the default value)
         self.txstorage_data_block_interval = self.txstorage_data_interval / settings.AVG_TIME_BETWEEN_BLOCKS
-
-        # Variables to store the last block when we updated the RocksDB storage metrics
-        self.last_txstorage_data_block: Optional[int] = None
 
     def _start_initial_values(self) -> None:
         """ When we start the metrics object we set the transaction and block count already in the network
@@ -365,14 +292,14 @@ class Metrics:
             return
 
         # Try to use the number of blocks to decide when we should update the tx storage data
-        block_count = self.tx_storage.get_height_best_block()
+        best_block_count = self.tx_storage.get_height_best_block()
 
         if self.last_txstorage_data_block and (
-            block_count - self.last_txstorage_data_block
+            best_block_count - self.last_txstorage_data_block
         ) < self.txstorage_data_block_interval:
             return
 
-        self.last_txstorage_data_block = block_count
+        self.last_txstorage_data_block = best_block_count
 
         self.rocksdb_cfs_sizes = store.get_sst_files_sizes_by_cf()
 
