@@ -776,6 +776,7 @@ class EnvironmentInfo:
     hathor_core_args: str
     hathor_core_version: str
     peer_id: str
+    network: str
 
     def as_dict(self):
         return asdict(self)
@@ -785,7 +786,8 @@ def get_environment_info(args: Namespace, peer_id: str) -> EnvironmentInfo:
         python_implementation=str(sys.implementation),
         hathor_core_args=str(args),
         hathor_core_version=get_hathor_core_version(),
-        peer_id=peer_id
+        peer_id=peer_id,
+        network=settings.NETWORK_NAME
     )
 
     return environment_info
