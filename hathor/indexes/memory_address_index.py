@@ -50,9 +50,7 @@ class MemoryAddressIndex(AddressIndex):
         """
         assert self.pubsub is not None
         # Subscribe to voided/winner events
-        events = [HathorEvents.STORAGE_TX_VOIDED, HathorEvents.STORAGE_TX_WINNER]
-        for event in events:
-            self.pubsub.subscribe(event, self.handle_tx_event)
+        self.pubsub.subscribe(HathorEvents.CONSENSUS_TX_UPDATE, self.handle_tx_event)
 
     def add_tx(self, tx: BaseTransaction) -> None:
         """ Add tx inputs and outputs to the wallet index (indexed by its addresses).

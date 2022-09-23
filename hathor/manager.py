@@ -159,7 +159,7 @@ class HathorManager:
             self.tx_storage.indexes.enable_utxo_index()
 
         self.soft_voided_tx_ids = soft_voided_tx_ids or set()
-        self.consensus_algorithm = ConsensusAlgorithm(self.soft_voided_tx_ids)
+        self.consensus_algorithm = ConsensusAlgorithm(self.soft_voided_tx_ids, pubsub=self.pubsub)
 
         self.peer_discoveries: List[PeerDiscovery] = []
 
