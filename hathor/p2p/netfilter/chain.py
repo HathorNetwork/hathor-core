@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     from hathor.p2p.netfilter.context import NetfilterContext
@@ -30,11 +30,29 @@ class NetfilterChain:
         self.rules: List['NetfilterRule'] = []
         self.policy = policy
 
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            'name': self.name,
+            'table': self.table.to_json() if self.table else None,
+            'policy': self.policy.to_json()
+        }
+
     def add_rule(self, rule: 'NetfilterRule') -> 'NetfilterChain':
         """Add a new rule to this chain."""
         self.rules.append(rule)
         rule.chain = self
         return self
+
+    def delete_rule(self, uuid: str) -> bool:
+        """Delete a rule from this chain.
+           Returns a bool that shows if the rule has been removed
+        """
+        for rule in self.rules:
+            if rule.uuid == uuid:
+                self.rules.remove(rule)
+                return True
+
+        return False
 
     def process(self, context: 'NetfilterContext') -> 'NetfilterTarget':
         """Process the rules of this chain."""

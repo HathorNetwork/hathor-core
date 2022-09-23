@@ -26,3 +26,7 @@ class NetfilterFactoryTest(unittest.TestCase):
 
         ret = factory.buildProtocol(IPv4Address('TCP', '192.168.0.2', 1234))
         self.assertIsNotNone(ret)
+
+        pre_conn.delete_rule(rule.uuid)
+        ret = factory.buildProtocol(IPv4Address('TCP', '192.168.0.1', 1234))
+        self.assertIsNotNone(ret)
