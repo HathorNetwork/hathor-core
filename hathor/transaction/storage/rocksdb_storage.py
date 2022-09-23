@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional
+from typing import TYPE_CHECKING, Dict, Iterator, List, Optional
 
 from structlog import get_logger
 
@@ -23,6 +23,8 @@ from hathor.transaction.storage.transaction_storage import BaseTransactionStorag
 from hathor.util import json_dumpb, json_loadb
 
 if TYPE_CHECKING:
+    import rocksdb
+
     from hathor.transaction import BaseTransaction, TransactionMetadata
 
 logger = get_logger()
@@ -153,13 +155,16 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         keys_count = int(keys_bcount)
         return keys_count
 
-    def get_sst_files_sizes_by_cf(self, cfs: Optional[List[Any]] = None) -> Dict[bytes, float]:
+    def get_sst_files_sizes_by_cf(
+        self,
+        cfs: Optional[List['rocksdb.ColumnFamilyHandle']] = None
+    ) -> Dict[bytes, float]:
         """Get the SST files sizes of each Column Family in bytes
 
         :param cfs: The list of column families, defaults to None, in which case all of them are returned
         :return: A dict containing the names of the cfs and their sizes
         """
-        column_families = cfs or self._db.column_families
+        column_families = self._db.column_families if cfs is None else cfs
 
         sizes: Dict[bytes, float] = {}
 
