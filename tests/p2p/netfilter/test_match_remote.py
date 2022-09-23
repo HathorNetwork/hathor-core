@@ -16,3 +16,8 @@ class NetfilterMatchRemoteTest(unittest.TestCase):
 
         matcher._update_cb(b'hathor-ip-list\n192.168.0.2')
         self.assertFalse(matcher.match(context))
+
+        # Guarantee the to_json is working fine
+        json = matcher.to_json()
+        self.assertEqual(json['match_params']['name'], 'test')
+        self.assertEqual(json['match_params']['url'], 'http://localhost:8080')

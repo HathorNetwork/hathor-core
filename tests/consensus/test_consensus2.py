@@ -32,7 +32,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         txF2 = add_custom_tx(manager1, [(txB, 0), (txD1, 0)])
         self.graphviz.labels[txF2.hash] = f'txF2-{i}'
 
-        txD2 = add_custom_tx(manager1, [(txC, 0)], base_parent=tx_base)
+        txD2 = add_custom_tx(manager1, [(txC, 0)], base_parent=tx_base, inc_timestamp=1)
         self.graphviz.labels[txD2.hash] = f'txD2-{i}'
         txE = add_custom_tx(manager1, [(txD2, 0)], base_parent=tx_base)
         self.graphviz.labels[txE.hash] = f'txE-{i}'

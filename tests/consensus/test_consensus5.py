@@ -64,7 +64,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         self.graphviz.labels[txC1.hash] = 'txC1'
         self.assertTrue(manager1.propagate_tx(txC1))
 
-        txC2 = gen_custom_tx(manager1, [(txA2, 0)])
+        txC2 = gen_custom_tx(manager1, [(txA2, 0)], inc_timestamp=1)
         self.graphviz.labels[txC2.hash] = 'txC2'
         self.assertTrue(manager1.propagate_tx(txC2))
 

@@ -1,3 +1,5 @@
+from ipaddress import ip_network
+
 from twisted.internet.address import HostnameAddress, IPv4Address, IPv6Address, UNIXAddress
 
 from hathor.p2p.netfilter.context import NetfilterContext
@@ -25,10 +27,18 @@ class NetfilterMatchTest(unittest.TestCase):
         context = NetfilterContext()
         self.assertTrue(matcher.match(context))
 
+        # Guarantee the to_json is working fine
+        json = matcher.to_json()
+        self.assertEqual(json['type'], 'NetfilterMatchAll')
+
     def test_never_match(self):
         matcher = NetfilterNeverMatch()
         context = NetfilterContext()
         self.assertFalse(matcher.match(context))
+
+        # Guarantee the to_json is working fine
+        json = matcher.to_json()
+        self.assertEqual(json['type'], 'NetfilterNeverMatch')
 
     def test_match_and_success(self):
         m1 = NetfilterMatchAll()
@@ -43,6 +53,12 @@ class NetfilterMatchTest(unittest.TestCase):
         matcher = NetfilterMatchAnd(m1, m2)
         context = NetfilterContext()
         self.assertFalse(matcher.match(context))
+
+        # Guarantee the to_json is working fine
+        json = matcher.to_json()
+        self.assertEqual(json['type'], 'NetfilterMatchAnd')
+        self.assertEqual(json['match_params']['a']['type'], 'NetfilterNeverMatch')
+        self.assertEqual(json['match_params']['b']['type'], 'NetfilterMatchAll')
 
     def test_match_and_fail_10(self):
         m1 = NetfilterMatchAll()
@@ -72,6 +88,12 @@ class NetfilterMatchTest(unittest.TestCase):
         context = NetfilterContext()
         self.assertTrue(matcher.match(context))
 
+        # Guarantee the to_json is working fine
+        json = matcher.to_json()
+        self.assertEqual(json['type'], 'NetfilterMatchOr')
+        self.assertEqual(json['match_params']['a']['type'], 'NetfilterMatchAll')
+        self.assertEqual(json['match_params']['b']['type'], 'NetfilterNeverMatch')
+
     def test_match_or_success_01(self):
         m1 = NetfilterNeverMatch()
         m2 = NetfilterMatchAll()
@@ -90,6 +112,11 @@ class NetfilterMatchTest(unittest.TestCase):
         matcher = NetfilterMatchIPAddress('192.168.0.0/24')
         context = NetfilterContext()
         self.assertFalse(matcher.match(context))
+
+        # Guarantee the to_json is working fine
+        json = matcher.to_json()
+        self.assertEqual(json['type'], 'NetfilterMatchIPAddress')
+        self.assertEqual(json['match_params']['host'], '192.168.0.0/24')
 
     def test_match_ip_address_ipv4_net(self):
         matcher = NetfilterMatchIPAddress('192.168.0.0/24')
@@ -134,6 +161,11 @@ class NetfilterMatchTest(unittest.TestCase):
         self.assertFalse(matcher.match(context))
         context = NetfilterContext(addr=IPv6Address('TCP', '2001:db8:0:f101:2::7334', 1234))
         self.assertTrue(matcher.match(context))
+
+        # Guarantee the to_json is working fine
+        json = matcher.to_json()
+        self.assertEqual(json['type'], 'NetfilterMatchIPAddress')
+        self.assertEqual(json['match_params']['host'], str(ip_network('2001:0db8:0:f101::/64')))
 
     def test_match_ip_address_ipv6_ip(self):
         matcher = NetfilterMatchIPAddress('2001:0db8:0:f101::1/128')
@@ -195,6 +227,11 @@ class BaseNetfilterMatchTest(unittest.TestCase):
         # Fail because proto1 is connected to proto2, and the peer id cannot match.
         context = NetfilterContext(protocol=conn.proto1)
         self.assertFalse(matcher.match(context))
+
+        # Guarantee the to_json is working fine
+        json = matcher.to_json()
+        self.assertEqual(json['type'], 'NetfilterMatchPeerId')
+        self.assertEqual(json['match_params']['peer_id'], str(peer_id1.id))
 
 
 class SyncV1NetfilterMatchTest(unittest.SyncV1Params, BaseNetfilterMatchTest):

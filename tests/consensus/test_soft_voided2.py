@@ -1,8 +1,9 @@
 from hathor.conf import HathorSettings
 from hathor.graphviz import GraphvizVisualizer
+from hathor.simulator import Simulator
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
-from tests.utils import add_custom_tx, gen_new_tx
+from tests.utils import BURN_ADDRESS, add_custom_tx, gen_new_tx
 
 settings = HathorSettings()
 
@@ -30,35 +31,46 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         self.assertLessEqual(cnt, 1)
 
     def do_step(self, i, manager1, tx_base):
-        txA = add_custom_tx(manager1, [(tx_base, 0)], n_outputs=2)
+        wallet = manager1.wallet
+        address = wallet.get_address(wallet.get_key_at_index(0))
+
+        txA = add_custom_tx(manager1, [(tx_base, 0)], n_outputs=2, address=address)
         self.graphviz.labels[txA.hash] = f'txA-{i}'
 
-        txB = add_custom_tx(manager1, [(txA, 0)])
+        txB = add_custom_tx(manager1, [(txA, 0)], address=address)
         self.graphviz.labels[txB.hash] = f'txB-{i}'
-        txC = add_custom_tx(manager1, [(txA, 1)])
+        txC = add_custom_tx(manager1, [(txA, 1)], address=address)
         self.graphviz.labels[txC.hash] = f'txC-{i}'
 
-        txD1 = add_custom_tx(manager1, [(txC, 0)], base_parent=tx_base)
+        txD1 = add_custom_tx(manager1, [(txC, 0)], base_parent=tx_base, address=address)
         self.graphviz.labels[txD1.hash] = f'txD1-{i}'
-        txF2 = add_custom_tx(manager1, [(txB, 0), (txD1, 0)])
+        txF2 = add_custom_tx(manager1, [(txB, 0), (txD1, 0)], address=address)
         self.graphviz.labels[txF2.hash] = f'txF2-{i}'
 
-        txD2 = add_custom_tx(manager1, [(txC, 0)], base_parent=tx_base)
+        txD2 = add_custom_tx(manager1, [(txC, 0)], base_parent=tx_base, inc_timestamp=1, address=address)
         self.graphviz.labels[txD2.hash] = f'txD2-{i}'
-        txE = add_custom_tx(manager1, [(txD2, 0)], base_parent=tx_base)
+        txE = add_custom_tx(manager1, [(txD2, 0)], base_parent=tx_base, address=address)
         self.graphviz.labels[txE.hash] = f'txE-{i}'
 
-        txF1 = add_custom_tx(manager1, [(txB, 0)], base_parent=tx_base)
+        txF1 = add_custom_tx(manager1, [(txB, 0)], base_parent=tx_base, address=address)
         self.graphviz.labels[txF1.hash] = f'txF1-{i}'
 
-        self.assertIn(txF1.hash, manager1.soft_voided_tx_ids)
-        self.assertIn(txF2.hash, manager1.soft_voided_tx_ids)
+        if not self.skip_asserts:
+            self.assertIn(txF1.hash, manager1.soft_voided_tx_ids)
+            self.assertIn(txF2.hash, manager1.soft_voided_tx_ids)
 
-        txG = add_custom_tx(manager1, [(txF2, 0)], base_parent=tx_base)
+        txG = add_custom_tx(manager1, [(txF2, 0)], base_parent=tx_base, address=address)
         self.graphviz.labels[txG.hash] = f'txG-{i}'
 
-        txH = add_custom_tx(manager1, [(txF1, 0), (txG, 0)])
+        txH = add_custom_tx(manager1, [(txF1, 0), (txG, 0)], address=address)
         self.graphviz.labels[txH.hash] = f'txH-{i}'
+
+        print(f'!! txA-{i}: {txA.hash.hex()}')
+        print(f'!! txB-{i}: {txB.hash.hex()}')
+        print(f'!! txC-{i}: {txC.hash.hex()}', txC.outputs[0].script.hex())
+        print(f'!! txD1-{i}: {txD1.hash.hex()}')
+        print(f'!! txD2-{i}: {txD2.hash.hex()}', bytes(txD2).hex())
+        print(f'!! txE-{i}: {txE.hash.hex()}')
 
         print(f'!! txF1-{i}: {txF1.hash.hex()}')
         print(f'!! txF2-{i}: {txF2.hash.hex()}')
@@ -69,6 +81,8 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
             self.txB_0 = txB
             self.txD1_0 = txD1
 
+        self.txF_hashes.extend([txF1.hash, txF2.hash])
+
         self.assertValidConflictResolution(txD1, txD2)
         self.assertValidConflictResolution(txF1, txF2)
 
@@ -76,7 +90,7 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
 
     def gen_block(self, manager1, tx, parent_block=None):
         parent_block_hash = parent_block.hash if parent_block else None
-        block = manager1.generate_mining_block(parent_block_hash=parent_block_hash)
+        block = manager1.generate_mining_block(parent_block_hash=parent_block_hash, address=BURN_ADDRESS)
         block.parents[1] = tx.hash
         block.timestamp = max(block.timestamp, tx.timestamp + 1)
         block.nonce = self.rng.getrandbits(32)
@@ -84,29 +98,19 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         self.assertTrue(manager1.propagate_tx(block, fails_silently=False))
         return block
 
-    def test_soft_voided(self):
-        soft_voided_tx_ids = set([
-            bytes.fromhex('30d49cf336ceb8528a918bed25b729febd3ebc3a8449d5e840aac865d0ca407f'),
-            bytes.fromhex('875ef2cdf7405f82f20e0ba115cd2fe07d8c60c50f763f7c48e8d673f56ff4e4'),
-            bytes.fromhex('ef0b5e356b82253c8b0f7f078396bd435605dc297b38af3d9623b88ffab43b41'),
-            bytes.fromhex('aba55041658213b0bfda880045e5a321cb3d0a88cffa2833e620a2ed1ba27451'),
-            bytes.fromhex('43f1782cc7d5702378d067daefea0460cd1976e5479e17accb6f412be8d26ff5'),
-            bytes.fromhex('24fe23d0128c85bc149963ff904aefe1c11b44b0e0cddad344b308b34d1dbac8'),
-            bytes.fromhex('a6b7b21e4020a70d77fd7467184c65bfb2e4443a0b465b6ace05c1b11b82355b'),
-            bytes.fromhex('982e9a2a3f0b1d22eead5ca8cf9a86a5d9edd981ac06f977245a2e664a752e5f'),
-            bytes.fromhex('b6cddd95fe02c035fde820add901545662c7b3ae85010cde5914b86cb0a6505e'),
-            bytes.fromhex('3a84cff789d3263fea4da636da5c54cb0981a4a0caec1579037a4fa06457f8f3'),
-        ])
-        manager1 = self.create_peer(soft_voided_tx_ids=soft_voided_tx_ids)
+    def _run_test(self, simulator, soft_voided_tx_ids):
+        self.txF_hashes = []
+
+        manager1 = self.create_peer(soft_voided_tx_ids=soft_voided_tx_ids, simulator=simulator)
         manager1.allow_mining_without_peers()
 
-        miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
+        miner1 = simulator.create_miner(manager1, hashpower=10e6)
         miner1.start()
-        self.simulator.run(60)
+        simulator.run(60)
 
-        gen_tx1 = self.simulator.create_tx_generator(manager1, rate=3 / 60., hashpower=1e6, ignore_no_funds=True)
+        gen_tx1 = simulator.create_tx_generator(manager1, rate=3 / 60., hashpower=1e6, ignore_no_funds=True)
         gen_tx1.start()
-        self.simulator.run(300)
+        simulator.run(300)
 
         self.graphviz = GraphvizVisualizer(manager1.tx_storage, include_verifications=True, include_funds=True)
 
@@ -142,6 +146,8 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         b5 = self.gen_block(manager1, x, parent_block=b4)
         self.graphviz.labels[b5.hash] = 'b5'
 
+        yield
+
         self.assertIsNone(b0.get_metadata().voided_by)
         self.assertIsNone(b1.get_metadata().voided_by)
         self.assertIsNone(b2.get_metadata().voided_by)
@@ -175,6 +181,28 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         # Uncomment lines below to visualize the DAG and the blockchain.
         # dot = self.graphviz.dot()
         # dot.render('dot0')
+
+    def _get_txF_hashes(self):
+        self.skip_asserts = True
+        simulator = Simulator(seed=self.simulator.seed)
+        simulator.start()
+
+        try:
+            it = self._run_test(simulator, set())
+            next(it)
+        finally:
+            simulator.stop()
+            self.skip_asserts = False
+
+        return list(self.txF_hashes)
+
+    def test_soft_voided(self):
+        txF_hashes = self._get_txF_hashes()
+        self.assertEqual(10, len(txF_hashes))
+        soft_voided_tx_ids = set(txF_hashes)
+        self.assertEqual(10, len(soft_voided_tx_ids))
+        for _ in self._run_test(self.simulator, soft_voided_tx_ids):
+            pass
 
 
 class SyncV1ConsensusSimulatorTestCase(unittest.SyncV1Params, BaseConsensusSimulatorTestCase):

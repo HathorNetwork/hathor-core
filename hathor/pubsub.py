@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from enum import Enum
-from typing import Any, Callable, Dict, List, cast
+from typing import Any, Callable, Deque, Dict, List, Tuple, cast
 
 from twisted.internet.interfaces import IReactorFromThreads
 
@@ -43,12 +43,8 @@ class HathorEvents(Enum):
             Triggered when a peer disconnects from the network
             Publishes the peer protocol and the peers count
 
-        STORAGE_TX_VOIDED:
-            Triggered when a tx is marked as voided because of a conflict
-            Publishes the tx object
-
-        STORAGE_TX_WINNER:
-            Triggered when a tx is marked as winner of a conflict
+        CONSENSUS_TX_UPDATE:
+            Triggered when a tx is changed by the consensus algorithm
             Publishes the tx object
 
         WALLET_OUTPUT_RECEIVED:
@@ -92,9 +88,7 @@ class HathorEvents(Enum):
 
     NETWORK_NEW_TX_ACCEPTED = 'network:new_tx_accepted'
 
-    STORAGE_TX_VOIDED = 'storage:tx_voided'
-
-    STORAGE_TX_WINNER = 'storage:tx_winner'
+    CONSENSUS_TX_UPDATE = 'consensus:tx_update'
 
     WALLET_OUTPUT_RECEIVED = 'wallet:output_received'
 
@@ -140,6 +134,7 @@ class PubSubManager:
 
     def __init__(self, reactor: Reactor) -> None:
         self._subscribers = defaultdict(list)
+        self.queue: Deque[Tuple[PubSubCallable, HathorEvents, EventArguments]] = deque()
         self.reactor = reactor
 
     def subscribe(self, key: HathorEvents, fn: PubSubCallable) -> None:
@@ -160,6 +155,29 @@ class PubSubManager:
         if fn in self._subscribers[key]:
             self._subscribers[key].remove(fn)
 
+    def _call_next(self):
+        """Execute next call if it exists."""
+        if not self.queue:
+            return
+        fn, key, args = self.queue.popleft()
+        fn(key, args)
+        if self.queue:
+            self._schedule_call_next()
+
+    def _schedule_call_next(self):
+        """Schedule next call's execution."""
+        reactor_thread = ReactorThread.get_current_thread(self.reactor)
+        if reactor_thread == ReactorThread.MAIN_THREAD:
+            self.reactor.callLater(0, self._call_next)
+        elif reactor_thread == ReactorThread.NOT_MAIN_THREAD:
+            # XXX: does this always hold true? an assert could be tricky because it is a zope.interface
+            reactor = cast(IReactorFromThreads, self.reactor)
+            # We're taking a conservative approach, since not all functions might need to run
+            # on the main thread [yan 2019-02-20]
+            reactor.callFromThread(self._call_next)
+        else:
+            raise NotImplementedError
+
     def publish(self, key: HathorEvents, **kwargs: Any) -> None:
         """Publish a new event.
 
@@ -175,11 +193,8 @@ class PubSubManager:
         for fn in self._subscribers[key]:
             if reactor_thread == ReactorThread.NOT_RUNNING:
                 fn(key, args)
-            elif reactor_thread == ReactorThread.MAIN_THREAD:
-                self.reactor.callLater(0, fn, key, args)
-            elif reactor_thread == ReactorThread.NOT_MAIN_THREAD:
-                # XXX: does this always hold true? an assert could be tricky because it is a zope.interface
-                reactor = cast(IReactorFromThreads, self.reactor)
-                # We're taking a conservative approach, since not all functions might need to run
-                # on the main thread [yan 2019-02-20]
-                reactor.callFromThread(fn, key, args)
+            else:
+                is_empty = bool(not self.queue)
+                self.queue.append((fn, key, args))
+                if is_empty:
+                    self._schedule_call_next()

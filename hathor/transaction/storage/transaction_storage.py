@@ -24,7 +24,7 @@ from structlog import get_logger
 
 from hathor.conf import HathorSettings
 from hathor.indexes import IndexesManager, MemoryIndexesManager
-from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction
 from hathor.transaction.block import Block
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
@@ -118,7 +118,7 @@ class TransactionStorage(ABC):
         """Reset all the indexes, making sure that no persisted value is reused."""
         raise NotImplementedError
 
-    def update_best_block_tips_cache(self, tips_cache: List[bytes]) -> None:
+    def update_best_block_tips_cache(self, tips_cache: Optional[List[bytes]]) -> None:
         # XXX: check that the cache update is working properly, only used in unittests
         # XXX: this might not actually hold true in some cases, commenting out while we figure it out
         # if settings.SLOW_ASSERTS:
@@ -265,12 +265,6 @@ class TransactionStorage(ABC):
         if not meta.validation.is_fully_connected():
             return
 
-        if self.pubsub:
-            if not meta.voided_by:
-                self.pubsub.publish(HathorEvents.STORAGE_TX_WINNER, tx=tx)
-            else:
-                self.pubsub.publish(HathorEvents.STORAGE_TX_VOIDED, tx=tx)
-
     @abstractmethod
     def remove_transaction(self, tx: BaseTransaction) -> None:
         """Remove the tx.
@@ -407,6 +401,8 @@ class TransactionStorage(ABC):
             elif meta.score > best_score:
                 best_score = meta.score
                 best_tip_blocks = [block_hash]
+        if timestamp is None:
+            self._best_block_tips_cache = best_tip_blocks[:]
         return best_tip_blocks
 
     def get_weight_best_block(self) -> float:

@@ -103,6 +103,8 @@ class RunNode:
         parser.add_argument('--x-rocksdb-indexes', action='store_true', help='Use RocksDB indexes (currently opt-in)')
         parser.add_argument('--x-enable-event-queue', action='store_true', help='Enable event queue mechanism')
         parser.add_argument('--x-retain-events', action='store_true', help='Retain all events in the local database')
+        parser.add_argument('--peer-id-blacklist', action='extend', default=[], nargs='+', type=str,
+                            help='Peer IDs to forbid connection')
         return parser
 
     def prepare(self, args: Namespace) -> None:
@@ -112,6 +114,7 @@ class RunNode:
         from hathor.conf.get_settings import get_settings_module
         from hathor.daa import TestMode, _set_test_mode
         from hathor.manager import HathorManager
+        from hathor.p2p.netfilter.utils import add_peer_id_blacklist
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
         from hathor.p2p.peer_id import PeerId
         from hathor.p2p.utils import discover_hostname
@@ -321,6 +324,10 @@ class RunNode:
         for description in args.listen:
             self.manager.add_listen_address(description)
 
+        if args.peer_id_blacklist:
+            self.log.info('with peer id blacklist', blacklist=args.peer_id_blacklist)
+            add_peer_id_blacklist(args.peer_id_blacklist)
+
         self.start_manager(args)
         self.register_resources(args)
 
@@ -365,6 +372,7 @@ class RunNode:
             HealthcheckReadinessResource,
             MiningInfoResource,
             MiningResource,
+            NetfilterRuleResource,
             StatusResource,
         )
         from hathor.profiler import get_cpu_profiler
@@ -485,6 +493,7 @@ class RunNode:
                 (b'execute', NanoContractExecuteResource(self.manager), contracts_resource),
                 # /p2p
                 (b'peers', AddPeersResource(self.manager), p2p_resource),
+                (b'netfilter', NetfilterRuleResource(self.manager), p2p_resource),
                 (b'readiness', HealthcheckReadinessResource(self.manager), p2p_resource),
             ]
             # XXX: only enable UTXO search API if the index is enabled
