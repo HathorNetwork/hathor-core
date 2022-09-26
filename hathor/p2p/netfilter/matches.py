@@ -14,7 +14,7 @@
 
 from abc import ABC, abstractmethod
 from ipaddress import ip_address, ip_network
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict
 
 if TYPE_CHECKING:
     from hathor.p2p.netfilter.context import NetfilterContext
@@ -22,6 +22,12 @@ if TYPE_CHECKING:
 
 class NetfilterMatch(ABC):
     """Abstract match class."""
+
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            'type': type(self).__name__,
+            'match_params': {}
+        }
 
     @abstractmethod
     def match(self, context: 'NetfilterContext') -> bool:
@@ -34,11 +40,20 @@ class NetfilterMatchAll(NetfilterMatch):
         return True
 
 
-class NetfilterMatchAnd(NetfilterMatch):
-    """Logic AND operation for two matches. When the first fails, the second is not executed."""
+class TwoVariablesMatch(NetfilterMatch):
     def __init__(self, a: NetfilterMatch, b: NetfilterMatch):
         self.a = a
         self.b = b
+
+    def to_json(self) -> Dict[str, Any]:
+        data = super().to_json()
+        data['match_params']['a'] = self.a.to_json()
+        data['match_params']['b'] = self.b.to_json()
+        return data
+
+
+class NetfilterMatchAnd(TwoVariablesMatch):
+    """Logic AND operation for two matches. When the first fails, the second is not executed."""
 
     def match(self, context: 'NetfilterContext') -> bool:
         if not self.a.match(context):
@@ -48,11 +63,8 @@ class NetfilterMatchAnd(NetfilterMatch):
         return True
 
 
-class NetfilterMatchOr(NetfilterMatch):
+class NetfilterMatchOr(TwoVariablesMatch):
     """Logic OR operation for two matches. When the first matches, the second is not executed."""
-    def __init__(self, a: NetfilterMatch, b: NetfilterMatch):
-        self.a = a
-        self.b = b
 
     def match(self, context: 'NetfilterContext') -> bool:
         if self.a.match(context):
@@ -74,6 +86,11 @@ class NetfilterMatchIPAddress(NetfilterMatch):
             0.0.0.0/0 (match all addresses)
         """
         self.network = ip_network(host)
+
+    def to_json(self) -> Dict[str, Any]:
+        data = super().to_json()
+        data['match_params']['host'] = str(self.network)
+        return data
 
     def match(self, context: 'NetfilterContext') -> bool:
         if context.addr is None:
@@ -100,6 +117,11 @@ class NetfilterMatchPeerId(NetfilterMatch):
     """Match a Peer-ID."""
     def __init__(self, peer_id: str):
         self.peer_id = peer_id
+
+    def to_json(self) -> Dict[str, Any]:
+        data = super().to_json()
+        data['match_params']['peer_id'] = self.peer_id
+        return data
 
     def match(self, context: 'NetfilterContext') -> bool:
         if context.protocol is None:

@@ -61,6 +61,10 @@ class _SerializationTest(unittest.TestCase):
             tx_re = self._reserialize(tx)
             self._assertTxEq(tx, tx_re)
 
+
+class _SerializationV2OnlyTest(unittest.TestCase):
+    __test__ = False
+
     def test_serialization_tips(self):
         from itertools import chain
         it_mempool_tips = (x.hash for x in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage))
@@ -96,7 +100,7 @@ class SyncV1NoSerializationTest(unittest.SyncV1Params, BaseNoSerializationTest):
     __test__ = True
 
 
-class SyncV2NoSerializationTest(unittest.SyncV2Params, BaseNoSerializationTest):
+class SyncV2NoSerializationTest(unittest.SyncV2Params, BaseNoSerializationTest, _SerializationV2OnlyTest):
     __test__ = True
 
 
@@ -116,7 +120,7 @@ class SyncV1StructSerializationTest(unittest.SyncV1Params, BaseStructSerializati
     __test__ = True
 
 
-class SyncV2StructSerializationTest(unittest.SyncV2Params, BaseStructSerializationTest):
+class SyncV2StructSerializationTest(unittest.SyncV2Params, BaseStructSerializationTest, _SerializationV2OnlyTest):
     __test__ = True
 
 

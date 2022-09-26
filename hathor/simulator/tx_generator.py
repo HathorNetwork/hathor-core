@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, List
+from collections import deque
+from typing import TYPE_CHECKING, Deque, List
 
 from structlog import get_logger
 
@@ -25,6 +26,7 @@ from tests.utils import NoCandidatesError, gen_new_double_spending, gen_new_tx
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
+    from hathor.transaction import Transaction
 
 settings = HathorSettings()
 logger = get_logger()
@@ -34,6 +36,9 @@ class RandomTransactionGenerator:
     """ Generates random transactions without mining. It is supposed to be used
     with Simulator class. The mining part is simulated using the geometrical distribution.
     """
+
+    MAX_LATEST_TRANSACTIONS_LEN = 10
+
     def __init__(self, manager: 'HathorManager', rng: Random, *,
                  rate: float, hashpower: float, ignore_no_funds: bool = False):
         """
@@ -54,6 +59,10 @@ class RandomTransactionGenerator:
         self.delayedcall = None
         self.log = logger.new()
         self.rng = rng
+
+        # Most recent transactions generated here.
+        # The lowest index has the most recent transaction.
+        self.latest_transactions: Deque[Transaction] = deque()
 
         self.double_spending_only = False
 
@@ -76,7 +85,11 @@ class RandomTransactionGenerator:
         """ Schedule the generation of a new transaction.
         """
         if self.tx:
-            self.manager.propagate_tx(self.tx, fails_silently=False)
+            ret = self.manager.propagate_tx(self.tx, fails_silently=False)
+            assert ret is True
+            self.latest_transactions.appendleft(self.tx.hash)
+            if len(self.latest_transactions) > self.MAX_LATEST_TRANSACTIONS_LEN:
+                self.latest_transactions.pop()
             self.tx = None
 
         dt = self.rng.expovariate(self.rate)

@@ -24,7 +24,7 @@ from structlog import get_logger
 
 from hathor.conf import HathorSettings
 from hathor.indexes import IndexesManager, MemoryIndexesManager
-from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction
 from hathor.transaction.block import Block
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
@@ -109,16 +109,11 @@ class TransactionStorage(ABC):
         self._saving_genesis = False
 
     @abstractmethod
-    def _update_caches(self, block_count: int, tx_count: int, latest_timestamp: int, first_timestamp: int) -> None:
-        """Update ephemeral caches, should only be used internally."""
-        raise NotImplementedError
-
-    @abstractmethod
     def reset_indexes(self) -> None:
         """Reset all the indexes, making sure that no persisted value is reused."""
         raise NotImplementedError
 
-    def update_best_block_tips_cache(self, tips_cache: List[bytes]) -> None:
+    def update_best_block_tips_cache(self, tips_cache: Optional[List[bytes]]) -> None:
         # XXX: check that the cache update is working properly, only used in unittests
         # XXX: this might not actually hold true in some cases, commenting out while we figure it out
         # if settings.SLOW_ASSERTS:
@@ -265,12 +260,6 @@ class TransactionStorage(ABC):
         if not meta.validation.is_fully_connected():
             return
 
-        if self.pubsub:
-            if not meta.voided_by:
-                self.pubsub.publish(HathorEvents.STORAGE_TX_WINNER, tx=tx)
-            else:
-                self.pubsub.publish(HathorEvents.STORAGE_TX_VOIDED, tx=tx)
-
     @abstractmethod
     def remove_transaction(self, tx: BaseTransaction) -> None:
         """Remove the tx.
@@ -407,6 +396,8 @@ class TransactionStorage(ABC):
             elif meta.score > best_score:
                 best_score = meta.score
                 best_tip_blocks = [block_hash]
+        if timestamp is None:
+            self._best_block_tips_cache = best_tip_blocks[:]
         return best_tip_blocks
 
     def get_weight_best_block(self) -> float:
@@ -769,24 +760,19 @@ class BaseTransactionStorage(TransactionStorage):
         self.with_index = with_index
         if with_index:
             self.indexes = self._build_indexes_manager()
-            self._reset_cache(clear_indexes=False)
 
         # Either save or verify all genesis.
         self._save_or_verify_genesis()
 
-    def _update_caches(self, block_count: int, tx_count: int, latest_timestamp: int, first_timestamp: int) -> None:
-        self._cache_block_count = block_count
-        self._cache_tx_count = tx_count
-        self._latest_timestamp = latest_timestamp
-        self._first_timestamp = first_timestamp
-
     @property
     def latest_timestamp(self) -> int:
-        return self._latest_timestamp
+        assert self.indexes is not None
+        return self.indexes.info.get_latest_timestamp()
 
     @property
     def first_timestamp(self) -> int:
-        return self._first_timestamp
+        assert self.indexes is not None
+        return self.indexes.info.get_first_timestamp()
 
     @abstractmethod
     def _save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
@@ -796,27 +782,10 @@ class BaseTransactionStorage(TransactionStorage):
         return MemoryIndexesManager()
 
     def reset_indexes(self) -> None:
-        self._reset_cache(clear_indexes=True)
-
-    def _reset_cache(self, *, clear_indexes: bool = True) -> None:
-        """Reset all caches. This function should not be called unless you know what you are doing."""
-        assert self.with_index, 'Cannot reset cache because it has not been enabled.'
-
-        # XXX: these fields would be better of being migrated to the IndexesManager, and probably as proper indexes
-        self._cache_block_count = 0
-        self._cache_tx_count = 0
-
-        if clear_indexes:
-            assert self.indexes is not None
-            self.indexes.force_clear_all()
-
-        genesis = self.get_all_genesis()
-        if genesis:
-            self._latest_timestamp = max(x.timestamp for x in genesis)
-            self._first_timestamp = min(x.timestamp for x in genesis)
-        else:
-            self._latest_timestamp = 0
-            self._first_timestamp = 0
+        """Reset all indexes. This function should not be called unless you know what you are doing."""
+        assert self.with_index, 'Cannot reset indexes because they have not been enabled.'
+        assert self.indexes is not None
+        self.indexes.force_clear_all()
 
     def remove_cache(self) -> None:
         """Remove all caches in case we don't need it."""
@@ -922,7 +891,6 @@ class BaseTransactionStorage(TransactionStorage):
         return txs, has_more
 
     def _manually_initialize(self) -> None:
-        self._reset_cache(clear_indexes=False)
         self._manually_initialize_indexes()
 
     def _manually_initialize_indexes(self) -> None:
@@ -1051,41 +1019,26 @@ class BaseTransactionStorage(TransactionStorage):
             else:
                 raise NotImplementedError
         assert self.indexes is not None
-        self._latest_timestamp = max(self.latest_timestamp, tx.timestamp)
-        if self._first_timestamp == 0:
-            self._first_timestamp = tx.timestamp
-        else:
-            self._first_timestamp = min(self.first_timestamp, tx.timestamp)
-        self._first_timestamp = min(self.first_timestamp, tx.timestamp)
         self._all_tips_cache = None
-
-        success = self.indexes.add_tx(tx)
-
-        if success:
-            if tx.is_block:
-                self._cache_block_count += 1
-            else:
-                self._cache_tx_count += 1
+        self.indexes.add_tx(tx)
 
     def del_from_indexes(self, tx: BaseTransaction, *, remove_all: bool = False, relax_assert: bool = False) -> None:
         if not self.with_index:
             raise NotImplementedError
         assert self.indexes is not None
         self.indexes.del_tx(tx, remove_all=remove_all, relax_assert=relax_assert)
-        if tx.is_block:
-            self._cache_block_count -= 1
-        else:
-            self._cache_tx_count -= 1
 
     def get_block_count(self) -> int:
         if not self.with_index:
             raise NotImplementedError
-        return self._cache_block_count
+        assert self.indexes is not None
+        return self.indexes.info.get_block_count()
 
     def get_tx_count(self) -> int:
         if not self.with_index:
             raise NotImplementedError
-        return self._cache_tx_count
+        assert self.indexes is not None
+        return self.indexes.info.get_tx_count()
 
     def get_genesis(self, hash_bytes: bytes) -> Optional[BaseTransaction]:
         assert self._genesis_cache is not None

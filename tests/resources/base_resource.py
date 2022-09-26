@@ -105,13 +105,16 @@ class StubSite(server.Site):
     def put(self, url, body=None, args=None, headers=None):
         return self._request('PUT', url, body, args, headers)
 
+    def delete(self, url, body=None, args=None, headers=None):
+        return self._request('DELETE', url, body, args, headers)
+
     def options(self, url, args=None, headers=None):
         return self._request('OPTIONS', url, None, args, headers)
 
     def _request(self, method, url, body, args, headers):
         request = TestDummyRequest(method, url, args, headers)
         # body content
-        if (method == 'POST' or method == 'PUT') and body:
+        if (method == 'POST' or method == 'PUT' or method == 'DELETE') and body:
             # Creating post content exactly the same as twisted resource
             request.content.setvalue(json_dumpb(body))
 
