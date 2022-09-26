@@ -217,3 +217,6 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
     def get_value(self, key: str) -> Optional[str]:
         return self.store.get_value(key)
+
+    def flush(self):
+        self._flush_to_storage(self.dirty_txs.copy())
