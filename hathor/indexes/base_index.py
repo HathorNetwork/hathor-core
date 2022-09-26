@@ -25,6 +25,13 @@ class BaseIndex(ABC):
     created to generalize how we initialize indexes and keep track of which ones are up-to-date.
     """
 
+    def init_start(self) -> None:
+        """ This method will always be called when starting the index manager, regardless of initialization state.
+
+        It comes with a no-op implementation by default because usually indexes will not need this.
+        """
+        pass
+
     @abstractmethod
     def get_db_name(self) -> Optional[str]:
         """ The returned string is used to generate the relevant attributes for storing an indexe's state in the db.
