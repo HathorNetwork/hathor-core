@@ -22,7 +22,9 @@ from tests import unittest
 from tests.utils import HAS_ROCKSDB, add_new_blocks
 
 
-class MetricsTest(unittest.TestCase):
+class BaseMetricsTest(unittest.TestCase):
+    __test__ = False
+
     def test_p2p_network_events(self):
         """Simulates publishing an event to pubsub the same way as done
            by the ConnectionsManager class.
@@ -317,3 +319,16 @@ class MetricsTest(unittest.TestCase):
         # Assertion
         self.assertEquals(manager.metrics.transaction_cache_hits, 10)
         self.assertEquals(manager.metrics.transaction_cache_misses, 20)
+
+
+class SyncV1MetricsTest(unittest.SyncV1Params, BaseMetricsTest):
+    __test__ = True
+
+
+class SyncV2MetricsTest(unittest.SyncV2Params, BaseMetricsTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeMetricsTest(unittest.SyncBridgeParams, SyncV2MetricsTest):
+    pass
