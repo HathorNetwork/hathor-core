@@ -137,8 +137,8 @@ class Metrics:
         self._lc_collect_data.clock = self.reactor
 
         # The number of blocks interval to control periodic collection of RocksDB data
-        # We try to use it if possible, instead of the time interval, because it's better to make sure we update the
-        # storage during sync, otherwise we would only get the real storage metric after 24h (the default value)
+        # We use it instead of a time interval because it's better to make sure we update the
+        # storage during sync.
         self.txstorage_data_block_interval = self.txstorage_data_interval / settings.AVG_TIME_BETWEEN_BLOCKS
 
     def _start_initial_values(self) -> None:
@@ -291,7 +291,6 @@ class Metrics:
             # We currently only collect metrics for RocksDB
             return
 
-        # Try to use the number of blocks to decide when we should update the tx storage data
         best_block_count = self.tx_storage.get_height_best_block()
 
         if self.last_txstorage_data_block and (
