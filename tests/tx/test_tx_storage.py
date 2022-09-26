@@ -51,9 +51,9 @@ class BaseTransactionStorageTest(unittest.TestCase):
             self.reactor = reactor
         self.reactor.advance(time.time())
         self.tx_storage = tx_storage
-        assert tx_storage.first_timestamp > 0
 
         tx_storage._manually_initialize()
+        assert tx_storage.first_timestamp > 0
 
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]

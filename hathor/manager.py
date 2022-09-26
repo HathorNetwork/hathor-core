@@ -318,6 +318,9 @@ class HathorManager:
             wait_stratum = self.stratum_factory.stop()
             if wait_stratum:
                 waits.append(wait_stratum)
+
+        self.tx_storage.flush()
+
         return defer.DeferredList(waits)
 
     def do_discovery(self) -> None:
