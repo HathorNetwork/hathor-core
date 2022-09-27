@@ -27,13 +27,21 @@ class HathorEvents(Enum):
             Triggered when a new tx/block is accepted in the network
             Publishes a tx/block object
 
+        NETWORK_PEER_CONNECTION_FAILURE:
+            Triggered when a peer connection to the network fails
+            Publishes the peer id and the peers count
+
         NETWORK_PEER_CONNECTED:
             Triggered when a new peer connects to the network
-            Publishes the peer protocol
+            Publishes the peer protocol and the peers count
+
+        NETWORK_PEER_READY:
+            Triggered when a connected peer is ready
+            Publishes the peer protocol and the peers count
 
         NETWORK_PEER_DISCONNECTED:
             Triggered when a peer disconnects from the network
-            Publishes the peer protocol
+            Publishes the peer protocol and the peers count
 
         CONSENSUS_TX_UPDATE:
             Triggered when a tx is changed by the consensus algorithm
@@ -70,7 +78,11 @@ class HathorEvents(Enum):
     MANAGER_ON_START = 'manager:on_start'
     MANAGER_ON_STOP = 'manager:on_stop'
 
+    NETWORK_PEER_CONNECTION_FAILED = 'network:peer_connection_failed'
+
     NETWORK_PEER_CONNECTED = 'network:peer_connected'
+
+    NETWORK_PEER_READY = 'network:peer_ready'
 
     NETWORK_PEER_DISCONNECTED = 'network:peer_disconnected'
 
