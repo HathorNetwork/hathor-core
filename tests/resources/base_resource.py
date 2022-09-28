@@ -8,7 +8,7 @@ from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.storage.rocksdb_storage import RocksDBStorage
-from hathor.util import json_dumpb, json_loadb
+from hathor.util import get_environment_info, json_dumpb, json_loadb
 from tests import unittest
 
 
@@ -46,6 +46,7 @@ class _BaseResourceTest:
                 wallet_index=True,
                 enable_sync_v1=self._enable_sync_v1,
                 enable_sync_v2=self._enable_sync_v2,
+                environment_info=get_environment_info({}, peer_id.id)
             )
 
         def setUp(self):
