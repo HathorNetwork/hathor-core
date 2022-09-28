@@ -787,7 +787,8 @@ def get_environment_info(args: Namespace, peer_id: str) -> EnvironmentInfo:
         hathor_core_args=str(args),
         hathor_core_version=get_hathor_core_version(),
         peer_id=peer_id,
-        network=settings.NETWORK_NAME
+        # We want to ignore the testnet suffixes here. "testnet-golf" should be reported only as "testnet".
+        network=settings.NETWORK_NAME.split("-")[0]
     )
 
     return environment_info
