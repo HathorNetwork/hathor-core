@@ -8,7 +8,6 @@ from hathor.p2p.protocol import PeerIdState
 from hathor.p2p.sync_version import SyncVersion
 from hathor.simulator import FakeConnection
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
-from hathor.util import get_environment_info
 from tests import unittest
 
 settings = HathorSettings()
