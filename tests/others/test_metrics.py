@@ -122,6 +122,11 @@ class BaseMetricsTest(unittest.TestCase):
             b'attr': 0.0
         })
 
+        manager.tx_storage.pre_init()
+        manager.tx_storage.indexes._manually_initialize(manager.tx_storage)
+        manager.tx_storage.update_best_block_tips_cache(None)
+
+
         add_new_blocks(manager, 10)
         # XXX: I had to close the DB and reinitialize the classes to force a flush of RocksDB memtables to disk
         # But I think we could do this in a better way if we had a python-binding for this Flush method in
@@ -173,6 +178,7 @@ class BaseMetricsTest(unittest.TestCase):
 
         manager.tx_storage.pre_init()
         manager.tx_storage.indexes._manually_initialize(manager.tx_storage)
+        manager.tx_storage.update_best_block_tips_cache(None)
 
         add_new_blocks(manager, 10)
 
