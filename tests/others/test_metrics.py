@@ -8,8 +8,6 @@ from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents, PubSubManager
-from hathor.util import reactor
-from hathor.wallet import Wallet
 from hathor.storage import RocksDBStorage
 from hathor.transaction.storage import (
     TransactionCacheStorage,
@@ -18,6 +16,8 @@ from hathor.transaction.storage import (
     TransactionRocksDBStorage,
 )
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
+from hathor.util import reactor
+from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import HAS_ROCKSDB, add_new_blocks
 
@@ -125,7 +125,6 @@ class BaseMetricsTest(unittest.TestCase):
         manager.tx_storage.pre_init()
         manager.tx_storage.indexes._manually_initialize(manager.tx_storage)
         manager.tx_storage.update_best_block_tips_cache(None)
-
 
         add_new_blocks(manager, 10)
         # XXX: I had to close the DB and reinitialize the classes to force a flush of RocksDB memtables to disk
