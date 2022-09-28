@@ -74,7 +74,8 @@ class HathorManager:
                  stratum_port: Optional[int] = None, ssl: bool = True,
                  enable_sync_v1: bool = True, enable_sync_v2: bool = False,
                  capabilities: Optional[List[str]] = None, checkpoints: Optional[List[Checkpoint]] = None,
-                 rng: Optional[Random] = None, soft_voided_tx_ids: Optional[Set[bytes]] = None) -> None:
+                 rng: Optional[Random] = None, soft_voided_tx_ids: Optional[Set[bytes]] = None,
+                 environment_info: Optional[EnvironmentInfo] = None) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node. If not given, a new one is created.
@@ -222,13 +223,13 @@ class HathorManager:
         else:
             self.capabilities = DEFAULT_CAPABILITIES
 
-        # Is set during node initialization
-        self.environment_info: Optional[EnvironmentInfo] = None
+        # This is included in some logs to provide more context
+        self.environment_info = environment_info
 
         # Task that will count the total sync time
         self.lc_check_sync_state = LoopingCall(self.check_sync_state)
         self.lc_check_sync_state.clock = self.reactor
-        self.lc_check_sync_state_interval = 30 # seconds
+        self.lc_check_sync_state_interval = 30  # seconds
 
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
@@ -544,9 +545,11 @@ class HathorManager:
         tdt = LogDuration(t2 - t0)
         tx_rate = '?' if tdt == 0 else cnt / tdt
 
+        environment_info = self.environment_info.as_dict() if self.environment_info else {}
+
         # Changing the field names in this log could impact log collectors that parse them
-        # TODO: Should we use vertex_count instead of tx_count in the first field?
-        self.log.info('ready', tx_count=cnt, tx_rate=tx_rate, total_load_time=tdt, height=h, blocks=block_count, txs=tx_count, **self.environment_info.as_dict())
+        self.log.info('ready', tx_count=cnt, tx_rate=tx_rate, total_load_time=tdt, height=h,
+                      blocks=block_count, txs=tx_count, **environment_info)
 
     def _initialize_components_new(self) -> None:
         """You are not supposed to run this method manually. You should run `doStart()` to initialize the
@@ -619,8 +622,11 @@ class HathorManager:
         t1 = time.time()
         tdt = LogDuration(t1 - t0)
 
+        environment_info = self.environment_info.as_dict() if self.environment_info else {}
+
         # Changing the field names in this log could impact log collectors that parse them
-        self.log.info('ready', tx_count=self.tx_storage.get_count_tx_blocks(), total_load_time=tdt, **self.environment_info.as_dict())
+        self.log.info('ready', tx_count=self.tx_storage.get_count_tx_blocks(),
+                      total_load_time=tdt, **environment_info)
 
     def _verify_checkpoints(self) -> None:
         """ Method to verify if all checkpoints that exist in the database have the correct hash and are winners.
@@ -1123,18 +1129,19 @@ class HathorManager:
         return True, None
 
     def check_sync_state(self):
-           now = time.time()
+        now = time.time()
 
-           if self.has_recent_activity():
-               self.first_time_fully_synced = now
+        if self.has_recent_activity():
+            self.first_time_fully_synced = now
 
-               total_sync_time = LogDuration(self.first_time_fully_synced - self.start_time)
-               vertex_count = self.tx_storage.get_tx_count() + self.tx_storage.get_block_count()
+            total_sync_time = LogDuration(self.first_time_fully_synced - self.start_time)
+            vertex_count = self.tx_storage.get_tx_count() + self.tx_storage.get_block_count()
 
-               # TODO: Should we use vertex_count instead of tx_count?
-               self.log.info('reached synced state for the first time', total_sync_time=total_sync_time, tx_count=vertex_count, **self.environment_info.as_dict())
+            # TODO: Should we use vertex_count instead of tx_count?
+            self.log.info('reached synced state for the first time', total_sync_time=total_sync_time,
+                          tx_count=vertex_count, **self.environment_info.as_dict())
 
-               self.lc_check_sync_state.stop()
+            self.lc_check_sync_state.stop()
 
 
 class ParentTxs(NamedTuple):

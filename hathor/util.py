@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from argparse import Namespace
-from dataclasses import asdict, dataclass
 import datetime
 import gc
 import json
@@ -21,8 +19,10 @@ import math
 import sys
 import time
 import warnings
+from argparse import Namespace
 from collections import OrderedDict
 from contextlib import AbstractContextManager
+from dataclasses import asdict, dataclass
 from enum import Enum
 from functools import partial, wraps
 from random import Random as PyRandom
@@ -53,7 +53,6 @@ from zope.interface import Interface
 from zope.interface.verify import verifyObject
 
 import hathor
-
 from hathor.conf import HathorSettings
 
 if TYPE_CHECKING:
@@ -765,19 +764,21 @@ def is_token_uid_valid(token_uid: bytes) -> bool:
     else:
         return False
 
+
 @dataclass
 class EnvironmentInfo:
     # Changing these names could impact logging collectors that parse them
     python_implementation: str
     hathor_core_args: str
     hathor_core_version: str
-    peer_id: str
+    peer_id: Optional[str]
     network: str
 
     def as_dict(self):
         return asdict(self)
 
-def get_environment_info(args: Namespace, peer_id: str) -> EnvironmentInfo:
+
+def get_environment_info(args: Namespace, peer_id: Optional[str]) -> EnvironmentInfo:
     environment_info = EnvironmentInfo(
         python_implementation=str(sys.implementation),
         hathor_core_args=str(args),
@@ -788,6 +789,7 @@ def get_environment_info(args: Namespace, peer_id: str) -> EnvironmentInfo:
     )
 
     return environment_info
+
 
 def get_hathor_core_version():
     return hathor.__version__
