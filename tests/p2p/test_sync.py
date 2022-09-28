@@ -239,8 +239,6 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.manager1.check_sync_state()
         self.assertFalse(hasattr(self.manager1, "first_time_fully_synced"))
 
-        self.manager1.environment_info = get_environment_info({}, None)
-
         # We force some sync activity to happen
         self._add_new_block()
 
