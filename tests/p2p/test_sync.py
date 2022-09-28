@@ -8,6 +8,7 @@ from hathor.p2p.protocol import PeerIdState
 from hathor.p2p.sync_version import SyncVersion
 from hathor.simulator import FakeConnection
 from hathor.transaction.storage.exceptions import TransactionIsNotABlock
+from hathor.util import get_environment_info
 from tests import unittest
 
 settings = HathorSettings()
@@ -237,6 +238,8 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         # Initially it should do nothing, since there is no recent activity
         self.manager1.check_sync_state()
         self.assertFalse(hasattr(self.manager1, "first_time_fully_synced"))
+
+        self.manager1.environment_info = get_environment_info({}, None)
 
         # We force some sync activity to happen
         self._add_new_block()
