@@ -283,9 +283,8 @@ class RunNode:
             enable_sync_v1=enable_sync_v1,
             enable_sync_v2=enable_sync_v2,
             soft_voided_tx_ids=set(settings.SOFT_VOIDED_TX_IDS),
-            environment_info=get_environment_info(args=str(args), peer_id=peer_id.id)
+            environment_info=get_environment_info(args=args, peer_id=peer_id.id)
         )
-        self.manager.environment_info = get_environment_info(args=args, peer_id=peer_id.id)
 
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
