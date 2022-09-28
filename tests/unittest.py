@@ -150,7 +150,7 @@ class TestCase(unittest.TestCase):
             enable_sync_v1=enable_sync_v1,
             enable_sync_v2=enable_sync_v2,
             checkpoints=checkpoints,
-            environment_info=get_environment_info("", peer_id.id)
+            environment_info=get_environment_info({}, peer_id.id)
         )
 
         # XXX: just making sure that tests set this up correctly
