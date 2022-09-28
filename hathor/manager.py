@@ -567,7 +567,7 @@ class HathorManager:
         environment_info = self.environment_info.as_dict() if self.environment_info else {}
 
         # Changing the field names in this log could impact log collectors that parse them
-        self.log.info('ready', tx_count=cnt, tx_rate=tx_rate, total_load_time=tdt, height=h,
+        self.log.info('ready', vertex_count=cnt, tx_rate=tx_rate, total_load_time=tdt, height=h,
                       blocks=block_count, txs=tx_count, **environment_info)
 
     def _initialize_components_new(self) -> None:
@@ -643,8 +643,10 @@ class HathorManager:
 
         environment_info = self.environment_info.as_dict() if self.environment_info else {}
 
+        vertex_count = self.tx_storage.get_tx_count() + self.tx_storage.get_block_count()
+
         # Changing the field names in this log could impact log collectors that parse them
-        self.log.info('ready', tx_count=self.tx_storage.get_count_tx_blocks(),
+        self.log.info('ready', vertex_count=vertex_count,
                       total_load_time=tdt, **environment_info)
 
     def _verify_checkpoints(self) -> None:
@@ -1188,9 +1190,9 @@ class HathorManager:
             total_sync_time = LogDuration(self.first_time_fully_synced - self.start_time)
             vertex_count = self.tx_storage.get_tx_count() + self.tx_storage.get_block_count()
 
-            # TODO: Should we use vertex_count instead of tx_count?
+            # Changing the fields in this log could impact log collector that parse them
             self.log.info('reached synced state for the first time', total_sync_time=total_sync_time,
-                          tx_count=vertex_count, **self.environment_info.as_dict())
+                          vertex_count=vertex_count, **self.environment_info.as_dict())
 
             self.lc_check_sync_state.stop()
 
