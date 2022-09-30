@@ -1191,7 +1191,7 @@ class HathorManager:
             vertex_count = self.tx_storage.get_tx_count() + self.tx_storage.get_block_count()
 
             # Changing the fields in this log could impact log collector that parse them
-            self.log.info('reached synced state for the first time', total_sync_time=total_sync_time,
+            self.log.info('has recent activity for the first time', total_sync_time=total_sync_time,
                           vertex_count=vertex_count, **self.environment_info.as_dict())
 
             self.lc_check_sync_state.stop()
