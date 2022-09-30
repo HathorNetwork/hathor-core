@@ -778,10 +778,10 @@ class EnvironmentInfo:
         return asdict(self)
 
 
-def get_environment_info(args: Namespace, peer_id: Optional[str]) -> EnvironmentInfo:
+def get_environment_info(args: str, peer_id: Optional[str]) -> EnvironmentInfo:
     environment_info = EnvironmentInfo(
         python_implementation=str(sys.implementation),
-        hathor_core_args=str(args),
+        hathor_core_args=args,
         hathor_core_version=get_hathor_core_version(),
         peer_id=peer_id,
         # We want to ignore the testnet suffixes here. "testnet-golf" should be reported only as "testnet".
