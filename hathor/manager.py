@@ -67,6 +67,9 @@ class HathorManager:
         NO_RECENT_ACTIVITY = "Node doesn't have recent blocks"
         NO_SYNCED_PEER = "Node doesn't have a synced peer"
 
+    # This is the interval to be used by the task to check if the node is synced
+    CHECK_SYNC_STATE_INTERVAL: 30  # seconds
+
     def __init__(self, reactor: Reactor, peer_id: Optional[PeerId] = None, network: Optional[str] = None,
                  hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
@@ -229,7 +232,7 @@ class HathorManager:
         # Task that will count the total sync time
         self.lc_check_sync_state = LoopingCall(self.check_sync_state)
         self.lc_check_sync_state.clock = self.reactor
-        self.lc_check_sync_state_interval = 30  # seconds
+        self.lc_check_sync_state_interval = self.CHECK_SYNC_STATE_INTERVAL
 
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
