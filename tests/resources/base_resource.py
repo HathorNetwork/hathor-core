@@ -46,7 +46,7 @@ class _BaseResourceTest:
                 wallet_index=True,
                 enable_sync_v1=self._enable_sync_v1,
                 enable_sync_v2=self._enable_sync_v2,
-                environment_info=get_environment_info({}, peer_id.id)
+                environment_info=get_environment_info("", peer_id.id)
             )
 
         def setUp(self):
