@@ -545,13 +545,13 @@ class HathorManager:
 
         # self.stop_profiler(save_to='profiles/initializing.prof')
         self.state = self.NodeState.READY
-        tdt = LogDuration(t2 - t0)
-        tx_rate = '?' if tdt == 0 else cnt / tdt
+        total_load_time = LogDuration(t2 - t0)
+        tx_rate = '?' if total_load_time == 0 else cnt / total_load_time
 
         environment_info = self.environment_info.as_dict() if self.environment_info else {}
 
         # Changing the field names in this log could impact log collectors that parse them
-        self.log.info('ready', vertex_count=cnt, tx_rate=tx_rate, total_load_time=tdt, height=h,
+        self.log.info('ready', vertex_count=cnt, tx_rate=tx_rate, total_load_time=total_load_time, height=h,
                       blocks=block_count, txs=tx_count, **environment_info)
 
     def _initialize_components_new(self) -> None:
@@ -623,7 +623,7 @@ class HathorManager:
         self.state = self.NodeState.READY
 
         t1 = time.time()
-        tdt = LogDuration(t1 - t0)
+        total_load_time = LogDuration(t1 - t0)
 
         environment_info = self.environment_info.as_dict() if self.environment_info else {}
 
@@ -631,7 +631,7 @@ class HathorManager:
 
         # Changing the field names in this log could impact log collectors that parse them
         self.log.info('ready', vertex_count=vertex_count,
-                      total_load_time=tdt, **environment_info)
+                      total_load_time=total_load_time, **environment_info)
 
     def _verify_checkpoints(self) -> None:
         """ Method to verify if all checkpoints that exist in the database have the correct hash and are winners.
