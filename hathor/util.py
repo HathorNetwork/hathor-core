@@ -19,7 +19,6 @@ import math
 import sys
 import time
 import warnings
-from argparse import Namespace
 from collections import OrderedDict
 from contextlib import AbstractContextManager
 from dataclasses import asdict, dataclass

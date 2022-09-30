@@ -68,7 +68,7 @@ class HathorManager:
         NO_SYNCED_PEER = "Node doesn't have a synced peer"
 
     # This is the interval to be used by the task to check if the node is synced
-    CHECK_SYNC_STATE_INTERVAL: 30  # seconds
+    CHECK_SYNC_STATE_INTERVAL = 30  # seconds
 
     def __init__(self, reactor: Reactor, peer_id: Optional[PeerId] = None, network: Optional[str] = None,
                  hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
@@ -1142,7 +1142,7 @@ class HathorManager:
             total_sync_time = LogDuration(self.first_time_fully_synced - self.start_time)
             vertex_count = self.tx_storage.get_tx_count() + self.tx_storage.get_block_count()
 
-            # Changing the fields in this log could impact log collector that parse them
+            # Changing the fields in this log could impact log collectors that parse them
             self.log.info('has recent activity for the first time', total_sync_time=total_sync_time,
                           vertex_count=vertex_count, **self.environment_info.as_dict())
 
