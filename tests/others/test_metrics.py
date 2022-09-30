@@ -1,18 +1,30 @@
 import tempfile
 from unittest.mock import Mock
 
+import pytest
+
 from hathor.manager import HathorManager
 from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents, PubSubManager
-from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
+from hathor.storage import RocksDBStorage
+from hathor.transaction.storage import (
+    TransactionCacheStorage,
+    TransactionCompactStorage,
+    TransactionMemoryStorage,
+    TransactionRocksDBStorage,
+)
+from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.util import reactor
 from hathor.wallet import Wallet
 from tests import unittest
+from tests.utils import HAS_ROCKSDB, add_new_blocks
 
 
-class MetricsTest(unittest.TestCase):
+class BaseMetricsTest(unittest.TestCase):
+    __test__ = False
+
     def test_p2p_network_events(self):
         """Simulates publishing an event to pubsub the same way as done
            by the ConnectionsManager class.
@@ -77,11 +89,167 @@ class MetricsTest(unittest.TestCase):
 
         manager.metrics.stop()
 
+    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
+    def test_tx_storage_data_collection_with_rocksdb_storage_and_no_cache(self):
+        """Tests storage data collection when using RocksDB Storage
+           with cache disabled.
+
+           The expected result is that it will successfully collect
+           the RocksDB metrics.
+        """
+        reactor = self.clock
+
+        path = tempfile.mkdtemp()
+        self.tmpdirs.append(path)
+
+        def _init_manager():
+            rocksdb_storage = RocksDBStorage(path=path, cache_capacity=100)
+            tx_storage = TransactionRocksDBStorage(rocksdb_storage,
+                                                   with_index=True,
+                                                   use_memory_indexes=True)
+
+            pubsub = PubSubManager(reactor)
+            wallet = self._create_test_wallet()
+            return HathorManager(reactor=reactor, tx_storage=tx_storage, pubsub=pubsub, wallet=wallet)
+
+        manager = _init_manager()
+        manager.metrics._collect_data()
+
+        self.assertEqual(manager.metrics.rocksdb_cfs_sizes, {
+            b'default': 0.0,
+            b'tx': 0.0,
+            b'meta': 0.0,
+            b'attr': 0.0
+        })
+
+        manager.tx_storage.pre_init()
+        manager.tx_storage.indexes._manually_initialize(manager.tx_storage)
+        manager.tx_storage.update_best_block_tips_cache(None)
+
+        add_new_blocks(manager, 10)
+        # XXX: I had to close the DB and reinitialize the classes to force a flush of RocksDB memtables to disk
+        # But I think we could do this in a better way if we had a python-binding for this Flush method in
+        # https://github.com/facebook/rocksdb/blob/v7.5.3/include/rocksdb/db.h#L1396
+        manager.tx_storage._db.close()
+
+        manager = _init_manager()
+        manager.metrics._collect_data()
+
+        # We don't know exactly the sizes of each column family,
+        # but we know empirically that they should be higher than these values
+        self.assertTrue(manager.metrics.rocksdb_cfs_sizes[b'tx'] > 500)
+        self.assertTrue(manager.metrics.rocksdb_cfs_sizes[b'meta'] > 1000)
+
+    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
+    def test_tx_storage_data_collection_with_rocksdb_storage_and_cache(self):
+        """Tests storage data collection when using RocksDB Storage
+           with cache enabled.
+
+           The expected result is that it will successfully collect
+           the RocksDB metrics.
+        """
+        reactor = self.clock
+
+        path = tempfile.mkdtemp()
+        self.tmpdirs.append(path)
+
+        def _init_manager():
+            rocksdb_storage = RocksDBStorage(path=path, cache_capacity=100)
+            tx_storage = TransactionRocksDBStorage(rocksdb_storage,
+                                                   with_index=False,
+                                                   use_memory_indexes=True)
+            tx_storage = TransactionCacheStorage(tx_storage, reactor)
+
+            pubsub = PubSubManager(reactor)
+            wallet = self._create_test_wallet()
+            return HathorManager(reactor=reactor, tx_storage=tx_storage, pubsub=pubsub, wallet=wallet)
+
+        manager = _init_manager()
+        manager.metrics._collect_data()
+
+        # Assert that the metrics are really zero
+        self.assertEqual(manager.metrics.rocksdb_cfs_sizes, {
+            b'default': 0.0,
+            b'tx': 0.0,
+            b'meta': 0.0,
+            b'attr': 0.0
+        })
+
+        manager.tx_storage.pre_init()
+        manager.tx_storage.indexes._manually_initialize(manager.tx_storage)
+        manager.tx_storage.update_best_block_tips_cache(None)
+
+        add_new_blocks(manager, 10)
+
+        # XXX: I had to close the DB and reinitialize the classes to force a flush of RocksDB memtables to disk
+        # But I think we could do this in a better way if we had a python-binding for this Flush method in
+        # https://github.com/facebook/rocksdb/blob/v7.5.3/include/rocksdb/db.h#L1396
+        manager.tx_storage.store._db.close()
+
+        manager = _init_manager()
+        manager.metrics._collect_data()
+
+        # We don't know exactly the sizes of each column family,
+        # but we know empirically that they should be higher than these values
+        self.assertTrue(manager.metrics.rocksdb_cfs_sizes[b'tx'] > 500)
+        self.assertTrue(manager.metrics.rocksdb_cfs_sizes[b'meta'] > 1000)
+
+    def test_tx_storage_data_collection_with_compact_storage(self):
+        """Tests storage data collection when using JSON Storage.
+           We test it both with cache enabled and disabled.
+
+           The expected result is that nothing is done, because we currently only collect
+           data for RocksDB storage
+        """
+        reactor = self.clock
+
+        path = tempfile.mkdtemp()
+        self.tmpdirs.append(path)
+
+        def _init_manager(cache_enabled: bool) -> HathorManager:
+            tx_storage: BaseTransactionStorage = TransactionCompactStorage(path=path, with_index=(not cache_enabled))
+
+            if cache_enabled:
+                tx_storage = TransactionCacheStorage(tx_storage, reactor)
+
+            pubsub = PubSubManager(reactor)
+            wallet = self._create_test_wallet()
+            return HathorManager(reactor=reactor, tx_storage=tx_storage, pubsub=pubsub, wallet=wallet)
+
+        # With cache
+        manager = _init_manager(cache_enabled=True)
+        manager.metrics._collect_data()
+        self.assertEqual(manager.metrics.rocksdb_cfs_sizes, {})
+
+        # Without cache
+        manager = _init_manager(cache_enabled=False)
+        manager.metrics._collect_data()
+        self.assertEqual(manager.metrics.rocksdb_cfs_sizes, {})
+
+    def test_tx_storage_data_collection_with_memory_storage(self):
+        """Tests storage data collection when using Memory Storage using no cache
+           We don't allow using it with cache, so this is the only case
+
+           The expected result is that nothing is done, because we currently only collect
+           data for RocksDB storage
+        """
+        reactor = self.clock
+        tx_storage = TransactionMemoryStorage()
+
+        # All
+        pubsub = PubSubManager(reactor)
+        manager = HathorManager(reactor=reactor, tx_storage=tx_storage, pubsub=pubsub)
+
+        manager.metrics._collect_data()
+
+        self.assertEqual(manager.metrics.rocksdb_cfs_sizes, {})
+
     def test_peer_connections_data_collection(self):
         """Test if peer connections data is correctly being collected from the
             ConnectionsManager
         """
         # Preparation
+        reactor = self.clock
         tx_storage = TransactionMemoryStorage(with_index=False)
         pubsub = PubSubManager(reactor)
 
@@ -139,6 +307,7 @@ class MetricsTest(unittest.TestCase):
             TransactionCacheStorage
         """
         # Preparation
+        reactor = self.clock
         base_storage = TransactionMemoryStorage(with_index=False)
         tx_storage = TransactionCacheStorage(base_storage, reactor)
 
@@ -155,3 +324,16 @@ class MetricsTest(unittest.TestCase):
         # Assertion
         self.assertEquals(manager.metrics.transaction_cache_hits, 10)
         self.assertEquals(manager.metrics.transaction_cache_misses, 20)
+
+
+class SyncV1MetricsTest(unittest.SyncV1Params, BaseMetricsTest):
+    __test__ = True
+
+
+class SyncV2MetricsTest(unittest.SyncV2Params, BaseMetricsTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeMetricsTest(unittest.SyncBridgeParams, SyncV2MetricsTest):
+    pass

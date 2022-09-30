@@ -748,6 +748,14 @@ class TransactionStorage(ABC):
         """
         raise NotImplementedError
 
+    def is_rocksdb_storage(self) -> bool:
+        """This method should be reimplemented by Transaction Storages that use
+           RocksDB as their underlying storage mechanism
+
+           Motivation: https://github.com/HathorNetwork/hathor-core/pull/485#discussion_r970933018
+        """
+        return False
+
 
 class BaseTransactionStorage(TransactionStorage):
     def __init__(self, with_index: bool = True, pubsub: Optional[Any] = None) -> None:
