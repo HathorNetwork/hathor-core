@@ -35,7 +35,8 @@ class DbImport(RunNode):
     def register_resources(self, args: Namespace) -> None:
         pass
 
-    def create_parser(self) -> ArgumentParser:
+    @classmethod
+    def create_parser(cls) -> ArgumentParser:
         parser = super().create_parser()
         parser.add_argument('--import-file', type=FileType('rb', 0), required=True,
                             help='Save the export to this file')

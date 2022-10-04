@@ -19,7 +19,8 @@ from hathor.cli.run_node import RunNode
 
 class QuickTest(RunNode):
 
-    def create_parser(self) -> ArgumentParser:
+    @classmethod
+    def create_parser(cls) -> ArgumentParser:
         parser = super().create_parser()
         parser.add_argument('--no-wait', action='store_true', help='If set will not wait for a new tx before exiting')
         return parser
