@@ -162,6 +162,29 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.assertEqual(2, len(tx_parents_hash))
         self.assertEqual(set(tx_parents_hash), {self.genesis_txs[0].hash, self.genesis_txs[1].hash})
 
+    def test_vertices_count(self):
+        _set_test_mode(TestMode.TEST_ALL_WEIGHT)
+
+        _new_blocks_count = 0
+        _new_txs_count = 0
+
+        blocks = add_new_blocks(self.manager, 10, advance_clock=10)
+        _new_blocks_count += len(blocks)
+        blocks = add_blocks_unlock_reward(self.manager)
+        _new_blocks_count += len(blocks)
+        txs = add_new_transactions(self.manager, 5, advance_clock=5)
+        _new_txs_count += len(txs)
+        blocks = add_new_blocks(self.manager, 10, advance_clock=10)
+        _new_blocks_count += len(blocks)
+        txs = add_new_transactions(self.manager, 5, advance_clock=5)
+        _new_txs_count += len(txs)
+
+        _new_vertices_count = _new_blocks_count + _new_txs_count
+
+        self.assertEqual(self.tx_storage.get_block_count(), _new_blocks_count + 1)
+        self.assertEqual(self.tx_storage.get_tx_count(), _new_txs_count + 2)
+        self.assertEqual(self.tx_storage.get_count_tx_blocks(), _new_vertices_count + 3)
+
     def validate_save(self, obj):
         self.tx_storage.save_transaction(obj)
         self.tx_storage.add_to_indexes(obj)

@@ -228,3 +228,6 @@ class TransactionCompactStorage(BaseTransactionStorage):
                 return json_file.read()
         else:
             return None
+
+    def is_rocksdb_storage(self) -> bool:
+        return False

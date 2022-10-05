@@ -107,3 +107,6 @@ class TransactionMemoryStorage(BaseTransactionStorage):
 
     def get_value(self, key: str) -> Optional[str]:
         return self.attributes.get(key)
+
+    def is_rocksdb_storage(self) -> bool:
+        return False

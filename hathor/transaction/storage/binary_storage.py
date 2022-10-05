@@ -211,3 +211,6 @@ class TransactionBinaryStorage(BaseTransactionStorage):
             return self.load_from_json(filepath, AttributeDoesNotExist())
         except AttributeDoesNotExist:
             return None
+
+    def is_rocksdb_storage(self) -> bool:
+        return False

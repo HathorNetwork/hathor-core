@@ -879,13 +879,12 @@ class TransactionStorage(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def is_rocksdb_storage(self) -> bool:
-        """This method should be reimplemented by Transaction Storages that use
-           RocksDB as their underlying storage mechanism
-
-           Motivation: https://github.com/HathorNetwork/hathor-core/pull/485#discussion_r970933018
+        """ Indicates whether the class uses RocksDB as its underlying
+        storage mechanism.
         """
-        return False
+        raise NotImplementedError
 
 
 class BaseTransactionStorage(TransactionStorage):
@@ -1219,3 +1218,6 @@ class BaseTransactionStorage(TransactionStorage):
 
     def flush(self) -> None:
         pass
+
+    def is_rocksdb_storage(self) -> bool:
+        return super().is_rocksdb_storage()

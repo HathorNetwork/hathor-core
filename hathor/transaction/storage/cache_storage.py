@@ -217,6 +217,12 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
     def get_count_tx_blocks(self) -> int:
         self._flush_to_storage(self.dirty_txs.copy())
+
+        if self.store.is_rocksdb_storage():
+            # We know RocksDB estimation for the number of keys is not 100% accurate, so we prefer to
+            # count using the indexes
+            return self.get_tx_count() + self.get_block_count()
+
         return self.store.get_count_tx_blocks()
 
     def add_value(self, key: str, value: str) -> None:
@@ -230,3 +236,6 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
     def flush(self):
         self._flush_to_storage(self.dirty_txs.copy())
+
+    def is_rocksdb_storage(self) -> bool:
+        return self.store.is_rocksdb_storage()

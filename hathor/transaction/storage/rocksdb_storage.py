@@ -166,8 +166,16 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             yield tx
 
     def get_count_tx_blocks(self) -> int:
-        keys_bcount = self._db.get_property(b'rocksdb.estimate-num-keys', self._cf_tx)
-        keys_count = int(keys_bcount)
+        try:
+            # We know RocksDB estimation for the number of keys is not 100% accurate, so we prefer to
+            # count using the indexes, if available
+            keys_count = self.get_tx_count() + self.get_block_count()
+        except NotImplementedError:
+            # This will happen if self.with_index == False, and the only way out is to fallback
+            # to RocksDB key estimation anyway
+            keys_bcount = self._db.get_property(b'rocksdb.estimate-num-keys', self._cf_tx)
+            keys_count = int(keys_bcount)
+
         return keys_count
 
     def get_sst_files_sizes_by_cf(
@@ -201,3 +209,6 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             return None
         else:
             return data.decode()
+
+    def is_rocksdb_storage(self) -> bool:
+        return True
