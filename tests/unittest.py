@@ -17,7 +17,7 @@ from hathor.p2p.sync_version import SyncVersion
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import BaseTransaction
 from hathor.util import Random, reactor
-from hathor.wallet import Wallet
+from hathor.wallet import HDWallet, Wallet
 
 logger = get_logger()
 main = ut_main
@@ -318,15 +318,18 @@ class TestCase(unittest.TestCase):
         if required_to_quiesce and active:
             self.fail('Reactor was still active when it was required to be quiescent.')
 
-    def get_address(self, index: int) -> Optional[str]:
-        """ Generate a fixed HD Wallet and return an address
-        """
-        from hathor.wallet import HDWallet
+    def get_wallet(self) -> HDWallet:
         words = ('bind daring above film health blush during tiny neck slight clown salmon '
                  'wine brown good setup later omit jaguar tourist rescue flip pet salute')
 
         hd = HDWallet(words=words)
         hd._manually_initialize()
+        return hd
+
+    def get_address(self, index: int) -> Optional[str]:
+        """ Generate a fixed HD Wallet and return an address
+        """
+        hd = self.get_wallet()
 
         if index >= hd.gap_limit:
             return None
