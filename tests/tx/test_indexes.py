@@ -602,6 +602,195 @@ class BaseIndexesTest(unittest.TestCase):
             print(']')
         self.assertEqual(actual, expected)
 
+    def test_utxo_index_after_push_tx(self):
+        from hathor.indexes.utxo_index import UtxoIndexItem
+        from hathor.transaction import TxInput, TxOutput
+        from hathor.transaction.scripts import P2PKH
+
+        assert self.tx_storage.indexes is not None
+        utxo_index = self.tx_storage.indexes.utxo
+
+        address = self.get_address(0)
+
+        add_new_blocks(self.manager, 4, advance_clock=1)
+
+        # Add some blocks with the address that we have, we'll have 1 output of 64.00 HTR
+        blocks = add_new_blocks(self.manager, 1, advance_clock=1, address=decode_address(address))
+        self.assertEqual(len(blocks), 1)
+        add_blocks_unlock_reward(self.manager)
+
+        self.assertEqual(
+            list(utxo_index.iter_utxos(address=address, target_amount=1)),
+            [
+                UtxoIndexItem(
+                    token_uid=settings.HATHOR_TOKEN_UID,
+                    tx_id=b.hash,
+                    index=0,
+                    address=address,
+                    amount=6400,
+                    timelock=None,
+                    heightlock=b.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS,
+                    ) for b in blocks
+            ]
+        )
+
+        # spend that utxo and check that it is gone from the index
+        address1 = self.get_address(1)
+
+        wallet = self.get_wallet()
+        tx1 = Transaction(
+            timestamp=int(self.clock.seconds()),
+            weight=1.0,
+            inputs=[TxInput(blocks[0].hash, 0, b'')],
+            outputs=[TxOutput(6400, P2PKH.create_output_script(decode_address(address1)))],
+            parents=list(self.manager.get_new_tx_parents()),
+            storage=self.tx_storage,
+        )
+        tx1.inputs[0].data = P2PKH.create_input_data(
+            *wallet.get_input_aux_data(tx1.get_sighash_all(), wallet.get_private_key(address))
+        )
+        tx1.resolve()
+        self.assertTrue(self.manager.propagate_tx(tx1, False))
+
+        self.assertEqual(
+            list(utxo_index.iter_utxos(address=address, target_amount=1)),
+            []
+        )
+
+        self.assertEqual(
+            list(utxo_index.iter_utxos(address=address1, target_amount=6400)),
+            [
+                UtxoIndexItem(
+                    token_uid=settings.HATHOR_TOKEN_UID,
+                    tx_id=tx1.hash,
+                    index=0,
+                    address=address1,
+                    amount=6400,
+                    timelock=None,
+                    heightlock=None,
+                )
+            ]
+        )
+
+    def test_utxo_index_last(self):
+        """
+        """
+        from hathor.indexes.utxo_index import UtxoIndexItem
+        from hathor.transaction import TxInput, TxOutput
+        from hathor.transaction.scripts import P2PKH
+
+        assert self.tx_storage.indexes is not None
+        utxo_index = self.tx_storage.indexes.utxo
+
+        address = self.get_address(0)
+
+        add_new_blocks(self.manager, 4, advance_clock=1)
+
+        # Add some blocks with the address that we have, we'll have 1 output of 64.00 HTR
+        blocks = add_new_blocks(self.manager, 1, advance_clock=1, address=decode_address(address))
+        self.assertEqual(len(blocks), 1)
+        add_blocks_unlock_reward(self.manager)
+
+        self.assertEqual(
+            list(utxo_index.iter_utxos(address=address, target_amount=1)),
+            [
+                UtxoIndexItem(
+                    token_uid=settings.HATHOR_TOKEN_UID,
+                    tx_id=b.hash,
+                    index=0,
+                    address=address,
+                    amount=6400,
+                    timelock=None,
+                    heightlock=b.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS,
+                    ) for b in blocks
+            ]
+        )
+
+        # spend that utxo and check that it is gone from the index
+        address1 = self.get_address(1)
+
+        change_value = 26
+        transfer_value = 6400 - change_value
+        wallet = self.get_wallet()
+        tx1 = Transaction(
+            timestamp=int(self.clock.seconds()),
+            weight=1.0,
+            inputs=[TxInput(blocks[0].hash, 0, b'')],
+            outputs=[TxOutput(change_value, P2PKH.create_output_script(decode_address(address))),
+                     TxOutput(transfer_value, P2PKH.create_output_script(decode_address(address1)))],
+            parents=list(self.manager.get_new_tx_parents()),
+            storage=self.tx_storage,
+        )
+        tx1.inputs[0].data = P2PKH.create_input_data(
+            *wallet.get_input_aux_data(tx1.get_sighash_all(), wallet.get_private_key(address))
+        )
+        tx1.resolve()
+        self.assertTrue(self.manager.propagate_tx(tx1, False))
+
+        # querying for exact values
+
+        self.assertEqual(
+            list(utxo_index.iter_utxos(address=address1, target_amount=transfer_value)),
+            [
+                UtxoIndexItem(
+                    token_uid=settings.HATHOR_TOKEN_UID,
+                    tx_id=tx1.hash,
+                    index=1,
+                    address=address1,
+                    amount=transfer_value,
+                    timelock=None,
+                    heightlock=None,
+                )
+            ]
+        )
+
+        self.assertEqual(
+            list(utxo_index.iter_utxos(address=address, target_amount=change_value)),
+            [
+                UtxoIndexItem(
+                    token_uid=settings.HATHOR_TOKEN_UID,
+                    tx_id=tx1.hash,
+                    index=0,
+                    address=address,
+                    amount=change_value,
+                    timelock=None,
+                    heightlock=None,
+                )
+            ]
+        )
+
+        # querying for minimum value, should also return same UTXOs
+
+        self.assertEqual(
+            list(utxo_index.iter_utxos(address=address1, target_amount=1)),
+            [
+                UtxoIndexItem(
+                    token_uid=settings.HATHOR_TOKEN_UID,
+                    tx_id=tx1.hash,
+                    index=1,
+                    address=address1,
+                    amount=transfer_value,
+                    timelock=None,
+                    heightlock=None,
+                )
+            ]
+        )
+
+        self.assertEqual(
+            list(utxo_index.iter_utxos(address=address, target_amount=1)),
+            [
+                UtxoIndexItem(
+                    token_uid=settings.HATHOR_TOKEN_UID,
+                    tx_id=tx1.hash,
+                    index=0,
+                    address=address,
+                    amount=change_value,
+                    timelock=None,
+                    heightlock=None,
+                )
+            ]
+        )
+
     def test_addresses_index_empty(self):
         addresses_indexes = self.manager.tx_storage.indexes.addresses
         address = self.get_address(10)
