@@ -28,6 +28,7 @@ from hathor import daa
 from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
+from hathor.event.storage import EventStorage
 from hathor.exception import HathorError, InitializationError, InvalidNewTransaction
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -73,6 +74,7 @@ class HathorManager:
     def __init__(self, reactor: Reactor, peer_id: Optional[PeerId] = None, network: Optional[str] = None,
                  hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
+                 event_storage: Optional[EventStorage] = None,
                  peer_storage: Optional[Any] = None, wallet_index: bool = False, utxo_index: bool = False,
                  stratum_port: Optional[int] = None, ssl: bool = True,
                  enable_sync_v1: bool = True, enable_sync_v2: bool = False,
@@ -152,6 +154,7 @@ class HathorManager:
         # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
         self.pubsub = pubsub or PubSubManager(self.reactor)
         self.tx_storage = tx_storage
+        self.event_storage = event_storage
         self.tx_storage.pubsub = self.pubsub
         if wallet_index and self.tx_storage.with_index:
             assert self.tx_storage.indexes is not None

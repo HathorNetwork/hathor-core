@@ -1,5 +1,8 @@
 import base64
+import hashlib
 import os
+import random
+import string
 import subprocess
 import time
 import urllib.parse
@@ -11,6 +14,7 @@ from twisted.internet.task import Clock
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key, get_private_key_from_bytes
+from hathor.event.base_event import BaseEvent
 from hathor.manager import HathorManager
 from hathor.transaction import BaseTransaction, Transaction, TxInput, TxOutput, genesis
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
@@ -642,3 +646,28 @@ def add_tx_with_data_script(manager: 'HathorManager', data: List[str], propagate
         manager.reactor.advance(8)
 
     return tx
+
+
+def generate_mocked_event(id: Optional[int] = None) -> BaseEvent:
+    """ Generates a mocked event with a best block found message
+    """
+    hash = hashlib.sha256(generate_random_word(10).encode('utf-8'))
+    peer_id_mock = hash.hexdigest()
+
+    return BaseEvent(
+        id=id or random.randint(1, 18446744073709551615),
+        peer_id=peer_id_mock,
+        timestamp=1658892990,
+        type='network:best_block_found',
+        group_id=0,
+        data={
+            "data": "test"
+        }
+    )
+
+
+def generate_random_word(length: int) -> str:
+    """ Generates a random sequence of characters given a length
+    """
+    letters = string.ascii_lowercase
+    return ''.join(random.choice(letters) for i in range(length))

@@ -18,7 +18,7 @@ import os
 import platform
 import sys
 from argparse import SUPPRESS, ArgumentParser, Namespace
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from autobahn.twisted.resource import WebSocketResource
 from structlog import get_logger
@@ -114,6 +114,7 @@ class RunNode:
         from hathor.conf import HathorSettings
         from hathor.conf.get_settings import get_settings_module
         from hathor.daa import TestMode, _set_test_mode
+        from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
         from hathor.manager import HathorManager
         from hathor.p2p.netfilter.utils import add_peer_id_blacklist
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
@@ -206,10 +207,13 @@ class RunNode:
 
         tx_storage: TransactionStorage
         rocksdb_storage: RocksDBStorage
+        self.event_storage: Optional[EventStorage] = None
         if args.memory_storage:
             check_or_exit(not args.data, '--data should not be used with --memory-storage')
             # if using MemoryStorage, no need to have cache
             tx_storage = TransactionMemoryStorage()
+            if args.x_enable_event_queue:
+                self.event_storage = EventMemoryStorage()
             assert not args.x_rocksdb_indexes, 'RocksDB indexes require RocksDB data'
             self.log.info('with storage', storage_class=type(tx_storage).__name__)
         elif args.json_storage:
@@ -225,6 +229,9 @@ class RunNode:
             tx_storage = TransactionRocksDBStorage(rocksdb_storage,
                                                    with_index=(not args.cache),
                                                    use_memory_indexes=args.memory_indexes)
+            if args.x_enable_event_queue:
+                self.event_storage = EventRocksDBStorage(rocksdb_storage)
+
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
         if args.cache:
             check_or_exit(not args.memory_storage, '--cache should not be used with --memory-storage')
@@ -268,6 +275,7 @@ class RunNode:
             network=network,
             hostname=hostname,
             tx_storage=self.tx_storage,
+            event_storage=self.event_storage,
             wallet=self.wallet,
             wallet_index=args.wallet_index,
             utxo_index=args.utxo_index,
