@@ -17,7 +17,7 @@ import json
 import os
 import platform
 import sys
-from argparse import ArgumentParser, Namespace
+from argparse import SUPPRESS, ArgumentParser, Namespace
 from typing import Any, Callable, Dict, List, Tuple
 
 from autobahn.twisted.resource import WebSocketResource
@@ -57,8 +57,10 @@ class RunNode:
         parser.add_argument('--data', help='Data directory')
         storage = parser.add_mutually_exclusive_group()
         storage.add_argument('--rocksdb-storage', action='store_true', help='Use RocksDB storage backend (default)')
-        storage.add_argument('--memory-storage', action='store_true', help='Do not use any storage')
+        storage.add_argument('--memory-storage', action='store_true', help='Do not use a persistent storage')
         storage.add_argument('--json-storage', action='store_true', help='Use legacy JSON storage (not recommended)')
+        parser.add_argument('--memory-indexes', action='store_true',
+                            help='Use memory indexes when using RocksDB storage (startup is significantly slower)')
         parser.add_argument('--rocksdb-cache', type=int, help='RocksDB block-table cache size (bytes)', default=None)
         parser.add_argument('--wallet', help='Set wallet type. Options are hd (Hierarchical Deterministic) or keypair',
                             default=None)
@@ -73,6 +75,8 @@ class RunNode:
         parser.add_argument('--utxo-index', action='store_true',
                             help='Create an index of UTXOs by token/address/amount and allow searching queries')
         parser.add_argument('--prometheus', action='store_true', help='Send metric data to Prometheus')
+        parser.add_argument('--prometheus-prefix', default='',
+                            help='A prefix that will be added in all Prometheus metrics')
         parser.add_argument('--cache', action='store_true', help='Use cache for tx storage')
         parser.add_argument('--cache-size', type=int, help='Number of txs to keep on cache')
         parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
@@ -80,10 +84,7 @@ class RunNode:
         parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
         fvargs = parser.add_mutually_exclusive_group()
         fvargs.add_argument('--x-full-verification', action='store_true', help='Fully validate the local database')
-        fvargs.add_argument('--x-fast-init-beta', action='store_true',
-                            help='Execute a fast initialization, which skips some transaction verifications. '
-                            'This is still a beta feature as it may cause issues when restarting the full node '
-                            'after a crash.')
+        fvargs.add_argument('--x-fast-init-beta', action='store_true', help=SUPPRESS)
         parser.add_argument('--procname-prefix', help='Add a prefix to the process name', default='')
         parser.add_argument('--allow-non-standard-script', action='store_true', help='Accept non-standard scripts on '
                             '/push-tx API')
@@ -98,9 +99,11 @@ class RunNode:
         v2args.add_argument('--x-sync-v2-only', action='store_true',
                             help='Disable support for running sync-v1. DO NOT ENABLE, IT WILL BREAK.')
         parser.add_argument('--x-localhost-only', action='store_true', help='Only connect to peers on localhost')
-        parser.add_argument('--x-rocksdb-indexes', action='store_true', help='Use RocksDB indexes (currently opt-in)')
+        parser.add_argument('--x-rocksdb-indexes', action='store_true', help=SUPPRESS)
         parser.add_argument('--x-enable-event-queue', action='store_true', help='Enable event queue mechanism')
         parser.add_argument('--x-retain-events', action='store_true', help='Retain all events in the local database')
+        parser.add_argument('--peer-id-blacklist', action='extend', default=[], nargs='+', type=str,
+                            help='Peer IDs to forbid connection')
         return parser
 
     def prepare(self, args: Namespace) -> None:
@@ -110,6 +113,7 @@ class RunNode:
         from hathor.conf.get_settings import get_settings_module
         from hathor.daa import TestMode, _set_test_mode
         from hathor.manager import HathorManager
+        from hathor.p2p.netfilter.utils import add_peer_id_blacklist
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
         from hathor.p2p.peer_id import PeerId
         from hathor.p2p.utils import discover_hostname
@@ -215,11 +219,10 @@ class RunNode:
             if args.rocksdb_storage:
                 self.log.warn('--rocksdb-storage is now implied, no need to specify it')
             cache_capacity = args.rocksdb_cache
-            use_memory_indexes = not args.x_rocksdb_indexes
             rocksdb_storage = RocksDBStorage(path=args.data, cache_capacity=cache_capacity)
             tx_storage = TransactionRocksDBStorage(rocksdb_storage,
                                                    with_index=(not args.cache),
-                                                   use_memory_indexes=use_memory_indexes)
+                                                   use_memory_indexes=args.memory_indexes)
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
         if args.cache:
             check_or_exit(not args.memory_storage, '--cache should not be used with --memory-storage')
@@ -301,6 +304,14 @@ class RunNode:
             self.manager._full_verification = True
         if args.x_fast_init_beta:
             self.log.warn('--x-fast-init-beta is now the default, no need to specify it')
+        if args.x_rocksdb_indexes:
+            self.log.warn('--x-rocksdb-indexes is now the default, no need to specify it')
+            if args.memory_indexes:
+                self.log.error('You cannot use --memory-indexes and --x-rocksdb-indexes.')
+                sys.exit(-1)
+
+        if args.memory_indexes and (args.memory_storage or args.json_storage):
+            self.log.warn('--memory-indexes is implied for memory storage or JSON storage')
 
         if args.x_enable_event_queue:
             if not settings.ENABLE_EVENT_QUEUE_FEATURE:
@@ -318,6 +329,10 @@ class RunNode:
 
         for description in args.listen:
             self.manager.add_listen_address(description)
+
+        if args.peer_id_blacklist:
+            self.log.info('with peer id blacklist', blacklist=args.peer_id_blacklist)
+            add_peer_id_blacklist(args.peer_id_blacklist)
 
         self.start_manager(args)
         self.register_resources(args)
@@ -358,7 +373,14 @@ class RunNode:
             DebugRejectResource,
         )
         from hathor.mining.ws import MiningWebsocketFactory
-        from hathor.p2p.resources import AddPeersResource, MiningInfoResource, MiningResource, StatusResource
+        from hathor.p2p.resources import (
+            AddPeersResource,
+            HealthcheckReadinessResource,
+            MiningInfoResource,
+            MiningResource,
+            NetfilterRuleResource,
+            StatusResource,
+        )
         from hathor.profiler import get_cpu_profiler
         from hathor.profiler.resources import CPUProfilerResource, ProfilerResource
         from hathor.prometheus import PrometheusMetricsExporter
@@ -409,7 +431,10 @@ class RunNode:
         cpu = get_cpu_profiler()
 
         if args.prometheus:
-            kwargs: Dict[str, Any] = {'metrics': self.manager.metrics}
+            kwargs: Dict[str, Any] = {
+                'metrics': self.manager.metrics,
+                'metrics_prefix': args.prometheus_prefix
+            }
 
             if args.data:
                 kwargs['path'] = os.path.join(args.data, 'prometheus')
@@ -474,6 +499,8 @@ class RunNode:
                 (b'execute', NanoContractExecuteResource(self.manager), contracts_resource),
                 # /p2p
                 (b'peers', AddPeersResource(self.manager), p2p_resource),
+                (b'netfilter', NetfilterRuleResource(self.manager), p2p_resource),
+                (b'readiness', HealthcheckReadinessResource(self.manager), p2p_resource),
             ]
             # XXX: only enable UTXO search API if the index is enabled
             if args.utxo_index:
@@ -644,22 +671,23 @@ class RunNode:
                 sys.exit(-1)
 
     def check_python_version(self) -> None:
-        MIN_STABLE = (3, 8)
+        MIN_VER = (3, 8)
         RECOMMENDED_VER = (3, 9)
         cur = sys.version_info
-        min_pretty = '.'.join(map(str, MIN_STABLE))
+        min_pretty = '.'.join(map(str, MIN_VER))
         cur_pretty = '.'.join(map(str, cur))
         recommended_pretty = '.'.join(map(str, RECOMMENDED_VER))
-        if cur < MIN_STABLE:
-            self.log.warning('\n'.join([
+        if cur < MIN_VER:
+            self.log.critical('\n'.join([
                 '',
                 '********************************************************',
-                f'The detected Python version {cur_pretty} is deprecated and support for it will be removed soon.',
-                f'The minimum supported Python version will be {min_pretty}',
+                f'The detected Python version {cur_pretty} is not supported anymore.',
+                f'The minimum supported Python version is be {min_pretty}',
                 f'The recommended Python version is {recommended_pretty}',
                 '********************************************************',
                 '',
             ]))
+            sys.exit(-1)
 
     def __init__(self, *, argv=None):
         if argv is None:

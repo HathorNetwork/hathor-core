@@ -72,6 +72,19 @@ class _SeekKeyBase(_KeyBase):
         array.extend(self.address)
         assert len(array) == 1 + 32 + 25
 
+    def as_prefix(self) -> '_SeekKeyBase':
+        """This helper method will always create a _SeekKeyBase which is a useful prefix when using its subclasses.
+
+        In practice this is useful for filtering out keys that aren't relevant to a given query. The _SeekKeyBase class
+        maps to the following prefix:
+
+            [tag][token_uid][address]
+            |1b-||--32b----||--25b--|
+
+        Which is what is used to filter out entries in all cases of the UTXO index.
+        """
+        return _SeekKeyBase(tag=self.tag, token_uid_internal=self.token_uid_internal, address=self.address)
+
 
 @dataclass(frozen=True)
 class _SeekKeyNoLock(_SeekKeyBase):
@@ -319,23 +332,21 @@ class RocksDBUtxoIndex(UtxoIndex, RocksDBIndexUtils):
 
     def _iter_utxos_nolock(self, *, token_uid: bytes, address: str, target_amount: int) -> Iterator[UtxoIndexItem]:
         seek = _SeekKeyNoLock(token_uid_internal=to_internal_token_uid(token_uid), address=decode_address(address),
-                              amount=target_amount + 1)
+                              amount=target_amount)
         for key in self._iter_keys(seek):
-            if not isinstance(key, _KeyNoLock):
-                break
-            if key.token_uid_internal != seek.token_uid_internal or key.address != seek.address:
-                break
+            assert isinstance(key, _KeyNoLock)
+            assert key.token_uid_internal == seek.token_uid_internal
+            assert key.address == seek.address
             yield key.to_index_item()
 
     def _iter_utxos_timelock(self, *, token_uid: bytes, address: str, target_amount: int,
                              target_timestamp: Optional[int] = None) -> Iterator[UtxoIndexItem]:
         seek = _SeekKeyTimeLock(token_uid_internal=to_internal_token_uid(token_uid), address=decode_address(address),
-                                amount=target_amount, timelock=(target_timestamp or 0xfffffffe) + 1)
+                                amount=target_amount, timelock=(target_timestamp or 0xffffffff))
         for key in self._iter_keys(seek):
-            if not isinstance(key, _KeyTimeLock):
-                break
-            if key.token_uid_internal != seek.token_uid_internal or key.address != seek.address:
-                break
+            assert isinstance(key, _KeyTimeLock)
+            assert key.token_uid_internal == seek.token_uid_internal
+            assert key.address == seek.address
             i = key.to_index_item()
             # it might happen that the first one is out of the timelock range
             if i.timelock is not None and i.timelock > seek.timelock:
@@ -345,12 +356,11 @@ class RocksDBUtxoIndex(UtxoIndex, RocksDBIndexUtils):
     def _iter_utxos_heightlock(self, *, token_uid: bytes, address: str, target_amount: int,
                                target_height: Optional[int] = None) -> Iterator[UtxoIndexItem]:
         seek = _SeekKeyHeightLock(token_uid_internal=to_internal_token_uid(token_uid), address=decode_address(address),
-                                  amount=target_amount, heightlock=(target_height or 0xfffffffe) + 1)
+                                  amount=target_amount, heightlock=(target_height or 0xffffffff))
         for key in self._iter_keys(seek):
-            if not isinstance(key, _KeyHeightLock):
-                break
-            if key.token_uid_internal != seek.token_uid_internal or key.address != seek.address:
-                break
+            assert isinstance(key, _KeyHeightLock)
+            assert key.token_uid_internal == seek.token_uid_internal
+            assert key.address == seek.address
             i = key.to_index_item()
             # it might happen that the first one is out of the heightlock range
             if i.heightlock is not None and i.heightlock > seek.heightlock:
@@ -358,8 +368,74 @@ class RocksDBUtxoIndex(UtxoIndex, RocksDBIndexUtils):
             yield i
 
     def _iter_keys(self, seek: _SeekKeyBase) -> Iterator[_KeyBase]:
-        it: Any = reversed(self._db.iterkeys(self._cf))
-        it.seek_for_prev(bytes(seek))
-        for _cf, k in it:
+        """ This helper method iterates in reverse order from the seek key as long as keys match the seek prefix.
+
+        For example, if the complete database is (letter is prefix, number is the rest):
+
+        - `A1`
+        - `A2`
+        - `B1`
+        - `B2`
+        - `B3`
+        - `C1`
+        - `C2`
+
+        A seek of `B4` should yield `B3,B2,B1`. Internally when we seek to `B4` the first element is `C1` which we
+        filter out and continue once, until the iterator reaches `A2` and we break.
+        """
+        prefix = bytes(seek.as_prefix())
+        first = True
+        for k in self._db_rev_iter_from_seek(bytes(seek)):
+            if not k.startswith(prefix):
+                # XXX: the seek might overshoot so we should still continue one time to see if we missed any keys
+                if first:
+                    first = False
+                    continue
+                else:
+                    break
             key = _parse_key(k)
             yield key
+
+    def _db_rev_iter_from_seek(self, seek: bytes) -> Iterator[bytes]:
+        """ This helper method will seek to the given seek key and iterate in reverse order.
+
+        It mainly deals with the case where the seek would end up after the last element which would stop the iterator
+        even if it's on reverse order (which you would normally expect to iterate from the last element).
+
+        For example, if the complete database is:
+
+        - `A1`
+        - `A2`
+        - `B1`
+        - `B2`
+        - `B3`
+
+        Creating a reversed iterator and doing a seek to `B4` would result in an "empty" iterator because it went past
+        the last element.
+
+        If in practice you want it to start from `B3` instead of being empty, this method provides this behavior by
+        doing a `seek_to_last` when the first `next` raises a `StopIteration`. It also omits yielding the column_family
+        for simplicity.
+
+        Otherwise, given the following example:
+
+        - `A1`
+        - `A2`
+        - `B1`
+        - `B2`
+        - `B3`
+        - `C1`
+        - `C2`
+
+        When seeking to `B4`, the following would be yielded in this order: `C1,B3,B2,B1,A2,A1`, this method does not
+        look at any prefix so it continues until it reaches the start of the database.
+        """
+        it: Any = reversed(self._db.iterkeys(self._cf))
+        it.seek(bytes(seek))
+        try:
+            _cf, k = next(it)
+            yield k
+        except StopIteration:
+            it.seek_to_last()
+        for _cf, k in it:
+            yield k

@@ -53,6 +53,13 @@ class _ConnectingPeer(NamedTuple):
     endpoint_deferred: Deferred
 
 
+class PeerConnectionsMetrics(NamedTuple):
+    connecting_peers_count: int
+    handshaking_peers_count: int
+    connected_peers_count: int
+    known_peers_count: int
+
+
 class ConnectionsManager:
     """ It manages all peer-to-peer connections and events related to control messages.
     """
@@ -158,6 +165,16 @@ class ConnectionsManager:
         if self.lc_reconnect.running:
             self.lc_reconnect.stop()
 
+    def _get_peers_count(self) -> PeerConnectionsMetrics:
+        """Get a dict containing the count of peers in each state"""
+
+        return PeerConnectionsMetrics(
+            len(self.connecting_peers),
+            len(self.handshaking_peers),
+            len(self.connected_peers),
+            len(self.peer_storage)
+        )
+
     def get_sync_versions(self) -> Set[SyncVersion]:
         """Set of versions that were enabled and are supported."""
         if self.manager.has_sync_version_capability():
@@ -206,11 +223,16 @@ class ConnectionsManager:
             conn.disconnect(force=force)
 
     def on_connection_failure(self, failure: Failure, peer: Optional[PeerId], endpoint: IStreamClientEndpoint) -> None:
-        self.log.warn('connection failure', endpoint=endpoint, failure=failure.getErrorMessage())
+        connecting_peer = self.connecting_peers[endpoint]
+        connection_string = connecting_peer.connection_string
+        self.log.warn('connection failure', endpoint=connection_string, failure=failure.getErrorMessage())
         self.connecting_peers.pop(endpoint)
-        if peer is not None:
-            now = int(self.reactor.seconds())
-            peer.increment_retry_attempt(now)
+
+        self.pubsub.publish(
+            HathorEvents.NETWORK_PEER_CONNECTION_FAILED,
+            peer=peer,
+            peers_count=self._get_peers_count()
+        )
 
     def on_peer_connect(self, protocol: HathorProtocol) -> None:
         """Called when a new connection is established."""
@@ -221,19 +243,28 @@ class ConnectionsManager:
         self.connections.add(protocol)
         self.handshaking_peers.add(protocol)
 
+        self.pubsub.publish(
+            HathorEvents.NETWORK_PEER_CONNECTED,
+            protocol=protocol,
+            peers_count=self._get_peers_count()
+        )
+
     def on_peer_ready(self, protocol: HathorProtocol) -> None:
         """Called when a peer is ready."""
         assert protocol.peer is not None
+        protocol.peer = self.peer_storage.add_or_merge(protocol.peer)
         assert protocol.peer.id is not None
 
         self.handshaking_peers.remove(protocol)
         self.received_peer_storage.pop(protocol.peer.id, None)
 
-        self.peer_storage.add_or_merge(protocol.peer)
-
         # we emit the event even if it's a duplicate peer as a matching
         # NETWORK_PEER_DISCONNECTED will be emmited regardless
-        self.pubsub.publish(HathorEvents.NETWORK_PEER_CONNECTED, protocol=protocol)
+        self.pubsub.publish(
+            HathorEvents.NETWORK_PEER_READY,
+            protocol=protocol,
+            peers_count=self._get_peers_count()
+        )
 
         if protocol.peer.id in self.connected_peers:
             # connected twice to same peer
@@ -274,7 +305,11 @@ class ConnectionsManager:
                 # chance it can happen if both connections start at the same time and none of them has
                 # reached READY state while the other is on PEER_ID state
                 self.connected_peers[protocol.peer.id] = existing_protocol
-        self.pubsub.publish(HathorEvents.NETWORK_PEER_DISCONNECTED, protocol=protocol)
+        self.pubsub.publish(
+            HathorEvents.NETWORK_PEER_DISCONNECTED,
+            protocol=protocol,
+            peers_count=self._get_peers_count()
+        )
 
     def iter_all_connections(self) -> Iterable[HathorProtocol]:
         """Iterate over all connections."""
@@ -308,7 +343,7 @@ class ConnectionsManager:
         """
         if peer.id == self.my_peer.id:
             return
-        self.received_peer_storage.add_or_merge(peer)
+        peer = self.received_peer_storage.add_or_merge(peer)
         self.connect_to_if_not_connected(peer, 0)
 
     def reconnect_to_all(self) -> None:
@@ -423,6 +458,11 @@ class ConnectionsManager:
 
         If `use_ssl` is True, then the connection will be wraped by a TLS.
         """
+        for connecting_peer in self.connecting_peers.values():
+            if connecting_peer.connection_string == description:
+                self.log.debug('skipping because we are already connecting to this endpoint', endpoint=description)
+                return
+
         if use_ssl is None:
             use_ssl = self.ssl
         connection_string, peer_id = description_to_connection_string(description)
@@ -441,12 +481,16 @@ class ConnectionsManager:
         else:
             factory = self.client_factory
 
+        if peer is not None:
+            now = int(self.reactor.seconds())
+            peer.increment_retry_attempt(now)
+
         deferred = endpoint.connect(factory)
         self.connecting_peers[endpoint] = _ConnectingPeer(connection_string, deferred)
 
         deferred.addCallback(self._connect_to_callback, peer, endpoint, connection_string, peer_id)
         deferred.addErrback(self.on_connection_failure, peer, endpoint)
-        self.log.info('connect to ', endpoint=description)
+        self.log.info('connect to ', endpoint=description, peer=str(peer))
 
     def listen(self, description: str, use_ssl: Optional[bool] = None) -> IStreamServerEndpoint:
         """ Start to listen to new connection according to the description.

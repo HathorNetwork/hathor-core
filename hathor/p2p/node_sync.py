@@ -211,7 +211,6 @@ class NodeSyncTimestamp(SyncManager):
         self.send_data_queue: SendDataPush = SendDataPush(self)
 
         # Latest data timestamp of the peer.
-        self.peer_merkle_hash: Optional[int] = None
         self.previous_timestamp: int = 0
 
         # Latest deferred waiting for a reply.
@@ -274,6 +273,8 @@ class NodeSyncTimestamp(SyncManager):
             self.send_data_queue.stop()
         if self.call_later_id and self.call_later_id.active():
             self.call_later_id.cancel()
+        # XXX: force remove this connection from _all_ pending downloads
+        self.downloader.drop_connection(self)
 
     # XXX[jansegre]: maybe we should rename this to `out_of_sync` and invert the condition, would be easier to
     #                understand its usage on `send_tx_to_peer_if_possible` IMO
@@ -473,6 +474,9 @@ class NodeSyncTimestamp(SyncManager):
     def _next_step(self) -> Generator[Deferred, Any, None]:
         """ Run the next step to keep nodes synced.
         """
+        if not self.is_running or not self._started:
+            self.log.debug('already stopped')
+            return
         next_timestamp: int = (yield self.find_synced_timestamp())
         self.log.debug('_next_step', next_timestamp=next_timestamp)
         if next_timestamp is None:

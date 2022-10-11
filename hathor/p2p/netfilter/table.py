@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING, Any, Dict
 
 if TYPE_CHECKING:
     from hathor.p2p.netfilter.chain import NetfilterChain
@@ -23,6 +23,9 @@ class NetfilterTable:
     def __init__(self, name: str):
         self.name = name
         self.chains: Dict[str, 'NetfilterChain'] = {}
+
+    def to_json(self) -> Dict[str, Any]:
+        return {'name': self.name}
 
     def add_chain(self, chain: 'NetfilterChain') -> 'NetfilterChain':
         """Add a new chain to the table."""

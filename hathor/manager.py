@@ -62,6 +62,10 @@ class HathorManager:
         # This node is ready to establish new connections, sync, and exchange transactions.
         READY = 'READY'
 
+    class UnhealthinessReason(str, Enum):
+        NO_RECENT_ACTIVITY = "Node doesn't have recent blocks"
+        NO_SYNCED_PEER = "Node doesn't have a synced peer"
+
     def __init__(self, reactor: Reactor, peer_id: Optional[PeerId] = None, network: Optional[str] = None,
                  hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
@@ -154,15 +158,8 @@ class HathorManager:
             self.log.debug('enable utxo index')
             self.tx_storage.indexes.enable_utxo_index()
 
-        self.metrics = Metrics(
-            pubsub=self.pubsub,
-            avg_time_between_blocks=settings.AVG_TIME_BETWEEN_BLOCKS,
-            tx_storage=self.tx_storage,
-            reactor=self.reactor,
-        )
-
         self.soft_voided_tx_ids = soft_voided_tx_ids or set()
-        self.consensus_algorithm = ConsensusAlgorithm(self.soft_voided_tx_ids)
+        self.consensus_algorithm = ConsensusAlgorithm(self.soft_voided_tx_ids, pubsub=self.pubsub)
 
         self.peer_discoveries: List[PeerDiscovery] = []
 
@@ -172,6 +169,14 @@ class HathorManager:
         self.connections = ConnectionsManager(self.reactor, self.my_peer, self.server_factory, self.client_factory,
                                               self.pubsub, self, ssl, whitelist_only=False, rng=self.rng,
                                               enable_sync_v1=enable_sync_v1, enable_sync_v2=enable_sync_v2)
+
+        self.metrics = Metrics(
+            pubsub=self.pubsub,
+            avg_time_between_blocks=settings.AVG_TIME_BETWEEN_BLOCKS,
+            connections=self.connections,
+            tx_storage=self.tx_storage,
+            reactor=self.reactor,
+        )
 
         self.wallet = wallet
         if self.wallet:
@@ -313,6 +318,9 @@ class HathorManager:
             wait_stratum = self.stratum_factory.stop()
             if wait_stratum:
                 waits.append(wait_stratum)
+
+        self.tx_storage.flush()
+
         return defer.DeferredList(waits)
 
     def do_discovery(self) -> None:
@@ -1066,6 +1074,28 @@ class HathorManager:
             self.peers_whitelist.remove(peer_id)
             # disconnect from node
             self.connections.drop_connection_by_peer_id(peer_id)
+
+    def has_recent_activity(self) -> bool:
+        current_timestamp = time.time()
+        latest_blockchain_timestamp = self.tx_storage.latest_timestamp
+
+        # We use the avg time between blocks as a basis to know how much time we should use to consider the fullnode
+        # as not synced.
+        maximum_timestamp_delta = settings.P2P_RECENT_ACTIVITY_THRESHOLD_MULTIPLIER * settings.AVG_TIME_BETWEEN_BLOCKS
+
+        if current_timestamp - latest_blockchain_timestamp > maximum_timestamp_delta:
+            return False
+
+        return True
+
+    def is_healthy(self) -> Tuple[bool, Optional[str]]:
+        if not self.has_recent_activity():
+            return False, HathorManager.UnhealthinessReason.NO_RECENT_ACTIVITY
+
+        if not self.connections.has_synced_peer():
+            return False, HathorManager.UnhealthinessReason.NO_SYNCED_PEER
+
+        return True, None
 
 
 class ParentTxs(NamedTuple):

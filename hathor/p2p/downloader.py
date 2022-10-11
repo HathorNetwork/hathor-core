@@ -53,12 +53,40 @@ class TxDetails:
     requested_index: int
 
     def __init__(self, tx_id: bytes, deferred: Deferred, connections: List['NodeSyncTimestamp']):
+        self.log = logger.new()
         self.tx_id = tx_id
         self.deferred = deferred
         self.connections = connections
         self.downloading_deferred = None
         self.requested_index = 0
         self.retry_count = 0
+
+    def drop_connection(self, connection: 'NodeSyncTimestamp') -> bool:
+        """Called by the downloader to remove a connection from the tx_details connections, returns a bool.
+
+        It will return True if after the drop there are no more viable connections to download the tx from, which means
+        the _remove_pending_tx should be called for this tx, returns False otherwise."""
+        try:
+            connection_index = self.connections.index(connection)
+        except ValueError:
+            return False
+        if self.requested_index > connection_index:
+            self.requested_index -= 1
+        self.connections.pop(connection_index)
+        if not self.has_available_connection():
+            if self.downloading_deferred is not None:
+                self.log.debug('cancel downloading deferred', tx=self.tx_id.hex())
+                self.downloading_deferred.cancel()
+                self.downloading_deferred = None
+            return True
+        return False
+
+    def has_available_connection(self) -> bool:
+        """ Whether there is any valid connection which the tx can be downloaded from."""
+        for conn in self.connections:
+            if not conn.protocol.aborting:
+                return True
+        return False
 
     def get_connection(self) -> Optional['NodeSyncTimestamp']:
         """ Get a connection to start the download for this tx detail
@@ -127,6 +155,15 @@ class Downloader:
         self.downloading_buffer = {}
         self.window_size = window_size
 
+    def drop_connection(self, connection: 'NodeSyncTimestamp') -> None:
+        """ Called when a peer is disconnected to remove that connection from all the affected pending transactions."""
+        to_remove: List[bytes] = []
+        for tx_details in self.pending_transactions.values():
+            if tx_details.drop_connection(connection):
+                to_remove.append(tx_details.tx_id)
+        for tx_id in to_remove:
+            self._remove_pending_tx(tx_id)
+
     def get_tx(self, tx_id: bytes, connection: 'NodeSyncTimestamp') -> Deferred:
         """ Add a transaction to be downloaded and add to the DAG.
         """
@@ -185,6 +222,7 @@ class Downloader:
         assert details.downloading_deferred is None
         details.downloading_deferred = connection.request_data(tx_id)
         details.downloading_deferred.addCallback(self.on_new_tx)
+        details.downloading_deferred.addErrback(self.on_error)
 
         # Adding timeout to callback
         fn_timeout = partial(self.on_deferred_timeout, tx_id=tx_id)
@@ -199,6 +237,11 @@ class Downloader:
             It just calls the retry method
         """
         self.retry(tx_id)
+
+    def on_error(self, result: Any) -> None:
+        """ Errback for downloading deferred.
+        """
+        self.log.error('failed to download tx', err=result)
 
     def on_new_tx(self, tx: 'BaseTransaction') -> None:
         """ This is called when a new transaction arrives.
@@ -254,7 +297,8 @@ class Downloader:
         details = self.pending_transactions.get(tx_id, None)
 
         if details is None:
-            # Nothing to retry but should never enter here
+            self.log.error('nothing to retry', tx=tx_id.hex())
+            # XXX: Nothing to retry but should never enter here
             # Maybe a race condition in which the timeout has triggered and the tx has arrived.
             return
 
@@ -284,3 +328,7 @@ class Downloader:
         # also remove from downloading queue
         if tx_id in self.downloading_deque:
             self.downloading_deque.remove(tx_id)
+
+        # also remove from waiting queue
+        if tx_id in self.waiting_deque:
+            self.waiting_deque.remove(tx_id)

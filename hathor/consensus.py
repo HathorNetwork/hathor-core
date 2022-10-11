@@ -19,6 +19,7 @@ from structlog import get_logger
 
 from hathor.conf import HathorSettings
 from hathor.profiler import get_cpu_profiler
+from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction, Block, Transaction, TxInput, sum_weights
 from hathor.util import classproperty, not_none
 
@@ -77,7 +78,8 @@ class ConsensusAlgorithm:
     b0 will not be propagated to the voided_by of b1, b2, and b3.
     """
 
-    def __init__(self, soft_voided_tx_ids: Set[bytes]) -> None:
+    def __init__(self, soft_voided_tx_ids: Set[bytes], pubsub: PubSubManager) -> None:
+        self.pubsub = pubsub
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory()
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
@@ -99,11 +101,12 @@ class ConsensusAlgorithm:
             context.block_algorithm.update_consensus(base)
         else:
             raise NotImplementedError
-        # finally signal an index update for all affecetd transactions
+        # finally signal an index update for all affected transactions
         for tx in context.txs_affected:
             assert tx.storage is not None
             assert tx.storage.indexes is not None
             tx.storage.indexes.update(tx)
+            self.pubsub.publish(HathorEvents.CONSENSUS_TX_UPDATE, tx=tx)
 
     def filter_out_soft_voided_entries(self, tx: BaseTransaction, voided_by: Set[bytes]) -> Set[bytes]:
         if not (self.soft_voided_tx_ids & voided_by):
@@ -1006,6 +1009,7 @@ class TransactionConsensusAlgorithm:
             if tx2.is_block:
                 assert isinstance(tx2, Block)
                 self.context.block_algorithm.mark_as_voided(tx2)
+                tx2.storage.update_best_block_tips_cache(None)
 
             assert not meta2.voided_by or voided_hash not in meta2.voided_by
             if tx2.hash != tx.hash and meta2.conflict_with and not meta2.voided_by:

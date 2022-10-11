@@ -31,7 +31,10 @@ METRIC_INFO = {
     'transactions': 'Number of transactions',
     'blocks': 'Number of blocks',
     'hash_rate': 'Hash rate of blocks with old calculus',
-    'peers': 'Peers connected in the network',
+    'connected_peers': 'Peers connected in the network',
+    'connecting_peers': 'Peers connecting in the network',
+    'handshaking_peers': 'Peers handshaking in the network',
+    'known_peers': 'Peers known in the network',
     'best_block_weight': 'Weight of blocks',
     'best_block_height': 'Height of best chain',
     'websocket_connections': 'Number of connections in the websocket',
@@ -40,6 +43,24 @@ METRIC_INFO = {
     'blocks_found': 'Number of blocks found by the miner in stratum',
     'estimated_hash_rate': 'Estimated hash rate for stratum miners',
     'send_token_timeouts': 'Number of times send_token API has timed-out',
+    'transaction_cache_hits': 'Number of hits in the transactions cache',
+    'transaction_cache_misses': 'Number of misses in the transactions cache',
+}
+
+PEER_CONNECTION_METRICS = {
+    # The keys here need to match the field names of class hathor.metrics.PeerConnectionMetrics
+    "received_messages": "Counts how many messages the node received from a peer",
+    "sent_messages": "Counts how many messages the node sent to a peer",
+    "received_bytes": "Counts how many bytes the node received from a peer",
+    "sent_bytes": "Counts how many bytes the node sent to a peer",
+    "received_txs": "Counts how many txs the node received from a peer",
+    "discarded_txs": "Counts how many txs the node discarded from a peer",
+    "received_blocks": "Counts how many blocks the node received from a peer",
+    "discarded_blocks": "Counts how many blocks the node discarded from a peer",
+}
+
+TX_STORAGE_METRICS = {
+    'total_sst_files_size': 'Storage size in bytes of all SST files of a certain column-family in RocksDB'
 }
 
 
@@ -47,7 +68,7 @@ class PrometheusMetricsExporter:
     """ Class that sends hathor metrics to a node exporter that will be read by Prometheus
     """
 
-    def __init__(self, metrics: 'Metrics', path: str, filename: str = 'hathor.prom'):
+    def __init__(self, metrics: 'Metrics', path: str, filename: str = 'hathor.prom', metrics_prefix: str = ''):
         """
         :param metrics: Metric object that stores all the hathor metrics
         :type metrics: :py:class:`hathor.metrics.Metrics`
@@ -59,6 +80,7 @@ class PrometheusMetricsExporter:
         :type filename: str
         """
         self.metrics = metrics
+        self.metrics_prefix = metrics_prefix
 
         # Create full directory, if does not exist
         os.makedirs(path, exist_ok=True)
@@ -89,8 +111,42 @@ class PrometheusMetricsExporter:
         """
         self.registry = CollectorRegistry()
 
+        self._initialize_peer_connection_metrics()
+        self._initialize_tx_storage_metrics()
+
         for name, comment in METRIC_INFO.items():
-            self.metric_gauges[name] = Gauge(name, comment, registry=self.registry)
+            self.metric_gauges[name] = Gauge(self.metrics_prefix + name, comment, registry=self.registry)
+
+    def _initialize_peer_connection_metrics(self) -> None:
+        # Defines the metrics related to peer connections
+        peer_connection_labels = ["network", "connection_string", "peer_id"]
+
+        prefix = self.metrics_prefix + "peer_connection_"
+
+        self.peer_connection_metrics = {
+            name: Gauge(
+                prefix + name,
+                description,
+                labelnames=peer_connection_labels,
+                registry=self.registry
+            ) for name, description in PEER_CONNECTION_METRICS.items()
+        }
+
+    def _initialize_tx_storage_metrics(self) -> None:
+        """Initializes the metrics related to tx storage (RocksDB)
+        """
+        tx_storage_labels = ["column_family"]
+
+        prefix = self.metrics_prefix + "tx_storage_"
+
+        self.tx_storage_metrics = {
+            name: Gauge(
+                prefix + name,
+                description,
+                labelnames=tx_storage_labels,
+                registry=self.registry
+            ) for name, description in TX_STORAGE_METRICS.items()
+        }
 
     def start(self) -> None:
         """ Starts exporter
@@ -104,7 +160,25 @@ class PrometheusMetricsExporter:
         for metric_name in METRIC_INFO.keys():
             self.metric_gauges[metric_name].set(getattr(self.metrics, metric_name))
 
+        self._set_rocksdb_tx_storage_metrics()
+        self._set_new_peer_connection_metrics()
+
         write_to_textfile(self.filepath, self.registry)
+
+    def _set_rocksdb_tx_storage_metrics(self) -> None:
+        for cf, size in self.metrics.rocksdb_cfs_sizes.items():
+            self.tx_storage_metrics['total_sst_files_size'].labels(
+                column_family=cf
+            ).set(size)
+
+    def _set_new_peer_connection_metrics(self) -> None:
+        for name, metric in self.peer_connection_metrics.items():
+            for connection_metric in self.metrics.peer_connection_metrics:
+                metric.labels(
+                    network=connection_metric.network,
+                    peer_id=connection_metric.peer_id,
+                    connection_string=connection_metric.connection_string
+                ).set(getattr(connection_metric, name))
 
     def _write_data(self) -> None:
         """ Update all metric data with new values

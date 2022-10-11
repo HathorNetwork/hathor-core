@@ -119,7 +119,7 @@ class BaseManagerInitializationTestCase(unittest.TestCase):
         self.assertEqual(seen, self.all_hashes)
 
         # a new manager must be successfully initialized
-        self.tx_storage._reset_cache()
+        self.tx_storage.reset_indexes()
         self.create_peer('testnet', tx_storage=self.tx_storage)
 
     def test_init_unfavorable_order(self):
@@ -138,7 +138,7 @@ class BaseManagerInitializationTestCase(unittest.TestCase):
         self.assertEqual(seen, self.all_hashes)
 
         # a new manager must be successfully initialized
-        self.tx_storage._reset_cache()
+        self.tx_storage.reset_indexes()
         self.create_peer('testnet', tx_storage=self.tx_storage)
 
     def test_init_not_voided_tips(self):
@@ -163,7 +163,7 @@ class BaseManagerInitializationTestCase(unittest.TestCase):
         self.assertEqual(50, sum(bool(tx.get_metadata().voided_by) for tx in self.tx_storage.get_all_transactions()))
 
         # create a new manager (which will initialize in the self.create_peer call)
-        self.tx_storage._reset_cache()
+        self.tx_storage.reset_indexes()
         self.manager.stop()
         manager = self.create_peer(self.network, tx_storage=self.tx_storage, full_verification=False)
 

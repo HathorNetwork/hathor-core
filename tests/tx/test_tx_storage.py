@@ -32,6 +32,7 @@ from tests.utils import (
     add_blocks_unlock_reward,
     add_new_blocks,
     add_new_transactions,
+    add_new_tx,
     create_tokens,
 )
 
@@ -50,9 +51,9 @@ class BaseTransactionStorageTest(unittest.TestCase):
             self.reactor = reactor
         self.reactor.advance(time.time())
         self.tx_storage = tx_storage
-        assert tx_storage.first_timestamp > 0
 
         tx_storage._manually_initialize()
+        assert tx_storage.first_timestamp > 0
 
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
@@ -351,6 +352,18 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.manager.propagate_tx(block, fails_silently=False)
         self.reactor.advance(5)
         return block
+
+    def test_best_block_tips_cache(self):
+        _set_test_mode(TestMode.TEST_ALL_WEIGHT)
+        self.manager.wallet.unlock(b'MYPASS')
+        spent_blocks = add_new_blocks(self.manager, 10)
+        self.assertEqual(self.tx_storage._best_block_tips_cache, [spent_blocks[-1].hash])
+        unspent_blocks = add_blocks_unlock_reward(self.manager)
+        self.assertEqual(self.tx_storage._best_block_tips_cache, [unspent_blocks[-1].hash])
+        latest_blocks = add_blocks_unlock_reward(self.manager)
+        unspent_address = self.manager.wallet.get_unused_address()
+        add_new_tx(self.manager, unspent_address, 100)
+        self.assertEqual(self.tx_storage._best_block_tips_cache, [latest_blocks[-1].hash])
 
     def test_topological_sort(self):
         _set_test_mode(TestMode.TEST_ALL_WEIGHT)

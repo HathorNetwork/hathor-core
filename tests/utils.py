@@ -50,17 +50,17 @@ def resolve_block_bytes(block_bytes):
 
 def add_custom_tx(manager: HathorManager, tx_inputs: List[Tuple[BaseTransaction, int]], *, n_outputs: int = 1,
                   base_parent: Optional[Transaction] = None, weight: Optional[float] = None,
-                  resolve: bool = False, address: Optional[str] = None) -> Transaction:
+                  resolve: bool = False, address: Optional[str] = None, inc_timestamp: int = 0) -> Transaction:
     """Add a custom tx based on the gen_custom_tx(...) method."""
     tx = gen_custom_tx(manager, tx_inputs, n_outputs=n_outputs, base_parent=base_parent, weight=weight,
-                       resolve=resolve, address=address)
+                       resolve=resolve, address=address, inc_timestamp=inc_timestamp)
     manager.propagate_tx(tx, fails_silently=False)
     return tx
 
 
 def gen_custom_tx(manager: HathorManager, tx_inputs: List[Tuple[BaseTransaction, int]], *, n_outputs: int = 1,
                   base_parent: Optional[Transaction] = None, weight: Optional[float] = None,
-                  resolve: bool = False, address: Optional[str] = None) -> Transaction:
+                  resolve: bool = False, address: Optional[str] = None, inc_timestamp: int = 0) -> Transaction:
     """Generate a custom tx based on the inputs and outputs. It gives full control to the
     inputs and can be used to generate conflicts and specific patterns in the DAG."""
     wallet = manager.wallet
@@ -117,6 +117,7 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: List[Tuple[BaseTransaction,
     assert len(tx2.parents) == 2
 
     tx2.weight = weight or 25
+    tx2.timestamp += inc_timestamp
     if resolve:
         tx2.resolve()
     else:
