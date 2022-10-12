@@ -25,7 +25,6 @@ jobs:
           # available OS's: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idruns-on
           'os': ['ubuntu-22.04', 'macos-12', 'windows-2022'],
           'include': [
-            {'os': 'ubuntu-20.04', 'python': '3.8'},
             # XXX: tests fail on these, not sure why, when running them individually each on passes, but not on `make tests`
             # {'os': 'ubuntu-22.04', 'python': 'pypy-3.8'},
             # {'os': 'ubuntu-22.04', 'python': 'pypy-3.9'},
@@ -34,7 +33,7 @@ jobs:
         # this is the fastest one:
         reduced_matrix = {
           'python': ['3.9'],
-          'os': ['ubuntu-20.04'],
+          'os': ['ubuntu-22.04'],
         }
         github_repository = os.environ['GITHUB_REPOSITORY']
         if github_repository.lower() == 'hathornetwork/hathor-core':
@@ -65,11 +64,14 @@ jobs:
       matrix: ${{fromJson(needs.matrix.outputs.matrix)}}
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
+    - name: Install Poetry
+      run: pipx install poetry
     - name: Set up Python ${{ matrix.python }}
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python }}
+        cache: 'poetry'
     - name: Install Ubuntu dependencies
       if: startsWith(matrix.os, 'ubuntu')
       run: |
@@ -81,14 +83,10 @@ jobs:
         brew cleanup -q
         brew update -q
         brew install -q graphviz rocksdb
-    - name: Install Poetry
-      run: |
-        pip --no-input --no-cache-dir install --upgrade pip wheel
-        pip --no-input --no-cache-dir install poetry
     - name: Install Poetry dependencies
       run: poetry install -n --no-root
     - name: Cache mypy
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       with:
         path: .mypy_cache
         # this key is setup such that every branch has its cache and new branches can reuse dev's cache, but not the other way around
@@ -101,5 +99,5 @@ jobs:
     - name: Run tests
       run: poetry run make tests
     - name: Upload coverage
-      uses: codecov/codecov-action@v1
+      uses: codecov/codecov-action@v3
       if: matrix.python == 3.9 && startsWith(matrix.os, 'ubuntu')
