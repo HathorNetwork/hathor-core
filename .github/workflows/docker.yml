@@ -32,7 +32,7 @@ jobs:
           python-version: '3.10'
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Prepare tags
       id: prep
       shell: python
@@ -110,13 +110,13 @@ jobs:
         install: true
         driver-opts: network=host
     - name: Login to DockerHub
-      uses: docker/login-action@v1
+      uses: docker/login-action@v2
       if: steps.prep.outputs.login-dockerhub
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
     - name: Login to GitHub Container Registry
-      uses: docker/login-action@v1
+      uses: docker/login-action@v2
       if: steps.prep.outputs.login-ghcr
       with:
         registry: ghcr.io
@@ -131,7 +131,7 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-refs/heads/master-
     - name: Build and export to Docker
-      uses: docker/build-push-action@v2
+      uses: docker/build-push-action@v3
       with:
         context: .
         file: ${{ steps.prep.outputs.dockerfile }}
@@ -144,7 +144,7 @@ jobs:
     - name: Test image
       run: docker run --rm ${{ env.TEST_TAG }} quick_test --data / --testnet
     - name: Build and push
-      uses: docker/build-push-action@v2
+      uses: docker/build-push-action@v3
       continue-on-error: ${{ matrix.python-impl == 'pypy' }}  # PyPy is not first-class and has been causing some build failures
       with:
         context: .

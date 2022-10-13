@@ -16,7 +16,7 @@ RUN pip --no-input --no-cache-dir install --upgrade pip wheel poetry
 ENV POETRY_VIRTUALENVS_IN_PROJECT=true
 WORKDIR /app/
 COPY pyproject.toml poetry.lock  ./
-RUN poetry install -n -E sentry --no-root --no-dev
+RUN poetry install -n -E sentry --no-root --only=main
 COPY hathor ./hathor
 COPY README.md ./
 RUN poetry build -f wheel
