@@ -643,7 +643,7 @@ class HathorManager:
 
         environment_info = self.environment_info.as_dict() if self.environment_info else {}
 
-        vertex_count = self.tx_storage.get_count_tx_blocks()
+        vertex_count = self.tx_storage.get_vertices_count()
 
         # Changing the field names in this log could impact log collectors that parse them
         self.log.info('ready', vertex_count=vertex_count,
@@ -1188,7 +1188,7 @@ class HathorManager:
             self.first_time_fully_synced = now
 
             total_sync_time = LogDuration(self.first_time_fully_synced - self.start_time)
-            vertex_count = self.tx_storage.get_count_tx_blocks()
+            vertex_count = self.tx_storage.get_vertices_count()
 
             # Changing the fields in this log could impact log collectors that parse them
             self.log.info('has recent activity for the first time', total_sync_time=total_sync_time,

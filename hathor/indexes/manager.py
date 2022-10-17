@@ -173,7 +173,7 @@ class IndexesManager(ABC):
             index.init_start()
 
         self.log.debug('indexes init')
-        for tx in progress(tx_storage.topological_iterator(), log=self.log, total=tx_storage.get_count_tx_blocks()):
+        for tx in progress(tx_storage.topological_iterator(), log=self.log, total=tx_storage.get_vertices_count()):
             tx_meta = tx.get_metadata()
             # feed each transaction to the indexes that they are interested in
             for index_filter, index in indexes_to_init:

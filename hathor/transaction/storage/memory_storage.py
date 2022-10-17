@@ -96,7 +96,7 @@ class TransactionMemoryStorage(BaseTransactionStorage):
                 tx._metadata = self._clone(self.metadata[tx.hash])
             yield tx
 
-    def get_count_tx_blocks(self) -> int:
+    def get_vertices_count(self) -> int:
         return len(self.transactions)
 
     def add_value(self, key: str, value: str) -> None:

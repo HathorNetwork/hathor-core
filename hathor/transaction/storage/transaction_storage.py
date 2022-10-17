@@ -145,7 +145,7 @@ class TransactionStorage(ABC):
 
     def is_empty(self) -> bool:
         """True when only genesis is present, useful for checking for a fresh database."""
-        return self.get_count_tx_blocks() <= 3
+        return self.get_vertices_count() <= 3
 
     def pre_init(self) -> None:
         """Storages can implement this to run code before transaction loading starts"""
@@ -487,7 +487,7 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_count_tx_blocks(self) -> int:
+    def get_vertices_count(self) -> int:
         # TODO: verify the following claim:
         """Return the number of transactions/blocks stored.
 
@@ -1177,6 +1177,12 @@ class BaseTransactionStorage(TransactionStorage):
             raise NotImplementedError
         assert self.indexes is not None
         return self.indexes.info.get_tx_count()
+
+    def get_vertices_count(self) -> int:
+        if not self.with_index:
+            raise NotImplementedError
+        assert self.indexes is not None
+        return self.indexes.info.get_vertices_count()
 
     def get_genesis(self, hash_bytes: bytes) -> Optional[BaseTransaction]:
         assert self._genesis_cache is not None

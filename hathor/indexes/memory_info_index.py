@@ -68,6 +68,9 @@ class MemoryInfoIndex(InfoIndex):
     def get_tx_count(self) -> int:
         return self._tx_count
 
+    def get_vertices_count(self) -> int:
+        return self.get_tx_count() + self.get_block_count()
+
     def get_latest_timestamp(self) -> int:
         return self._latest_timestamp
 

@@ -110,7 +110,7 @@ class DbExport(RunNode):
         self.out_file.write(struct.pack('!I', block_count))
         # estimated total, this will obviously be wrong if we're not exporting everything, but it's still better than
         # nothing, and it's probably better to finish sooner than expected, rather than later than expected
-        total = self.tx_storage.get_count_tx_blocks()
+        total = self.tx_storage.get_vertices_count()
         for tx in progress(self.iter_tx(), log=self.log, total=total):
             assert tx.hash is not None
             tx_meta = tx.get_metadata()

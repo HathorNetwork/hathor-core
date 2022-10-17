@@ -215,15 +215,9 @@ class TransactionCacheStorage(BaseTransactionStorage):
             self._save_to_weakref(tx)
             yield tx
 
-    def get_count_tx_blocks(self) -> int:
+    def get_vertices_count(self) -> int:
         self._flush_to_storage(self.dirty_txs.copy())
-
-        if self.store.is_rocksdb_storage():
-            # We know RocksDB estimation for the number of keys is not 100% accurate, so we prefer to
-            # count using the indexes
-            return self.get_tx_count() + self.get_block_count()
-
-        return self.store.get_count_tx_blocks()
+        return super().get_vertices_count()
 
     def add_value(self, key: str, value: str) -> None:
         self.store.add_value(key, value)

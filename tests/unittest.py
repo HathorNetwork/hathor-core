@@ -207,7 +207,7 @@ class TestCase(unittest.TestCase):
         self.assertNotEqual(s1, s2)
 
     def assertConsensusEqual(self, manager1, manager2):
-        self.assertEqual(manager1.tx_storage.get_count_tx_blocks(), manager2.tx_storage.get_count_tx_blocks())
+        self.assertEqual(manager1.tx_storage.get_vertices_count(), manager2.tx_storage.get_vertices_count())
         for tx1 in manager1.tx_storage.get_all_transactions():
             tx2 = manager2.tx_storage.get_transaction(tx1.hash)
             tx1_meta = tx1.get_metadata()
