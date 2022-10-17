@@ -232,6 +232,22 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(self.manager2)
         self.assertConsensusValid(self.manager3)
 
+    def test_check_sync_state(self):
+        """Tests if the LoopingCall to check the sync state works"""
+        # Initially it should do nothing, since there is no recent activity
+        self.manager1.check_sync_state()
+        self.assertFalse(hasattr(self.manager1, "first_time_fully_synced"))
+
+        # We force some sync activity to happen
+        self._add_new_block()
+
+        # Make sure enough time passes so the LoopingCall runs
+        self.clock.advance(self.manager1.lc_check_sync_state_interval)
+
+        # Asserts it ran correctly
+        self.assertTrue(hasattr(self.manager1, "first_time_fully_synced"))
+        self.assertFalse(self.manager1.lc_check_sync_state.running)
+
 
 class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMethodsTestCase):
     __test__ = True

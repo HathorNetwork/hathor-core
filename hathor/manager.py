@@ -21,6 +21,7 @@ from typing import Any, Iterable, Iterator, List, NamedTuple, Optional, Set, Tup
 from structlog import get_logger
 from twisted.internet import defer
 from twisted.internet.defer import Deferred
+from twisted.internet.task import LoopingCall
 from twisted.python.threadpool import ThreadPool
 
 from hathor import daa
@@ -38,7 +39,7 @@ from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transact
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.util import LogDuration, Random, Reactor
+from hathor.util import EnvironmentInfo, LogDuration, Random, Reactor
 from hathor.wallet import BaseWallet
 
 settings = HathorSettings()
@@ -66,6 +67,9 @@ class HathorManager:
         NO_RECENT_ACTIVITY = "Node doesn't have recent blocks"
         NO_SYNCED_PEER = "Node doesn't have a synced peer"
 
+    # This is the interval to be used by the task to check if the node is synced
+    CHECK_SYNC_STATE_INTERVAL = 30  # seconds
+
     def __init__(self, reactor: Reactor, peer_id: Optional[PeerId] = None, network: Optional[str] = None,
                  hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
@@ -73,7 +77,8 @@ class HathorManager:
                  stratum_port: Optional[int] = None, ssl: bool = True,
                  enable_sync_v1: bool = True, enable_sync_v2: bool = False,
                  capabilities: Optional[List[str]] = None, checkpoints: Optional[List[Checkpoint]] = None,
-                 rng: Optional[Random] = None, soft_voided_tx_ids: Optional[Set[bytes]] = None) -> None:
+                 rng: Optional[Random] = None, soft_voided_tx_ids: Optional[Set[bytes]] = None,
+                 environment_info: Optional[EnvironmentInfo] = None) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node. If not given, a new one is created.
@@ -221,6 +226,14 @@ class HathorManager:
         else:
             self.capabilities = DEFAULT_CAPABILITIES
 
+        # This is included in some logs to provide more context
+        self.environment_info = environment_info
+
+        # Task that will count the total sync time
+        self.lc_check_sync_state = LoopingCall(self.check_sync_state)
+        self.lc_check_sync_state.clock = self.reactor
+        self.lc_check_sync_state_interval = self.CHECK_SYNC_STATE_INTERVAL
+
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
         """
@@ -285,6 +298,8 @@ class HathorManager:
 
         self.start_time = time.time()
 
+        self.lc_check_sync_state.start(self.lc_check_sync_state_interval, now=False)
+
         if self.wallet:
             self.wallet.start()
 
@@ -310,6 +325,9 @@ class HathorManager:
 
         # Metric stops to capture data
         self.metrics.stop()
+
+        if self.lc_check_sync_state.running:
+            self.lc_check_sync_state.stop()
 
         if self.wallet:
             self.wallet.stop()
@@ -527,9 +545,14 @@ class HathorManager:
 
         # self.stop_profiler(save_to='profiles/initializing.prof')
         self.state = self.NodeState.READY
-        tdt = LogDuration(t2 - t0)
-        tx_rate = '?' if tdt == 0 else cnt / tdt
-        self.log.info('ready', tx_count=cnt, tx_rate=tx_rate, total_dt=tdt, height=h, blocks=block_count, txs=tx_count)
+        total_load_time = LogDuration(t2 - t0)
+        tx_rate = '?' if total_load_time == 0 else cnt / total_load_time
+
+        environment_info = self.environment_info.as_dict() if self.environment_info else {}
+
+        # Changing the field names in this log could impact log collectors that parse them
+        self.log.info('ready', vertex_count=cnt, tx_rate=tx_rate, total_load_time=total_load_time, height=h,
+                      blocks=block_count, txs=tx_count, **environment_info)
 
     def _initialize_components_new(self) -> None:
         """You are not supposed to run this method manually. You should run `doStart()` to initialize the
@@ -538,6 +561,9 @@ class HathorManager:
         This method runs through all transactions, verifying them and updating our wallet.
         """
         self.log.info('initialize')
+        t0 = time.time()
+        t1 = t0
+
         if self.wallet:
             self.wallet._manually_initialize()
 
@@ -595,7 +621,17 @@ class HathorManager:
         # XXX: last step before actually starting is updating the last started at timestamps
         self.tx_storage.update_last_started_at(started_at)
         self.state = self.NodeState.READY
-        self.log.info('ready')
+
+        t1 = time.time()
+        total_load_time = LogDuration(t1 - t0)
+
+        environment_info = self.environment_info.as_dict() if self.environment_info else {}
+
+        vertex_count = self.tx_storage.get_tx_count() + self.tx_storage.get_block_count()
+
+        # Changing the field names in this log could impact log collectors that parse them
+        self.log.info('ready', vertex_count=vertex_count,
+                      total_load_time=total_load_time, **environment_info)
 
     def _verify_checkpoints(self) -> None:
         """ Method to verify if all checkpoints that exist in the database have the correct hash and are winners.
@@ -1096,6 +1132,21 @@ class HathorManager:
             return False, HathorManager.UnhealthinessReason.NO_SYNCED_PEER
 
         return True, None
+
+    def check_sync_state(self):
+        now = time.time()
+
+        if self.has_recent_activity():
+            self.first_time_fully_synced = now
+
+            total_sync_time = LogDuration(self.first_time_fully_synced - self.start_time)
+            vertex_count = self.tx_storage.get_tx_count() + self.tx_storage.get_block_count()
+
+            # Changing the fields in this log could impact log collectors that parse them
+            self.log.info('has recent activity for the first time', total_sync_time=total_sync_time,
+                          vertex_count=vertex_count, **self.environment_info.as_dict())
+
+            self.lc_check_sync_state.stop()
 
 
 class ParentTxs(NamedTuple):

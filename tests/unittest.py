@@ -16,7 +16,7 @@ from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import BaseTransaction
-from hathor.util import Random, reactor
+from hathor.util import Random, get_environment_info, reactor
 from hathor.wallet import HDWallet, Wallet
 
 logger = get_logger()
@@ -149,6 +149,7 @@ class TestCase(unittest.TestCase):
             enable_sync_v1=enable_sync_v1,
             enable_sync_v2=enable_sync_v2,
             checkpoints=checkpoints,
+            environment_info=get_environment_info("", peer_id.id)
         )
 
         # XXX: just making sure that tests set this up correctly
