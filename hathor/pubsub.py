@@ -23,13 +23,25 @@ from hathor.util import Reactor, ReactorThread
 
 class HathorEvents(Enum):
     """
-        NETWORK_NEW_ACCEPTED:
+        NETWORK_NEW_TX_ACCEPTED:
             Triggered when a new tx/block is accepted in the network
             Publishes a tx/block object
 
         NETWORK_PEER_CONNECTION_FAILURE:
             Triggered when a peer connection to the network fails
             Publishes the peer id and the peers count
+
+        NETWORK_NEW_TX_VOIDED
+            Triggered when a new transaction is voided in the network
+            Publishes a tx object
+
+        NETWORK_BEST_BLOCK_FOUND
+            Triggered when a new block is accepted in the network
+            Publishes a block object
+
+        NETWORK_ORPHAN_BLOCK_FOUND
+            Triggered when a new block is voided in the network
+            Publishes a block object
 
         NETWORK_PEER_CONNECTED:
             Triggered when a new peer connects to the network
@@ -74,6 +86,24 @@ class HathorEvents(Enum):
 
         WALLET_ELEMENT_VOIDED:
             Triggered when a wallet element is marked as voided
+
+        LOAD_STARTED
+            Triggered when manager has started reading data from the local database
+
+        LOAD_FINISHED
+            Triggered when manager finishes reading local data and it is ready to sync
+
+        REORG_STARTED
+            Trigerred when consensus algorithm finds that a reorg started to happen
+
+        REORG_FINISHED
+            Triggered when consensus algorithm ends all changes involved in a reorg
+
+        TX_METADATA_CHANGED
+            Triggered when consensus algorithm changes a metadata of an existing transaction
+
+        BLOCK_METADATA_CHANGED
+            Triggered when consensus algorithm changes a metadata from an existing block
     """
     MANAGER_ON_START = 'manager:on_start'
     MANAGER_ON_STOP = 'manager:on_stop'
@@ -89,6 +119,12 @@ class HathorEvents(Enum):
     NETWORK_NEW_TX_ACCEPTED = 'network:new_tx_accepted'
 
     CONSENSUS_TX_UPDATE = 'consensus:tx_update'
+
+    NETWORK_NEW_TX_VOIDED = 'network:new_tx_voided'
+
+    NETWORK_BEST_BLOCK_FOUND = 'network:best_block_found'
+
+    NETWORK_ORPHAN_BLOCK_FOUND = 'network:orphan_block_found'
 
     WALLET_OUTPUT_RECEIVED = 'wallet:output_received'
 
@@ -107,6 +143,18 @@ class HathorEvents(Enum):
     WALLET_ELEMENT_WINNER = 'wallet:element_winner'
 
     WALLET_ELEMENT_VOIDED = 'wallet:element_voided'
+
+    LOAD_STARTED = 'manager:load_started'
+
+    LOAD_FINISHED = 'manager:load_finished'
+
+    REORG_STARTED = 'reorg:started'
+
+    REORG_FINISHED = 'reorg:finished'
+
+    TX_METADATA_CHANGED = 'tx:metadata_changed'
+
+    BLOCK_METADATA_CHANGED = 'block:metadata_changed'
 
 
 class EventArguments:
