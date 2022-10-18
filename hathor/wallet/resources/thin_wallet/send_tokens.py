@@ -202,7 +202,7 @@ class SendTokensResource(Resource):
         funds_hash = context.tx.get_funds_hash()
         context.tx = self.manager.stratum_factory.mined_txs[funds_hash]
         # Delete it to avoid memory leak
-        del(self.manager.stratum_factory.mined_txs[funds_hash])
+        del self.manager.stratum_factory.mined_txs[funds_hash]
 
         deferred = threads.deferToThreadPool(reactor, self.manager.pow_thread_pool,
                                              self._stratum_thread_verify, context)

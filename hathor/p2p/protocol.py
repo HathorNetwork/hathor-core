@@ -296,7 +296,12 @@ class HathorProtocol:
         self.reset_idle_timeout()
 
         if not self.ratelimit.add_hit(self.RateLimitKeys.GLOBAL):
-            self.state.send_throttle(self.RateLimitKeys.GLOBAL)
+            # XXX: on Python 3.11 the result of the following expression:
+            #      '{}'.format(HathorProtocol.RateLimitKeys.GLOBAL)
+            #      is not 'global' but 'RateLimitKeys.GLOBAL', even though the enum value *is* a string, but it seems
+            #      that something like `str(value)` is called which results in a different value (usually not the case
+            #      for regular strings, but it is for enum+str), using `enum_variant.value` side-steps this problem
+            self.state.send_throttle(self.RateLimitKeys.GLOBAL.value)
             return None
 
         fn = self.state.cmd_map.get(cmd)

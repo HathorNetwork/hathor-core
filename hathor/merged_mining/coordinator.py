@@ -755,7 +755,7 @@ class MergedMiningStratumProtocol(asyncio.Protocol):
                            merkle_root=bitcoin_block.merkle_root.hex())
 
     async def estimator_loop(self) -> None:
-        """ This loop only cares about reducing the current difficulty if the miner takes too long to submit a solution.
+        """ This loop only cares about reducing the current difficulty if the miner takes too long to submit a solution
         """
         from functools import reduce
         from math import log2
