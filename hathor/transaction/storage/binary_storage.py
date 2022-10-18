@@ -189,6 +189,14 @@ class TransactionBinaryStorage(BaseTransactionStorage):
                         tx = get_tx(hash_bytes, f.path)
                     yield tx
 
+    def get_vertices_count(self):
+        try:
+            return super().get_vertices_count()
+        except NotImplementedError:
+            files = os.listdir(self.tx_path)
+            assert len(files) % 2 == 0
+            return len(files) // 2
+
     def add_value(self, key: str, value: str) -> None:
         filepath = os.path.join(self.attributes_path, key)
         self.save_to_json(filepath, value)

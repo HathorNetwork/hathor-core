@@ -165,6 +165,14 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             assert tx is not None
             yield tx
 
+    def get_vertices_count(self) -> int:
+        try:
+            return super().get_vertices_count()
+        except NotImplementedError:
+            keys_bcount = self._db.get_property(b'rocksdb.estimate-num-keys', self._cf_tx)
+            keys_count = int(keys_bcount)
+            return keys_count
+
     def get_sst_files_sizes_by_cf(
         self,
         cfs: Optional[List['rocksdb.ColumnFamilyHandle']] = None
