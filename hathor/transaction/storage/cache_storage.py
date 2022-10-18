@@ -230,6 +230,3 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
     def flush(self):
         self._flush_to_storage(self.dirty_txs.copy())
-
-    def is_rocksdb_storage(self) -> bool:
-        return self.store.is_rocksdb_storage()

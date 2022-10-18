@@ -879,13 +879,6 @@ class TransactionStorage(ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
-    def is_rocksdb_storage(self) -> bool:
-        """ Indicates whether the class uses RocksDB as its underlying
-        storage mechanism.
-        """
-        raise NotImplementedError
-
 
 class BaseTransactionStorage(TransactionStorage):
     def __init__(self, with_index: bool = True, pubsub: Optional[Any] = None) -> None:
@@ -1224,6 +1217,3 @@ class BaseTransactionStorage(TransactionStorage):
 
     def flush(self) -> None:
         pass
-
-    def is_rocksdb_storage(self) -> bool:
-        return super().is_rocksdb_storage()

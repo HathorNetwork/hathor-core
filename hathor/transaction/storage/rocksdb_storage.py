@@ -204,6 +204,3 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             return None
         else:
             return data.decode()
-
-    def is_rocksdb_storage(self) -> bool:
-        return True
