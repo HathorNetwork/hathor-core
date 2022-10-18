@@ -233,6 +233,8 @@ class IndexesManager(ABC):
         # XXX: this method is idempotent and has no result
         self.deps.add_tx(tx)
 
+        # We need to check r1 as well to make sure we don't count twice the transactions/blocks that are
+        # just changing from voided to executed or vice-versa
         if r1 and r3:
             self.info.update_counts(tx)
 
