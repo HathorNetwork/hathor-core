@@ -24,8 +24,6 @@ from autobahn.twisted.resource import WebSocketResource
 from structlog import get_logger
 from twisted.web.resource import Resource
 
-from hathor.util import get_environment_info
-
 logger = get_logger()
 # LOGGING_CAPTURE_STDOUT = True
 
@@ -129,7 +127,7 @@ class RunNode:
             TransactionRocksDBStorage,
             TransactionStorage,
         )
-        from hathor.util import reactor
+        from hathor.util import get_environment_info, reactor
         from hathor.wallet import HDWallet, Wallet
 
         settings = HathorSettings()
