@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Any, Callable, Dict, Optional
 
 from structlog import get_logger
 
@@ -42,7 +42,57 @@ _SUBSCRIBE_EVENTS = [
     HathorEvents.REORG_FINISHED,
     HathorEvents.TX_METADATA_CHANGED,
     HathorEvents.BLOCK_METADATA_CHANGED,
+    HathorEvents.CONSENSUS_TX_UPDATE,
+    HathorEvents.CONSENSUS_TX_REMOVED,
 ]
+
+
+def _todo(args: EventArguments) -> Dict[str, Any]:
+    raise NotImplementedError('TODO')
+
+
+def _empty(args: EventArguments) -> Dict[str, Any]:
+    return {}
+
+
+def _extract_tx(args: EventArguments) -> Dict[str, Any]:
+    return {
+        'hash': args.tx.hash_hex,
+        # TODO: other fields haven't been implemented, but will be before this feature is rolled out
+    }
+
+
+def _extract_reorg(args: EventArguments) -> Dict[str, Any]:
+    return {
+        'reorg_size': args.reorg_size,
+        'previous_best_block': args.old_best_block.hash_hex,
+        'new_best_block': args.new_best_block.hash_hex,
+        'common_block': args.common_block.hash_hex,
+    }
+
+
+_EVENT_EXTRACT_MAP: Dict[HathorEvents, Callable[[EventArguments], Dict[str, Any]]] = {
+    HathorEvents.LOAD_STARTED: _empty,
+    HathorEvents.LOAD_FINISHED: _empty,
+    HathorEvents.NETWORK_NEW_TX_ACCEPTED: _extract_tx,
+    HathorEvents.NETWORK_NEW_TX_VOIDED: _extract_tx,
+    HathorEvents.NETWORK_BEST_BLOCK_FOUND: _extract_tx,
+    HathorEvents.NETWORK_ORPHAN_BLOCK_FOUND: _extract_tx,
+    HathorEvents.REORG_STARTED: _extract_reorg,
+    HathorEvents.REORG_FINISHED: _empty,
+    HathorEvents.TX_METADATA_CHANGED: _todo,  # XXX: I'm considering removing this event
+    HathorEvents.BLOCK_METADATA_CHANGED: _todo,  # XXX: I'm considering removing this event
+    HathorEvents.CONSENSUS_TX_UPDATE: _extract_tx,
+    HathorEvents.CONSENSUS_TX_REMOVED: _extract_tx,
+}
+
+
+def build_event_data(event: HathorEvents, event_args: EventArguments) -> Dict[str, Any]:
+    """Extract and build event data from event_args for a given event type."""
+    event_extract_fn = _EVENT_EXTRACT_MAP.get(event)
+    if event_extract_fn is None:
+        raise ValueError(f'The given event type ({event}) is not a supported event')
+    return event_extract_fn(event_args)
 
 
 class EventManager:
@@ -71,8 +121,7 @@ class EventManager:
         for event in _SUBSCRIBE_EVENTS:
             pubsub.subscribe(event, self._persist_event)
 
-    def _persist_event(self, event: HathorEvents, args: EventArguments) -> None:
-        event_data = args.__dict__['event']
+    def _persist_event(self, event: HathorEvents, event_args: EventArguments) -> None:
         group_id: Optional[int]
         if event in _GROUP_START_EVENTS:
             assert self._current_group_id is None, 'cannot start an event group before the last one is ended'
@@ -86,7 +135,7 @@ class EventManager:
             peer_id=self._peer_id,
             timestamp=self.clock.seconds(),
             type=event.value,
-            data=event_data,
+            data=build_event_data(event, event_args),
             group_id=group_id,
         )
         self.event_storage.save_event(event_to_store)

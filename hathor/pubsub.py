@@ -14,11 +14,14 @@
 
 from collections import defaultdict, deque
 from enum import Enum
-from typing import Any, Callable, Deque, Dict, List, Tuple, cast
+from typing import TYPE_CHECKING, Any, Callable, Deque, Dict, List, Tuple, cast
 
 from twisted.internet.interfaces import IReactorFromThreads
 
 from hathor.util import Reactor, ReactorThread
+
+if TYPE_CHECKING:
+    from hathor.transaction import BaseTransaction, Block
 
 
 class HathorEvents(Enum):
@@ -166,6 +169,13 @@ class HathorEvents(Enum):
 class EventArguments:
     """Simple object for storing event arguments.
     """
+
+    # XXX: add these as needed, these attributes don't always exist, but when they do these are their types
+    tx: 'BaseTransaction'
+    reorg_size: int
+    old_best_block: 'Block'
+    new_best_block: 'Block'
+    common_block: 'Block'
 
     def __init__(self, **kwargs: Any) -> None:
         for key, value in kwargs.items():

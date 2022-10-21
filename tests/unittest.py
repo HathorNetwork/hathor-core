@@ -156,6 +156,17 @@ class TestCase(unittest.TestCase):
         if utxo_index:
             tx_storage.indexes.enable_utxo_index()
 
+        if event_storage is True:
+            # XXX: either bool or Optional[EventStorage] is accepted for event_storage
+            if self.use_memory_storage:
+                from hathor.event.storage import EventMemoryStorage
+                event_storage = EventMemoryStorage()
+            else:
+                from hathor.event.storage import EventRocksDBStorage
+                event_storage = EventRocksDBStorage(rocksdb_storage)
+        elif event_storage is False:
+            event_storage = None
+
         manager = HathorManager(
             self.clock,
             pubsub=pubsub,
