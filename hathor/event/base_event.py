@@ -22,8 +22,10 @@ class BaseEvent:
     peer_id: str
     # Event unique id, determines event order
     id: int
-    # Timestamp in which the event was emitted, this follows the unix_timestamp format
-    timestamp: int
+    # Timestamp in which the event was emitted, this follows the unix_timestamp format, it's only informative, events
+    # aren't guaranteed to always have sequential timestamps, for example, if the system clock changes between two
+    # events it's possible that timestamps will temporarily decrease.
+    timestamp: float
     # One of the event types
     type: str
     # Variable for event type

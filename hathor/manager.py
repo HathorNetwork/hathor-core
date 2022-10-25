@@ -28,6 +28,7 @@ from hathor import daa
 from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
+from hathor.event.event_manager import EventManager
 from hathor.event.storage import EventStorage
 from hathor.exception import HathorError, InitializationError, InvalidNewTransaction
 from hathor.mining import BlockTemplate, BlockTemplates
@@ -40,7 +41,7 @@ from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transact
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.util import EnvironmentInfo, LogDuration, Random, Reactor
+from hathor.util import EnvironmentInfo, LogDuration, Random, Reactor, not_none
 from hathor.wallet import BaseWallet
 
 settings = HathorSettings()
@@ -154,7 +155,6 @@ class HathorManager:
         # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
         self.pubsub = pubsub or PubSubManager(self.reactor)
         self.tx_storage = tx_storage
-        self.event_storage = event_storage
         self.tx_storage.pubsub = self.pubsub
         if wallet_index and self.tx_storage.with_index:
             assert self.tx_storage.indexes is not None
@@ -165,6 +165,10 @@ class HathorManager:
             assert self.tx_storage.indexes is not None
             self.log.debug('enable utxo index')
             self.tx_storage.indexes.enable_utxo_index()
+        self.event_manager: Optional[EventManager] = None
+        if event_storage is not None:
+            self.event_manager = EventManager(event_storage, self.reactor, not_none(self.my_peer.id))
+            self.event_manager.subscribe(self.pubsub)
 
         self.soft_voided_tx_ids = soft_voided_tx_ids or set()
         self.consensus_algorithm = ConsensusAlgorithm(self.soft_voided_tx_ids, pubsub=self.pubsub)

@@ -13,5 +13,6 @@
 # limitations under the License.
 
 from hathor.event.base_event import BaseEvent
+from hathor.event.event_manager import EventManager
 
-__all__ = ['BaseEvent']
+__all__ = ['BaseEvent', 'EventManager']

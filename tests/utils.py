@@ -1,11 +1,11 @@
 import base64
 import hashlib
 import os
-import random
 import string
 import subprocess
 import time
 import urllib.parse
+from dataclasses import dataclass
 from typing import List, Optional, Tuple, cast
 
 import requests
@@ -20,6 +20,7 @@ from hathor.transaction import BaseTransaction, Transaction, TxInput, TxOutput, 
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount
+from hathor.util import Random
 
 try:
     import rocksdb  # noqa: F401
@@ -648,26 +649,35 @@ def add_tx_with_data_script(manager: 'HathorManager', data: List[str], propagate
     return tx
 
 
-def generate_mocked_event(id: Optional[int] = None) -> BaseEvent:
-    """ Generates a mocked event with a best block found message
-    """
-    hash = hashlib.sha256(generate_random_word(10).encode('utf-8'))
-    peer_id_mock = hash.hexdigest()
+@dataclass
+class EventMocker:
+    rng: Random
+    next_id: int = 0
 
-    return BaseEvent(
-        id=id or random.randint(1, 18446744073709551615),
-        peer_id=peer_id_mock,
-        timestamp=1658892990,
-        type='network:best_block_found',
-        group_id=0,
-        data={
-            "data": "test"
-        }
-    )
+    def gen_next_id(self) -> int:
+        next_id = self.next_id
+        self.next_id += 1
+        return next_id
 
+    def generate_mocked_event(self, id: Optional[int] = None) -> BaseEvent:
+        """ Generates a mocked event with a best block found message
+        """
+        hash = hashlib.sha256(self.generate_random_word(10).encode('utf-8'))
+        peer_id_mock = hash.hexdigest()
 
-def generate_random_word(length: int) -> str:
-    """ Generates a random sequence of characters given a length
-    """
-    letters = string.ascii_lowercase
-    return ''.join(random.choice(letters) for i in range(length))
+        return BaseEvent(
+            id=id or self.gen_next_id(),
+            peer_id=peer_id_mock,
+            timestamp=1658892990,
+            type='network:best_block_found',
+            group_id=0,
+            data={
+                "data": "test"
+            },
+        )
+
+    def generate_random_word(self, length: int) -> str:
+        """ Generates a random sequence of characters given a length
+        """
+        letters = string.ascii_lowercase
+        return ''.join(self.rng.choice(letters) for i in range(length))
