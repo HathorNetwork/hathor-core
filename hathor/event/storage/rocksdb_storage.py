@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Iterator, Optional
 
 from hathor.event.base_event import BaseEvent
 from hathor.event.storage.event_storage import EventStorage
@@ -32,6 +32,13 @@ class EventRocksDBStorage(EventStorage):
         self._cf_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_META)
         self._last_event: Optional[BaseEvent] = self._db_get_last_event()
         self._last_group_id: Optional[int] = self._db_get_last_group_id()
+
+    def iter_from_event(self, key: int) -> Iterator[BaseEvent]:
+        it = self._db.itervalues(self._cf_event)
+        it.seek(int_to_bytes(key, 8))
+        for event_bytes in it:
+            event = self._load_from_bytes(event_bytes)
+            yield event
 
     def _load_from_bytes(self, event_data: bytes) -> BaseEvent:
         event_dict = json_loadb(event_data)

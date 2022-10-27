@@ -308,6 +308,7 @@ class CliBuilder:
             DebugRaiseResource,
             DebugRejectResource,
         )
+        from hathor.event.websocket.factory import EventWebsocketFactory
         from hathor.mining.ws import MiningWebsocketFactory
         from hathor.p2p.resources import (
             AddPeersResource,
@@ -480,6 +481,11 @@ class CliBuilder:
         root.putChild(b'mining_ws', WebSocketResource(mining_ws_factory))
 
         ws_factory.subscribe(self.manager.pubsub)
+
+        # Event websocket resource
+        if args.x_enable_event_queue and self.event_storage is not None:
+            event_ws_factory = EventWebsocketFactory(self.event_storage)
+            root.putChild(b'event_ws', WebSocketResource(event_ws_factory))
 
         # Websocket stats resource
         root.putChild(b'websocket_stats', WebsocketStatsResource(ws_factory))

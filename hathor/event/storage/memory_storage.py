@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Optional
+from typing import Iterator, List, Optional
 
 from hathor.event.base_event import BaseEvent
 from hathor.event.storage.event_storage import EventStorage
@@ -48,3 +48,8 @@ class EventMemoryStorage(EventStorage):
 
     def get_last_group_id(self) -> Optional[int]:
         return self._last_group_id
+
+    def iter_from_event(self, key: int) -> Iterator[BaseEvent]:
+        while key < len(self._events):
+            yield self._events[key]
+            key += 1

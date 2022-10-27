@@ -340,6 +340,9 @@ class HathorSettings(NamedTuple):
     # Interval (in seconds) to broadcast dashboard metrics to websocket connections
     WS_SEND_METRICS_INTERVAL: int = 1
 
+    # Interval (in seconds) to send node events to websocket connections
+    WS_SEND_EVENTS_INTERVAL: int = 5
+
     # Interval (in seconds) to write data to prometheus
     PROMETHEUS_WRITE_INTERVAL: int = 5
 
