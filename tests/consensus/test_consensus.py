@@ -30,16 +30,16 @@ class BaseConsensusTestCase(unittest.TestCase):
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
 
         # Mine a few blocks in a row with no transaction but the genesis
-        blocks = add_new_blocks(manager, 3, advance_clock=15)
-        add_blocks_unlock_reward(manager)
+        add_new_blocks(manager, 3, advance_clock=15)
+        blocks = add_blocks_unlock_reward(manager)
 
-        # Add some transactions between blocks
+        # Add some transactions after blocks
         add_new_transactions(manager, 5, advance_clock=15)
 
         # Create a double spending transaction.
         conflicting_tx = add_new_double_spending(manager, use_same_parents=True)
 
-        # Add a few transactions.
+        # Add a few more transactions.
         add_new_transactions(manager, 10, advance_clock=15)
 
         meta = conflicting_tx.get_metadata()
@@ -49,6 +49,7 @@ class BaseConsensusTestCase(unittest.TestCase):
 
         # These blocks will be voided later.
         blocks2 = add_new_blocks(manager, 2, advance_clock=15)
+        self.assertEqual(blocks[-1].hash, blocks2[0].parents[0])
 
         # This block verifies the conflicting transaction and has a high weight.
         # So, it will be executed and previous blocks and transactions will be voided.
@@ -147,8 +148,8 @@ class BaseConsensusTestCase(unittest.TestCase):
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
 
         # Mine a few blocks in a row with no transaction but the genesis
-        blocks = add_new_blocks(manager, 3, advance_clock=15)
-        add_blocks_unlock_reward(manager)
+        add_new_blocks(manager, 3, advance_clock=15)
+        blocks = add_blocks_unlock_reward(manager)
 
         # Add some transactions between blocks
         txs = add_new_transactions(manager, 5, advance_clock=15)
@@ -167,6 +168,7 @@ class BaseConsensusTestCase(unittest.TestCase):
 
         # These blocks will be voided later.
         blocks2 = add_new_blocks(manager, 2, advance_clock=15)
+        self.assertEqual(blocks[-1].hash, blocks2[0].parents[0])
 
         # This block verifies the conflicting transaction and has a high weight.
         tb0 = manager.make_custom_block_template(blocks[-1].hash, [conflicting_tx.hash, conflicting_tx.parents[0]])

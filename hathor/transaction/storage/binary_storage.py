@@ -23,6 +23,7 @@ from hathor.transaction.storage.exceptions import (
     TransactionDoesNotExist,
     TransactionMetadataDoesNotExist,
 )
+from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.transaction_metadata import TransactionMetadata
 
@@ -38,10 +39,25 @@ class TransactionBinaryStorage(BaseTransactionStorage):
         filename_pattern = r'^tx_([\dabcdef]{64})\.bin$'
         self.re_pattern = re.compile(filename_pattern)
 
+        self.migrations_path = os.path.join(path, 'migrations.json')
         self.attributes_path = os.path.join(path, 'attributes')
         os.makedirs(self.attributes_path, exist_ok=True)
 
         super().__init__(with_index=with_index)
+
+    def pre_init(self) -> None:
+        if not os.path.exists(self.migrations_path):
+            self.save_to_json(self.migrations_path, {})
+        super().pre_init()
+
+    def get_migration_state(self, migration_name: str) -> MigrationState:
+        migrations = self.load_from_json(self.migrations_path, AssertionError('database corrupted'))
+        return MigrationState(migrations.get(migration_name, MigrationState.NOT_STARTED.value))
+
+    def set_migration_state(self, migration_name: str, state: MigrationState) -> None:
+        migrations = self.load_from_json(self.migrations_path, AssertionError('database corrupted'))
+        migrations[migration_name] = state.value
+        self.save_to_json(self.migrations_path, migrations)
 
     def remove_transaction(self, tx):
         super().remove_transaction(tx)

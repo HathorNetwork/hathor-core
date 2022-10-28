@@ -27,3 +27,27 @@ class InvalidNewTransaction(HathorError):
 class InitializationError(HathorError):
     """Raised when there's anything wrong during initialization that should cause it to be aborted.
     """
+
+
+class DoubleSpendingError(InvalidNewTransaction):
+    """Raised when a new received tx/block is not valid because of a double spending.
+    """
+    pass
+
+
+class SpendingVoidedError(InvalidNewTransaction):
+    """Raised when a new received tx/block is not valid because of an attempt to spend a voided transaction.
+    """
+    pass
+
+
+class RewardLockedError(InvalidNewTransaction):
+    """Raised when a new received tx/block is not valid because of an attempt to spend a locked reward.
+    """
+    pass
+
+
+class NonStandardTxError(InvalidNewTransaction):
+    """Raised when a new received tx/block is not accepted because of a standard-tx rule.
+    """
+    pass

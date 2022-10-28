@@ -243,6 +243,9 @@ class IndexesManager(ABC):
 
         :param tx: Transaction to be deleted
         """
+        assert tx.storage is not None
+        assert tx.hash is not None
+
         if remove_all:
             # We delete from indexes in two cases: (i) mark tx as voided, and (ii) remove tx.
             # We only remove tx from all_tips and sorted_all when it is removed from the storage.
@@ -254,6 +257,11 @@ class IndexesManager(ABC):
             if self.utxo:
                 self.utxo.del_tx(tx)
             self.info.update_counts(tx, remove=True)
+
+        # mempool will pick-up if the transaction is voided/invalid and remove it
+        logger.debug('remove from mempool tips', tx=tx.hash_hex)
+        if tx.storage.transaction_exists(tx.hash):
+            self.mempool_tips.update(tx, remove=True)
 
         if tx.is_block:
             self.block_tips.del_tx(tx, relax_assert=relax_assert)

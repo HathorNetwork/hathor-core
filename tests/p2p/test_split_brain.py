@@ -1,5 +1,6 @@
 import random
 
+import pytest
 from mnemonic import Mnemonic
 
 from hathor.daa import TestMode, _set_test_mode
@@ -43,6 +44,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         wallet.unlock(words=words, tx_storage=manager.tx_storage)
         return manager
 
+    @pytest.mark.slow
     def test_split_brain(self):
         debug_pdf = False
 

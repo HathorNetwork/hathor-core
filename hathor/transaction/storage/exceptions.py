@@ -33,3 +33,11 @@ class AttributeDoesNotExist(HathorError):
 
 class WrongNetworkError(HathorError):
     """You are trying to use a database for a different network"""
+
+
+class PartialMigrationError(HathorError):
+    """You are trying to run a migration that did not run until the end, the database could be unusable"""
+
+
+class OutOfOrderMigrationError(HathorError):
+    """A migration was run before another that was before it"""

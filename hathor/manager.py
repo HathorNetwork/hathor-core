@@ -18,6 +18,7 @@ import time
 from enum import Enum
 from typing import Any, Iterable, Iterator, List, NamedTuple, Optional, Set, Tuple, Union
 
+from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
 from twisted.internet import defer
 from twisted.internet.defer import Deferred
@@ -30,7 +31,15 @@ from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.event.event_manager import EventManager
 from hathor.event.storage import EventStorage
-from hathor.exception import HathorError, InitializationError, InvalidNewTransaction
+from hathor.exception import (
+    DoubleSpendingError,
+    HathorError,
+    InitializationError,
+    InvalidNewTransaction,
+    NonStandardTxError,
+    RewardLockedError,
+    SpendingVoidedError,
+)
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
@@ -894,6 +903,37 @@ class HathorManager:
             return False
         return self.propagate_tx(blk, fails_silently=fails_silently)
 
+    def push_tx(self, tx: Transaction, allow_non_standard_script: bool = False,
+                max_output_script_size: int = settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE) -> None:
+        """Used by all APIs that accept a new transaction (like push_tx)
+        """
+        is_double_spending = tx.is_double_spending()
+        if is_double_spending:
+            raise DoubleSpendingError('Invalid transaction. At least one of your inputs has already been spent.')
+
+        is_spending_voided_tx = tx.is_spending_voided_tx()
+        if is_spending_voided_tx:
+            raise SpendingVoidedError('Invalid transaction. At least one input is voided.')
+
+        is_spent_reward_locked = tx.is_spent_reward_locked()
+        if is_spent_reward_locked:
+            raise RewardLockedError('Spent reward is locked.')
+
+        # We are using here the method from lib because the property
+        # to identify a nft creation transaction was created on the lib
+        # to be used in the full node and tx mining service
+        # TODO: avoid reparsing when hathorlib is fully compatible
+        tx_from_lib = lib_tx_or_block_from_bytes(bytes(tx))
+        if not tx_from_lib.is_standard(max_output_script_size, not allow_non_standard_script):
+            raise NonStandardTxError('Transaction is non standard.')
+
+        # Validate tx.
+        success, message = tx.validate_tx_error()
+        if not success:
+            raise InvalidNewTransaction(message)
+
+        self.propagate_tx(tx, fails_silently=False)
+
     def propagate_tx(self, tx: BaseTransaction, fails_silently: bool = True) -> bool:
         """Push a new transaction to the network. It is used by both the wallet and the mining modules.
 
@@ -911,7 +951,7 @@ class HathorManager:
     def on_new_tx(self, tx: BaseTransaction, *, conn: Optional[HathorProtocol] = None,
                   quiet: bool = False, fails_silently: bool = True, propagate_to_peers: bool = True,
                   skip_block_weight_verification: bool = False, sync_checkpoints: bool = False,
-                  partial: bool = False) -> bool:
+                  partial: bool = False, reject_locked_reward: bool = True) -> bool:
         """ New method for adding transactions or blocks that steps the validation state machine.
 
         :param tx: transaction to be added
@@ -962,7 +1002,7 @@ class HathorManager:
         if not partial or (metadata.validation.is_fully_connected() or tx.can_validate_full()):
             if not metadata.validation.is_fully_connected():
                 try:
-                    tx.validate_full(sync_checkpoints=sync_checkpoints)
+                    tx.validate_full(sync_checkpoints=sync_checkpoints, reject_locked_reward=reject_locked_reward)
                 except HathorError as e:
                     if not fails_silently:
                         raise InvalidNewTransaction('full validation failed') from e
@@ -973,7 +1013,7 @@ class HathorManager:
             # This needs to be called right before the save because we were adding the children
             # in the tx parents even if the tx was invalid (failing the verifications above)
             # then I would have a children that was not in the storage
-            tx.update_initial_metadata()
+            tx.update_initial_metadata(save=False)
             self.tx_storage.save_transaction(tx)
             self.tx_storage.add_to_indexes(tx)
             try:
@@ -984,7 +1024,7 @@ class HathorManager:
                 self.log.warn('on_new_tx(): consensus update failed', tx=tx.hash_hex)
                 return False
             else:
-                assert tx.validate_full(skip_block_weight_verification=True)
+                assert tx.validate_full(skip_block_weight_verification=True, reject_locked_reward=reject_locked_reward)
                 self.tx_storage.indexes.update(tx)
                 self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
                 self.tx_fully_validated(tx)
@@ -1014,7 +1054,7 @@ class HathorManager:
             # This needs to be called right before the save because we were adding the children
             # in the tx parents even if the tx was invalid (failing the verifications above)
             # then I would have a children that was not in the storage
-            tx.update_initial_metadata()
+            tx.update_initial_metadata(save=False)
             self.tx_storage.save_transaction(tx)
 
         if tx.is_transaction:
@@ -1056,12 +1096,13 @@ class HathorManager:
             assert tx.hash is not None
             tx.update_initial_metadata()
             try:
-                assert tx.validate_full()
+                # XXX: `reject_locked_reward` might not apply, partial validation is only used on sync-v2
+                # TODO: deal with `reject_locked_reward` on sync-v2
+                assert tx.validate_full(reject_locked_reward=True)
             except (AssertionError, HathorError):
                 # TODO
                 raise
             else:
-                self.tx_storage.save_transaction(tx, only_metadata=True)
                 self.tx_storage.add_to_indexes(tx)
                 self.consensus_algorithm.update(tx)
                 self.tx_storage.indexes.update(tx)
