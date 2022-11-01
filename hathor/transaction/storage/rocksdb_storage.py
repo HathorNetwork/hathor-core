@@ -165,13 +165,14 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             assert tx is not None
             yield tx
 
-    def get_vertices_count(self) -> int:
-        try:
-            return super().get_vertices_count()
-        except NotImplementedError:
-            keys_bcount = self._db.get_property(b'rocksdb.estimate-num-keys', self._cf_tx)
-            keys_count = int(keys_bcount)
-            return keys_count
+    def _get_local_vertices_count(self) -> int:
+        keys_bcount = self._db.get_property(b'rocksdb.estimate-num-keys', self._cf_tx)
+        keys_count = int(keys_bcount)
+        return keys_count
+
+    def is_empty(self) -> bool:
+        # TODO: Is there a method in RocksDB to tell if it's empty?
+        return self._get_local_vertices_count() <= 3
 
     def get_sst_files_sizes_by_cf(
         self,

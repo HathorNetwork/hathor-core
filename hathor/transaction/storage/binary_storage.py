@@ -189,13 +189,13 @@ class TransactionBinaryStorage(BaseTransactionStorage):
                         tx = get_tx(hash_bytes, f.path)
                     yield tx
 
-    def get_vertices_count(self):
-        try:
-            return super().get_vertices_count()
-        except NotImplementedError:
-            files = os.listdir(self.tx_path)
-            assert len(files) % 2 == 0
-            return len(files) // 2
+    def _get_local_vertices_count(self) -> int:
+        files = os.listdir(self.tx_path)
+        assert len(files) % 2 == 0
+        return len(files) // 2
+
+    def is_empty(self) -> bool:
+        return self._get_local_vertices_count() <= 3
 
     def add_value(self, key: str, value: str) -> None:
         filepath = os.path.join(self.attributes_path, key)

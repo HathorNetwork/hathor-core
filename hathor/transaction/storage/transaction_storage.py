@@ -132,6 +132,11 @@ class TransactionStorage(ABC):
         """Reset all the indexes, making sure that no persisted value is reused."""
         raise NotImplementedError
 
+    @abstractmethod
+    def is_empty(self) -> bool:
+        """True when only genesis is present, useful for checking for a fresh database."""
+        raise NotImplementedError
+
     def update_best_block_tips_cache(self, tips_cache: Optional[List[bytes]]) -> None:
         # XXX: check that the cache update is working properly, only used in unittests
         # XXX: this might not actually hold true in some cases, commenting out while we figure it out
@@ -142,10 +147,6 @@ class TransactionStorage(ABC):
         #                    cached=[i.hex() for i in tips_cache])
         #     assert set(tips_cache) == set(calculated_tips)
         self._best_block_tips_cache = tips_cache
-
-    def is_empty(self) -> bool:
-        """True when only genesis is present, useful for checking for a fresh database."""
-        return self.get_vertices_count() <= 3
 
     def pre_init(self) -> None:
         """Storages can implement this to run code before transaction loading starts"""

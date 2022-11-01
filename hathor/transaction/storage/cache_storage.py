@@ -215,9 +215,9 @@ class TransactionCacheStorage(BaseTransactionStorage):
             self._save_to_weakref(tx)
             yield tx
 
-    def get_vertices_count(self) -> int:
+    def is_empty(self) -> bool:
         self._flush_to_storage(self.dirty_txs.copy())
-        return super().get_vertices_count()
+        return self.store.is_empty()
 
     def add_value(self, key: str, value: str) -> None:
         self.store.add_value(key, value)

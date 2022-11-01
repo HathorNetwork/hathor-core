@@ -203,14 +203,14 @@ class TransactionCompactStorage(BaseTransactionStorage):
                 assert tx is not None
                 yield tx
 
-    def get_vertices_count(self) -> int:
-        try:
-            return super().get_vertices_count()
-        except NotImplementedError:
-            files = [
-                f for f in glob.iglob(os.path.join(self.tx_path, '*/*')) if self.re_pattern.match(os.path.basename(f))
-            ]
-            return len(files)
+    def _get_local_vertices_count(self) -> int:
+        files = [
+            f for f in glob.iglob(os.path.join(self.tx_path, '*/*')) if self.re_pattern.match(os.path.basename(f))
+        ]
+        return len(files)
+
+    def is_empty(self) -> bool:
+        return self._get_local_vertices_count() <= 3
 
     def add_value(self, key: str, value: str) -> None:
         filepath = os.path.join(self.attributes_path, key)
