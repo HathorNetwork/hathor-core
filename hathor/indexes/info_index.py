@@ -47,6 +47,10 @@ class InfoIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
+    def get_vertices_count(self) -> int:
+        raise NotImplementedError
+
+    @abstractmethod
     def get_latest_timestamp(self) -> int:
         raise NotImplementedError
 

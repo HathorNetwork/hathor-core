@@ -139,7 +139,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
     def test_storage_basic(self):
         self.assertEqual(1, self.tx_storage.get_block_count())
         self.assertEqual(2, self.tx_storage.get_tx_count())
-        self.assertEqual(3, self.tx_storage.get_count_tx_blocks())
+        self.assertEqual(3, self.tx_storage.get_vertices_count())
 
         block_parents_hash = [x.data for x in self.tx_storage.get_block_tips()]
         self.assertEqual(1, len(block_parents_hash))
@@ -152,7 +152,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
     def test_storage_basic_v2(self):
         self.assertEqual(1, self.tx_storage.get_block_count())
         self.assertEqual(2, self.tx_storage.get_tx_count())
-        self.assertEqual(3, self.tx_storage.get_count_tx_blocks())
+        self.assertEqual(3, self.tx_storage.get_vertices_count())
 
         block_parents_hash = self.tx_storage.get_best_block_tips()
         self.assertEqual(1, len(block_parents_hash))
@@ -161,6 +161,29 @@ class BaseTransactionStorageTest(unittest.TestCase):
         tx_parents_hash = self.manager.get_new_tx_parents()
         self.assertEqual(2, len(tx_parents_hash))
         self.assertEqual(set(tx_parents_hash), {self.genesis_txs[0].hash, self.genesis_txs[1].hash})
+
+    def test_vertices_count(self):
+        _set_test_mode(TestMode.TEST_ALL_WEIGHT)
+
+        blocks_count = 1
+        txs_count = 2
+
+        blocks = add_new_blocks(self.manager, 10, advance_clock=10)
+        blocks_count += len(blocks)
+        blocks = add_blocks_unlock_reward(self.manager)
+        blocks_count += len(blocks)
+        txs = add_new_transactions(self.manager, 5, advance_clock=5)
+        txs_count += len(txs)
+        blocks = add_new_blocks(self.manager, 10, advance_clock=10)
+        blocks_count += len(blocks)
+        txs = add_new_transactions(self.manager, 5, advance_clock=5)
+        txs_count += len(txs)
+
+        vertices_count = blocks_count + txs_count
+
+        self.assertEqual(self.tx_storage.get_block_count(), blocks_count)
+        self.assertEqual(self.tx_storage.get_tx_count(), txs_count)
+        self.assertEqual(self.tx_storage.get_vertices_count(), vertices_count)
 
     def validate_save(self, obj):
         self.tx_storage.save_transaction(obj)

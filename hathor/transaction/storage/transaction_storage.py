@@ -132,6 +132,11 @@ class TransactionStorage(ABC):
         """Reset all the indexes, making sure that no persisted value is reused."""
         raise NotImplementedError
 
+    @abstractmethod
+    def is_empty(self) -> bool:
+        """True when only genesis is present, useful for checking for a fresh database."""
+        raise NotImplementedError
+
     def update_best_block_tips_cache(self, tips_cache: Optional[List[bytes]]) -> None:
         # XXX: check that the cache update is working properly, only used in unittests
         # XXX: this might not actually hold true in some cases, commenting out while we figure it out
@@ -142,10 +147,6 @@ class TransactionStorage(ABC):
         #                    cached=[i.hex() for i in tips_cache])
         #     assert set(tips_cache) == set(calculated_tips)
         self._best_block_tips_cache = tips_cache
-
-    def is_empty(self) -> bool:
-        """True when only genesis is present, useful for checking for a fresh database."""
-        return self.get_count_tx_blocks() <= 3
 
     def pre_init(self) -> None:
         """Storages can implement this to run code before transaction loading starts"""
@@ -487,7 +488,7 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_count_tx_blocks(self) -> int:
+    def get_vertices_count(self) -> int:
         # TODO: verify the following claim:
         """Return the number of transactions/blocks stored.
 
@@ -879,14 +880,6 @@ class TransactionStorage(ABC):
         """
         raise NotImplementedError
 
-    def is_rocksdb_storage(self) -> bool:
-        """This method should be reimplemented by Transaction Storages that use
-           RocksDB as their underlying storage mechanism
-
-           Motivation: https://github.com/HathorNetwork/hathor-core/pull/485#discussion_r970933018
-        """
-        return False
-
 
 class BaseTransactionStorage(TransactionStorage):
     def __init__(self, with_index: bool = True, pubsub: Optional[Any] = None) -> None:
@@ -1178,6 +1171,12 @@ class BaseTransactionStorage(TransactionStorage):
             raise NotImplementedError
         assert self.indexes is not None
         return self.indexes.info.get_tx_count()
+
+    def get_vertices_count(self) -> int:
+        if not self.with_index:
+            raise NotImplementedError
+        assert self.indexes is not None
+        return self.indexes.info.get_vertices_count()
 
     def get_genesis(self, hash_bytes: bytes) -> Optional[BaseTransaction]:
         assert self._genesis_cache is not None

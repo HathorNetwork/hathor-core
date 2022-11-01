@@ -173,7 +173,7 @@ class IndexesManager(ABC):
             index.init_start()
 
         self.log.debug('indexes init')
-        for tx in progress(tx_storage.topological_iterator(), log=self.log, total=tx_storage.get_count_tx_blocks()):
+        for tx in progress(tx_storage.topological_iterator(), log=self.log, total=tx_storage.get_vertices_count()):
             tx_meta = tx.get_metadata()
             # feed each transaction to the indexes that they are interested in
             for index_filter, index in indexes_to_init:
@@ -233,7 +233,9 @@ class IndexesManager(ABC):
         # XXX: this method is idempotent and has no result
         self.deps.add_tx(tx)
 
-        if r3:
+        # We need to check r1 as well to make sure we don't count twice the transactions/blocks that are
+        # just changing from voided to executed or vice-versa
+        if r1 and r3:
             self.info.update_counts(tx)
 
         return r3

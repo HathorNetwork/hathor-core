@@ -165,10 +165,19 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             assert tx is not None
             yield tx
 
-    def get_count_tx_blocks(self) -> int:
-        keys_bcount = self._db.get_property(b'rocksdb.estimate-num-keys', self._cf_tx)
-        keys_count = int(keys_bcount)
-        return keys_count
+    def is_empty(self) -> bool:
+        # We consider 3 or less transactions as empty, because we want to ignore the genesis
+        # block and txs
+        keys = self._db.iterkeys(self._cf_tx)
+        keys.seek_to_first()
+        count = 0
+
+        for key in keys:
+            count += 1
+            if count > 3:
+                return False
+
+        return True
 
     def get_sst_files_sizes_by_cf(
         self,

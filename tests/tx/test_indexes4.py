@@ -63,7 +63,7 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         assert tx_storage.indexes is not None
 
         # XXX: sanity check that we've at least produced something
-        self.assertGreater(tx_storage.get_count_tx_blocks(), 3)
+        self.assertGreater(tx_storage.get_vertices_count(), 3)
 
         for tx in tx_storage.get_all_transactions():
             if tx.is_transaction and tx.get_metadata().voided_by:
@@ -117,7 +117,7 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         tx_storage = self.manager.tx_storage
 
         # XXX: sanity check that we've at least produced something
-        total_count = tx_storage.get_count_tx_blocks()
+        total_count = tx_storage.get_vertices_count()
         self.assertGreater(total_count, 3)
 
         # XXX: sanity check that the children metadata is properly set (this is needed for one of the iterators)

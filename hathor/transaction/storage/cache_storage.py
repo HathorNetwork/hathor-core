@@ -215,9 +215,9 @@ class TransactionCacheStorage(BaseTransactionStorage):
             self._save_to_weakref(tx)
             yield tx
 
-    def get_count_tx_blocks(self) -> int:
+    def is_empty(self) -> bool:
         self._flush_to_storage(self.dirty_txs.copy())
-        return self.store.get_count_tx_blocks()
+        return self.store.is_empty()
 
     def add_value(self, key: str, value: str) -> None:
         self.store.add_value(key, value)

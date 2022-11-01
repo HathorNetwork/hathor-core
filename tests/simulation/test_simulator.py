@@ -25,7 +25,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.simulator.run(60 * 60)
 
         # FIXME: the setup above produces 0 new blocks and transactions
-        # self.assertGreater(manager1.tx_storage.get_count_tx_blocks(), 3)
+        # self.assertGreater(manager1.tx_storage.get_vertices_count(), 3)
 
     def test_two_nodes(self):
         manager1 = self.create_peer()
