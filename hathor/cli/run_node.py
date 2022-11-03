@@ -54,7 +54,6 @@ class RunNode:
         storage = parser.add_mutually_exclusive_group()
         storage.add_argument('--rocksdb-storage', action='store_true', help='Use RocksDB storage backend (default)')
         storage.add_argument('--memory-storage', action='store_true', help='Do not use a persistent storage')
-        storage.add_argument('--json-storage', action='store_true', help='Use legacy JSON storage (not recommended)')
         parser.add_argument('--memory-indexes', action='store_true',
                             help='Use memory indexes when using RocksDB storage (startup is significantly slower)')
         parser.add_argument('--rocksdb-cache', type=int, help='RocksDB block-table cache size (bytes)', default=None)

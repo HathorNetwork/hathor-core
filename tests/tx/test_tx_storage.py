@@ -1,4 +1,3 @@
-import os
 import shutil
 import tempfile
 import time
@@ -15,13 +14,7 @@ from hathor.simulator.clock import MemoryReactorHeapClock
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
-from hathor.transaction.storage import (
-    TransactionBinaryStorage,
-    TransactionCacheStorage,
-    TransactionCompactStorage,
-    TransactionMemoryStorage,
-    TransactionRocksDBStorage,
-)
+from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage, TransactionRocksDBStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.transaction_metadata import ValidationState
 from hathor.wallet import Wallet
@@ -463,76 +456,6 @@ class BaseCacheStorageTest(BaseTransactionStorageTest):
         super()._test_remove_tx_or_block(tx)
         # XXX: make sure it was removed from the internal storage
         self.assertFalse(self.tx_storage.store.transaction_exists(tx_hash))
-
-
-class TransactionBinaryStorageTest(BaseTransactionStorageTest):
-    __test__ = True
-
-    def setUp(self):
-        self.directory = tempfile.mkdtemp()
-        super().setUp(TransactionBinaryStorage(self.directory))
-
-    def tearDown(self):
-        shutil.rmtree(self.directory)
-        super().tearDown()
-
-    def test_storage_new_blocks(self):
-        self.tx_storage._always_use_topological_dfs = True
-        super().test_storage_new_blocks()
-
-
-class TransactionCompactStorageTest(BaseTransactionStorageTest):
-    __test__ = True
-
-    def setUp(self):
-        self.directory = tempfile.mkdtemp()
-        # Creating random file just to test specific part of code
-        tempfile.NamedTemporaryFile(dir=self.directory, delete=True)
-        super().setUp(TransactionCompactStorage(self.directory))
-
-    def test_subfolders(self):
-        # test we have the subfolders under the main tx folder
-        subfolders_path = os.path.join(self.directory, 'tx')
-        subfolders = os.listdir(subfolders_path)
-        self.assertEqual(settings.STORAGE_SUBFOLDERS, len(subfolders))
-
-    def test_storage_new_blocks(self):
-        self.tx_storage._always_use_topological_dfs = True
-        super().test_storage_new_blocks()
-
-    def tearDown(self):
-        shutil.rmtree(self.directory)
-        super().tearDown()
-
-
-class CacheBinaryStorageTest(BaseCacheStorageTest):
-    __test__ = True
-
-    def setUp(self):
-        self.directory = tempfile.mkdtemp()
-        store = TransactionBinaryStorage(self.directory, with_index=False)
-        reactor = MemoryReactorHeapClock()
-        super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
-
-    def tearDown(self):
-        shutil.rmtree(self.directory)
-        super().tearDown()
-
-
-class CacheCompactStorageTest(BaseCacheStorageTest):
-    __test__ = True
-
-    def setUp(self):
-        self.directory = tempfile.mkdtemp()
-        # Creating random file just to test specific part of code
-        tempfile.NamedTemporaryFile(dir=self.directory, delete=True)
-        store = TransactionCompactStorage(self.directory, with_index=False)
-        reactor = MemoryReactorHeapClock()
-        super().setUp(TransactionCacheStorage(store, reactor, capacity=5))
-
-    def tearDown(self):
-        shutil.rmtree(self.directory)
-        super().tearDown()
 
 
 class TransactionMemoryStorageTest(BaseTransactionStorageTest):

@@ -7,12 +7,7 @@ from hathor.exception import BuilderError
 from hathor.indexes import MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.p2p.sync_version import SyncVersion
-from hathor.transaction.storage import (
-    TransactionCacheStorage,
-    TransactionCompactStorage,
-    TransactionMemoryStorage,
-    TransactionRocksDBStorage,
-)
+from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage, TransactionRocksDBStorage
 from hathor.wallet import HDWallet, Wallet
 from tests import unittest
 from tests.utils import HAS_ROCKSDB
@@ -95,17 +90,6 @@ class BuilderTestCase(unittest.TestCase):
 
     def test_memory_storage_with_rocksdb_indexes(self):
         self._build_with_error(['--memory-storage', '--x-rocksdb-indexes'], 'RocksDB indexes require RocksDB data')
-
-    def test_json_storage(self):
-        data_dir = self.mkdtemp()
-        manager = self._build(['--json-storage', '--data', data_dir])
-        self.assertIsInstance(manager.tx_storage, TransactionCompactStorage)
-        self.assertIsInstance(manager.tx_storage.indexes, MemoryIndexesManager)
-
-    def test_json_storage_with_rocksdb_indexes(self):
-        data_dir = self.mkdtemp()
-        args = ['--json-storage', '--x-rocksdb-indexes', '--data', data_dir]
-        self._build_with_error(args, 'RocksDB indexes require RocksDB data')
 
     def test_sync_bridge(self):
         manager = self._build(['--memory-storage', '--x-sync-bridge'])
