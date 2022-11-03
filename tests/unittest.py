@@ -72,9 +72,12 @@ class TestCase(unittest.TestCase):
         self.log = logger.new()
         self.reset_peer_id_pool()
         self.rng = Random()
+        self._pending_cleanups = []
 
     def tearDown(self):
         self.clean_tmpdirs()
+        for fn in self._pending_cleanups:
+            fn()
 
     def reset_peer_id_pool(self) -> None:
         self._free_peer_id_pool = self.new_peer_id_pool()
@@ -140,6 +143,7 @@ class TestCase(unittest.TestCase):
                 directory = tempfile.mkdtemp()
                 self.tmpdirs.append(directory)
                 rocksdb_storage = RocksDBStorage(path=directory)
+                self._pending_cleanups.append(rocksdb_storage.close)
                 tx_storage = TransactionRocksDBStorage(rocksdb_storage)
         manager = HathorManager(
             self.clock,
