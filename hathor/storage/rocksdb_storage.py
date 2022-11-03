@@ -69,3 +69,6 @@ class RocksDBStorage:
         if cf is None:
             cf = self._db.create_column_family(cf_name, rocksdb.ColumnFamilyOptions())
         return cf
+
+    def close(self) -> None:
+        self._db.close()
