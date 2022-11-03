@@ -60,7 +60,6 @@ class CliBuilder:
         from hathor.transaction import genesis
         from hathor.transaction.storage import (
             TransactionCacheStorage,
-            TransactionCompactStorage,
             TransactionMemoryStorage,
             TransactionRocksDBStorage,
             TransactionStorage,
@@ -98,10 +97,6 @@ class CliBuilder:
                 event_storage = EventMemoryStorage()
             self.check_or_raise(not args.x_rocksdb_indexes, 'RocksDB indexes require RocksDB data')
             self.log.info('with storage', storage_class=type(tx_storage).__name__)
-        elif args.json_storage:
-            self.check_or_raise(args.data, '--data is expected')
-            self.check_or_raise(not args.x_rocksdb_indexes, 'RocksDB indexes require RocksDB data')
-            tx_storage = TransactionCompactStorage(path=args.data, with_index=(not args.cache))
         else:
             self.check_or_raise(args.data, '--data is expected')
             if args.rocksdb_storage:
@@ -188,7 +183,7 @@ class CliBuilder:
             if args.memory_indexes:
                 raise BuilderError('You cannot use --memory-indexes and --x-rocksdb-indexes.')
 
-        if args.memory_indexes and (args.memory_storage or args.json_storage):
+        if args.memory_indexes and args.memory_storage:
             self.log.warn('--memory-indexes is implied for memory storage or JSON storage')
 
         if args.x_enable_event_queue:

@@ -9,13 +9,7 @@ from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.storage import RocksDBStorage
-from hathor.transaction.storage import (
-    TransactionCacheStorage,
-    TransactionCompactStorage,
-    TransactionMemoryStorage,
-    TransactionRocksDBStorage,
-)
-from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
+from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage, TransactionRocksDBStorage
 from hathor.util import reactor
 from hathor.wallet import Wallet
 from tests import unittest
@@ -195,38 +189,6 @@ class BaseMetricsTest(unittest.TestCase):
         # but we know empirically that they should be higher than these values
         self.assertTrue(manager.metrics.rocksdb_cfs_sizes[b'tx'] > 500)
         self.assertTrue(manager.metrics.rocksdb_cfs_sizes[b'meta'] > 1000)
-
-    def test_tx_storage_data_collection_with_compact_storage(self):
-        """Tests storage data collection when using JSON Storage.
-           We test it both with cache enabled and disabled.
-
-           The expected result is that nothing is done, because we currently only collect
-           data for RocksDB storage
-        """
-        reactor = self.clock
-
-        path = tempfile.mkdtemp()
-        self.tmpdirs.append(path)
-
-        def _init_manager(cache_enabled: bool) -> HathorManager:
-            tx_storage: BaseTransactionStorage = TransactionCompactStorage(path=path, with_index=(not cache_enabled))
-
-            if cache_enabled:
-                tx_storage = TransactionCacheStorage(tx_storage, reactor)
-
-            pubsub = PubSubManager(reactor)
-            wallet = self._create_test_wallet()
-            return HathorManager(reactor=reactor, tx_storage=tx_storage, pubsub=pubsub, wallet=wallet)
-
-        # With cache
-        manager = _init_manager(cache_enabled=True)
-        manager.metrics._collect_data()
-        self.assertEqual(manager.metrics.rocksdb_cfs_sizes, {})
-
-        # Without cache
-        manager = _init_manager(cache_enabled=False)
-        manager.metrics._collect_data()
-        self.assertEqual(manager.metrics.rocksdb_cfs_sizes, {})
 
     def test_tx_storage_data_collection_with_memory_storage(self):
         """Tests storage data collection when using Memory Storage using no cache

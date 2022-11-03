@@ -12,9 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathor.transaction.storage.binary_storage import TransactionBinaryStorage
 from hathor.transaction.storage.cache_storage import TransactionCacheStorage
-from hathor.transaction.storage.compact_storage import TransactionCompactStorage
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.transaction.storage.transaction_storage import TransactionStorage
 
@@ -26,8 +24,6 @@ except ImportError:
 __all__ = [
     'TransactionStorage',
     'TransactionMemoryStorage',
-    'TransactionCompactStorage',
     'TransactionCacheStorage',
-    'TransactionBinaryStorage',
     'TransactionRocksDBStorage',
 ]
