@@ -14,15 +14,9 @@ class BaseUtxoSearchTest(_BaseResourceTest._ResourceTest):
     __test__ = False
 
     def setUp(self):
-        super().setUp()
+        super().setUp(utxo_index=True)
         self.web = StubSite(UtxoSearchResource(self.manager))
         self.manager.wallet.unlock(b'MYPASS')
-
-    def _manager_kwargs(self):
-        # TODO: when we are in Python 3.9+ we could use `return super()._manger_kwargs() | {'utxo_index': True}`
-        kwargs = super()._manager_kwargs()
-        kwargs.update(utxo_index=True)
-        return kwargs
 
     @inlineCallbacks
     def test_simple_gets(self):

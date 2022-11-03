@@ -23,6 +23,7 @@ from structlog import get_logger
 from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
+from hathor.pubsub import PubSubManager
 from hathor.simulator.clock import HeapClock
 from hathor.simulator.miner import MinerSimulator
 from hathor.simulator.tx_generator import RandomTransactionGenerator
@@ -135,12 +136,15 @@ class Simulator:
         wallet = HDWallet(gap_limit=2)
         wallet._manually_initialize()
 
+        pubsub = PubSubManager(self._clock)
+
         assert peer_id is not None  # XXX: temporary, for checking that tests are using the peer_id
         if peer_id is None:
             peer_id = PeerId()
         tx_storage = TransactionMemoryStorage()
         manager = HathorManager(
             self._clock,
+            pubsub=pubsub,
             peer_id=peer_id,
             network=network,
             wallet=wallet,

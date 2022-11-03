@@ -1,61 +1,25 @@
-import tempfile
-
 from twisted.internet.defer import succeed
 from twisted.web import server
 from twisted.web.test.requesthelper import DummyRequest
 
 from hathor.daa import TestMode, _set_test_mode
-from hathor.manager import HathorManager
-from hathor.p2p.peer_id import PeerId
-from hathor.storage.rocksdb_storage import RocksDBStorage
-from hathor.util import get_environment_info, json_dumpb, json_loadb
+from hathor.util import json_dumpb, json_loadb
 from tests import unittest
 
 
 class _BaseResourceTest:
     class _ResourceTest(unittest.TestCase):
-        def _manager_kwargs(self):
-            peer_id = PeerId()
-            network = 'testnet'
-            wallet = self._create_test_wallet()
-            tx_storage = getattr(self, 'tx_storage', None)
-            if tx_storage is None:
-                if self.use_memory_storage:
-                    from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
-                    tx_storage = TransactionMemoryStorage()
-                else:
-                    from hathor.transaction.storage.rocksdb_storage import TransactionRocksDBStorage
-                    directory = tempfile.mkdtemp()
-                    self.tmpdirs.append(directory)
-                    rocksdb_storage = RocksDBStorage(path=directory)
-                    tx_storage = TransactionRocksDBStorage(rocksdb_storage)
-            assert (
-                hasattr(self, '_enable_sync_v1') and
-                hasattr(self, '_enable_sync_v2') and
-                (self._enable_sync_v1 or self._enable_sync_v2)
-            ), (
-                'Please set both `_enable_sync_v1` and `_enable_sync_v2` on the class. '
-                'Also they can\'t both be False. '
-                'This is by design so we don\'t forget to test for multiple sync versions.'
-            )
-            return dict(
-                peer_id=peer_id,
-                network=network,
-                wallet=wallet,
-                tx_storage=tx_storage,
-                wallet_index=True,
-                enable_sync_v1=self._enable_sync_v1,
-                enable_sync_v2=self._enable_sync_v2,
-                environment_info=get_environment_info("", peer_id.id)
-            )
-
-        def setUp(self):
+        def setUp(self, *, utxo_index: bool = False, unlock_wallet: bool = True) -> None:
             super().setUp()
             self.reactor = self.clock
-            self.manager = HathorManager(self.reactor, **self._manager_kwargs())
+            self.manager = self.create_peer(
+                'testnet',
+                wallet_index=True,
+                utxo_index=utxo_index,
+                unlock_wallet=unlock_wallet
+            )
             self.manager.allow_mining_without_peers()
             _set_test_mode(TestMode.TEST_ALL_WEIGHT)
-            self.manager.start()
 
         def tearDown(self):
             return self.manager.stop()

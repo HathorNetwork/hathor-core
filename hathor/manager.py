@@ -81,11 +81,10 @@ class HathorManager:
     # This is the interval to be used by the task to check if the node is synced
     CHECK_SYNC_STATE_INTERVAL = 30  # seconds
 
-    def __init__(self, reactor: Reactor, peer_id: Optional[PeerId] = None, network: Optional[str] = None,
-                 hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
+    def __init__(self, reactor: Reactor, *, pubsub: PubSubManager, peer_id: Optional[PeerId] = None,
+                 network: Optional[str] = None, hostname: Optional[str] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
                  event_storage: Optional[EventStorage] = None,
-                 peer_storage: Optional[Any] = None, wallet_index: bool = False, utxo_index: bool = False,
                  stratum_port: Optional[int] = None, ssl: bool = True,
                  enable_sync_v1: bool = True, enable_sync_v2: bool = False,
                  capabilities: Optional[List[str]] = None, checkpoints: Optional[List[Checkpoint]] = None,
@@ -100,17 +99,8 @@ class HathorManager:
         :param hostname: The hostname of this node. It is used to generate its entrypoints.
         :type hostname: string
 
-        :param pubsub: If not given, a new one is created.
-        :type pubsub: :py:class:`hathor.pubsub.PubSubManager`
-
         :param tx_storage: Required storage backend.
         :type tx_storage: :py:class:`hathor.transaction.storage.transaction_storage.TransactionStorage`
-
-        :param peer_storage: If not given, a new one is created.
-        :type peer_storage: :py:class:`hathor.p2p.peer_storage.PeerStorage`
-
-        :param wallet_index: If should add a wallet index in the storage
-        :type wallet_index: bool
 
         :param stratum_port: Stratum server port. Stratum server will only be created if it is not None.
         :type stratum_port: Optional[int]
@@ -165,18 +155,9 @@ class HathorManager:
             self.checkpoints_ready[0] = True
 
         # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
-        self.pubsub = pubsub or PubSubManager(self.reactor)
+        self.pubsub = pubsub
         self.tx_storage = tx_storage
         self.tx_storage.pubsub = self.pubsub
-        if wallet_index and self.tx_storage.with_index:
-            assert self.tx_storage.indexes is not None
-            self.log.debug('enable wallet indexes')
-            self.tx_storage.indexes.enable_address_index(self.pubsub)
-            self.tx_storage.indexes.enable_tokens_index()
-        if utxo_index and self.tx_storage.with_index:
-            assert self.tx_storage.indexes is not None
-            self.log.debug('enable utxo index')
-            self.tx_storage.indexes.enable_utxo_index()
         self.event_manager: Optional[EventManager] = None
         if event_storage is not None:
             self.event_manager = EventManager(event_storage, self.reactor, not_none(self.my_peer.id))
