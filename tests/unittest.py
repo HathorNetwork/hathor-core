@@ -94,6 +94,11 @@ class TestCase(unittest.TestCase):
         pool.remove(peer_id)
         return peer_id
 
+    def mkdtemp(self):
+        tmpdir = tempfile.mkdtemp()
+        self.tmpdirs.append(tmpdir)
+        return tmpdir
+
     def _create_test_wallet(self):
         """ Generate a Wallet with a number of keypairs for testing
             :rtype: Wallet

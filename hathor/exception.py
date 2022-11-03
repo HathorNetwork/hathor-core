@@ -18,6 +18,11 @@ class HathorError(Exception):
     pass
 
 
+class BuilderError(Exception):
+    """Base class for exceptions in builders."""
+    pass
+
+
 class InvalidNewTransaction(HathorError):
     """Raised when a new received tx/block is not valid.
     """

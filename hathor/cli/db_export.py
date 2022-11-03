@@ -35,7 +35,8 @@ class DbExport(RunNode):
     def register_resources(self, args: Namespace) -> None:
         pass
 
-    def create_parser(self) -> ArgumentParser:
+    @classmethod
+    def create_parser(cls) -> ArgumentParser:
         from hathor.conf import HathorSettings
         settings = HathorSettings()
 
