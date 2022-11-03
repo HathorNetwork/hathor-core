@@ -151,3 +151,46 @@ class SyncV2RandomSimulatorTestCase(unittest.SyncV2Params, BaseRandomSimulatorTe
 # sync-bridge should behave like sync-v2
 class SyncBridgeRandomSimulatorTestCase(unittest.SyncBridgeParams, SyncV2RandomSimulatorTestCase):
     __test__ = True
+
+    def test_compare_mempool_implementations(self):
+        manager1 = self.create_peer()
+        manager2 = self.create_peer()
+
+        # XXX: make sure we have both indexes
+        tx_storage = manager1.tx_storage
+        assert tx_storage.indexes is not None
+        assert tx_storage.indexes.mempool_tips is not None
+        assert manager1.tx_storage.indexes.tx_tips is not None
+        mempool_tips = tx_storage.indexes.mempool_tips
+
+        miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
+        miner1.start()
+        self.simulator.run(10)
+
+        gen_tx1 = self.simulator.create_tx_generator(manager1, rate=3 / 60., hashpower=1e6, ignore_no_funds=True)
+        gen_tx1.start()
+        self.simulator.run(10)
+
+        conn12 = FakeConnection(manager1, manager2, latency=0.150)
+        self.simulator.add_connection(conn12)
+        self.simulator.run(10)
+
+        miner2 = self.simulator.create_miner(manager2, hashpower=100e6)
+        miner2.start()
+        self.simulator.run(10)
+
+        gen_tx2 = self.simulator.create_tx_generator(manager2, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
+        gen_tx2.start()
+
+        for _ in range(200):
+            # mempool tips
+            self.assertEqual(
+                set(mempool_tips.iter(tx_storage)),
+                set(tx_storage.iter_mempool_tips_from_tx_tips()),
+            )
+            # and the complete mempool
+            self.assertEqual(
+                set(mempool_tips.iter_all(tx_storage)),
+                set(tx_storage.iter_mempool_from_tx_tips()),
+            )
+            self.simulator.run(10)

@@ -113,7 +113,7 @@ class ConsensusAlgorithm:
         if new_best_height < best_height:
             self.log.warn('height decreased, re-checking mempool', prev_height=best_height, new_height=new_best_height,
                           prev_block_tip=best_tip.hex(), new_block_tip=new_best_tip.hex())
-            to_remove = storage.indexes.mempool_tips.get_transactions_to_remove(storage)
+            to_remove = storage.get_transactions_that_became_invalid()
             if to_remove:
                 self.log.warn('some transactions on the mempool became invalid and will be removed',
                               count=len(to_remove))

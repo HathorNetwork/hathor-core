@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from enum import Enum
 from itertools import islice
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterator
 
-from hathor.api_util import Resource, set_cors
+from hathor.api_util import Resource, get_args, parse_args, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
+from hathor.transaction import Transaction
 from hathor.util import json_dumpb
 
 settings = HathorSettings()
@@ -26,6 +28,12 @@ if TYPE_CHECKING:
     from twisted.web.http import Request
 
     from hathor.manager import HathorManager
+
+
+class IndexSource(Enum):
+    ANY = 'any'
+    MEMPOOL = 'mempool'
+    TX_TIPS = 'tx-tips'
 
 
 @register_resource
@@ -48,18 +56,63 @@ class MempoolResource(Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
+        # XXX: get an explicit index source if requested, only the order of results can change
+        index_source = IndexSource.ANY
+        args = get_args(request)
+        if 'index' in args:
+            parsed_args = parse_args(args, ['index'])
+            if not parsed_args['success']:
+                return json_dumpb({
+                    'success': False,
+                    'message': 'Failed to parse \'index\''
+                })
+            try:
+                index_source = IndexSource(parsed_args['index'])
+            except ValueError as e:
+                return json_dumpb({
+                    'success': False,
+                    'message': f'Failed to parse \'index\': {e}'
+                })
+
         # Get a list of all txs on the mempool
-        assert self.manager.tx_storage.indexes is not None
-        it_mempool = self.manager.tx_storage.indexes.mempool_tips.iter_all(self.manager.tx_storage)
         tx_ids = map(
             # get only tx_ids
             lambda tx: tx.hash_hex,
             # order by timestamp
-            sorted(list(it_mempool), key=lambda tx: tx.timestamp),
+            sorted(list(self._get_from_index(index_source)), key=lambda tx: tx.timestamp),
         )
         # Only return up to settings.MEMPOOL_API_TX_LIMIT txs per call (default: 100)
         data = {'success': True, 'transactions': list(islice(tx_ids, settings.MEMPOOL_API_TX_LIMIT))}
         return json_dumpb(data)
+
+    def _get_from_index(self, index_source: IndexSource) -> Iterator[Transaction]:
+        tx_storage = self.manager.tx_storage
+        assert tx_storage.indexes is not None
+        if index_source is IndexSource.ANY:
+            # XXX: if source is ANY we try to use the mempool when possible
+            if tx_storage.indexes.mempool_tips is not None:
+                yield from self._get_from_mempool_tips_index()
+            else:
+                yield from self._get_from_tx_tips_index()
+        elif index_source is IndexSource.MEMPOOL:
+            if tx_storage.indexes.mempool_tips is None:
+                raise ValueError('mempool index is not enabled')
+            yield from self._get_from_mempool_tips_index()
+        elif index_source is IndexSource.TX_TIPS:
+            if tx_storage.indexes.tx_tips is None:
+                raise ValueError('tx-tips index is not enabled')
+            yield from self._get_from_tx_tips_index()
+        else:
+            raise NotImplementedError  # XXX: this cannot happen
+
+    def _get_from_tx_tips_index(self) -> Iterator[Transaction]:
+        yield from self.manager.tx_storage.iter_mempool_from_tx_tips()
+
+    def _get_from_mempool_tips_index(self) -> Iterator[Transaction]:
+        tx_storage = self.manager.tx_storage
+        assert tx_storage.indexes is not None
+        assert tx_storage.indexes.mempool_tips is not None
+        yield from tx_storage.indexes.mempool_tips.iter_all(tx_storage)
 
 
 MempoolResource.openapi = {

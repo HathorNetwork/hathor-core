@@ -66,9 +66,9 @@ class IndexesManager(ABC):
     sorted_blocks: TimestampIndex
     sorted_txs: TimestampIndex
 
-    deps: DepsIndex
     height: HeightIndex
-    mempool_tips: MempoolTipsIndex
+    deps: Optional[DepsIndex]
+    mempool_tips: Optional[MempoolTipsIndex]
     addresses: Optional[AddressIndex]
     tokens: Optional[TokensIndex]
     utxo: Optional[UtxoIndex]
@@ -99,9 +99,11 @@ class IndexesManager(ABC):
         yield _IndexFilter.ALL, self.sorted_all
         yield _IndexFilter.ALL_BLOCKS, self.sorted_blocks
         yield _IndexFilter.VALID_TXS, self.sorted_txs
-        yield _IndexFilter.ALL, self.deps
         yield _IndexFilter.ALL, self.height
-        yield _IndexFilter.ALL, self.mempool_tips
+        if self.deps is not None:
+            yield _IndexFilter.ALL, self.deps
+        if self.mempool_tips is not None:
+            yield _IndexFilter.ALL, self.mempool_tips
         if self.addresses is not None:
             yield _IndexFilter.ALL, self.addresses
         if self.tokens is not None:
@@ -122,6 +124,16 @@ class IndexesManager(ABC):
     @abstractmethod
     def enable_utxo_index(self) -> None:
         """Enable UTXO index. It does nothing if it has already been enabled."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def enable_deps_index(self) -> None:
+        """Enable dependencies index. It does nothing if it has already been enabled."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def enable_mempool_index(self) -> None:
+        """Enable mempool index. It does nothing if it has already been enabled."""
         raise NotImplementedError
 
     def force_clear_all(self) -> None:
@@ -148,10 +160,10 @@ class IndexesManager(ABC):
                 indexes_to_init.append((index_filter, index))
 
         if indexes_to_init:
-            self.log.debug('there are indexes that need initialization',
-                           indexes_to_init=[i for _, i in indexes_to_init])
+            self.log.info('there are indexes that need initialization',
+                          indexes_to_init=[i for _, i in indexes_to_init])
         else:
-            self.log.debug('there are no indexes that need initialization')
+            self.log.info('there are no indexes that need initialization')
 
         # make sure that all the indexes that we're rebuilding are cleared
         for _, index in indexes_to_init:
@@ -170,10 +182,15 @@ class IndexesManager(ABC):
 
         self.log.debug('indexes pre-init')
         for index in self.iter_all_indexes():
-            index.init_start()
+            index.init_start(self)
 
         self.log.debug('indexes init')
-        for tx in progress(tx_storage.topological_iterator(), log=self.log, total=tx_storage.get_vertices_count()):
+        if indexes_to_init:
+            tx_iter = progress(tx_storage.topological_iterator(), log=self.log, total=tx_storage.get_vertices_count())
+        else:
+            tx_iter = iter([])
+        for tx in tx_iter:
+
             tx_meta = tx.get_metadata()
             # feed each transaction to the indexes that they are interested in
             for index_filter, index in indexes_to_init:
@@ -199,7 +216,8 @@ class IndexesManager(ABC):
         """
         # XXX: this _should_ be here, but it breaks some tests, for now this is done explicitly in hathor.manager
         # self.mempool_tips.update(tx)
-        self.deps.update(tx)
+        if self.deps:
+            self.deps.update(tx)
         if self.utxo:
             self.utxo.update(tx)
 
@@ -231,7 +249,8 @@ class IndexesManager(ABC):
             self.tokens.add_tx(tx)
 
         # XXX: this method is idempotent and has no result
-        self.deps.add_tx(tx)
+        if self.deps:
+            self.deps.add_tx(tx)
 
         # We need to check r1 as well to make sure we don't count twice the transactions/blocks that are
         # just changing from voided to executed or vice-versa
@@ -261,8 +280,8 @@ class IndexesManager(ABC):
             self.info.update_counts(tx, remove=True)
 
         # mempool will pick-up if the transaction is voided/invalid and remove it
-        logger.debug('remove from mempool tips', tx=tx.hash_hex)
-        if tx.storage.transaction_exists(tx.hash):
+        if self.mempool_tips is not None and tx.storage.transaction_exists(tx.hash):
+            logger.debug('remove from mempool tips', tx=tx.hash_hex)
             self.mempool_tips.update(tx, remove=True)
 
         if tx.is_block:
@@ -276,15 +295,14 @@ class IndexesManager(ABC):
             self.tokens.del_tx(tx)
 
         # XXX: this method is idempotent and has no result
-        self.deps.del_tx(tx)
+        if self.deps:
+            self.deps.del_tx(tx)
 
 
 class MemoryIndexesManager(IndexesManager):
     def __init__(self) -> None:
-        from hathor.indexes.memory_deps_index import MemoryDepsIndex
         from hathor.indexes.memory_height_index import MemoryHeightIndex
         from hathor.indexes.memory_info_index import MemoryInfoIndex
-        from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
         from hathor.indexes.memory_timestamp_index import MemoryTimestampIndex
         from hathor.indexes.memory_tips_index import MemoryTipsIndex
 
@@ -301,8 +319,8 @@ class MemoryIndexesManager(IndexesManager):
         self.tokens = None
         self.utxo = None
         self.height = MemoryHeightIndex()
-        self.mempool_tips = MemoryMempoolTipsIndex()
-        self.deps = MemoryDepsIndex()
+        self.mempool_tips = None
+        self.deps = None
 
         # XXX: this has to be at the end of __init__, after everything has been initialized
         self.__init_checks__()
@@ -322,11 +340,19 @@ class MemoryIndexesManager(IndexesManager):
         if self.utxo is None:
             self.utxo = MemoryUtxoIndex()
 
+    def enable_deps_index(self) -> None:
+        from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
+        if self.mempool_tips is None:
+            self.mempool_tips = MemoryMempoolTipsIndex()
+
+    def enable_mempool_index(self) -> None:
+        from hathor.indexes.memory_deps_index import MemoryDepsIndex
+        if self.deps is None:
+            self.deps = MemoryDepsIndex()
+
 
 class RocksDBIndexesManager(IndexesManager):
     def __init__(self, db: 'rocksdb.DB') -> None:
-        from hathor.indexes.memory_deps_index import MemoryDepsIndex
-        from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
         from hathor.indexes.partial_rocksdb_tips_index import PartialRocksDBTipsIndex
         from hathor.indexes.rocksdb_height_index import RocksDBHeightIndex
         from hathor.indexes.rocksdb_info_index import RocksDBInfoIndex
@@ -335,6 +361,7 @@ class RocksDBIndexesManager(IndexesManager):
         self._db = db
 
         self.info = RocksDBInfoIndex(self._db)
+        self.height = RocksDBHeightIndex(self._db)
         self.all_tips = PartialRocksDBTipsIndex(self._db, 'all')
         self.block_tips = PartialRocksDBTipsIndex(self._db, 'blocks')
         self.tx_tips = PartialRocksDBTipsIndex(self._db, 'txs')
@@ -346,9 +373,8 @@ class RocksDBIndexesManager(IndexesManager):
         self.addresses = None
         self.tokens = None
         self.utxo = None
-        self.height = RocksDBHeightIndex(self._db)
-        self.mempool_tips = MemoryMempoolTipsIndex()  # use of RocksDBMempoolTipsIndex is very slow and was suspended
-        self.deps = MemoryDepsIndex()  # use of RocksDBDepsIndex is currently suspended until it is fixed
+        self.mempool_tips = None
+        self.deps = None
 
         # XXX: this has to be at the end of __init__, after everything has been initialized
         self.__init_checks__()
@@ -367,3 +393,15 @@ class RocksDBIndexesManager(IndexesManager):
         from hathor.indexes.rocksdb_utxo_index import RocksDBUtxoIndex
         if self.utxo is None:
             self.utxo = RocksDBUtxoIndex(self._db)
+
+    def enable_deps_index(self) -> None:
+        from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
+        if self.mempool_tips is None:
+            # XXX: use of RocksDBMempoolTipsIndex is very slow and was suspended
+            self.mempool_tips = MemoryMempoolTipsIndex()
+
+    def enable_mempool_index(self) -> None:
+        from hathor.indexes.memory_deps_index import MemoryDepsIndex
+        if self.deps is None:
+            # XXX: use of RocksDBDepsIndex is currently suspended until it is fixed
+            self.deps = MemoryDepsIndex()
