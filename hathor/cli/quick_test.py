@@ -25,11 +25,10 @@ class QuickTest(RunNode):
         parser.add_argument('--no-wait', action='store_true', help='If set will not wait for a new tx before exiting')
         return parser
 
-    def prepare(self, args: Namespace) -> None:
-        super().prepare(args)
+    def prepare(self, args: Namespace, *, register_resources: bool = True) -> None:
+        super().prepare(args, register_resources=False)
         self._no_wait = args.no_wait
 
-    def register_resources(self, args: Namespace) -> None:
         self.log.info('patching on_new_tx to quit on success')
         orig_on_new_tx = self.manager.on_new_tx
 
