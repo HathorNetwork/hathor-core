@@ -26,6 +26,7 @@ from hathor.transaction.exceptions import (
     BlockWithTokensError,
     CheckpointError,
     InvalidBlockReward,
+    RewardLocked,
     TransactionDataError,
     WeightError,
 )
@@ -99,6 +100,14 @@ class Block(BaseTransaction):
         assert self.storage is not None
         parent_block = self.get_block_parent()
         return parent_block.get_metadata().height + 1
+
+    def calculate_min_height(self) -> int:
+        """The minimum height the next block needs to have, basically the maximum min-height of this block's parents.
+        """
+        assert self.storage is not None
+        # maximum min-height of any parent tx
+        return max((self.storage.get_transaction(tx).get_metadata().min_height for tx in self.get_tx_parents()),
+                   default=0)
 
     def get_next_block_best_chain_hash(self) -> Optional[bytes]:
         """Return the hash of the next (child/left-to-right) block in the best blockchain.
@@ -274,6 +283,12 @@ class Block(BaseTransaction):
             raise WeightError(f'Invalid new block {self.hash_hex}: weight ({self.weight}) is '
                               f'smaller than the minimum weight ({block_weight})')
 
+    def verify_height(self) -> None:
+        """Validate that the block height is enough to confirm all transactions being confirmed."""
+        meta = self.get_metadata()
+        if meta.height < meta.min_height:
+            raise RewardLocked(f'Block needs {meta.min_height} height but has {meta.height}')
+
     def verify_reward(self) -> None:
         """Validate reward amount."""
         parent_block = self.get_block_parent()
@@ -313,7 +328,7 @@ class Block(BaseTransaction):
         return sha256d_hash(self.get_header_without_nonce())
 
     @cpu.profiler(key=lambda self: 'block-verify!{}'.format(self.hash.hex()))
-    def verify(self) -> None:
+    def verify(self, reject_locked_reward: bool = True) -> None:
         """
             (1) confirms at least two pending transactions and references last block
             (2) solves the pow with the correct weight (done in HathorManager)
@@ -330,3 +345,5 @@ class Block(BaseTransaction):
 
         # (1) and (4)
         self.verify_parents()
+
+        self.verify_height()

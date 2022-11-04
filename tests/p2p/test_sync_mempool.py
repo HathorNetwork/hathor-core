@@ -80,10 +80,10 @@ class BaseHathorSyncMempoolTestCase(unittest.TestCase):
             dot1 = GraphvizVisualizer(self.manager1.tx_storage, include_verifications=True, include_funds=True).dot()
             dot1.render('mempool-test')
 
-        manager2 = self.create_peer(self.network, enable_sync_v1=True)
-        self.assertEqual(manager2.state, manager2.NodeState.READY)
+        self.manager2 = self.create_peer(self.network, enable_sync_v1=True)
+        self.assertEqual(self.manager2.state, self.manager2.NodeState.READY)
 
-        conn = FakeConnection(self.manager1, manager2)
+        conn = FakeConnection(self.manager1, self.manager2)
         for _ in range(1000):
             if conn.is_empty():
                 break
@@ -91,15 +91,8 @@ class BaseHathorSyncMempoolTestCase(unittest.TestCase):
             self.clock.advance(1)
 
         self.assertConsensusValid(self.manager1)
-        self.assertConsensusValid(manager2)
-        self.assertConsensusEqual(self.manager1, manager2)
-
-        # 3 genesis
-        # 25 blocks
-        # Unlock reward blocks
-        # 8 txs
-        self.assertEqual(len(manager2.tx_storage.indexes.mempool_tips.get()), 1)
-        self.assertEqual(len(self.manager1.tx_storage.indexes.mempool_tips.get()), 1)
+        self.assertConsensusValid(self.manager2)
+        self.assertConsensusEqual(self.manager1, self.manager2)
 
 
 class SyncV1HathorSyncMempoolTestCase(unittest.SyncV1Params, BaseHathorSyncMempoolTestCase):
@@ -108,6 +101,16 @@ class SyncV1HathorSyncMempoolTestCase(unittest.SyncV1Params, BaseHathorSyncMempo
 
 class SyncV2HathorSyncMempoolTestCase(unittest.SyncV2Params, BaseHathorSyncMempoolTestCase):
     __test__ = True
+
+    def test_mempool_basic(self):
+        super().test_mempool_basic()
+
+        # 3 genesis
+        # 25 blocks
+        # Unlock reward blocks
+        # 8 txs
+        self.assertEqual(len(self.manager2.tx_storage.indexes.mempool_tips.get()), 1)
+        self.assertEqual(len(self.manager1.tx_storage.indexes.mempool_tips.get()), 1)
 
 
 # sync-bridge should behave like sync-v2

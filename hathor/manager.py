@@ -18,16 +18,28 @@ import time
 from enum import Enum
 from typing import Any, Iterable, Iterator, List, NamedTuple, Optional, Set, Tuple, Union
 
+from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
 from twisted.internet import defer
 from twisted.internet.defer import Deferred
+from twisted.internet.task import LoopingCall
 from twisted.python.threadpool import ThreadPool
 
 from hathor import daa
 from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
-from hathor.exception import HathorError, InitializationError, InvalidNewTransaction
+from hathor.event.event_manager import EventManager
+from hathor.event.storage import EventStorage
+from hathor.exception import (
+    DoubleSpendingError,
+    HathorError,
+    InitializationError,
+    InvalidNewTransaction,
+    NonStandardTxError,
+    RewardLockedError,
+    SpendingVoidedError,
+)
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
@@ -38,7 +50,7 @@ from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transact
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.util import LogDuration, Random, Reactor
+from hathor.util import EnvironmentInfo, LogDuration, Random, Reactor, not_none
 from hathor.wallet import BaseWallet
 
 settings = HathorSettings()
@@ -66,14 +78,19 @@ class HathorManager:
         NO_RECENT_ACTIVITY = "Node doesn't have recent blocks"
         NO_SYNCED_PEER = "Node doesn't have a synced peer"
 
+    # This is the interval to be used by the task to check if the node is synced
+    CHECK_SYNC_STATE_INTERVAL = 30  # seconds
+
     def __init__(self, reactor: Reactor, peer_id: Optional[PeerId] = None, network: Optional[str] = None,
                  hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
+                 event_storage: Optional[EventStorage] = None,
                  peer_storage: Optional[Any] = None, wallet_index: bool = False, utxo_index: bool = False,
                  stratum_port: Optional[int] = None, ssl: bool = True,
                  enable_sync_v1: bool = True, enable_sync_v2: bool = False,
                  capabilities: Optional[List[str]] = None, checkpoints: Optional[List[Checkpoint]] = None,
-                 rng: Optional[Random] = None, soft_voided_tx_ids: Optional[Set[bytes]] = None) -> None:
+                 rng: Optional[Random] = None, soft_voided_tx_ids: Optional[Set[bytes]] = None,
+                 environment_info: Optional[EnvironmentInfo] = None) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node. If not given, a new one is created.
@@ -107,6 +124,9 @@ class HathorManager:
 
         if tx_storage is None:
             raise TypeError(f'{type(self).__name__}() missing 1 required positional argument: \'tx_storage\'')
+
+        self._enable_sync_v1 = enable_sync_v1
+        self._enable_sync_v2 = enable_sync_v2
 
         self.log = logger.new()
 
@@ -157,6 +177,15 @@ class HathorManager:
             assert self.tx_storage.indexes is not None
             self.log.debug('enable utxo index')
             self.tx_storage.indexes.enable_utxo_index()
+        self.event_manager: Optional[EventManager] = None
+        if event_storage is not None:
+            self.event_manager = EventManager(event_storage, self.reactor, not_none(self.my_peer.id))
+            self.event_manager.subscribe(self.pubsub)
+        if enable_sync_v2:
+            assert self.tx_storage.indexes is not None
+            self.log.debug('enable sync-v2 indexes')
+            self.tx_storage.indexes.enable_deps_index()
+            self.tx_storage.indexes.enable_mempool_index()
 
         self.soft_voided_tx_ids = soft_voided_tx_ids or set()
         self.consensus_algorithm = ConsensusAlgorithm(self.soft_voided_tx_ids, pubsub=self.pubsub)
@@ -220,6 +249,14 @@ class HathorManager:
             self.capabilities = capabilities
         else:
             self.capabilities = DEFAULT_CAPABILITIES
+
+        # This is included in some logs to provide more context
+        self.environment_info = environment_info
+
+        # Task that will count the total sync time
+        self.lc_check_sync_state = LoopingCall(self.check_sync_state)
+        self.lc_check_sync_state.clock = self.reactor
+        self.lc_check_sync_state_interval = self.CHECK_SYNC_STATE_INTERVAL
 
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
@@ -285,6 +322,8 @@ class HathorManager:
 
         self.start_time = time.time()
 
+        self.lc_check_sync_state.start(self.lc_check_sync_state_interval, now=False)
+
         if self.wallet:
             self.wallet.start()
 
@@ -310,6 +349,9 @@ class HathorManager:
 
         # Metric stops to capture data
         self.metrics.stop()
+
+        if self.lc_check_sync_state.running:
+            self.lc_check_sync_state.stop()
 
         if self.wallet:
             self.wallet.stop()
@@ -447,8 +489,10 @@ class HathorManager:
                         assert tx.validate_full(skip_block_weight_verification=skip_block_weight_verification)
                         self.consensus_algorithm.update(tx)
                         self.tx_storage.indexes.update(tx)
-                        self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
-                        self.step_validations([tx])
+                        if self.tx_storage.indexes.mempool_tips is not None:
+                            self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
+                        if self.tx_storage.indexes.deps is not None:
+                            self.sync_v2_step_validations([tx])
                     else:
                         assert tx.validate_basic(skip_block_weight_verification=skip_block_weight_verification)
                     self.tx_storage.save_transaction(tx, only_metadata=True)
@@ -459,7 +503,8 @@ class HathorManager:
                             assert tx_meta.validation.is_at_least_basic(), f'invalid: {tx.hash_hex}'
                     elif tx.is_transaction and tx_meta.first_block is None and not tx_meta.voided_by:
                         assert self.tx_storage.indexes is not None
-                        self.tx_storage.indexes.mempool_tips.update(tx)
+                        if self.tx_storage.indexes.mempool_tips:
+                            self.tx_storage.indexes.mempool_tips.update(tx)
                     self.tx_storage.add_to_indexes(tx)
                     if tx.is_transaction and tx_meta.voided_by:
                         self.tx_storage.del_from_indexes(tx)
@@ -509,7 +554,7 @@ class HathorManager:
                 sys.exit()
 
         # restart all validations possible
-        if self.tx_storage.indexes.deps.has_needed_tx():
+        if self.tx_storage.indexes.deps and self.tx_storage.indexes.deps.has_needed_tx():
             self.log.debug('run pending validations')
             depended_final_txs: List[BaseTransaction] = []
             for tx_hash in self.tx_storage.indexes.deps.iter():
@@ -518,7 +563,8 @@ class HathorManager:
                 tx = self.tx_storage.get_transaction(tx_hash)
                 if tx.get_metadata().validation.is_final():
                     depended_final_txs.append(tx)
-            self.step_validations(depended_final_txs)
+            if self.tx_storage.indexes.deps is not None:
+                self.sync_v2_step_validations(depended_final_txs)
             self.log.debug('pending validations finished')
 
         best_height = self.tx_storage.get_height_best_block()
@@ -527,9 +573,14 @@ class HathorManager:
 
         # self.stop_profiler(save_to='profiles/initializing.prof')
         self.state = self.NodeState.READY
-        tdt = LogDuration(t2 - t0)
-        tx_rate = '?' if tdt == 0 else cnt / tdt
-        self.log.info('ready', tx_count=cnt, tx_rate=tx_rate, total_dt=tdt, height=h, blocks=block_count, txs=tx_count)
+        total_load_time = LogDuration(t2 - t0)
+        tx_rate = '?' if total_load_time == 0 else cnt / total_load_time
+
+        environment_info = self.environment_info.as_dict() if self.environment_info else {}
+
+        # Changing the field names in this log could impact log collectors that parse them
+        self.log.info('ready', vertex_count=cnt, tx_rate=tx_rate, total_load_time=total_load_time, height=h,
+                      blocks=block_count, txs=tx_count, **environment_info)
 
     def _initialize_components_new(self) -> None:
         """You are not supposed to run this method manually. You should run `doStart()` to initialize the
@@ -538,6 +589,9 @@ class HathorManager:
         This method runs through all transactions, verifying them and updating our wallet.
         """
         self.log.info('initialize')
+        t0 = time.time()
+        t1 = t0
+
         if self.wallet:
             self.wallet._manually_initialize()
 
@@ -590,12 +644,23 @@ class HathorManager:
             sys.exit()
 
         # restart all validations possible
-        self._resume_validations()
+        if self.tx_storage.indexes.deps is not None:
+            self._sync_v2_resume_validations()
 
         # XXX: last step before actually starting is updating the last started at timestamps
         self.tx_storage.update_last_started_at(started_at)
         self.state = self.NodeState.READY
-        self.log.info('ready')
+
+        t1 = time.time()
+        total_load_time = LogDuration(t1 - t0)
+
+        environment_info = self.environment_info.as_dict() if self.environment_info else {}
+
+        vertex_count = self.tx_storage.get_vertices_count()
+
+        # Changing the field names in this log could impact log collectors that parse them
+        self.log.info('ready', vertex_count=vertex_count,
+                      total_load_time=total_load_time, **environment_info)
 
     def _verify_checkpoints(self) -> None:
         """ Method to verify if all checkpoints that exist in the database have the correct hash and are winners.
@@ -637,10 +702,11 @@ class HathorManager:
                     f'hash {tx_hash.hex()} was found'
                 )
 
-    def _resume_validations(self) -> None:
+    def _sync_v2_resume_validations(self) -> None:
         """ This method will resume running validations that did not run because the node exited.
         """
         assert self.tx_storage.indexes is not None
+        assert self.tx_storage.indexes.deps is not None
         if self.tx_storage.indexes.deps.has_needed_tx():
             self.log.debug('run pending validations')
             depended_final_txs: List[BaseTransaction] = []
@@ -650,7 +716,7 @@ class HathorManager:
                 tx = self.tx_storage.get_transaction(tx_hash)
                 if tx.get_metadata().validation.is_final():
                     depended_final_txs.append(tx)
-            self.step_validations(depended_final_txs)
+            self.sync_v2_step_validations(depended_final_txs)
             self.log.debug('pending validations finished')
 
     def add_listen_address(self, addr: str) -> None:
@@ -851,6 +917,37 @@ class HathorManager:
             return False
         return self.propagate_tx(blk, fails_silently=fails_silently)
 
+    def push_tx(self, tx: Transaction, allow_non_standard_script: bool = False,
+                max_output_script_size: int = settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE) -> None:
+        """Used by all APIs that accept a new transaction (like push_tx)
+        """
+        is_double_spending = tx.is_double_spending()
+        if is_double_spending:
+            raise DoubleSpendingError('Invalid transaction. At least one of your inputs has already been spent.')
+
+        is_spending_voided_tx = tx.is_spending_voided_tx()
+        if is_spending_voided_tx:
+            raise SpendingVoidedError('Invalid transaction. At least one input is voided.')
+
+        is_spent_reward_locked = tx.is_spent_reward_locked()
+        if is_spent_reward_locked:
+            raise RewardLockedError('Spent reward is locked.')
+
+        # We are using here the method from lib because the property
+        # to identify a nft creation transaction was created on the lib
+        # to be used in the full node and tx mining service
+        # TODO: avoid reparsing when hathorlib is fully compatible
+        tx_from_lib = lib_tx_or_block_from_bytes(bytes(tx))
+        if not tx_from_lib.is_standard(max_output_script_size, not allow_non_standard_script):
+            raise NonStandardTxError('Transaction is non standard.')
+
+        # Validate tx.
+        success, message = tx.validate_tx_error()
+        if not success:
+            raise InvalidNewTransaction(message)
+
+        self.propagate_tx(tx, fails_silently=False)
+
     def propagate_tx(self, tx: BaseTransaction, fails_silently: bool = True) -> bool:
         """Push a new transaction to the network. It is used by both the wallet and the mining modules.
 
@@ -868,7 +965,7 @@ class HathorManager:
     def on_new_tx(self, tx: BaseTransaction, *, conn: Optional[HathorProtocol] = None,
                   quiet: bool = False, fails_silently: bool = True, propagate_to_peers: bool = True,
                   skip_block_weight_verification: bool = False, sync_checkpoints: bool = False,
-                  partial: bool = False) -> bool:
+                  partial: bool = False, reject_locked_reward: bool = True) -> bool:
         """ New method for adding transactions or blocks that steps the validation state machine.
 
         :param tx: transaction to be added
@@ -919,7 +1016,7 @@ class HathorManager:
         if not partial or (metadata.validation.is_fully_connected() or tx.can_validate_full()):
             if not metadata.validation.is_fully_connected():
                 try:
-                    tx.validate_full(sync_checkpoints=sync_checkpoints)
+                    tx.validate_full(sync_checkpoints=sync_checkpoints, reject_locked_reward=reject_locked_reward)
                 except HathorError as e:
                     if not fails_silently:
                         raise InvalidNewTransaction('full validation failed') from e
@@ -930,7 +1027,7 @@ class HathorManager:
             # This needs to be called right before the save because we were adding the children
             # in the tx parents even if the tx was invalid (failing the verifications above)
             # then I would have a children that was not in the storage
-            tx.update_initial_metadata()
+            tx.update_initial_metadata(save=False)
             self.tx_storage.save_transaction(tx)
             self.tx_storage.add_to_indexes(tx)
             try:
@@ -941,11 +1038,13 @@ class HathorManager:
                 self.log.warn('on_new_tx(): consensus update failed', tx=tx.hash_hex)
                 return False
             else:
-                assert tx.validate_full(skip_block_weight_verification=True)
+                assert tx.validate_full(skip_block_weight_verification=True, reject_locked_reward=reject_locked_reward)
                 self.tx_storage.indexes.update(tx)
-                self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
+                if self.tx_storage.indexes.mempool_tips:
+                    self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
                 self.tx_fully_validated(tx)
         elif sync_checkpoints:
+            assert self.tx_storage.indexes.deps is not None
             metadata.children = self.tx_storage.indexes.deps.known_children(tx)
             try:
                 tx.validate_checkpoint(self.checkpoints)
@@ -971,19 +1070,20 @@ class HathorManager:
             # This needs to be called right before the save because we were adding the children
             # in the tx parents even if the tx was invalid (failing the verifications above)
             # then I would have a children that was not in the storage
-            tx.update_initial_metadata()
+            tx.update_initial_metadata(save=False)
             self.tx_storage.save_transaction(tx)
 
-        if tx.is_transaction:
+        if tx.is_transaction and self.tx_storage.indexes.deps is not None:
             self.tx_storage.indexes.deps.remove_from_needed_index(tx.hash)
 
-        try:
-            self.step_validations([tx])
-        except (AssertionError, HathorError) as e:
-            if not fails_silently:
-                raise InvalidNewTransaction('step validations failed') from e
-            self.log.warn('on_new_tx(): step validations failed', tx=tx.hash_hex, exc_info=True)
-            return False
+        if self.tx_storage.indexes.deps is not None:
+            try:
+                self.sync_v2_step_validations([tx])
+            except (AssertionError, HathorError) as e:
+                if not fails_silently:
+                    raise InvalidNewTransaction('step validations failed') from e
+                self.log.warn('on_new_tx(): step validations failed', tx=tx.hash_hex, exc_info=True)
+                return False
 
         if not quiet:
             ts_date = datetime.datetime.fromtimestamp(tx.timestamp)
@@ -999,10 +1099,11 @@ class HathorManager:
 
         return True
 
-    def step_validations(self, txs: Iterable[BaseTransaction]) -> None:
+    def sync_v2_step_validations(self, txs: Iterable[BaseTransaction]) -> None:
         """ Step all validations until none can be stepped anymore.
         """
         assert self.tx_storage.indexes is not None
+        assert self.tx_storage.indexes.deps is not None
         # cur_txs will be empty when there are no more new txs that reached full
         # validation because of an initial trigger
         for ready_tx in txs:
@@ -1013,16 +1114,18 @@ class HathorManager:
             assert tx.hash is not None
             tx.update_initial_metadata()
             try:
-                assert tx.validate_full()
+                # XXX: `reject_locked_reward` might not apply, partial validation is only used on sync-v2
+                # TODO: deal with `reject_locked_reward` on sync-v2
+                assert tx.validate_full(reject_locked_reward=True)
             except (AssertionError, HathorError):
                 # TODO
                 raise
             else:
-                self.tx_storage.save_transaction(tx, only_metadata=True)
                 self.tx_storage.add_to_indexes(tx)
                 self.consensus_algorithm.update(tx)
                 self.tx_storage.indexes.update(tx)
-                self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
+                if self.tx_storage.indexes.mempool_tips:
+                    self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
                 self.tx_fully_validated(tx)
 
     def tx_fully_validated(self, tx: BaseTransaction) -> None:
@@ -1037,7 +1140,8 @@ class HathorManager:
         # Publish to pubsub manager the new tx accepted, now that it's full validated
         self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
 
-        self.tx_storage.indexes.mempool_tips.update(tx)
+        if self.tx_storage.indexes.mempool_tips:
+            self.tx_storage.indexes.mempool_tips.update(tx)
 
         if self.wallet:
             # TODO Remove it and use pubsub instead.
@@ -1096,6 +1200,21 @@ class HathorManager:
             return False, HathorManager.UnhealthinessReason.NO_SYNCED_PEER
 
         return True, None
+
+    def check_sync_state(self):
+        now = time.time()
+
+        if self.has_recent_activity():
+            self.first_time_fully_synced = now
+
+            total_sync_time = LogDuration(self.first_time_fully_synced - self.start_time)
+            vertex_count = self.tx_storage.get_vertices_count()
+
+            # Changing the fields in this log could impact log collectors that parse them
+            self.log.info('has recent activity for the first time', total_sync_time=total_sync_time,
+                          vertex_count=vertex_count, **self.environment_info.as_dict())
+
+            self.lc_check_sync_state.stop()
 
 
 class ParentTxs(NamedTuple):

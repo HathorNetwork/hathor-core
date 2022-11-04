@@ -34,9 +34,11 @@ class MempoolTipsIndex(BaseIndex):
 
     # originally tx_storage.update_mempool_tips
     @abstractmethod
-    def update(self, tx: BaseTransaction) -> None:
+    def update(self, tx: BaseTransaction, *, remove: Optional[bool] = None) -> None:
         """
         This should be called when a new `tx/block` is added to the best chain.
+
+        `remove` will be implied from the tx state but can be set explicitly.
         """
         raise NotImplementedError
 
@@ -91,9 +93,10 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
 
     # PROVIDES:
 
-    def update(self, tx: BaseTransaction) -> None:
+    def update(self, tx: BaseTransaction, *, remove: Optional[bool] = None) -> None:
         assert tx.hash is not None
         assert tx.storage is not None
+        tx_meta = tx.get_metadata()
         to_remove: Set[bytes] = set()
         to_remove_parents: Set[bytes] = set()
         tx_storage = tx.storage
@@ -104,15 +107,14 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
             # double spending tx2, where tx1 is valid and tx2 voided. A new block confirming tx2 will make it valid
             # while tx1 becomes voided, so it has to be removed from the tips. The txs confirmed by tx1 need to be
             # double checked, as they might themselves become tips (hence we use to_remove_parents)
-            if meta.voided_by:
+            if meta.voided_by or meta.validation.is_invalid():
                 to_remove.add(tip_tx.hash)
                 to_remove_parents.update(tip_tx.parents)
                 continue
 
             # might also happen that a tip has a child that became valid, so it's not a tip anymore
             confirmed = False
-            for child_meta in map(tx_storage.get_metadata, meta.children):
-                assert child_meta is not None
+            for child_meta in filter(None, map(tx_storage.get_metadata, meta.children)):
                 if not child_meta.voided_by:
                     confirmed = True
                     break
@@ -133,8 +135,7 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
             if meta.voided_by:
                 continue
             children = meta.children
-            for child_meta in map(tx_storage.get_metadata, children):
-                assert child_meta is not None
+            for child_meta in filter(None, map(tx_storage.get_metadata, children)):
                 if not child_meta.voided_by:
                     confirmed = True
                     break
@@ -145,14 +146,25 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
             self._add_many(to_add)
             self.log.debug('added txs to tips', txs=[tx.hex() for tx in to_add])
 
-        if tx.get_metadata().voided_by:
-            # this tx is voided, don't need to update the tips
-            self.log.debug('voided tx, won\'t add it as a tip', tx=tx.hash_hex)
+        actually_remove: bool
+        voided_or_invalid = bool(tx_meta.voided_by) or tx_meta.validation.is_invalid()
+        if remove is None:
+            actually_remove = voided_or_invalid
+        else:
+            actually_remove = remove
+            if remove and not voided_or_invalid:
+                self.log.warn('removing tx even though it isn\'t voided or invalid, some tests can do this')
+            if not remove and voided_or_invalid:
+                raise ValueError('cannot add voided or invalid tx to mempool')
+
+        if actually_remove:
+            self.log.debug('remove from mempool', tx=tx.hash_hex, validation=tx_meta.validation,
+                           is_voided=bool(tx_meta.voided_by))
             return
 
         self._discard_many(set(tx.parents))
 
-        if tx.is_transaction and tx.get_metadata().first_block is None:
+        if tx.is_transaction and tx_meta.first_block is None:
             assert tx.hash is not None
             self._add(tx.hash)
 

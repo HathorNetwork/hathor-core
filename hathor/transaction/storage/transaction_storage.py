@@ -14,9 +14,9 @@
 
 import hashlib
 from abc import ABC, abstractmethod, abstractproperty
-from collections import deque
+from collections import defaultdict, deque
 from threading import Lock
-from typing import Any, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple, cast
+from typing import Any, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple, Type, cast
 from weakref import WeakValueDictionary
 
 from intervaltree.interval import Interval
@@ -28,8 +28,10 @@ from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction
 from hathor.transaction.block import Block
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
+from hathor.transaction.storage.migrations import BaseMigration, MigrationState, add_min_height_metadata
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
+from hathor.util import not_none
 
 settings = HathorSettings()
 
@@ -69,6 +71,13 @@ class TransactionStorage(ABC):
     # Ket storage attribute to save the last time the node started
     _last_start_attribute: str = 'last_start'
 
+    # history of migrations that have to be applied in the order defined here
+    _migration_factories: List[Type[BaseMigration]] = [
+        add_min_height_metadata.Migration,
+    ]
+
+    _migrations: List[BaseMigration]
+
     def __init__(self):
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
         self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
@@ -105,12 +114,27 @@ class TransactionStorage(ABC):
         # Internal toggle to choose when to select topological DFS iterator, used only on some tests
         self._always_use_topological_dfs = False
 
-        # Only used in self.add_to_indexes to bypass raising an exception
         self._saving_genesis = False
+
+        # Migrations instances
+        self._migrations = [cls() for cls in self._migration_factories]
+
+        # XXX: sanity check
+        migration_names = set()
+        for migration in self._migrations:
+            migration_name = migration.get_db_name()
+            if migration_name in migration_names:
+                raise ValueError(f'Duplicate migration name "{migration_name}"')
+            migration_names.add(migration_name)
 
     @abstractmethod
     def reset_indexes(self) -> None:
         """Reset all the indexes, making sure that no persisted value is reused."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def is_empty(self) -> bool:
+        """True when only genesis is present, useful for checking for a fresh database."""
         raise NotImplementedError
 
     def update_best_block_tips_cache(self, tips_cache: Optional[List[bytes]]) -> None:
@@ -124,13 +148,84 @@ class TransactionStorage(ABC):
         #     assert set(tips_cache) == set(calculated_tips)
         self._best_block_tips_cache = tips_cache
 
-    def is_empty(self) -> bool:
-        """True when only genesis is present, useful for checking for a fresh database."""
-        return self.get_count_tx_blocks() <= 3
-
     def pre_init(self) -> None:
         """Storages can implement this to run code before transaction loading starts"""
         self._check_and_set_network()
+        self._check_and_apply_migrations()
+
+    @abstractmethod
+    def get_migration_state(self, migration_name: str) -> MigrationState:
+        raise NotImplementedError
+
+    @abstractmethod
+    def set_migration_state(self, migration_name: str, state: MigrationState) -> None:
+        raise NotImplementedError
+
+    def _check_and_apply_migrations(self):
+        """Check which migrations have not been run yet and apply them in order."""
+        from hathor.transaction.storage.exceptions import OutOfOrderMigrationError, PartialMigrationError
+        db_is_empty = self.is_empty()
+        self.log.debug('step through all migrations', count=len(self._migrations))
+        migrations_to_run = []
+        # XXX: this is used to ensure migrations don't advance out of order
+        previous_migration_state = MigrationState.COMPLETED
+        for migration in self._migrations:
+            migration_name = migration.get_db_name()
+            self.log.debug('step migration', migration=migration_name)
+
+            # short-cut to avoid running migrations on empty database
+            if migration.skip_empty_db() and db_is_empty:
+                self.log.debug('migration is new, but does not need to run on an empty database',
+                               migration=migration_name)
+                self.set_migration_state(migration_name, MigrationState.COMPLETED)
+                continue
+
+            # get the migration state to decide whether to run, skip or error
+            migration_state = self.get_migration_state(migration_name)
+
+            if migration_state > previous_migration_state:
+                raise OutOfOrderMigrationError(f'{migration_name} ran after a migration that wasn\'t advanced')
+            previous_migration_state = migration_state
+
+            should_run_migration: bool
+            if migration_state is MigrationState.NOT_STARTED:
+                self.log.debug('migration is new, will run', migration=migration_name)
+                should_run_migration = True
+            elif migration_state is MigrationState.STARTED:
+                self.log.warn('this migration was started before, but it is not marked as COMPLETED or ERROR, '
+                              'it will run again but might fail', migration=migration_name)
+                should_run_migration = True
+            elif migration_state is MigrationState.COMPLETED:
+                self.log.debug('migration is already complete', migration=migration_name)
+                should_run_migration = False
+            elif migration_state is MigrationState.ERROR:
+                self.log.error('this migration was run before but resulted in an error, the database will need to be '
+                               'either manually fixed or discarded', migration=migration_name)
+                raise PartialMigrationError(f'Migration error state previously: {migration_name}')
+            else:
+                raise ValueError(f'Unexcepted migration state: {migration_state!r}')
+
+            # run if needed, updating the state along the way
+            if should_run_migration:
+                migrations_to_run.append(migration)
+        self.log.debug('stepped through all migrations')
+        if migrations_to_run:
+            self.log.info('there are migrations that need to be applied')
+        migrations_to_run_count = len(migrations_to_run)
+        for i, migration in enumerate(migrations_to_run):
+            migration_name = migration.get_db_name()
+            self.log.info(f'running migration {i+1} out of {migrations_to_run_count}', migration=migration_name)
+            self.set_migration_state(migration_name, MigrationState.STARTED)
+            try:
+                migration.run(self)
+            # XXX: we catch "any" exception because just we want to mark the state as "ERROR"
+            except Exception as exc:
+                self.set_migration_state(migration_name, MigrationState.ERROR)
+                raise PartialMigrationError(f'Migration error state: {migration_name}') from exc
+            else:
+                self.set_migration_state(migration_name, MigrationState.COMPLETED)
+        if migrations_to_run:
+            self.log.info('all migrations have been applied')
 
     def _check_and_set_network(self) -> None:
         """Check the network name is as expected and try to set it when none is present"""
@@ -269,6 +364,45 @@ class TransactionStorage(ABC):
         if self.with_index:
             self.del_from_indexes(tx, remove_all=True, relax_assert=True)
 
+    def remove_transactions(self, txs: List[BaseTransaction]) -> None:
+        """Will remove all of the transactions on the list from the database.
+
+        Special notes:
+
+        - will refuse and raise an error when removing all transactions would leave dangling transactions, that is,
+          transactions without existing parent
+        - inputs's spent_outputs should not have any of the transactions being removed as spending transactions,
+          this method will update and save those transaction's metadata
+        - parent's children metadata will be updated to reflect the removals
+        - all indexes will be updated
+        """
+        parents_to_update: Dict[bytes, List[bytes]] = defaultdict(list)
+        dangling_children: Set[bytes] = set()
+        txset = {not_none(tx.hash) for tx in txs}
+        for tx in txs:
+            assert tx.hash is not None
+            tx_meta = tx.get_metadata()
+            assert not tx_meta.validation.is_checkpoint()
+            for parent in set(tx.parents) - txset:
+                parents_to_update[parent].append(tx.hash)
+            dangling_children.update(set(tx_meta.children) - txset)
+            for tx_input in tx.inputs:
+                spent_tx = tx.get_spent_tx(tx_input)
+                spent_tx_meta = spent_tx.get_metadata()
+                if tx.hash in spent_tx_meta.spent_outputs[tx_input.index]:
+                    spent_tx_meta.spent_outputs[tx_input.index].remove(tx.hash)
+                    self.save_transaction(spent_tx, only_metadata=True)
+        assert not dangling_children, 'It is an error to try to remove transactions that would leave a gap in the DAG'
+        for parent_hash, children_to_remove in parents_to_update.items():
+            parent_tx = self.get_transaction(parent_hash)
+            parent_meta = parent_tx.get_metadata()
+            for child in children_to_remove:
+                parent_meta.children.remove(child)
+            self.save_transaction(parent_tx, only_metadata=True)
+        for tx in txs:
+            self.log.debug('remove transaction', tx=tx.hash_hex)
+            self.remove_transaction(tx)
+
     @abstractmethod
     def transaction_exists(self, hash_bytes: bytes) -> bool:
         """Returns `True` if transaction with hash `hash_bytes` exists.
@@ -350,13 +484,11 @@ class TransactionStorage(ABC):
     def get_all_transactions(self) -> Iterator[BaseTransaction]:
         # TODO: verify the following claim:
         """Return all transactions that are not blocks.
-
-        :rtype :py:class:`typing.Iterable[hathor.transaction.BaseTransaction]`
         """
         raise NotImplementedError
 
     @abstractmethod
-    def get_count_tx_blocks(self) -> int:
+    def get_vertices_count(self) -> int:
         # TODO: verify the following claim:
         """Return the number of transactions/blocks stored.
 
@@ -748,13 +880,65 @@ class TransactionStorage(ABC):
         """
         raise NotImplementedError
 
-    def is_rocksdb_storage(self) -> bool:
-        """This method should be reimplemented by Transaction Storages that use
-           RocksDB as their underlying storage mechanism
+    def iter_mempool_tips_from_tx_tips(self) -> Iterator[Transaction]:
+        """ Same behavior as the mempool index for iterating over the tips.
 
-           Motivation: https://github.com/HathorNetwork/hathor-core/pull/485#discussion_r970933018
+        This basically means that the returned iterator will yield all transactions that are tips and have not been
+        confirmed by a block on the best chain.
+
+        This method requires indexes to be enabled.
         """
-        return False
+        assert self.indexes is not None
+        tx_tips = self.indexes.tx_tips
+
+        for interval in tx_tips[self.latest_timestamp + 1]:
+            tx = self.get_transaction(interval.data)
+            tx_meta = tx.get_metadata()
+            assert isinstance(tx, Transaction)  # XXX: tx_tips only has transactions
+            # XXX: skip txs that have already been confirmed
+            if tx_meta.first_block:
+                continue
+            yield tx
+
+    def iter_mempool_from_tx_tips(self) -> Iterator[Transaction]:
+        """ Same behavior as the mempool index for iterating over all mempool transactions.
+
+        This basically means that the returned iterator will yield all transactions that have not been confirmed by a
+        block on the best chain. Order is not guaranteed to be the same as in the mempool index.
+
+        This method requires indexes to be enabled.
+        """
+        from hathor.transaction.storage.traversal import BFSWalk
+
+        root = self.iter_mempool_tips_from_tx_tips()
+        walk = BFSWalk(self, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=False)
+        for tx in walk.run(root):
+            tx_meta = tx.get_metadata()
+            # XXX: skip blocks and tx-tips that have already been confirmed
+            if tx_meta.first_block is not None or tx.is_block:
+                walk.skip_neighbors(tx)
+            else:
+                assert isinstance(tx, Transaction)
+                yield tx
+
+    def iter_mempool_from_best_index(self) -> Iterator[Transaction]:
+        """Get all transactions in the mempool, using the best available index (mempool_tips or tx_tips)"""
+        assert self.indexes is not None
+        if self.indexes.mempool_tips is not None:
+            yield from self.indexes.mempool_tips.iter_all(self)
+        else:
+            yield from self.iter_mempool_from_tx_tips()
+
+    def get_transactions_that_became_invalid(self) -> List[BaseTransaction]:
+        """ This method will look for transactions in the mempool that have became invalid due to the reward lock.
+        """
+        from hathor.transaction.transaction_metadata import ValidationState
+        to_remove: List[BaseTransaction] = []
+        for tx in self.iter_mempool_from_best_index():
+            if tx.is_spent_reward_locked():
+                tx.get_metadata().validation = ValidationState.INVALID
+                to_remove.append(tx)
+        return to_remove
 
 
 class BaseTransactionStorage(TransactionStorage):
@@ -1047,6 +1231,12 @@ class BaseTransactionStorage(TransactionStorage):
             raise NotImplementedError
         assert self.indexes is not None
         return self.indexes.info.get_tx_count()
+
+    def get_vertices_count(self) -> int:
+        if not self.with_index:
+            raise NotImplementedError
+        assert self.indexes is not None
+        return self.indexes.info.get_vertices_count()
 
     def get_genesis(self, hash_bytes: bytes) -> Optional[BaseTransaction]:
         assert self._genesis_cache is not None

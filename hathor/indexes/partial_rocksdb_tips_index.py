@@ -27,6 +27,8 @@ from hathor.util import LogDuration
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
 
+    from hathor.indexes.manager import IndexesManager
+
 logger = get_logger()
 
 
@@ -46,7 +48,8 @@ def _from_db_value(i: int) -> Union[int, float]:
     return i
 
 
-def progress(iter_iv: Iterator[Interval], *, log: 'structlog.stdlib.BoundLogger', total: int) -> Iterator[Interval]:
+def progress(iter_iv: Iterator[Interval], *, log: 'structlog.stdlib.BoundLogger', total: Optional[int],
+             ) -> Iterator[Interval]:
     """ Implementation of progress helper for using with loading the interval tree.
 
     This is basically a stripped down version of `hathor.util.progress`
@@ -54,7 +57,10 @@ def progress(iter_iv: Iterator[Interval], *, log: 'structlog.stdlib.BoundLogger'
     t_start = time.time()
     count = 0
     count_log_prev = 0
-    log.debug('load will start')
+    if total is not None:
+        log.info('loading... 0%', progress=0)
+    else:
+        log.info('loading...')
     t_log_prev = t_start
     while True:
         try:
@@ -83,7 +89,12 @@ def progress(iter_iv: Iterator[Interval], *, log: 'structlog.stdlib.BoundLogger'
     t_final = time.time()
     dt_total = LogDuration(t_final - t_start)
     rate = '?' if dt_total == 0 else count / dt_total
-    log.info('loaded', count=count, rate=rate, total_dt=dt_total)
+    if total is not None:
+        progress = count / total
+        log.info(f'loaded...  {math.floor(progress * 100):2.0f}%', progress=progress, count=count, rate=rate,
+                 total_dt=dt_total)
+    else:
+        log.info('loaded', count=count, rate=rate, total_dt=dt_total)
 
 
 class PartialRocksDBTipsIndex(MemoryTipsIndex, RocksDBIndexUtils):
@@ -102,6 +113,7 @@ class PartialRocksDBTipsIndex(MemoryTipsIndex, RocksDBIndexUtils):
 
     def __init__(self, db: 'rocksdb.DB', name: str) -> None:
         MemoryTipsIndex.__init__(self)
+        self.log = logger.new()  # XXX: override MemoryTipsIndex logger so it shows the correct module
         RocksDBIndexUtils.__init__(self, db, f'tips-{name}'.encode())
         self._name = name
 
@@ -127,9 +139,18 @@ class PartialRocksDBTipsIndex(MemoryTipsIndex, RocksDBIndexUtils):
         assert len(tx_id) == 32
         return Interval(_from_db_value(begin), _from_db_value(end), tx_id)
 
-    def init_start(self) -> None:
+    def init_start(self, indexes_manager: 'IndexesManager') -> None:
         log = self.log.new(index=f'tips-{self._name}')
-        total = int(self._db.get_property(b'rocksdb.estimate-num-keys', self._cf))
+        total: Optional[int]
+        if self is indexes_manager.all_tips:
+            total = indexes_manager.info.get_tx_count() + indexes_manager.info.get_block_count()
+        elif self is indexes_manager.block_tips:
+            total = indexes_manager.info.get_block_count()
+        elif self is indexes_manager.tx_tips:
+            total = indexes_manager.info.get_tx_count()
+        else:
+            log.info('index not identified, skipping total count')
+            total = None
         for iv in progress(self._iter_intervals_db(), log=log, total=total):
             self.tree.add(iv)
             self.tx_last_interval[iv.data] = iv

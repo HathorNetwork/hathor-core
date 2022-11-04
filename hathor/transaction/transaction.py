@@ -13,9 +13,9 @@
 # limitations under the License.
 
 import hashlib
-from collections import namedtuple
+from itertools import chain
 from struct import pack
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple
 
 from hathor import daa
 from hathor.checkpoint import Checkpoint
@@ -54,7 +54,16 @@ _FUNDS_FORMAT_STRING = '!HBBB'
 # Version (H), inputs len (B), and outputs len (B), token uids len (B).
 _SIGHASH_ALL_FORMAT_STRING = '!HBBB'
 
-TokenInfo = namedtuple('TokenInfo', 'amount can_mint can_melt')
+
+class TokenInfo(NamedTuple):
+    amount: int
+    can_mint: bool
+    can_melt: bool
+
+
+class RewardLockedInfo(NamedTuple):
+    block_hash: bytes
+    blocks_needed: int
 
 
 class Transaction(BaseTransaction):
@@ -79,7 +88,6 @@ class Transaction(BaseTransaction):
         super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight, inputs=inputs
                          or [], outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.tokens = tokens or []
-        self._height_cache: Optional[int] = None
         self._sighash_cache: Optional[bytes] = None
         self._sighash_data_cache: Optional[bytes] = None
 
@@ -114,6 +122,37 @@ class Transaction(BaseTransaction):
     def calculate_height(self) -> int:
         # XXX: transactions don't have height, using 0 as a placeholder
         return 0
+
+    def calculate_min_height(self) -> int:
+        """Calculates the min height the first block confirming this tx needs to have for reward lock verification.
+
+        Assumes tx has been fully verified (parents and inputs exist and have complete metadata).
+        """
+        if self.is_genesis:
+            return 0
+        return max(
+            # 1) don't drop the min height of any parent tx or input tx
+            self._calculate_inherited_min_height(),
+            # 2) include the min height for any reward being spent
+            self._calculate_my_min_height(),
+        )
+
+    def _calculate_inherited_min_height(self) -> int:
+        """ Calculates min height inherited from any input or parent"""
+        assert self.storage is not None
+        min_height = 0
+        iter_parents = map(self.storage.get_transaction, self.get_tx_parents())
+        iter_inputs = map(self.get_spent_tx, self.inputs)
+        for tx in chain(iter_parents, iter_inputs):
+            min_height = max(min_height, tx.get_metadata().min_height)
+        return min_height
+
+    def _calculate_my_min_height(self) -> int:
+        """ Calculates min height derived from own spent rewards"""
+        min_height = 0
+        for blk in self.iter_spent_rewards():
+            min_height = max(min_height, blk.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS + 1)
+        return min_height
 
     def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets all funds fields for a transaction from a buffer.
@@ -263,7 +302,7 @@ class Transaction(BaseTransaction):
                                         f'smaller than the minimum weight ({min_tx_weight})')
 
     @cpu.profiler(key=lambda self: 'tx-verify!{}'.format(self.hash.hex()))
-    def verify(self) -> None:
+    def verify(self, reject_locked_reward: bool = True) -> None:
         """ Common verification for all transactions:
            (i) number of inputs is at most 256
           (ii) number of outputs is at most 256
@@ -283,6 +322,8 @@ class Transaction(BaseTransaction):
         self.verify_inputs()  # need to run verify_inputs first to check if all inputs exist
         self.verify_parents()
         self.verify_sum()
+        if reject_locked_reward:
+            self.verify_reward_locked()
 
     def verify_unsigned_skip_pow(self) -> None:
         """ Same as .verify but skipping pow and signature verification."""
@@ -457,6 +498,14 @@ class Transaction(BaseTransaction):
         self.update_token_info_from_outputs(token_dict)
         self.check_authorities_and_deposit(token_dict)
 
+    def iter_spent_rewards(self) -> Iterator[Block]:
+        """Iterate over all the rewards being spent, assumes tx has been verified."""
+        for input_tx in self.inputs:
+            spent_tx = self.get_spent_tx(input_tx)
+            if spent_tx.is_block:
+                assert isinstance(spent_tx, Block)
+                yield spent_tx
+
     def verify_inputs(self, *, skip_script: bool = False) -> None:
         """Verify inputs signatures and ownership and all inputs actually exist"""
         from hathor.transaction.storage.exceptions import TransactionDoesNotExist
@@ -485,10 +534,6 @@ class Transaction(BaseTransaction):
                     spent_tx.timestamp,
                 ))
 
-            if spent_tx.is_block:
-                assert isinstance(spent_tx, Block)
-                self.verify_spent_reward(spent_tx)
-
             if not skip_script:
                 self.verify_script(input_tx, spent_tx)
 
@@ -499,33 +544,36 @@ class Transaction(BaseTransaction):
                     self.hash_hex, input_tx.tx_id.hex(), input_tx.index))
             spent_outputs.add(key)
 
-    def verify_spent_reward(self, block: Block) -> None:
-        """ Verify that the reward being spent is old enough (has enoughs blocks after it on the best chain).
+    def verify_reward_locked(self) -> None:
+        """Will raise `RewardLocked` if any reward is spent before the best block height is enough."""
+        info = self.get_spent_reward_locked_info()
+        if info is not None:
+            raise RewardLocked(f'Reward {info.block_hash.hex()} still needs {info.blocks_needed} to be unlocked.')
 
-        We only consider the blocks on the best chain up to the tx's timestamp.
-        """
+    def is_spent_reward_locked(self) -> bool:
+        """ Verify whether any spent reward is currently locked."""
+        return self.get_spent_reward_locked_info() is not None
+
+    def get_spent_reward_locked_info(self) -> Optional[RewardLockedInfo]:
+        """ Same verification as in `is_spent_reward_locked`, but returns extra information or None for False."""
+        for blk in self.iter_spent_rewards():
+            assert blk.hash is not None
+            needed_height = self._spent_reward_needed_height(blk)
+            if needed_height > 0:
+                return RewardLockedInfo(blk.hash, needed_height)
+        return None
+
+    def _spent_reward_needed_height(self, block: Block) -> int:
+        """ Returns height still needed to unlock this reward: 0 means it's unlocked."""
         assert self.storage is not None
-
-        if self._height_cache:
-            # get_best_block_tips is a costly method because there are many orphan blocks in our blockchain
-            # This method is called for each input that spends a block and, since we have many transactions
-            # that consolidate blocks rewards, this is common.
-            # This cache helps to decrease 90% of the verify time for those transactions.
-            best_height = self._height_cache
-        else:
-            # using the timestamp, we get the block immediately before this transaction in the blockchain
-            tips = self.storage.get_best_block_tips(self.timestamp - 1)
-            assert len(tips) > 0
-            tip = self.storage.get_transaction(tips[0])
-            assert tip is not None
-            assert self.timestamp > tip.timestamp
-            best_height = tip.get_metadata().height
-            self._height_cache = best_height
+        # omitting timestamp to get the current best block, this will usually hit the cache instead of being slow
+        tips = self.storage.get_best_block_tips()
+        assert len(tips) > 0
+        best_height = min(self.storage.get_transaction(tip).get_metadata().height for tip in tips)
         spent_height = block.get_metadata().height
         spend_blocks = best_height - spent_height
-        if spend_blocks < settings.REWARD_SPEND_MIN_BLOCKS:
-            raise RewardLocked(f'Reward needs {settings.REWARD_SPEND_MIN_BLOCKS} blocks to be spent, {spend_blocks} '
-                               'not enough')
+        needed_height = settings.REWARD_SPEND_MIN_BLOCKS - spend_blocks
+        return max(needed_height, 0)
 
     def verify_script(self, input_tx: TxInput, spent_tx: BaseTransaction) -> None:
         """

@@ -284,6 +284,10 @@ class BaseTransaction(ABC):
     def calculate_height(self) -> int:
         raise NotImplementedError
 
+    @abstractmethod
+    def calculate_min_height(self) -> int:
+        raise NotImplementedError
+
     @property
     def hash_hex(self) -> str:
         """Return the current stored hash in hex string format"""
@@ -506,7 +510,8 @@ class BaseTransaction(ABC):
         meta.validation = ValidationState.BASIC
         return True
 
-    def validate_full(self, skip_block_weight_verification: bool = False, sync_checkpoints: bool = False) -> bool:
+    def validate_full(self, skip_block_weight_verification: bool = False, sync_checkpoints: bool = False,
+                      reject_locked_reward: bool = True) -> bool:
         """ Run full validations (these need access to all dependencies) and update the validation state.
 
         If no exception is raised, the ValidationState will end up as `FULL` or `CHECKPOINT_FULL` and return `True`.
@@ -525,7 +530,7 @@ class BaseTransaction(ABC):
             # run basic validation if we haven't already
             self.verify_basic(skip_block_weight_verification=skip_block_weight_verification)
 
-        self.verify()
+        self.verify(reject_locked_reward=reject_locked_reward)
         if sync_checkpoints:
             meta.validation = ValidationState.CHECKPOINT_FULL
         else:
@@ -547,7 +552,7 @@ class BaseTransaction(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def verify(self) -> None:
+    def verify(self, reject_locked_reward: bool = True) -> None:
         """Run all verifications. Raises on error.
 
         To be implemented by tx/block, used by `self.validate_full`. Should not modify the validation state."""
@@ -833,7 +838,8 @@ class BaseTransaction(ABC):
             #        happens include generating new mining blocks and some tests
             height = self.calculate_height() if self.storage else 0
             score = self.weight if self.is_genesis else 0
-            metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight, height=height, score=score)
+            metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight, height=height, score=score,
+                                           min_height=0)
             self._metadata = metadata
         if not metadata.hash:
             metadata.hash = self.hash
@@ -848,7 +854,8 @@ class BaseTransaction(ABC):
         score = self.weight if self.is_genesis else 0
         self._metadata = TransactionMetadata(hash=self.hash, score=score,
                                              accumulated_weight=self.weight,
-                                             height=self.calculate_height())
+                                             height=self.calculate_height(),
+                                             min_height=self.calculate_min_height())
         self._metadata._tx_ref = weakref.ref(self)
         self.storage.save_transaction(self, only_metadata=True)
 
@@ -898,13 +905,24 @@ class BaseTransaction(ABC):
 
         return metadata
 
-    def update_initial_metadata(self) -> None:
+    def update_initial_metadata(self, *, save: bool = True) -> None:
         """Update the tx's initial metadata. It does not update the whole metadata.
 
         It is called when a new transaction/block is received by HathorManager.
-
-        :rtype None
         """
+        self._update_parents_children_metadata()
+        self._update_reward_lock_metadata()
+        if save:
+            assert self.storage is not None
+            self.storage.save_transaction(self, only_metadata=True)
+
+    def _update_reward_lock_metadata(self) -> None:
+        """Update the txs/block min_height metadata."""
+        metadata = self.get_metadata()
+        metadata.min_height = self.calculate_min_height()
+
+    def _update_parents_children_metadata(self) -> None:
+        """Update the txs/block parent's children metadata."""
         assert self.hash is not None
         assert self.storage is not None
 

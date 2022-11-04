@@ -32,10 +32,8 @@ class DbExport(RunNode):
     def register_signal_handlers(self, args: Namespace) -> None:
         pass
 
-    def register_resources(self, args: Namespace) -> None:
-        pass
-
-    def create_parser(self) -> ArgumentParser:
+    @classmethod
+    def create_parser(cls) -> ArgumentParser:
         from hathor.conf import HathorSettings
         settings = HathorSettings()
 
@@ -60,9 +58,8 @@ class DbExport(RunNode):
         parser.add_argument('--export-skip-voided', action='store_true', help='Do not export voided txs/blocks')
         return parser
 
-    def prepare(self, args: Namespace) -> None:
-
-        super().prepare(args)
+    def prepare(self, args: Namespace, *, register_resources: bool = True) -> None:
+        super().prepare(args, register_resources=False)
 
         # allocating io.BufferedWriter here so we "own" it
         self.out_file = io.BufferedWriter(args.export_file)
@@ -110,7 +107,7 @@ class DbExport(RunNode):
         self.out_file.write(struct.pack('!I', block_count))
         # estimated total, this will obviously be wrong if we're not exporting everything, but it's still better than
         # nothing, and it's probably better to finish sooner than expected, rather than later than expected
-        total = self.tx_storage.get_count_tx_blocks()
+        total = self.tx_storage.get_vertices_count()
         for tx in progress(self.iter_tx(), log=self.log, total=total):
             assert tx.hash is not None
             tx_meta = tx.get_metadata()

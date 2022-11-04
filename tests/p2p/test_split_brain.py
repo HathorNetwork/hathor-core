@@ -1,5 +1,6 @@
 import random
 
+import pytest
 from mnemonic import Mnemonic
 
 from hathor.daa import TestMode, _set_test_mode
@@ -10,7 +11,7 @@ from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_block, add_new_double_spending, add_new_transactions
 
 
-class BaseHathorSyncMethodsTestCase(unittest.TestCase):
+class BaseHathorSplitBrainTestCase(unittest.TestCase):
     __test__ = False
 
     def setUp(self):
@@ -43,6 +44,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         wallet.unlock(words=words, tx_storage=manager.tx_storage)
         return manager
 
+    @pytest.mark.slow
     def test_split_brain(self):
         debug_pdf = False
 
@@ -112,14 +114,14 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(manager2)
 
 
-class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMethodsTestCase):
+class SyncV1HathorSplitBrainTestCase(unittest.SyncV1Params, BaseHathorSplitBrainTestCase):
     __test__ = True
 
 
-class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMethodsTestCase):
+class SyncV2HathorSplitBrainTestCase(unittest.SyncV2Params, BaseHathorSplitBrainTestCase):
     __test__ = True
 
 
 # sync-bridge should behave like sync-v2
-class SyncBridgeHathorSyncMethodsTestCase(unittest.SyncBridgeParams, SyncV2HathorSyncMethodsTestCase):
+class SyncBridgeHathorSplitBrainTestCase(unittest.SyncBridgeParams, SyncV2HathorSplitBrainTestCase):
     pass

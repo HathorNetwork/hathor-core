@@ -19,6 +19,7 @@ from twisted.internet import threads
 
 from hathor.indexes import IndexesManager
 from hathor.transaction import BaseTransaction
+from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.util import Reactor
 
@@ -82,7 +83,16 @@ class TransactionCacheStorage(BaseTransactionStorage):
         else:
             return x
 
+    def get_migration_state(self, migration_name: str) -> MigrationState:
+        # forward to internal store
+        return self.store.get_migration_state(migration_name)
+
+    def set_migration_state(self, migration_name: str, state: MigrationState) -> None:
+        # forward to internal store
+        self.store.set_migration_state(migration_name, state)
+
     def pre_init(self) -> None:
+        # XXX: not calling super().pre_init() because it would run `BaseTransactionStorage.pre_init` twice.
         self.store.pre_init()
         self.reactor.callLater(self.interval, self._start_flush_thread)
 
@@ -205,9 +215,9 @@ class TransactionCacheStorage(BaseTransactionStorage):
             self._save_to_weakref(tx)
             yield tx
 
-    def get_count_tx_blocks(self) -> int:
+    def is_empty(self) -> bool:
         self._flush_to_storage(self.dirty_txs.copy())
-        return self.store.get_count_tx_blocks()
+        return self.store.is_empty()
 
     def add_value(self, key: str, value: str) -> None:
         self.store.add_value(key, value)

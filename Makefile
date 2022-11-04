@@ -37,7 +37,7 @@ tests-lib:
 
 .PHONY: tests-quick
 tests-quick:
-	pytest --durations=10 $(pytest_flags) --doctest-modules hathor $(tests_lib) --maxfail=1
+	pytest --durations=10 $(pytest_flags) --doctest-modules hathor $(tests_lib) --maxfail=1 -m "not slow"
 
 .PHONY: tests-genesis
 tests-genesis:

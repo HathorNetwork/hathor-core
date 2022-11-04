@@ -53,7 +53,7 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         assert tx_storage.indexes is not None
 
         # XXX: sanity check that we've at least produced something
-        self.assertGreater(tx_storage.get_count_tx_blocks(), 3)
+        self.assertGreater(tx_storage.get_vertices_count(), 3)
 
         # base tips indexes
         base_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
@@ -87,7 +87,7 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         tx_storage = self.manager.tx_storage
 
         # XXX: sanity check that we've at least produced something
-        total_count = tx_storage.get_count_tx_blocks()
+        total_count = tx_storage.get_vertices_count()
         self.assertGreater(total_count, 3)
 
         # XXX: sanity check that the children metadata is properly set (this is needed for one of the iterators)

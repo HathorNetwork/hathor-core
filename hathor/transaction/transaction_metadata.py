@@ -109,6 +109,10 @@ class TransactionMetadata:
     first_block: Optional[bytes]
     height: int
     validation: ValidationState
+    # XXX: this is only used to defer the reward-lock verification from the transaction spending a reward to the first
+    # block that confirming this transaction, it is important to always have this set to be able to distinguish an old
+    # metadata (that does not have this calculated, from a tx with a new format that does have this calculated)
+    min_height: int
 
     # It must be a weakref.
     _tx_ref: Optional['ReferenceType[BaseTransaction]']
@@ -118,7 +122,7 @@ class TransactionMetadata:
     _last_spent_by_hash: Optional[int]
 
     def __init__(self, spent_outputs: Optional[Dict[int, List[bytes]]] = None, hash: Optional[bytes] = None,
-                 accumulated_weight: float = 0, score: float = 0, height: int = 0) -> None:
+                 accumulated_weight: float = 0, score: float = 0, height: int = 0, min_height: int = 0) -> None:
         from hathor.transaction.genesis import is_genesis
 
         # Hash of the transaction.
@@ -167,6 +171,9 @@ class TransactionMetadata:
 
         # Height
         self.height = height
+
+        # Min height
+        self.min_height = min_height
 
         # Validation
         self.validation = ValidationState.INITIAL
@@ -232,7 +239,7 @@ class TransactionMetadata:
             return False
         for field in ['hash', 'conflict_with', 'voided_by', 'received_by',
                       'children', 'accumulated_weight', 'twins', 'score',
-                      'first_block', 'validation']:
+                      'first_block', 'validation', 'min_height']:
             if (getattr(self, field) or None) != (getattr(other, field) or None):
                 return False
 
@@ -266,6 +273,7 @@ class TransactionMetadata:
         data['accumulated_weight'] = self.accumulated_weight
         data['score'] = self.score
         data['height'] = self.height
+        data['min_height'] = self.min_height
         if self.first_block is not None:
             data['first_block'] = self.first_block.hex()
         else:
@@ -314,6 +322,7 @@ class TransactionMetadata:
         meta.accumulated_weight = data['accumulated_weight']
         meta.score = data.get('score', 0)
         meta.height = data.get('height', 0)  # XXX: should we calculate the height if it's not defined?
+        meta.min_height = data.get('min_height', 0)
 
         first_block_raw = data.get('first_block', None)
         if first_block_raw:

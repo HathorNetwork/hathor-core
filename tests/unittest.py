@@ -16,7 +16,7 @@ from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import BaseTransaction
-from hathor.util import Random, reactor
+from hathor.util import Random, get_environment_info, reactor
 from hathor.wallet import HDWallet, Wallet
 
 logger = get_logger()
@@ -72,9 +72,12 @@ class TestCase(unittest.TestCase):
         self.log = logger.new()
         self.reset_peer_id_pool()
         self.rng = Random()
+        self._pending_cleanups = []
 
     def tearDown(self):
         self.clean_tmpdirs()
+        for fn in self._pending_cleanups:
+            fn()
 
     def reset_peer_id_pool(self) -> None:
         self._free_peer_id_pool = self.new_peer_id_pool()
@@ -94,6 +97,11 @@ class TestCase(unittest.TestCase):
         pool.remove(peer_id)
         return peer_id
 
+    def mkdtemp(self):
+        tmpdir = tempfile.mkdtemp()
+        self.tmpdirs.append(tmpdir)
+        return tmpdir
+
     def _create_test_wallet(self):
         """ Generate a Wallet with a number of keypairs for testing
             :rtype: Wallet
@@ -109,7 +117,7 @@ class TestCase(unittest.TestCase):
 
     def create_peer(self, network, peer_id=None, wallet=None, tx_storage=None, unlock_wallet=True, wallet_index=False,
                     capabilities=None, full_verification=True, enable_sync_v1=None, enable_sync_v2=None,
-                    checkpoints=None, utxo_index=False):
+                    checkpoints=None, utxo_index=False, event_storage=None):
         if enable_sync_v1 is None:
             assert hasattr(self, '_enable_sync_v1'), ('`_enable_sync_v1` has no default by design, either set one on '
                                                       'the test class or pass `enable_sync_v1` by argument')
@@ -135,6 +143,7 @@ class TestCase(unittest.TestCase):
                 directory = tempfile.mkdtemp()
                 self.tmpdirs.append(directory)
                 rocksdb_storage = RocksDBStorage(path=directory)
+                self._pending_cleanups.append(rocksdb_storage.close)
                 tx_storage = TransactionRocksDBStorage(rocksdb_storage)
         manager = HathorManager(
             self.clock,
@@ -142,6 +151,7 @@ class TestCase(unittest.TestCase):
             network=network,
             wallet=wallet,
             tx_storage=tx_storage,
+            event_storage=event_storage,
             wallet_index=wallet_index,
             utxo_index=utxo_index,
             capabilities=capabilities,
@@ -149,6 +159,7 @@ class TestCase(unittest.TestCase):
             enable_sync_v1=enable_sync_v1,
             enable_sync_v2=enable_sync_v2,
             checkpoints=checkpoints,
+            environment_info=get_environment_info("", peer_id.id)
         )
 
         # XXX: just making sure that tests set this up correctly
@@ -205,7 +216,7 @@ class TestCase(unittest.TestCase):
         self.assertNotEqual(s1, s2)
 
     def assertConsensusEqual(self, manager1, manager2):
-        self.assertEqual(manager1.tx_storage.get_count_tx_blocks(), manager2.tx_storage.get_count_tx_blocks())
+        self.assertEqual(manager1.tx_storage.get_vertices_count(), manager2.tx_storage.get_vertices_count())
         for tx1 in manager1.tx_storage.get_all_transactions():
             tx2 = manager2.tx_storage.get_transaction(tx1.hash)
             tx1_meta = tx1.get_metadata()
