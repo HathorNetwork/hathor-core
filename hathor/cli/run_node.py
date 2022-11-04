@@ -101,7 +101,7 @@ class RunNode:
                             help='Peer IDs to forbid connection')
         return parser
 
-    def prepare(self, args: Namespace) -> None:
+    def prepare(self, args: Namespace, *, register_resources: bool = True) -> None:
         from setproctitle import setproctitle
         setproctitle('{}hathor-core'.format(args.procname_prefix))
 
@@ -134,7 +134,8 @@ class RunNode:
         self.tx_storage = self.manager.tx_storage
         self.wallet = self.manager.wallet
         self.start_manager(args)
-        builder.register_resources(args)
+        if register_resources:
+            builder.register_resources(args)
 
     def start_sentry_if_possible(self, args: Namespace) -> None:
         """Start Sentry integration if possible."""

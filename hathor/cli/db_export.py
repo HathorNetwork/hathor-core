@@ -32,9 +32,6 @@ class DbExport(RunNode):
     def register_signal_handlers(self, args: Namespace) -> None:
         pass
 
-    def register_resources(self, args: Namespace) -> None:
-        pass
-
     @classmethod
     def create_parser(cls) -> ArgumentParser:
         from hathor.conf import HathorSettings
@@ -61,9 +58,8 @@ class DbExport(RunNode):
         parser.add_argument('--export-skip-voided', action='store_true', help='Do not export voided txs/blocks')
         return parser
 
-    def prepare(self, args: Namespace) -> None:
-
-        super().prepare(args)
+    def prepare(self, args: Namespace, *, register_resources: bool = True) -> None:
+        super().prepare(args, register_resources=False)
 
         # allocating io.BufferedWriter here so we "own" it
         self.out_file = io.BufferedWriter(args.export_file)

@@ -32,9 +32,6 @@ class DbImport(RunNode):
     def register_signal_handlers(self, args: Namespace) -> None:
         pass
 
-    def register_resources(self, args: Namespace) -> None:
-        pass
-
     @classmethod
     def create_parser(cls) -> ArgumentParser:
         parser = super().create_parser()
@@ -42,8 +39,8 @@ class DbImport(RunNode):
                             help='Save the export to this file')
         return parser
 
-    def prepare(self, args: Namespace) -> None:
-        super().prepare(args)
+    def prepare(self, args: Namespace, *, register_resources: bool = True) -> None:
+        super().prepare(args, register_resources=False)
 
         # allocating io.BufferedReader here so we "own" it
         self.in_file = io.BufferedReader(args.import_file)
