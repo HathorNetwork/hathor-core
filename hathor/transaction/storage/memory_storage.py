@@ -52,12 +52,12 @@ class TransactionMemoryStorage(BaseTransactionStorage):
             return x
 
     def get_migration_state(self, migration_name: str) -> MigrationState:
-        # XXX: migrations aren't needed for memory storage, this method shouldn't even be called
-        raise NotImplementedError
+        # XXX: it will always return COMPLETED, migrations don't apply to memory storage
+        return MigrationState.COMPLETED
 
     def set_migration_state(self, migration_name: str, state: MigrationState) -> None:
-        # XXX: migrations aren't needed for memory storage, this method shouldn't even be called
-        raise NotImplementedError
+        # XXX: do nothing, migrations have no effect on memory storage
+        pass
 
     def remove_transaction(self, tx: BaseTransaction) -> None:
         assert tx.hash is not None
