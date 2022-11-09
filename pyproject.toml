@@ -49,7 +49,7 @@ types-pyopenssl = "=22.0.3"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<4"
-twisted = "~22.4.0"
+twisted = "~22.10.0"
 autobahn = "~22.4.2"
 base58 = "~2.1.1"
 colorama = "~0.4.4"
