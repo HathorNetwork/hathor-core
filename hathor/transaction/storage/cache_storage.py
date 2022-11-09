@@ -92,8 +92,8 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self.store.set_migration_state(migration_name, state)
 
     def pre_init(self) -> None:
-        # XXX: not calling super().pre_init() because it would run `BaseTransactionStorage.pre_init` twice.
-        self.store.pre_init()
+        # XXX: not calling self.store.pre_init() because it would run `BaseTransactionStorage.pre_init` twice.
+        super().pre_init()
         self.reactor.callLater(self.interval, self._start_flush_thread)
 
     def _enable_weakref(self) -> None:
