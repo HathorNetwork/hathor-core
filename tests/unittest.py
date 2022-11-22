@@ -9,11 +9,13 @@ from structlog import get_logger
 from twisted.internet.task import Clock
 from twisted.trial import unittest
 
+from hathor.builder import CliBuilder
 from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
+from hathor.pubsub import PubSubManager
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import BaseTransaction
 from hathor.util import Random, get_environment_info, reactor
@@ -106,8 +108,7 @@ class TestCase(unittest.TestCase):
         """ Generate a Wallet with a number of keypairs for testing
             :rtype: Wallet
         """
-        tmpdir = tempfile.mkdtemp()
-        self.tmpdirs.append(tmpdir)
+        tmpdir = self.mkdtemp()
 
         wallet = Wallet(directory=tmpdir)
         wallet.unlock(b'MYPASS')
@@ -117,7 +118,7 @@ class TestCase(unittest.TestCase):
 
     def create_peer(self, network, peer_id=None, wallet=None, tx_storage=None, unlock_wallet=True, wallet_index=False,
                     capabilities=None, full_verification=True, enable_sync_v1=None, enable_sync_v2=None,
-                    checkpoints=None, utxo_index=False, event_storage=None):
+                    checkpoints=None, utxo_index=False, event_storage=None, use_memory_index=None, start_manager=True):
         if enable_sync_v1 is None:
             assert hasattr(self, '_enable_sync_v1'), ('`_enable_sync_v1` has no default by design, either set one on '
                                                       'the test class or pass `enable_sync_v1` by argument')
@@ -144,16 +145,25 @@ class TestCase(unittest.TestCase):
                 self.tmpdirs.append(directory)
                 rocksdb_storage = RocksDBStorage(path=directory)
                 self._pending_cleanups.append(rocksdb_storage.close)
-                tx_storage = TransactionRocksDBStorage(rocksdb_storage)
+                tx_storage = TransactionRocksDBStorage(rocksdb_storage, use_memory_indexes=use_memory_index)
+
+        pubsub = PubSubManager(self.clock)
+
+        builder = CliBuilder()
+        if wallet_index:
+            builder.enable_wallet_index(tx_storage.indexes, pubsub)
+
+        if utxo_index:
+            tx_storage.indexes.enable_utxo_index()
+
         manager = HathorManager(
             self.clock,
+            pubsub=pubsub,
             peer_id=peer_id,
             network=network,
             wallet=wallet,
             tx_storage=tx_storage,
             event_storage=event_storage,
-            wallet_index=wallet_index,
-            utxo_index=utxo_index,
             capabilities=capabilities,
             rng=self.rng,
             enable_sync_v1=enable_sync_v1,
@@ -174,8 +184,9 @@ class TestCase(unittest.TestCase):
 
         manager.avg_time_between_blocks = 0.0001
         manager._full_verification = full_verification
-        manager.start()
-        self.run_to_completion()
+        if start_manager:
+            manager.start()
+            self.run_to_completion()
         return manager
 
     def run_to_completion(self):

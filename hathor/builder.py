@@ -27,10 +27,12 @@ from twisted.web import server
 from twisted.web.resource import Resource
 
 from hathor.exception import BuilderError
+from hathor.indexes import IndexesManager
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import discover_hostname
 from hathor.prometheus import PrometheusMetricsExporter
+from hathor.pubsub import PubSubManager
 from hathor.wallet import BaseWallet, HDWallet, Wallet
 
 logger = get_logger()
@@ -38,6 +40,8 @@ logger = get_logger()
 
 class CliBuilder:
     def __init__(self) -> None:
+        self.log = logger.new()
+
         self._build_prometheus = False
         self._build_status = False
 
@@ -47,8 +51,6 @@ class CliBuilder:
             raise BuilderError(message)
 
     def create_manager(self, reactor: PosixReactorBase, args: Namespace) -> HathorManager:
-        self.log = logger.new()
-
         import hathor
         from hathor.conf import HathorSettings
         from hathor.conf.get_settings import get_settings_module
@@ -131,16 +133,25 @@ class CliBuilder:
         enable_sync_v1 = not args.x_sync_v2_only
         enable_sync_v2 = args.x_sync_v2_only or args.x_sync_bridge
 
+        pubsub = PubSubManager(reactor)
+
+        if args.wallet_index and tx_storage.indexes is not None:
+            self.log.debug('enable wallet indexes')
+            self.enable_wallet_index(tx_storage.indexes, pubsub)
+
+        if args.utxo_index and tx_storage.indexes is not None:
+            self.log.debug('enable utxo index')
+            tx_storage.indexes.enable_utxo_index()
+
         self.manager = HathorManager(
             reactor,
+            pubsub=pubsub,
             peer_id=peer_id,
             network=network,
             hostname=hostname,
             tx_storage=tx_storage,
             event_storage=event_storage,
             wallet=self.wallet,
-            wallet_index=args.wallet_index,
-            utxo_index=args.utxo_index,
             stratum_port=args.stratum,
             ssl=True,
             checkpoints=settings.CHECKPOINTS,
@@ -208,6 +219,11 @@ class CliBuilder:
             add_peer_id_blacklist(args.peer_id_blacklist)
 
         return self.manager
+
+    def enable_wallet_index(self, indexes: IndexesManager, pubsub: PubSubManager) -> None:
+        self.log.debug('enable wallet indexes')
+        indexes.enable_address_index(pubsub)
+        indexes.enable_tokens_index()
 
     def get_hostname(self, args: Namespace) -> str:
         if args.hostname and args.auto_hostname:

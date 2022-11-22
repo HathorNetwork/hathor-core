@@ -3,14 +3,12 @@ from unittest.mock import Mock
 
 import pytest
 
-from hathor.manager import HathorManager
 from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
-from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.pubsub import HathorEvents
 from hathor.storage import RocksDBStorage
 from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage, TransactionRocksDBStorage
-from hathor.util import reactor
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import HAS_ROCKSDB, add_new_blocks
@@ -27,11 +25,10 @@ class BaseMetricsTest(unittest.TestCase):
            the event to set its own fields related to the network peers
         """
         # Preparation
-        tx_storage = TransactionMemoryStorage()
-        pubsub = PubSubManager(reactor)
-        manager = HathorManager(self.clock, tx_storage=tx_storage, pubsub=pubsub)
-
-        manager.metrics.start()
+        self.use_memory_storage = True
+        manager = self.create_peer('testnet')
+        self.assertIsInstance(manager.tx_storage, TransactionMemoryStorage)
+        pubsub = manager.pubsub
 
         # Execution
         pubsub.publish(
@@ -39,6 +36,7 @@ class BaseMetricsTest(unittest.TestCase):
             protocol=Mock(),
             peers_count=PeerConnectionsMetrics(3, 4, 5, 6)
         )
+        self.run_to_completion()
 
         # Assertion
         self.assertEquals(manager.metrics.connecting_peers, 3)
@@ -60,11 +58,9 @@ class BaseMetricsTest(unittest.TestCase):
         self.tmpdirs.append(tmpdir)
         wallet = Wallet(directory=tmpdir)
         wallet.unlock(b'teste')
-        manager = HathorManager(self.clock, tx_storage=tx_storage, wallet=wallet)
+        manager = self.create_peer('testnet', tx_storage=tx_storage, wallet=wallet)
 
-        manager.metrics.start()
-
-        manager.connections.peer_storage.update({"1": Mock(), "2": Mock(), "3": Mock()})
+        manager.connections.peer_storage.update({"1": PeerId(), "2": PeerId(), "3": PeerId()})
         manager.connections.connected_peers.update({"1": Mock(), "2": Mock()})
         manager.connections.handshaking_peers.update({Mock()})
 
@@ -91,8 +87,6 @@ class BaseMetricsTest(unittest.TestCase):
            The expected result is that it will successfully collect
            the RocksDB metrics.
         """
-        reactor = self.clock
-
         path = tempfile.mkdtemp()
         self.tmpdirs.append(path)
 
@@ -101,10 +95,8 @@ class BaseMetricsTest(unittest.TestCase):
             tx_storage = TransactionRocksDBStorage(rocksdb_storage,
                                                    with_index=True,
                                                    use_memory_indexes=True)
-
-            pubsub = PubSubManager(reactor)
-            wallet = self._create_test_wallet()
-            return HathorManager(reactor=reactor, tx_storage=tx_storage, pubsub=pubsub, wallet=wallet)
+            manager = self.create_peer('testnet', tx_storage=tx_storage, start_manager=False)
+            return manager
 
         manager = _init_manager()
         manager.metrics._collect_data()
@@ -132,8 +124,8 @@ class BaseMetricsTest(unittest.TestCase):
 
         # We don't know exactly the sizes of each column family,
         # but we know empirically that they should be higher than these values
-        self.assertTrue(manager.metrics.rocksdb_cfs_sizes[b'tx'] > 500)
-        self.assertTrue(manager.metrics.rocksdb_cfs_sizes[b'meta'] > 1000)
+        self.assertGreater(manager.metrics.rocksdb_cfs_sizes[b'tx'], 500)
+        self.assertGreater(manager.metrics.rocksdb_cfs_sizes[b'meta'], 1000)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_tx_storage_data_collection_with_rocksdb_storage_and_cache(self):
@@ -143,8 +135,6 @@ class BaseMetricsTest(unittest.TestCase):
            The expected result is that it will successfully collect
            the RocksDB metrics.
         """
-        reactor = self.clock
-
         path = tempfile.mkdtemp()
         self.tmpdirs.append(path)
 
@@ -153,11 +143,10 @@ class BaseMetricsTest(unittest.TestCase):
             tx_storage = TransactionRocksDBStorage(rocksdb_storage,
                                                    with_index=False,
                                                    use_memory_indexes=True)
-            tx_storage = TransactionCacheStorage(tx_storage, reactor)
+            tx_storage = TransactionCacheStorage(tx_storage, self.clock)
 
-            pubsub = PubSubManager(reactor)
             wallet = self._create_test_wallet()
-            return HathorManager(reactor=reactor, tx_storage=tx_storage, pubsub=pubsub, wallet=wallet)
+            return self.create_peer('testnet', tx_storage=tx_storage, wallet=wallet, start_manager=False)
 
         manager = _init_manager()
         manager.metrics._collect_data()
@@ -197,12 +186,10 @@ class BaseMetricsTest(unittest.TestCase):
            The expected result is that nothing is done, because we currently only collect
            data for RocksDB storage
         """
-        reactor = self.clock
         tx_storage = TransactionMemoryStorage()
 
         # All
-        pubsub = PubSubManager(reactor)
-        manager = HathorManager(reactor=reactor, tx_storage=tx_storage, pubsub=pubsub)
+        manager = self.create_peer('testnet', tx_storage=tx_storage)
 
         manager.metrics._collect_data()
 
@@ -213,13 +200,11 @@ class BaseMetricsTest(unittest.TestCase):
             ConnectionsManager
         """
         # Preparation
-        reactor = self.clock
-        tx_storage = TransactionMemoryStorage(with_index=False)
-        pubsub = PubSubManager(reactor)
+        self.use_memory_storage = True
+        manager = self.create_peer('testnet')
+        self.assertIsInstance(manager.tx_storage, TransactionMemoryStorage)
 
-        manager = HathorManager(reactor=reactor, tx_storage=tx_storage, pubsub=pubsub)
-
-        my_peer = PeerId()
+        my_peer = manager.my_peer
 
         def build_hathor_protocol():
             protocol = HathorProtocol(
@@ -271,13 +256,10 @@ class BaseMetricsTest(unittest.TestCase):
             TransactionCacheStorage
         """
         # Preparation
-        reactor = self.clock
         base_storage = TransactionMemoryStorage(with_index=False)
-        tx_storage = TransactionCacheStorage(base_storage, reactor)
+        tx_storage = TransactionCacheStorage(base_storage, self.clock)
 
-        pubsub = PubSubManager(reactor)
-
-        manager = HathorManager(reactor=reactor, tx_storage=tx_storage, pubsub=pubsub)
+        manager = self.create_peer('testnet', tx_storage=tx_storage)
 
         tx_storage.stats["hit"] = 10
         tx_storage.stats["miss"] = 20

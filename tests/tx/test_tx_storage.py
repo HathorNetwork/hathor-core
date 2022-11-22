@@ -10,6 +10,7 @@ from twisted.trial import unittest
 
 from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
+from hathor.pubsub import PubSubManager
 from hathor.simulator.clock import MemoryReactorHeapClock
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
@@ -44,6 +45,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
             self.reactor = reactor
         self.reactor.advance(time.time())
         self.tx_storage = tx_storage
+        self.pubsub = PubSubManager(self.reactor)
 
         tx_storage._manually_initialize()
         assert tx_storage.first_timestamp > 0
@@ -55,7 +57,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.tmpdir = tempfile.mkdtemp()
         wallet = Wallet(directory=self.tmpdir)
         wallet.unlock(b'teste')
-        self.manager = HathorManager(self.reactor, tx_storage=self.tx_storage, wallet=wallet)
+        self.manager = HathorManager(self.reactor, pubsub=self.pubsub, tx_storage=self.tx_storage, wallet=wallet)
 
         self.tx_storage.indexes.enable_address_index(self.manager.pubsub)
         self.tx_storage.indexes.enable_tokens_index()
@@ -193,7 +195,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.assertEqual(obj.is_block, loaded_obj1.is_block)
 
         # Testing add and remove from cache
-        if self.tx_storage.with_index:
+        if self.tx_storage.indexes is not None:
             if obj.is_block:
                 self.assertTrue(obj.hash in self.tx_storage.indexes.block_tips.tx_last_interval)
             else:
@@ -201,14 +203,14 @@ class BaseTransactionStorageTest(unittest.TestCase):
 
         self.tx_storage.del_from_indexes(obj)
 
-        if self.tx_storage.with_index:
+        if self.tx_storage.indexes is not None:
             if obj.is_block:
                 self.assertFalse(obj.hash in self.tx_storage.indexes.block_tips.tx_last_interval)
             else:
                 self.assertFalse(obj.hash in self.tx_storage.indexes.tx_tips.tx_last_interval)
 
         self.tx_storage.add_to_indexes(obj)
-        if self.tx_storage.with_index:
+        if self.tx_storage.indexes is not None:
             if obj.is_block:
                 self.assertTrue(obj.hash in self.tx_storage.indexes.block_tips.tx_last_interval)
             else:

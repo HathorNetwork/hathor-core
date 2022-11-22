@@ -1,11 +1,7 @@
 import sys
-import tempfile
 
 import pytest
 
-from hathor.manager import HathorManager
-from hathor.transaction.storage import TransactionMemoryStorage
-from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import run_server
 
@@ -22,12 +18,7 @@ class ConnectionsTest(unittest.TestCase):
         process3.terminate()
 
     def test_manager_connections(self):
-        tx_storage = TransactionMemoryStorage()
-        tmpdir = tempfile.mkdtemp()
-        self.tmpdirs.append(tmpdir)
-        wallet = Wallet(directory=tmpdir)
-        wallet.unlock(b'teste')
-        manager = HathorManager(self.clock, tx_storage=tx_storage, wallet=wallet)
+        manager = self.create_peer('testnet', enable_sync_v1=True, enable_sync_v2=False)
 
         endpoint = 'tcp://127.0.0.1:8005'
         manager.connections.connect_to(endpoint, use_ssl=True)
