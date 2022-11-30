@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock
+
 from hathor.conf import HathorSettings
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
@@ -7,6 +9,7 @@ from tests.utils import (
     add_new_blocks,
     add_new_double_spending,
     add_new_transactions,
+    gen_new_tx,
 )
 
 settings = HathorSettings()
@@ -21,6 +24,29 @@ class BaseConsensusTestCase(unittest.TestCase):
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
+
+    def test_unhandled_exception(self):
+        manager = self.create_peer('testnet', tx_storage=self.tx_storage)
+
+        # Mine a few blocks in a row with no transaction but the genesis
+        add_new_blocks(manager, 3, advance_clock=15)
+        add_blocks_unlock_reward(manager)
+
+        address = 'HGov979VaeyMQ92ubYcnVooP6qPzUJU8Ro'
+        value = 1
+        tx = gen_new_tx(manager, address, value)
+
+        class MyError(Exception):
+            pass
+
+        manager.consensus_algorithm._unsafe_update = MagicMock(side_effect=MyError)
+
+        with self.assertRaises(MyError):
+            manager.propagate_tx(tx, fails_silently=False)
+
+        tx2 = manager.tx_storage.get_transaction(tx.hash)
+        meta2 = tx2.get_metadata()
+        self.assertEqual({settings.CONSENSUS_FAIL_ID}, meta2.voided_by)
 
     def test_revert_block_high_weight(self):
         """ A conflict transaction will be propagated. At first, it will be voided.
