@@ -100,6 +100,16 @@ class ConsensusAlgorithm:
 
     @cpu.profiler(key=lambda self, base: 'consensus!{}'.format(base.hash.hex()))
     def update(self, base: BaseTransaction) -> None:
+        try:
+            self._unsafe_update(base)
+        except Exception:
+            meta = base.get_metadata()
+            meta.add_voided_by(settings.CONSENSUS_FAIL_ID)
+            assert base.storage is not None
+            base.storage.save_transaction(base, only_metadata=True)
+            raise
+
+    def _unsafe_update(self, base: BaseTransaction) -> None:
         """Run a consensus update with its own context, indexes will be updated accordingly."""
         from hathor.transaction import Block, Transaction
 
