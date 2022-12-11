@@ -59,11 +59,11 @@ First, you need to have Python >=3.8 installed. If you don't, we recommend you t
   brew install pyenv
   ```
 
-  then Python 3.10 (you could check the latest 3.10.x version with `pyenv install --list`):
+  then Python 3.11 (you could check the latest 3.11.x version with `pyenv install --list`):
 
   ```
-  pyenv install 3.10.6
-  pyenv local 3.10.6
+  pyenv install 3.11.0
+  pyenv local 3.11.0
   pip install -U poetry
   ```
 
@@ -75,7 +75,7 @@ First, you need to have Python >=3.8 installed. If you don't, we recommend you t
 - on Windows 10 (using [winget](https://github.com/microsoft/winget-cli)):
 
   ```
-  winget install python-3.10
+  winget install python-3.11
   pip install -U poetry
   ```
 
