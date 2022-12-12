@@ -35,21 +35,30 @@ class ConsensusAlgorithmContext:
     """
 
     consensus: 'ConsensusAlgorithm'
+    pubsub: PubSubManager
     block_algorithm: 'BlockConsensusAlgorithm'
     transaction_algorithm: 'TransactionConsensusAlgorithm'
     txs_affected: Set[BaseTransaction]
+    reorg_common_block: Optional[Block]
 
-    def __init__(self, consensus: 'ConsensusAlgorithm') -> None:
+    def __init__(self, consensus: 'ConsensusAlgorithm', pubsub: PubSubManager) -> None:
         self.consensus = consensus
-        self.block_algorithm = consensus.block_algorithm_factory(self)
-        self.transaction_algorithm = consensus.transaction_algorithm_factory(self)
+        self.pubsub = pubsub
+        self.block_algorithm = self.consensus.block_algorithm_factory(self)
+        self.transaction_algorithm = self.consensus.transaction_algorithm_factory(self)
         self.txs_affected = set()
+        self.reorg_common_block = None
 
     def save(self, tx: BaseTransaction) -> None:
         """Only metadata is ever saved in a consensus update."""
         assert tx.storage is not None
         self.txs_affected.add(tx)
         tx.storage.save_transaction(tx, only_metadata=True)
+
+    def mark_as_reorg(self, common_block: Block) -> None:
+        """Must only be called once, will raise an assert error if called twice."""
+        assert self.reorg_common_block is None
+        self.reorg_common_block = common_block
 
 
 class ConsensusAlgorithm:
@@ -79,15 +88,15 @@ class ConsensusAlgorithm:
     """
 
     def __init__(self, soft_voided_tx_ids: Set[bytes], pubsub: PubSubManager) -> None:
-        self.pubsub = pubsub
         self.log = logger.new()
+        self._pubsub = pubsub
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory()
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
 
     def create_context(self) -> ConsensusAlgorithmContext:
         """Handy method to create a context that can be used to access block and transaction algorithms."""
-        return ConsensusAlgorithmContext(self)
+        return ConsensusAlgorithmContext(self, self._pubsub)
 
     @cpu.profiler(key=lambda self, base: 'consensus!{}'.format(base.hash.hex()))
     def update(self, base: BaseTransaction) -> None:
@@ -119,14 +128,32 @@ class ConsensusAlgorithm:
                               count=len(to_remove))
                 storage.remove_transactions(to_remove)
                 for tx_removed in to_remove:
-                    self.pubsub.publish(HathorEvents.CONSENSUS_TX_REMOVED, tx_hash=tx_removed.hash)
+                    context.pubsub.publish(HathorEvents.CONSENSUS_TX_REMOVED, tx_hash=tx_removed.hash)
+
+        # emit the reorg started event if needed
+        if context.reorg_common_block is not None:
+            old_best_block = base.storage.get_transaction(best_tip)
+            new_best_block = base.storage.get_transaction(new_best_tip)
+            old_best_block_meta = old_best_block.get_metadata()
+            common_block_meta = context.reorg_common_block.get_metadata()
+            reorg_size = old_best_block_meta.height - common_block_meta.height
+            assert old_best_block != new_best_block
+            assert reorg_size > 0
+            context.pubsub.publish(HathorEvents.REORG_STARTED, old_best_height=best_height,
+                                   old_best_block=old_best_block, new_best_height=new_best_height,
+                                   new_best_block=new_best_block, common_block=context.reorg_common_block,
+                                   reorg_size=reorg_size)
 
         # finally signal an index update for all affected transactions
         for tx_affected in context.txs_affected:
             assert tx_affected.storage is not None
             assert tx_affected.storage.indexes is not None
             tx_affected.storage.indexes.update(tx_affected)
-            self.pubsub.publish(HathorEvents.CONSENSUS_TX_UPDATE, tx=tx_affected)
+            context.pubsub.publish(HathorEvents.CONSENSUS_TX_UPDATE, tx=tx_affected)
+
+        # and also emit the reorg finished event if needed
+        if context.reorg_common_block is not None:
+            context.pubsub.publish(HathorEvents.REORG_FINISHED)
 
     def filter_out_soft_voided_entries(self, tx: BaseTransaction, voided_by: Set[bytes]) -> Set[bytes]:
         if not (self.soft_voided_tx_ids & voided_by):
@@ -313,7 +340,8 @@ class BlockConsensusAlgorithm:
                 assert len(valid_heads) <= 1, 'We must never have more than one valid head'
 
                 # Add voided_by to all heads.
-                self.add_voided_by_to_multiple_chains(block, heads)
+                common_block = self._find_first_parent_in_best_chain(block)
+                self.add_voided_by_to_multiple_chains(block, heads, common_block)
 
                 if score >= best_score + settings.WEIGHT_TOL:
                     # We have a new winner candidate.
@@ -326,8 +354,13 @@ class BlockConsensusAlgorithm:
                         # We update the height cache index with the new winner chain
                         storage.indexes.height.update_new_chain(meta.height, block)
                         storage.update_best_block_tips_cache([block.hash])
+                        # It is only a re-org if common_block not in heads
+                        if common_block not in heads:
+                            self.context.mark_as_reorg(common_block)
                 else:
                     storage.update_best_block_tips_cache([not_none(blk.hash) for blk in heads])
+                    if not meta.voided_by:
+                        self.context.mark_as_reorg(common_block)
 
     def union_voided_by_from_parents(self, block: Block) -> Set[bytes]:
         """Return the union of the voided_by of block's parents.
@@ -369,13 +402,12 @@ class BlockConsensusAlgorithm:
             return True
         return False
 
-    def add_voided_by_to_multiple_chains(self, block: Block, heads: List[Block]) -> None:
+    def add_voided_by_to_multiple_chains(self, block: Block, heads: List[Block], first_block: Block) -> None:
         # We need to go through all side chains because there may be non-voided blocks
         # that must be voided.
         # For instance, imagine two chains with intersection with both heads voided.
         # Now, a new chain starting in genesis reaches the same score. Then, the tail
         # of the two chains must be voided.
-        first_block = self._find_first_parent_in_best_chain(block)
         for head in heads:
             while True:
                 if head.timestamp <= first_block.timestamp:
@@ -416,7 +448,8 @@ class BlockConsensusAlgorithm:
             assert isinstance(best_score, (int, float)) and best_score > 0
 
             assert len(best_heads) > 0
-            self.add_voided_by_to_multiple_chains(best_heads[0], [block])
+            first_block = self._find_first_parent_in_best_chain(best_heads[0])
+            self.add_voided_by_to_multiple_chains(best_heads[0], [block], first_block)
             if len(best_heads) == 1:
                 self.update_score_and_mark_as_the_best_chain_if_possible(best_heads[0])
 
@@ -438,7 +471,7 @@ class BlockConsensusAlgorithm:
                 break
             block = block.get_block_parent()
 
-    def _find_first_parent_in_best_chain(self, block: Block) -> BaseTransaction:
+    def _find_first_parent_in_best_chain(self, block: Block) -> Block:
         """ Find the first block in the side chain that is not voided, i.e., the block where the fork started.
 
         In the simple schema below, the best chain's blocks are O's, the side chain's blocks are I's, and the first
