@@ -73,9 +73,13 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
             raise AssertionError('no voided tx found')
 
         # base tips indexes
-        base_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
-        base_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
-        base_tx_tips_tree = tx_storage.indexes.tx_tips.tree.copy()
+        use_tips_indexes = tx_storage.indexes.all_tips is not None
+        if use_tips_indexes:
+            assert tx_storage.indexes.block_tips is not None
+            assert tx_storage.indexes.tx_tips is not None
+            base_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
+            base_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
+            base_tx_tips_tree = tx_storage.indexes.tx_tips.tree.copy()
         base_address_index = deepcopy(tx_storage.indexes.addresses.index)
         base_utxo_index = deepcopy(tx_storage.indexes.utxo._index)
 
@@ -84,15 +88,17 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         tx_storage.indexes.enable_address_index(self.manager.pubsub)
         tx_storage._manually_initialize_indexes()
 
-        reinit_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
-        reinit_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
-        reinit_tx_tips_tree = tx_storage.indexes.tx_tips.tree.copy()
+        if use_tips_indexes:
+            reinit_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
+            reinit_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
+            reinit_tx_tips_tree = tx_storage.indexes.tx_tips.tree.copy()
         reinit_address_index = deepcopy(tx_storage.indexes.addresses.index)
         reinit_utxo_index = deepcopy(tx_storage.indexes.utxo._index)
 
-        self.assertEqual(reinit_all_tips_tree, base_all_tips_tree)
-        self.assertEqual(reinit_block_tips_tree, base_block_tips_tree)
-        self.assertEqual(reinit_tx_tips_tree, base_tx_tips_tree)
+        if use_tips_indexes:
+            self.assertEqual(reinit_all_tips_tree, base_all_tips_tree)
+            self.assertEqual(reinit_block_tips_tree, base_block_tips_tree)
+            self.assertEqual(reinit_tx_tips_tree, base_tx_tips_tree)
         self.assertEqual(reinit_address_index, base_address_index)
         self.assertEqual(reinit_utxo_index, base_utxo_index)
 
@@ -101,15 +107,17 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         tx_storage.indexes.enable_address_index(self.manager.pubsub)
         tx_storage._manually_initialize_indexes()
 
-        newinit_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
-        newinit_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
-        newinit_tx_tips_tree = tx_storage.indexes.tx_tips.tree.copy()
+        if use_tips_indexes:
+            newinit_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
+            newinit_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
+            newinit_tx_tips_tree = tx_storage.indexes.tx_tips.tree.copy()
         newinit_address_index = deepcopy(tx_storage.indexes.addresses.index)
         newinit_utxo_index = deepcopy(tx_storage.indexes.utxo._index)
 
-        self.assertEqual(newinit_all_tips_tree, base_all_tips_tree)
-        self.assertEqual(newinit_block_tips_tree, base_block_tips_tree)
-        self.assertEqual(newinit_tx_tips_tree, base_tx_tips_tree)
+        if use_tips_indexes:
+            self.assertEqual(newinit_all_tips_tree, base_all_tips_tree)
+            self.assertEqual(newinit_block_tips_tree, base_block_tips_tree)
+            self.assertEqual(newinit_tx_tips_tree, base_tx_tips_tree)
         self.assertEqual(newinit_address_index, base_address_index)
         self.assertEqual(newinit_utxo_index, base_utxo_index)
 
