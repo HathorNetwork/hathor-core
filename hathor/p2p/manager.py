@@ -233,9 +233,12 @@ class ConnectionsManager:
             raise TypeError('Class built incorrectly without any enabled sync version')
 
         self.manager = manager
+        assert self.manager.tx_storage.indexes is not None
+        indexes = self.manager.tx_storage.indexes
+        if self.is_sync_version_available(SyncVersion.V1_1):
+            self.log.debug('enable sync-v1 indexes')
+            indexes.enable_tips_indexes()
         if self.is_sync_version_available(SyncVersion.V2):
-            assert self.manager.tx_storage.indexes is not None
-            indexes = self.manager.tx_storage.indexes
             self.log.debug('enable sync-v2 indexes')
             indexes.enable_mempool_index()
 

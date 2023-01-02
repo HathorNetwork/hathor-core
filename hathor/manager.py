@@ -694,6 +694,42 @@ class HathorManager:
         This method tries to return a stable result, such that for a given timestamp and storage state it will always
         return the same.
         """
+        # return self._generate_parent_txs_from_tips_index(timestamp)
+        # XXX: prefer txs_tips index since it's been tested more
+        assert self.tx_storage.indexes is not None
+        if self.tx_storage.indexes.tx_tips is not None:
+            return self._generate_parent_txs_from_tips_index(timestamp)
+        else:
+            return self._generate_parent_txs_from_mempool_index(timestamp)
+
+    def _generate_parent_txs_from_mempool_index(self, timestamp: Optional[float]) -> 'ParentTxs':
+        # XXX: this implementation is naive, it will return a working result but not necessarily actual tips,
+        #      particularly when the timestamp is in the past it will just return tx parents of a previous block that
+        #      is within the timestamp, this is because we don't need to support that case for normal usage
+        if timestamp is None:
+            timestamp = self.reactor.seconds()
+        assert self.tx_storage.indexes is not None
+        assert self.tx_storage.indexes.height is not None
+        assert self.tx_storage.indexes.mempool_tips is not None
+        tips = [tx for tx in self.tx_storage.indexes.mempool_tips.iter(self.tx_storage) if tx.timestamp < timestamp]
+        max_timestamp = max(tx.timestamp for tx in tips) if tips else 0
+        can_include: list[bytes] = [not_none(tx.hash) for tx in tips]
+        must_include = []
+        if len(can_include) < 2:
+            best_block = self.tx_storage.indexes.height.find_by_timestamp(timestamp, self.tx_storage)
+            assert best_block is not None
+            all_best_block_parent_txs = list(map(self.tx_storage.get_transaction, best_block.parents[1:]))
+            best_block_parent_txs = [tx for tx in all_best_block_parent_txs if tx.timestamp < timestamp]
+            max_timestamp = max(max_timestamp, *list(tx.timestamp for tx in best_block_parent_txs))
+            if len(can_include) < 1:
+                can_include.extend(not_none(tx.hash) for tx in best_block_parent_txs)
+            else:
+                must_include = can_include
+                can_include = [not_none(tx.hash) for tx in best_block_parent_txs]
+        assert len(can_include) + len(must_include) >= 2
+        return ParentTxs(max_timestamp, can_include, must_include)
+
+    def _generate_parent_txs_from_tips_index(self, timestamp: Optional[float]) -> 'ParentTxs':
         if timestamp is None:
             timestamp = self.reactor.seconds()
         can_include_intervals = sorted(self.tx_storage.get_tx_tips(timestamp - 1))

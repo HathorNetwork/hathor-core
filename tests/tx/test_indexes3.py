@@ -47,6 +47,38 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         self.manager = self._build_randomized_blockchain()
 
     @pytest.mark.flaky(max_runs=3, min_passes=1)
+    def test_topological_iterators(self):
+        tx_storage = self.manager.tx_storage
+
+        # XXX: sanity check that we've at least produced something
+        total_count = tx_storage.get_vertices_count()
+        self.assertGreater(total_count, 3)
+
+        # XXX: sanity check that the children metadata is properly set (this is needed for one of the iterators)
+        for tx in tx_storage.get_all_transactions():
+            assert tx.hash is not None
+            for parent_tx in map(tx_storage.get_transaction, tx.parents):
+                self.assertIn(tx.hash, parent_tx.get_metadata().children)
+
+        # test iterators, name is used to aid in assert messages
+        iterators = [
+            ('dfs', tx_storage._topological_sort_dfs()),
+            ('timestamp_index', tx_storage._topological_sort_timestamp_index()),
+            ('metadata', tx_storage._topological_sort_metadata()),
+        ]
+        for name, it in iterators:
+            # collect all transactions, while checking that inputs/parents are consistent
+            txs = list(it)
+            # must be complete
+            self.assertEqual(len(txs), total_count, f'iterator "{name}" does not cover all txs')
+            # must be topological
+            self.assertIsTopological(iter(txs), f'iterator "{name}" is not topological')
+
+
+class SyncV1SimulatorIndexesTestCase(unittest.SyncV1Params, BaseSimulatorIndexesTestCase):
+    __test__ = True
+
+    @pytest.mark.flaky(max_runs=3, min_passes=1)
     def test_tips_index_initialization(self):
         # XXX: this test makes use of the internals of TipsIndex
         tx_storage = self.manager.tx_storage
@@ -81,38 +113,6 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         self.assertEqual(newinit_all_tips_tree, base_all_tips_tree)
         self.assertEqual(newinit_block_tips_tree, base_block_tips_tree)
         self.assertEqual(newinit_tx_tips_tree, base_tx_tips_tree)
-
-    @pytest.mark.flaky(max_runs=3, min_passes=1)
-    def test_topological_iterators(self):
-        tx_storage = self.manager.tx_storage
-
-        # XXX: sanity check that we've at least produced something
-        total_count = tx_storage.get_vertices_count()
-        self.assertGreater(total_count, 3)
-
-        # XXX: sanity check that the children metadata is properly set (this is needed for one of the iterators)
-        for tx in tx_storage.get_all_transactions():
-            assert tx.hash is not None
-            for parent_tx in map(tx_storage.get_transaction, tx.parents):
-                self.assertIn(tx.hash, parent_tx.get_metadata().children)
-
-        # test iterators, name is used to aid in assert messages
-        iterators = [
-            ('dfs', tx_storage._topological_sort_dfs()),
-            ('timestamp_index', tx_storage._topological_sort_timestamp_index()),
-            ('metadata', tx_storage._topological_sort_metadata()),
-        ]
-        for name, it in iterators:
-            # collect all transactions, while checking that inputs/parents are consistent
-            txs = list(it)
-            # must be complete
-            self.assertEqual(len(txs), total_count, f'iterator "{name}" does not cover all txs')
-            # must be topological
-            self.assertIsTopological(iter(txs), f'iterator "{name}" is not topological')
-
-
-class SyncV1SimulatorIndexesTestCase(unittest.SyncV1Params, BaseSimulatorIndexesTestCase):
-    __test__ = True
 
 
 class SyncV2SimulatorIndexesTestCase(unittest.SyncV2Params, BaseSimulatorIndexesTestCase):

@@ -328,9 +328,30 @@ class TestCase(unittest.TestCase):
             self.assertTipsEqualSyncV1(manager1, manager2)
 
     def assertTipsNotEqual(self, manager1: HathorManager, manager2: HathorManager) -> None:
-        s1 = set(manager1.tx_storage.get_all_tips())
-        s2 = set(manager2.tx_storage.get_all_tips())
+        s1 = self._get_all_tips_form_best_index(manager1)
+        s2 = self._get_all_tips_form_best_index(manager2)
         self.assertNotEqual(s1, s2)
+
+    def _get_all_tips_form_best_index(self, manager: HathorManager) -> set[bytes]:
+        assert manager.tx_storage.indexes is not None
+        if manager.tx_storage.indexes.all_tips is not None:
+            return self._get_all_tips_from_syncv1_indexes(manager.tx_storage)
+        else:
+            return self._get_all_tips_from_syncv2_indexes(manager.tx_storage)
+
+    def _get_all_tips_from_syncv1_indexes(self, tx_storage: TransactionStorage) -> set[bytes]:
+        assert tx_storage.indexes is not None
+        assert tx_storage.indexes.all_tips is not None
+        intervals = tx_storage.indexes.all_tips[tx_storage.latest_timestamp]
+        tips = set(i.data for i in intervals)
+        return tips
+
+    def _get_all_tips_from_syncv2_indexes(self, tx_storage: TransactionStorage) -> set[bytes]:
+        assert tx_storage.indexes is not None
+        assert tx_storage.indexes.mempool_tips is not None
+        tx_tips = tx_storage.indexes.mempool_tips.get()
+        block_tip = tx_storage.indexes.height.get_tip()
+        return tx_tips | {block_tip}
 
     def assertTipsEqualSyncV1(self, manager1: HathorManager, manager2: HathorManager) -> None:
         # XXX: this is the original implementation of assertTipsEqual

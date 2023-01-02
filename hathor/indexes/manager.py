@@ -51,14 +51,12 @@ class IndexesManager(ABC):
     log = get_logger()
 
     info: InfoIndex
-    all_tips: TipsIndex
-    block_tips: TipsIndex
-    tx_tips: TipsIndex
-
+    all_tips: Optional[TipsIndex]
+    block_tips: Optional[TipsIndex]
+    tx_tips: Optional[TipsIndex]
     sorted_all: TimestampIndex
     sorted_blocks: TimestampIndex
     sorted_txs: TimestampIndex
-
     height: HeightIndex
     mempool_tips: Optional[MempoolTipsIndex]
     addresses: Optional[AddressIndex]
@@ -93,6 +91,11 @@ class IndexesManager(ABC):
             self.tokens,
             self.utxo,
         ])
+
+    @abstractmethod
+    def enable_tips_indexes(self) -> None:
+        """Enable tips indexs. It does nothing if it has already been enabled."""
+        raise NotImplementedError
 
     @abstractmethod
     def enable_address_index(self, pubsub: 'PubSubManager') -> None:
@@ -198,18 +201,21 @@ class IndexesManager(ABC):
 
         # These two calls return False when a transaction changes from
         # voided to executed and vice-versa.
-        r1 = self.all_tips.add_tx(tx)
-        r2 = self.sorted_all.add_tx(tx)
-        assert r1 == r2
+        r1 = self.sorted_all.add_tx(tx)
+        if self.all_tips is not None:
+            r2 = self.all_tips.add_tx(tx)
+            assert r1 == r2
 
         if tx.is_block:
-            r3 = self.block_tips.add_tx(tx)
-            r4 = self.sorted_blocks.add_tx(tx)
-            assert r3 == r4
+            r3 = self.sorted_blocks.add_tx(tx)
+            if self.block_tips is not None:
+                r4 = self.block_tips.add_tx(tx)
+                assert r3 == r4
         else:
-            r3 = self.tx_tips.add_tx(tx)
-            r4 = self.sorted_txs.add_tx(tx)
-            assert r3 == r4
+            r3 = self.sorted_txs.add_tx(tx)
+            if self.tx_tips is not None:
+                r4 = self.tx_tips.add_tx(tx)
+                assert r3 == r4
 
         if self.addresses:
             self.addresses.add_tx(tx)
@@ -235,7 +241,8 @@ class IndexesManager(ABC):
             # We delete from indexes in two cases: (i) mark tx as voided, and (ii) remove tx.
             # We only remove tx from all_tips and sorted_all when it is removed from the storage.
             # For clarity, when a tx is marked as voided, it is not removed from all_tips and sorted_all.
-            self.all_tips.del_tx(tx, relax_assert=relax_assert)
+            if self.all_tips is not None:
+                self.all_tips.del_tx(tx, relax_assert=relax_assert)
             self.sorted_all.del_tx(tx)
             if self.addresses:
                 self.addresses.remove_tx(tx)
@@ -249,11 +256,13 @@ class IndexesManager(ABC):
             self.mempool_tips.update(tx, remove=True)
 
         if tx.is_block:
-            self.block_tips.del_tx(tx, relax_assert=relax_assert)
             self.sorted_blocks.del_tx(tx)
+            if self.block_tips is not None:
+                self.block_tips.del_tx(tx, relax_assert=relax_assert)
         else:
-            self.tx_tips.del_tx(tx, relax_assert=relax_assert)
             self.sorted_txs.del_tx(tx)
+            if self.tx_tips is not None:
+                self.tx_tips.del_tx(tx, relax_assert=relax_assert)
 
         if self.tokens:
             self.tokens.del_tx(tx)
@@ -264,12 +273,11 @@ class MemoryIndexesManager(IndexesManager):
         from hathor.indexes.memory_height_index import MemoryHeightIndex
         from hathor.indexes.memory_info_index import MemoryInfoIndex
         from hathor.indexes.memory_timestamp_index import MemoryTimestampIndex
-        from hathor.indexes.memory_tips_index import MemoryTipsIndex
 
         self.info = MemoryInfoIndex()
-        self.all_tips = MemoryTipsIndex(scope_type=TipsScopeType.ALL)
-        self.block_tips = MemoryTipsIndex(scope_type=TipsScopeType.BLOCKS)
-        self.tx_tips = MemoryTipsIndex(scope_type=TipsScopeType.TXS)
+        self.all_tips = None
+        self.block_tips = None
+        self.tx_tips = None
 
         self.sorted_all = MemoryTimestampIndex(scope_type=TimestampScopeType.ALL)
         self.sorted_blocks = MemoryTimestampIndex(scope_type=TimestampScopeType.BLOCKS)
@@ -283,6 +291,15 @@ class MemoryIndexesManager(IndexesManager):
 
         # XXX: this has to be at the end of __init__, after everything has been initialized
         self.__init_checks__()
+
+    def enable_tips_indexes(self) -> None:
+        from hathor.indexes.memory_tips_index import MemoryTipsIndex
+        if self.all_tips is None:
+            self.all_tips = MemoryTipsIndex(scope_type=TipsScopeType.ALL)
+        if self.block_tips is None:
+            self.block_tips = MemoryTipsIndex(scope_type=TipsScopeType.BLOCKS)
+        if self.tx_tips is None:
+            self.tx_tips = MemoryTipsIndex(scope_type=TipsScopeType.TXS)
 
     def enable_address_index(self, pubsub: 'PubSubManager') -> None:
         from hathor.indexes.memory_address_index import MemoryAddressIndex
@@ -307,7 +324,6 @@ class MemoryIndexesManager(IndexesManager):
 
 class RocksDBIndexesManager(IndexesManager):
     def __init__(self, rocksdb_storage: 'RocksDBStorage') -> None:
-        from hathor.indexes.partial_rocksdb_tips_index import PartialRocksDBTipsIndex
         from hathor.indexes.rocksdb_height_index import RocksDBHeightIndex
         from hathor.indexes.rocksdb_info_index import RocksDBInfoIndex
         from hathor.indexes.rocksdb_timestamp_index import RocksDBTimestampIndex
@@ -316,9 +332,9 @@ class RocksDBIndexesManager(IndexesManager):
 
         self.info = RocksDBInfoIndex(self._db)
         self.height = RocksDBHeightIndex(self._db)
-        self.all_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.ALL)
-        self.block_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.BLOCKS)
-        self.tx_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.TXS)
+        self.all_tips = None
+        self.block_tips = None
+        self.tx_tips = None
 
         self.sorted_all = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.ALL)
         self.sorted_blocks = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.BLOCKS)
@@ -331,6 +347,15 @@ class RocksDBIndexesManager(IndexesManager):
 
         # XXX: this has to be at the end of __init__, after everything has been initialized
         self.__init_checks__()
+
+    def enable_tips_indexes(self) -> None:
+        from hathor.indexes.partial_rocksdb_tips_index import PartialRocksDBTipsIndex
+        if self.all_tips is None:
+            self.all_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.ALL)
+        if self.block_tips is None:
+            self.block_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.BLOCKS)
+        if self.tx_tips is None:
+            self.tx_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.TXS)
 
     def enable_address_index(self, pubsub: 'PubSubManager') -> None:
         from hathor.indexes.rocksdb_address_index import RocksDBAddressIndex

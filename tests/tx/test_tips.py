@@ -179,7 +179,12 @@ class SyncV2TipsTestCase(unittest.SyncV2Params, BaseTipsTestCase):
         assert self.manager.tx_storage.indexes.mempool_tips is not None
         return self.manager.tx_storage.indexes.mempool_tips.get()
 
+    # XXX: disable this test for sync-v2-only
+    def test_choose_tips(self):
+        pass
+
 
 # sync-bridge should behave like sync-v2
 class SyncBridgeTipsTestCase(unittest.SyncBridgeParams, SyncV2TipsTestCase):
-    pass
+    def test_choose_tips(self):
+        BaseTipsTestCase.test_choose_tips(self)
