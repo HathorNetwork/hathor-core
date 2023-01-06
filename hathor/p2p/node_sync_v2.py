@@ -56,7 +56,6 @@ class StreamEnd(IntFlag):
     END_HASH_REACHED = 0
     NO_MORE_BLOCKS = 1
     LIMIT_EXCEEDED = 2
-    STREAM_BECAME_VOIDED = 3  # this will happen when the current chain becomes voided while it is being sent
 
     def __str__(self):
         if self is StreamEnd.END_HASH_REACHED:
@@ -65,8 +64,6 @@ class StreamEnd(IntFlag):
             return 'end of blocks, no more blocks to download from this peer'
         elif self is StreamEnd.LIMIT_EXCEEDED:
             return 'streaming limit exceeded'
-        elif self is StreamEnd.STREAM_BECAME_VOIDED:
-            return 'streamed block chain became voided'
         else:
             raise ValueError(f'invalid StreamEnd value: {self.value}')
 
@@ -654,8 +651,22 @@ class NodeBlockSync(SyncManager):
     def send_next_blocks(self, start_hash: bytes, end_hash: bytes) -> None:
         self.log.debug('start GET-NEXT-BLOCKS stream response')
         # XXX If I don't have this block it will raise TransactionDoesNotExist error. Should I handle this?
-        blk = self.tx_storage.get_transaction(start_hash)
-        assert isinstance(blk, Block)
+        try:
+            blk = self.tx_storage.get_transaction(start_hash)
+            assert isinstance(blk, Block)
+        except TransactionDoesNotExist:
+            # In case the tx does not exist we send a NOT-FOUND message
+            self.send_message(ProtocolMessages.NOT_FOUND, start_hash.hex())
+            return
+        if blk.get_metadata().voided_by:
+            # XXX: using NOT_FOUND for when it is voided because externally it makes sense to behave as if voided
+            #      blocks/transactions don't exist
+            self.log.debug('requested start block is voided', start_hash=start_hash.hex())
+            self.send_message(ProtocolMessages.NOT_FOUND, start_hash.hex())
+            return
+        if not self.tx_storage.transaction_exists(end_hash):
+            self.send_message(ProtocolMessages.NOT_FOUND, end_hash.hex())
+            return
         self.blockchain_streaming = BlockchainStreaming(self, blk, end_hash)
         self.blockchain_streaming.start()
 
@@ -1208,6 +1219,8 @@ class BlockchainStreaming(_StreamingBase):
         cur = self.current_block
         assert cur is not None
         assert cur.hash is not None
+        assert not (vby := cur.get_metadata().voided_by), f'failed to send {cur.hash_hex} because it is voided: ' \
+                                                          f'{", ".join(i.hex() for i in vby)}; reverse={self.reverse}'
 
         if cur.hash == self.end_hash:
             # only send the last when not reverse
@@ -1225,11 +1238,6 @@ class BlockchainStreaming(_StreamingBase):
                 self.node_sync.send_blocks(cur)
             self.stop()
             self.node_sync.send_blocks_end(StreamEnd.LIMIT_EXCEEDED)
-            return
-
-        if cur.get_metadata().voided_by:
-            self.stop()
-            self.node_sync.send_blocks_end(StreamEnd.STREAM_BECAME_VOIDED)
             return
 
         self.counter += 1
@@ -1301,11 +1309,6 @@ class TransactionsStreaming(_StreamingBase):
         assert cur.hash is not None
 
         cur_metadata = cur.get_metadata()
-        if cur_metadata.voided_by:
-            self.stop()
-            self.node_sync.send_blocks_end(StreamEnd.STREAM_BECAME_VOIDED)
-            return
-
         assert cur_metadata.first_block is not None
         first_blk_meta = self.storage.get_metadata(cur_metadata.first_block)
         assert first_blk_meta is not None

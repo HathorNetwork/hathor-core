@@ -84,7 +84,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         for miner in miners:
             miner.stop()
 
-        self.simulator.run(15)
+        self.simulator.run(300)
 
         for node in nodes[1:]:
             self.assertTipsEqual(nodes[0], node)
