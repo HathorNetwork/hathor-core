@@ -109,7 +109,8 @@ class DepsIndex(BaseIndex):
         tx_meta = tx.get_metadata()
         if tx_meta.voided_by:
             return
-        self.add_tx(tx, partial=False)
+        # self.add_tx(tx, partial=False)
+        self.add_tx(tx)
 
     def update(self, tx: BaseTransaction) -> None:
         assert tx.hash is not None

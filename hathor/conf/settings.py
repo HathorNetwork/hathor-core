@@ -256,7 +256,7 @@ class HathorSettings(NamedTuple):
     PEER_MAX_CONNECTIONS: int = 125
 
     # Maximum period without receiving any messages from ther peer (in seconds).
-    PEER_IDLE_TIMEOUT: int = 60
+    PEER_IDLE_TIMEOUT: int = 600
 
     # Filepath of ca certificate file to generate connection certificates
     CA_FILEPATH: str = os.path.join(os.path.dirname(__file__), '../p2p/ca.crt')

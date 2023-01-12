@@ -226,6 +226,7 @@ class SyncCheckpoint:
 
         sync_interval = self._get_next_sync_interval()
         if not sync_interval:
+            self.should_skip_sync_tx = False
             self.log.debug('no checkpoints to sync anymore')
             return
 

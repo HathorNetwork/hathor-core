@@ -186,7 +186,7 @@ class IndexesManager(ABC):
 
         self.log.debug('indexes init')
         if indexes_to_init:
-            tx_iter = progress(tx_storage.topological_iterator(), log=self.log, total=tx_storage.get_vertices_count())
+            tx_iter = progress(tx_storage._topological_sort_dfs(), log=self.log, total=tx_storage.get_vertices_count())
         else:
             tx_iter = iter([])
         for tx in tx_iter:

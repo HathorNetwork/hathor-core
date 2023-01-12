@@ -1130,7 +1130,7 @@ class NodeBlockSync(SyncManager):
     # ---------------------------------
 
 
-DEAFAULT_STREAMING_LIMIT = 1_000
+DEAFAULT_STREAMING_LIMIT = 10_000
 
 
 @implementer(IPushProducer)
