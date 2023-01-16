@@ -7,7 +7,7 @@
         ],
 	"info": {
             "title": "Hathor API",
-            "version": "0.52.1"
+            "version": "0.53.0"
 	},
 	"consumes": [
             "application/json"
