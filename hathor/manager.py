@@ -466,8 +466,10 @@ class HathorManager:
                 if self._full_verification:
                     # TODO: deal with invalid tx
                     if tx.can_validate_full():
-                        self.tx_storage.add_to_indexes(tx)
+                        if tx.is_genesis:
+                            assert tx.validate_checkpoint(self.checkpoints)
                         assert tx.validate_full(skip_block_weight_verification=skip_block_weight_verification)
+                        self.tx_storage.add_to_indexes(tx)
                         self.consensus_algorithm.update(tx)
                         self.tx_storage.indexes.update(tx)
                         if self.tx_storage.indexes.mempool_tips is not None:

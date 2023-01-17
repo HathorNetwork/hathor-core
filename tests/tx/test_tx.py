@@ -226,6 +226,8 @@ class BaseTransactionTest(unittest.TestCase):
 
     def test_children_update(self):
         tx = self._gen_tx_spending_genesis_block()
+        tx.weight = 1.0
+        tx.resolve()
 
         # get info before update
         children_len = []
@@ -234,6 +236,7 @@ class BaseTransactionTest(unittest.TestCase):
             children_len.append(len(metadata.children))
 
         # update metadata
+        tx.validate_full()
         tx.update_initial_metadata()
 
         # genesis transactions should have only this tx in their children set

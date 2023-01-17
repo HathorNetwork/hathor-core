@@ -62,6 +62,8 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_get_one_known_tx(self):
+        from hathor.transaction.transaction_metadata import ValidationState
+
         # Tx tesnet 0033784bc8443ba851fd88d81c6f06774ae529f25c1fa8f026884ad0a0e98011
         # We had a bug with this endpoint in this tx because the token_data from inputs
         # was being copied from the output
@@ -84,6 +86,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
                   '2dc703120a77192fc16eda9ed22e1b88ac40200000218def416095b08602003d3c40fb04737e1a2a848cfd2592490a71cd'
                   '0248b9e7d6a626f45dec86975b00f4dd53f84f1f0091125250b044e49023fbbd0f74f6093cdd2226fdff3e09a1000002be')
         tx = Transaction.create_from_struct(bytes.fromhex(tx_hex), self.manager.tx_storage)
+        tx.get_metadata().validation = ValidationState.FULL
         self.manager.tx_storage.save_transaction(tx)
 
         tx_parent1_hex = ('0001010102001c382847d8440d05da95420bee2ebeb32bc437f82a9ae47b0745c8a29a7b0d001c382847d844'
@@ -95,6 +98,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
                           '5250b044e49023fbbd0f74f6093cdd2226fdff3e09a1001f16fe62e3433bcc74b262c11a1fa94fcb38484f4d'
                           '8fb080f53a0c9c57ddb000000120')
         tx_parent1 = Transaction.create_from_struct(bytes.fromhex(tx_parent1_hex), self.manager.tx_storage)
+        tx_parent1.get_metadata().validation = ValidationState.FULL
         self.manager.tx_storage.save_transaction(tx_parent1)
 
         tx_parent2_hex = ('0001000103001f16fe62e3433bcc74b262c11a1fa94fcb38484f4d8fb080f53a0c9c57ddb001006946304402'
@@ -106,6 +110,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
                           '62e3433bcc74b262c11a1fa94fcb38484f4d8fb080f53a0c9c57ddb00065329457d13410ac711318bd941e16'
                           'd57709926b76e64763bf19c3f13eeac30000016d')
         tx_parent2 = Transaction.create_from_struct(bytes.fromhex(tx_parent2_hex), self.manager.tx_storage)
+        tx_parent2.get_metadata().validation = ValidationState.FULL
         self.manager.tx_storage.save_transaction(tx_parent2)
 
         tx_input_hex = ('0001010203007231eee3cb6160d95172a409d634d0866eafc8775f5729fff6a61e7850aba500b3ab76c5337b55'
@@ -120,6 +125,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
                         '5e95ac369b31f46188ac40200000218def416082eba802000e4e54b2922c1fa34b5d427f1e96885612e28673ac'
                         'cfaf6e7ceb2ba91c9c84009c8174d4a46ebcc789d1989e3dec5b68cffeef239fd8cf86ef62728e2eacee000001b6')
         tx_input = Transaction.create_from_struct(bytes.fromhex(tx_input_hex), self.manager.tx_storage)
+        tx_input.get_metadata().validation = ValidationState.FULL
         self.manager.tx_storage.save_transaction(tx_input)
 
         # XXX: this is completely dependant on MemoryTokensIndex implementation, hence use_memory_storage=True
@@ -170,6 +176,8 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_get_one_known_tx_with_authority(self):
+        from hathor.transaction.transaction_metadata import ValidationState
+
         # Tx tesnet 00005f234469407614bf0abedec8f722bb5e534949ad37650f6077c899741ed7
         # We had a bug with this endpoint in this tx because the token_data from inputs
         # was not considering authority mask
@@ -186,6 +194,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
                   '7851af043c11e19f28675b010e8cf4d8da3278f126d2429490a804a7fb2c000023b318c91dcfd4b967b205dc938f9f5e2fd'
                   '5114256caacfb8f6dd13db33000020393')
         tx = Transaction.create_from_struct(bytes.fromhex(tx_hex), self.manager.tx_storage)
+        tx.get_metadata().validation = ValidationState.FULL
         self.manager.tx_storage.save_transaction(tx)
 
         tx_parent1_hex = ('0001010203000023b318c91dcfd4b967b205dc938f9f5e2fd5114256caacfb8f6dd13db330000023b318c91dcfd'
@@ -200,6 +209,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
                           '08ef288ac40311513e4fef9d161087be202000023b318c91dcfd4b967b205dc938f9f5e2fd5114256caacfb8f6d'
                           'd13db3300038c3d3b69ce90bb88c0c4d6a87b9f0c349e5b10c9b7ce6714f996e512ac16400021261')
         tx_parent1 = Transaction.create_from_struct(bytes.fromhex(tx_parent1_hex), self.manager.tx_storage)
+        tx_parent1.get_metadata().validation = ValidationState.FULL
         self.manager.tx_storage.save_transaction(tx_parent1)
 
         tx_parent2_hex = ('000201040000476810205cb3625d62897fcdad620e01d66649869329640f5504d77e960d01006a473045022100c'
@@ -213,6 +223,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
                           '00d810')
         tx_parent2_bytes = bytes.fromhex(tx_parent2_hex)
         tx_parent2 = TokenCreationTransaction.create_from_struct(tx_parent2_bytes, self.manager.tx_storage)
+        tx_parent2.get_metadata().validation = ValidationState.FULL
         self.manager.tx_storage.save_transaction(tx_parent2)
 
         # Both inputs are the same as the last parent, so no need to manually add them

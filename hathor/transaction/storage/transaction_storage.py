@@ -349,10 +349,26 @@ class TransactionStorage(ABC):
         """
         assert tx.hash is not None
         meta = tx.get_metadata()
+        self.pre_save_validation(tx, meta)
 
-        # XXX: we can only add to cache and publish txs that are fully connected (which also implies it's valid)
-        if not meta.validation.is_fully_connected():
-            return
+    def pre_save_validation(self, tx: BaseTransaction, tx_meta: TransactionMetadata) -> None:
+        """ Must be run before every save, only raises AssertionError.
+
+        A failure means there is a bug in the code that allowed the condition to reach the "save" code. This is a last
+        second measure to prevent persisting a bad transaction/metadata.
+
+        This method receives the transaction AND the metadata in order to avoid calling ".get_metadata()" which could
+        potentially create a fresh metadata.
+        """
+        assert tx.hash is not None
+        assert tx_meta.hash is not None
+        assert tx.hash == tx_meta.hash, f'{tx.hash.hex()} != {tx_meta.hash.hex()}'
+        voided_by = tx_meta.voided_by or set()
+        # XXX: PARTIALLY_VALIDATED_ID must be included if the tx is fully connected and must not included otherwise
+        has_partially_validated_marker = settings.PARTIALLY_VALIDATED_ID in voided_by
+        validation_is_fully_connected = tx_meta.validation.is_fully_connected()
+        assert (not has_partially_validated_marker) == validation_is_fully_connected, \
+               f'{has_partially_validated_marker} == {validation_is_fully_connected}'
 
     @abstractmethod
     def remove_transaction(self, tx: BaseTransaction) -> None:

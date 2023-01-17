@@ -103,6 +103,11 @@ class ConsensusAlgorithm:
         """Run a consensus update with its own context, indexes will be updated accordingly."""
         from hathor.transaction import Block, Transaction
 
+        # XXX: first make sure we can run the consensus update on this tx:
+        meta = base.get_metadata()
+        assert meta.voided_by is None or (settings.PARTIALLY_VALIDATED_ID not in meta.voided_by)
+        assert meta.validation.is_fully_connected()
+
         # this context instance will live only while this update is running
         context = self.create_context()
 

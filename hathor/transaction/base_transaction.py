@@ -494,6 +494,7 @@ class BaseTransaction(ABC):
         self.verify_checkpoint(checkpoints)
 
         meta.validation = ValidationState.CHECKPOINT
+        self.mark_partially_validated()
         return True
 
     def validate_basic(self, skip_block_weight_verification: bool = False) -> bool:
@@ -508,6 +509,7 @@ class BaseTransaction(ABC):
         self.verify_basic(skip_block_weight_verification=skip_block_weight_verification)
 
         meta.validation = ValidationState.BASIC
+        self.mark_partially_validated()
         return True
 
     def validate_full(self, skip_block_weight_verification: bool = False, sync_checkpoints: bool = False,
@@ -531,7 +533,10 @@ class BaseTransaction(ABC):
         # skip full validation when it is a checkpoint
         if meta.validation.is_checkpoint():
             meta.validation = ValidationState.CHECKPOINT_FULL
+            # at last, remove the partially validated mark
+            self.unmark_partially_validated()
             return True
+
         # XXX: in some cases it might be possible that this transaction is verified by a checkpoint but we went
         #      directly into trying a full validation so we should check it here to make sure the validation states
         #      ends up being CHECKPOINT_FULL instead of FULL
@@ -544,7 +549,35 @@ class BaseTransaction(ABC):
             meta.validation = ValidationState.CHECKPOINT_FULL
         else:
             meta.validation = ValidationState.FULL
+
+        # at last, remove the partially validated mark
+        self.unmark_partially_validated()
         return True
+
+    def mark_partially_validated(self) -> None:
+        """ This function is used to add the partially-validated mark from the voided-by metadata.
+
+        It is idempotent: calling it multiple time has the same effect as calling it once. But it must only be called
+        when the validation state is *NOT* "fully connected", otherwise it'll raise an assertion error.
+        """
+        tx_meta = self.get_metadata()
+        assert not tx_meta.validation.is_fully_connected()
+        if tx_meta.voided_by is None:
+            tx_meta.voided_by = set()
+        tx_meta.voided_by.add(settings.PARTIALLY_VALIDATED_ID)
+
+    def unmark_partially_validated(self) -> None:
+        """ This function is used to remove the partially-validated mark from the voided-by metadata.
+
+        It is idempotent: calling it multiple time has the same effect as calling it once. But it must only be called
+        when the validation state is "fully connected", otherwise it'll raise an assertion error.
+        """
+        tx_meta = self.get_metadata()
+        assert tx_meta.validation.is_fully_connected()
+        if tx_meta.voided_by is not None:
+            tx_meta.voided_by.discard(settings.PARTIALLY_VALIDATED_ID)
+            if not tx_meta.voided_by:
+                tx_meta.voided_by = None
 
     @abstractmethod
     def verify_checkpoint(self, checkpoints: List[Checkpoint]) -> None:
@@ -711,6 +744,9 @@ class BaseTransaction(ABC):
 
         if hash_bytes:
             self.hash = hash_bytes
+            metadata = getattr(self, '_metadata', None)
+            if metadata is not None and metadata.hash is not None:
+                metadata.hash = hash_bytes
             return True
         else:
             return False
@@ -859,12 +895,15 @@ class BaseTransaction(ABC):
         """ Reset transaction's metadata. It is used when a node is initializing and
         recalculating all metadata.
         """
+        from hathor.transaction.transaction_metadata import ValidationState
         assert self.storage is not None
         score = self.weight if self.is_genesis else 0
         self._metadata = TransactionMetadata(hash=self.hash, score=score,
                                              accumulated_weight=self.weight,
                                              height=self.calculate_height(),
                                              min_height=self.calculate_min_height())
+        self._metadata.validation = ValidationState.INITIAL
+        self._metadata.voided_by = {settings.PARTIALLY_VALIDATED_ID}
         self._metadata._tx_ref = weakref.ref(self)
         self.storage.save_transaction(self, only_metadata=True)
 
