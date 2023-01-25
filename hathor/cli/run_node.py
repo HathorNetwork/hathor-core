@@ -19,9 +19,6 @@ from typing import Any, Callable, List, Tuple
 
 from structlog import get_logger
 
-from hathor.event.storage import EventStorage
-from hathor.util import get_environment_info
-
 logger = get_logger()
 # LOGGING_CAPTURE_STDOUT = True
 

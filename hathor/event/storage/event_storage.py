@@ -37,6 +37,7 @@ class EventStorage(ABC):
     @abstractmethod
     def get_last_group_id(self) -> Optional[int]:
         """ Get the last group-id that was emitted, this is used to help resume when restarting."""
+        raise NotImplementedError
 
     @abstractmethod
     def iter_from_event(self, key: int) -> Iterator[BaseEvent]:
