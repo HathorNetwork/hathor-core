@@ -81,7 +81,7 @@ jobs:
       if: startsWith(matrix.os, 'macos')
       run: |
         brew cleanup -q
-        brew update -q
+        # brew update -q
         brew install -q graphviz rocksdb
     - name: Install Poetry dependencies
       run: poetry install -n --no-root
