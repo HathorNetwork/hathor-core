@@ -14,7 +14,7 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TypeVar, Generic
+from typing import TypeVar, Generic, Optional
 
 from hathor.event import BaseEvent
 
@@ -25,7 +25,7 @@ class ResponseType(Enum):
     START_STREAMING_EVENTS = 'START_STREAMING_EVENTS'
     STOP_STREAMING_EVENTS = 'STOP_STREAMING_EVENTS'
     GET_EVENT = 'GET_EVENT'
-    NEW_EVENT = 'NEW_EVENT'
+    EVENT = 'EVENT'
 
 
 @dataclass
@@ -36,9 +36,15 @@ class Response(Generic[T]):
 
 @dataclass
 class StopStreamingResponseData:
-    event_id: int
+    last_sent_event_id: int
 
 
 @dataclass
-class EventResponseData:
+class SpecificEventResponseData:
+    event_id: int
+    event: Optional[BaseEvent]
+
+
+@dataclass
+class NewEventResponseData:
     event: BaseEvent

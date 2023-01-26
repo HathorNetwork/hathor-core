@@ -47,6 +47,7 @@ class HathorEventWebsocketProtocol(WebSocketServerProtocol):
 
     client_peer: Optional[str] = None
     streaming_is_active = False
+    last_sent_event_id: Optional[int] = None
 
     def __init__(self):
         super().__init__()
@@ -74,9 +75,8 @@ class HathorEventWebsocketProtocol(WebSocketServerProtocol):
             case Request():
                 self.factory.handle_request(self, request)
             case RequestError():
-                self._handle_request_error(request)
+                self.factory.handle_request_error(self, request)
 
-    def _handle_request_error(self, error: RequestError) -> None:
-        payload = json_dumpb(asdict(error))
-
-        self.sendMessage(payload)
+    def _update_last_sent_event_id(self, event_id: int) -> None:
+        last_sent_event_id = self.last_sent_event_id or event_id
+        self.last_sent_event_id = max(last_sent_event_id, event_id)

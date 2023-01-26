@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathor.event.websocket.event_streaming import EventStreaming
 from hathor.event.websocket.factory import EventWebsocketFactory
 from hathor.event.websocket.protocol import HathorEventWebsocketProtocol
 
-__all__ = ['EventStreaming', 'EventWebsocketFactory', 'HathorEventWebsocketProtocol']
+__all__ = ['EventWebsocketFactory', 'HathorEventWebsocketProtocol']
