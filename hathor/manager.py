@@ -160,8 +160,13 @@ class HathorManager:
         self.tx_storage.pubsub = self.pubsub
         self.event_manager: Optional[EventManager] = None
         if event_storage is not None:
-            self.event_manager = EventManager(event_storage, self.reactor, not_none(self.my_peer.id))
-            self.event_manager.subscribe(self.pubsub)
+            self.event_manager = EventManager(
+                event_storage=event_storage,
+                event_ws_factory=None,  # TODO: Get event ws factory
+                pubsub=self.pubsub,
+                reactor=self.reactor,
+                peer_id=not_none(self.my_peer.id),
+            )
         if enable_sync_v2:
             assert self.tx_storage.indexes is not None
             self.log.debug('enable sync-v2 indexes')
