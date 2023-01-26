@@ -1,16 +1,29 @@
-from typing import Dict, Set
-from uuid import uuid4
+# Copyright 2023 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from dataclasses import asdict
+from typing import Set, Optional
 
 from autobahn.twisted.websocket import WebSocketServerFactory
 from structlog import get_logger
-from twisted.internet.task import LoopingCall
 
-from hathor.conf import HathorSettings
 from hathor.event import BaseEvent
 from hathor.event.websocket.protocol import HathorEventWebsocketProtocol
-from hathor.util import json_dumpb, json_loadb, reactor
+from hathor.event.websocket.request import Request, RequestType
+from hathor.event.websocket.response import Response, ResponseType, EventResponseData, StopStreamingResponseData
+from hathor.util import json_dumpb
 
-settings = HathorSettings()
 logger = get_logger()
 
 
@@ -19,84 +32,90 @@ class EventWebsocketFactory(WebSocketServerFactory):
     """
 
     protocol = HathorEventWebsocketProtocol
+    _is_running = False
+    _connections: Set[HathorEventWebsocketProtocol] = set()
 
-    def buildProtocol(self, address: str):
-        return self.protocol(self)
-
-    def __init__(self, event_storage):
+    def __init__(self):
         super().__init__()
         self.log = logger.new()
-        self.is_running = False
-        self.event_storage = event_storage
-
-        # A timer to periodically send new events to clients that sent start_streaming_events message
-        self._lc_send_events = LoopingCall(self._send_events_to_subscribed_clients)
-        self._lc_send_events.clock = reactor
 
     def start(self):
-        self.is_running = True
-
-        # Start event sender
-        self._lc_send_events.start(settings.WS_SEND_EVENTS_INTERVAL, now=False)
+        self._is_running = True
 
     def stop(self):
-        self.is_running = False
+        self._is_running = False
 
-        if self._lc_send_events.running:
-            self._lc_send_events.stop()
+        for connection in self._connections:
+            connection.sendClose()
 
-    def on_new_event(self, event: BaseEvent) -> None:
+        self._connections = set()
+
+    def broadcast_event(self, event: BaseEvent) -> None:
         """Called when there is a new event, only after subscribing."""
-        pass
+        response = Response(
+            type=ResponseType.NEW_EVENT,
+            data=EventResponseData(event)
+        )
+
+        payload = json_dumpb(asdict(response))
+
+        for connection in self._connections:
+            if connection.streaming_is_active:
+                connection.sendMessage(payload)
 
     def on_client_close(self, connection: HathorEventWebsocketProtocol) -> None:
         """Called when a ws connection is closed."""
-        # A connection closed before finishing handshake will not be in `self.connections`.
-        self.connections.discard(connection)
-        del self.connections_to_stream_events[connection.id]
+        self._connections.discard(connection)
 
     def on_client_open(self, connection: HathorEventWebsocketProtocol) -> None:
         """Called when a ws connection is opened (after handshaking)."""
-        connection.id = str(uuid4())
-        self.connections.add(connection)
+        if not self._is_running:
+            # TODO: Rejecting a connection should send something to the client
+            return
 
-    def handle_message(self, connection: HathorEventWebsocketProtocol, data: bytes) -> None:
-        message = json_loadb(data)
-        if message['type'] == 'start_streaming_events':
-            self._handle_start_streaming_events(connection, message)
-        elif message['type'] == 'stop_streaming_events':
-            self._handle_stop_streaming_events(connection, message)
-        elif message['type'] == 'get_event':
-            self._handle_get_event(connection, message)
+        self._connections.add(connection)
 
-    def _handle_start_streaming_events(self, connection: HathorEventWebsocketProtocol, message: Dict) -> None:
-        response = {'type': 'start_streaming_events', 'success': True}
-        event_id = message['event_id'] if 'event_id' in message else 0
+    def handle_request(self, connection: HathorEventWebsocketProtocol, request: Request) -> None:
+        match request.type:
+            case RequestType.START_STREAMING_EVENTS:
+                self._handle_start_streaming_events(connection, request.event_id)
+            case RequestType.STOP_STREAMING_EVENTS:
+                self._handle_stop_streaming_events(connection)
+            case RequestType.GET_EVENT:
+                self._handle_get_event(connection, request.event_id)
 
-        if not event_id.isdigit():
-            response['success'] = False
-            response['reason'] = 'event_id must be a positive integer number'
-        # else:
-        #     self.connections_to_stream_events[connection.id] = EventStreaming(connection, event_id)
+    @staticmethod
+    def _handle_start_streaming_events(connection: HathorEventWebsocketProtocol, event_id: Optional[int]) -> None:
+        # TODO: use event_id
+        connection.streaming_is_active = True
 
-        payload = json_dumpb(response)
-        connection.sendMessage(payload, False)
+        response = Response(ResponseType.START_STREAMING_EVENTS)
+        payload = json_dumpb(asdict(response))
 
-    def _handle_stop_streaming_events(self, connection: HathorEventWebsocketProtocol, message: Dict) -> None:
-        self.connections_to_stream_events.pop(connection.id)
-        del self.connections_to_stream_events[connection.id]
-        payload = json_dumpb({'type': 'stop_streaming_events', 'success': True})
-        connection.sendMessage(payload, False)
+        connection.sendMessage(payload)
 
-    def _handle_get_event(self, connection: HathorEventWebsocketProtocol, message: Dict) -> None:
+    @staticmethod
+    def _handle_stop_streaming_events(connection: HathorEventWebsocketProtocol) -> None:
+        connection.streaming_is_active = False
+
+        response = Response(
+            type=ResponseType.STOP_STREAMING_EVENTS,
+            data=StopStreamingResponseData(None)  # TODO: put event_id
+        )
+        payload = json_dumpb(asdict(response))
+
+        connection.sendMessage(payload)
+
+    def _handle_get_event(self, connection: HathorEventWebsocketProtocol, event_id: int) -> None:
+        # TODO: Get from event_storage?
         pass
 
-    def _send_events_to_subscribed_clients(self) -> None:
-        max_count = 100
-        for event_streaming in self.connections_to_stream_events.values():
-            iter_events = self.event_storage.iter_from_event(event_streaming.last_event)
-            for i, event in enumerate(iter_events):
-                if i == max_count:
-                    break
-                payload = json_dumpb({'type': 'event', 'data': event.__dict__})
-                event_streaming.connection.sendMessage(payload)
+    # def _send_events_to_subscribed_clients(self) -> None:
+    #     max_count = 100
+    #     for event_streaming in self.connections_to_stream_events.values():
+    #         iter_events = self.event_storage.iter_from_event(event_streaming.last_event)
+    #         for i, event in enumerate(iter_events):
+    #             if i == max_count:
+    #                 break
+    #             payload = json_dumpb({'type': 'event', 'data': event.__dict__})
+    #             event_streaming.connection.sendMessage(payload)
