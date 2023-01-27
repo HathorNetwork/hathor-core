@@ -16,13 +16,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Union, Dict
+from typing import Union, Dict, Optional
 
 
 class RequestType(Enum):
     START_STREAMING_EVENTS = 'START_STREAMING_EVENTS'
     STOP_STREAMING_EVENTS = 'STOP_STREAMING_EVENTS'
-    GET_EVENT = 'GET_EVENT'
 
     @classmethod
     def values(cls):
@@ -37,12 +36,12 @@ class RequestError:
 @dataclass
 class Request:
     type: RequestType
-    event_id: int
+    last_received_event_id: Optional[int]
 
     @classmethod
     def from_dict(cls, request_dict: Dict) -> Union[Request | RequestError]:
         raw_request_type = request_dict.get('type')
-        event_id = request_dict.get('event_id')
+        event_id = request_dict.get('last_received_event_id')
 
         try:
             request_type = RequestType[raw_request_type]
@@ -51,13 +50,8 @@ class Request:
                 f'Unknown request type \'{raw_request_type}\'. Known types are {RequestType.values()}.'
             )
 
-        if request_type == RequestType.GET_EVENT and event_id is None:
-            return RequestError(f'Missing \'event_id\'.')
-
-        event_id = event_id or 0
-
-        if request_type in [RequestType.START_STREAMING_EVENTS, RequestType.GET_EVENT]:
+        if request_type == RequestType.START_STREAMING_EVENTS and event_id is not None:
             if not isinstance(event_id, int) or event_id < 0:
-                return RequestError(f'Invalid \'event_id\': {event_id}. Must be a positive integer.')
+                return RequestError(f'Invalid \'event_id\': {event_id}. Must be a positive integer or null.')
 
         return Request(request_type, event_id)

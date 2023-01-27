@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from dataclasses import asdict, dataclass
-from typing import Set
+from typing import Set, Optional, List
 
 from autobahn.twisted.websocket import WebSocketServerFactory
 from structlog import get_logger
@@ -22,11 +22,12 @@ from hathor.event import BaseEvent
 from hathor.event.storage import EventStorage
 from hathor.event.websocket.protocol import HathorEventWebsocketProtocol
 from hathor.event.websocket.request import Request, RequestType, RequestError
-from hathor.event.websocket.response import Response, ResponseType, NewEventResponseData, StopStreamingResponseData, \
-    SpecificEventResponseData
+from hathor.event.websocket.response import Response
 from hathor.util import json_dumpb
+from hathor.conf import HathorSettings
 
 logger = get_logger()
+settings = HathorSettings()
 
 
 class EventWebsocketFactory(WebSocketServerFactory):
@@ -36,11 +37,11 @@ class EventWebsocketFactory(WebSocketServerFactory):
     protocol = HathorEventWebsocketProtocol
     _is_running = False
     _connections: Set[HathorEventWebsocketProtocol] = set()
+    _latest_event_id: Optional[int] = None
 
     def __init__(self, event_storage: EventStorage):
         super().__init__()
         self.log = logger.new()
-
         self._event_storage = event_storage
 
     def start(self):
@@ -56,28 +57,39 @@ class EventWebsocketFactory(WebSocketServerFactory):
 
     def broadcast_event(self, event: BaseEvent) -> None:
         """Called when there is a new event, only after subscribing."""
-        response = Response(
-            type=ResponseType.EVENT,
-            data=NewEventResponseData(event)
-        )
-        payload = self._dataclass_to_payload(response)
+        self._latest_event_id = event.id
 
         for connection in self._connections:
             if connection.streaming_is_active:
+                events = self._get_events_to_send(connection, event)
+                response = Response(events, self._latest_event_id)
+                payload = self._dataclass_to_payload(response)
+
                 connection.sendMessage(payload)
-                connection.update_last_sent_event_id(event.id)
 
-    def on_client_close(self, connection: HathorEventWebsocketProtocol) -> None:
-        """Called when a ws connection is closed."""
-        self._connections.discard(connection)
+    def _get_events_to_send(self, connection: HathorEventWebsocketProtocol, event: BaseEvent) -> List[BaseEvent]:
+        next_event_id = connection.last_received_event_id + 1
+        assert event.id >= next_event_id, 'Cannot reprocess past event.'
 
-    def on_client_open(self, connection: HathorEventWebsocketProtocol) -> None:
+        if event.id == next_event_id:
+            return [event]
+
+        events = self._event_storage.iter_events(next_event_id, settings.EVENT_WS_MAX_BATCH_SIZE)
+
+        # TODO: Change iter_events to list
+        return list(events)
+
+    def register(self, connection: HathorEventWebsocketProtocol) -> None:
         """Called when a ws connection is opened (after handshaking)."""
         if not self._is_running:
             # TODO: Rejecting a connection should send something to the client
             return
 
         self._connections.add(connection)
+
+    def unregister(self, connection: HathorEventWebsocketProtocol) -> None:
+        """Called when a ws connection is closed."""
+        self._connections.discard(connection)
 
     def handle_request_error(self, connection: HathorEventWebsocketProtocol, error: RequestError) -> None:
         payload = self._dataclass_to_payload(error)
@@ -86,58 +98,18 @@ class EventWebsocketFactory(WebSocketServerFactory):
     def handle_request(self, connection: HathorEventWebsocketProtocol, request: Request) -> None:
         match request.type:
             case RequestType.START_STREAMING_EVENTS:
-                self._handle_start_streaming_events(connection, request.event_id)
+                self._handle_start_streaming_events(connection, request.last_received_event_id)
             case RequestType.STOP_STREAMING_EVENTS:
                 self._handle_stop_streaming_events(connection)
-            case RequestType.GET_EVENT:
-                self._handle_get_event(connection, request.event_id)
 
-    def _handle_start_streaming_events(self, connection: HathorEventWebsocketProtocol, from_event_id: int) -> None:
+    @staticmethod
+    def _handle_start_streaming_events(connection: HathorEventWebsocketProtocol, last_received_event_id: int) -> None:
+        connection.last_received_event_id = last_received_event_id
         connection.streaming_is_active = True
 
-        response = Response(ResponseType.START_STREAMING_EVENTS)
-        payload = self._dataclass_to_payload(response)
-
-        connection.sendMessage(payload)
-
-        self._backfill_events(connection, from_event_id)
-
-    def _backfill_events(self, connection: HathorEventWebsocketProtocol, from_event_id: int) -> None:
-        # TODO: Limit number of events sent?
-        events = self._event_storage.iter_from_event(from_event_id)
-
-        for event in events:
-            response = Response(
-                type=ResponseType.EVENT,
-                data=NewEventResponseData(event)
-            )
-            payload = self._dataclass_to_payload(response)
-
-            connection.sendMessage(payload)
-            connection.update_last_sent_event_id(event.id)
-
-    def _handle_stop_streaming_events(self, connection: HathorEventWebsocketProtocol) -> None:
+    @staticmethod
+    def _handle_stop_streaming_events(connection: HathorEventWebsocketProtocol) -> None:
         connection.streaming_is_active = False
-
-        response = Response(
-            type=ResponseType.STOP_STREAMING_EVENTS,
-            data=StopStreamingResponseData(connection.last_sent_event_id)
-        )
-
-        payload = self._dataclass_to_payload(response)
-
-        connection.sendMessage(payload)
-
-    def _handle_get_event(self, connection: HathorEventWebsocketProtocol, event_id: int) -> None:
-        event = self._event_storage.get_event(event_id)
-        response = Response(
-            type=ResponseType.GET_EVENT,
-            data=SpecificEventResponseData(event_id, event)
-        )
-
-        payload = self._dataclass_to_payload(response)
-
-        connection.sendMessage(payload)
 
     @staticmethod
     def _dataclass_to_payload(obj: dataclass) -> bytes:
