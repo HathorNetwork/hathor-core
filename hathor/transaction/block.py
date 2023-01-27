@@ -169,7 +169,7 @@ class Block(BaseTransaction):
         """Return the parent block.
         """
         assert self.storage is not None
-        block_parent = self.storage.get_transaction(self.get_block_parent_hash())
+        block_parent = self.storage.get_transaction(self.get_block_parent_hash(), allow_partially_valid=True)
         assert isinstance(block_parent, Block)
         return block_parent
 
@@ -271,7 +271,7 @@ class Block(BaseTransaction):
         parent_block_hash = self.parents[0]
         if not self.storage.transaction_exists(parent_block_hash):
             return False
-        metadata = self.storage.get_metadata(parent_block_hash)
+        metadata = self.storage.get_metadata(parent_block_hash, allow_partially_valid=True)
         assert metadata is not None
         return metadata.validation.is_at_least_basic()
 

@@ -44,7 +44,7 @@ def get_requested_from_height(tx: BaseTransaction) -> int:
         #      I'm defaulting the height to `inf` (practically), this should make it heightest priority when
         #      choosing which transactions to fetch next
         return INF_HEIGHT
-    block = tx.storage.get_transaction(first_block)
+    block = tx.storage.get_transaction(first_block, allow_partially_valid=True)
     assert isinstance(block, Block)
     return block.get_metadata().height
 

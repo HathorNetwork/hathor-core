@@ -855,7 +855,8 @@ class BaseTransaction(ABC):
                     return None
         return None
 
-    def get_metadata(self, *, force_reload: bool = False, use_storage: bool = True) -> TransactionMetadata:
+    def get_metadata(self, *, force_reload: bool = False, use_storage: bool = True, allow_partial: bool = False
+                     ) -> TransactionMetadata:
         """Return this tx's metadata.
 
         It first looks in our cache (tx._metadata) and then tries the tx storage. If it doesn't
@@ -875,7 +876,7 @@ class BaseTransaction(ABC):
             metadata = getattr(self, '_metadata', None)
         if not metadata and use_storage and self.storage:
             assert self.hash is not None
-            metadata = self.storage.get_metadata(self.hash)
+            metadata = self.storage.get_metadata(self.hash, allow_partially_valid=allow_partial)
             self._metadata = metadata
         if not metadata:
             # FIXME: there is code that set use_storage=False but relies on correct height being calculated
@@ -899,11 +900,13 @@ class BaseTransaction(ABC):
         assert self.storage is not None
         score = self.weight if self.is_genesis else 0
         self._metadata = TransactionMetadata(hash=self.hash, score=score,
-                                             accumulated_weight=self.weight,
-                                             height=self.calculate_height(),
-                                             min_height=self.calculate_min_height())
-        self._metadata.validation = ValidationState.INITIAL
-        self._metadata.voided_by = {settings.PARTIALLY_VALIDATED_ID}
+                                             accumulated_weight=self.weight)
+        if self.is_genesis:
+            self._metadata.validation = ValidationState.CHECKPOINT_FULL
+            self._metadata.voided_by = set()
+        else:
+            self._metadata.validation = ValidationState.INITIAL
+            self._metadata.voided_by = {settings.PARTIALLY_VALIDATED_ID}
         self._metadata._tx_ref = weakref.ref(self)
         self.storage.save_transaction(self, only_metadata=True)
 

@@ -433,9 +433,6 @@ class HathorManager:
 
         self.log.debug('load blocks and transactions')
         for tx in self.tx_storage._topological_sort_dfs():
-            if self._full_verification:
-                tx.update_initial_metadata()
-
             assert tx.hash is not None
 
             tx_meta = tx.get_metadata()
@@ -465,7 +462,11 @@ class HathorManager:
             try:
                 if self._full_verification:
                     # TODO: deal with invalid tx
+                    tx.calculate_height()
+                    tx._update_parents_children_metadata()
+
                     if tx.can_validate_full():
+                        tx.calculate_min_height()
                         if tx.is_genesis:
                             assert tx.validate_checkpoint(self.checkpoints)
                         assert tx.validate_full(skip_block_weight_verification=skip_block_weight_verification)
@@ -544,7 +545,7 @@ class HathorManager:
             for tx_hash in self.tx_storage.indexes.deps.iter():
                 if not self.tx_storage.transaction_exists(tx_hash):
                     continue
-                tx = self.tx_storage.get_transaction(tx_hash)
+                tx = self.tx_storage.get_transaction(tx_hash, allow_partially_valid=True)
                 if tx.get_metadata().validation.is_final():
                     depended_final_txs.append(tx)
             if self.tx_storage.indexes.deps is not None:
@@ -697,7 +698,7 @@ class HathorManager:
             for tx_hash in self.tx_storage.indexes.deps.iter():
                 if not self.tx_storage.transaction_exists(tx_hash):
                     continue
-                tx = self.tx_storage.get_transaction(tx_hash)
+                tx = self.tx_storage.get_transaction(tx_hash, allow_partially_valid=True)
                 if tx.get_metadata().validation.is_final():
                     depended_final_txs.append(tx)
             self.sync_v2_step_validations(depended_final_txs, quiet=True)
@@ -983,7 +984,7 @@ class HathorManager:
         tx.storage = self.tx_storage
 
         try:
-            metadata = tx.get_metadata()
+            metadata = tx.get_metadata(allow_partial=partial)
         except TransactionDoesNotExist:
             if not fails_silently:
                 raise InvalidNewTransaction('missing parent')
@@ -1082,6 +1083,8 @@ class HathorManager:
     def sync_v2_step_validations(self, txs: Iterable[BaseTransaction], *, quiet: bool) -> None:
         """ Step all validations until none can be stepped anymore.
         """
+        from functools import partial
+
         assert self.tx_storage.indexes is not None
         assert self.tx_storage.indexes.deps is not None
         # cur_txs will be empty when there are no more new txs that reached full
@@ -1090,7 +1093,8 @@ class HathorManager:
             assert ready_tx.hash is not None
             self.tx_storage.indexes.deps.remove_ready_for_validation(ready_tx.hash)
         it_next_ready = self.tx_storage.indexes.deps.next_ready_for_validation(self.tx_storage)
-        for tx in map(self.tx_storage.get_transaction, it_next_ready):
+        get_partially_validated = partial(self.tx_storage.get_transaction, allow_partially_valid=True)
+        for tx in map(get_partially_validated, it_next_ready):
             assert tx.hash is not None
             tx.update_initial_metadata()
             try:

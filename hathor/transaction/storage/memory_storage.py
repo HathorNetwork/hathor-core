@@ -14,7 +14,7 @@
 
 from typing import Any, Dict, Iterator, Optional, TypeVar
 
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionPartiallyValidatedError
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.transaction import BaseTransaction
@@ -80,11 +80,14 @@ class TransactionMemoryStorage(BaseTransactionStorage):
     def transaction_exists(self, hash_bytes: bytes) -> bool:
         return hash_bytes in self.transactions
 
-    def _get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
+    def _get_transaction(self, hash_bytes: bytes, *, allow_partially_valid: bool = False) -> BaseTransaction:
         if hash_bytes in self.transactions:
             tx = self._clone(self.transactions[hash_bytes])
             if hash_bytes in self.metadata:
                 tx._metadata = self._clone(self.metadata[hash_bytes])
+            assert tx._metadata is not None
+            if not allow_partially_valid and not tx._metadata.validation.is_fully_connected():
+                raise TransactionPartiallyValidatedError(tx.hash_hex)
             return tx
         else:
             raise TransactionDoesNotExist(hash_bytes.hex())

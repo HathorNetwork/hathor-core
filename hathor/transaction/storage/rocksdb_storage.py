@@ -18,7 +18,7 @@ from structlog import get_logger
 
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.storage import RocksDBStorage
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionPartiallyValidatedError
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.util import json_dumpb, json_loadb
@@ -113,7 +113,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         tx_exists = self._db.get((self._cf_tx, hash_bytes)) is not None
         return tx_exists
 
-    def _get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
+    def _get_transaction(self, hash_bytes: bytes, *, allow_partially_valid: bool = False) -> 'BaseTransaction':
         tx = self.get_transaction_from_weakref(hash_bytes)
         if tx is not None:
             return tx
@@ -121,6 +121,10 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         tx = self._get_transaction_from_db(hash_bytes)
         if not tx:
             raise TransactionDoesNotExist(hash_bytes.hex())
+
+        assert tx._metadata is not None
+        if not allow_partially_valid and not tx._metadata.validation.is_fully_connected():
+            raise TransactionPartiallyValidatedError(tx.hash_hex)
 
         assert tx.hash == hash_bytes
 

@@ -189,7 +189,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
             return True
         return self.store.transaction_exists(hash_bytes)
 
-    def _get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
+    def _get_transaction(self, hash_bytes: bytes, *, allow_partially_valid: bool = False) -> BaseTransaction:
         tx: Optional[BaseTransaction]
         if hash_bytes in self.cache:
             tx = self._clone(self.cache[hash_bytes])
@@ -200,7 +200,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
             if tx is not None:
                 self.stats['hit'] += 1
             else:
-                tx = self.store.get_transaction(hash_bytes)
+                tx = self.store.get_transaction(hash_bytes, allow_partially_valid=allow_partially_valid)
                 tx.storage = self
                 self.stats['miss'] += 1
             self._update_cache(tx)

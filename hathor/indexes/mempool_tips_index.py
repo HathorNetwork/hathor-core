@@ -14,6 +14,7 @@
 
 from abc import abstractmethod
 from collections.abc import Collection
+from functools import partial
 from typing import TYPE_CHECKING, Iterable, Iterator, Optional, Set, cast
 
 import structlog
@@ -169,7 +170,8 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
             self._add(tx.hash)
 
     def iter(self, tx_storage: 'TransactionStorage', max_timestamp: Optional[float] = None) -> Iterator[Transaction]:
-        it: Iterator[BaseTransaction] = map(tx_storage.get_transaction, self._index)
+        get_partially_validated = partial(tx_storage.get_transaction, allow_partially_valid=True)
+        it: Iterator[BaseTransaction] = map(get_partially_validated, self._index)
         if max_timestamp is not None:
             it = filter(lambda tx: tx.timestamp < not_none(max_timestamp), it)
         yield from cast(Iterator[Transaction], it)

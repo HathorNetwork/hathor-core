@@ -19,6 +19,10 @@ class TransactionDoesNotExist(HathorError):
     """You are trying to get a transaction that does not exist"""
 
 
+class TransactionPartiallyValidatedError(TransactionDoesNotExist):
+    """You are trying to get a transaction that has not been fully validated yet, treated as non-existent"""
+
+
 class TransactionMetadataDoesNotExist(HathorError):
     """You are trying to get a metadata (of a transaction) that does not exist"""
 

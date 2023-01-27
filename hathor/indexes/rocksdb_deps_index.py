@@ -14,6 +14,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
+from functools import partial
 from typing import TYPE_CHECKING, FrozenSet, Iterator, List, Optional, Tuple
 
 from structlog import get_logger
@@ -219,7 +220,7 @@ class RocksDBDepsIndex(DepsIndex, RocksDBIndexUtils):
         assert tx.hash is not None
         assert tx.storage is not None
         for candidate_hash in self._iter_rev_deps_of(tx.hash):
-            candidate_tx = tx.storage.get_transaction(candidate_hash)
+            candidate_tx = tx.storage.get_transaction(candidate_hash, allow_partially_valid=True)
             if candidate_tx.is_ready_for_validation():
                 self._add_ready(candidate_hash, batch)
 
@@ -266,7 +267,7 @@ class RocksDBDepsIndex(DepsIndex, RocksDBIndexUtils):
 
     def _drain_all_sorted_ready(self, tx_storage: 'TransactionStorage', batch: 'rocksdb.WriteBatch') -> List[bytes]:
         ready = list(self._drain_all_ready(tx_storage, batch))
-        ready.sort(key=lambda tx_hash: tx_storage.get_transaction(tx_hash).timestamp)
+        ready.sort(key=lambda tx_hash: tx_storage.get_transaction(tx_hash, allow_partially_valid=True).timestamp)
         return ready
 
     def _drain_all_ready(self, tx_storage: 'TransactionStorage', batch: 'rocksdb.WriteBatch') -> Iterator[bytes]:
@@ -315,7 +316,8 @@ class RocksDBDepsIndex(DepsIndex, RocksDBIndexUtils):
     def known_children(self, tx: BaseTransaction) -> List[bytes]:
         assert tx.hash is not None
         assert tx.storage is not None
-        it_rev_deps = map(tx.storage.get_transaction, self._get_rev_deps(tx.hash))
+        get_partially_validated = partial(tx.storage.get_transaction, allow_partially_valid=True)
+        it_rev_deps = map(get_partially_validated, self._get_rev_deps(tx.hash))
         return [not_none(rev.hash) for rev in it_rev_deps if tx.hash in rev.parents]
 
     def _get_rev_deps(self, tx: bytes) -> FrozenSet[bytes]:

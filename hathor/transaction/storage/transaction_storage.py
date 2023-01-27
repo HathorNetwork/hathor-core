@@ -27,7 +27,11 @@ from hathor.indexes import IndexesManager, MemoryIndexesManager
 from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction
 from hathor.transaction.block import Block
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
+from hathor.transaction.storage.exceptions import (
+    TransactionDoesNotExist,
+    TransactionIsNotABlock,
+    TransactionPartiallyValidatedError,
+)
 from hathor.transaction.storage.migrations import BaseMigration, MigrationState, add_min_height_metadata
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
@@ -409,7 +413,7 @@ class TransactionStorage(ABC):
                     self.save_transaction(spent_tx, only_metadata=True)
         assert not dangling_children, 'It is an error to try to remove transactions that would leave a gap in the DAG'
         for parent_hash, children_to_remove in parents_to_update.items():
-            parent_tx = self.get_transaction(parent_hash)
+            parent_tx = self.get_transaction(parent_hash, allow_partially_valid=True)
             parent_meta = parent_tx.get_metadata()
             for child in children_to_remove:
                 parent_meta.children.remove(child)
@@ -429,7 +433,7 @@ class TransactionStorage(ABC):
     def compare_bytes_with_local_tx(self, tx: BaseTransaction) -> bool:
         """Compare byte-per-byte `tx` with the local transaction."""
         assert tx.hash is not None
-        local_tx = self.get_transaction(tx.hash)
+        local_tx = self.get_transaction(tx.hash, allow_partially_valid=True)
         local_tx_bytes = bytes(local_tx)
         tx_bytes = bytes(tx)
         if tx_bytes == local_tx_bytes:
@@ -439,7 +443,7 @@ class TransactionStorage(ABC):
         return False
 
     @abstractmethod
-    def _get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
+    def _get_transaction(self, hash_bytes: bytes, *, allow_partially_valid: bool = False) -> BaseTransaction:
         """Returns the transaction with hash `hash_bytes`.
 
         :param hash_bytes: Hash in bytes that will be checked.
@@ -469,7 +473,7 @@ class TransactionStorage(ABC):
                 self._weakref_lock_per_hash[hash_bytes] = lock
         return lock
 
-    def get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
+    def get_transaction(self, hash_bytes: bytes, *, allow_partially_valid: bool = False) -> BaseTransaction:
         """Acquire the lock and get the transaction with hash `hash_bytes`.
 
         :param hash_bytes: Hash in bytes that will be checked.
@@ -478,19 +482,23 @@ class TransactionStorage(ABC):
             lock = self._get_lock(hash_bytes)
             assert lock is not None
             with lock:
-                tx = self._get_transaction(hash_bytes)
+                tx = self._get_transaction(hash_bytes, allow_partially_valid=allow_partially_valid)
         else:
-            tx = self._get_transaction(hash_bytes)
+            tx = self._get_transaction(hash_bytes, allow_partially_valid=allow_partially_valid)
+        if not allow_partially_valid:
+            tx_meta = tx.get_metadata()
+            if tx_meta.voided_by is not None and settings.PARTIALLY_VALIDATED_ID in tx_meta.voided_by:
+                raise TransactionPartiallyValidatedError(tx.hash_hex)
         return tx
 
-    def get_metadata(self, hash_bytes: bytes) -> Optional[TransactionMetadata]:
+    def get_metadata(self, hash_bytes: bytes, *, allow_partially_valid: bool = False) -> Optional[TransactionMetadata]:
         """Returns the transaction metadata with hash `hash_bytes`.
 
         :param hash_bytes: Hash in bytes that will be checked.
         :rtype :py:class:`hathor.transaction.TransactionMetadata`
         """
         try:
-            tx = self.get_transaction(hash_bytes)
+            tx = self.get_transaction(hash_bytes, allow_partially_valid=allow_partially_valid)
             return tx.get_metadata(use_storage=False)
         except TransactionDoesNotExist:
             return None
@@ -1212,7 +1220,7 @@ class BaseTransactionStorage(TransactionStorage):
             for parent_hash in tx.parents[::-1]:
                 if parent_hash not in visited:
                     try:
-                        parent = self.get_transaction(parent_hash)
+                        parent = self.get_transaction(parent_hash, allow_partially_valid=True)
                     except TransactionDoesNotExist:
                         # XXX: it's possible transactions won't exist because of missing dependencies
                         pass
@@ -1222,7 +1230,7 @@ class BaseTransactionStorage(TransactionStorage):
             for txin in tx.inputs:
                 if txin.tx_id not in visited:
                     try:
-                        txinput = self.get_transaction(txin.tx_id)
+                        txinput = self.get_transaction(txin.tx_id, allow_partially_valid=True)
                     except TransactionDoesNotExist:
                         # XXX: it's possible transactions won't exist because of missing dependencies
                         pass

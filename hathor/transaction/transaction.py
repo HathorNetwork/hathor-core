@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import hashlib
+from functools import partial
 from itertools import chain
 from struct import pack
 from typing import TYPE_CHECKING, Any, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple
@@ -277,8 +278,9 @@ class Transaction(BaseTransaction):
         if self.is_genesis:
             return
         meta = self.get_metadata()
+        get_partially_validated = partial(self.storage.get_transaction, allow_partially_valid=True)
         # at least one child must be checkpoint validated
-        for child_tx in map(self.storage.get_transaction, meta.children):
+        for child_tx in map(get_partially_validated, meta.children):
             if child_tx.get_metadata().validation.is_checkpoint():
                 return
         raise InvalidNewTransaction(f'Invalid new transaction {self.hash_hex}: expected to reach a checkpoint but '

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from functools import partial
 from typing import TYPE_CHECKING, Dict, FrozenSet, Iterator, List, Optional, Set, Tuple
 
 from structlog import get_logger
@@ -75,7 +76,7 @@ class MemoryDepsIndex(DepsIndex):
         assert tx.hash is not None
         assert tx.storage is not None
         for candidate_hash in self._rev_dep_index.get(tx.hash, []):
-            candidate_tx = tx.storage.get_transaction(candidate_hash)
+            candidate_tx = tx.storage.get_transaction(candidate_hash, allow_partially_valid=True)
             if candidate_tx.is_ready_for_validation():
                 self._txs_with_deps_ready.add(candidate_hash)
 
@@ -105,12 +106,13 @@ class MemoryDepsIndex(DepsIndex):
         self._txs_with_deps_ready.discard(tx)
 
     def next_ready_for_validation(self, tx_storage: 'TransactionStorage', *, dry_run: bool = False) -> Iterator[bytes]:
+        get_partially_validated = partial(tx_storage.get_transaction, allow_partially_valid=True)
         if dry_run:
             cur_ready = self._txs_with_deps_ready.copy()
         else:
             cur_ready, self._txs_with_deps_ready = self._txs_with_deps_ready, set()
         while cur_ready:
-            yield from sorted(cur_ready, key=lambda tx_hash: tx_storage.get_transaction(tx_hash).timestamp)
+            yield from sorted(cur_ready, key=lambda tx_hash: get_partially_validated(tx_hash).timestamp)
             if dry_run:
                 cur_ready = self._txs_with_deps_ready - cur_ready
             else:
@@ -129,7 +131,8 @@ class MemoryDepsIndex(DepsIndex):
     def known_children(self, tx: BaseTransaction) -> List[bytes]:
         assert tx.hash is not None
         assert tx.storage is not None
-        it_rev_deps = map(tx.storage.get_transaction, self._get_rev_deps(tx.hash))
+        get_partially_validated = partial(tx.storage.get_transaction, allow_partially_valid=True)
+        it_rev_deps = map(get_partially_validated, self._get_rev_deps(tx.hash))
         return [not_none(rev.hash) for rev in it_rev_deps if tx.hash in rev.parents]
 
     # needed-txs-index methods:

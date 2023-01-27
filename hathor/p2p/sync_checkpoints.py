@@ -139,7 +139,7 @@ class SyncCheckpoint:
         # XXX: this could be optimized a lot, but it actually isn't that slow
         while start_height > end_height:
             try:
-                block = self.manager.tx_storage.get_transaction(start_hash)
+                block = self.manager.tx_storage.get_transaction(start_hash, allow_partially_valid=True)
             except TransactionDoesNotExist:
                 break
             assert isinstance(block, Block)
