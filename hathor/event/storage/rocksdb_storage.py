@@ -33,14 +33,21 @@ class EventRocksDBStorage(EventStorage):
         self._last_event: Optional[BaseEvent] = self._db_get_last_event()
         self._last_group_id: Optional[int] = self._db_get_last_group_id()
 
-    def iter_from_event(self, key: int) -> Iterator[BaseEvent]:
+    def iter_events(self, from_event_id: int, max_amount: int) -> Iterator[BaseEvent]:
         it = self._db.itervalues(self._cf_event)
-        it.seek(int_to_bytes(key, 8))
+        it.seek(int_to_bytes(from_event_id, 8))
+
         for event_bytes in it:
+            if max_amount <= 0:
+                break
+
             event = self._load_from_bytes(event_bytes)
+            max_amount -= 1
+
             yield event
 
-    def _load_from_bytes(self, event_data: bytes) -> BaseEvent:
+    @staticmethod
+    def _load_from_bytes(event_data: bytes) -> BaseEvent:
         event_dict = json_loadb(event_data)
         return BaseEvent(
             id=event_dict['id'],
@@ -80,14 +87,6 @@ class EventRocksDBStorage(EventStorage):
         if event.group_id is not None:
             self._db.put((self._cf_meta, _KEY_LAST_GROUP_ID), int_to_bytes(event.group_id, 8))
             self._last_group_id = event.group_id
-
-    def get_event(self, key: int) -> Optional[BaseEvent]:
-        if key < 0:
-            raise ValueError('key must be non-negative')
-        event = self._db.get((self._cf_event, int_to_bytes(key, 8)))
-        if event is None:
-            return None
-        return self._load_from_bytes(event_data=event)
 
     def get_last_event(self) -> Optional[BaseEvent]:
         return self._last_event
