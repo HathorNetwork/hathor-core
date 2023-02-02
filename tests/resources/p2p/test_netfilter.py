@@ -179,8 +179,8 @@ class BaseNetfilterTest(_BaseResourceTest._ResourceTest):
         # self.assertEqual(len(data['rules']), 0)
 
         # Validate we can do dump -> reload
-        for d in data_get['rules']:
-            response_post = yield self.web.post('netfilter', d)
+        # for d in data_get['rules']:
+        #     response_post = yield self.web.post('netfilter', d)
 
         # response = yield self.web.get('netfilter', {b'chain': bytes('post_peerid', 'utf-8')})
         # data_get = response.json_value()

@@ -11,26 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import annotations
 
-from dataclasses import dataclass
 from json import JSONDecodeError
-from typing import TYPE_CHECKING, Any, Dict, TypeVar, Generic, Type, Literal, Annotated, Union
-
-from pydantic import BaseModel as PydanticBaseModel, Extra, Field
-from pydantic.generics import GenericModel
+from typing import TYPE_CHECKING
 
 from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.p2p.netfilter import get_table
-from hathor.p2p.netfilter.matches import (
-    NetfilterMatchAll,
-    NetfilterMatchAnd,
-    NetfilterMatchIPAddress,
-    NetfilterMatchOr,
-    NetfilterMatchPeerId,
-)
-from hathor.p2p.netfilter.matches_remote import NetfilterMatchRemoteURL
+from hathor.p2p.netfilter.request.request import NetFilterRequest
+from hathor.p2p.netfilter.response.error_response import ErrorResponse
 from hathor.p2p.netfilter.rule import NetfilterRule
 from hathor.p2p.netfilter.targets import NetfilterAccept, NetfilterJump, NetfilterLog, NetfilterReject
 from hathor.util import json_dumpb, json_loadb
@@ -39,92 +28,6 @@ if TYPE_CHECKING:
     from twisted.web.http import Request
 
     from hathor.manager import HathorManager
-
-
-class BaseModel(PydanticBaseModel):
-    class Config:
-        pass
-        # allow_mutation = False
-        # extra = Extra.forbid
-
-
-class ChainRequest(BaseModel):
-    name: str
-
-#
-# class NetfilterMatchAllParams(BaseModel):
-#     pass
-#
-#
-# class NetfilterMatchAndParams(BaseModel):
-#     a: MatchRequest
-#     b: MatchRequest
-
-
-ModelT = TypeVar('ModelT')
-
-
-class Params(GenericModel, Generic[ModelT]):
-    _model_class: Type[ModelT]
-
-    def build(self) -> ModelT:
-        return self._model_class(**self.dict())
-
-
-class NetfilterMatchOrParams(BaseModel, Params):
-    _model_class = NetfilterMatchOr
-    a: MatchRequest
-    b: MatchRequest
-
-
-class NetfilterMatchIPAddressParams(BaseModel, Params):
-    _model_class = NetfilterMatchIPAddress
-    host: str
-
-
-class NetfilterMatchPeerIdParams(BaseModel, Params):
-    _model_class = NetfilterMatchPeerId
-    peer_id: str
-
-
-# class NetfilterMatchRemoteURLParams(BaseModel):
-#     name: str, reactor: Reactor, url: str, update_interval: int = 30
-
-
-TypeLiteralT = TypeVar('TypeLiteralT')
-ParamsT = TypeVar('ParamsT')
-
-
-class GenericMatchRequest(GenericModel, Generic[TypeLiteralT, ParamsT]):
-    type: TypeLiteralT
-    match_params: ParamsT
-
-
-MatchRequest = Union[
-    GenericMatchRequest[Literal['NetfilterMatchOr'], NetfilterMatchOrParams],
-    GenericMatchRequest[Literal['NetfilterMatchPeerId'], NetfilterMatchPeerIdParams],
-    GenericMatchRequest[Literal['NetfilterMatchIPAddress'], NetfilterMatchIPAddressParams]
-]
-
-MatchRequest = Annotated[MatchRequest, Field(discriminator='type')]
-
-
-class TargetRequest(BaseModel):
-    type: str
-    target_params: Dict[str, Any]
-
-
-class NetFilterRequest(BaseModel):
-    chain: ChainRequest
-    match: MatchRequest
-    target: TargetRequest
-
-
-@dataclass(frozen=True)
-class ErrorResponse:
-    message: str
-    success: bool = False
-
 
 BodyValidationResult = NetFilterRequest | ErrorResponse
 
