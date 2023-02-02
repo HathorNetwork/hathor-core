@@ -21,7 +21,6 @@ from hathor.p2p.netfilter import get_table
 from hathor.p2p.netfilter.request.request import NetFilterRequest
 from hathor.p2p.netfilter.response.error_response import ErrorResponse
 from hathor.p2p.netfilter.rule import NetfilterRule
-from hathor.p2p.netfilter.targets import NetfilterAccept, NetfilterJump, NetfilterLog, NetfilterReject
 from hathor.util import json_dumpb, json_loadb
 
 if TYPE_CHECKING:
@@ -29,10 +28,8 @@ if TYPE_CHECKING:
 
     from hathor.manager import HathorManager
 
-BodyValidationResult = NetFilterRequest | ErrorResponse
 
-
-def handle_body_validation(request: 'Request') -> BodyValidationResult:
+def handle_body_validation(request: 'Request') -> NetFilterRequest | ErrorResponse:
     """ Auxiliar method to be used by POST and DELETE requests
         to handle the parameters validation
     """
@@ -99,28 +96,13 @@ class NetfilterRuleResource(Resource):
         except KeyError:
             return json_dumpb(ErrorResponse('Invalid netfilter chain.'))
 
-        target_classes = [NetfilterAccept, NetfilterReject, NetfilterJump, NetfilterLog]
-        targets = {}
-        for target_class in target_classes:
-            targets[target_class.__name__] = target_class
-
         try:
             match = body.match.match_params.build()
         except TypeError:
             return json_dumpb({'success': False, 'message': 'Invalid netfilter match parameters.'})
 
-        # Finally we get the target
-        target_data = body.target
-        target_type = target_data.type
-        target_params = target_data.target_params
-
-        if target_type not in targets:
-            return json_dumpb({'success': False, 'message': 'Invalid netfilter target.'})
-
-        target_class = targets[target_type]
-
         try:
-            target = target_class(**target_params)
+            target = body.target.target_params.build()
         except TypeError:
             return json_dumpb({'success': False, 'message': 'Invalid netfilter target parameters.'})
 
@@ -135,20 +117,18 @@ class NetfilterRuleResource(Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'DELETE')
 
-        response = handle_body_validation(request)
+        body = handle_body_validation(request)
 
-        if isinstance(response, ErrorResponse):
-            return json_dumpb(response)
-
-        body = response.body
+        if isinstance(body, ErrorResponse):
+            return json_dumpb(body)
 
         # Get the filter table chain
         try:
-            chain = get_table('filter').get_chain(body.get('chain'))
+            chain = get_table('filter').get_chain(body.chain)
         except KeyError:
             return json_dumpb({'success': False, 'message': 'Invalid netfilter chain.'})
 
-        uuid = body.get('rule_uuid')
+        uuid = body.rule_uuid
         if not uuid:
             return json_dumpb({'success': False, 'message': 'Invalid uuid for rule.'})
 
