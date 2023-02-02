@@ -355,6 +355,9 @@ class TransactionMetadata:
 
     def get_soft_height(self) -> int:
         """ Returns the soft-height, which is either the soft_height or height metadata.
+
+        The "soft height" is a basically a height preview, this method will always return either the "preview" or the
+        "actual" height (which when set will erase the soft_height).
         """
         if self.soft_height is not None:
             return self.soft_height

@@ -531,11 +531,13 @@ class SyncV2HathorSyncMethodsTestCase(unittest.SyncV2Params, BaseHathorSyncMetho
         self.assertEqual(self.manager1.tx_storage.latest_timestamp, self.manager2.tx_storage.latest_timestamp)
         self.assertEqual(node_sync1.peer_height, node_sync1.synced_height)
         self.assertEqual(node_sync1.peer_height, self.manager1.tx_storage.get_height_best_block())
+        self.assertConsensusEqual(self.manager1, self.manager2)
 
         node_sync2 = self.conn2.proto1.state.sync_manager
         self.assertEqual(self.manager2.tx_storage.latest_timestamp, self.manager3.tx_storage.latest_timestamp)
         self.assertEqual(node_sync2.peer_height, node_sync2.synced_height)
         self.assertEqual(node_sync2.peer_height, self.manager2.tx_storage.get_height_best_block())
+        self.assertConsensusEqual(self.manager2, self.manager3)
 
     def test_block_sync_new_blocks_and_txs(self):
         self._add_new_blocks(25)

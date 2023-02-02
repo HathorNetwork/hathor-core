@@ -157,8 +157,11 @@ class NodeBlockSync(SyncManager):
         # Whether we propagate transactions or not
         self._is_relaying = False
 
-        # Initial value
+        # This stores the known height of the block we're currently downloading, we know the height before we can
+        # calculate it because of checkpoints
         self._blk_height: Optional[int] = None
+
+        # This stores the final height that we expect the last "get blocks" stream to end on
         self._blk_end_height: Optional[int] = None
 
     def get_status(self) -> Dict[str, Any]:
