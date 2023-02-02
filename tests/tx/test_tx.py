@@ -128,19 +128,6 @@ class BaseTransactionTest(unittest.TestCase):
         self.assertTrue(manager2.on_new_tx(block2, sync_checkpoints=True, partial=True, fails_silently=False))
         self.assertEqual(block2.get_metadata().validation, ValidationState.CHECKPOINT)
 
-        # XXX: this stopped failing because we removed the partial children metadata which simplified the validation
-        #      and the expected expection is not raised anymore
-        # # otherwise it should fail if it's not in the checkpoints
-        # manager3 = self.create_peer('testnet', checkpoints=[])
-        # del block2._metadata
-        # block2.storage = manager3.tx_storage
-        # block2.set_height(block2_height)
-        # # failing silently should not raise an exception, but should return False
-        # self.assertFalse(manager3.on_new_tx(block2, sync_checkpoints=True, partial=True, fails_silently=True))
-        # # otherwise it should raise the correct exception
-        # with self.assertRaises(InvalidNewTransaction):
-        #     manager3.on_new_tx(block2, sync_checkpoints=True, partial=True, fails_silently=False)
-
     def test_script(self):
         genesis_block = self.genesis_blocks[0]
 

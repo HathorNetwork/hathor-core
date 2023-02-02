@@ -288,14 +288,6 @@ class Block(BaseTransaction):
         # XXX: it's fine to use `in` with NamedTuples
         if Checkpoint(meta.get_soft_height(), self.hash) in checkpoints:
             return
-        # otherwise at least one child must be checkpoint validated
-        # XXX: because we decided to remove "partial" children metadata, this won't work, we could add a new metadata
-        #      field to track this
-        # for child_tx in map(self.storage.get_transaction, meta.children):
-        #     if child_tx.get_metadata().validation.is_checkpoint():
-        #         return
-        # raise CheckpointError(f'Invalid new block {self.hash_hex}: expected to reach a checkpoint but none of '
-        #                       'its children is checkpoint-valid and its hash does not match any checkpoint')
 
     def verify_weight(self) -> None:
         """Validate minimum block difficulty."""
