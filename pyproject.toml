@@ -98,10 +98,7 @@ warn_unused_ignores = true
 namespace_packages = true
 show_error_codes = true
 show_error_context = true
-plugins = [
-    "mypy_zope:plugin",
-    "pydantic.mypy" # TODO: Not working
-]
+plugins = ["mypy_zope:plugin"]
 
 # these are modules which we don't have type stubs for
 [[tool.mypy.overrides]]
