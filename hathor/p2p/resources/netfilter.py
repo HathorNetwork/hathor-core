@@ -11,9 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
 
+from dataclasses import dataclass
 from json import JSONDecodeError
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, TypeVar, Generic, Type, Literal, Annotated, Union
+
+from pydantic import BaseModel as PydanticBaseModel, Extra, Field
+from pydantic.generics import GenericModel
 
 from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
@@ -36,23 +41,111 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager
 
 
-def handle_body_validation(request: 'Request') -> Dict[str, Any]:
+class BaseModel(PydanticBaseModel):
+    class Config:
+        pass
+        # allow_mutation = False
+        # extra = Extra.forbid
+
+
+class ChainRequest(BaseModel):
+    name: str
+
+#
+# class NetfilterMatchAllParams(BaseModel):
+#     pass
+#
+#
+# class NetfilterMatchAndParams(BaseModel):
+#     a: MatchRequest
+#     b: MatchRequest
+
+
+ModelT = TypeVar('ModelT')
+
+
+class Params(GenericModel, Generic[ModelT]):
+    _model_class: Type[ModelT]
+
+    def build(self) -> ModelT:
+        return self._model_class(**self.dict())
+
+
+class NetfilterMatchOrParams(BaseModel, Params):
+    _model_class = NetfilterMatchOr
+    a: MatchRequest
+    b: MatchRequest
+
+
+class NetfilterMatchIPAddressParams(BaseModel, Params):
+    _model_class = NetfilterMatchIPAddress
+    host: str
+
+
+class NetfilterMatchPeerIdParams(BaseModel, Params):
+    _model_class = NetfilterMatchPeerId
+    peer_id: str
+
+
+# class NetfilterMatchRemoteURLParams(BaseModel):
+#     name: str, reactor: Reactor, url: str, update_interval: int = 30
+
+
+TypeLiteralT = TypeVar('TypeLiteralT')
+ParamsT = TypeVar('ParamsT')
+
+
+class GenericMatchRequest(GenericModel, Generic[TypeLiteralT, ParamsT]):
+    type: TypeLiteralT
+    match_params: ParamsT
+
+
+MatchRequest = Union[
+    GenericMatchRequest[Literal['NetfilterMatchOr'], NetfilterMatchOrParams],
+    GenericMatchRequest[Literal['NetfilterMatchPeerId'], NetfilterMatchPeerIdParams],
+    GenericMatchRequest[Literal['NetfilterMatchIPAddress'], NetfilterMatchIPAddressParams]
+]
+
+MatchRequest = Annotated[MatchRequest, Field(discriminator='type')]
+
+
+class TargetRequest(BaseModel):
+    type: str
+    target_params: Dict[str, Any]
+
+
+class NetFilterRequest(BaseModel):
+    chain: ChainRequest
+    match: MatchRequest
+    target: TargetRequest
+
+
+@dataclass(frozen=True)
+class ErrorResponse:
+    message: str
+    success: bool = False
+
+
+BodyValidationResult = NetFilterRequest | ErrorResponse
+
+
+def handle_body_validation(request: 'Request') -> BodyValidationResult:
     """ Auxiliar method to be used by POST and DELETE requests
         to handle the parameters validation
     """
     if request.content is None:
-        return {'success': False, 'message': 'No body data'}
+        return ErrorResponse('No body data')
 
     raw_data = request.content.read()
     if raw_data is None:
-        return {'success': False, 'message': 'No body data'}
+        return ErrorResponse('No body data')
 
     try:
         data = json_loadb(raw_data)
     except (JSONDecodeError, AttributeError):
-        return {'success': False, 'message': 'Invalid format for body data'}
+        return ErrorResponse('Invalid format for body data')
 
-    return {'success': True, 'body': data}
+    return NetFilterRequest(**data)
 
 
 @register_resource
@@ -92,64 +185,31 @@ class NetfilterRuleResource(Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
 
-        data = handle_body_validation(request)
+        body = handle_body_validation(request)
 
-        if not data['success']:
-            return json_dumpb(data)
-
-        body = data['body']
-
-        chain = body.get('chain')
-        if not chain:
-            return json_dumpb({'success': False, 'message': 'Invalid chain data'})
+        if isinstance(body, ErrorResponse):
+            return json_dumpb(body)
 
         # Get the filter table chain
         try:
-            chain = get_table('filter').get_chain(chain.get('name'))
+            chain = get_table('filter').get_chain(body.chain.name)
         except KeyError:
-            return json_dumpb({'success': False, 'message': 'Invalid netfilter chain.'})
-
-        # Map of classes string with classes for targets and matches
-        # The class name is used in the to_json for the GET API
-        # so we expect the same format in the POST in order to allow dump -> reload
-        # XXX The dump -> reload won't work for matchAnd, matchOr, and remote URL
-        # because their constructor parameters are more complex
-        match_classes = [
-            NetfilterMatchAll,
-            NetfilterMatchAnd,
-            NetfilterMatchOr,
-            NetfilterMatchIPAddress,
-            NetfilterMatchPeerId,
-            NetfilterMatchRemoteURL
-        ]
-        matches = {}
-        for match_class in match_classes:
-            matches[match_class.__name__] = match_class
+            return json_dumpb(ErrorResponse('Invalid netfilter chain.'))
 
         target_classes = [NetfilterAccept, NetfilterReject, NetfilterJump, NetfilterLog]
         targets = {}
         for target_class in target_classes:
             targets[target_class.__name__] = target_class
 
-        # Then we get the match
-        match_data = body.get('match')
-        match_type = match_data.get('type')
-        match_params = match_data.get('match_params', {})
-
-        if match_type not in matches:
-            return json_dumpb({'success': False, 'message': 'Invalid netfilter match.'})
-
-        match_class = matches[match_type]
-
         try:
-            match = match_class(**match_params)
+            match = body.match.match_params.build()
         except TypeError:
             return json_dumpb({'success': False, 'message': 'Invalid netfilter match parameters.'})
 
         # Finally we get the target
-        target_data = body.get('target')
-        target_type = target_data.get('type')
-        target_params = target_data.get('target_params', {})
+        target_data = body.target
+        target_type = target_data.type
+        target_params = target_data.target_params
 
         if target_type not in targets:
             return json_dumpb({'success': False, 'message': 'Invalid netfilter target.'})
@@ -172,12 +232,12 @@ class NetfilterRuleResource(Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'DELETE')
 
-        data = handle_body_validation(request)
+        response = handle_body_validation(request)
 
-        if not data['success']:
-            return json_dumpb(data)
+        if isinstance(response, ErrorResponse):
+            return json_dumpb(response)
 
-        body = data['body']
+        body = response.body
 
         # Get the filter table chain
         try:
