@@ -96,15 +96,8 @@ class NetfilterRuleResource(Resource):
         except KeyError:
             return json_dumpb(ErrorResponse('Invalid netfilter chain.'))
 
-        try:
-            match = body.match.match_params.build()
-        except TypeError:
-            return json_dumpb({'success': False, 'message': 'Invalid netfilter match parameters.'})
-
-        try:
-            target = body.target.target_params.build()
-        except TypeError:
-            return json_dumpb({'success': False, 'message': 'Invalid netfilter target parameters.'})
+        match = body.match.match_params.build()
+        target = body.target.target_params.build()
 
         rule = NetfilterRule(match, target)
 
@@ -117,18 +110,20 @@ class NetfilterRuleResource(Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'DELETE')
 
-        body = handle_body_validation(request)
+        data = handle_body_validation(request)
 
-        if isinstance(body, ErrorResponse):
-            return json_dumpb(body)
+        if not data['success']:
+            return json_dumpb(data)
+
+        body = data['body']
 
         # Get the filter table chain
         try:
-            chain = get_table('filter').get_chain(body.chain)
+            chain = get_table('filter').get_chain(body.get('chain'))
         except KeyError:
             return json_dumpb({'success': False, 'message': 'Invalid netfilter chain.'})
 
-        uuid = body.rule_uuid
+        uuid = body.get('rule_uuid')
         if not uuid:
             return json_dumpb({'success': False, 'message': 'Invalid uuid for rule.'})
 

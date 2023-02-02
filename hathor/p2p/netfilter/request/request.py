@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Literal, Union, Annotated
 from typing import TypeVar, Generic, Type
 
-from pydantic import Field
+from pydantic import Field, BaseModel
 from pydantic.generics import GenericModel
 
 from hathor.p2p.netfilter.matches import NetfilterMatchOr, NetfilterMatchIPAddress, NetfilterMatchPeerId, \
@@ -25,7 +25,6 @@ from hathor.p2p.netfilter.matches import NetfilterMatchOr, NetfilterMatchIPAddre
 from hathor.p2p.netfilter.matches_remote import NetfilterMatchRemoteURL
 from hathor.p2p.netfilter.targets import NetfilterAccept, NetfilterReject, NetfilterJump, NetfilterLog
 from hathor.util import Reactor
-from hathor.utils.pydantic import BaseModel
 
 ModelT = TypeVar('ModelT')
 
@@ -37,33 +36,33 @@ class Params(GenericModel, Generic[ModelT]):
         return self._model_class(**self.dict())
 
 
-class NetfilterMatchAllParams(BaseModel, Params):
+class NetfilterMatchAllParams(Params):
     _model_class = NetfilterMatchAll
 
 
-class NetfilterMatchAndParams(BaseModel, Params):
+class NetfilterMatchAndParams(Params):
     _model_class = NetfilterMatchAnd
     a: MatchRequest
     b: MatchRequest
 
 
-class NetfilterMatchOrParams(BaseModel, Params):
+class NetfilterMatchOrParams(Params):
     _model_class = NetfilterMatchOr
     a: MatchRequest
     b: MatchRequest
 
 
-class NetfilterMatchIPAddressParams(BaseModel, Params):
+class NetfilterMatchIPAddressParams(Params):
     _model_class = NetfilterMatchIPAddress
     host: str
 
 
-class NetfilterMatchPeerIdParams(BaseModel, Params):
+class NetfilterMatchPeerIdParams(Params):
     _model_class = NetfilterMatchPeerId
     peer_id: str
 
 
-class NetfilterMatchRemoteURLParams(BaseModel, Params):
+class NetfilterMatchRemoteURLParams(Params):
     _model_class = NetfilterMatchRemoteURL
     name: str
     reactor: Reactor
@@ -71,19 +70,19 @@ class NetfilterMatchRemoteURLParams(BaseModel, Params):
     update_interval: int = 30
 
 
-class NetfilterAcceptParams(BaseModel, Params):
+class NetfilterAcceptParams(Params):
     _model_class = NetfilterAccept
 
 
-class NetfilterRejectParams(BaseModel, Params):
+class NetfilterRejectParams(Params):
     _model_class = NetfilterReject
 
 
-class NetfilterJumpParams(BaseModel, Params):
+class NetfilterJumpParams(Params):
     _model_class = NetfilterJump
 
 
-class NetfilterLogParams(BaseModel, Params):
+class NetfilterLogParams(Params):
     _model_class = NetfilterLog
     msg: str
 
@@ -106,7 +105,6 @@ class GenericTargetRequest(GenericModel, Generic[TypeLiteralT, ParamsT]):
     target_params: ParamsT
 
 
-# TODO: Move constants to Enum?
 MatchRequestUnion = Union[
     GenericMatchRequest[Literal['NetfilterMatchAll'], NetfilterMatchAllParams],
     GenericMatchRequest[Literal['NetfilterMatchAnd'], NetfilterMatchAndParams],
