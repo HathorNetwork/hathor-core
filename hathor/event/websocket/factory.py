@@ -21,13 +21,12 @@ from structlog import get_logger
 from hathor.event import BaseEvent
 from hathor.event.storage import EventStorage
 from hathor.event.websocket.protocol import HathorEventWebsocketProtocol
-from hathor.event.websocket.request import Request, RequestType, RequestError
+from hathor.event.websocket.request import StreamRequest
 from hathor.event.websocket.response import Response
 from hathor.util import json_dumpb
-from hathor.conf import HathorSettings
+
 
 logger = get_logger()
-settings = HathorSettings()
 
 
 class EventWebsocketFactory(WebSocketServerFactory):
@@ -60,24 +59,8 @@ class EventWebsocketFactory(WebSocketServerFactory):
         self._latest_event_id = event.id
 
         for connection in self._connections:
-            if connection.streaming_is_active:
-                events = self._get_events_to_send(connection, event)
-                response = Response(events, self._latest_event_id)
-                payload = self._dataclass_to_payload(response)
-
-                connection.sendMessage(payload)
-
-    def _get_events_to_send(self, connection: HathorEventWebsocketProtocol, event: BaseEvent) -> List[BaseEvent]:
-        next_event_id = connection.last_received_event_id + 1
-        assert event.id >= next_event_id, 'Cannot reprocess past event.'
-
-        if event.id == next_event_id:
-            return [event]
-
-        events = self._event_storage.iter_events(next_event_id, settings.EVENT_WS_MAX_BATCH_SIZE)
-
-        # TODO: Change iter_events to list
-        return list(events)
+            if event.id == connection.next_event_id:
+                self._send_event_to_connection(connection, event)
 
     def register(self, connection: HathorEventWebsocketProtocol) -> None:
         """Called when a ws connection is opened (after handshaking)."""
@@ -91,26 +74,26 @@ class EventWebsocketFactory(WebSocketServerFactory):
         """Called when a ws connection is closed."""
         self._connections.discard(connection)
 
-    def handle_request_error(self, connection: HathorEventWebsocketProtocol, error: RequestError) -> None:
-        payload = self._dataclass_to_payload(error)
+    def handle_request(self, connection: HathorEventWebsocketProtocol, request: StreamRequest) -> None:
+        connection.last_received_event_id = request.last_received_event_id
+        connection.available_window_size += request.window_size_increment
+
+        events = self._event_storage.iter_from_event(connection.next_event_id)
+
+        for event in events:
+            can_receive = self._send_event_to_connection(connection, event)
+
+            if not can_receive:
+                break
+
+    def _send_event_to_connection(self, connection: HathorEventWebsocketProtocol, event: BaseEvent) -> bool:
+        if connection.available_window_size <= 0:
+            return False
+
+        response = Response(event, self._latest_event_id).__dict__
+        payload = json_dumpb(response)
+
         connection.sendMessage(payload)
+        connection.available_window_size -= 1
 
-    def handle_request(self, connection: HathorEventWebsocketProtocol, request: Request) -> None:
-        match request.type:
-            case RequestType.START_STREAMING_EVENTS:
-                self._handle_start_streaming_events(connection, request.last_received_event_id)
-            case RequestType.STOP_STREAMING_EVENTS:
-                self._handle_stop_streaming_events(connection)
-
-    @staticmethod
-    def _handle_start_streaming_events(connection: HathorEventWebsocketProtocol, last_received_event_id: int) -> None:
-        connection.last_received_event_id = last_received_event_id
-        connection.streaming_is_active = True
-
-    @staticmethod
-    def _handle_stop_streaming_events(connection: HathorEventWebsocketProtocol) -> None:
-        connection.streaming_is_active = False
-
-    @staticmethod
-    def _dataclass_to_payload(obj: dataclass) -> bytes:
-        return json_dumpb(asdict(obj))
+        return True
