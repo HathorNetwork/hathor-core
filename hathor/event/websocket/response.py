@@ -12,13 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass
+from pydantic import NonNegativeInt
 
 from hathor.event import BaseEvent
+from hathor.utils.pydantic import BaseModel
 
 
-# TODO: Migrate to pydantic
-@dataclass
-class Response:
+class Response(BaseModel):
     event: BaseEvent
-    latest_event_id: int
+    latest_event_id: NonNegativeInt

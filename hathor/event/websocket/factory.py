@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import asdict, dataclass
-from typing import Set, Optional, List
+from typing import Set, Optional
 
 from autobahn.twisted.websocket import WebSocketServerFactory
 from structlog import get_logger
@@ -90,7 +89,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
         if connection.available_window_size <= 0:
             return False
 
-        response = Response(event, self._latest_event_id).__dict__
+        response = Response(event=event, latest_event_id=self._latest_event_id).dict()
         payload = json_dumpb(response)
 
         connection.sendMessage(payload)
