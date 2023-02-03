@@ -340,9 +340,6 @@ class HathorSettings(NamedTuple):
     # Interval (in seconds) to broadcast dashboard metrics to websocket connections
     WS_SEND_METRICS_INTERVAL: int = 1
 
-    # Maximum number of events that can be sent in the same WebSocket message
-    EVENT_WS_MAX_BATCH_SIZE: int = 100
-
     # Interval (in seconds) to write data to prometheus
     PROMETHEUS_WRITE_INTERVAL: int = 5
 
