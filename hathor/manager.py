@@ -31,6 +31,7 @@ from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.event.event_manager import EventManager
 from hathor.event.storage import EventStorage
+from hathor.event.websocket import EventWebsocketFactory
 from hathor.exception import (
     DoubleSpendingError,
     HathorError,
@@ -89,7 +90,8 @@ class HathorManager:
                  enable_sync_v1: bool = True, enable_sync_v2: bool = False,
                  capabilities: Optional[List[str]] = None, checkpoints: Optional[List[Checkpoint]] = None,
                  rng: Optional[Random] = None, soft_voided_tx_ids: Optional[Set[bytes]] = None,
-                 environment_info: Optional[EnvironmentInfo] = None) -> None:
+                 environment_info: Optional[EnvironmentInfo] = None,
+                 event_ws_factory: Optional[EventWebsocketFactory] = None) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node. If not given, a new one is created.
@@ -159,10 +161,10 @@ class HathorManager:
         self.tx_storage = tx_storage
         self.tx_storage.pubsub = self.pubsub
         self.event_manager: Optional[EventManager] = None
-        if event_storage is not None:
+        if event_storage is not None and event_ws_factory is not None:
             self.event_manager = EventManager(
                 event_storage=event_storage,
-                event_ws_factory=None,  # TODO: Get event ws factory
+                event_ws_factory=event_ws_factory,
                 pubsub=self.pubsub,
                 reactor=self.reactor,
                 peer_id=not_none(self.my_peer.id),

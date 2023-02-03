@@ -27,7 +27,6 @@ class BaseEvent(BaseModel):
     # Timestamp in which the event was emitted, this follows the unix_timestamp format, it's only informative, events
     # aren't guaranteed to always have sequential timestamps, for example, if the system clock changes between two
     # events it's possible that timestamps will temporarily decrease.
-    # TODO: Why float?
     timestamp: float
     # One of the event types
     type: str  # TODO: Convert type and data to enum and classes

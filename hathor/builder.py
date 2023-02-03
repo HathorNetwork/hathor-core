@@ -56,6 +56,7 @@ class CliBuilder:
         from hathor.conf.get_settings import get_settings_module
         from hathor.daa import TestMode, _set_test_mode
         from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
+        from hathor.event.websocket.factory import EventWebsocketFactory
         from hathor.p2p.netfilter.utils import add_peer_id_blacklist
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
         from hathor.storage import RocksDBStorage
@@ -90,13 +91,15 @@ class CliBuilder:
 
         tx_storage: TransactionStorage
         rocksdb_storage: RocksDBStorage
-        event_storage: Optional[EventStorage] = None
+        self.event_storage: Optional[EventStorage] = None
+        self.event_ws_factory: Optional[EventWebsocketFactory] = None
+
         if args.memory_storage:
             self.check_or_raise(not args.data, '--data should not be used with --memory-storage')
             # if using MemoryStorage, no need to have cache
             tx_storage = TransactionMemoryStorage()
             if args.x_enable_event_queue:
-                event_storage = EventMemoryStorage()
+                self.event_storage = EventMemoryStorage()
             self.check_or_raise(not args.x_rocksdb_indexes, 'RocksDB indexes require RocksDB data')
             self.log.info('with storage', storage_class=type(tx_storage).__name__)
         else:
@@ -109,7 +112,10 @@ class CliBuilder:
                                                    with_index=(not args.cache),
                                                    use_memory_indexes=args.memory_indexes)
             if args.x_enable_event_queue:
-                event_storage = EventRocksDBStorage(rocksdb_storage)
+                self.event_storage = EventRocksDBStorage(rocksdb_storage)
+
+        if args.x_enable_event_queue and self.event_storage is not None:
+            self.event_ws_factory = EventWebsocketFactory(self.event_storage)
 
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
         if args.cache:
@@ -150,7 +156,7 @@ class CliBuilder:
             network=network,
             hostname=hostname,
             tx_storage=tx_storage,
-            event_storage=event_storage,
+            event_storage=self.event_storage,
             wallet=self.wallet,
             stratum_port=args.stratum,
             ssl=True,
@@ -159,6 +165,7 @@ class CliBuilder:
             enable_sync_v2=enable_sync_v2,
             soft_voided_tx_ids=set(settings.SOFT_VOIDED_TX_IDS),
             environment_info=get_environment_info(args=str(args), peer_id=peer_id.id),
+            event_ws_factory=self.event_ws_factory
         )
 
         if args.allow_mining_without_peers:
@@ -308,7 +315,6 @@ class CliBuilder:
             DebugRaiseResource,
             DebugRejectResource,
         )
-        from hathor.event.websocket.factory import EventWebsocketFactory
         from hathor.mining.ws import MiningWebsocketFactory
         from hathor.p2p.resources import (
             AddPeersResource,
@@ -484,8 +490,7 @@ class CliBuilder:
 
         # Event websocket resource
         if args.x_enable_event_queue and self.event_storage is not None:
-            event_ws_factory = EventWebsocketFactory(self.event_storage)
-            root.putChild(b'event_ws', WebSocketResource(event_ws_factory))
+            root.putChild(b'event_ws', WebSocketResource(self.event_ws_factory))
 
         # Websocket stats resource
         root.putChild(b'websocket_stats', WebsocketStatsResource(ws_factory))
@@ -511,3 +516,5 @@ class CliBuilder:
             status_server = self.create_resources(args)
             if not dry_run:
                 self.reactor.listenTCP(args.status, status_server)
+
+        # TODO: Need to register event ws TCP here?
