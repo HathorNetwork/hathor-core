@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Set, Optional
+from typing import Optional, Set
 
 from autobahn.twisted.websocket import WebSocketServerFactory
 from structlog import get_logger
@@ -23,7 +23,6 @@ from hathor.event.websocket.protocol import HathorEventWebsocketProtocol
 from hathor.event.websocket.request import StreamRequest
 from hathor.event.websocket.response import Response
 from hathor.util import json_dumpb
-
 
 logger = get_logger()
 

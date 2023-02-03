@@ -30,7 +30,7 @@ class BaseEvent(BaseModel):
     # TODO: Why float?
     timestamp: float
     # One of the event types
-    type: str # TODO: Convert type and data to enum and classes
+    type: str  # TODO: Convert type and data to enum and classes
     # Variable for event type
     data: Dict
     # Used to link events, for example, many TX_METADATA_CHANGED will have the same group_id when they belong to the

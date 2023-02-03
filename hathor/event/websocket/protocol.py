@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Union
+from typing import Optional
 
 from autobahn.twisted.websocket import WebSocketServerProtocol
 from autobahn.websocket import ConnectionRequest
@@ -21,7 +21,6 @@ from structlog import get_logger
 
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.event.websocket.request import StreamRequest
-from hathor.util import json_loadb
 
 logger = get_logger()
 
@@ -37,7 +36,7 @@ class HathorEventWebsocketProtocol(WebSocketServerProtocol):
 
     @property
     def next_event_id(self) -> int:
-        return self.last_received_event_id + 1
+        return 0 if self.last_received_event_id is None else self.last_received_event_id + 1
 
     def __init__(self):
         super().__init__()
@@ -48,7 +47,7 @@ class HathorEventWebsocketProtocol(WebSocketServerProtocol):
         self._client_peer = request.peer
 
     def onOpen(self) -> None:
-        self.log.info(f'connection established to the event websocket', client_peer=self._client_peer)
+        self.log.info('connection established to the event websocket', client_peer=self._client_peer)
         self.factory.register(self)
 
     def onClose(self, wasClean: bool, code: int, reason: str) -> None:
@@ -64,4 +63,3 @@ class HathorEventWebsocketProtocol(WebSocketServerProtocol):
         except ValidationError as e:
             # TODO
             raise e
-
