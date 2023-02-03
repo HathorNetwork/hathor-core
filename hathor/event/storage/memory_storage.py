@@ -34,14 +34,22 @@ class EventMemoryStorage(EventStorage):
             self._last_group_id = event.group_id
         self._events.append(event)
 
+    def get_event(self, key: int) -> Optional[BaseEvent]:
+        if key < 0:
+            raise ValueError('key must be non-negative')
+        if key >= len(self._events):
+            return None
+        event = self._events[key]
+        assert event.id == key
+        return event
+
     def get_last_event(self) -> Optional[BaseEvent]:
         return self._last_event
 
     def get_last_group_id(self) -> Optional[int]:
         return self._last_group_id
 
-    def iter_events(self, from_event_id: int, max_amount: int) -> Iterator[BaseEvent]:
-        to_event_id = min(from_event_id + max_amount, len(self._events))
-        events = self._events[from_event_id:to_event_id]
-
-        return iter(events)
+    def iter_from_event(self, key: int) -> Iterator[BaseEvent]:
+        while key < len(self._events):
+            yield self._events[key]
+            key += 1

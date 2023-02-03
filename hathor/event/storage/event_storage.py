@@ -25,6 +25,11 @@ class EventStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def get_event(self, key: int) -> Optional[BaseEvent]:
+        """ Get a stored event by key"""
+        raise NotImplementedError
+
+    @abstractmethod
     def get_last_event(self) -> Optional[BaseEvent]:
         """ Get the last event that was emitted, this is used to help resume when restarting."""
         raise NotImplementedError
@@ -35,6 +40,6 @@ class EventStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def iter_events(self, from_event_id: int, max_amount: int) -> Iterator[BaseEvent]:
-        """ Iterate through events starting from the event with the given id, yielding up to the provided amount"""
+    def iter_from_event(self, key: int) -> Iterator[BaseEvent]:
+        """ Iterate through events starting from the event with the given key"""
         raise NotImplementedError
