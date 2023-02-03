@@ -12,46 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import annotations
+from typing import Optional
 
-from dataclasses import dataclass
-from enum import Enum
-from typing import Union, Dict, Optional
+from pydantic import NonNegativeInt
 
-
-class RequestType(Enum):
-    START_STREAMING_EVENTS = 'START_STREAMING_EVENTS'
-    STOP_STREAMING_EVENTS = 'STOP_STREAMING_EVENTS'
-
-    @classmethod
-    def values(cls):
-        return [t.value for t in cls]
+from hathor.utils.pydantic import BaseModel
 
 
-@dataclass
-class RequestError:
-    message: str
-
-
-@dataclass
-class Request:
-    type: RequestType
-    last_received_event_id: Optional[int]
-
-    @classmethod
-    def from_dict(cls, request_dict: Dict) -> Union[Request | RequestError]:
-        raw_request_type = request_dict.get('type')
-        event_id = request_dict.get('last_received_event_id')
-
-        try:
-            request_type = RequestType[raw_request_type]
-        except KeyError:
-            return RequestError(
-                f'Unknown request type \'{raw_request_type}\'. Known types are {RequestType.values()}.'
-            )
-
-        if request_type == RequestType.START_STREAMING_EVENTS and event_id is not None:
-            if not isinstance(event_id, int) or event_id < 0:
-                return RequestError(f'Invalid \'event_id\': {event_id}. Must be a positive integer or null.')
-
-        return Request(request_type, event_id)
+class StreamRequest(BaseModel):
+    last_received_event_id: Optional[NonNegativeInt]
+    window_size_increment: NonNegativeInt

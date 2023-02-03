@@ -13,12 +13,12 @@
 # limitations under the License.
 
 from dataclasses import dataclass
-from typing import List
 
 from hathor.event import BaseEvent
 
 
+# TODO: Migrate to pydantic
 @dataclass
 class Response:
-    events: List[BaseEvent]
+    event: BaseEvent
     latest_event_id: int
