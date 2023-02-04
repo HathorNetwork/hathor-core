@@ -26,6 +26,7 @@ from twisted.internet.posixbase import PosixReactorBase
 from twisted.web import server
 from twisted.web.resource import Resource
 
+from hathor.conf import HathorSettings
 from hathor.exception import BuilderError
 from hathor.indexes import IndexesManager
 from hathor.manager import HathorManager
@@ -50,9 +51,13 @@ class CliBuilder:
         if not condition:
             raise BuilderError(message)
 
-    def create_manager(self, reactor: PosixReactorBase, args: Namespace) -> HathorManager:
+    def create_manager(
+        self,
+        reactor: PosixReactorBase,
+        args: Namespace,
+        settings: Optional[HathorSettings] = None
+    ) -> HathorManager:
         import hathor
-        from hathor.conf import HathorSettings
         from hathor.conf.get_settings import get_settings_module
         from hathor.daa import TestMode, _set_test_mode
         from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
@@ -69,7 +74,7 @@ class CliBuilder:
         )
         from hathor.util import get_environment_info
 
-        settings = HathorSettings()
+        settings = settings or HathorSettings()
         settings_module = get_settings_module()  # only used for logging its location
         self.log = logger.new()
         self.reactor = reactor
