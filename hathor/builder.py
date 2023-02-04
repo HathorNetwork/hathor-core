@@ -26,7 +26,7 @@ from twisted.internet.posixbase import PosixReactorBase
 from twisted.web import server
 from twisted.web.resource import Resource
 
-from hathor.conf import HathorSettings
+from hathor.conf import HathorSettings as DefaultHathorSettings, HathorSettings
 from hathor.exception import BuilderError
 from hathor.indexes import IndexesManager
 from hathor.manager import HathorManager
@@ -74,7 +74,7 @@ class CliBuilder:
         )
         from hathor.util import get_environment_info
 
-        settings = settings or HathorSettings()
+        settings = settings or DefaultHathorSettings()
         settings_module = get_settings_module()  # only used for logging its location
         self.log = logger.new()
         self.reactor = reactor
@@ -311,7 +311,6 @@ class CliBuilder:
         return prometheus
 
     def create_resources(self, args: Namespace) -> server.Site:
-        from hathor.conf import HathorSettings
         from hathor.debug_resources import (
             DebugCrashResource,
             DebugLogResource,
@@ -374,7 +373,7 @@ class CliBuilder:
         )
         from hathor.websocket import HathorAdminWebsocketFactory, WebsocketStatsResource
 
-        settings = HathorSettings()
+        settings = DefaultHathorSettings()
         cpu = get_cpu_profiler()
 
         # TODO get this from a file. How should we do with the factory?
