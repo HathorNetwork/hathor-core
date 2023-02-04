@@ -659,18 +659,18 @@ class EventMocker:
         self.next_id += 1
         return next_id
 
-    def generate_mocked_event(self, id: Optional[int] = None) -> BaseEvent:
-        """ Generates a mocked event with a best block found message
+    def generate_mocked_event(self, event_id: Optional[int] = None, group_id: Optional[int] = None) -> BaseEvent:
+        """ Generates a mocked event with the best block found message
         """
-        hash = hashlib.sha256(self.generate_random_word(10).encode('utf-8'))
-        peer_id_mock = hash.hexdigest()
+        _hash = hashlib.sha256(self.generate_random_word(10).encode('utf-8'))
+        peer_id_mock = _hash.hexdigest()
 
         return BaseEvent(
-            id=id or self.gen_next_id(),
+            id=event_id or self.gen_next_id(),
             peer_id=peer_id_mock,
             timestamp=1658892990,
             type='network:best_block_found',
-            group_id=0,
+            group_id=group_id,
             data={
                 "data": "test"
             },

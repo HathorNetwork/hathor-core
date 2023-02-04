@@ -34,6 +34,9 @@ class EventRocksDBStorage(EventStorage):
         self._last_group_id: Optional[int] = self._db_get_last_group_id()
 
     def iter_from_event(self, key: int) -> Iterator[BaseEvent]:
+        if key < 0:
+            raise ValueError(f'event.id \'{key}\' must be non-negative')
+
         it = self._db.itervalues(self._cf_event)
         it.seek(int_to_bytes(key, 8))
 
@@ -57,8 +60,6 @@ class EventRocksDBStorage(EventStorage):
         return int.from_bytes(last_group_id, byteorder='big', signed=False)
 
     def save_event(self, event: BaseEvent) -> None:
-        if event.id < 0:
-            raise ValueError('event.id must be non-negative')
         if (self._last_event is None and event.id != 0) or \
                 (self._last_event is not None and event.id > self._last_event.id + 1):
             raise ValueError('invalid event.id, ids must be sequential and leave no gaps')
@@ -72,7 +73,7 @@ class EventRocksDBStorage(EventStorage):
 
     def get_event(self, key: int) -> Optional[BaseEvent]:
         if key < 0:
-            raise ValueError('key must be non-negative')
+            raise ValueError(f'event.id \'{key}\' must be non-negative')
         event = self._db.get((self._cf_event, int_to_bytes(key, 8)))
         if event is None:
             return None
