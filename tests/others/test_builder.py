@@ -1,8 +1,13 @@
-from typing import List
+from typing import List, Optional
 
 import pytest
 
 from hathor.builder import CliBuilder
+from hathor.conf.get_settings import HathorSettings as DefaultHathorSettings
+from hathor.conf.settings import HathorSettings
+from hathor.event import EventManager
+from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage
+from hathor.event.websocket import EventWebsocketFactory
 from hathor.exception import BuilderError
 from hathor.indexes import MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
@@ -30,9 +35,9 @@ class BuilderTestCase(unittest.TestCase):
             self.builder.register_resources(args, dry_run=True)
         self.assertEqual(err_msg, str(cm.exception))
 
-    def _build(self, args: List[str]) -> HathorManager:
+    def _build(self, args: List[str], settings: Optional[HathorSettings] = None) -> HathorManager:
         args = self.parser.parse_args(args)
-        manager = self.builder.create_manager(self.reactor, args)
+        manager = self.builder.create_manager(self.reactor, args, settings)
         self.assertIsNotNone(manager)
         self.builder.register_resources(args, dry_run=True)
         return manager
@@ -52,6 +57,7 @@ class BuilderTestCase(unittest.TestCase):
         self.assertNotIn(SyncVersion.V2, manager.connections._sync_factories)
         self.assertFalse(self.builder._build_prometheus)
         self.assertFalse(self.builder._build_status)
+        self.assertIsNone(manager.event_manager)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_cache_storage(self):
@@ -139,3 +145,21 @@ class BuilderTestCase(unittest.TestCase):
         data_dir = self.mkdtemp()
         args = ['--memory-indexes', '--x-rocksdb-indexes', '--data', data_dir]
         self._build_with_error(args, 'You cannot use --memory-indexes and --x-rocksdb-indexes.')
+
+    @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
+    def test_event_queue_with_rocksdb_storage(self):
+        settings = DefaultHathorSettings()._replace(ENABLE_EVENT_QUEUE_FEATURE=True)
+        data_dir = self.mkdtemp()
+        manager = self._build(['--x-enable-event-queue', '--rocksdb-storage', '--data', data_dir], settings)
+
+        self.assertIsInstance(manager.event_manager, EventManager)
+        self.assertIsInstance(manager.event_manager._event_storage, EventRocksDBStorage)
+        self.assertIsInstance(manager.event_manager._event_ws_factory, EventWebsocketFactory)
+
+    def test_event_queue_with_memory_storage(self):
+        settings = DefaultHathorSettings()._replace(ENABLE_EVENT_QUEUE_FEATURE=True)
+        manager = self._build(['--x-enable-event-queue', '--memory-storage'], settings)
+
+        self.assertIsInstance(manager.event_manager, EventManager)
+        self.assertIsInstance(manager.event_manager._event_storage, EventMemoryStorage)
+        self.assertIsInstance(manager.event_manager._event_ws_factory, EventWebsocketFactory)

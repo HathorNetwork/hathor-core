@@ -14,12 +14,13 @@
 
 from __future__ import annotations
 
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from autobahn.twisted.websocket import WebSocketServerProtocol
 from autobahn.websocket import ConnectionRequest
 from pydantic import ValidationError
 from structlog import get_logger
+
 from hathor.event.websocket.request import StreamRequest
 
 if TYPE_CHECKING:
