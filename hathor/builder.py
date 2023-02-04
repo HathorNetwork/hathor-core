@@ -26,7 +26,8 @@ from twisted.internet.posixbase import PosixReactorBase
 from twisted.web import server
 from twisted.web.resource import Resource
 
-from hathor.conf import HathorSettings as DefaultHathorSettings, HathorSettings
+from hathor.conf.get_settings import HathorSettings as DefaultHathorSettings
+from hathor.conf.settings import HathorSettings
 from hathor.exception import BuilderError
 from hathor.indexes import IndexesManager
 from hathor.manager import HathorManager
