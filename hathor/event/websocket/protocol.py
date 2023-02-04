@@ -12,15 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from __future__ import annotations
+
+from typing import Optional, TYPE_CHECKING
 
 from autobahn.twisted.websocket import WebSocketServerProtocol
 from autobahn.websocket import ConnectionRequest
 from pydantic import ValidationError
 from structlog import get_logger
-
-from hathor.event.websocket import EventWebsocketFactory
 from hathor.event.websocket.request import StreamRequest
+
+if TYPE_CHECKING:
+    from hathor.event.websocket import EventWebsocketFactory
 
 logger = get_logger()
 
