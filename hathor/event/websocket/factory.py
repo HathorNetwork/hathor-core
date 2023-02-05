@@ -19,7 +19,7 @@ from structlog import get_logger
 
 from hathor.event import BaseEvent
 from hathor.event.storage import EventStorage
-from hathor.event.websocket.protocol import HathorEventWebsocketProtocol
+from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.request import StreamRequest
 from hathor.event.websocket.response import Response
 from hathor.util import json_dumpb
@@ -31,9 +31,9 @@ class EventWebsocketFactory(WebSocketServerFactory):
     """ Websocket that will handle events
     """
 
-    protocol = HathorEventWebsocketProtocol
+    protocol = EventWebsocketProtocol
     _is_running = False
-    _connections: Set[HathorEventWebsocketProtocol] = set()
+    _connections: Set[EventWebsocketProtocol] = set()
     _latest_event_id: Optional[int] = None
 
     def __init__(self, event_storage: EventStorage):
@@ -60,7 +60,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
             if event.id == connection.next_event_id:
                 self._send_event_to_connection(connection, event)
 
-    def register(self, connection: HathorEventWebsocketProtocol) -> None:
+    def register(self, connection: EventWebsocketProtocol) -> None:
         """Called when a ws connection is opened (after handshaking)."""
         if not self._is_running:
             # TODO: Rejecting a connection should send something to the client
@@ -68,11 +68,11 @@ class EventWebsocketFactory(WebSocketServerFactory):
 
         self._connections.add(connection)
 
-    def unregister(self, connection: HathorEventWebsocketProtocol) -> None:
+    def unregister(self, connection: EventWebsocketProtocol) -> None:
         """Called when a ws connection is closed."""
         self._connections.discard(connection)
 
-    def handle_request(self, connection: HathorEventWebsocketProtocol, request: StreamRequest) -> None:
+    def handle_request(self, connection: EventWebsocketProtocol, request: StreamRequest) -> None:
         connection.last_received_event_id = request.last_received_event_id
         connection.available_window_size += request.window_size_increment
 
@@ -84,7 +84,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
             if not can_receive:
                 break
 
-    def _send_event_to_connection(self, connection: HathorEventWebsocketProtocol, event: BaseEvent) -> bool:
+    def _send_event_to_connection(self, connection: EventWebsocketProtocol, event: BaseEvent) -> bool:
         if connection.available_window_size <= 0:
             return False
 

@@ -13,6 +13,6 @@
 # limitations under the License.
 
 from hathor.event.websocket.factory import EventWebsocketFactory
-from hathor.event.websocket.protocol import HathorEventWebsocketProtocol
+from hathor.event.websocket.protocol import EventWebsocketProtocol
 
-__all__ = ['EventWebsocketFactory', 'HathorEventWebsocketProtocol']
+__all__ = ['EventWebsocketFactory', 'EventWebsocketProtocol']

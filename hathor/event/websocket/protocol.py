@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 logger = get_logger()
 
 
-class HathorEventWebsocketProtocol(WebSocketServerProtocol):
+class EventWebsocketProtocol(WebSocketServerProtocol):
     """ Websocket protocol, basically forwards some events to the Websocket factory.
     """
 
