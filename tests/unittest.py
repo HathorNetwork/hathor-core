@@ -124,7 +124,8 @@ class TestCase(unittest.TestCase):
 
     def create_peer(self, network, peer_id=None, wallet=None, tx_storage=None, unlock_wallet=True, wallet_index=False,
                     capabilities=None, full_verification=True, enable_sync_v1=None, enable_sync_v2=None,
-                    checkpoints=None, utxo_index=False, event_storage=None, use_memory_index=None, start_manager=True):
+                    checkpoints=None, utxo_index=False, event_storage=None, use_memory_index=None, start_manager=True,
+                    event_ws_factory=None):
         if enable_sync_v1 is None:
             assert hasattr(self, '_enable_sync_v1'), ('`_enable_sync_v1` has no default by design, either set one on '
                                                       'the test class or pass `enable_sync_v1` by argument')
@@ -181,6 +182,7 @@ class TestCase(unittest.TestCase):
             wallet=wallet,
             tx_storage=tx_storage,
             event_storage=event_storage,
+            event_ws_factory=event_ws_factory,
             capabilities=capabilities,
             rng=self.rng,
             enable_sync_v1=enable_sync_v1,
