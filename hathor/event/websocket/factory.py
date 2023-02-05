@@ -41,10 +41,18 @@ class EventWebsocketFactory(WebSocketServerFactory):
         self.log = logger.new()
         self._event_storage = event_storage
 
+        latest_event = self._event_storage.get_last_event()
+
+        if latest_event is not None:
+            self._latest_event_id = latest_event.id
+
     def start(self):
+        # TODO: Only send events if is running
+        self.log.info('event websocket started')
         self._is_running = True
 
     def stop(self):
+        self.log.info('event websocket stopped')
         self._is_running = False
 
         for connection in self._connections:
@@ -62,6 +70,8 @@ class EventWebsocketFactory(WebSocketServerFactory):
 
     def register(self, connection: EventWebsocketProtocol) -> None:
         """Called when a ws connection is opened (after handshaking)."""
+        self.log.info('registering connection', client_peer=connection.client_peer)
+
         if not self._is_running:
             # TODO: Rejecting a connection should send something to the client
             return
@@ -70,6 +80,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
 
     def unregister(self, connection: EventWebsocketProtocol) -> None:
         """Called when a ws connection is closed."""
+        self.log.info('unregistering connection', client_peer=connection.client_peer)
         self._connections.discard(connection)
 
     def handle_request(self, connection: EventWebsocketProtocol, request: StreamRequest) -> None:
@@ -79,6 +90,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
         events = self._event_storage.iter_from_event(connection.next_event_id)
 
         for event in events:
+            # TODO: Prevent send event if < last_received
             can_receive = self._send_event_to_connection(connection, event)
 
             if not can_receive:

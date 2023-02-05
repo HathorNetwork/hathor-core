@@ -34,7 +34,7 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
     """
 
     factory: EventWebsocketFactory
-    _client_peer: str
+    client_peer: Optional[str] = None
     last_received_event_id: Optional[int] = None
     available_window_size: int = 0
 
@@ -48,14 +48,14 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
 
     def onConnect(self, request: ConnectionRequest) -> None:
         self.log.info('connection opened to the event websocket, starting handshake...', request=request)
-        self._client_peer = request.peer
+        self.client_peer = request.peer
 
     def onOpen(self) -> None:
-        self.log.info('connection established to the event websocket', client_peer=self._client_peer)
+        self.log.info('connection established to the event websocket', client_peer=self.client_peer)
         self.factory.register(self)
 
     def onClose(self, wasClean: bool, code: int, reason: str) -> None:
-        self.log.info('connection closed to the event websocket', client_peer=self._client_peer, reason=reason)
+        self.log.info('connection closed to the event websocket', client_peer=self.client_peer, reason=reason)
         self.factory.unregister(self)
 
     def onMessage(self, payload: bytes, isBinary: bool) -> None:
