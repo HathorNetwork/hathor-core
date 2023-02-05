@@ -180,8 +180,6 @@ class EventManager:
         )
 
     def _create_non_group_edge_event(self, event_type: HathorEvents, event_args: EventArguments) -> BaseEvent:
-        assert self._last_event is not None, 'Cannot end event group if there are no events.'
-
         group_id = None if self._event_group_is_closed() else self._last_event.group_id
 
         return self._create_event(
