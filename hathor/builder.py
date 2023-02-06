@@ -494,7 +494,7 @@ class CliBuilder:
         ws_factory.subscribe(self.manager.pubsub)
 
         # Event websocket resource
-        if args.x_enable_event_queue and self.event_storage is not None:
+        if args.x_enable_event_queue and self.event_ws_factory is not None:
             root.putChild(b'event_ws', WebSocketResource(self.event_ws_factory))
 
         # Websocket stats resource
