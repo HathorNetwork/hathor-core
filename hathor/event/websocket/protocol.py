@@ -40,6 +40,7 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
 
     @property
     def next_event_id(self) -> int:
+        """The ID of the next event the client expects."""
         return 0 if self.last_received_event_id is None else self.last_received_event_id + 1
 
     def __init__(self):

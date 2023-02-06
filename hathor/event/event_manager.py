@@ -97,6 +97,10 @@ def _build_event_data(event_type: HathorEvents, event_args: EventArguments) -> D
 
 
 class EventManager:
+    """Class that manages integration events.
+
+    Events are received from PubSub, persisted on the storage and sent to WebSocket clients.
+    """
     def __init__(
         self,
         event_storage: EventStorage,

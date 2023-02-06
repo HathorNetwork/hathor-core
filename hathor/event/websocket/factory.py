@@ -48,10 +48,12 @@ class EventWebsocketFactory(WebSocketServerFactory):
             self._latest_event_id = latest_event.id
 
     def start(self):
+        """Start the WebSocket server. Required to be able to send events."""
         self.log.info('event websocket started')
         self._is_running = True
 
     def stop(self):
+        """Stop the WebSocket server. No events can be sent."""
         self.log.info('event websocket stopped')
         self._is_running = False
 
@@ -61,7 +63,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
         self._connections = set()
 
     def broadcast_event(self, event: BaseEvent) -> None:
-        """Called when there is a new event, only after subscribing."""
+        """Broadcast the event to each registered client."""
         self._latest_event_id = event.id
 
         for connection in self._connections:
@@ -69,7 +71,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
                 self._send_event_to_connection(connection, event)
 
     def register(self, connection: EventWebsocketProtocol) -> None:
-        """Called when a ws connection is opened (after handshaking)."""
+        """Registers a client. Called when a ws connection is opened (after handshaking)."""
         if not self._is_running:
             response = EventWebSocketNotRunningResponse().dict()
             payload = json_dumpb(response)
@@ -81,11 +83,12 @@ class EventWebsocketFactory(WebSocketServerFactory):
         self._connections.add(connection)
 
     def unregister(self, connection: EventWebsocketProtocol) -> None:
-        """Called when a ws connection is closed."""
+        """Unregisters a client. Called when a ws connection is closed."""
         self.log.info('unregistering connection', client_peer=connection.client_peer)
         self._connections.discard(connection)
 
     def handle_valid_request(self, connection: EventWebsocketProtocol, request: StreamRequest) -> None:
+        """Handle a valid client request."""
         connection.last_received_event_id = request.last_received_event_id
         connection.available_window_size += request.window_size_increment
 
@@ -99,6 +102,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
 
     @staticmethod
     def handle_invalid_request(connection: EventWebsocketProtocol, validation_error: ValidationError) -> None:
+        """Handle an invalid client request."""
         response = BadRequestResponse(errors=validation_error.errors()).dict()
         payload = json_dumpb(response)
 

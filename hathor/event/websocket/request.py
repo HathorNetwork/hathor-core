@@ -20,5 +20,11 @@ from hathor.utils.pydantic import BaseModel
 
 
 class StreamRequest(BaseModel):
+    """Class that represents a client request to stream events.
+
+    Args:
+        last_received_event_id: The ID of the last event successfully processed by the requesting client.
+        window_size_increment: The amount of events the client is able to process next.
+    """
     last_received_event_id: Optional[NonNegativeInt]
     window_size_increment: NonNegativeInt
