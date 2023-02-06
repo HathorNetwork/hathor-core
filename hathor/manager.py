@@ -162,9 +162,10 @@ class HathorManager:
         self.tx_storage.pubsub = self.pubsub
         self.event_manager: Optional[EventManager] = None
         if event_storage is not None and event_ws_factory is not None:
+            self.event_ws_factory = event_ws_factory
             self.event_manager = EventManager(
                 event_storage=event_storage,
-                event_ws_factory=event_ws_factory,
+                event_ws_factory=self.event_ws_factory,
                 pubsub=self.pubsub,
                 reactor=self.reactor,
                 peer_id=not_none(self.my_peer.id),
@@ -318,6 +319,9 @@ class HathorManager:
         if self.stratum_factory:
             self.stratum_factory.start()
 
+        if self.event_ws_factory:
+            self.event_ws_factory.start()
+
         # Start running
         self.tx_storage.start_running_manager()
 
@@ -348,6 +352,9 @@ class HathorManager:
             wait_stratum = self.stratum_factory.stop()
             if wait_stratum:
                 waits.append(wait_stratum)
+
+        if self.event_ws_factory:
+            self.event_ws_factory.stop()
 
         self.tx_storage.flush()
 
