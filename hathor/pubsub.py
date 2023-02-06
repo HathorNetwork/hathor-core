@@ -111,9 +111,6 @@ class HathorEvents(Enum):
 
         BLOCK_METADATA_CHANGED
             Triggered when consensus algorithm changes a metadata from an existing block
-
-        NEW_EVENT
-            Triggered when an event is processed by the event manager after it is saved
     """
     MANAGER_ON_START = 'manager:on_start'
     MANAGER_ON_STOP = 'manager:on_stop'
@@ -167,8 +164,6 @@ class HathorEvents(Enum):
     TX_METADATA_CHANGED = 'tx:metadata_changed'
 
     BLOCK_METADATA_CHANGED = 'block:metadata_changed'
-
-    NEW_EVENT = 'event:new'
 
 
 class EventArguments:
