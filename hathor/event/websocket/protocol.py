@@ -48,8 +48,8 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
         self.log = logger.new()
 
     def onConnect(self, request: ConnectionRequest) -> None:
-        self.log.info('connection opened to the event websocket, starting handshake...', request=request)
         self.client_peer = request.peer
+        self.log.info('connection opened to the event websocket, starting handshake...', client_peer=self.client_peer)
 
     def onOpen(self) -> None:
         self.log.info('connection established to the event websocket', client_peer=self.client_peer)
