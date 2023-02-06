@@ -119,6 +119,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
         payload = json_dumpb(response)
 
         connection.sendMessage(payload)
+        connection.last_received_event_id = event.id
         connection.available_window_size -= 1
 
         return True

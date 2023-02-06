@@ -105,6 +105,29 @@ def test_broadcast_event(
     )
 
 
+def test_broadcast_multiple_events_multiple_connections():
+    factory = _get_factory()
+    connection1 = EventWebsocketProtocol()
+    connection1.available_window_size = 10
+    connection1.sendMessage = Mock()
+    connection2 = EventWebsocketProtocol()
+    connection2.available_window_size = 10
+    connection2.sendMessage = Mock()
+
+    factory.start()
+    factory.register(connection1)
+    factory.register(connection2)
+
+    for event_id in range(10):
+        event = _create_event(event_id)
+        factory.broadcast_event(event)
+
+    assert connection1.sendMessage.call_count == 10
+    assert connection2.sendMessage.call_count == 10
+    assert connection1.available_window_size == 0
+    assert connection2.available_window_size == 0
+
+
 @pytest.mark.parametrize(
     ['n_starting_events', 'starting_window_size', 'last_received_event_id', 'window_size_increment',
      'expected_events_sent'],
@@ -163,7 +186,12 @@ def test_handle_valid_request(
     factory.handle_valid_request(connection, request)
 
     assert connection.sendMessage.call_count == expected_events_sent
-    assert connection.last_received_event_id == last_received_event_id
+
+    if last_received_event_id is None:
+        assert connection.last_received_event_id == (None if expected_events_sent == 0 else expected_events_sent - 1)
+    else:
+        assert connection.last_received_event_id == expected_events_sent + last_received_event_id
+
     assert connection.available_window_size == starting_window_size + window_size_increment - expected_events_sent
 
 
