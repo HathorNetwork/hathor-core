@@ -14,7 +14,7 @@
 from enum import Enum
 from typing import Any, Dict, List
 
-from pydantic import NonNegativeInt, Field
+from pydantic import Field, NonNegativeInt
 
 from hathor.event import BaseEvent
 from hathor.utils.pydantic import BaseModel

@@ -22,7 +22,7 @@ from hathor.event import BaseEvent
 from hathor.event.storage import EventStorage
 from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.request import StreamRequest
-from hathor.event.websocket.response import EventResponse, ErrorResponse
+from hathor.event.websocket.response import ErrorResponse, EventResponse
 from hathor.util import json_dumpb
 
 logger = get_logger()
@@ -98,7 +98,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
                 break
 
     @staticmethod
-    def handle_invalid_request(connection: EventWebsocketProtocol, validation_error: ValidationError):
+    def handle_invalid_request(connection: EventWebsocketProtocol, validation_error: ValidationError) -> None:
         response = ErrorResponse(errors=validation_error.errors()).dict()
         payload = json_dumpb(response)
 

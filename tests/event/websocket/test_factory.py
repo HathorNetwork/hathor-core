@@ -11,7 +11,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-from typing import Optional, Iterator
+from typing import Iterator, Optional
 from unittest.mock import Mock
 
 import pytest
@@ -45,7 +45,7 @@ def test_broadcast_event(
     starting_window_size: int,
     last_received_event_id: Optional[int],
     expected_to_send_event: bool
-):
+) -> None:
     factory = _get_factory()
     event = _create_event(event_id)
     connection = EventWebsocketProtocol()
@@ -58,11 +58,14 @@ def test_broadcast_event(
     factory.broadcast_event(event)
 
     assert connection.sendMessage.call_count == (1 if expected_to_send_event else 0)
-    assert connection.available_window_size == (starting_window_size - 1 if expected_to_send_event else starting_window_size)
+    assert connection.available_window_size == (
+        starting_window_size - 1 if expected_to_send_event else starting_window_size
+    )
 
 
 @pytest.mark.parametrize(
-    ['n_starting_events', 'starting_window_size', 'last_received_event_id', 'window_size_increment', 'expected_events_sent'],
+    ['n_starting_events', 'starting_window_size', 'last_received_event_id', 'window_size_increment',
+     'expected_events_sent'],
     [
         # fresh peer
         (0, 0, None, 30, 0),
@@ -105,7 +108,7 @@ def test_handle_valid_request(
     last_received_event_id: Optional[int],
     window_size_increment: int,
     expected_events_sent: int
-):
+) -> None:
     factory = _get_factory(n_starting_events)
     connection = EventWebsocketProtocol()
     connection.available_window_size = starting_window_size
@@ -134,7 +137,7 @@ def test_handle_invalid_request():
     connection.sendMessage.assert_called_once()
 
 
-def _get_factory(n_starting_events: int = 0):
+def _get_factory(n_starting_events: int = 0) -> EventWebsocketFactory:
     event_storage = _get_event_storage(n_starting_events)
 
     return EventWebsocketFactory(event_storage)
@@ -142,8 +145,12 @@ def _get_factory(n_starting_events: int = 0):
 
 def _get_event_storage(n_starting_events: int) -> EventStorage:
     event_storage = Mock(spec_set=EventStorage)
-    event_storage.get_last_event = Mock(return_value=None if n_starting_events == 0 else _create_event(n_starting_events))
-    event_storage.iter_from_event = Mock(side_effect=lambda from_event_id: _iter_from_event(from_event_id, n_starting_events))
+    event_storage.get_last_event = Mock(
+        return_value=None if n_starting_events == 0 else _create_event(n_starting_events)
+    )
+    event_storage.iter_from_event = Mock(
+        side_effect=lambda from_event_id: _iter_from_event(from_event_id, n_starting_events)
+    )
 
     return event_storage
 
@@ -152,7 +159,7 @@ def _iter_from_event(from_event_id: int, n_starting_events: int) -> Iterator[Bas
     return (_create_event(event_id) for event_id in range(from_event_id, n_starting_events))
 
 
-def _create_event(event_id: int):
+def _create_event(event_id: int) -> BaseEvent:
     return BaseEvent(
         peer_id='123',
         id=event_id,
