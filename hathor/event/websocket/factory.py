@@ -22,7 +22,7 @@ from hathor.event import BaseEvent
 from hathor.event.storage import EventStorage
 from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.request import StreamRequest
-from hathor.event.websocket.response import ErrorResponse, EventResponse
+from hathor.event.websocket.response import BadRequestResponse, EventResponse, EventWebSocketNotRunningResponse
 from hathor.util import json_dumpb
 
 logger = get_logger()
@@ -48,7 +48,6 @@ class EventWebsocketFactory(WebSocketServerFactory):
             self._latest_event_id = latest_event.id
 
     def start(self):
-        # TODO: Only send events if is running
         self.log.info('event websocket started')
         self._is_running = True
 
@@ -71,11 +70,13 @@ class EventWebsocketFactory(WebSocketServerFactory):
 
     def register(self, connection: EventWebsocketProtocol) -> None:
         """Called when a ws connection is opened (after handshaking)."""
-        self.log.info('registering connection', client_peer=connection.client_peer)
-
         if not self._is_running:
-            # TODO: Rejecting a connection should send something to the client
-            return
+            response = EventWebSocketNotRunningResponse().dict()
+            payload = json_dumpb(response)
+
+            return connection.sendMessage(payload)
+
+        self.log.info('registering connection', client_peer=connection.client_peer)
 
         self._connections.add(connection)
 
@@ -91,7 +92,6 @@ class EventWebsocketFactory(WebSocketServerFactory):
         events = self._event_storage.iter_from_event(connection.next_event_id)
 
         for event in events:
-            # TODO: Prevent send event if < last_received
             can_receive = self._send_event_to_connection(connection, event)
 
             if not can_receive:
@@ -99,7 +99,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
 
     @staticmethod
     def handle_invalid_request(connection: EventWebsocketProtocol, validation_error: ValidationError) -> None:
-        response = ErrorResponse(errors=validation_error.errors()).dict()
+        response = BadRequestResponse(errors=validation_error.errors()).dict()
         payload = json_dumpb(response)
 
         connection.sendMessage(payload)

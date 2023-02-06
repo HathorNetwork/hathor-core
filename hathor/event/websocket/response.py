@@ -22,7 +22,8 @@ from hathor.utils.pydantic import BaseModel
 
 class ResponseType(Enum):
     EVENT = 'EVENT'
-    REQUEST_ERROR = 'REQUEST_ERROR'
+    BAD_REQUEST = 'BAD_REQUEST'
+    EVENT_WS_NOT_RUNNING = 'EVENT_WS_NOT_RUNNING'
 
 
 class EventResponse(BaseModel, use_enum_values=True):
@@ -31,6 +32,10 @@ class EventResponse(BaseModel, use_enum_values=True):
     latest_event_id: NonNegativeInt
 
 
-class ErrorResponse(BaseModel, use_enum_values=True):
-    type: ResponseType = Field(default=ResponseType.REQUEST_ERROR.value, const=True)
+class BadRequestResponse(BaseModel, use_enum_values=True):
+    type: ResponseType = Field(default=ResponseType.BAD_REQUEST.value, const=True)
     errors: List[Dict[str, Any]]
+
+
+class EventWebSocketNotRunningResponse(BaseModel, use_enum_values=True):
+    type: ResponseType = Field(default=ResponseType.EVENT_WS_NOT_RUNNING.value, const=True)

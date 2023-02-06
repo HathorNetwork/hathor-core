@@ -521,5 +521,3 @@ class CliBuilder:
             status_server = self.create_resources(args)
             if not dry_run:
                 self.reactor.listenTCP(args.status, status_server)
-
-        # TODO: Need to register event ws TCP here?

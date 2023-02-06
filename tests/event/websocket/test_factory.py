@@ -24,6 +24,41 @@ from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.request import StreamRequest
 
 
+def test_started_register():
+    factory = _get_factory()
+    connection = EventWebsocketProtocol()
+    connection.sendMessage = Mock()
+
+    factory.start()
+    factory.register(connection)
+
+    connection.sendMessage.assert_not_called()
+
+
+def test_non_started_register():
+    factory = _get_factory()
+    connection = EventWebsocketProtocol()
+    connection.sendMessage = Mock()
+
+    factory.register(connection)
+
+    message = b'{"type":"EVENT_WS_NOT_RUNNING"}'
+    connection.sendMessage.assert_called_once_with(message)
+
+
+def test_stopped_register():
+    factory = _get_factory()
+    connection = Mock(spec_set=EventWebsocketProtocol)
+    connection.sendMessage = Mock()
+
+    factory.start()
+    factory.stop()
+    factory.register(connection)
+
+    message = b'{"type":"EVENT_WS_NOT_RUNNING"}'
+    connection.sendMessage.assert_called_once_with(message)
+
+
 @pytest.mark.parametrize(
     ['event_id', 'starting_window_size', 'last_received_event_id', 'expected_to_send_event'],
     [
@@ -57,7 +92,14 @@ def test_broadcast_event(
     factory.register(connection)
     factory.broadcast_event(event)
 
-    assert connection.sendMessage.call_count == (1 if expected_to_send_event else 0)
+    message = f'{{"type":"EVENT","event":{{"peer_id":"123","id":{event_id},"timestamp":123456.0,"type":"type",' \
+              f'"data":{{}},"group_id":null}},"latest_event_id":{event_id}}}'.encode('utf8')
+
+    if expected_to_send_event:
+        connection.sendMessage.assert_called_once_with(message)
+    else:
+        connection.sendMessage.assert_not_called()
+
     assert connection.available_window_size == (
         starting_window_size - 1 if expected_to_send_event else starting_window_size
     )
@@ -130,11 +172,12 @@ def test_handle_invalid_request():
     connection = EventWebsocketProtocol()
     connection.sendMessage = Mock()
     validation_error = Mock(spec_set=ValidationError)
-    validation_error.errors = Mock(return_value=[])
+    validation_error.errors = Mock(return_value=[{'problem': 'some_problem'}])
 
     factory.handle_invalid_request(connection, validation_error)
 
-    connection.sendMessage.assert_called_once()
+    message = b'{"type":"BAD_REQUEST","errors":[{"problem":"some_problem"}]}'
+    connection.sendMessage.assert_called_once_with(message)
 
 
 def _get_factory(n_starting_events: int = 0) -> EventWebsocketFactory:
