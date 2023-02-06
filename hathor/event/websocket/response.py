@@ -11,13 +11,26 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from enum import Enum
+from typing import Any, Dict, List
 
-from pydantic import NonNegativeInt
+from pydantic import NonNegativeInt, Field
 
 from hathor.event import BaseEvent
 from hathor.utils.pydantic import BaseModel
 
 
-class Response(BaseModel):
+class ResponseType(Enum):
+    EVENT = 'EVENT'
+    REQUEST_ERROR = 'REQUEST_ERROR'
+
+
+class EventResponse(BaseModel, use_enum_values=True):
+    type: ResponseType = Field(default=ResponseType.EVENT.value, const=True)
     event: BaseEvent
     latest_event_id: NonNegativeInt
+
+
+class ErrorResponse(BaseModel, use_enum_values=True):
+    type: ResponseType = Field(default=ResponseType.REQUEST_ERROR.value, const=True)
+    errors: List[Dict[str, Any]]

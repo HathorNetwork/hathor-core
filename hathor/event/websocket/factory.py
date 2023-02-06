@@ -15,13 +15,14 @@
 from typing import Optional, Set
 
 from autobahn.twisted.websocket import WebSocketServerFactory
+from pydantic import ValidationError
 from structlog import get_logger
 
 from hathor.event import BaseEvent
 from hathor.event.storage import EventStorage
 from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.request import StreamRequest
-from hathor.event.websocket.response import Response
+from hathor.event.websocket.response import EventResponse, ErrorResponse
 from hathor.util import json_dumpb
 
 logger = get_logger()
@@ -83,7 +84,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
         self.log.info('unregistering connection', client_peer=connection.client_peer)
         self._connections.discard(connection)
 
-    def handle_request(self, connection: EventWebsocketProtocol, request: StreamRequest) -> None:
+    def handle_valid_request(self, connection: EventWebsocketProtocol, request: StreamRequest) -> None:
         connection.last_received_event_id = request.last_received_event_id
         connection.available_window_size += request.window_size_increment
 
@@ -96,11 +97,21 @@ class EventWebsocketFactory(WebSocketServerFactory):
             if not can_receive:
                 break
 
+    @staticmethod
+    def handle_invalid_request(connection: EventWebsocketProtocol, validation_error: ValidationError):
+        response = ErrorResponse(errors=validation_error.errors()).dict()
+        payload = json_dumpb(response)
+
+        connection.sendMessage(payload)
+
     def _send_event_to_connection(self, connection: EventWebsocketProtocol, event: BaseEvent) -> bool:
         if connection.available_window_size <= 0:
             return False
 
-        response = Response(event=event, latest_event_id=self._latest_event_id).dict()
+        response = EventResponse(
+            event=event,
+            latest_event_id=self._latest_event_id
+        ).dict()
         payload = json_dumpb(response)
 
         connection.sendMessage(payload)

@@ -19,6 +19,7 @@ import pytest
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.request import StreamRequest
+from hathor.util import json_dumpb
 
 
 @pytest.fixture
@@ -61,12 +62,34 @@ def test_on_close(factory):
     factory.unregister.assert_called_once_with(protocol)
 
 
-def test_on_message(factory):
-    payload = b'{"last_received_event_id": 100, "window_size_increment": "50"}'
-    request = StreamRequest(last_received_event_id=100, window_size_increment=50)
+@pytest.mark.parametrize('last_received_event_id', [None, 0, 1, 10])
+@pytest.mark.parametrize('window_size_increment', [0, 1, 10])
+def test_on_valid_message(factory, last_received_event_id, window_size_increment):
+    payload = {
+        'last_received_event_id': last_received_event_id,
+        'window_size_increment': window_size_increment
+    }
+    request = StreamRequest(last_received_event_id=last_received_event_id, window_size_increment=window_size_increment)
     protocol = EventWebsocketProtocol()
     protocol.factory = factory
 
-    protocol.onMessage(payload, False)
+    protocol.onMessage(json_dumpb(payload), False)
 
-    factory.handle_request.assert_called_once_with(protocol, request)
+    factory.handle_valid_request.assert_called_once_with(protocol, request)
+
+
+@pytest.mark.parametrize(
+    ['last_received_event_id', 'window_size_increment'],
+    [(-1, 0), (0, -1)]
+)
+def test_on_invalid_message(factory, last_received_event_id, window_size_increment):
+    payload = {
+        'last_received_event_id': last_received_event_id,
+        'window_size_increment': window_size_increment
+    }
+    protocol = EventWebsocketProtocol()
+    protocol.factory = factory
+
+    protocol.onMessage(json_dumpb(payload), False)
+
+    factory.handle_invalid_request.assert_called_once()

@@ -63,7 +63,6 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
 
         try:
             request = StreamRequest.parse_raw(payload)
-            self.factory.handle_request(self, request)
-        except ValidationError as e:
-            # TODO
-            raise e
+            self.factory.handle_valid_request(self, request)
+        except ValidationError as error:
+            self.factory.handle_invalid_request(self, error)

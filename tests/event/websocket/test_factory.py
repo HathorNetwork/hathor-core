@@ -15,6 +15,7 @@ from typing import Optional, Iterator
 from unittest.mock import Mock
 
 import pytest
+from pydantic import ValidationError
 
 from hathor.event import BaseEvent
 from hathor.event.storage import EventStorage
@@ -98,7 +99,7 @@ def test_broadcast_event(
         (150, 0, 149, 50, 0),
     ]
 )
-def test_handle_request(
+def test_handle_valid_request(
     n_starting_events: int,
     starting_window_size: int,
     last_received_event_id: Optional[int],
@@ -114,11 +115,23 @@ def test_handle_request(
         window_size_increment=window_size_increment
     )
 
-    factory.handle_request(connection, request)
+    factory.handle_valid_request(connection, request)
 
     assert connection.sendMessage.call_count == expected_events_sent
     assert connection.last_received_event_id == last_received_event_id
     assert connection.available_window_size == starting_window_size + window_size_increment - expected_events_sent
+
+
+def test_handle_invalid_request():
+    factory = _get_factory()
+    connection = EventWebsocketProtocol()
+    connection.sendMessage = Mock()
+    validation_error = Mock(spec_set=ValidationError)
+    validation_error.errors = Mock(return_value=[])
+
+    factory.handle_invalid_request(connection, validation_error)
+
+    connection.sendMessage.assert_called_once()
 
 
 def _get_factory(n_starting_events: int = 0):
