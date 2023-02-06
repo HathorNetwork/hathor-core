@@ -34,13 +34,13 @@ class EventWebsocketFactory(WebSocketServerFactory):
 
     protocol = EventWebsocketProtocol
     _is_running = False
-    _connections: Set[EventWebsocketProtocol] = set()
     _latest_event_id: Optional[int] = None
 
     def __init__(self, event_storage: EventStorage):
         super().__init__()
         self.log = logger.new()
         self._event_storage = event_storage
+        self._connections: Set[EventWebsocketProtocol] = set()
 
         latest_event = self._event_storage.get_last_event()
 
@@ -60,7 +60,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
         for connection in self._connections:
             connection.sendClose()
 
-        self._connections = set()
+        self._connections.clear()
 
     def broadcast_event(self, event: BaseEvent) -> None:
         """Broadcast the event to each registered client."""
