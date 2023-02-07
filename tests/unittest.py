@@ -32,12 +32,24 @@ def shorten_hash(container):
     return container_type(h[-2:].hex() for h in container)
 
 
-def _load_peer_id_pool(file_path: str = 'tests/peer_id_pool.json') -> Iterator[PeerId]:
+def _load_peer_id_pool(file_path: Optional[str] = None) -> Iterator[PeerId]:
     import json
+
+    if file_path is None:
+        file_path = _get_default_peer_id_pool_filepath()
+
     with open(file_path) as peer_id_pool_file:
         peer_id_pool_dict = json.load(peer_id_pool_file)
         for peer_id_dict in peer_id_pool_dict:
             yield PeerId.create_from_json(peer_id_dict)
+
+
+def _get_default_peer_id_pool_filepath():
+    this_file_path = os.path.dirname(__file__)
+    file_name = 'peer_id_pool.json'
+    file_path = os.path.join(this_file_path, file_name)
+
+    return file_path
 
 
 PEER_ID_POOL = list(_load_peer_id_pool())
