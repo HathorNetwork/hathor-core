@@ -75,6 +75,7 @@ setproctitle = "^1.2.2"
 sentry-sdk = {version = "^1.5.11", optional = true}
 structlog-sentry = {version = "^1.4.0", optional = true}
 hathorlib = "0.3.0"
+pydantic = "~1.10.4"
 
 [tool.poetry.extras]
 sentry = ["sentry-sdk", "structlog-sentry"]
@@ -97,7 +98,10 @@ warn_unused_ignores = true
 namespace_packages = true
 show_error_codes = true
 show_error_context = true
-plugins = ["mypy_zope:plugin"]
+plugins = [
+    "pydantic.mypy",
+    "mypy_zope:plugin"
+]
 
 # these are modules which we don't have type stubs for
 [[tool.mypy.overrides]]
@@ -121,6 +125,10 @@ module = [
     'structlog_sentry',
 ]
 ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+warn_untyped_fields = true
 
 [tool.pytest.ini_options]
 minversion = "6.0"
