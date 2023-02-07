@@ -37,11 +37,11 @@ def test_init():
 def test_next_event_id():
     protocol = EventWebsocketProtocol()
 
-    assert protocol.next_event_id == 0
+    assert protocol.next_expected_event_id() == 0
 
     protocol.last_received_event_id = 5
 
-    assert protocol.next_event_id == 6
+    assert protocol.next_expected_event_id() == 6
 
 
 def test_on_open(factory):

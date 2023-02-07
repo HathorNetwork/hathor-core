@@ -38,9 +38,12 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
     last_received_event_id: Optional[int] = None
     window_size: int = 0
 
-    @property
-    def next_event_id(self) -> int:
-        """The ID of the next event the client expects."""
+    def can_receive_event(self) -> bool:
+        """Returns whether this client is available to receive and event."""
+        return self.window_size > 0
+
+    def next_expected_event_id(self) -> int:
+        """Returns the ID of the next event the client expects."""
         return 0 if self.last_received_event_id is None else self.last_received_event_id + 1
 
     def __init__(self):

@@ -66,9 +66,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
         self._latest_event_id = event.id
 
         for connection in self._connections:
-            if event.id == connection.next_event_id:
-                if connection.window_size <= 0:
-                    continue
+            if connection.can_receive_event():
                 self._send_event_to_connection(connection, event)
 
     def register(self, connection: EventWebsocketProtocol) -> None:
@@ -104,14 +102,17 @@ class EventWebsocketFactory(WebSocketServerFactory):
         connection.sendMessage(payload)
 
     def _send_next_event_to_connection(self, connection: EventWebsocketProtocol):
-        if connection.window_size <= 0:
+        if not connection.can_receive_event():
             return
 
-        if event := self._event_storage.get_event(connection.next_event_id):
+        if event := self._event_storage.get_event(connection.next_expected_event_id()):
             self._send_event_to_connection(connection, event)
             self._reactor.callLater(0, self._send_next_event_to_connection, connection)
 
     def _send_event_to_connection(self, connection: EventWebsocketProtocol, event: BaseEvent):
+        if event.id != connection.next_expected_event_id():
+            return
+
         response = EventResponse(event=event, latest_event_id=self._latest_event_id)
         payload = json_dumpb(response.dict())
 

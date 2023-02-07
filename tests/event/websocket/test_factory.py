@@ -12,8 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import time
-from typing import Iterator, Optional
+from typing import Optional
 from unittest.mock import Mock
 
 import pytest
@@ -21,7 +20,7 @@ from pydantic import ValidationError
 from twisted.internet.task import Clock
 
 from hathor.event import BaseEvent
-from hathor.event.storage import EventMemoryStorage, EventStorage
+from hathor.event.storage import EventMemoryStorage
 from hathor.event.websocket.factory import EventWebsocketFactory
 from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.request import StreamRequest
