@@ -30,8 +30,6 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.event.event_manager import EventManager
-from hathor.event.storage import EventStorage
-from hathor.event.websocket import EventWebsocketFactory
 from hathor.exception import (
     DoubleSpendingError,
     HathorError,
@@ -85,13 +83,12 @@ class HathorManager:
     def __init__(self, reactor: Reactor, *, pubsub: PubSubManager, peer_id: Optional[PeerId] = None,
                  network: Optional[str] = None, hostname: Optional[str] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
-                 event_storage: Optional[EventStorage] = None,
+                 event_manager: Optional[EventManager] = None,
                  stratum_port: Optional[int] = None, ssl: bool = True,
                  enable_sync_v1: bool = True, enable_sync_v2: bool = False,
                  capabilities: Optional[List[str]] = None, checkpoints: Optional[List[Checkpoint]] = None,
                  rng: Optional[Random] = None, soft_voided_tx_ids: Optional[Set[bytes]] = None,
-                 environment_info: Optional[EnvironmentInfo] = None,
-                 event_ws_factory: Optional[EventWebsocketFactory] = None) -> None:
+                 environment_info: Optional[EnvironmentInfo] = None) -> None:
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node. If not given, a new one is created.
@@ -160,16 +157,9 @@ class HathorManager:
         self.pubsub = pubsub
         self.tx_storage = tx_storage
         self.tx_storage.pubsub = self.pubsub
-        self.event_manager: Optional[EventManager] = None
-        if event_storage is not None and event_ws_factory is not None:
-            self.event_ws_factory = event_ws_factory
-            self.event_manager = EventManager(
-                event_storage=event_storage,
-                event_ws_factory=self.event_ws_factory,
-                pubsub=self.pubsub,
-                reactor=self.reactor,
-                peer_id=not_none(self.my_peer.id),
-            )
+
+        self._event_manager = event_manager
+
         if enable_sync_v2:
             assert self.tx_storage.indexes is not None
             self.log.debug('enable sync-v2 indexes')
@@ -319,8 +309,8 @@ class HathorManager:
         if self.stratum_factory:
             self.stratum_factory.start()
 
-        if self.event_ws_factory:
-            self.event_ws_factory.start()
+        if self._event_manager:
+            self._event_manager.start(not_none(self.my_peer.id))
 
         # Start running
         self.tx_storage.start_running_manager()
@@ -353,8 +343,8 @@ class HathorManager:
             if wait_stratum:
                 waits.append(wait_stratum)
 
-        if self.event_ws_factory:
-            self.event_ws_factory.stop()
+        if self._event_manager:
+            self._event_manager.stop()
 
         self.tx_storage.flush()
 

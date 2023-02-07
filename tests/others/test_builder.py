@@ -55,7 +55,7 @@ class BuilderTestCase(unittest.TestCase):
         self.assertNotIn(SyncVersion.V2, manager.connections._sync_factories)
         self.assertFalse(self.builder._build_prometheus)
         self.assertFalse(self.builder._build_status)
-        self.assertIsNone(manager.event_manager)
+        self.assertIsNone(manager._event_manager)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_cache_storage(self):
@@ -149,13 +149,13 @@ class BuilderTestCase(unittest.TestCase):
         data_dir = self.mkdtemp()
         manager = self._build(['--x-enable-event-queue', '--rocksdb-storage', '--data', data_dir])
 
-        self.assertIsInstance(manager.event_manager, EventManager)
-        self.assertIsInstance(manager.event_manager._event_storage, EventRocksDBStorage)
-        self.assertIsInstance(manager.event_manager._event_ws_factory, EventWebsocketFactory)
+        self.assertIsInstance(manager._event_manager, EventManager)
+        self.assertIsInstance(manager._event_manager._event_storage, EventRocksDBStorage)
+        self.assertIsInstance(manager._event_manager._event_ws_factory, EventWebsocketFactory)
 
     def test_event_queue_with_memory_storage(self):
         manager = self._build(['--x-enable-event-queue', '--memory-storage'])
 
-        self.assertIsInstance(manager.event_manager, EventManager)
-        self.assertIsInstance(manager.event_manager._event_storage, EventMemoryStorage)
-        self.assertIsInstance(manager.event_manager._event_ws_factory, EventWebsocketFactory)
+        self.assertIsInstance(manager._event_manager, EventManager)
+        self.assertIsInstance(manager._event_manager._event_storage, EventMemoryStorage)
+        self.assertIsInstance(manager._event_manager._event_ws_factory, EventWebsocketFactory)

@@ -101,13 +101,15 @@ class EventManager:
 
     Events are received from PubSub, persisted on the storage and sent to WebSocket clients.
     """
+
+    _peer_id: str
+
     def __init__(
         self,
         event_storage: EventStorage,
         event_ws_factory: EventWebsocketFactory,
         pubsub: PubSubManager,
-        reactor: Reactor,
-        peer_id: str
+        reactor: Reactor
     ):
         self.log = logger.new()
 
@@ -115,13 +117,19 @@ class EventManager:
         self._event_storage = event_storage
         self._event_ws_factory = event_ws_factory
         self._pubsub = pubsub
-        self._peer_id = peer_id
 
         self._last_event = self._event_storage.get_last_event()
         self._last_existing_group_id = self._event_storage.get_last_group_id()
 
         self._assert_closed_event_group()
         self._subscribe_events()
+
+    def start(self, peer_id: str) -> None:
+        self._peer_id = peer_id
+        self._event_ws_factory.start()
+
+    def stop(self):
+        self._event_ws_factory.stop()
 
     def _assert_closed_event_group(self):
         # XXX: we must check that the last event either does not belong to an event group or that it just closed an

@@ -26,6 +26,7 @@ from twisted.internet.posixbase import PosixReactorBase
 from twisted.web import server
 from twisted.web.resource import Resource
 
+from hathor.event import EventManager
 from hathor.exception import BuilderError
 from hathor.indexes import IndexesManager
 from hathor.manager import HathorManager
@@ -114,9 +115,6 @@ class CliBuilder:
             if args.x_enable_event_queue:
                 self.event_storage = EventRocksDBStorage(rocksdb_storage)
 
-        if args.x_enable_event_queue and self.event_storage is not None:
-            self.event_ws_factory = EventWebsocketFactory(self.event_storage)
-
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
         if args.cache:
             self.check_or_raise(not args.memory_storage, '--cache should not be used with --memory-storage')
@@ -141,6 +139,17 @@ class CliBuilder:
 
         pubsub = PubSubManager(reactor)
 
+        event_manager: Optional[EventManager] = None
+        if args.x_enable_event_queue:
+            assert self.event_storage is not None, 'cannot create EventManager without EventStorage'
+            self.event_ws_factory = EventWebsocketFactory(self.event_storage)
+            event_manager = EventManager(
+                event_storage=self.event_storage,
+                event_ws_factory=self.event_ws_factory,
+                pubsub=pubsub,
+                reactor=reactor
+            )
+
         if args.wallet_index and tx_storage.indexes is not None:
             self.log.debug('enable wallet indexes')
             self.enable_wallet_index(tx_storage.indexes, pubsub)
@@ -156,7 +165,7 @@ class CliBuilder:
             network=network,
             hostname=hostname,
             tx_storage=tx_storage,
-            event_storage=self.event_storage,
+            event_manager=event_manager,
             wallet=self.wallet,
             stratum_port=args.stratum,
             ssl=True,
@@ -165,7 +174,6 @@ class CliBuilder:
             enable_sync_v2=enable_sync_v2,
             soft_voided_tx_ids=set(settings.SOFT_VOIDED_TX_IDS),
             environment_info=get_environment_info(args=str(args), peer_id=peer_id.id),
-            event_ws_factory=self.event_ws_factory
         )
 
         if args.allow_mining_without_peers:
