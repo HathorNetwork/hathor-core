@@ -11,14 +11,17 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+
+import time
 from typing import Iterator, Optional
 from unittest.mock import Mock
 
 import pytest
 from pydantic import ValidationError
+from twisted.internet.task import Clock
 
 from hathor.event import BaseEvent
-from hathor.event.storage import EventStorage
+from hathor.event.storage import EventMemoryStorage, EventStorage
 from hathor.event.websocket.factory import EventWebsocketFactory
 from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.request import StreamRequest
@@ -183,6 +186,7 @@ def test_handle_valid_request(
     )
 
     factory.handle_valid_request(connection, request)
+    factory._reactor.advance(0)
 
     assert connection.sendMessage.call_count == expected_events_sent
 
@@ -208,25 +212,14 @@ def test_handle_invalid_request():
 
 
 def _get_factory(n_starting_events: int = 0) -> EventWebsocketFactory:
-    event_storage = _get_event_storage(n_starting_events)
+    clock = Clock()
+    event_storage = EventMemoryStorage()
 
-    return EventWebsocketFactory(event_storage)
+    for event_id in range(n_starting_events):
+        event = _create_event(event_id)
+        event_storage.save_event(event)
 
-
-def _get_event_storage(n_starting_events: int) -> EventStorage:
-    event_storage = Mock(spec_set=EventStorage)
-    event_storage.get_last_event = Mock(
-        return_value=None if n_starting_events == 0 else _create_event(n_starting_events)
-    )
-    event_storage.iter_from_event = Mock(
-        side_effect=lambda from_event_id: _iter_from_event(from_event_id, n_starting_events)
-    )
-
-    return event_storage
-
-
-def _iter_from_event(from_event_id: int, n_starting_events: int) -> Iterator[BaseEvent]:
-    return (_create_event(event_id) for event_id in range(from_event_id, n_starting_events))
+    return EventWebsocketFactory(clock, event_storage)
 
 
 def _create_event(event_id: int) -> BaseEvent:

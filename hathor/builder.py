@@ -142,7 +142,7 @@ class CliBuilder:
         event_manager: Optional[EventManager] = None
         if args.x_enable_event_queue:
             assert self.event_storage is not None, 'cannot create EventManager without EventStorage'
-            self.event_ws_factory = EventWebsocketFactory(self.event_storage)
+            self.event_ws_factory = EventWebsocketFactory(reactor, self.event_storage)
             event_manager = EventManager(
                 event_storage=self.event_storage,
                 event_ws_factory=self.event_ws_factory,
