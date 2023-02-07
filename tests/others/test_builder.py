@@ -1,10 +1,8 @@
-from typing import List, Optional
+from typing import List
 
 import pytest
 
 from hathor.builder import CliBuilder
-from hathor.conf.get_settings import HathorSettings as DefaultHathorSettings
-from hathor.conf.settings import HathorSettings
 from hathor.event import EventManager
 from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage
 from hathor.event.websocket import EventWebsocketFactory
@@ -35,9 +33,9 @@ class BuilderTestCase(unittest.TestCase):
             self.builder.register_resources(args, dry_run=True)
         self.assertEqual(err_msg, str(cm.exception))
 
-    def _build(self, args: List[str], settings: Optional[HathorSettings] = None) -> HathorManager:
+    def _build(self, args: List[str]) -> HathorManager:
         args = self.parser.parse_args(args)
-        manager = self.builder.create_manager(self.reactor, args, settings)
+        manager = self.builder.create_manager(self.reactor, args)
         self.assertIsNotNone(manager)
         self.builder.register_resources(args, dry_run=True)
         return manager
@@ -148,17 +146,15 @@ class BuilderTestCase(unittest.TestCase):
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_event_queue_with_rocksdb_storage(self):
-        settings = DefaultHathorSettings()._replace(ENABLE_EVENT_QUEUE_FEATURE=True)
         data_dir = self.mkdtemp()
-        manager = self._build(['--x-enable-event-queue', '--rocksdb-storage', '--data', data_dir], settings)
+        manager = self._build(['--x-enable-event-queue', '--rocksdb-storage', '--data', data_dir])
 
         self.assertIsInstance(manager.event_manager, EventManager)
         self.assertIsInstance(manager.event_manager._event_storage, EventRocksDBStorage)
         self.assertIsInstance(manager.event_manager._event_ws_factory, EventWebsocketFactory)
 
     def test_event_queue_with_memory_storage(self):
-        settings = DefaultHathorSettings()._replace(ENABLE_EVENT_QUEUE_FEATURE=True)
-        manager = self._build(['--x-enable-event-queue', '--memory-storage'], settings)
+        manager = self._build(['--x-enable-event-queue', '--memory-storage'])
 
         self.assertIsInstance(manager.event_manager, EventManager)
         self.assertIsInstance(manager.event_manager._event_storage, EventMemoryStorage)
