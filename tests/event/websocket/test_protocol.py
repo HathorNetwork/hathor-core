@@ -31,7 +31,7 @@ def test_init():
     protocol = EventWebsocketProtocol()
 
     assert protocol.last_received_event_id is None
-    assert protocol.available_window_size == 0
+    assert protocol.window_size == 0
 
 
 def test_next_event_id():
@@ -63,13 +63,13 @@ def test_on_close(factory):
 
 
 @pytest.mark.parametrize('last_received_event_id', [None, 0, 1, 10])
-@pytest.mark.parametrize('window_size_increment', [0, 1, 10])
-def test_on_valid_message(factory, last_received_event_id, window_size_increment):
+@pytest.mark.parametrize('window_size', [0, 1, 10])
+def test_on_valid_message(factory, last_received_event_id, window_size):
     payload = {
         'last_received_event_id': last_received_event_id,
-        'window_size_increment': window_size_increment
+        'window_size': window_size
     }
-    request = StreamRequest(last_received_event_id=last_received_event_id, window_size_increment=window_size_increment)
+    request = StreamRequest(last_received_event_id=last_received_event_id, window_size=window_size)
     protocol = EventWebsocketProtocol()
     protocol.factory = factory
 
@@ -79,13 +79,13 @@ def test_on_valid_message(factory, last_received_event_id, window_size_increment
 
 
 @pytest.mark.parametrize(
-    ['last_received_event_id', 'window_size_increment'],
+    ['last_received_event_id', 'window_size'],
     [(-1, 0), (0, -1)]
 )
-def test_on_invalid_message(factory, last_received_event_id, window_size_increment):
+def test_on_invalid_message(factory, last_received_event_id, window_size):
     payload = {
         'last_received_event_id': last_received_event_id,
-        'window_size_increment': window_size_increment
+        'window_size': window_size
     }
     protocol = EventWebsocketProtocol()
     protocol.factory = factory

@@ -24,7 +24,7 @@ class StreamRequest(BaseModel):
 
     Args:
         last_received_event_id: The ID of the last event successfully processed by the requesting client.
-        window_size_increment: The amount of events the client is able to process next.
+        window_size: The amount of events the client is able to process.
     """
     last_received_event_id: Optional[NonNegativeInt]
-    window_size_increment: NonNegativeInt
+    window_size: NonNegativeInt

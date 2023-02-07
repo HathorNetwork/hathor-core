@@ -84,7 +84,7 @@ def test_broadcast_event(
     factory = _get_factory()
     event = _create_event(event_id)
     connection = EventWebsocketProtocol()
-    connection.available_window_size = starting_window_size
+    connection.window_size = starting_window_size
     connection.last_received_event_id = last_received_event_id
     connection.sendMessage = Mock()
 
@@ -100,7 +100,7 @@ def test_broadcast_event(
     else:
         connection.sendMessage.assert_not_called()
 
-    assert connection.available_window_size == (
+    assert connection.window_size == (
         starting_window_size - 1 if expected_to_send_event else starting_window_size
     )
 
@@ -108,10 +108,10 @@ def test_broadcast_event(
 def test_broadcast_multiple_events_multiple_connections():
     factory = _get_factory()
     connection1 = EventWebsocketProtocol()
-    connection1.available_window_size = 10
+    connection1.window_size = 10
     connection1.sendMessage = Mock()
     connection2 = EventWebsocketProtocol()
-    connection2.available_window_size = 10
+    connection2.window_size = 10
     connection2.sendMessage = Mock()
 
     factory.start()
@@ -124,13 +124,12 @@ def test_broadcast_multiple_events_multiple_connections():
 
     assert connection1.sendMessage.call_count == 10
     assert connection2.sendMessage.call_count == 10
-    assert connection1.available_window_size == 0
-    assert connection2.available_window_size == 0
+    assert connection1.window_size == 0
+    assert connection2.window_size == 0
 
 
 @pytest.mark.parametrize(
-    ['n_starting_events', 'starting_window_size', 'last_received_event_id', 'window_size_increment',
-     'expected_events_sent'],
+    ['n_starting_events', 'starting_window_size', 'last_received_event_id', 'window_size', 'expected_events_sent'],
     [
         # fresh peer
         (0, 0, None, 30, 0),
@@ -138,9 +137,9 @@ def test_broadcast_multiple_events_multiple_connections():
         (60, 0, None, 30, 30),
 
         # peer with starting window but no last event
-        (0, 10, None, 30, 0),
-        (20, 10, None, 30, 20),
-        (60, 10, None, 30, 40),
+        (0, 10, None, 40, 0),
+        (20, 10, None, 40, 20),
+        (60, 10, None, 40, 40),
 
         # peer with no starting window but with last event
         (0, 0, 5, 30, 0),
@@ -148,9 +147,9 @@ def test_broadcast_multiple_events_multiple_connections():
         (60, 0, 5, 30, 30),
 
         # peer with starting window and last event
-        (0, 10, 5, 30, 0),
-        (20, 10, 5, 30, 14),
-        (60, 10, 5, 30, 40),
+        (0, 10, 5, 40, 0),
+        (20, 10, 5, 40, 14),
+        (60, 10, 5, 40, 40),
 
         # peer processing events one by one
         (0, 0, None, 1, 0),
@@ -171,16 +170,16 @@ def test_handle_valid_request(
     n_starting_events: int,
     starting_window_size: int,
     last_received_event_id: Optional[int],
-    window_size_increment: int,
+    window_size: int,
     expected_events_sent: int
 ) -> None:
     factory = _get_factory(n_starting_events)
     connection = EventWebsocketProtocol()
-    connection.available_window_size = starting_window_size
+    connection.window_size = starting_window_size
     connection.sendMessage = Mock()
     request = StreamRequest(
         last_received_event_id=last_received_event_id,
-        window_size_increment=window_size_increment
+        window_size=window_size
     )
 
     factory.handle_valid_request(connection, request)
@@ -192,7 +191,7 @@ def test_handle_valid_request(
     else:
         assert connection.last_received_event_id == expected_events_sent + last_received_event_id
 
-    assert connection.available_window_size == starting_window_size + window_size_increment - expected_events_sent
+    assert connection.window_size == window_size - expected_events_sent
 
 
 def test_handle_invalid_request():
