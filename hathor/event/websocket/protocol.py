@@ -36,7 +36,7 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
     factory: EventWebsocketFactory
     client_peer: Optional[str] = None
     last_received_event_id: Optional[int] = None
-    available_window_size: int = 0
+    window_size: int = 0
 
     @property
     def next_event_id(self) -> int:

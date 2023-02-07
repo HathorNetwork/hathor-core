@@ -31,7 +31,7 @@ def test_init():
     protocol = EventWebsocketProtocol()
 
     assert protocol.last_received_event_id is None
-    assert protocol.available_window_size == 0
+    assert protocol.window_size == 0
 
 
 def test_next_event_id():

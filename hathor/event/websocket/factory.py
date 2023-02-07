@@ -88,7 +88,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
     def handle_valid_request(self, connection: EventWebsocketProtocol, request: StreamRequest) -> None:
         """Handle a valid client request."""
         connection.last_received_event_id = request.last_received_event_id
-        connection.available_window_size += request.window_size_increment
+        connection.window_size = request.window_size
 
         events = self._event_storage.iter_from_event(connection.next_event_id)
 
@@ -107,7 +107,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
         connection.sendMessage(payload)
 
     def _send_event_to_connection(self, connection: EventWebsocketProtocol, event: BaseEvent) -> bool:
-        if connection.available_window_size <= 0:
+        if connection.window_size <= 0:
             return False
 
         response = EventResponse(
@@ -118,6 +118,6 @@ class EventWebsocketFactory(WebSocketServerFactory):
 
         connection.sendMessage(payload)
         connection.last_received_event_id = event.id
-        connection.available_window_size -= 1
+        connection.window_size -= 1
 
         return True
