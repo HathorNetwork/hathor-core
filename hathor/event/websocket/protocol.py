@@ -49,14 +49,15 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
 
     def onConnect(self, request: ConnectionRequest) -> None:
         self.client_peer = request.peer
-        self.log.info('connection opened to the event websocket, starting handshake...', client_peer=self.client_peer)
+        self.log = self.log.new(client_peer=self.client_peer)
+        self.log.info('connection opened to the event websocket, starting handshake...')
 
     def onOpen(self) -> None:
-        self.log.info('connection established to the event websocket', client_peer=self.client_peer)
+        self.log.info('connection established to the event websocket')
         self.factory.register(self)
 
     def onClose(self, wasClean: bool, code: int, reason: str) -> None:
-        self.log.info('connection closed to the event websocket', client_peer=self.client_peer, reason=reason)
+        self.log.info('connection closed to the event websocket', reason=reason)
         self.factory.unregister(self)
 
     def onMessage(self, payload: bytes, isBinary: bool) -> None:
