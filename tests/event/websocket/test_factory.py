@@ -17,13 +17,15 @@ from unittest.mock import Mock
 
 import pytest
 from pydantic import ValidationError
-from twisted.internet.task import Clock
 
 from hathor.event import BaseEvent
 from hathor.event.storage import EventMemoryStorage
 from hathor.event.websocket.factory import EventWebsocketFactory
 from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.request import StreamRequest
+from hathor.simulator.clock import HeapClock
+
+_clock = HeapClock()
 
 
 def test_started_register():
@@ -185,7 +187,7 @@ def test_handle_valid_request(
     )
 
     factory.handle_valid_request(connection, request)
-    factory._reactor.advance(0)
+    _clock.advance(0)
 
     assert connection.sendMessage.call_count == expected_events_sent
 
@@ -211,14 +213,13 @@ def test_handle_invalid_request():
 
 
 def _get_factory(n_starting_events: int = 0) -> EventWebsocketFactory:
-    clock = Clock()
     event_storage = EventMemoryStorage()
 
     for event_id in range(n_starting_events):
         event = _create_event(event_id)
         event_storage.save_event(event)
 
-    return EventWebsocketFactory(clock, event_storage)
+    return EventWebsocketFactory(_clock, event_storage)
 
 
 def _create_event(event_id: int) -> BaseEvent:

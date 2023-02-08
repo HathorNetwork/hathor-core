@@ -101,7 +101,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
 
         connection.sendMessage(payload)
 
-    def _send_next_event_to_connection(self, connection: EventWebsocketProtocol):
+    def _send_next_event_to_connection(self, connection: EventWebsocketProtocol) -> None:
         if not connection.can_receive_event():
             return
 
@@ -109,7 +109,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
             self._send_event_to_connection(connection, event)
             self._reactor.callLater(0, self._send_next_event_to_connection, connection)
 
-    def _send_event_to_connection(self, connection: EventWebsocketProtocol, event: BaseEvent):
+    def _send_event_to_connection(self, connection: EventWebsocketProtocol, event: BaseEvent) -> None:
         if event.id != connection.next_expected_event_id():
             return
 
