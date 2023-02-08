@@ -12,19 +12,46 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Literal, Annotated, Optional
 
-from pydantic import NonNegativeInt
+from pydantic import NonNegativeInt, Field
 
 from hathor.utils.pydantic import BaseModel
 
 
-class StreamRequest(BaseModel):
-    """Class that represents a client request to stream events.
+class StartStreamRequest(BaseModel):
+    """Class that represents a client request to start streaming events.
 
     Args:
-        last_received_event_id: The ID of the last event successfully processed by the requesting client.
+        type: The type of the request.
+        last_ack_event_id: The ID of the last event acknowledged by the client.
         window_size: The amount of events the client is able to process.
     """
-    last_received_event_id: Optional[NonNegativeInt]
+    type: Literal['START_STREAM']
+    last_ack_event_id: Optional[NonNegativeInt]
     window_size: NonNegativeInt
+
+
+class AckRequest(BaseModel):
+    """Class that represents a client request to ack and event and change the window size.
+
+    Args:
+        type: The type of the request.
+        ack_event_id: The ID of the last event acknowledged by the client.
+        window_size: The amount of events the client is able to process.
+    """
+    type: Literal['ACK']
+    ack_event_id: NonNegativeInt
+    window_size: NonNegativeInt
+
+
+class StopStreamRequest(BaseModel):
+    """Class that represents a client request to stop streaming events.
+
+    Args:
+        type: The type of the request.
+    """
+    type: Literal['STOP_STREAM']
+
+
+Request = Annotated[StartStreamRequest | AckRequest | StopStreamRequest, Field(discriminator='type')]
