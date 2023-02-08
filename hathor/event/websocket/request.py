@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Literal, Annotated, Optional
+from typing import Annotated, Literal, Optional
 
-from pydantic import NonNegativeInt, Field
+from pydantic import Field, NonNegativeInt
 
 from hathor.utils.pydantic import BaseModel
 
@@ -55,3 +55,7 @@ class StopStreamRequest(BaseModel):
 
 
 Request = Annotated[StartStreamRequest | AckRequest | StopStreamRequest, Field(discriminator='type')]
+
+
+class RequestWrapper(BaseModel):
+    __root__: Request

@@ -21,7 +21,7 @@ from autobahn.websocket import ConnectionRequest
 from pydantic import ValidationError
 from structlog import get_logger
 
-from hathor.event.websocket.request import StreamRequest
+from hathor.event.websocket.request import RequestWrapper
 
 if TYPE_CHECKING:
     from hathor.event.websocket import EventWebsocketFactory
@@ -35,16 +35,28 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
 
     factory: EventWebsocketFactory
     client_peer: Optional[str] = None
-    last_received_event_id: Optional[int] = None
+    last_sent_event_id: Optional[int] = None
+    ack_event_id: Optional[int] = None
     window_size: int = 0
+    streaming_is_active: bool = False
 
-    def can_receive_event(self) -> bool:
-        """Returns whether this client is available to receive and event."""
-        return self.window_size > 0
+    def can_receive_event(self, event_id: int) -> bool:
+        """Returns whether this client is available to receive an event."""
+        number_of_pending_events = 0
+
+        if self.last_sent_event_id is not None:
+            ack_offset = -1 if self.ack_event_id is None else self.ack_event_id
+            number_of_pending_events = self.last_sent_event_id - ack_offset
+
+        return (
+            self.streaming_is_active
+            and event_id == self.next_expected_event_id()
+            and number_of_pending_events < self.window_size
+        )
 
     def next_expected_event_id(self) -> int:
         """Returns the ID of the next event the client expects."""
-        return 0 if self.last_received_event_id is None else self.last_received_event_id + 1
+        return 0 if self.last_sent_event_id is None else self.last_sent_event_id + 1
 
     def __init__(self):
         super().__init__()
@@ -67,7 +79,7 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
         self.log.debug('message', payload=payload.hex() if isBinary else payload.decode('utf8'))
 
         try:
-            request = StreamRequest.parse_raw(payload)
+            request = RequestWrapper.parse_raw(payload).__root__
             self.factory.handle_valid_request(self, request)
         except ValidationError as error:
             self.factory.handle_invalid_request(self, error)

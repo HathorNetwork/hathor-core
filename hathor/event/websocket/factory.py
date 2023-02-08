@@ -21,7 +21,7 @@ from structlog import get_logger
 from hathor.event import BaseEvent
 from hathor.event.storage import EventStorage
 from hathor.event.websocket.protocol import EventWebsocketProtocol
-from hathor.event.websocket.request import StreamRequest
+from hathor.event.websocket.request import AckRequest, Request, StartStreamRequest, StopStreamRequest
 from hathor.event.websocket.response import BadRequestResponse, EventResponse, EventWebSocketNotRunningResponse
 from hathor.util import Reactor, json_dumpb
 
@@ -66,8 +66,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
         self._latest_event_id = event.id
 
         for connection in self._connections:
-            if connection.can_receive_event():
-                self._send_event_to_connection(connection, event)
+            self._send_event_to_connection(connection, event)
 
     def register(self, connection: EventWebsocketProtocol) -> None:
         """Registers a client. Called when a ws connection is opened (after handshaking)."""
@@ -86,12 +85,15 @@ class EventWebsocketFactory(WebSocketServerFactory):
         self.log.info('unregistering connection', client_peer=connection.client_peer)
         self._connections.discard(connection)
 
-    def handle_valid_request(self, connection: EventWebsocketProtocol, request: StreamRequest) -> None:
+    def handle_valid_request(self, connection: EventWebsocketProtocol, request: Request) -> None:
         """Handle a valid client request."""
-        connection.last_received_event_id = request.last_received_event_id
-        connection.window_size = request.window_size
-
-        self._send_next_event_to_connection(connection)
+        match request:
+            case StartStreamRequest():
+                self.handle_start_stream_request(connection, request)
+            case AckRequest():
+                self.handle_ack_request(connection, request)
+            case StopStreamRequest():
+                self.handle_stop_stream_request(connection)
 
     @staticmethod
     def handle_invalid_request(connection: EventWebsocketProtocol, validation_error: ValidationError) -> None:
@@ -99,23 +101,42 @@ class EventWebsocketFactory(WebSocketServerFactory):
         response = BadRequestResponse(errors=validation_error.errors())
         payload = json_dumpb(response.dict())
 
-        connection.sendMessage(payload)
+        connection.sendMessage(payload)  # TODO: Error handling
+
+    def handle_start_stream_request(self, connection: EventWebsocketProtocol, request: StartStreamRequest) -> None:
+        connection.last_sent_event_id = request.last_ack_event_id
+        connection.ack_event_id = request.last_ack_event_id
+        connection.window_size = request.window_size
+        connection.streaming_is_active = True
+
+        self._send_next_event_to_connection(connection)
+
+    def handle_ack_request(self, connection: EventWebsocketProtocol, request: AckRequest) -> None:
+        connection.ack_event_id = request.ack_event_id
+        connection.window_size = request.window_size
+
+        self._send_next_event_to_connection(connection)
+
+    @staticmethod
+    def handle_stop_stream_request(connection: EventWebsocketProtocol) -> None:
+        connection.streaming_is_active = False
 
     def _send_next_event_to_connection(self, connection: EventWebsocketProtocol) -> None:
-        if not connection.can_receive_event():
+        next_event_id = connection.next_expected_event_id()
+
+        if not connection.can_receive_event(next_event_id):
             return
 
-        if event := self._event_storage.get_event(connection.next_expected_event_id()):
+        if event := self._event_storage.get_event(next_event_id):
             self._send_event_to_connection(connection, event)
             self._reactor.callLater(0, self._send_next_event_to_connection, connection)
 
     def _send_event_to_connection(self, connection: EventWebsocketProtocol, event: BaseEvent) -> None:
-        if event.id != connection.next_expected_event_id():
+        if not connection.can_receive_event(event.id):
             return
 
         response = EventResponse(event=event, latest_event_id=self._latest_event_id)
         payload = json_dumpb(response.dict())
 
-        connection.sendMessage(payload)
-        connection.last_received_event_id = event.id
-        connection.window_size -= 1
+        connection.sendMessage(payload)  # TODO: Error handling
+        connection.last_sent_event_id = event.id
