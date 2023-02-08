@@ -87,7 +87,6 @@ class TestCase(unittest.TestCase):
         self.reset_peer_id_pool()
         self.rng = Random()
         self._pending_cleanups = []
-        self.pubsub = PubSubManager(self.clock)
 
     def tearDown(self):
         self.clean_tmpdirs()
@@ -131,7 +130,8 @@ class TestCase(unittest.TestCase):
 
     def create_peer(self, network, peer_id=None, wallet=None, tx_storage=None, unlock_wallet=True, wallet_index=False,
                     capabilities=None, full_verification=True, enable_sync_v1=None, enable_sync_v2=None,
-                    checkpoints=None, utxo_index=False, event_manager=None, use_memory_index=None, start_manager=True):
+                    checkpoints=None, utxo_index=False, event_manager=None, use_memory_index=None, start_manager=True,
+                    pubsub=None):
         if enable_sync_v1 is None:
             assert hasattr(self, '_enable_sync_v1'), ('`_enable_sync_v1` has no default by design, either set one on '
                                                       'the test class or pass `enable_sync_v1` by argument')
@@ -160,16 +160,18 @@ class TestCase(unittest.TestCase):
                 self._pending_cleanups.append(rocksdb_storage.close)
                 tx_storage = TransactionRocksDBStorage(rocksdb_storage, use_memory_indexes=use_memory_index)
 
+        pubsub = pubsub or PubSubManager(self.clock)
+
         builder = CliBuilder()
         if wallet_index:
-            builder.enable_wallet_index(tx_storage.indexes, self.pubsub)
+            builder.enable_wallet_index(tx_storage.indexes, pubsub)
 
         if utxo_index:
             tx_storage.indexes.enable_utxo_index()
 
         manager = HathorManager(
             self.clock,
-            pubsub=self.pubsub,
+            pubsub=pubsub,
             peer_id=peer_id,
             network=network,
             wallet=wallet,
