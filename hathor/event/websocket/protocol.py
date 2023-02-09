@@ -143,18 +143,20 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
         self._stream_is_active = False
 
     def _validate_ack(self, ack_event_id: Optional[int]) -> None:
-        if ack_event_id is None:
-            return
+        """Validates an ack_event_id from a request.
 
-        error_type = None
+        The ack_event_id can't be smaller than the last ack we've received
+        and can't be larger than the last event we've sent.
+        """
+        if self._ack_event_id is not None and (
+            ack_event_id is None or ack_event_id < self._ack_event_id
+        ):
+            raise InvalidRequestError(InvalidRequestType.ACK_TOO_SMALL)
 
-        if ack_event_id < self._ack_event_id:
-            error_type = InvalidRequestType.ACK_TOO_SMALL
-        elif ack_event_id > self._last_sent_event_id:
-            error_type = InvalidRequestType.ACK_TOO_LARGE
-
-        if error_type:
-            raise InvalidRequestError(error_type)
+        if ack_event_id is not None and (
+            self._last_sent_event_id is None or self._last_sent_event_id < ack_event_id
+        ):
+            raise InvalidRequestError(InvalidRequestType.ACK_TOO_LARGE)
 
     def send_event_response(self, event_response: EventResponse) -> None:
         self._send_response(event_response)

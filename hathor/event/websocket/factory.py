@@ -20,7 +20,7 @@ from structlog import get_logger
 from hathor.event import BaseEvent
 from hathor.event.storage import EventStorage
 from hathor.event.websocket.protocol import EventWebsocketProtocol
-from hathor.event.websocket.response import EventResponse, InvalidStateType
+from hathor.event.websocket.response import EventResponse
 from hathor.util import Reactor
 
 logger = get_logger()
