@@ -13,7 +13,7 @@
 #  limitations under the License.
 
 from typing import Optional
-from unittest.mock import Mock, ANY
+from unittest.mock import ANY, Mock
 
 import pytest
 from autobahn.websocket import ConnectionRequest
@@ -151,7 +151,7 @@ def test_can_receive_event(
     stream_is_active: bool,
     event_id: int,
     expected_result: bool
-):
+) -> None:
     protocol = EventWebsocketProtocol()
     protocol._last_sent_event_id = last_sent_event_id
     protocol._ack_event_id = ack_event_id

@@ -20,7 +20,7 @@ from hathor.event import BaseEvent
 from hathor.event.storage import EventMemoryStorage
 from hathor.event.websocket.factory import EventWebsocketFactory
 from hathor.event.websocket.protocol import EventWebsocketProtocol
-from hathor.event.websocket.response import InvalidRequestType, EventResponse
+from hathor.event.websocket.response import EventResponse, InvalidRequestType
 from hathor.simulator.clock import HeapClock
 
 
@@ -107,7 +107,7 @@ def test_broadcast_multiple_events_multiple_connections():
         (10, True)
     ]
 )
-def test_send_next_event_to_connection(next_expected_event_id: int, can_receive_event: bool):
+def test_send_next_event_to_connection(next_expected_event_id: int, can_receive_event: bool) -> None:
     n_starting_events = 10
     clock = HeapClock()
     factory = _get_factory(n_starting_events, clock)
