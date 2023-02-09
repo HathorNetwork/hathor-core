@@ -20,7 +20,11 @@ from hathor.event import BaseEvent
 from hathor.utils.pydantic import BaseModel
 
 
-class EventResponse(BaseModel):
+class Response(BaseModel):
+    pass
+
+
+class EventResponse(Response):
     """Class that represents an event to be sent to the client.
 
     Args:
@@ -34,7 +38,7 @@ class EventResponse(BaseModel):
     latest_event_id: NonNegativeInt
 
 
-class InvalidRequestResponse(BaseModel):
+class InvalidRequestResponse(Response):
     """Class to let the client know that it performed an invalid request.
 
     Args:
@@ -48,7 +52,7 @@ class InvalidRequestResponse(BaseModel):
     errors: List[Dict[str, Any]]
 
 
-class EventWebSocketNotRunningResponse(BaseModel):
+class EventWebSocketNotRunningResponse(Response):
     """Class to let the client know that WebSocket server is not running.
 
     Args:
@@ -58,7 +62,7 @@ class EventWebSocketNotRunningResponse(BaseModel):
     type: str = Field(default='EVENT_WS_NOT_RUNNING', const=True)
 
 
-class StreamIsActiveResponse(BaseModel):
+class StreamIsActiveResponse(Response):
     """Class to let the client know that the stream is already active.
 
     Args:
@@ -68,7 +72,7 @@ class StreamIsActiveResponse(BaseModel):
     type: str = Field(default='STREAM_IS_ACTIVE', const=True)
 
 
-class StreamIsInactiveResponse(BaseModel):
+class StreamIsInactiveResponse(Response):
     """Class to let the client know that the stream is already inactive.
 
     Args:

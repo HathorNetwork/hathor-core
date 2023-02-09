@@ -59,3 +59,7 @@ Request = Annotated[StartStreamRequest | AckRequest | StopStreamRequest, Field(d
 
 class RequestWrapper(BaseModel):
     __root__: Request
+
+    @classmethod
+    def parse_raw_request(cls, raw: bytes) -> Request:
+        return cls.parse_raw(raw).__root__
