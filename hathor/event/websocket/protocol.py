@@ -22,8 +22,7 @@ from pydantic import ValidationError
 from structlog import get_logger
 
 from hathor.event.websocket.request import AckRequest, Request, RequestWrapper, StartStreamRequest, StopStreamRequest
-from hathor.event.websocket.response import InvalidRequestResponse, StreamIsActiveResponse, StreamIsInactiveResponse, \
-    Response
+from hathor.event.websocket.response import EventResponse, InvalidRequestResponse, InvalidRequestType, Response
 from hathor.util import json_dumpb
 
 if TYPE_CHECKING:
@@ -39,7 +38,7 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
     factory: EventWebsocketFactory
     client_peer: Optional[str] = None
 
-    last_sent_event_id: Optional[int] = None  # TODO: Make private
+    _last_sent_event_id: Optional[int] = None
     _ack_event_id: Optional[int] = None
     _window_size: int = 0
     _stream_is_active: bool = False
@@ -52,9 +51,9 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
         """Returns whether this client is available to receive an event."""
         number_of_pending_events = 0
 
-        if self.last_sent_event_id is not None:
+        if self._last_sent_event_id is not None:
             ack_offset = -1 if self._ack_event_id is None else self._ack_event_id
-            number_of_pending_events = self.last_sent_event_id - ack_offset
+            number_of_pending_events = self._last_sent_event_id - ack_offset
 
         return (
             self._stream_is_active
@@ -64,7 +63,7 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
 
     def next_expected_event_id(self) -> int:
         """Returns the ID of the next event the client expects."""
-        return 0 if self.last_sent_event_id is None else self.last_sent_event_id + 1
+        return 0 if self._last_sent_event_id is None else self._last_sent_event_id + 1
 
     def onConnect(self, request: ConnectionRequest) -> None:
         self.client_peer = request.peer
@@ -86,8 +85,9 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
             request = RequestWrapper.parse_raw_request(payload)
             self._handle_request(request)
         except ValidationError as error:
-            invalid_request = payload.decode('utf8')
-            self._handle_invalid_request(invalid_request, error)
+            self._handle_invalid_request(InvalidRequestType.VALIDATION_ERROR, payload, str(error))
+        except InvalidRequestError as error:
+            self._handle_invalid_request(error.type, payload)
 
     def _handle_request(self, request: Request) -> None:
         match request:
@@ -98,52 +98,74 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
             case StopStreamRequest():
                 self._handle_stop_stream_request()
 
-    def _handle_invalid_request(self, invalid_request: str, validation_error: ValidationError) -> None:
+    def _handle_invalid_request(
+        self,
+        _type: InvalidRequestType,
+        invalid_request: bytes,
+        error_message: Optional[str] = None
+    ) -> None:
         response = InvalidRequestResponse(
-            invalid_request=invalid_request,
-            errors=validation_error.errors()
+            type=_type,
+            invalid_request=invalid_request.decode('utf8'),
+            error_message=error_message
         )
 
-        self.send_response(response)
+        self._send_response(response)
 
     def _handle_start_stream_request(self, request: StartStreamRequest) -> None:
         if self._stream_is_active:
-            return self.send_response(StreamIsActiveResponse())
+            raise InvalidRequestError(InvalidRequestType.STREAM_IS_ACTIVE)
 
         self._validate_ack(request.last_ack_event_id)
 
-        self.last_sent_event_id = request.last_ack_event_id
+        self._last_sent_event_id = request.last_ack_event_id
         self._ack_event_id = request.last_ack_event_id
         self._window_size = request.window_size
         self._stream_is_active = True
 
-        self._send_next_event_to_connection(self)
+        self.factory.send_next_event_to_connection(self)
 
     def _handle_ack_request(self, request: AckRequest) -> None:
         if not self._stream_is_active:
-            return self.send_response(StreamIsInactiveResponse())
+            raise InvalidRequestError(InvalidRequestType.STREAM_IS_INACTIVE)
 
         self._validate_ack(request.ack_event_id)
 
         self._ack_event_id = request.ack_event_id
         self._window_size = request.window_size
 
-        self._send_next_event_to_connection(self)
+        self.factory.send_next_event_to_connection(self)
 
     def _handle_stop_stream_request(self) -> None:
         if not self._stream_is_active:
-            return self.send_response(StreamIsInactiveResponse())
+            raise InvalidRequestError(InvalidRequestType.STREAM_IS_INACTIVE)
 
         self._stream_is_active = False
 
-    def _validate_ack(self, ack_event_id: int) -> None:
+    def _validate_ack(self, ack_event_id: Optional[int]) -> None:
+        if ack_event_id is None:
+            return
+
+        error_type = None
+
         if ack_event_id < self._ack_event_id:
-            raise  # TODO
+            error_type = InvalidRequestType.ACK_TOO_SMALL
+        elif ack_event_id > self._last_sent_event_id:
+            error_type = InvalidRequestType.ACK_TOO_LARGE
 
-        if ack_event_id > self.last_sent_event_id:
-            raise  # TODO
+        if error_type:
+            raise InvalidRequestError(error_type)
 
-    def send_response(self, response: Response) -> None:
+    def send_event_response(self, event_response: EventResponse) -> None:
+        self._send_response(event_response)
+        self._last_sent_event_id = event_response.event.id
+
+    def _send_response(self, response: Response) -> None:
         payload = json_dumpb(response.dict())
 
         return self.sendMessage(payload)  # TODO: Error handling
+
+
+class InvalidRequestError(Exception):
+    def __init__(self, _type: InvalidRequestType):
+        self.type = _type

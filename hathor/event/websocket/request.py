@@ -58,6 +58,7 @@ Request = Annotated[StartStreamRequest | AckRequest | StopStreamRequest, Field(d
 
 
 class RequestWrapper(BaseModel):
+    """Class that wraps the Request union type for parsing."""
     __root__: Request
 
     @classmethod

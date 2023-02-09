@@ -20,7 +20,7 @@ from structlog import get_logger
 from hathor.event import BaseEvent
 from hathor.event.storage import EventStorage
 from hathor.event.websocket.protocol import EventWebsocketProtocol
-from hathor.event.websocket.response import EventResponse, EventWebSocketNotRunningResponse
+from hathor.event.websocket.response import EventResponse, InvalidStateType
 from hathor.util import Reactor
 
 logger = get_logger()
@@ -69,9 +69,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
     def register(self, connection: EventWebsocketProtocol) -> None:
         """Registers a client. Called when a ws connection is opened (after handshaking)."""
         if not self._is_running:
-            response = EventWebSocketNotRunningResponse()
-
-            return connection.send_response(response)
+            return connection.send_invalid_state_response(InvalidStateType.EVENT_WS_NOT_RUNNING)
 
         self.log.info('registering connection', client_peer=connection.client_peer)
 
@@ -82,7 +80,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
         self.log.info('unregistering connection', client_peer=connection.client_peer)
         self._connections.discard(connection)
 
-    def _send_next_event_to_connection(self, connection: EventWebsocketProtocol) -> None:
+    def send_next_event_to_connection(self, connection: EventWebsocketProtocol) -> None:
         next_event_id = connection.next_expected_event_id()
 
         if not connection.can_receive_event(next_event_id):
@@ -98,5 +96,4 @@ class EventWebsocketFactory(WebSocketServerFactory):
 
         response = EventResponse(event=event, latest_event_id=self._latest_event_id)
 
-        connection.send_response(response)
-        connection.last_sent_event_id = event.id
+        connection.send_event_response(response)
