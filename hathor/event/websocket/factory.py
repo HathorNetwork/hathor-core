@@ -22,7 +22,8 @@ from hathor.event import BaseEvent
 from hathor.event.storage import EventStorage
 from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.request import AckRequest, Request, StartStreamRequest, StopStreamRequest
-from hathor.event.websocket.response import BadRequestResponse, EventResponse, EventWebSocketNotRunningResponse
+from hathor.event.websocket.response import InvalidRequestResponse, EventResponse, EventWebSocketNotRunningResponse, \
+    StreamIsActiveResponse, StreamIsInactiveResponse
 from hathor.util import Reactor, json_dumpb
 
 logger = get_logger()
@@ -96,22 +97,41 @@ class EventWebsocketFactory(WebSocketServerFactory):
                 self.handle_stop_stream_request(connection)
 
     @staticmethod
-    def handle_invalid_request(connection: EventWebsocketProtocol, validation_error: ValidationError) -> None:
+    def handle_invalid_request(
+        connection: EventWebsocketProtocol,
+        invalid_request: str,
+        validation_error: ValidationError
+    ) -> None:
         """Handle an invalid client request."""
-        response = BadRequestResponse(errors=validation_error.errors())
+        response = InvalidRequestResponse(
+            invalid_request=invalid_request,
+            errors=validation_error.errors()
+        )
         payload = json_dumpb(response.dict())
 
         connection.sendMessage(payload)  # TODO: Error handling
 
     def handle_start_stream_request(self, connection: EventWebsocketProtocol, request: StartStreamRequest) -> None:
+        if connection.stream_is_active:
+            response = StreamIsActiveResponse().dict()
+            payload = json_dumpb(response)
+
+            return connection.sendMessage(payload)
+
         connection.last_sent_event_id = request.last_ack_event_id
         connection.ack_event_id = request.last_ack_event_id
         connection.window_size = request.window_size
-        connection.streaming_is_active = True
+        connection.stream_is_active = True
 
         self._send_next_event_to_connection(connection)
 
     def handle_ack_request(self, connection: EventWebsocketProtocol, request: AckRequest) -> None:
+        if not connection.stream_is_active:
+            response = StreamIsInactiveResponse().dict()
+            payload = json_dumpb(response)
+
+            return connection.sendMessage(payload)
+
         connection.ack_event_id = request.ack_event_id
         connection.window_size = request.window_size
 
@@ -119,7 +139,13 @@ class EventWebsocketFactory(WebSocketServerFactory):
 
     @staticmethod
     def handle_stop_stream_request(connection: EventWebsocketProtocol) -> None:
-        connection.streaming_is_active = False
+        if not connection.stream_is_active:
+            response = StreamIsInactiveResponse().dict()
+            payload = json_dumpb(response)
+
+            return connection.sendMessage(payload)
+
+        connection.stream_is_active = False
 
     def _send_next_event_to_connection(self, connection: EventWebsocketProtocol) -> None:
         next_event_id = connection.next_expected_event_id()

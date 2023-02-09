@@ -38,7 +38,7 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
     last_sent_event_id: Optional[int] = None
     ack_event_id: Optional[int] = None
     window_size: int = 0
-    streaming_is_active: bool = False
+    stream_is_active: bool = False
 
     def can_receive_event(self, event_id: int) -> bool:
         """Returns whether this client is available to receive an event."""
@@ -49,7 +49,7 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
             number_of_pending_events = self.last_sent_event_id - ack_offset
 
         return (
-            self.streaming_is_active
+            self.stream_is_active
             and event_id == self.next_expected_event_id()
             and number_of_pending_events < self.window_size
         )
@@ -82,4 +82,5 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
             request = RequestWrapper.parse_raw(payload).__root__
             self.factory.handle_valid_request(self, request)
         except ValidationError as error:
-            self.factory.handle_invalid_request(self, error)
+            invalid_request = payload.decode('utf8')
+            self.factory.handle_invalid_request(self, invalid_request, error)
