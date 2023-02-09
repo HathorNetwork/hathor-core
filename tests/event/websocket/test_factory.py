@@ -12,111 +12,79 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Optional
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import pytest
-from pydantic import ValidationError
 
 from hathor.event import BaseEvent
 from hathor.event.storage import EventMemoryStorage
 from hathor.event.websocket.factory import EventWebsocketFactory
 from hathor.event.websocket.protocol import EventWebsocketProtocol
-from hathor.event.websocket.request import StreamRequest
+from hathor.event.websocket.response import InvalidRequestType, EventResponse
 from hathor.simulator.clock import HeapClock
-
-_clock = HeapClock()
 
 
 def test_started_register():
     factory = _get_factory()
-    connection = EventWebsocketProtocol()
-    connection.sendMessage = Mock()
+    connection = Mock(spec_set=EventWebsocketProtocol)
+    connection.send_invalid_request_response = Mock()
 
     factory.start()
     factory.register(connection)
 
-    connection.sendMessage.assert_not_called()
+    connection.send_invalid_request_response.assert_not_called()
 
 
 def test_non_started_register():
     factory = _get_factory()
-    connection = EventWebsocketProtocol()
-    connection.sendMessage = Mock()
+    connection = Mock(spec_set=EventWebsocketProtocol)
+    connection.send_invalid_request_response = Mock()
 
     factory.register(connection)
 
-    message = b'{"type":"EVENT_WS_NOT_RUNNING"}'
-    connection.sendMessage.assert_called_once_with(message)
+    connection.send_invalid_request_response.assert_called_once_with(InvalidRequestType.EVENT_WS_NOT_RUNNING)
 
 
 def test_stopped_register():
     factory = _get_factory()
     connection = Mock(spec_set=EventWebsocketProtocol)
-    connection.sendMessage = Mock()
+    connection.send_invalid_request_response = Mock()
 
     factory.start()
     factory.stop()
     factory.register(connection)
 
-    message = b'{"type":"EVENT_WS_NOT_RUNNING"}'
-    connection.sendMessage.assert_called_once_with(message)
+    connection.send_invalid_request_response.assert_called_once_with(InvalidRequestType.EVENT_WS_NOT_RUNNING)
 
 
-@pytest.mark.parametrize(
-    ['event_id', 'starting_window_size', 'last_received_event_id', 'expected_to_send_event'],
-    [
-        # does not send if window is not available
-        (0, 0, None, False),
-        (0, 0, 10, False),
-        (10, 0, 10, False),
-        (11, 0, 10, False),
-
-        # send only if window is available and event_id > last_received_event_id
-        (0, 100, None, True),
-        (0, 100, 10, False),
-        (10, 100, 10, False),
-        (11, 100, 10, True),
-    ]
-)
-def test_broadcast_event(
-    event_id: int,
-    starting_window_size: int,
-    last_received_event_id: Optional[int],
-    expected_to_send_event: bool
-) -> None:
-    factory = _get_factory()
-    event = _create_event(event_id)
-    connection = EventWebsocketProtocol()
-    connection.window_size = starting_window_size
-    connection.last_received_event_id = last_received_event_id
-    connection.sendMessage = Mock()
+@pytest.mark.parametrize('can_receive_event', [False, True])
+def test_broadcast_event(can_receive_event: bool) -> None:
+    n_starting_events = 10
+    factory = _get_factory(n_starting_events)
+    event = _create_event(n_starting_events - 1)
+    connection = Mock(spec_set=EventWebsocketProtocol)
+    connection.can_receive_event = Mock(return_value=can_receive_event)
+    connection.send_event_response = Mock()
 
     factory.start()
     factory.register(connection)
     factory.broadcast_event(event)
 
-    message = f'{{"type":"EVENT","event":{{"peer_id":"123","id":{event_id},"timestamp":123456.0,"type":"type",' \
-              f'"data":{{}},"group_id":null}},"latest_event_id":{event_id}}}'.encode('utf8')
+    if not can_receive_event:
+        return connection.send_event_response.assert_not_called()
 
-    if expected_to_send_event:
-        connection.sendMessage.assert_called_once_with(message)
-    else:
-        connection.sendMessage.assert_not_called()
-
-    assert connection.window_size == (
-        starting_window_size - 1 if expected_to_send_event else starting_window_size
-    )
+    response = EventResponse(event=event, latest_event_id=n_starting_events - 1)
+    connection.send_event_response.assert_called_once_with(response)
 
 
 def test_broadcast_multiple_events_multiple_connections():
-    factory = _get_factory()
-    connection1 = EventWebsocketProtocol()
-    connection1.window_size = 10
-    connection1.sendMessage = Mock()
-    connection2 = EventWebsocketProtocol()
-    connection2.window_size = 10
-    connection2.sendMessage = Mock()
+    factory = _get_factory(10)
+    connection1 = Mock(spec_set=EventWebsocketProtocol)
+    connection1.can_receive_event = Mock(return_value=True)
+    connection1.send_event_response = Mock()
+    connection2 = Mock(spec_set=EventWebsocketProtocol)
+    connection2.can_receive_event = Mock(return_value=True)
+    connection2.send_event_response = Mock()
 
     factory.start()
     factory.register(connection1)
@@ -126,100 +94,57 @@ def test_broadcast_multiple_events_multiple_connections():
         event = _create_event(event_id)
         factory.broadcast_event(event)
 
-    assert connection1.sendMessage.call_count == 10
-    assert connection2.sendMessage.call_count == 10
-    assert connection1.window_size == 0
-    assert connection2.window_size == 0
+    assert connection1.send_event_response.call_count == 10
+    assert connection2.send_event_response.call_count == 10
 
 
 @pytest.mark.parametrize(
-    ['n_starting_events', 'starting_window_size', 'last_received_event_id', 'window_size', 'expected_events_sent'],
+    ['next_expected_event_id', 'can_receive_event'],
     [
-        # fresh peer
-        (0, 0, None, 30, 0),
-        (20, 0, None, 30, 20),
-        (60, 0, None, 30, 30),
-
-        # peer with starting window but no last event
-        (0, 10, None, 40, 0),
-        (20, 10, None, 40, 20),
-        (60, 10, None, 40, 40),
-
-        # peer with no starting window but with last event
-        (0, 0, 5, 30, 0),
-        (20, 0, 5, 30, 14),
-        (60, 0, 5, 30, 30),
-
-        # peer with starting window and last event
-        (0, 10, 5, 40, 0),
-        (20, 10, 5, 40, 14),
-        (60, 10, 5, 40, 40),
-
-        # peer processing events one by one
-        (0, 0, None, 1, 0),
-        (3, 0, None, 1, 1),
-        (3, 0, 0, 1, 1),
-        (3, 0, 1, 1, 1),
-        (3, 0, 2, 1, 0),
-
-        # peer processing events in batches of 50
-        (0, 0, None, 50, 0),
-        (150, 0, None, 50, 50),
-        (150, 0, 50, 50, 50),
-        (150, 0, 100, 50, 49),
-        (150, 0, 149, 50, 0),
+        (0, False),
+        (0, True),
+        (3, True),
+        (10, True)
     ]
 )
-def test_handle_valid_request(
-    n_starting_events: int,
-    starting_window_size: int,
-    last_received_event_id: Optional[int],
-    window_size: int,
-    expected_events_sent: int
-) -> None:
-    factory = _get_factory(n_starting_events)
-    connection = EventWebsocketProtocol()
-    connection.window_size = starting_window_size
-    connection.sendMessage = Mock()
-    request = StreamRequest(
-        last_received_event_id=last_received_event_id,
-        window_size=window_size
+def test_send_next_event_to_connection(next_expected_event_id: int, can_receive_event: bool):
+    n_starting_events = 10
+    clock = HeapClock()
+    factory = _get_factory(n_starting_events, clock)
+    connection = Mock(spec_set=EventWebsocketProtocol)
+    connection.send_event_response = Mock()
+    connection.can_receive_event = Mock(return_value=can_receive_event)
+    connection.next_expected_event_id = Mock(
+        side_effect=lambda: next_expected_event_id + connection.send_event_response.call_count
     )
 
-    factory.handle_valid_request(connection, request)
-    _clock.advance(0)
+    factory.start()
+    factory.register(connection)
+    factory.send_next_event_to_connection(connection)
 
-    assert connection.sendMessage.call_count == expected_events_sent
+    clock.advance(0)
 
-    if last_received_event_id is None:
-        assert connection.last_received_event_id == (None if expected_events_sent == 0 else expected_events_sent - 1)
-    else:
-        assert connection.last_received_event_id == expected_events_sent + last_received_event_id
+    if not can_receive_event or next_expected_event_id > n_starting_events - 1:
+        return connection.send_event_response.assert_not_called()
 
-    assert connection.window_size == window_size - expected_events_sent
+    calls = []
+    for _id in range(next_expected_event_id, n_starting_events):
+        event = _create_event(_id)
+        response = EventResponse(event=event, latest_event_id=n_starting_events - 1)
+        calls.append(call(response))
 
-
-def test_handle_invalid_request():
-    factory = _get_factory()
-    connection = EventWebsocketProtocol()
-    connection.sendMessage = Mock()
-    validation_error = Mock(spec_set=ValidationError)
-    validation_error.errors = Mock(return_value=[{'problem': 'some_problem'}])
-
-    factory.handle_invalid_request(connection, validation_error)
-
-    message = b'{"type":"BAD_REQUEST","errors":[{"problem":"some_problem"}]}'
-    connection.sendMessage.assert_called_once_with(message)
+    assert connection.send_event_response.call_count == n_starting_events - next_expected_event_id
+    connection.send_event_response.assert_has_calls(calls)
 
 
-def _get_factory(n_starting_events: int = 0) -> EventWebsocketFactory:
+def _get_factory(n_starting_events: int = 0, clock: HeapClock = HeapClock()) -> EventWebsocketFactory:
     event_storage = EventMemoryStorage()
 
     for event_id in range(n_starting_events):
         event = _create_event(event_id)
         event_storage.save_event(event)
 
-    return EventWebsocketFactory(_clock, event_storage)
+    return EventWebsocketFactory(clock, event_storage)
 
 
 def _create_event(event_id: int) -> BaseEvent:

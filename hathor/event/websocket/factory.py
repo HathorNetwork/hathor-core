@@ -88,7 +88,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
 
         if event := self._event_storage.get_event(next_event_id):
             self._send_event_to_connection(connection, event)
-            self._reactor.callLater(0, self._send_next_event_to_connection, connection)
+            self._reactor.callLater(0, self.send_next_event_to_connection, connection)
 
     def _send_event_to_connection(self, connection: EventWebsocketProtocol, event: BaseEvent) -> None:
         if not connection.can_receive_event(event.id):
