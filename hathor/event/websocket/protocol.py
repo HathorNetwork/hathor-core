@@ -85,9 +85,9 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
             request = RequestWrapper.parse_raw_request(payload)
             self._handle_request(request)
         except ValidationError as error:
-            self._handle_invalid_request(InvalidRequestType.VALIDATION_ERROR, payload, str(error))
+            self.send_invalid_request_response(InvalidRequestType.VALIDATION_ERROR, payload, str(error))
         except InvalidRequestError as error:
-            self._handle_invalid_request(error.type, payload)
+            self.send_invalid_request_response(error.type, payload)
 
     def _handle_request(self, request: Request) -> None:
         match request:
@@ -97,20 +97,6 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
                 self._handle_ack_request(request)
             case StopStreamRequest():
                 self._handle_stop_stream_request()
-
-    def _handle_invalid_request(
-        self,
-        _type: InvalidRequestType,
-        invalid_request: bytes,
-        error_message: Optional[str] = None
-    ) -> None:
-        response = InvalidRequestResponse(
-            type=_type,
-            invalid_request=invalid_request.decode('utf8'),
-            error_message=error_message
-        )
-
-        self._send_response(response)
 
     def _handle_start_stream_request(self, request: StartStreamRequest) -> None:
         if self._stream_is_active:
@@ -161,6 +147,21 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
     def send_event_response(self, event_response: EventResponse) -> None:
         self._send_response(event_response)
         self._last_sent_event_id = event_response.event.id
+
+    def send_invalid_request_response(
+        self,
+        _type: InvalidRequestType,
+        invalid_payload: Optional[bytes] = None,
+        error_message: Optional[str] = None
+    ) -> None:
+        invalid_request = None if invalid_payload is None else invalid_payload.decode('utf8')
+        response = InvalidRequestResponse(
+            type=_type,
+            invalid_request=invalid_request,
+            error_message=error_message
+        )
+
+        self._send_response(response)
 
     def _send_response(self, response: Response) -> None:
         payload = json_dumpb(response.dict())

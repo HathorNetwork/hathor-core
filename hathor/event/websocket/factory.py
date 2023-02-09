@@ -20,7 +20,7 @@ from structlog import get_logger
 from hathor.event import BaseEvent
 from hathor.event.storage import EventStorage
 from hathor.event.websocket.protocol import EventWebsocketProtocol
-from hathor.event.websocket.response import EventResponse
+from hathor.event.websocket.response import EventResponse, InvalidRequestType
 from hathor.util import Reactor
 
 logger = get_logger()
@@ -69,7 +69,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
     def register(self, connection: EventWebsocketProtocol) -> None:
         """Registers a client. Called when a ws connection is opened (after handshaking)."""
         if not self._is_running:
-            return connection.send_invalid_state_response(InvalidStateType.EVENT_WS_NOT_RUNNING)
+            return connection.send_invalid_request_response(InvalidRequestType.EVENT_WS_NOT_RUNNING)
 
         self.log.info('registering connection', client_peer=connection.client_peer)
 

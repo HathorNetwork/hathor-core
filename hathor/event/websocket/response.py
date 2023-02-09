@@ -57,5 +57,5 @@ class InvalidRequestResponse(Response, use_enum_values=True):
     """
 
     type: InvalidRequestType
-    invalid_request: str
+    invalid_request: Optional[str]
     error_message: Optional[str]
