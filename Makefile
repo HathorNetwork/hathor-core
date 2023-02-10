@@ -76,7 +76,7 @@ check-version:
 .PHONY: check
 check: check-version flake8 isort-check mypy
 
-.PHONY: check
+.PHONY: dcheck
 dcheck: check-version flake8 isort-check dmypy
 
 # formatting:
