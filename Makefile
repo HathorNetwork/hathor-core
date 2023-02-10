@@ -57,6 +57,10 @@ tests-full:
 mypy:
 	mypy -p hathor -p tests
 
+.PHONY: dmypy
+dmypy:
+	dmypy run --timeout 86400 -- -p hathor -p tests
+
 .PHONY: flake8
 flake8:
 	flake8 $(py_sources)
@@ -71,6 +75,9 @@ check-version:
 
 .PHONY: check
 check: check-version flake8 isort-check mypy
+
+.PHONY: check
+dcheck: check-version flake8 isort-check dmypy
 
 # formatting:
 
