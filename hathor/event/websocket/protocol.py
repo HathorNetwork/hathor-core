@@ -14,11 +14,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Optional, cast
+from typing import TYPE_CHECKING, Callable, Dict, Optional
 
 from autobahn.twisted.websocket import WebSocketServerProtocol
 from autobahn.websocket import ConnectionRequest
 from pydantic import ValidationError
+from pydantic.main import ModelMetaclass
 from structlog import get_logger
 
 from hathor.event.websocket.request import AckRequest, Request, RequestWrapper, StartStreamRequest, StopStreamRequest
@@ -90,14 +91,14 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
             self.send_invalid_request_response(error.type, payload)
 
     def _handle_request(self, request: Request) -> None:
+        # This could be a pattern match in Python 3.10
         request_type = type(request)
-        handlers = {
+        handlers: Dict[ModelMetaclass, Callable] = {
             StartStreamRequest: self._handle_start_stream_request,
             AckRequest: self._handle_ack_request,
             StopStreamRequest: lambda _: self._handle_stop_stream_request()
         }
-
-        handle_fn = cast(Callable[[Request], None], handlers.get(request_type))
+        handle_fn = handlers.get(request_type)
 
         assert handle_fn is not None, f'cannot handle request of unknown type "{request_type}"'
 
