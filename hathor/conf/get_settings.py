@@ -15,10 +15,11 @@
 import importlib
 import os
 from types import ModuleType
+from typing import Optional
 
 from hathor.conf.settings import HathorSettings as Settings
 
-_config_file = None
+_config_file: Optional[str] = None
 
 
 def HathorSettings() -> Settings:
