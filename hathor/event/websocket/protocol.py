@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Callable
+from typing import TYPE_CHECKING, Callable, Optional, cast
 
 from autobahn.twisted.websocket import WebSocketServerProtocol
 from autobahn.websocket import ConnectionRequest
@@ -90,17 +90,18 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
             self.send_invalid_request_response(error.type, payload)
 
     def _handle_request(self, request: Request) -> None:
-        handle_fn: Callable[[Request], None]
+        request_type = type(request)
         handlers = {
             StartStreamRequest: self._handle_start_stream_request,
             AckRequest: self._handle_ack_request,
             StopStreamRequest: lambda _: self._handle_stop_stream_request()
         }
 
-        request_type = type(request)
-        handler = handlers[request_type]
+        handle_fn = cast(Callable[[Request], None], handlers.get(request_type))
 
-        handler(request)
+        assert handle_fn is not None, f'cannot handle request of unknown type "{request_type}"'
+
+        handle_fn(request)
 
     def _handle_start_stream_request(self, request: StartStreamRequest) -> None:
         if self._stream_is_active:
