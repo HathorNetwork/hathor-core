@@ -14,12 +14,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Callable, Dict, Optional, Type
 
+from autobahn.exception import Disconnected
 from autobahn.twisted.websocket import WebSocketServerProtocol
 from autobahn.websocket import ConnectionRequest
 from pydantic import ValidationError
-from pydantic.main import ModelMetaclass
 from structlog import get_logger
 
 from hathor.event.websocket.request import AckRequest, Request, RequestWrapper, StartStreamRequest, StopStreamRequest
@@ -93,7 +93,7 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
     def _handle_request(self, request: Request) -> None:
         # This could be a pattern match in Python 3.10
         request_type = type(request)
-        handlers: Dict[ModelMetaclass, Callable] = {
+        handlers: Dict[Type, Callable] = {
             StartStreamRequest: self._handle_start_stream_request,
             AckRequest: self._handle_ack_request,
             StopStreamRequest: lambda _: self._handle_stop_stream_request()
@@ -172,7 +172,15 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
     def _send_response(self, response: Response) -> None:
         payload = json_dumpb(response.dict())
 
-        return self.sendMessage(payload)  # TODO: Error handling
+        try:
+            self.sendMessage(payload)
+        except Disconnected:
+            # Connection is closed. Nothing to do.
+            pass
+        # XXX: unfortunately autobahn can raise 3 different exceptions and one of them is a bare Exception
+        # https://github.com/crossbario/autobahn-python/blob/v20.12.3/autobahn/websocket/protocol.py#L2201-L2294
+        except Exception:
+            self.log.error('send failed, moving on', exc_info=True)
 
 
 class InvalidRequestError(Exception):
