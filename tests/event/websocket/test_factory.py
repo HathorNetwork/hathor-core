@@ -145,4 +145,3 @@ def _get_factory(n_starting_events: int = 0, clock: HeapClock = HeapClock()) -> 
         event_storage.save_event(event)
 
     return EventWebsocketFactory(clock, event_storage)
-

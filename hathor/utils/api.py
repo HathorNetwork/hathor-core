@@ -14,18 +14,18 @@
 
 from __future__ import annotations
 
-from typing import List, TypeVar
+from typing import List, Optional, TypeVar
 
-from pydantic import validator, ValidationError, Field
+from pydantic import Field, ValidationError, validator
+from twisted.web.http import Request
 
 from hathor.api_util import get_args
 from hathor.utils.pydantic import BaseModel
-from twisted.web.http import Request
 
 T = TypeVar('T')
 
 
-def _list_to_single_item(v: List[T]) -> T:
+def _list_to_single_item(v: List[T]) -> Optional[T]:
     assert len(v) <= 1, 'expected one value at most'
 
     return None if not len(v) else v[0]
@@ -52,4 +52,3 @@ class Response(BaseModel):
 class ErrorResponse(Response):
     success: bool = Field(default=False, const=True)
     error: str
-

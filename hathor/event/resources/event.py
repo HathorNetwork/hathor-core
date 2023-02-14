@@ -15,14 +15,14 @@
 from itertools import islice
 from typing import List, Optional
 
-from pydantic import NonNegativeInt, conint
+from pydantic import Field, NonNegativeInt
 
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
 from hathor.event import BaseEvent
 from hathor.manager import HathorManager
-from hathor.utils.api import QueryParams, ErrorResponse, Response
+from hathor.utils.api import ErrorResponse, QueryParams, Response
 
 settings = HathorSettings()
 
@@ -66,7 +66,7 @@ class EventResource(Resource):
 
 class GetEventsParams(QueryParams):
     last_ack_event_id: Optional[NonNegativeInt]
-    size: conint(ge=0, le=settings.EVENT_API_MAX_BATCH_SIZE) = settings.EVENT_API_DEFAULT_BATCH_SIZE
+    size: int = Field(default=settings.EVENT_API_DEFAULT_BATCH_SIZE, ge=0, le=settings.EVENT_API_MAX_BATCH_SIZE)
 
 
 class GetEventsResponse(Response):

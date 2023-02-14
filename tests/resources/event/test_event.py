@@ -39,7 +39,14 @@ def web():
 def test_get_events(web):
     response = web.get('event').result
     result = response.json_value()
-    expected = {'events': [{'peer_id': '123', 'id': 0, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None}, {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None}, {'peer_id': '123', 'id': 2, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None}], 'latest_event_id': 2}
+    expected = {
+        'events': [
+            {'peer_id': '123', 'id': 0, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None},
+            {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None},
+            {'peer_id': '123', 'id': 2, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None}
+        ],
+        'latest_event_id': 2
+    }
 
     assert result == expected
 
@@ -47,7 +54,12 @@ def test_get_events(web):
 def test_get_events_with_size(web):
     response = web.get('event', {b'size': 1})
     result = response.result.json_value()
-    expected = {'events': [{'peer_id': '123', 'id': 0, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None}], 'latest_event_id': 2}
+    expected = {
+        'events': [
+            {'peer_id': '123', 'id': 0, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None}
+        ],
+        'latest_event_id': 2
+    }
 
     assert result == expected
 
@@ -55,7 +67,13 @@ def test_get_events_with_size(web):
 def test_get_events_with_last_ack_event_id(web):
     response = web.get('event', {b'last_ack_event_id': 0})
     result = response.result.json_value()
-    expected = {'events': [{'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None},{'peer_id': '123', 'id': 2, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None}], 'latest_event_id': 2}
+    expected = {
+        'events': [
+            {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None},
+            {'peer_id': '123', 'id': 2, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None}
+        ],
+        'latest_event_id': 2
+    }
 
     assert result == expected
 
@@ -63,7 +81,11 @@ def test_get_events_with_last_ack_event_id(web):
 def test_get_events_with_size_and_last_ack_event_id(web):
     response = web.get('event', {b'last_ack_event_id': 0, b'size': 1})
     result = response.result.json_value()
-    expected = {'events': [{'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None}], 'latest_event_id': 2}
+    expected = {
+        'events': [
+            {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None},
+        ],
+        'latest_event_id': 2
+    }
 
     assert result == expected
-

@@ -1202,7 +1202,7 @@ class HathorManager:
             self.lc_check_sync_state.stop()
 
     @property
-    def event_manager(self) -> EventManager:
+    def event_manager(self) -> Optional[EventManager]:
         return self._event_manager
 
 
