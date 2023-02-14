@@ -1,0 +1,69 @@
+#  Copyright 2023 Hathor Labs
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+from unittest.mock import Mock
+
+import pytest
+
+from hathor.event.resources.event import EventResource
+from hathor.event.storage import EventMemoryStorage
+from hathor.manager import HathorManager
+from tests.resources.base_resource import StubSite
+from tests.utils import EventMocker
+
+
+@pytest.fixture
+def web():
+    event_storage = EventMemoryStorage()
+
+    for i in range(3):
+        event = EventMocker.create_event(i)
+        event_storage.save_event(event)
+
+    manager = Mock(spec_set=HathorManager)
+    manager.event_manager.event_storage = event_storage
+
+    return StubSite(EventResource(manager))
+
+
+def test_get_events(web):
+    response = web.get('event').result
+    result = response.json_value()
+    expected = {'events': [{'peer_id': '123', 'id': 0, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None}, {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None}, {'peer_id': '123', 'id': 2, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None}], 'latest_event_id': 2}
+
+    assert result == expected
+
+
+def test_get_events_with_size(web):
+    response = web.get('event', {b'size': 1})
+    result = response.result.json_value()
+    expected = {'events': [{'peer_id': '123', 'id': 0, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None}], 'latest_event_id': 2}
+
+    assert result == expected
+
+
+def test_get_events_with_last_ack_event_id(web):
+    response = web.get('event', {b'last_ack_event_id': 0})
+    result = response.result.json_value()
+    expected = {'events': [{'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None},{'peer_id': '123', 'id': 2, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None}], 'latest_event_id': 2}
+
+    assert result == expected
+
+
+def test_get_events_with_size_and_last_ack_event_id(web):
+    response = web.get('event', {b'last_ack_event_id': 0, b'size': 1})
+    result = response.result.json_value()
+    expected = {'events': [{'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None}], 'latest_event_id': 2}
+
+    assert result == expected
+
