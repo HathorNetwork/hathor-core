@@ -63,8 +63,6 @@ class EventResource(Resource):
 
         return response.json_dumpb()
 
-# MiningStatsResource.openapi = {
-
 
 class GetEventsParams(QueryParams):
     last_ack_event_id: Optional[NonNegativeInt]
@@ -74,3 +72,75 @@ class GetEventsParams(QueryParams):
 class GetEventsResponse(Response):
     events: List[BaseEvent]
     latest_event_id: Optional[int]
+
+
+EventResource.openapi = {
+    '/event': {
+        'x-visibility': 'private',
+        'get': {
+            'operationId': 'event',
+            'summary': 'Hathor Events',
+            'description': 'Returns information about past events',
+            'parameters': [
+                {
+                    'name': 'last_ack_event_id',
+                    'in': 'query',
+                    'description': 'ID of last acknowledged event',
+                    'required': False,
+                    'schema': {
+                        'type': 'int'
+                    }
+                },
+                {
+                    'name': 'size',
+                    'in': 'query',
+                    'description': 'Amount of events',
+                    'required': False,
+                    'schema': {
+                        'type': 'int'
+                    }
+                }
+            ],
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    "events": [
+                                        {
+                                            "peer_id": ("315d290c818091e5f01b8e52c45e7e24"
+                                                        "f2558ba4376f423358fdc4c71d70da9a"),
+                                            "id": 0,
+                                            "timestamp": 1676332496.991634,
+                                            "type": "consensus:tx_update",
+                                            "data": {
+                                                "hash": ("00000000030b86022eaea447484bd4d7"
+                                                         "70be0fbd7e03678967f601c315673c5c")
+                                            },
+                                            "group_id": None
+                                        },
+                                        {
+                                            "peer_id": ("315d290c818091e5f01b8e52c45e7e24"
+                                                        "f2558ba4376f423358fdc4c71d70da9a"),
+                                            "id": 1,
+                                            "timestamp": 1676332497.1872509,
+                                            "type": "network:new_tx_accepted",
+                                            "data": {
+                                                "hash": ("00000000030b86022eaea447484bd4d7"
+                                                         "70be0fbd7e03678967f601c315673c5c")
+                                            },
+                                            "group_id": None
+                                        }
+                                    ],
+                                    "latest_event_id": 342
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
