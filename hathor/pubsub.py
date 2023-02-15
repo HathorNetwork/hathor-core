@@ -34,10 +34,6 @@ class HathorEvents(Enum):
             Triggered when a peer connection to the network fails
             Publishes the peer id and the peers count
 
-        NETWORK_NEW_TX_VOIDED
-            Triggered when a new transaction is voided in the network
-            Publishes a tx object
-
         NETWORK_BEST_BLOCK_FOUND
             Triggered when a new block is accepted in the network
             Publishes a block object
