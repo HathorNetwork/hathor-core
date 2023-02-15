@@ -129,8 +129,6 @@ class HathorEvents(Enum):
 
     CONSENSUS_TX_REMOVED = 'consensus:tx_removed'
 
-    NETWORK_NEW_TX_VOIDED = 'network:new_tx_voided'
-
     NETWORK_BEST_BLOCK_FOUND = 'network:best_block_found'
 
     NETWORK_ORPHAN_BLOCK_FOUND = 'network:orphan_block_found'
