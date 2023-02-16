@@ -11,15 +11,26 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+import pytest
 
-from typing import List, Optional, TypeVar
-
-
-T = TypeVar('T')
+from hathor.utils.list import single_or_none
 
 
-def single_or_none(_list: List[T]) -> Optional[T]:
-    """Function to convert a list with at most one element to the given element or None."""
-    assert len(_list) <= 1, f'expected one value at most'
+def test_single_or_none_empty():
+    result = single_or_none([])
 
-    return None if not len(_list) else _list[0]
+    assert result is None
+
+
+@pytest.mark.parametrize('value', [None, 1, 10.4, 'test', b'test'])
+def test_single_or_none_one(value):
+    result = single_or_none([value])
+
+    assert result == value
+
+
+def test_single_or_none_more_than_one():
+    with pytest.raises(AssertionError) as exc_info:
+        single_or_none([1, 2, 3])
+
+    assert exc_info.value.args[0] == f'expected one value at most, list contains [1, 2, 3]'

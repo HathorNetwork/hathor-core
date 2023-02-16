@@ -11,15 +11,3 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
-from typing import List, Optional, TypeVar
-
-
-T = TypeVar('T')
-
-
-def single_or_none(_list: List[T]) -> Optional[T]:
-    """Function to convert a list with at most one element to the given element or None."""
-    assert len(_list) <= 1, f'expected one value at most'
-
-    return None if not len(_list) else _list[0]
