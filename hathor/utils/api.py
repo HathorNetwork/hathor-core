@@ -12,9 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from __future__ import annotations
-
-from typing import List, Optional, TypeVar
+from typing import Union
 
 from pydantic import Field, ValidationError, validator
 from twisted.web.http import Request
@@ -25,10 +23,16 @@ from hathor.utils.pydantic import BaseModel
 
 
 class QueryParams(BaseModel):
+    """Class used to parse Twisted HTTP Request query parameters.
+
+    Subclass this class defining your query parameters as attributes and their respective types, then call the
+    from_request() class method to instantiate your class from the provided request.
+    """
     _list_to_single_item_validator = validator('*', pre=True, allow_reuse=True)(single_or_none)
 
     @classmethod
-    def from_request(cls, request: Request) -> QueryParams | ErrorResponse:
+    def from_request(cls, request: Request) -> Union['QueryParams', 'ErrorResponse']:
+        """Creates an instance from a Twisted Request."""
         raw_args = get_args(request).items()
         args = {k.decode('utf8'): v for k, v in raw_args}
 
