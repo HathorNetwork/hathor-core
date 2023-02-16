@@ -13,8 +13,9 @@
 #  limitations under the License.
 from unittest.mock import Mock
 
-from hathor.utils.api import QueryParams, ErrorResponse
 from twisted.web.http import Request
+
+from hathor.utils.api import ErrorResponse, QueryParams
 
 
 def test_query_params_from_request():

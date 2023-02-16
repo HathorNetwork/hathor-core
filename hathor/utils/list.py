@@ -14,12 +14,11 @@
 
 from typing import List, Optional, TypeVar
 
-
 T = TypeVar('T')
 
 
 def single_or_none(_list: List[T]) -> Optional[T]:
     """Function to convert a list with at most one element to the given element or None."""
-    assert len(_list) <= 1, f'expected one value at most'
+    assert len(_list) <= 1, 'expected one value at most'
 
     return None if not len(_list) else _list[0]

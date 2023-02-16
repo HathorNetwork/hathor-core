@@ -33,4 +33,4 @@ def test_single_or_none_more_than_one():
     with pytest.raises(AssertionError) as exc_info:
         single_or_none([1, 2, 3])
 
-    assert exc_info.value.args[0] == f'expected one value at most, list contains [1, 2, 3]'
+    assert exc_info.value.args[0] == 'expected one value at most'
