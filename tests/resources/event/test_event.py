@@ -15,9 +15,9 @@ from unittest.mock import Mock
 
 import pytest
 
+from hathor.event import EventManager
 from hathor.event.resources.event import EventResource
 from hathor.event.storage import EventMemoryStorage
-from hathor.manager import HathorManager
 from tests.resources.base_resource import StubSite
 from tests.utils import EventMocker
 
@@ -30,10 +30,10 @@ def web():
         event = EventMocker.create_event(i)
         event_storage.save_event(event)
 
-    manager = Mock(spec_set=HathorManager)
-    manager.event_manager.event_storage = event_storage
+    event_manager = Mock(spec_set=EventManager)
+    event_manager.event_storage = event_storage
 
-    return StubSite(EventResource(manager))
+    return StubSite(EventResource(event_manager))
 
 
 def test_get_events(web):

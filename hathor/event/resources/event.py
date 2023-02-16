@@ -20,8 +20,7 @@ from pydantic import Field, NonNegativeInt
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf import HathorSettings
-from hathor.event import BaseEvent
-from hathor.manager import HathorManager
+from hathor.event import BaseEvent, EventManager
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 
 settings = HathorSettings()
@@ -31,15 +30,15 @@ settings = HathorSettings()
 class EventResource(Resource):
     isLeaf = True
 
-    def __init__(self, manager: HathorManager):
+    def __init__(self, event_manager: EventManager):
         super().__init__()
-        self.manager = manager
+        self.event_manager = event_manager
 
     def render_GET(self, request):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
-        if not self.manager.event_manager:
+        if not self.event_manager:
             request.setResponseCode(503)
 
             return ErrorResponse(error='EventManager unavailable.').json_dumpb()
@@ -50,8 +49,8 @@ class EventResource(Resource):
             return params.json_dumpb()
 
         next_event_id = 0 if params.last_ack_event_id is None else params.last_ack_event_id + 1
-        event_iter = self.manager.event_manager.event_storage.iter_from_event(next_event_id)
-        last_event = self.manager.event_manager.event_storage.get_last_event()
+        event_iter = self.event_manager.event_storage.iter_from_event(next_event_id)
+        last_event = self.event_manager.event_storage.get_last_event()
         last_event_id = last_event.id if last_event is not None else None
 
         response = GetEventsResponse(

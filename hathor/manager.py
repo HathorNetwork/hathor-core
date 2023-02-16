@@ -1201,10 +1201,6 @@ class HathorManager:
 
             self.lc_check_sync_state.stop()
 
-    @property
-    def event_manager(self) -> Optional[EventManager]:
-        return self._event_manager
-
 
 class ParentTxs(NamedTuple):
     """ Tuple where the `must_include` hash, when present (at most 1), must be included in a pair, and a list of hashes
