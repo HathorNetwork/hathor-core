@@ -20,19 +20,12 @@ from pydantic import Field, ValidationError, validator
 from twisted.web.http import Request
 
 from hathor.api_util import get_args
+from hathor.utils.list import single_or_none
 from hathor.utils.pydantic import BaseModel
-
-T = TypeVar('T')
-
-
-def _list_to_single_item(v: List[T]) -> Optional[T]:
-    assert len(v) <= 1, 'expected one value at most'
-
-    return None if not len(v) else v[0]
 
 
 class QueryParams(BaseModel):
-    _list_to_single_item_validator = validator('*', pre=True, allow_reuse=True)(_list_to_single_item)
+    _list_to_single_item_validator = validator('*', pre=True, allow_reuse=True)(single_or_none)
 
     @classmethod
     def from_request(cls, request: Request) -> QueryParams | ErrorResponse:
