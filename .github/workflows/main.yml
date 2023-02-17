@@ -82,7 +82,7 @@ jobs:
       run: |
         brew cleanup -q
         # brew update -q
-        brew install -q graphviz rocksdb
+        brew install -q graphviz rocksdb pkg-config
     - name: Install Poetry dependencies
       run: poetry install -n --no-root
     - name: Cache mypy
