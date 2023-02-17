@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+from typing import Iterator, Optional
 
 from hathor.event.base_event import BaseEvent
 from hathor.event.storage.event_storage import EventStorage
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction.util import int_to_bytes
-from hathor.util import json_dumpb, json_loadb
+from hathor.util import json_dumpb
 
 _CF_NAME_EVENT = b'event'
 _CF_NAME_META = b'event-metadata'
@@ -33,16 +33,15 @@ class EventRocksDBStorage(EventStorage):
         self._last_event: Optional[BaseEvent] = self._db_get_last_event()
         self._last_group_id: Optional[int] = self._db_get_last_group_id()
 
-    def _load_from_bytes(self, event_data: bytes) -> BaseEvent:
-        event_dict = json_loadb(event_data)
-        return BaseEvent(
-            id=event_dict['id'],
-            peer_id=event_dict['peer_id'],
-            timestamp=event_dict['timestamp'],
-            type=event_dict['type'],
-            group_id=event_dict['group_id'],
-            data=event_dict['data'],
-        )
+    def iter_from_event(self, key: int) -> Iterator[BaseEvent]:
+        if key < 0:
+            raise ValueError(f'event.id \'{key}\' must be non-negative')
+
+        it = self._db.itervalues(self._cf_event)
+        it.seek(int_to_bytes(key, 8))
+
+        for event_bytes in it:
+            yield BaseEvent.parse_raw(event_bytes)
 
     def _db_get_last_event(self) -> Optional[BaseEvent]:
         last_element: Optional[bytes] = None
@@ -52,7 +51,7 @@ class EventRocksDBStorage(EventStorage):
         for i in it:
             last_element = i
             break
-        return None if last_element is None else self._load_from_bytes(last_element)
+        return None if last_element is None else BaseEvent.parse_raw(last_element)
 
     def _db_get_last_group_id(self) -> Optional[int]:
         last_group_id = self._db.get((self._cf_meta, _KEY_LAST_GROUP_ID))
@@ -61,12 +60,10 @@ class EventRocksDBStorage(EventStorage):
         return int.from_bytes(last_group_id, byteorder='big', signed=False)
 
     def save_event(self, event: BaseEvent) -> None:
-        if event.id < 0:
-            raise ValueError('event.id must be non-negative')
         if (self._last_event is None and event.id != 0) or \
                 (self._last_event is not None and event.id > self._last_event.id + 1):
             raise ValueError('invalid event.id, ids must be sequential and leave no gaps')
-        event_data = json_dumpb(event.__dict__)
+        event_data = json_dumpb(event.dict())
         key = int_to_bytes(event.id, 8)
         self._db.put((self._cf_event, key), event_data)
         self._last_event = event
@@ -76,11 +73,11 @@ class EventRocksDBStorage(EventStorage):
 
     def get_event(self, key: int) -> Optional[BaseEvent]:
         if key < 0:
-            raise ValueError('key must be non-negative')
+            raise ValueError(f'event.id \'{key}\' must be non-negative')
         event = self._db.get((self._cf_event, int_to_bytes(key, 8)))
         if event is None:
             return None
-        return self._load_from_bytes(event_data=event)
+        return BaseEvent.parse_raw(event)
 
     def get_last_event(self) -> Optional[BaseEvent]:
         return self._last_event

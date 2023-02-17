@@ -1,5 +1,9 @@
+from unittest.mock import Mock
+
+from hathor.event import EventManager
 from hathor.event.storage.memory_storage import EventMemoryStorage
-from hathor.pubsub import HathorEvents
+from hathor.event.websocket import EventWebsocketFactory
+from hathor.pubsub import HathorEvents, PubSubManager
 from tests import unittest
 
 
@@ -9,9 +13,20 @@ class BaseEventManagerTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.event_storage = EventMemoryStorage()
+        self.event_ws_factory = Mock(spec_set=EventWebsocketFactory)
         self.network = 'testnet'
-        self.manager = self.create_peer(self.network, event_storage=self.event_storage)
-        self.event_manager = self.manager.event_manager
+        pubsub = PubSubManager(self.clock)
+        self.event_manager = EventManager(
+            event_storage=self.event_storage,
+            event_ws_factory=self.event_ws_factory,
+            pubsub=pubsub,
+            reactor=self.clock
+        )
+        self.manager = self.create_peer(
+            self.network,
+            event_manager=self.event_manager,
+            pubsub=pubsub
+        )
 
     def test_if_event_is_persisted(self):
         block = self.manager.tx_storage.get_best_block()

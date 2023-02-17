@@ -26,6 +26,7 @@ from twisted.internet.posixbase import PosixReactorBase
 from twisted.web import server
 from twisted.web.resource import Resource
 
+from hathor.event import EventManager
 from hathor.exception import BuilderError
 from hathor.indexes import IndexesManager
 from hathor.manager import HathorManager
@@ -56,6 +57,7 @@ class CliBuilder:
         from hathor.conf.get_settings import get_settings_module
         from hathor.daa import TestMode, _set_test_mode
         from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
+        from hathor.event.websocket.factory import EventWebsocketFactory
         from hathor.p2p.netfilter.utils import add_peer_id_blacklist
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
         from hathor.storage import RocksDBStorage
@@ -90,13 +92,15 @@ class CliBuilder:
 
         tx_storage: TransactionStorage
         rocksdb_storage: RocksDBStorage
-        event_storage: Optional[EventStorage] = None
+        self.event_storage: Optional[EventStorage] = None
+        self.event_ws_factory: Optional[EventWebsocketFactory] = None
+
         if args.memory_storage:
             self.check_or_raise(not args.data, '--data should not be used with --memory-storage')
             # if using MemoryStorage, no need to have cache
             tx_storage = TransactionMemoryStorage()
             if args.x_enable_event_queue:
-                event_storage = EventMemoryStorage()
+                self.event_storage = EventMemoryStorage()
             self.check_or_raise(not args.x_rocksdb_indexes, 'RocksDB indexes require RocksDB data')
             self.log.info('with storage', storage_class=type(tx_storage).__name__)
         else:
@@ -109,7 +113,7 @@ class CliBuilder:
                                                    with_index=(not args.cache),
                                                    use_memory_indexes=args.memory_indexes)
             if args.x_enable_event_queue:
-                event_storage = EventRocksDBStorage(rocksdb_storage)
+                self.event_storage = EventRocksDBStorage(rocksdb_storage)
 
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
         if args.cache:
@@ -135,6 +139,17 @@ class CliBuilder:
 
         pubsub = PubSubManager(reactor)
 
+        event_manager: Optional[EventManager] = None
+        if args.x_enable_event_queue:
+            assert self.event_storage is not None, 'cannot create EventManager without EventStorage'
+            self.event_ws_factory = EventWebsocketFactory(reactor, self.event_storage)
+            event_manager = EventManager(
+                event_storage=self.event_storage,
+                event_ws_factory=self.event_ws_factory,
+                pubsub=pubsub,
+                reactor=reactor
+            )
+
         if args.wallet_index and tx_storage.indexes is not None:
             self.log.debug('enable wallet indexes')
             self.enable_wallet_index(tx_storage.indexes, pubsub)
@@ -150,7 +165,7 @@ class CliBuilder:
             network=network,
             hostname=hostname,
             tx_storage=tx_storage,
-            event_storage=event_storage,
+            event_manager=event_manager,
             wallet=self.wallet,
             stratum_port=args.stratum,
             ssl=True,
@@ -480,6 +495,10 @@ class CliBuilder:
         root.putChild(b'mining_ws', WebSocketResource(mining_ws_factory))
 
         ws_factory.subscribe(self.manager.pubsub)
+
+        # Event websocket resource
+        if args.x_enable_event_queue and self.event_ws_factory is not None:
+            root.putChild(b'event_ws', WebSocketResource(self.event_ws_factory))
 
         # Websocket stats resource
         root.putChild(b'websocket_stats', WebsocketStatsResource(ws_factory))

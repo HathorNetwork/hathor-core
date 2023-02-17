@@ -30,7 +30,6 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.event.event_manager import EventManager
-from hathor.event.storage import EventStorage
 from hathor.exception import (
     DoubleSpendingError,
     HathorError,
@@ -84,7 +83,7 @@ class HathorManager:
     def __init__(self, reactor: Reactor, *, pubsub: PubSubManager, peer_id: Optional[PeerId] = None,
                  network: Optional[str] = None, hostname: Optional[str] = None,
                  wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
-                 event_storage: Optional[EventStorage] = None,
+                 event_manager: Optional[EventManager] = None,
                  stratum_port: Optional[int] = None, ssl: bool = True,
                  enable_sync_v1: bool = True, enable_sync_v2: bool = False,
                  capabilities: Optional[List[str]] = None, checkpoints: Optional[List[Checkpoint]] = None,
@@ -158,10 +157,9 @@ class HathorManager:
         self.pubsub = pubsub
         self.tx_storage = tx_storage
         self.tx_storage.pubsub = self.pubsub
-        self.event_manager: Optional[EventManager] = None
-        if event_storage is not None:
-            self.event_manager = EventManager(event_storage, self.reactor, not_none(self.my_peer.id))
-            self.event_manager.subscribe(self.pubsub)
+
+        self._event_manager = event_manager
+
         if enable_sync_v2:
             assert self.tx_storage.indexes is not None
             self.log.debug('enable sync-v2 indexes')
@@ -311,6 +309,9 @@ class HathorManager:
         if self.stratum_factory:
             self.stratum_factory.start()
 
+        if self._event_manager:
+            self._event_manager.start(not_none(self.my_peer.id))
+
         # Start running
         self.tx_storage.start_running_manager()
 
@@ -341,6 +342,9 @@ class HathorManager:
             wait_stratum = self.stratum_factory.stop()
             if wait_stratum:
                 waits.append(wait_stratum)
+
+        if self._event_manager:
+            self._event_manager.stop()
 
         self.tx_storage.flush()
 

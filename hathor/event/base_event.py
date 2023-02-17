@@ -12,24 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass
 from typing import Dict, Optional
 
+from pydantic import NonNegativeInt
 
-@dataclass
-class BaseEvent:
+from hathor.utils.pydantic import BaseModel
+
+
+class BaseEvent(BaseModel):
     # Full node id, because different full nodes can have different sequences of events
     peer_id: str
     # Event unique id, determines event order
-    id: int
+    id: NonNegativeInt
     # Timestamp in which the event was emitted, this follows the unix_timestamp format, it's only informative, events
     # aren't guaranteed to always have sequential timestamps, for example, if the system clock changes between two
     # events it's possible that timestamps will temporarily decrease.
     timestamp: float
     # One of the event types
-    type: str
+    type: str  # TODO: Convert type and data to enum and classes
     # Variable for event type
     data: Dict
     # Used to link events, for example, many TX_METADATA_CHANGED will have the same group_id when they belong to the
     # same reorg process
-    group_id: Optional[int] = None
+    group_id: Optional[NonNegativeInt] = None

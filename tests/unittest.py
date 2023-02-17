@@ -130,7 +130,8 @@ class TestCase(unittest.TestCase):
 
     def create_peer(self, network, peer_id=None, wallet=None, tx_storage=None, unlock_wallet=True, wallet_index=False,
                     capabilities=None, full_verification=True, enable_sync_v1=None, enable_sync_v2=None,
-                    checkpoints=None, utxo_index=False, event_storage=None, use_memory_index=None, start_manager=True):
+                    checkpoints=None, utxo_index=False, event_manager=None, use_memory_index=None, start_manager=True,
+                    pubsub=None):
         if enable_sync_v1 is None:
             assert hasattr(self, '_enable_sync_v1'), ('`_enable_sync_v1` has no default by design, either set one on '
                                                       'the test class or pass `enable_sync_v1` by argument')
@@ -159,7 +160,7 @@ class TestCase(unittest.TestCase):
                 self._pending_cleanups.append(rocksdb_storage.close)
                 tx_storage = TransactionRocksDBStorage(rocksdb_storage, use_memory_indexes=use_memory_index)
 
-        pubsub = PubSubManager(self.clock)
+        pubsub = pubsub or PubSubManager(self.clock)
 
         builder = CliBuilder()
         if wallet_index:
@@ -168,17 +169,6 @@ class TestCase(unittest.TestCase):
         if utxo_index:
             tx_storage.indexes.enable_utxo_index()
 
-        if event_storage is True:
-            # XXX: either bool or Optional[EventStorage] is accepted for event_storage
-            if self.use_memory_storage:
-                from hathor.event.storage import EventMemoryStorage
-                event_storage = EventMemoryStorage()
-            else:
-                from hathor.event.storage import EventRocksDBStorage
-                event_storage = EventRocksDBStorage(rocksdb_storage)
-        elif event_storage is False:
-            event_storage = None
-
         manager = HathorManager(
             self.clock,
             pubsub=pubsub,
@@ -186,7 +176,7 @@ class TestCase(unittest.TestCase):
             network=network,
             wallet=wallet,
             tx_storage=tx_storage,
-            event_storage=event_storage,
+            event_manager=event_manager,
             capabilities=capabilities,
             rng=self.rng,
             enable_sync_v1=enable_sync_v1,
