@@ -34,7 +34,6 @@ _GROUP_END_EVENTS = {
 
 _SUBSCRIBE_EVENTS = [
     HathorEvents.NETWORK_NEW_TX_ACCEPTED,
-    HathorEvents.NETWORK_NEW_TX_VOIDED,
     HathorEvents.NETWORK_BEST_BLOCK_FOUND,
     HathorEvents.NETWORK_ORPHAN_BLOCK_FOUND,
     HathorEvents.LOAD_STARTED,
@@ -76,7 +75,6 @@ _EVENT_EXTRACT_MAP: Dict[HathorEvents, Callable[[EventArguments], Dict[str, Any]
     HathorEvents.LOAD_STARTED: _empty,
     HathorEvents.LOAD_FINISHED: _empty,
     HathorEvents.NETWORK_NEW_TX_ACCEPTED: _extract_tx,
-    HathorEvents.NETWORK_NEW_TX_VOIDED: _extract_tx,
     HathorEvents.NETWORK_BEST_BLOCK_FOUND: _extract_tx,
     HathorEvents.NETWORK_ORPHAN_BLOCK_FOUND: _extract_tx,
     HathorEvents.REORG_STARTED: _extract_reorg,

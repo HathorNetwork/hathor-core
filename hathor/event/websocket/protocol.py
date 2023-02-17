@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, Callable, Dict, Optional, Type
 
 from autobahn.exception import Disconnected
@@ -36,7 +34,7 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
     """ Websocket protocol, basically forwards some events to the Websocket factory.
     """
 
-    factory: EventWebsocketFactory
+    factory: 'EventWebsocketFactory'
     client_peer: Optional[str] = None
 
     _last_sent_event_id: Optional[int] = None

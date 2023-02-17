@@ -16,6 +16,7 @@ from unittest.mock import Mock, call
 
 import pytest
 
+from hathor.event import BaseEvent
 from hathor.event.storage import EventMemoryStorage
 from hathor.event.websocket.factory import EventWebsocketFactory
 from hathor.event.websocket.protocol import EventWebsocketProtocol
