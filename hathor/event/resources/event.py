@@ -30,7 +30,7 @@ settings = HathorSettings()
 class EventResource(Resource):
     isLeaf = True
 
-    def __init__(self, event_manager: EventManager):
+    def __init__(self, event_manager: Optional[EventManager]):
         super().__init__()
         self.event_manager = event_manager
 
