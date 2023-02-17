@@ -13,13 +13,12 @@
 #  limitations under the License.
 from unittest.mock import Mock
 
-from twisted.web.http import Request
-
 from hathor.utils.api import ErrorResponse, QueryParams
 
 
 def test_query_params_from_request():
-    request = Mock(spec_set=Request)
+    request = Mock()
+    request.requestHeaders.getRawHeaders = Mock(return_value=None)
     request.args = {b'a': [b'abc'], b'b': [b'123']}
     result = DummyQueryParams.from_request(request)
 
@@ -28,8 +27,23 @@ def test_query_params_from_request():
     assert result.b == 123
 
 
+def test_query_params_from_request_with_encoding():
+    request = Mock()
+    request.requestHeaders.getRawHeaders = Mock(return_value=['application/json; charset=utf-16'])
+    request.args = {
+        'a'.encode('utf-16'): ['abc'.encode('utf-16')],
+        'b'.encode('utf-16'): ['123'.encode('utf-16')]
+    }
+    result = DummyQueryParams.from_request(request)
+
+    assert isinstance(result, DummyQueryParams)
+    assert result.a == 'abc'
+    assert result.b == 123
+
+
 def test_query_params_from_request_invalid():
-    request = Mock(spec_set=Request)
+    request = Mock()
+    request.requestHeaders.getRawHeaders = Mock(return_value=None)
     request.args = {b'a': [b'abc'], b'b': [b'123', b'456']}
     result = DummyQueryParams.from_request(request)
 
