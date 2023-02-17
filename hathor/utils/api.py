@@ -11,7 +11,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
+import cgi
 from typing import Union
 
 from pydantic import Field, ValidationError, validator
@@ -33,8 +33,17 @@ class QueryParams(BaseModel):
     @classmethod
     def from_request(cls, request: Request) -> Union['QueryParams', 'ErrorResponse']:
         """Creates an instance from a Twisted Request."""
+        encoding = 'utf8'
+
+        if content_type_header := request.requestHeaders.getRawHeaders('content-type'):
+            _, options = cgi.parse_header(content_type_header[0])
+            encoding = options.get('charset', encoding)
+
         raw_args = get_args(request).items()
-        args = {k.decode('utf8'): v for k, v in raw_args}
+        args = {
+            key.decode(encoding): [value.decode(encoding) for value in values]
+            for key, values in raw_args
+        }
 
         try:
             return cls.parse_obj(args)
