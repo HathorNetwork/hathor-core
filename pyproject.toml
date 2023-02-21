@@ -76,6 +76,7 @@ sentry-sdk = {version = "^1.5.11", optional = true}
 structlog-sentry = {version = "^1.4.0", optional = true}
 hathorlib = "0.3.0"
 pydantic = "~1.10.4"
+pytest-xdist = "~3.2.0"
 
 [tool.poetry.extras]
 sentry = ["sentry-sdk", "structlog-sentry"]
