@@ -40,8 +40,7 @@ _SUBSCRIBE_EVENTS = [
     HathorEvents.LOAD_FINISHED,
     HathorEvents.REORG_STARTED,
     HathorEvents.REORG_FINISHED,
-    HathorEvents.TX_METADATA_CHANGED,
-    HathorEvents.BLOCK_METADATA_CHANGED,
+    HathorEvents.VERTEX_METADATA_CHANGED,
     HathorEvents.CONSENSUS_TX_UPDATE,
     HathorEvents.CONSENSUS_TX_REMOVED,
 ]
@@ -79,8 +78,7 @@ _EVENT_EXTRACT_MAP: Dict[HathorEvents, Callable[[EventArguments], Dict[str, Any]
     HathorEvents.NETWORK_ORPHAN_BLOCK_FOUND: _extract_tx,
     HathorEvents.REORG_STARTED: _extract_reorg,
     HathorEvents.REORG_FINISHED: _empty,
-    HathorEvents.TX_METADATA_CHANGED: _todo,  # XXX: I'm considering removing this event
-    HathorEvents.BLOCK_METADATA_CHANGED: _todo,  # XXX: I'm considering removing this event
+    HathorEvents.VERTEX_METADATA_CHANGED: _todo,  # XXX: I'm considering removing this event
     HathorEvents.CONSENSUS_TX_UPDATE: _extract_tx,
     HathorEvents.CONSENSUS_TX_REMOVED: _extract_tx,
 }
