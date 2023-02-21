@@ -45,9 +45,9 @@ _SUBSCRIBE_EVENTS = [
     HathorEvents.CONSENSUS_TX_REMOVED,
 ]
 
-
-def _todo(args: EventArguments) -> Dict[str, Any]:
-    raise NotImplementedError('TODO')
+_EVENT_CONVERTER = {
+    HathorEvents.CONSENSUS_TX_UPDATE: HathorEvents.VERTEX_METADATA_CHANGED
+}
 
 
 def _empty(args: EventArguments) -> Dict[str, Any]:
@@ -78,7 +78,7 @@ _EVENT_EXTRACT_MAP: Dict[HathorEvents, Callable[[EventArguments], Dict[str, Any]
     HathorEvents.NETWORK_ORPHAN_BLOCK_FOUND: _extract_tx,
     HathorEvents.REORG_STARTED: _extract_reorg,
     HathorEvents.REORG_FINISHED: _empty,
-    HathorEvents.VERTEX_METADATA_CHANGED: _todo,  # XXX: I'm considering removing this event
+    HathorEvents.VERTEX_METADATA_CHANGED: _extract_tx,
     HathorEvents.CONSENSUS_TX_UPDATE: _extract_tx,
     HathorEvents.CONSENSUS_TX_REMOVED: _extract_tx,
 }
@@ -153,6 +153,7 @@ class EventManager:
 
     def _handle_event(self, event_type: HathorEvents, event_args: EventArguments) -> None:
         create_event_fn: Callable[[HathorEvents, EventArguments], BaseEvent]
+        event_type = _EVENT_CONVERTER.get(event_type, event_type)
 
         if event_type in _GROUP_START_EVENTS:
             create_event_fn = self._create_group_start_event
