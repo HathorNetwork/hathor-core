@@ -25,7 +25,7 @@ pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov-report=x
 
 .PHONY: tests-cli
 tests-cli:
-	pytest --durations=10 --cov=hathor/cli/ --cov-config=.coveragerc_full --cov-fail-under=27 -p no:warnings $(tests_cli)
+	pytest -n auto --durations=10 --cov=hathor/cli/ --cov-config=.coveragerc_full --cov-fail-under=27 -p no:warnings $(tests_cli)
 
 .PHONY: tests-doctests
 tests-doctests:
@@ -33,7 +33,7 @@ tests-doctests:
 
 .PHONY: tests-lib
 tests-lib:
-	pytest --durations=10 $(pytest_flags) --doctest-modules hathor $(tests_lib)
+	pytest -n auto --durations=10 $(pytest_flags) --doctest-modules hathor $(tests_lib)
 
 .PHONY: tests-quick
 tests-quick:
@@ -41,8 +41,8 @@ tests-quick:
 
 .PHONY: tests-genesis
 tests-genesis:
-	HATHOR_TEST_CONFIG_FILE=hathor.conf.mainnet pytest tests/tx/test_genesis.py
-	HATHOR_TEST_CONFIG_FILE=hathor.conf.testnet pytest tests/tx/test_genesis.py
+	HATHOR_TEST_CONFIG_FILE=hathor.conf.mainnet pytest -n auto tests/tx/test_genesis.py
+	HATHOR_TEST_CONFIG_FILE=hathor.conf.testnet pytest -n auto tests/tx/test_genesis.py
 
 .PHONY: tests
 tests: tests-cli tests-lib tests-genesis
