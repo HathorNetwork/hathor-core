@@ -52,7 +52,7 @@ def test_get_events(web):
 
 
 def test_get_events_with_size(web):
-    response = web.get('event', {b'size': 1})
+    response = web.get('event', {b'size': b'1'})
     result = response.result.json_value()
     expected = {
         'events': [
@@ -65,7 +65,7 @@ def test_get_events_with_size(web):
 
 
 def test_get_events_with_last_ack_event_id(web):
-    response = web.get('event', {b'last_ack_event_id': 0})
+    response = web.get('event', {b'last_ack_event_id': b'0'})
     result = response.result.json_value()
     expected = {
         'events': [
@@ -79,7 +79,7 @@ def test_get_events_with_last_ack_event_id(web):
 
 
 def test_get_events_with_size_and_last_ack_event_id(web):
-    response = web.get('event', {b'last_ack_event_id': 0, b'size': 1})
+    response = web.get('event', {b'last_ack_event_id': b'0', b'size': b'1'})
     result = response.result.json_value()
     expected = {
         'events': [
