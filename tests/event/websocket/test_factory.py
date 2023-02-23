@@ -16,12 +16,12 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from hathor.event import BaseEvent
 from hathor.event.storage import EventMemoryStorage
 from hathor.event.websocket.factory import EventWebsocketFactory
 from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.response import EventResponse, InvalidRequestType
 from hathor.simulator.clock import HeapClock
+from tests.utils import EventMocker
 
 
 def test_started_register():
@@ -61,7 +61,7 @@ def test_stopped_register():
 def test_broadcast_event(can_receive_event: bool) -> None:
     n_starting_events = 10
     factory = _get_factory(n_starting_events)
-    event = _create_event(n_starting_events - 1)
+    event = EventMocker.create_event(n_starting_events - 1)
     connection = Mock(spec_set=EventWebsocketProtocol)
     connection.can_receive_event = Mock(return_value=can_receive_event)
     connection.send_event_response = Mock()
@@ -91,7 +91,7 @@ def test_broadcast_multiple_events_multiple_connections():
     factory.register(connection2)
 
     for event_id in range(10):
-        event = _create_event(event_id)
+        event = EventMocker.create_event(event_id)
         factory.broadcast_event(event)
 
     assert connection1.send_event_response.call_count == 10
@@ -129,7 +129,7 @@ def test_send_next_event_to_connection(next_expected_event_id: int, can_receive_
 
     calls = []
     for _id in range(next_expected_event_id, n_starting_events):
-        event = _create_event(_id)
+        event = EventMocker.create_event(_id)
         response = EventResponse(event=event, latest_event_id=n_starting_events - 1)
         calls.append(call(response))
 
@@ -141,17 +141,7 @@ def _get_factory(n_starting_events: int = 0, clock: HeapClock = HeapClock()) -> 
     event_storage = EventMemoryStorage()
 
     for event_id in range(n_starting_events):
-        event = _create_event(event_id)
+        event = EventMocker.create_event(event_id)
         event_storage.save_event(event)
 
     return EventWebsocketFactory(clock, event_storage)
-
-
-def _create_event(event_id: int) -> BaseEvent:
-    return BaseEvent(
-        peer_id='123',
-        id=event_id,
-        timestamp=123456,
-        type='type',
-        data={}
-    )

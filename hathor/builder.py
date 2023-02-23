@@ -27,6 +27,7 @@ from twisted.web import server
 from twisted.web.resource import Resource
 
 from hathor.event import EventManager
+from hathor.event.resources.event import EventResource
 from hathor.exception import BuilderError
 from hathor.indexes import IndexesManager
 from hathor.manager import HathorManager
@@ -499,6 +500,7 @@ class CliBuilder:
         # Event websocket resource
         if args.x_enable_event_queue and self.event_ws_factory is not None:
             root.putChild(b'event_ws', WebSocketResource(self.event_ws_factory))
+            root.putChild(b'event', EventResource(self.manager._event_manager))
 
         # Websocket stats resource
         root.putChild(b'websocket_stats', WebsocketStatsResource(ws_factory))

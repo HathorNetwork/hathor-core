@@ -102,6 +102,10 @@ class EventManager:
 
     _peer_id: str
 
+    @property
+    def event_storage(self) -> EventStorage:
+        return self._event_storage
+
     def __init__(
         self,
         event_storage: EventStorage,

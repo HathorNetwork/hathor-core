@@ -681,3 +681,15 @@ class EventMocker:
         """
         letters = string.ascii_lowercase
         return ''.join(self.rng.choice(letters) for i in range(length))
+
+    @staticmethod
+    def create_event(event_id: int) -> BaseEvent:
+        """ Generates a mocked event with fixed properties, except the ID
+        """
+        return BaseEvent(
+            peer_id='123',
+            id=event_id,
+            timestamp=123456,
+            type='type',
+            data={}
+        )
