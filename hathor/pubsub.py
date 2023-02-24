@@ -102,11 +102,8 @@ class HathorEvents(Enum):
         REORG_FINISHED
             Triggered when consensus algorithm ends all changes involved in a reorg
 
-        TX_METADATA_CHANGED
-            Triggered when consensus algorithm changes a metadata of an existing transaction
-
-        BLOCK_METADATA_CHANGED
-            Triggered when consensus algorithm changes a metadata from an existing block
+        VERTEX_METADATA_CHANGED
+            Triggered when consensus algorithm changes a metadata of an existing vertex (transaction or block)
     """
     MANAGER_ON_START = 'manager:on_start'
     MANAGER_ON_STOP = 'manager:on_stop'
@@ -155,9 +152,7 @@ class HathorEvents(Enum):
 
     REORG_FINISHED = 'reorg:finished'
 
-    TX_METADATA_CHANGED = 'tx:metadata_changed'
-
-    BLOCK_METADATA_CHANGED = 'block:metadata_changed'
+    VERTEX_METADATA_CHANGED = 'vertex:metadata_changed'
 
 
 class EventArguments:
