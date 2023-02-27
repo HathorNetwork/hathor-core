@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Union
+from typing import Dict, Optional, Type, Union
 
-from pydantic import NonNegativeInt
+from pydantic import NonNegativeInt, validator
 
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.utils.pydantic import BaseModel
@@ -29,7 +29,7 @@ class BaseEventData(BaseModel):
 class EmptyData(BaseEventData):
     @classmethod
     def from_event_arguments(cls, args: EventArguments) -> 'EmptyData':
-        return EmptyData()
+        return cls()
 
 
 class TxData(BaseEventData):
@@ -38,7 +38,7 @@ class TxData(BaseEventData):
 
     @classmethod
     def from_event_arguments(cls, args: EventArguments) -> 'TxData':
-        return TxData(
+        return cls(
             hash=args.tx.hash_hex,
         )
 
@@ -51,7 +51,7 @@ class ReorgData(BaseEventData):
 
     @classmethod
     def from_event_arguments(cls, args: EventArguments) -> 'ReorgData':
-        return ReorgData(
+        return cls(
             reorg_size=args.reorg_size,
             previous_best_block=args.old_best_block.hash_hex,
             new_best_block=args.new_best_block.hash_hex,
@@ -60,6 +60,19 @@ class ReorgData(BaseEventData):
 
 
 EventData = Union[EmptyData, TxData, ReorgData]
+
+_EVENT_DATA_MAP: Dict[HathorEvents, Type[BaseEventData]] = {
+    HathorEvents.LOAD_STARTED: EmptyData,
+    HathorEvents.LOAD_FINISHED: EmptyData,
+    HathorEvents.NETWORK_NEW_TX_ACCEPTED: TxData,
+    HathorEvents.NETWORK_BEST_BLOCK_FOUND: TxData,
+    HathorEvents.NETWORK_ORPHAN_BLOCK_FOUND: TxData,
+    HathorEvents.REORG_STARTED: ReorgData,
+    HathorEvents.REORG_FINISHED: EmptyData,
+    HathorEvents.VERTEX_METADATA_CHANGED: TxData,
+    HathorEvents.CONSENSUS_TX_UPDATE: TxData,
+    HathorEvents.CONSENSUS_TX_REMOVED: TxData,
+}
 
 
 class BaseEvent(BaseModel, use_enum_values=True):
@@ -78,4 +91,37 @@ class BaseEvent(BaseModel, use_enum_values=True):
     # Used to link events, for example, many TX_METADATA_CHANGED will have the same group_id when they belong to the
     # same reorg process
     group_id: Optional[NonNegativeInt] = None
-    # TODO: Custom validate that EventData is equivalent to HathorEvents
+
+    @classmethod
+    def from_event_arguments(
+        cls,
+        peer_id: str,
+        event_id: NonNegativeInt,
+        timestamp: float,
+        event_type: HathorEvents,
+        event_args: EventArguments,
+        group_id: Optional[NonNegativeInt]
+    ) -> 'BaseEvent':
+        event_data_type = _EVENT_DATA_MAP.get(event_type)
+
+        if event_data_type is None:
+            raise ValueError(f'The given event type ({event_type}) is not a supported event')
+
+        return cls(
+            peer_id=peer_id,
+            id=event_id,
+            timestamp=timestamp,
+            type=event_type,
+            data=event_data_type.from_event_arguments(event_args),
+            group_id=group_id,
+        )
+
+    @validator('data')
+    def data_type_must_match_event_type(cls, v, values):
+        event_type = HathorEvents(values['type'])
+        expected_data_type = _EVENT_DATA_MAP.get(event_type)
+
+        if type(v) != expected_data_type:
+            raise ValueError('event data type does not match event type')
+
+        return v

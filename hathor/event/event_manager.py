@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Callable, Dict, Optional, Type
+from typing import Callable, Optional
 
 from structlog import get_logger
 
-from hathor.event.base_event import BaseEvent, BaseEventData, EmptyData, ReorgData, TxData
+from hathor.event.base_event import BaseEvent
 from hathor.event.storage import EventStorage
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
@@ -47,20 +47,6 @@ _SUBSCRIBE_EVENTS = [
 
 _EVENT_CONVERTER = {
     HathorEvents.CONSENSUS_TX_UPDATE: HathorEvents.VERTEX_METADATA_CHANGED
-}
-
-
-_EVENT_EXTRACT_MAP: Dict[HathorEvents, Type[BaseEventData]] = {
-    HathorEvents.LOAD_STARTED: EmptyData,
-    HathorEvents.LOAD_FINISHED: EmptyData,
-    HathorEvents.NETWORK_NEW_TX_ACCEPTED: TxData,
-    HathorEvents.NETWORK_BEST_BLOCK_FOUND: TxData,
-    HathorEvents.NETWORK_ORPHAN_BLOCK_FOUND: TxData,
-    HathorEvents.REORG_STARTED: ReorgData,
-    HathorEvents.REORG_FINISHED: EmptyData,
-    HathorEvents.VERTEX_METADATA_CHANGED: TxData,
-    HathorEvents.CONSENSUS_TX_UPDATE: TxData,
-    HathorEvents.CONSENSUS_TX_REMOVED: TxData,
 }
 
 
@@ -183,16 +169,11 @@ class EventManager:
         event_args: EventArguments,
         group_id: Optional[int],
     ) -> BaseEvent:
-        event_data_type = _EVENT_EXTRACT_MAP.get(event_type)
-
-        if event_data_type is None:
-            raise ValueError(f'The given event type ({event_type}) is not a supported event')
-
-        return BaseEvent(
-            id=0 if self._last_event is None else self._last_event.id + 1,
+        return BaseEvent.from_event_arguments(
+            event_id=0 if self._last_event is None else self._last_event.id + 1,
             peer_id=self._peer_id,
             timestamp=self._clock.seconds(),
-            type=event_type.value,
-            data=event_data_type.from_event_arguments(event_args),
+            event_type=event_type,
+            event_args=event_args,
             group_id=group_id,
         )
