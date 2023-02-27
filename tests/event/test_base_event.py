@@ -16,7 +16,7 @@ import pytest
 from pydantic import ValidationError
 
 from hathor.event import BaseEvent
-from hathor.event.base_event import TxData
+from hathor.event.base_event import TxData, ReorgData
 from hathor.pubsub import HathorEvents
 
 
@@ -66,4 +66,20 @@ def test_create_base_event_fail_group_id(group_id):
             type=HathorEvents.VERTEX_METADATA_CHANGED,
             data=TxData(hash="abc"),
             group_id=group_id
+        )
+
+
+def test_create_base_event_fail_data_type():
+    with pytest.raises(ValidationError):
+        BaseEvent(
+            peer_id='some_peer',
+            id=0,
+            timestamp=123.3,
+            type=HathorEvents.VERTEX_METADATA_CHANGED,
+            data=ReorgData(
+                reorg_size=10,
+                previous_best_block='a',
+                new_best_block='b',
+                common_block='c'
+            ),
         )
