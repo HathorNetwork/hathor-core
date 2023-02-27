@@ -14,8 +14,9 @@ from twisted.internet.task import Clock
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key, get_private_key_from_bytes
-from hathor.event.base_event import BaseEvent
+from hathor.event.base_event import BaseEvent, TxData
 from hathor.manager import HathorManager
+from hathor.pubsub import HathorEvents
 from hathor.transaction import BaseTransaction, Transaction, TxInput, TxOutput, genesis
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
@@ -669,11 +670,9 @@ class EventMocker:
             id=event_id or self.gen_next_id(),
             peer_id=peer_id_mock,
             timestamp=1658892990,
-            type='network:best_block_found',
+            type=HathorEvents.VERTEX_METADATA_CHANGED,
             group_id=group_id,
-            data={
-                "data": "test"
-            },
+            data=TxData(hash="abc"),
         )
 
     def generate_random_word(self, length: int) -> str:
@@ -690,6 +689,6 @@ class EventMocker:
             peer_id='123',
             id=event_id,
             timestamp=123456,
-            type='type',
-            data={}
+            type=HathorEvents.VERTEX_METADATA_CHANGED,
+            data=TxData(hash="abc")
         )

@@ -19,9 +19,11 @@ import pytest
 from autobahn.websocket import ConnectionRequest
 
 from hathor.event import BaseEvent
+from hathor.event.base_event import TxData
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.response import EventResponse, InvalidRequestType
+from hathor.pubsub import HathorEvents
 
 
 @pytest.fixture
@@ -85,8 +87,8 @@ def test_send_event_response():
             peer_id='some_peer_id',
             id=10,
             timestamp=123,
-            type='some_type',
-            data={}
+            type=HathorEvents.VERTEX_METADATA_CHANGED,
+            data=TxData(hash="abc")
         ),
         latest_event_id=10
     )
@@ -94,7 +96,7 @@ def test_send_event_response():
     protocol.send_event_response(response)
 
     expected_payload = b'{"type":"EVENT","event":{"peer_id":"some_peer_id","id":10,"timestamp":123.0,' \
-                       b'"type":"some_type","data":{},"group_id":null},"latest_event_id":10}'
+                       b'"type":"vertex:metadata_changed","data":{"hash":"abc"},"group_id":null},"latest_event_id":10}'
 
     protocol.sendMessage.assert_called_once_with(expected_payload)
 

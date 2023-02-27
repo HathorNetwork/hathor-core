@@ -126,13 +126,13 @@ class BaseEventReorgTest(unittest.TestCase):
 
         for actual_events, expected_events in zipchunkify(events, expected_events_grouped):
             if isinstance(expected_events, unsorted):
-                actual_events.sort(key=lambda i: i.data.get('hash', ''))
+                actual_events.sort(key=lambda i: i.data.hash)
                 expected_events.sort(key=lambda i: i[1].get('hash', ''))
             for actual_event, expected_event in zip(actual_events, expected_events):
                 expected_event_type, expected_partial_data = expected_event
                 self.assertEqual(HathorEvents(actual_event.type), expected_event_type)
                 for expected_data_key, expected_data_value in expected_partial_data.items():
-                    self.assertEqual(actual_event.data[expected_data_key], expected_data_value)
+                    self.assertEqual(actual_event.data.dict()[expected_data_key], expected_data_value)
 
 
 class SyncV1EventReorgTest(unittest.SyncV1Params, BaseEventReorgTest):

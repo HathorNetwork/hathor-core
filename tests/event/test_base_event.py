@@ -16,6 +16,8 @@ import pytest
 from pydantic import ValidationError
 
 from hathor.event import BaseEvent
+from hathor.event.base_event import TxData
+from hathor.pubsub import HathorEvents
 
 
 @pytest.mark.parametrize('event_id', [0, 1, 1000])
@@ -25,8 +27,8 @@ def test_create_base_event(event_id, group_id):
         peer_id='some_peer',
         id=event_id,
         timestamp=123.3,
-        type='some_type',
-        data=dict(some_data='some_value'),
+        type=HathorEvents.VERTEX_METADATA_CHANGED,
+        data=TxData(hash="abc"),
         group_id=group_id
     )
 
@@ -34,8 +36,8 @@ def test_create_base_event(event_id, group_id):
         peer_id='some_peer',
         id=event_id,
         timestamp=123.3,
-        type='some_type',
-        data=dict(some_data='some_value'),
+        type='vertex:metadata_changed',
+        data=dict(hash='abc'),
         group_id=group_id
     )
 
@@ -49,8 +51,8 @@ def test_create_base_event_fail_id(event_id):
             peer_id='some_peer',
             id=event_id,
             timestamp=123.3,
-            type='some_type',
-            data=dict(some_data='some_value')
+            type=HathorEvents.VERTEX_METADATA_CHANGED,
+            data=TxData(hash="abc"),
         )
 
 
@@ -61,7 +63,7 @@ def test_create_base_event_fail_group_id(group_id):
             peer_id='some_peer',
             id=0,
             timestamp=123.3,
-            type='some_type',
-            data=dict(some_data='some_value'),
+            type=HathorEvents.VERTEX_METADATA_CHANGED,
+            data=TxData(hash="abc"),
             group_id=group_id
         )
