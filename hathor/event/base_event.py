@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Optional, Type, Union
+from typing import Dict, List, Optional, Type, Union
 
 from pydantic import NonNegativeInt, validator
 
@@ -34,13 +34,54 @@ class EmptyData(BaseEventData):
 
 class TxData(BaseEventData):
     hash: str
-    # TODO: Other fields
+    nonce: int
+    timestamp: int
+    version: int
+    weight: float
+    inputs: List['TxInput']
+    outputs: List['TxOutput']
+    parents: List[str]
+    tokens: List[str]
+    token_name: Optional[str]
+    token_symbol: Optional[str]
+    metadata: 'TxMetadata'
+
+    class TxInput(BaseModel):
+        tx_id: str
+        index: int
+        data: int
+
+    class TxOutput(BaseModel):
+        value: int
+        script: str
+        token_data: int
+
+    class SpentOutput(BaseModel):
+        index: int
+        tx_ids: List[str]
+
+    class SpentOutputs(BaseModel):
+        spent_output: List['TxData.SpentOutput']
+
+    class TxMetadata(BaseModel, ):
+        hash: str
+        spent_outputs: List['TxData.SpentOutputs']
+        conflict_with: List[str]
+        voided_by: List[str]
+        received_by: List[int]
+        children: List[str]
+        twins: List[str]
+        accumulated_weight: float
+        score: float
+        first_block: Optional[str]
+        height: int
+        validation: str
 
     @classmethod
     def from_event_arguments(cls, args: EventArguments) -> 'TxData':
-        return cls(
-            hash=args.tx.hash_hex,
-        )
+        tx_json = args.tx.to_json(include_metadata=True)
+
+        return cls(**tx_json)
 
 
 class ReorgData(BaseEventData):

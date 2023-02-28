@@ -16,7 +16,7 @@ import pytest
 from pydantic import ValidationError
 
 from hathor.event import BaseEvent
-from hathor.event.base_event import TxData, ReorgData
+from hathor.event.base_event import ReorgData, TxData
 from hathor.pubsub import HathorEvents
 
 
