@@ -14,6 +14,8 @@
 
 from typing import List, Optional, Union
 
+from pydantic import Extra
+
 from hathor.pubsub import EventArguments
 from hathor.utils.pydantic import BaseModel
 
@@ -39,7 +41,7 @@ class SpentOutputs(BaseModel):
     spent_output: List[SpentOutput]
 
 
-class TxMetadata(BaseModel):
+class TxMetadata(BaseModel, extra=Extra.ignore):
     hash: str
     spent_outputs: List[SpentOutputs]
     conflict_with: List[str]
@@ -66,7 +68,7 @@ class EmptyData(BaseEventData):
         return cls()
 
 
-class TxData(BaseEventData):
+class TxData(BaseEventData, extra=Extra.ignore):
     hash: str
     nonce: int
     timestamp: int
@@ -76,6 +78,7 @@ class TxData(BaseEventData):
     outputs: List['TxOutput']
     parents: List[str]
     tokens: List[str]
+    # TODO: Token name and symbol could be in a different class because they're only used by TokenCreationTransaction
     token_name: Optional[str]
     token_symbol: Optional[str]
     metadata: 'TxMetadata'

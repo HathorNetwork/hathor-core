@@ -16,8 +16,9 @@ import pytest
 from pydantic import ValidationError
 
 from hathor.event.model.base_event import BaseEvent
-from hathor.event.model.event_data import ReorgData, TxData
+from hathor.event.model.event_data import ReorgData
 from hathor.pubsub import HathorEvents
+from tests.utils import EventMocker
 
 
 @pytest.mark.parametrize('event_id', [0, 1, 1000])
@@ -28,7 +29,7 @@ def test_create_base_event(event_id, group_id):
         id=event_id,
         timestamp=123.3,
         type=HathorEvents.VERTEX_METADATA_CHANGED,
-        data=TxData(hash="abc"),
+        data=EventMocker.tx_data,
         group_id=group_id
     )
 
@@ -37,7 +38,33 @@ def test_create_base_event(event_id, group_id):
         id=event_id,
         timestamp=123.3,
         type='vertex:metadata_changed',
-        data=dict(hash='abc'),
+        data=dict(
+            hash='abc',
+            nonce=123,
+            timestamp=456,
+            version=1,
+            weight=10.0,
+            inputs=[],
+            outputs=[],
+            parents=[],
+            token_name=None,
+            token_symbol=None,
+            tokens=[],
+            metadata=dict(
+                hash='abc',
+                spent_outputs=[],
+                conflict_with=[],
+                first_block=None,
+                voided_by=[],
+                received_by=[],
+                children=[],
+                twins=[],
+                accumulated_weight=10.0,
+                score=20.0,
+                height=100,
+                validation='validation'
+            )
+        ),
         group_id=group_id
     )
 
@@ -52,7 +79,7 @@ def test_create_base_event_fail_id(event_id):
             id=event_id,
             timestamp=123.3,
             type=HathorEvents.VERTEX_METADATA_CHANGED,
-            data=TxData(hash="abc"),
+            data=EventMocker.tx_data,
         )
 
 
@@ -64,7 +91,7 @@ def test_create_base_event_fail_group_id(group_id):
             id=0,
             timestamp=123.3,
             type=HathorEvents.VERTEX_METADATA_CHANGED,
-            data=TxData(hash="abc"),
+            data=EventMocker.tx_data,
             group_id=group_id
         )
 
