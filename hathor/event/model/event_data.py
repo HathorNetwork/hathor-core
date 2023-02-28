@@ -18,6 +18,42 @@ from hathor.pubsub import EventArguments
 from hathor.utils.pydantic import BaseModel
 
 
+class TxInput(BaseModel):
+    tx_id: str
+    index: int
+    data: int
+
+
+class TxOutput(BaseModel):
+    value: int
+    script: str
+    token_data: int
+
+
+class SpentOutput(BaseModel):
+    index: int
+    tx_ids: List[str]
+
+
+class SpentOutputs(BaseModel):
+    spent_output: List[SpentOutput]
+
+
+class TxMetadata(BaseModel):
+    hash: str
+    spent_outputs: List[SpentOutputs]
+    conflict_with: List[str]
+    voided_by: List[str]
+    received_by: List[int]
+    children: List[str]
+    twins: List[str]
+    accumulated_weight: float
+    score: float
+    first_block: Optional[str]
+    height: int
+    validation: str
+
+
 class BaseEventData(BaseModel):
     @classmethod
     def from_event_arguments(cls, args: EventArguments) -> 'EventData':
@@ -43,37 +79,6 @@ class TxData(BaseEventData):
     token_name: Optional[str]
     token_symbol: Optional[str]
     metadata: 'TxMetadata'
-
-    class TxInput(BaseModel):
-        tx_id: str
-        index: int
-        data: int
-
-    class TxOutput(BaseModel):
-        value: int
-        script: str
-        token_data: int
-
-    class SpentOutput(BaseModel):
-        index: int
-        tx_ids: List[str]
-
-    class SpentOutputs(BaseModel):
-        spent_output: List['TxData.SpentOutput']
-
-    class TxMetadata(BaseModel):
-        hash: str
-        spent_outputs: List['TxData.SpentOutputs']
-        conflict_with: List[str]
-        voided_by: List[str]
-        received_by: List[int]
-        children: List[str]
-        twins: List[str]
-        accumulated_weight: float
-        score: float
-        first_block: Optional[str]
-        height: int
-        validation: str
 
     @classmethod
     def from_event_arguments(cls, args: EventArguments) -> 'TxData':
