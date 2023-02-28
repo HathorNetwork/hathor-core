@@ -16,7 +16,7 @@ from typing import Optional
 
 from pydantic import Field, NonNegativeInt
 
-from hathor.event import BaseEvent
+from hathor.event.model.base_event import BaseEvent
 from hathor.utils.pydantic import BaseModel
 
 

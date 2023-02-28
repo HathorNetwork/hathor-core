@@ -16,7 +16,7 @@ from typing import Dict, Optional, Type
 
 from pydantic import NonNegativeInt, validator
 
-from hathor.event.model.event_data import BaseEventData, EmptyData, TxData, ReorgData, EventData
+from hathor.event.model.event_data import BaseEventData, EmptyData, EventData, ReorgData, TxData
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.utils.pydantic import BaseModel
 
