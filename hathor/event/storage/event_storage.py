@@ -15,7 +15,7 @@
 from abc import ABC, abstractmethod
 from typing import Iterator, Optional
 
-from hathor.event.base_event import BaseEvent
+from hathor.event.model.base_event import BaseEvent
 
 
 class EventStorage(ABC):

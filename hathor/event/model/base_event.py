@@ -63,7 +63,7 @@ class TxData(BaseEventData):
     class SpentOutputs(BaseModel):
         spent_output: List['TxData.SpentOutput']
 
-    class TxMetadata(BaseModel, ):
+    class TxMetadata(BaseModel):
         hash: str
         spent_outputs: List['TxData.SpentOutputs']
         conflict_with: List[str]

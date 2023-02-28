@@ -14,7 +14,7 @@
 
 from typing import Iterator, List, Optional
 
-from hathor.event.base_event import BaseEvent
+from hathor.event.model.base_event import BaseEvent
 from hathor.event.storage.event_storage import EventStorage
 
 

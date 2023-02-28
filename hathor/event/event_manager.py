@@ -16,7 +16,7 @@ from typing import Callable, Optional
 
 from structlog import get_logger
 
-from hathor.event.base_event import BaseEvent
+from hathor.event.model.base_event import BaseEvent
 from hathor.event.storage import EventStorage
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager

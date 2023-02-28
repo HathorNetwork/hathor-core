@@ -14,7 +14,7 @@
 
 from typing import Iterator, Optional
 
-from hathor.event.base_event import BaseEvent
+from hathor.event.model.base_event import BaseEvent
 from hathor.event.storage.event_storage import EventStorage
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction.util import int_to_bytes

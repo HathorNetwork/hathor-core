@@ -18,8 +18,7 @@ from unittest.mock import ANY, Mock
 import pytest
 from autobahn.websocket import ConnectionRequest
 
-from hathor.event import BaseEvent
-from hathor.event.base_event import TxData
+from hathor.event.model.base_event import BaseEvent, TxData
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.response import EventResponse, InvalidRequestType
