@@ -52,7 +52,11 @@ class RunNode:
         parser.add_argument('--auto-hostname', action='store_true', help='Try to discover the hostname automatically')
         parser.add_argument('--unsafe-mode',
                             help='Enable unsafe parameters. **NEVER USE IT IN PRODUCTION ENVIRONMENT**')
-        parser.add_argument('--testnet', action='store_true', help='Connect to Hathor testnet')
+
+        netargs = parser.add_mutually_exclusive_group()
+        netargs.add_argument('--nano-testnet', action='store_true', help='Connect to Hathor nano-testnet')
+        netargs.add_argument('--testnet', action='store_true', help='Connect to Hathor testnet')
+
         parser.add_argument('--test-mode-tx-weight', action='store_true',
                             help='Reduces tx weight to 1 for testing purposes')
         parser.add_argument('--dns', action='append', help='Seed DNS')
@@ -355,7 +359,7 @@ class RunNode:
 
     def __init__(self, *, argv=None):
         from hathor.cli.run_node_args import RunNodeArgs
-        from hathor.conf import TESTNET_SETTINGS_FILEPATH
+        from hathor.conf import NANO_TESTNET_SETTINGS_FILEPATH, TESTNET_SETTINGS_FILEPATH
         from hathor.conf.get_settings import get_global_settings
         self.log = logger.new()
 
@@ -372,6 +376,8 @@ class RunNode:
             os.environ['HATHOR_CONFIG_YAML'] = self._args.config_yaml
         elif self._args.testnet:
             os.environ['HATHOR_CONFIG_YAML'] = TESTNET_SETTINGS_FILEPATH
+        elif self._args.nano_testnet:
+            os.environ['HATHOR_CONFIG_YAML'] = NANO_TESTNET_SETTINGS_FILEPATH
 
         try:
             get_global_settings()

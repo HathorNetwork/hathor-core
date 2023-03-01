@@ -39,5 +39,6 @@ SETTINGS = HathorSettings(
         evaluation_interval=4,
         max_signal_bits=4,
         default_threshold=3
-    )
+    ),
+    ENABLE_NANO_CONTRACTS=True,
 )
