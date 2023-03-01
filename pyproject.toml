@@ -44,6 +44,7 @@ mypy-zope = {version = "^0.3", markers = "implementation_name == 'cpython'"}
 pytest = "~7.2.0"
 pytest-cov = "~4.0.0"
 flaky = "~3.7.0"
+pytest-xdist = "~3.2.0"
 # stubs:
 types-requests = "=2.28.11.4"
 types-pyopenssl = "=22.1.0.2"
