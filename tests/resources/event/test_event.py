@@ -36,14 +36,22 @@ def web():
     return StubSite(EventResource(event_manager))
 
 
-def test_get_events(web):
+@pytest.fixture
+def data():
+    return EventMocker.tx_data.dict()
+
+
+def test_get_events(web, data):
     response = web.get('event').result
     result = response.json_value()
     expected = {
         'events': [
-            {'peer_id': '123', 'id': 0, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None},
-            {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None},
-            {'peer_id': '123', 'id': 2, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None}
+            {'peer_id': '123', 'id': 0, 'timestamp': 123456.0, 'type': 'vertex:metadata_changed', 'data': data,
+             'group_id': None},
+            {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'vertex:metadata_changed', 'data': data,
+             'group_id': None},
+            {'peer_id': '123', 'id': 2, 'timestamp': 123456.0, 'type': 'vertex:metadata_changed', 'data': data,
+             'group_id': None}
         ],
         'latest_event_id': 2
     }
@@ -51,12 +59,13 @@ def test_get_events(web):
     assert result == expected
 
 
-def test_get_events_with_size(web):
+def test_get_events_with_size(web, data):
     response = web.get('event', {b'size': b'1'})
     result = response.result.json_value()
     expected = {
         'events': [
-            {'peer_id': '123', 'id': 0, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None}
+            {'peer_id': '123', 'id': 0, 'timestamp': 123456.0, 'type': 'vertex:metadata_changed', 'data': data,
+             'group_id': None}
         ],
         'latest_event_id': 2
     }
@@ -64,13 +73,15 @@ def test_get_events_with_size(web):
     assert result == expected
 
 
-def test_get_events_with_last_ack_event_id(web):
+def test_get_events_with_last_ack_event_id(web, data):
     response = web.get('event', {b'last_ack_event_id': b'0'})
     result = response.result.json_value()
     expected = {
         'events': [
-            {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None},
-            {'peer_id': '123', 'id': 2, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None}
+            {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'vertex:metadata_changed', 'data': data,
+             'group_id': None},
+            {'peer_id': '123', 'id': 2, 'timestamp': 123456.0, 'type': 'vertex:metadata_changed', 'data': data,
+             'group_id': None}
         ],
         'latest_event_id': 2
     }
@@ -78,12 +89,13 @@ def test_get_events_with_last_ack_event_id(web):
     assert result == expected
 
 
-def test_get_events_with_size_and_last_ack_event_id(web):
+def test_get_events_with_size_and_last_ack_event_id(web, data):
     response = web.get('event', {b'last_ack_event_id': b'0', b'size': b'1'})
     result = response.result.json_value()
     expected = {
         'events': [
-            {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'type', 'data': {}, 'group_id': None},
+            {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'vertex:metadata_changed', 'data': data,
+             'group_id': None},
         ],
         'latest_event_id': 2
     }
