@@ -222,11 +222,6 @@ class CliBuilder:
             self.log.info('--x-enable-event-queue flag provided. '
                           'The events detected by the full node will be stored and retrieved to clients')
 
-            self.manager.retain_events = args.x_retain_events is True
-        elif args.x_retain_events:
-            self.log.error('You cannot use --x-retain-events without --x-enable-event-queue.')
-            sys.exit(-1)
-
         for description in args.listen:
             self.manager.add_listen_address(description)
 
