@@ -35,7 +35,8 @@ class MemoryTimestampIndex(TimestampIndex):
 
     _index: 'SortedKeyList[TransactionIndexElement]'
 
-    def __init__(self) -> None:
+    def __init__(self, *, txs: bool = False, blocks: bool = False, all: bool = False):
+        super().__init__(txs=txs, blocks=blocks, all=all)
         self.log = logger.new()
         self.force_clear()
 

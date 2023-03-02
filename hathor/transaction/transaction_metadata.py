@@ -103,6 +103,7 @@ class TransactionMetadata:
     voided_by: Optional[Set[bytes]]
     received_by: List[int]
     children: List[bytes]
+    children_partial: List[bytes]
     twins: List[bytes]
     accumulated_weight: float
     score: float
@@ -154,6 +155,10 @@ class TransactionMetadata:
         # List of transactions which have this transaction as parent.
         # Store only the transactions' hash.
         self.children = []
+
+        # List of partially validated transactions which have this transaction as parent.
+        # Store only the transactions' hash.
+        self.children_partial = []
 
         # Hash of the transactions that are twin to this transaction.
         # Twin transactions have the same inputs and outputs
@@ -241,7 +246,7 @@ class TransactionMetadata:
         if not isinstance(other, TransactionMetadata):
             return False
         for field in ['hash', 'conflict_with', 'voided_by', 'received_by',
-                      'children', 'accumulated_weight', 'twins', 'score',
+                      'children', 'children_partial', 'accumulated_weight', 'twins', 'score',
                       'first_block', 'validation', 'min_height', 'soft_height']:
             if (getattr(self, field) or None) != (getattr(other, field) or None):
                 return False
@@ -262,7 +267,11 @@ class TransactionMetadata:
 
         return True
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self, *, _extended: bool = False) -> Dict[str, Any]:
+        """ Serialize data to JSON
+
+        `_extended` is an internal parameter, don't use it directly, use `to_json_extended` instead
+        """
         data: Dict[str, Any] = {}
         data['hash'] = self.hash and self.hash.hex()
         data['spent_outputs'] = []
@@ -270,6 +279,8 @@ class TransactionMetadata:
             data['spent_outputs'].append([idx, [h_bytes.hex() for h_bytes in hashes]])
         data['received_by'] = list(self.received_by)
         data['children'] = [x.hex() for x in self.children]
+        if not _extended:
+            data['children_partial'] = [x.hex() for x in self.children_partial]
         data['conflict_with'] = [x.hex() for x in set(self.conflict_with)] if self.conflict_with else []
         data['voided_by'] = [x.hex() for x in self.voided_by] if self.voided_by else []
         data['twins'] = [x.hex() for x in self.twins]
@@ -287,7 +298,9 @@ class TransactionMetadata:
         return data
 
     def to_json_extended(self, tx_storage: 'TransactionStorage') -> Dict[str, Any]:
-        data = self.to_json()
+        """ Serialize data to JSON with attributes to be exposed to the APIs
+        """
+        data = self.to_json(_extended=True)
         first_block_height: Optional[int]
         if self.first_block is not None:
             first_block = tx_storage.get_transaction(self.first_block)
@@ -308,6 +321,7 @@ class TransactionMetadata:
                 meta.spent_outputs[idx].append(bytes.fromhex(h_hex))
         meta.received_by = list(data['received_by'])
         meta.children = [bytes.fromhex(h) for h in data['children']]
+        meta.children_partial = [bytes.fromhex(h) for h in data.get('children_partial', [])]
 
         if 'conflict_with' in data and data['conflict_with']:
             meta.conflict_with = [bytes.fromhex(h) for h in set(data['conflict_with'])]

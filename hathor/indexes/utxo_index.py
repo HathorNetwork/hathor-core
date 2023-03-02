@@ -19,13 +19,19 @@ from typing import Iterator, Optional
 from structlog import get_logger
 
 from hathor.conf import HathorSettings
-from hathor.indexes.base_index import BaseIndex
+from hathor.indexes.base_index import BaseIndex, Scope
 from hathor.transaction import BaseTransaction, TxOutput
 from hathor.transaction.scripts import parse_address_script
 from hathor.util import sorted_merger
 
 logger = get_logger()
 settings = HathorSettings()
+
+SCOPE = Scope(
+    include_blocks=True,
+    include_txs=True,
+    include_voided=True,
+)
 
 
 @dataclass(frozen=True)
@@ -103,6 +109,9 @@ class UtxoIndex(BaseIndex):
         self.log = logger.new()
 
     # interface methods provided by the base class
+
+    def get_scope(self) -> Scope:
+        return SCOPE
 
     def init_loop_step(self, tx: BaseTransaction) -> None:
         self.update(tx)

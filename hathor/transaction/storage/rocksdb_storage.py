@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Dict, Iterator, List, Optional
 
 from structlog import get_logger
 
+from hathor.conf import HathorSettings
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.storage import RocksDBStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionPartiallyValidatedError
@@ -29,6 +30,7 @@ if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction, TransactionMetadata
 
 logger = get_logger()
+settings = HathorSettings()
 
 _DB_NAME = 'data_v2.db'
 _CF_NAME_TX = b'tx'
@@ -150,7 +152,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             self._save_to_weakref(tx)
         return tx
 
-    def get_all_transactions(self) -> Iterator['BaseTransaction']:
+    def get_all_transactions(self, *, include_partial: bool = False) -> Iterator[BaseTransaction]:
         tx: Optional['BaseTransaction']
 
         items = self._db.iteritems(self._cf_tx)
@@ -167,6 +169,10 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
                 tx = self._get_tx(hash_bytes, tx_data)
 
             assert tx is not None
+            if not include_partial:
+                assert tx._metadata is not None
+                if tx._metadata.voided_by and settings.PARTIALLY_VALIDATED_ID in tx._metadata.voided_by:
+                    continue
             yield tx
 
     def is_empty(self) -> bool:

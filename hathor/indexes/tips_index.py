@@ -18,10 +18,28 @@ from typing import Set
 from intervaltree import Interval
 from structlog import get_logger
 
-from hathor.indexes.base_index import BaseIndex
+from hathor.indexes.base_index import BaseIndex, Scope
 from hathor.transaction import BaseTransaction
 
 logger = get_logger()
+
+SCOPE_ALL = Scope(
+    include_blocks=True,
+    include_txs=True,
+    include_voided=True,
+)
+
+SCOPE_TXS = Scope(
+    include_blocks=False,
+    include_txs=True,
+    include_voided=False,
+)
+
+SCOPE_BLOCKS = Scope(
+    include_blocks=True,
+    include_txs=False,
+    include_voided=True,
+)
 
 
 class TipsIndex(BaseIndex):
@@ -37,6 +55,20 @@ class TipsIndex(BaseIndex):
 
     TODO Use an interval tree stored in disk, possibly using a B-tree.
     """
+
+    def __init__(self, *, txs: bool = False, blocks: bool = False, all: bool = False):
+        if sum([txs, blocks, all]) != 1:
+            raise TypeError('Exactly one of these: txs, blocks, all, must be set to True')
+        self._scope: Scope
+        if txs:
+            self._scope = SCOPE_TXS
+        elif blocks:
+            self._scope = SCOPE_BLOCKS
+        elif all:
+            self._scope = SCOPE_ALL
+
+    def get_scope(self) -> Scope:
+        return self._scope
 
     @abstractmethod
     def add_tx(self, tx: BaseTransaction) -> bool:

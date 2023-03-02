@@ -92,7 +92,7 @@ class TransactionMemoryStorage(BaseTransactionStorage):
         else:
             raise TransactionDoesNotExist(hash_bytes.hex())
 
-    def get_all_transactions(self) -> Iterator[BaseTransaction]:
+    def get_all_transactions(self, *, include_partial: bool = False) -> Iterator[BaseTransaction]:
         for tx in self.transactions.values():
             tx = self._clone(tx)
             if tx.hash in self.metadata:

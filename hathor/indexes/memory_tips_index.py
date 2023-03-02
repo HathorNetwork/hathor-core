@@ -47,7 +47,8 @@ class MemoryTipsIndex(TipsIndex):
     # It is useful because the interval tree allows access only by the interval.
     tx_last_interval: Dict[bytes, Interval]
 
-    def __init__(self) -> None:
+    def __init__(self, *, txs: bool = False, blocks: bool = False, all: bool = False):
+        super().__init__(txs=txs, blocks=blocks, all=all)
         self.log = logger.new()
         self.tree = IntervalTree()
         self.tx_last_interval = {}

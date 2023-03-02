@@ -15,7 +15,7 @@
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Iterator, List
 
-from hathor.indexes.base_index import BaseIndex
+from hathor.indexes.base_index import BaseIndex, Scope
 from hathor.transaction import BaseTransaction, Block
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -24,6 +24,13 @@ if TYPE_CHECKING:  # pragma: no cover
 
 # XXX: this arbitrary height limit must fit in a u32 (4-bytes unsigned), so it can be stored easily on rocksdb
 INF_HEIGHT: int = 2**32 - 1
+
+SCOPE = Scope(
+    include_blocks=True,
+    include_txs=True,
+    include_voided=True,
+    include_partial=True
+)
 
 
 def get_requested_from_height(tx: BaseTransaction) -> int:
@@ -104,6 +111,9 @@ class DepsIndex(BaseIndex):
     - The "needed" and "ready" concepts should be easier to understand, but are harder to ascii-draw, thus I skipped
       them.
     """
+
+    def get_scope(self) -> Scope:
+        return SCOPE
 
     def init_loop_step(self, tx: BaseTransaction) -> None:
         tx_meta = tx.get_metadata()

@@ -504,7 +504,7 @@ class TransactionStorage(ABC):
             return None
 
     @abstractmethod
-    def get_all_transactions(self) -> Iterator[BaseTransaction]:
+    def get_all_transactions(self, *, include_partial: bool = False) -> Iterator[BaseTransaction]:
         # TODO: verify the following claim:
         """Return all transactions that are not blocks.
         """
@@ -1147,7 +1147,7 @@ class BaseTransactionStorage(TransactionStorage):
         yield from cur_blocks
         yield from cur_txs
 
-    def _topological_sort_metadata(self) -> Iterator[BaseTransaction]:
+    def _topological_sort_metadata(self, *, include_partial: bool = False) -> Iterator[BaseTransaction]:
         import heapq
         from dataclasses import dataclass, field
 

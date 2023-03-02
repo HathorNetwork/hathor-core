@@ -307,13 +307,13 @@ class MemoryIndexesManager(IndexesManager):
         from hathor.indexes.memory_tips_index import MemoryTipsIndex
 
         self.info = MemoryInfoIndex()
-        self.all_tips = MemoryTipsIndex()
-        self.block_tips = MemoryTipsIndex()
-        self.tx_tips = MemoryTipsIndex()
+        self.all_tips = MemoryTipsIndex(all=True)
+        self.block_tips = MemoryTipsIndex(blocks=True)
+        self.tx_tips = MemoryTipsIndex(txs=True)
 
-        self.sorted_all = MemoryTimestampIndex()
-        self.sorted_blocks = MemoryTimestampIndex()
-        self.sorted_txs = MemoryTimestampIndex()
+        self.sorted_all = MemoryTimestampIndex(all=True)
+        self.sorted_blocks = MemoryTimestampIndex(blocks=True)
+        self.sorted_txs = MemoryTimestampIndex(txs=True)
 
         self.addresses = None
         self.tokens = None
@@ -362,13 +362,13 @@ class RocksDBIndexesManager(IndexesManager):
 
         self.info = RocksDBInfoIndex(self._db)
         self.height = RocksDBHeightIndex(self._db)
-        self.all_tips = PartialRocksDBTipsIndex(self._db, 'all')
-        self.block_tips = PartialRocksDBTipsIndex(self._db, 'blocks')
-        self.tx_tips = PartialRocksDBTipsIndex(self._db, 'txs')
+        self.all_tips = PartialRocksDBTipsIndex(self._db, all=True)
+        self.block_tips = PartialRocksDBTipsIndex(self._db, blocks=True)
+        self.tx_tips = PartialRocksDBTipsIndex(self._db, txs=True)
 
-        self.sorted_all = RocksDBTimestampIndex(self._db, 'all')
-        self.sorted_blocks = RocksDBTimestampIndex(self._db, 'blocks')
-        self.sorted_txs = RocksDBTimestampIndex(self._db, 'txs')
+        self.sorted_all = RocksDBTimestampIndex(self._db, all=True)
+        self.sorted_blocks = RocksDBTimestampIndex(self._db, blocks=True)
+        self.sorted_txs = RocksDBTimestampIndex(self._db, txs=True)
 
         self.addresses = None
         self.tokens = None

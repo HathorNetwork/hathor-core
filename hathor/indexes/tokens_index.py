@@ -15,8 +15,14 @@
 from abc import ABC, abstractmethod
 from typing import Iterator, List, NamedTuple, Optional, Tuple
 
-from hathor.indexes.base_index import BaseIndex
+from hathor.indexes.base_index import BaseIndex, Scope
 from hathor.transaction import BaseTransaction
+
+SCOPE = Scope(
+    include_blocks=False,
+    include_txs=True,
+    include_voided=True,
+)
 
 
 class TokenUtxoInfo(NamedTuple):
@@ -61,6 +67,9 @@ class TokenIndexInfo(ABC):
 class TokensIndex(BaseIndex):
     """ Index of tokens by token uid
     """
+
+    def get_scope(self) -> Scope:
+        return SCOPE
 
     def init_loop_step(self, tx: BaseTransaction) -> None:
         tx_meta = tx.get_metadata()
