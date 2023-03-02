@@ -43,7 +43,7 @@ _SUBSCRIBE_EVENTS = [
     HathorEvents.CONSENSUS_TX_REMOVED,
 ]
 
-_EVENT_CONVERTER = {
+_EVENT_CONVERTERS = {
     HathorEvents.CONSENSUS_TX_UPDATE: HathorEvents.VERTEX_METADATA_CHANGED
 }
 
@@ -55,6 +55,7 @@ class EventManager:
     """
 
     _peer_id: str
+    _load_finished: bool = False
 
     @property
     def event_storage(self) -> EventStorage:
@@ -110,8 +111,21 @@ class EventManager:
             self._pubsub.subscribe(event, self._handle_event)
 
     def _handle_event(self, event_type: HathorEvents, event_args: EventArguments) -> None:
+        event_type = _EVENT_CONVERTERS.get(event_type, event_type)
+        event_specific_handlers = {
+            HathorEvents.LOAD_FINISHED: self._handle_load_finished
+        }
+
+        if event_specific_handler := event_specific_handlers.get(event_type):
+            event_specific_handler()
+
+        if not self._load_finished and not self._emit_load_events:
+            return
+
+        self._handle_event_creation(event_type, event_args)
+
+    def _handle_event_creation(self, event_type: HathorEvents, event_args: EventArguments):
         create_event_fn: Callable[[HathorEvents, EventArguments], BaseEvent]
-        event_type = _EVENT_CONVERTER.get(event_type, event_type)
 
         if event_type in _GROUP_START_EVENTS:
             create_event_fn = self._create_group_start_event
@@ -162,6 +176,9 @@ class EventManager:
             event_args=event_args,
             group_id=group_id,
         )
+
+    def _handle_load_finished(self):
+        self._load_finished = True
 
     def _create_event(
         self,
