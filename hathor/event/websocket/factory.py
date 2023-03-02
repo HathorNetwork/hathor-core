@@ -17,7 +17,7 @@ from typing import Optional, Set
 from autobahn.twisted.websocket import WebSocketServerFactory
 from structlog import get_logger
 
-from hathor.event import BaseEvent
+from hathor.event.model.base_event import BaseEvent
 from hathor.event.storage import EventStorage
 from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.response import EventResponse, InvalidRequestType

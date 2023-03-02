@@ -18,10 +18,12 @@ from unittest.mock import ANY, Mock
 import pytest
 from autobahn.websocket import ConnectionRequest
 
-from hathor.event import BaseEvent
+from hathor.event.model.base_event import BaseEvent
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.response import EventResponse, InvalidRequestType
+from hathor.pubsub import HathorEvents
+from tests.utils import EventMocker
 
 
 @pytest.fixture
@@ -85,8 +87,8 @@ def test_send_event_response():
             peer_id='some_peer_id',
             id=10,
             timestamp=123,
-            type='some_type',
-            data={}
+            type=HathorEvents.VERTEX_METADATA_CHANGED,
+            data=EventMocker.tx_data
         ),
         latest_event_id=10
     )
@@ -94,7 +96,12 @@ def test_send_event_response():
     protocol.send_event_response(response)
 
     expected_payload = b'{"type":"EVENT","event":{"peer_id":"some_peer_id","id":10,"timestamp":123.0,' \
-                       b'"type":"some_type","data":{},"group_id":null},"latest_event_id":10}'
+                       b'"type":"vertex:metadata_changed","data":{"hash":"abc","nonce":123,"timestamp":456,' \
+                       b'"version":1,"weight":10.0,"inputs":[],"outputs":[],"parents":[],"tokens":[],' \
+                       b'"token_name":null,"token_symbol":null,"metadata":{"hash":"abc","spent_outputs":[],' \
+                       b'"conflict_with":[],"voided_by":[],"received_by":[],"children":[],"twins":[],' \
+                       b'"accumulated_weight":10.0,"score":20.0,"first_block":null,"height":100,' \
+                       b'"validation":"validation"}},"group_id":null},"latest_event_id":10}'
 
     protocol.sendMessage.assert_called_once_with(expected_payload)
 

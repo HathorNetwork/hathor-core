@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Callable, Dict, Optional
+from typing import Callable, Optional
 
 from structlog import get_logger
 
-from hathor.event.base_event import BaseEvent
+from hathor.event.model.base_event import BaseEvent
 from hathor.event.storage import EventStorage
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
@@ -48,48 +48,6 @@ _SUBSCRIBE_EVENTS = [
 _EVENT_CONVERTER = {
     HathorEvents.CONSENSUS_TX_UPDATE: HathorEvents.VERTEX_METADATA_CHANGED
 }
-
-
-def _empty(args: EventArguments) -> Dict[str, Any]:
-    return {}
-
-
-def _extract_tx(args: EventArguments) -> Dict[str, Any]:
-    return {
-        'hash': args.tx.hash_hex,
-        # TODO: other fields haven't been implemented, but will be before this feature is rolled out
-    }
-
-
-def _extract_reorg(args: EventArguments) -> Dict[str, Any]:
-    return {
-        'reorg_size': args.reorg_size,
-        'previous_best_block': args.old_best_block.hash_hex,
-        'new_best_block': args.new_best_block.hash_hex,
-        'common_block': args.common_block.hash_hex,
-    }
-
-
-_EVENT_EXTRACT_MAP: Dict[HathorEvents, Callable[[EventArguments], Dict[str, Any]]] = {
-    HathorEvents.LOAD_STARTED: _empty,
-    HathorEvents.LOAD_FINISHED: _empty,
-    HathorEvents.NETWORK_NEW_TX_ACCEPTED: _extract_tx,
-    HathorEvents.NETWORK_BEST_BLOCK_FOUND: _extract_tx,
-    HathorEvents.NETWORK_ORPHAN_BLOCK_FOUND: _extract_tx,
-    HathorEvents.REORG_STARTED: _extract_reorg,
-    HathorEvents.REORG_FINISHED: _empty,
-    HathorEvents.VERTEX_METADATA_CHANGED: _extract_tx,
-    HathorEvents.CONSENSUS_TX_UPDATE: _extract_tx,
-    HathorEvents.CONSENSUS_TX_REMOVED: _extract_tx,
-}
-
-
-def _build_event_data(event_type: HathorEvents, event_args: EventArguments) -> Dict[str, Any]:
-    """Extract and build event data from event_args for a given event type."""
-    event_extract_fn = _EVENT_EXTRACT_MAP.get(event_type)
-    if event_extract_fn is None:
-        raise ValueError(f'The given event type ({event_type}) is not a supported event')
-    return event_extract_fn(event_args)
 
 
 class EventManager:
@@ -211,11 +169,11 @@ class EventManager:
         event_args: EventArguments,
         group_id: Optional[int],
     ) -> BaseEvent:
-        return BaseEvent(
-            id=0 if self._last_event is None else self._last_event.id + 1,
+        return BaseEvent.from_event_arguments(
+            event_id=0 if self._last_event is None else self._last_event.id + 1,
             peer_id=self._peer_id,
             timestamp=self._clock.seconds(),
-            type=event_type.value,
-            data=_build_event_data(event_type, event_args),
+            event_type=event_type,
+            event_args=event_args,
             group_id=group_id,
         )

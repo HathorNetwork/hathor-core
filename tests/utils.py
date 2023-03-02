@@ -14,8 +14,10 @@ from twisted.internet.task import Clock
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key, get_private_key_from_bytes
-from hathor.event.base_event import BaseEvent
+from hathor.event.model.base_event import BaseEvent
+from hathor.event.model.event_data import TxData, TxMetadata
 from hathor.manager import HathorManager
+from hathor.pubsub import HathorEvents
 from hathor.transaction import BaseTransaction, Transaction, TxInput, TxOutput, genesis
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
@@ -653,6 +655,30 @@ def add_tx_with_data_script(manager: 'HathorManager', data: List[str], propagate
 class EventMocker:
     rng: Random
     next_id: int = 0
+    tx_data = TxData(
+        hash='abc',
+        nonce=123,
+        timestamp=456,
+        version=1,
+        weight=10,
+        inputs=[],
+        outputs=[],
+        parents=[],
+        tokens=[],
+        metadata=TxMetadata(
+            hash='abc',
+            spent_outputs=[],
+            conflict_with=[],
+            voided_by=[],
+            received_by=[],
+            children=[],
+            twins=[],
+            accumulated_weight=10,
+            score=20,
+            height=100,
+            validation='validation'
+        )
+    )
 
     def gen_next_id(self) -> int:
         next_id = self.next_id
@@ -669,11 +695,9 @@ class EventMocker:
             id=event_id or self.gen_next_id(),
             peer_id=peer_id_mock,
             timestamp=1658892990,
-            type='network:best_block_found',
+            type=HathorEvents.VERTEX_METADATA_CHANGED,
             group_id=group_id,
-            data={
-                "data": "test"
-            },
+            data=self.tx_data,
         )
 
     def generate_random_word(self, length: int) -> str:
@@ -682,14 +706,14 @@ class EventMocker:
         letters = string.ascii_lowercase
         return ''.join(self.rng.choice(letters) for i in range(length))
 
-    @staticmethod
-    def create_event(event_id: int) -> BaseEvent:
+    @classmethod
+    def create_event(cls, event_id: int) -> BaseEvent:
         """ Generates a mocked event with fixed properties, except the ID
         """
         return BaseEvent(
             peer_id='123',
             id=event_id,
             timestamp=123456,
-            type='type',
-            data={}
+            type=HathorEvents.VERTEX_METADATA_CHANGED,
+            data=cls.tx_data
         )
