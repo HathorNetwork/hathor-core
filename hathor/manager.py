@@ -271,6 +271,7 @@ class HathorManager:
 
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
+        self.pubsub.publish(HathorEvents.LOAD_STARTED)
         self.connections.start()
         self.pow_thread_pool.start()
 
@@ -554,6 +555,8 @@ class HathorManager:
 
         # self.stop_profiler(save_to='profiles/initializing.prof')
         self.state = self.NodeState.READY
+        self.pubsub.publish(HathorEvents.LOAD_FINISHED)
+
         total_load_time = LogDuration(t2 - t0)
         tx_rate = '?' if total_load_time == 0 else cnt / total_load_time
 
