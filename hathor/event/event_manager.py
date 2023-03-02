@@ -65,7 +65,8 @@ class EventManager:
         event_storage: EventStorage,
         event_ws_factory: EventWebsocketFactory,
         pubsub: PubSubManager,
-        reactor: Reactor
+        reactor: Reactor,
+        emit_load_events: bool = False
     ):
         self.log = logger.new()
 
@@ -73,6 +74,7 @@ class EventManager:
         self._event_storage = event_storage
         self._event_ws_factory = event_ws_factory
         self._pubsub = pubsub
+        self._emit_load_events = emit_load_events
 
         self._last_event = self._event_storage.get_last_event()
         self._last_existing_group_id = self._event_storage.get_last_group_id()
