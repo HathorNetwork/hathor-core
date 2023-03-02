@@ -206,6 +206,8 @@ class CliBuilder:
                 self.wallet.test_mode = True
 
         if args.x_full_verification:
+            self.check_or_raise(not args.x_enable_event_queue, '--x-full-verification cannot be used with '
+                                                               '--x-enable-event-queue')
             self.manager._full_verification = True
         if args.x_fast_init_beta:
             self.log.warn('--x-fast-init-beta is now the default, no need to specify it')
