@@ -21,7 +21,6 @@ from hathor.pubsub import EventArguments, HathorEvents
 from hathor.utils.pydantic import BaseModel
 
 _EVENT_DATA_MAP: Dict[HathorEvents, Type[BaseEventData]] = {
-    HathorEvents.LOAD_STARTED: EmptyData,
     HathorEvents.LOAD_FINISHED: EmptyData,
     HathorEvents.NETWORK_NEW_TX_ACCEPTED: TxData,
     HathorEvents.REORG_STARTED: ReorgData,

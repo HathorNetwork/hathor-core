@@ -34,7 +34,6 @@ _GROUP_END_EVENTS = {
 
 _SUBSCRIBE_EVENTS = [
     HathorEvents.NETWORK_NEW_TX_ACCEPTED,
-    HathorEvents.LOAD_STARTED,
     HathorEvents.LOAD_FINISHED,
     HathorEvents.REORG_STARTED,
     HathorEvents.REORG_FINISHED,

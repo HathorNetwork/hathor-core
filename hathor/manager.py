@@ -271,7 +271,6 @@ class HathorManager:
 
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
-        self.pubsub.publish(HathorEvents.LOAD_STARTED)
         self.connections.start()
         self.pow_thread_pool.start()
 
