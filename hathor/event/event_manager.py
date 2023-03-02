@@ -124,7 +124,7 @@ class EventManager:
 
         self._handle_event_creation(event_type, event_args)
 
-    def _handle_event_creation(self, event_type: HathorEvents, event_args: EventArguments):
+    def _handle_event_creation(self, event_type: HathorEvents, event_args: EventArguments) -> None:
         create_event_fn: Callable[[HathorEvents, EventArguments], BaseEvent]
 
         if event_type in _GROUP_START_EVENTS:
