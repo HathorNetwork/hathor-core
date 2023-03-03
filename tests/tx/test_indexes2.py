@@ -45,8 +45,8 @@ class SimpleIndexesTestCase(unittest.TestCase):
         from hathor.indexes.memory_timestamp_index import MemoryTimestampIndex
         from hathor.indexes.rocksdb_timestamp_index import RocksDBTimestampIndex
         from hathor.indexes.timestamp_index import RangeIdx
-        rocksdb_index = RocksDBTimestampIndex(self.create_tmp_rocksdb_db(), 'foo')
-        memory_index = MemoryTimestampIndex()
+        rocksdb_index = RocksDBTimestampIndex(self.create_tmp_rocksdb_db(), all=True)
+        memory_index = MemoryTimestampIndex(all=True)
         for tx in self.transactions:
             rocksdb_index.add_tx(tx)
             memory_index.add_tx(tx)

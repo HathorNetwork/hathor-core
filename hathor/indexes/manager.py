@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import operator
 from abc import ABC, abstractmethod
-from enum import Enum, auto
-from typing import TYPE_CHECKING, Iterator, List, Optional, Tuple
+from functools import reduce
+from typing import TYPE_CHECKING, Iterator, List, Optional
 
 from structlog import get_logger
 
@@ -40,12 +41,6 @@ if TYPE_CHECKING:  # pragma: no cover
 logger = get_logger()
 
 MAX_CACHE_SIZE_DURING_LOAD = 1000
-
-
-class _IndexFilter(Enum):
-    ALL = auto()  # block or tx, voided or not
-    ALL_BLOCKS = auto()  # only blocks that are not voided
-    VALID_TXS = auto()  # only transactions that are not voided
 
 
 class IndexesManager(ABC):
@@ -87,29 +82,24 @@ class IndexesManager(ABC):
 
     def iter_all_indexes(self) -> Iterator[BaseIndex]:
         """ Iterate over all of the indexes abstracted by this manager, hiding their specific implementation details"""
-        for _, index in self._iter_all_indexes_with_filter():
-            yield index
-
-    def _iter_all_indexes_with_filter(self) -> Iterator[Tuple[_IndexFilter, BaseIndex]]:
-        """ Same as `iter_all_indexes()`, but includes a filter for what transactions an index is interested in."""
-        yield _IndexFilter.ALL, self.info
-        yield _IndexFilter.ALL, self.all_tips
-        yield _IndexFilter.ALL_BLOCKS, self.block_tips
-        yield _IndexFilter.VALID_TXS, self.tx_tips
-        yield _IndexFilter.ALL, self.sorted_all
-        yield _IndexFilter.ALL_BLOCKS, self.sorted_blocks
-        yield _IndexFilter.VALID_TXS, self.sorted_txs
-        yield _IndexFilter.ALL, self.height
+        yield self.info
+        yield self.all_tips
+        yield self.block_tips
+        yield self.tx_tips
+        yield self.sorted_all
+        yield self.sorted_blocks
+        yield self.sorted_txs
+        yield self.height
         if self.deps is not None:
-            yield _IndexFilter.ALL, self.deps
+            yield self.deps
         if self.mempool_tips is not None:
-            yield _IndexFilter.ALL, self.mempool_tips
+            yield self.mempool_tips
         if self.addresses is not None:
-            yield _IndexFilter.ALL, self.addresses
+            yield self.addresses
         if self.tokens is not None:
-            yield _IndexFilter.ALL, self.tokens
+            yield self.tokens
         if self.utxo is not None:
-            yield _IndexFilter.ALL, self.utxo
+            yield self.utxo
 
     @abstractmethod
     def enable_address_index(self, pubsub: 'PubSubManager') -> None:
@@ -149,24 +139,23 @@ class IndexesManager(ABC):
 
         db_last_started_at = tx_storage.get_last_started_at()
 
-        indexes_to_init: List[Tuple[_IndexFilter, BaseIndex]] = []
-        for index_filter, index in self._iter_all_indexes_with_filter():
+        indexes_to_init: List[BaseIndex] = []
+        for index in self.iter_all_indexes():
             index_db_name = index.get_db_name()
             if index_db_name is None:
-                indexes_to_init.append((index_filter, index))
+                indexes_to_init.append(index)
                 continue
             index_last_started_at = tx_storage.get_index_last_started_at(index_db_name)
             if db_last_started_at != index_last_started_at:
-                indexes_to_init.append((index_filter, index))
+                indexes_to_init.append(index)
 
         if indexes_to_init:
-            self.log.info('there are indexes that need initialization',
-                          indexes_to_init=[i for _, i in indexes_to_init])
+            self.log.info('there are indexes that need initialization', indexes_to_init=indexes_to_init)
         else:
             self.log.info('there are no indexes that need initialization')
 
         # make sure that all the indexes that we're rebuilding are cleared
-        for _, index in indexes_to_init:
+        for index in indexes_to_init:
             index_db_name = index.get_db_name()
             if index_db_name:
                 tx_storage.set_index_last_started_at(index_db_name, NULL_INDEX_LAST_STARTED_AT)
@@ -184,27 +173,20 @@ class IndexesManager(ABC):
         for index in self.iter_all_indexes():
             index.init_start(self)
 
-        self.log.debug('indexes init')
         if indexes_to_init:
-            tx_iter = progress(tx_storage.topological_iterator(), log=self.log, total=tx_storage.get_vertices_count())
+            overall_scope = reduce(operator.__or__, map(lambda i: i.get_scope(), indexes_to_init))
+            tx_iter_inner = overall_scope.get_iterator(tx_storage)
+            tx_iter = progress(tx_iter_inner, log=self.log, total=tx_storage.get_vertices_count())
+            self.log.debug('indexes init', scope=overall_scope)
         else:
             tx_iter = iter([])
-        for tx in tx_iter:
+            self.log.debug('indexes init')
 
-            tx_meta = tx.get_metadata()
+        for tx in tx_iter:
             # feed each transaction to the indexes that they are interested in
-            for index_filter, index in indexes_to_init:
-                if index_filter is _IndexFilter.ALL:
+            for index in indexes_to_init:
+                if index.get_scope().matches(tx):
                     index.init_loop_step(tx)
-                elif index_filter is _IndexFilter.ALL_BLOCKS:
-                    if tx.is_block:
-                        index.init_loop_step(tx)
-                elif index_filter is _IndexFilter.VALID_TXS:
-                    # XXX: all indexes that use this filter treat soft-voided as voided, nothing special needed
-                    if tx.is_transaction and not tx_meta.voided_by:
-                        index.init_loop_step(tx)
-                else:
-                    assert False, 'impossible filter'
 
         # Restore cache capacity.
         if isinstance(tx_storage, TransactionCacheStorage):
@@ -307,13 +289,13 @@ class MemoryIndexesManager(IndexesManager):
         from hathor.indexes.memory_tips_index import MemoryTipsIndex
 
         self.info = MemoryInfoIndex()
-        self.all_tips = MemoryTipsIndex()
-        self.block_tips = MemoryTipsIndex()
-        self.tx_tips = MemoryTipsIndex()
+        self.all_tips = MemoryTipsIndex(all=True)
+        self.block_tips = MemoryTipsIndex(blocks=True)
+        self.tx_tips = MemoryTipsIndex(txs=True)
 
-        self.sorted_all = MemoryTimestampIndex()
-        self.sorted_blocks = MemoryTimestampIndex()
-        self.sorted_txs = MemoryTimestampIndex()
+        self.sorted_all = MemoryTimestampIndex(all=True)
+        self.sorted_blocks = MemoryTimestampIndex(blocks=True)
+        self.sorted_txs = MemoryTimestampIndex(txs=True)
 
         self.addresses = None
         self.tokens = None
@@ -362,13 +344,13 @@ class RocksDBIndexesManager(IndexesManager):
 
         self.info = RocksDBInfoIndex(self._db)
         self.height = RocksDBHeightIndex(self._db)
-        self.all_tips = PartialRocksDBTipsIndex(self._db, 'all')
-        self.block_tips = PartialRocksDBTipsIndex(self._db, 'blocks')
-        self.tx_tips = PartialRocksDBTipsIndex(self._db, 'txs')
+        self.all_tips = PartialRocksDBTipsIndex(self._db, all=True)
+        self.block_tips = PartialRocksDBTipsIndex(self._db, blocks=True)
+        self.tx_tips = PartialRocksDBTipsIndex(self._db, txs=True)
 
-        self.sorted_all = RocksDBTimestampIndex(self._db, 'all')
-        self.sorted_blocks = RocksDBTimestampIndex(self._db, 'blocks')
-        self.sorted_txs = RocksDBTimestampIndex(self._db, 'txs')
+        self.sorted_all = RocksDBTimestampIndex(self._db, all=True)
+        self.sorted_blocks = RocksDBTimestampIndex(self._db, blocks=True)
+        self.sorted_txs = RocksDBTimestampIndex(self._db, txs=True)
 
         self.addresses = None
         self.tokens = None

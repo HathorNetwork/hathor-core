@@ -38,7 +38,15 @@ class RocksDBTimestampIndex(TimestampIndex, RocksDBIndexUtils):
     It works nicely because rocksdb uses a tree sorted by key under the hood.
     """
 
-    def __init__(self, db: 'rocksdb.DB', name: str) -> None:
+    def __init__(self, db: 'rocksdb.DB', *, txs: bool = False, blocks: bool = False, all: bool = False):
+        TimestampIndex.__init__(self, txs=txs, blocks=blocks, all=all)
+        name: str
+        if txs:
+            name = 'txs'
+        elif blocks:
+            name = 'blocks'
+        elif all:
+            name = 'all'
         self.log = logger.new()
         RocksDBIndexUtils.__init__(self, db, f'timestamp-sorted-{name}'.encode())
         self._name = name

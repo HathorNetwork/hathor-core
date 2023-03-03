@@ -18,16 +18,25 @@ from typing import TYPE_CHECKING, Iterable, Iterator, Optional, Set, cast
 
 import structlog
 
-from hathor.indexes.base_index import BaseIndex
+from hathor.indexes.base_index import BaseIndex, Scope
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.util import not_none
 
 if TYPE_CHECKING:  # pragma: no cover
     from hathor.transaction.storage import TransactionStorage
 
+SCOPE = Scope(
+    include_blocks=True,
+    include_txs=True,
+    include_voided=True,
+)
+
 
 class MempoolTipsIndex(BaseIndex):
     """Index to access the tips of the mempool transactions, which haven't been confirmed by a block."""
+
+    def get_scope(self) -> Scope:
+        return SCOPE
 
     def init_loop_step(self, tx: BaseTransaction) -> None:
         self.update(tx)

@@ -111,8 +111,15 @@ class PartialRocksDBTipsIndex(MemoryTipsIndex, RocksDBIndexUtils):
     # It is useful because the interval tree allows access only by the interval.
     tx_last_interval: Dict[bytes, Interval]
 
-    def __init__(self, db: 'rocksdb.DB', name: str) -> None:
-        MemoryTipsIndex.__init__(self)
+    def __init__(self, db: 'rocksdb.DB', *, txs: bool = False, blocks: bool = False, all: bool = False):
+        MemoryTipsIndex.__init__(self, txs=txs, blocks=blocks, all=all)
+        name: str
+        if txs:
+            name = 'txs'
+        elif blocks:
+            name = 'blocks'
+        elif all:
+            name = 'all'
         self.log = logger.new()  # XXX: override MemoryTipsIndex logger so it shows the correct module
         RocksDBIndexUtils.__init__(self, db, f'tips-{name}'.encode())
         self._name = name
