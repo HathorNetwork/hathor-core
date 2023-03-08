@@ -76,7 +76,6 @@ class BaseEventReorgTest(unittest.TestCase):
             ],
             # XXX: the order of the following events can vary depending on which genesis is spent/confirmed first
             unsorted([
-                # (HathorEvents.VERTEX_METADATA_CHANGED, {'hash': settings.GENESIS_BLOCK_HASH.hex()}),
                 (HathorEvents.VERTEX_METADATA_CHANGED, {'hash': settings.GENESIS_TX1_HASH.hex()}),
                 (HathorEvents.VERTEX_METADATA_CHANGED, {'hash': settings.GENESIS_TX2_HASH.hex()}),
                 (HathorEvents.VERTEX_METADATA_CHANGED, {'hash': blocks[0].hash_hex}),
