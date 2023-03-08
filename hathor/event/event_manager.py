@@ -74,7 +74,7 @@ class EventManager:
         self._event_storage = event_storage
         self._event_ws_factory = event_ws_factory
         self._pubsub = pubsub
-        self._emit_load_events = emit_load_events
+        self.emit_load_events = emit_load_events
 
         self._last_event = self._event_storage.get_last_event()
         self._last_existing_group_id = self._event_storage.get_last_group_id()
@@ -118,7 +118,7 @@ class EventManager:
         if event_specific_handler := event_specific_handlers.get(event_type):
             event_specific_handler()
 
-        if not self._load_finished and not self._emit_load_events:
+        if not self._load_finished and not self.emit_load_events:
             return
 
         self._handle_event_creation(event_type, event_args)
