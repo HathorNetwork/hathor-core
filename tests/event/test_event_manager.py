@@ -30,7 +30,7 @@ class BaseEventManagerTest(unittest.TestCase):
 
     def test_if_event_is_persisted(self):
         block = self.manager.tx_storage.get_best_block()
-        self.manager.pubsub.publish(HathorEvents.NETWORK_BEST_BLOCK_FOUND, tx=block)
+        self.manager.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=block)
         self.run_to_completion()
         self.assertIsNotNone(self.event_storage.get_event(0))
 

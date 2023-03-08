@@ -34,8 +34,6 @@ _GROUP_END_EVENTS = {
 
 _SUBSCRIBE_EVENTS = [
     HathorEvents.NETWORK_NEW_TX_ACCEPTED,
-    HathorEvents.NETWORK_BEST_BLOCK_FOUND,
-    HathorEvents.NETWORK_ORPHAN_BLOCK_FOUND,
     HathorEvents.LOAD_STARTED,
     HathorEvents.LOAD_FINISHED,
     HathorEvents.REORG_STARTED,
