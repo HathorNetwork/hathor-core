@@ -15,7 +15,8 @@
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Iterator, List
 
-from hathor.indexes.base_index import BaseIndex, Scope
+from hathor.indexes.base_index import BaseIndex
+from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction, Block
 
 if TYPE_CHECKING:  # pragma: no cover

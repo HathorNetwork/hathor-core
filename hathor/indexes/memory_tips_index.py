@@ -18,7 +18,7 @@ from typing import Dict, Optional, Set
 from intervaltree import Interval, IntervalTree
 from structlog import get_logger
 
-from hathor.indexes.tips_index import TipsIndex
+from hathor.indexes.tips_index import ScopeType, TipsIndex
 from hathor.transaction import BaseTransaction
 
 logger = get_logger()
@@ -47,8 +47,8 @@ class MemoryTipsIndex(TipsIndex):
     # It is useful because the interval tree allows access only by the interval.
     tx_last_interval: Dict[bytes, Interval]
 
-    def __init__(self, *, txs: bool = False, blocks: bool = False, all: bool = False):
-        super().__init__(txs=txs, blocks=blocks, all=all)
+    def __init__(self, *, scope_type: ScopeType):
+        super().__init__(scope_type=scope_type)
         self.log = logger.new()
         self.tree = IntervalTree()
         self.tx_last_interval = {}

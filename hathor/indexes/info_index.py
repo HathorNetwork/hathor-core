@@ -16,7 +16,8 @@ from abc import abstractmethod
 
 from structlog import get_logger
 
-from hathor.indexes.base_index import BaseIndex, Scope
+from hathor.indexes.base_index import BaseIndex
+from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction
 
 logger = get_logger()

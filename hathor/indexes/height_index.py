@@ -15,7 +15,8 @@
 from abc import abstractmethod
 from typing import List, NamedTuple, Optional, Tuple
 
-from hathor.indexes.base_index import BaseIndex, Scope
+from hathor.indexes.base_index import BaseIndex
+from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction, Block
 from hathor.transaction.genesis import BLOCK_GENESIS
 from hathor.util import not_none

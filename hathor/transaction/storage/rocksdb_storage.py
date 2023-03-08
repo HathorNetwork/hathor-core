@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Dict, Iterator, List, Optional
 
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.storage import RocksDBStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
@@ -30,7 +29,6 @@ if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction, TransactionMetadata
 
 logger = get_logger()
-settings = HathorSettings()
 
 _DB_NAME = 'data_v2.db'
 _CF_NAME_TX = b'tx'

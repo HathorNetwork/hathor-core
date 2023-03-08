@@ -13,32 +13,37 @@
 # limitations under the License.
 
 from abc import abstractmethod
+from enum import Enum
 from typing import Iterator, List, NamedTuple, Optional, Tuple
 
 from structlog import get_logger
 
-from hathor.indexes.base_index import BaseIndex, Scope
+from hathor.indexes.base_index import BaseIndex
+from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction
 
 logger = get_logger()
 
-SCOPE_ALL = Scope(
-    include_blocks=True,
-    include_txs=True,
-    include_voided=True,
-)
 
-SCOPE_TXS = Scope(
-    include_blocks=False,
-    include_txs=True,
-    include_voided=False,
-)
+class ScopeType(Enum):
+    ALL = Scope(
+        include_blocks=True,
+        include_txs=True,
+        include_voided=True,
+    )
+    TXS = Scope(
+        include_blocks=False,
+        include_txs=True,
+        include_voided=False,
+    )
+    BLOCKS = Scope(
+        include_blocks=True,
+        include_txs=False,
+        include_voided=True,
+    )
 
-SCOPE_BLOCKS = Scope(
-    include_blocks=True,
-    include_txs=False,
-    include_voided=True,
-)
+    def get_name(self) -> str:
+        return self.name.lower()
 
 
 class RangeIdx(NamedTuple):
@@ -50,19 +55,11 @@ class TimestampIndex(BaseIndex):
     """ Index of transactions sorted by their timestamps.
     """
 
-    def __init__(self, *, txs: bool = False, blocks: bool = False, all: bool = False):
-        if sum([txs, blocks, all]) != 1:
-            raise TypeError('Exactly one of these: txs, blocks, all, must be set to True')
-        self._scope: Scope
-        if txs:
-            self._scope = SCOPE_TXS
-        elif blocks:
-            self._scope = SCOPE_BLOCKS
-        elif all:
-            self._scope = SCOPE_ALL
+    def __init__(self, *, scope_type: ScopeType):
+        self._scope_type = scope_type
 
     def get_scope(self) -> Scope:
-        return self._scope
+        return self._scope_type.value
 
     def init_loop_step(self, tx: BaseTransaction) -> None:
         self.add_tx(tx)

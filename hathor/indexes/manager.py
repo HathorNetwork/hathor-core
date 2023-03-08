@@ -25,8 +25,8 @@ from hathor.indexes.deps_index import DepsIndex
 from hathor.indexes.height_index import HeightIndex
 from hathor.indexes.info_index import InfoIndex
 from hathor.indexes.mempool_tips_index import MempoolTipsIndex
-from hathor.indexes.timestamp_index import TimestampIndex
-from hathor.indexes.tips_index import TipsIndex
+from hathor.indexes.timestamp_index import ScopeType as TimestampScopeType, TimestampIndex
+from hathor.indexes.tips_index import ScopeType as TipsScopeType, TipsIndex
 from hathor.indexes.tokens_index import TokensIndex
 from hathor.indexes.utxo_index import UtxoIndex
 from hathor.transaction import BaseTransaction
@@ -82,24 +82,21 @@ class IndexesManager(ABC):
 
     def iter_all_indexes(self) -> Iterator[BaseIndex]:
         """ Iterate over all of the indexes abstracted by this manager, hiding their specific implementation details"""
-        yield self.info
-        yield self.all_tips
-        yield self.block_tips
-        yield self.tx_tips
-        yield self.sorted_all
-        yield self.sorted_blocks
-        yield self.sorted_txs
-        yield self.height
-        if self.deps is not None:
-            yield self.deps
-        if self.mempool_tips is not None:
-            yield self.mempool_tips
-        if self.addresses is not None:
-            yield self.addresses
-        if self.tokens is not None:
-            yield self.tokens
-        if self.utxo is not None:
-            yield self.utxo
+        return filter(None, [
+            self.info,
+            self.all_tips,
+            self.block_tips,
+            self.tx_tips,
+            self.sorted_all,
+            self.sorted_blocks,
+            self.sorted_txs,
+            self.height,
+            self.deps,
+            self.mempool_tips,
+            self.addresses,
+            self.tokens,
+            self.utxo,
+        ])
 
     @abstractmethod
     def enable_address_index(self, pubsub: 'PubSubManager') -> None:
@@ -289,13 +286,13 @@ class MemoryIndexesManager(IndexesManager):
         from hathor.indexes.memory_tips_index import MemoryTipsIndex
 
         self.info = MemoryInfoIndex()
-        self.all_tips = MemoryTipsIndex(all=True)
-        self.block_tips = MemoryTipsIndex(blocks=True)
-        self.tx_tips = MemoryTipsIndex(txs=True)
+        self.all_tips = MemoryTipsIndex(scope_type=TipsScopeType.ALL)
+        self.block_tips = MemoryTipsIndex(scope_type=TipsScopeType.BLOCKS)
+        self.tx_tips = MemoryTipsIndex(scope_type=TipsScopeType.TXS)
 
-        self.sorted_all = MemoryTimestampIndex(all=True)
-        self.sorted_blocks = MemoryTimestampIndex(blocks=True)
-        self.sorted_txs = MemoryTimestampIndex(txs=True)
+        self.sorted_all = MemoryTimestampIndex(scope_type=TimestampScopeType.ALL)
+        self.sorted_blocks = MemoryTimestampIndex(scope_type=TimestampScopeType.BLOCKS)
+        self.sorted_txs = MemoryTimestampIndex(scope_type=TimestampScopeType.TXS)
 
         self.addresses = None
         self.tokens = None
@@ -344,13 +341,13 @@ class RocksDBIndexesManager(IndexesManager):
 
         self.info = RocksDBInfoIndex(self._db)
         self.height = RocksDBHeightIndex(self._db)
-        self.all_tips = PartialRocksDBTipsIndex(self._db, all=True)
-        self.block_tips = PartialRocksDBTipsIndex(self._db, blocks=True)
-        self.tx_tips = PartialRocksDBTipsIndex(self._db, txs=True)
+        self.all_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.ALL)
+        self.block_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.BLOCKS)
+        self.tx_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.TXS)
 
-        self.sorted_all = RocksDBTimestampIndex(self._db, all=True)
-        self.sorted_blocks = RocksDBTimestampIndex(self._db, blocks=True)
-        self.sorted_txs = RocksDBTimestampIndex(self._db, txs=True)
+        self.sorted_all = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.ALL)
+        self.sorted_blocks = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.BLOCKS)
+        self.sorted_txs = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.TXS)
 
         self.addresses = None
         self.tokens = None

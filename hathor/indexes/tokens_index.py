@@ -15,7 +15,8 @@
 from abc import ABC, abstractmethod
 from typing import Iterator, List, NamedTuple, Optional, Tuple
 
-from hathor.indexes.base_index import BaseIndex, Scope
+from hathor.indexes.base_index import BaseIndex
+from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction
 
 SCOPE = Scope(

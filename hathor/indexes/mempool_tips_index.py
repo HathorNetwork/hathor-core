@@ -18,7 +18,8 @@ from typing import TYPE_CHECKING, Iterable, Iterator, Optional, Set, cast
 
 import structlog
 
-from hathor.indexes.base_index import BaseIndex, Scope
+from hathor.indexes.base_index import BaseIndex
+from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.util import not_none
 

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Iterable, List, Optional
 
 from structlog import get_logger
 
-from hathor.indexes.base_index import Scope
+from hathor.indexes.scope import Scope
 from hathor.indexes.tx_group_index import TxGroupIndex
 from hathor.pubsub import HathorEvents
 from hathor.transaction import BaseTransaction
