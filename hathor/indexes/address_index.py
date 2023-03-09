@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Iterable, List, Optional
 
 from structlog import get_logger
 
+from hathor.indexes.scope import Scope
 from hathor.indexes.tx_group_index import TxGroupIndex
 from hathor.pubsub import HathorEvents
 from hathor.transaction import BaseTransaction
@@ -26,11 +27,20 @@ if TYPE_CHECKING:  # pragma: no cover
 
 logger = get_logger()
 
+SCOPE = Scope(
+    include_blocks=True,
+    include_txs=True,
+    include_voided=True,
+)
+
 
 class AddressIndex(TxGroupIndex[str]):
     """ Index of inputs/outputs by address
     """
     pubsub: Optional['PubSubManager']
+
+    def get_scope(self) -> Scope:
+        return SCOPE
 
     def init_loop_step(self, tx: BaseTransaction) -> None:
         self.add_tx(tx)

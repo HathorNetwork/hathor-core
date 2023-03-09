@@ -17,9 +17,18 @@ from abc import abstractmethod
 from structlog import get_logger
 
 from hathor.indexes.base_index import BaseIndex
+from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction
 
 logger = get_logger()
+
+SCOPE = Scope(
+    include_blocks=True,
+    include_txs=True,
+    include_voided=True,
+    # XXX: this index doesn't care about the ordering
+    topological_order=False,
+)
 
 
 class InfoIndex(BaseIndex):
@@ -29,6 +38,9 @@ class InfoIndex(BaseIndex):
     def init_loop_step(self, tx: BaseTransaction) -> None:
         self.update_timestamps(tx)
         self.update_counts(tx)
+
+    def get_scope(self) -> Scope:
+        return SCOPE
 
     @abstractmethod
     def update_timestamps(self, tx: BaseTransaction) -> None:

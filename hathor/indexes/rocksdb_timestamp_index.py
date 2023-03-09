@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Iterator, List, Optional, Tuple
 from structlog import get_logger
 
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils, incr_key
-from hathor.indexes.timestamp_index import RangeIdx, TimestampIndex
+from hathor.indexes.timestamp_index import RangeIdx, ScopeType, TimestampIndex
 from hathor.transaction import BaseTransaction
 from hathor.util import collect_n, skip_n
 
@@ -38,10 +38,11 @@ class RocksDBTimestampIndex(TimestampIndex, RocksDBIndexUtils):
     It works nicely because rocksdb uses a tree sorted by key under the hood.
     """
 
-    def __init__(self, db: 'rocksdb.DB', name: str) -> None:
+    def __init__(self, db: 'rocksdb.DB', *, scope_type: ScopeType):
+        TimestampIndex.__init__(self, scope_type=scope_type)
+        self._name = scope_type.get_name()
         self.log = logger.new()
-        RocksDBIndexUtils.__init__(self, db, f'timestamp-sorted-{name}'.encode())
-        self._name = name
+        RocksDBIndexUtils.__init__(self, db, f'timestamp-sorted-{self._name}'.encode())
 
     def get_db_name(self) -> Optional[str]:
         return f'timestamp_{self._name}'
