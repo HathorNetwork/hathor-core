@@ -620,11 +620,6 @@ class HathorManager:
         #       complex code
         self.tx_storage.indexes._manually_initialize(self.tx_storage)
 
-        if self._event_manager and self._event_manager.emit_load_events:
-            # Publish events for all stored transactions
-            for tx in self.tx_storage.topological_iterator():
-                self.pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=tx)
-
         # Verify if all checkpoints that exist in the database are correct
         try:
             self._verify_checkpoints()
