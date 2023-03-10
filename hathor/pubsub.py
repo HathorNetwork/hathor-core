@@ -34,14 +34,6 @@ class HathorEvents(Enum):
             Triggered when a peer connection to the network fails
             Publishes the peer id and the peers count
 
-        NETWORK_BEST_BLOCK_FOUND
-            Triggered when a new block is accepted in the network
-            Publishes a block object
-
-        NETWORK_ORPHAN_BLOCK_FOUND
-            Triggered when a new block is voided in the network
-            Publishes a block object
-
         NETWORK_PEER_CONNECTED:
             Triggered when a new peer connects to the network
             Publishes the peer protocol and the peers count
@@ -121,10 +113,6 @@ class HathorEvents(Enum):
     CONSENSUS_TX_UPDATE = 'consensus:tx_update'
 
     CONSENSUS_TX_REMOVED = 'consensus:tx_removed'
-
-    NETWORK_BEST_BLOCK_FOUND = 'network:best_block_found'
-
-    NETWORK_ORPHAN_BLOCK_FOUND = 'network:orphan_block_found'
 
     WALLET_OUTPUT_RECEIVED = 'wallet:output_received'
 

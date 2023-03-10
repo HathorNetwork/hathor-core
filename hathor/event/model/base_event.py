@@ -24,8 +24,6 @@ _EVENT_DATA_MAP: Dict[HathorEvents, Type[BaseEventData]] = {
     HathorEvents.LOAD_STARTED: EmptyData,
     HathorEvents.LOAD_FINISHED: EmptyData,
     HathorEvents.NETWORK_NEW_TX_ACCEPTED: TxData,
-    HathorEvents.NETWORK_BEST_BLOCK_FOUND: TxData,
-    HathorEvents.NETWORK_ORPHAN_BLOCK_FOUND: TxData,
     HathorEvents.REORG_STARTED: ReorgData,
     HathorEvents.REORG_FINISHED: EmptyData,
     HathorEvents.VERTEX_METADATA_CHANGED: TxData,
