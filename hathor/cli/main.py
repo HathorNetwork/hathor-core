@@ -55,6 +55,7 @@ class CliManager:
             tx_generator,
             wallet,
         )
+        from .events_simulator import events_simulator
 
         self.add_cmd('mining', 'run_miner', mining, 'Run a mining process (running node required)')
         self.add_cmd('mining', 'run_merged_mining', merged_mining,
@@ -80,6 +81,7 @@ class CliManager:
         self.add_cmd('dev', 'shell', shell, 'Run a Python shell')
         self.add_cmd('dev', 'quick_test', quick_test, 'Similar to run_node but will quit after receiving a tx')
         self.add_cmd('dev', 'generate_nginx_config', nginx_config, 'Generate nginx config from OpenAPI json')
+        self.add_cmd('dev', 'events_simulator', events_simulator, 'Simulate integration events via websocket')
         self.add_cmd('dev', 'x-export', db_export, 'EXPERIMENTAL: Export database to a simple format.')
         self.add_cmd('dev', 'x-import', db_import, 'EXPERIMENTAL: Import database from exported format.')
         self.add_cmd('dev', 'replay-logs', replay_logs, 'EXPERIMENTAL: re-play json logs as console printted')
