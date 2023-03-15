@@ -34,7 +34,6 @@ _GROUP_END_EVENTS = {
 
 _SUBSCRIBE_EVENTS = [
     HathorEvents.NETWORK_NEW_TX_ACCEPTED,
-    HathorEvents.LOAD_STARTED,
     HathorEvents.LOAD_FINISHED,
     HathorEvents.REORG_STARTED,
     HathorEvents.REORG_FINISHED,
@@ -43,7 +42,7 @@ _SUBSCRIBE_EVENTS = [
     HathorEvents.CONSENSUS_TX_REMOVED,
 ]
 
-_EVENT_CONVERTER = {
+_EVENT_CONVERTERS = {
     HathorEvents.CONSENSUS_TX_UPDATE: HathorEvents.VERTEX_METADATA_CHANGED
 }
 
@@ -55,6 +54,7 @@ class EventManager:
     """
 
     _peer_id: str
+    _load_finished: bool = False
 
     @property
     def event_storage(self) -> EventStorage:
@@ -65,7 +65,8 @@ class EventManager:
         event_storage: EventStorage,
         event_ws_factory: EventWebsocketFactory,
         pubsub: PubSubManager,
-        reactor: Reactor
+        reactor: Reactor,
+        emit_load_events: bool = False
     ):
         self.log = logger.new()
 
@@ -73,6 +74,7 @@ class EventManager:
         self._event_storage = event_storage
         self._event_ws_factory = event_ws_factory
         self._pubsub = pubsub
+        self.emit_load_events = emit_load_events
 
         self._last_event = self._event_storage.get_last_event()
         self._last_existing_group_id = self._event_storage.get_last_group_id()
@@ -108,8 +110,21 @@ class EventManager:
             self._pubsub.subscribe(event, self._handle_event)
 
     def _handle_event(self, event_type: HathorEvents, event_args: EventArguments) -> None:
+        event_type = _EVENT_CONVERTERS.get(event_type, event_type)
+        event_specific_handlers = {
+            HathorEvents.LOAD_FINISHED: self._handle_load_finished
+        }
+
+        if event_specific_handler := event_specific_handlers.get(event_type):
+            event_specific_handler()
+
+        if not self._load_finished and not self.emit_load_events:
+            return
+
+        self._handle_event_creation(event_type, event_args)
+
+    def _handle_event_creation(self, event_type: HathorEvents, event_args: EventArguments) -> None:
         create_event_fn: Callable[[HathorEvents, EventArguments], BaseEvent]
-        event_type = _EVENT_CONVERTER.get(event_type, event_type)
 
         if event_type in _GROUP_START_EVENTS:
             create_event_fn = self._create_group_start_event
@@ -160,6 +175,9 @@ class EventManager:
             event_args=event_args,
             group_id=group_id,
         )
+
+    def _handle_load_finished(self):
+        self._load_finished = True
 
     def _create_event(
         self,

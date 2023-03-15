@@ -25,7 +25,8 @@ class BaseEventManagerTest(unittest.TestCase):
         self.manager = self.create_peer(
             self.network,
             event_manager=self.event_manager,
-            pubsub=pubsub
+            pubsub=pubsub,
+            full_verification=False
         )
 
     def test_if_event_is_persisted(self):
@@ -49,11 +50,12 @@ class BaseEventManagerTest(unittest.TestCase):
         self._fake_reorg_started()
         self._fake_reorg_finished()
         self.run_to_completion()
-        # XXX: 0 is a tx update
+        event0 = self.event_storage.get_event(0)
         event1 = self.event_storage.get_event(1)
         event2 = self.event_storage.get_event(2)
         event3 = self.event_storage.get_event(3)
         event4 = self.event_storage.get_event(4)
+        self.assertEqual(HathorEvents(event0.type), HathorEvents.LOAD_FINISHED)
         self.assertEqual(HathorEvents(event1.type), HathorEvents.REORG_STARTED)
         self.assertIsNotNone(event1.group_id)
         self.assertEqual(HathorEvents(event2.type), HathorEvents.REORG_FINISHED)

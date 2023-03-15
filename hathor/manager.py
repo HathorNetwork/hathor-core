@@ -380,6 +380,8 @@ class HathorManager:
 
         This method runs through all transactions, verifying them and updating our wallet.
         """
+        assert not self._event_manager, 'this method cannot be used if the events feature is enabled.'
+
         self.log.info('initialize')
         if self.wallet:
             self.wallet._manually_initialize()
@@ -554,6 +556,7 @@ class HathorManager:
 
         # self.stop_profiler(save_to='profiles/initializing.prof')
         self.state = self.NodeState.READY
+
         total_load_time = LogDuration(t2 - t0)
         tx_rate = '?' if total_load_time == 0 else cnt / total_load_time
 
@@ -631,6 +634,7 @@ class HathorManager:
         # XXX: last step before actually starting is updating the last started at timestamps
         self.tx_storage.update_last_started_at(started_at)
         self.state = self.NodeState.READY
+        self.pubsub.publish(HathorEvents.LOAD_FINISHED)
 
         t1 = time.time()
         total_load_time = LogDuration(t1 - t0)
