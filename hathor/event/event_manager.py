@@ -17,6 +17,7 @@ from typing import Callable, Optional
 from structlog import get_logger
 
 from hathor.event.model.base_event import BaseEvent
+from hathor.event.model.event_type import EventType
 from hathor.event.storage import EventStorage
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
@@ -25,25 +26,21 @@ from hathor.util import Reactor
 logger = get_logger()
 
 _GROUP_START_EVENTS = {
-    HathorEvents.REORG_STARTED,
+    EventType.REORG_STARTED,
 }
 
 _GROUP_END_EVENTS = {
-    HathorEvents.REORG_FINISHED,
+    EventType.REORG_FINISHED,
 }
 
 _SUBSCRIBE_EVENTS = [
-    HathorEvents.NETWORK_NEW_TX_ACCEPTED,
+    HathorEvents.MANAGER_ON_START,
     HathorEvents.LOAD_FINISHED,
+    HathorEvents.NETWORK_NEW_TX_ACCEPTED,
     HathorEvents.REORG_STARTED,
     HathorEvents.REORG_FINISHED,
-    HathorEvents.VERTEX_METADATA_CHANGED,
     HathorEvents.CONSENSUS_TX_UPDATE,
 ]
-
-_EVENT_CONVERTERS = {
-    HathorEvents.CONSENSUS_TX_UPDATE: HathorEvents.VERTEX_METADATA_CHANGED
-}
 
 
 class EventManager:
@@ -106,7 +103,7 @@ class EventManager:
         return (
             self._last_event is None or
             self._last_event.group_id is None or
-            HathorEvents(self._last_event.type) in _GROUP_END_EVENTS
+            EventType(self._last_event.type) in _GROUP_END_EVENTS
         )
 
     def _subscribe_events(self):
@@ -115,12 +112,12 @@ class EventManager:
         for event in _SUBSCRIBE_EVENTS:
             self._pubsub.subscribe(event, self._handle_event)
 
-    def _handle_event(self, event_type: HathorEvents, event_args: EventArguments) -> None:
+    def _handle_event(self, hathor_event: HathorEvents, event_args: EventArguments) -> None:
         assert self._is_running, 'Cannot handle event, EventManager is not started.'
 
-        event_type = _EVENT_CONVERTERS.get(event_type, event_type)
+        event_type = EventType.from_hathor_event(hathor_event, event_args)
         event_specific_handlers = {
-            HathorEvents.LOAD_FINISHED: self._handle_load_finished
+            EventType.LOAD_FINISHED: self._handle_load_finished
         }
 
         if event_specific_handler := event_specific_handlers.get(event_type):
@@ -131,8 +128,8 @@ class EventManager:
 
         self._handle_event_creation(event_type, event_args)
 
-    def _handle_event_creation(self, event_type: HathorEvents, event_args: EventArguments) -> None:
-        create_event_fn: Callable[[HathorEvents, EventArguments], BaseEvent]
+    def _handle_event_creation(self, event_type: EventType, event_args: EventArguments) -> None:
+        create_event_fn: Callable[[EventType, EventArguments], BaseEvent]
 
         if event_type in _GROUP_START_EVENTS:
             create_event_fn = self._create_group_start_event
@@ -148,7 +145,7 @@ class EventManager:
 
         self._last_event = event
 
-    def _create_group_start_event(self, event_type: HathorEvents, event_args: EventArguments) -> BaseEvent:
+    def _create_group_start_event(self, event_type: EventType, event_args: EventArguments) -> BaseEvent:
         assert self._event_group_is_closed(), 'A new event group cannot be started as one is already in progress.'
 
         new_group_id = 0 if self._last_existing_group_id is None else self._last_existing_group_id + 1
@@ -161,7 +158,7 @@ class EventManager:
             group_id=new_group_id,
         )
 
-    def _create_group_end_event(self, event_type: HathorEvents, event_args: EventArguments) -> BaseEvent:
+    def _create_group_end_event(self, event_type: EventType, event_args: EventArguments) -> BaseEvent:
         assert self._last_event is not None, 'Cannot end event group if there are no events.'
         assert not self._event_group_is_closed(), 'Cannot end event group as none is in progress.'
 
@@ -171,7 +168,7 @@ class EventManager:
             group_id=self._last_event.group_id,
         )
 
-    def _create_non_group_edge_event(self, event_type: HathorEvents, event_args: EventArguments) -> BaseEvent:
+    def _create_non_group_edge_event(self, event_type: EventType, event_args: EventArguments) -> BaseEvent:
         group_id = None
 
         if not self._event_group_is_closed():
@@ -189,7 +186,7 @@ class EventManager:
 
     def _create_event(
         self,
-        event_type: HathorEvents,
+        event_type: EventType,
         event_args: EventArguments,
         group_id: Optional[int],
     ) -> BaseEvent:
