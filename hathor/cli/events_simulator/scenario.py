@@ -16,7 +16,7 @@ from enum import Enum
 
 from hathor.event.model.base_event import BaseEvent
 from hathor.event.model.event_data import TxData, TxMetadata
-from hathor.pubsub import HathorEvents
+from hathor.event.model.event_type import EventType
 
 
 class Scenario(Enum):
@@ -57,7 +57,7 @@ _TRANSACTION_1 = BaseEvent(
     peer_id='123',
     id=0,
     timestamp=0,
-    type=HathorEvents.NETWORK_NEW_TX_ACCEPTED,
+    type=EventType.NEW_VERTEX_ACCEPTED,
     data=_TRANSACTION_DATA_1
 )
 
