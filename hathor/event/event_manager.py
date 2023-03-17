@@ -115,7 +115,7 @@ class EventManager:
     def _handle_event(self, hathor_event: HathorEvents, event_args: EventArguments) -> None:
         assert self._is_running, 'Cannot handle event, EventManager is not started.'
 
-        event_type = EventType.from_hathor_event(hathor_event, event_args)
+        event_type = EventType.from_hathor_event(hathor_event)
         event_specific_handlers = {
             EventType.LOAD_FINISHED: self._handle_load_finished
         }
