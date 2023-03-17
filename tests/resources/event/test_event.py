@@ -46,11 +46,11 @@ def test_get_events(web, data):
     result = response.json_value()
     expected = {
         'events': [
-            {'peer_id': '123', 'id': 0, 'timestamp': 123456.0, 'type': 'vertex:metadata_changed', 'data': data,
+            {'peer_id': '123', 'id': 0, 'timestamp': 123456.0, 'type': 'VERTEX_METADATA_CHANGED', 'data': data,
              'group_id': None},
-            {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'vertex:metadata_changed', 'data': data,
+            {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'VERTEX_METADATA_CHANGED', 'data': data,
              'group_id': None},
-            {'peer_id': '123', 'id': 2, 'timestamp': 123456.0, 'type': 'vertex:metadata_changed', 'data': data,
+            {'peer_id': '123', 'id': 2, 'timestamp': 123456.0, 'type': 'VERTEX_METADATA_CHANGED', 'data': data,
              'group_id': None}
         ],
         'latest_event_id': 2
@@ -64,7 +64,7 @@ def test_get_events_with_size(web, data):
     result = response.result.json_value()
     expected = {
         'events': [
-            {'peer_id': '123', 'id': 0, 'timestamp': 123456.0, 'type': 'vertex:metadata_changed', 'data': data,
+            {'peer_id': '123', 'id': 0, 'timestamp': 123456.0, 'type': 'VERTEX_METADATA_CHANGED', 'data': data,
              'group_id': None}
         ],
         'latest_event_id': 2
@@ -78,9 +78,9 @@ def test_get_events_with_last_ack_event_id(web, data):
     result = response.result.json_value()
     expected = {
         'events': [
-            {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'vertex:metadata_changed', 'data': data,
+            {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'VERTEX_METADATA_CHANGED', 'data': data,
              'group_id': None},
-            {'peer_id': '123', 'id': 2, 'timestamp': 123456.0, 'type': 'vertex:metadata_changed', 'data': data,
+            {'peer_id': '123', 'id': 2, 'timestamp': 123456.0, 'type': 'VERTEX_METADATA_CHANGED', 'data': data,
              'group_id': None}
         ],
         'latest_event_id': 2
@@ -94,7 +94,7 @@ def test_get_events_with_size_and_last_ack_event_id(web, data):
     result = response.result.json_value()
     expected = {
         'events': [
-            {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'vertex:metadata_changed', 'data': data,
+            {'peer_id': '123', 'id': 1, 'timestamp': 123456.0, 'type': 'VERTEX_METADATA_CHANGED', 'data': data,
              'group_id': None},
         ],
         'latest_event_id': 2
