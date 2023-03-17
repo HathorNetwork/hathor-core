@@ -17,7 +17,7 @@ from pydantic import ValidationError
 
 from hathor.event.model.base_event import BaseEvent
 from hathor.event.model.event_data import ReorgData
-from hathor.pubsub import HathorEvents
+from hathor.event.model.event_type import EventType
 from tests.utils import EventMocker
 
 
@@ -28,7 +28,7 @@ def test_create_base_event(event_id, group_id):
         peer_id='some_peer',
         id=event_id,
         timestamp=123.3,
-        type=HathorEvents.VERTEX_METADATA_CHANGED,
+        type=EventType.VERTEX_METADATA_CHANGED,
         data=EventMocker.tx_data,
         group_id=group_id
     )
@@ -37,7 +37,7 @@ def test_create_base_event(event_id, group_id):
         peer_id='some_peer',
         id=event_id,
         timestamp=123.3,
-        type='vertex:metadata_changed',
+        type='VERTEX_METADATA_CHANGED',
         data=dict(
             hash='abc',
             nonce=123,
@@ -78,7 +78,7 @@ def test_create_base_event_fail_id(event_id):
             peer_id='some_peer',
             id=event_id,
             timestamp=123.3,
-            type=HathorEvents.VERTEX_METADATA_CHANGED,
+            type=EventType.VERTEX_METADATA_CHANGED,
             data=EventMocker.tx_data,
         )
 
@@ -90,7 +90,7 @@ def test_create_base_event_fail_group_id(group_id):
             peer_id='some_peer',
             id=0,
             timestamp=123.3,
-            type=HathorEvents.VERTEX_METADATA_CHANGED,
+            type=EventType.VERTEX_METADATA_CHANGED,
             data=EventMocker.tx_data,
             group_id=group_id
         )
@@ -102,7 +102,7 @@ def test_create_base_event_fail_data_type():
             peer_id='some_peer',
             id=0,
             timestamp=123.3,
-            type=HathorEvents.VERTEX_METADATA_CHANGED,
+            type=EventType.VERTEX_METADATA_CHANGED,
             data=ReorgData(
                 reorg_size=10,
                 previous_best_block='a',
