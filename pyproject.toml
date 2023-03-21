@@ -39,8 +39,8 @@ hathor-cli = 'hathor.cli.main:main'
 [tool.poetry.dev-dependencies]
 flake8 = "~6.0.0"
 isort = {version = "~5.10.1", extras = ["colors"]}
-mypy = {version = "^0.981", markers = "implementation_name == 'cpython'"}
-mypy-zope = {version = "^0.3", markers = "implementation_name == 'cpython'"}
+mypy = {version = "^1.0.0", markers = "implementation_name == 'cpython'"}
+mypy-zope = {version = "^0.9.0", markers = "implementation_name == 'cpython'"}
 pytest = "~7.2.0"
 pytest-cov = "~4.0.0"
 flaky = "~3.7.0"
@@ -76,7 +76,7 @@ setproctitle = "^1.2.2"
 sentry-sdk = {version = "^1.5.11", optional = true}
 structlog-sentry = {version = "^1.4.0", optional = true}
 hathorlib = "0.3.0"
-pydantic = "~1.10.4"
+pydantic = "~1.10.6"
 
 [tool.poetry.extras]
 sentry = ["sentry-sdk", "structlog-sentry"]
@@ -128,6 +128,7 @@ module = [
 ignore_missing_imports = true
 
 [tool.pydantic-mypy]
+init_typed = true
 init_forbid_extra = true
 warn_untyped_fields = true
 

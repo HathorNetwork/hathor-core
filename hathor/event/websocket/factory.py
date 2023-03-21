@@ -94,6 +94,8 @@ class EventWebsocketFactory(WebSocketServerFactory):
         if not connection.can_receive_event(event.id):
             return
 
+        assert self._latest_event_id is not None, '_latest_event_id must be set.'
+
         response = EventResponse(event=event, latest_event_id=self._latest_event_id)
 
         connection.send_event_response(response)

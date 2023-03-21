@@ -1185,7 +1185,7 @@ class TxOutput:
 
     def __str__(self) -> str:
         cls_name = type(self).__name__
-        value_str = hex(self.value) if self.is_token_authority else str(self.value)
+        value_str = hex(self.value) if self.is_token_authority() else str(self.value)
         if self.token_data:
             return f'{cls_name}(token_data={bin(self.token_data)}, value={value_str}, script={self.script.hex()})'
         else:
