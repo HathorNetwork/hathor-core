@@ -12,4 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-__version__ = '0.53.0'
+import os
+
+BASE_VERSION = '0.53.0'
+
+DEFAULT_VERSION_SUFFIX = "-local"
+BUILD_VERSION_FILE_PATH = "./BUILD_VERSION"
+
+
+def _get_build_version():
+    if not os.path.isfile(BUILD_VERSION_FILE_PATH):
+        return None
+
+    with open(BUILD_VERSION_FILE_PATH, 'r') as f:
+        build_version = f.readline()
+
+        return build_version
+
+
+def _get_version():
+    local_version = BASE_VERSION + DEFAULT_VERSION_SUFFIX
+    return _get_build_version() or local_version
+
+
+__version__ = _get_version()
