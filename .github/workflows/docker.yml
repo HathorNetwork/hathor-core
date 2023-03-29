@@ -52,7 +52,8 @@ jobs:
         default_python = 'python' + extract_pyver(dockerfile_cpython)
         default_pypy = 'pypy' + extract_pyver(dockerfile_pypy)
         if '${{ github.event_name }}' == 'schedule':
-            base_version = 'nightly'
+            commit_short_sha = '${{ github.sha }}'[:8]
+            base_version = 'nightly-' + commit_short_sha
         elif ref.startswith('refs/tags/'):
             base_version = ref[10:].split('-', 1)[0]
         elif ref.startswith('refs/heads/'):
