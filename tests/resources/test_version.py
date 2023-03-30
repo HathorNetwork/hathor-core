@@ -1,4 +1,5 @@
 import os
+import tempfile
 from unittest.mock import patch
 
 from twisted.internet.defer import inlineCallbacks
@@ -8,6 +9,8 @@ from hathor.version import BASE_VERSION, DEFAULT_VERSION_SUFFIX, _get_version
 from hathor.version_resource import VersionResource
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
+
+TMP_DIR = tempfile.gettempdir()
 
 
 class BaseVersionTest(_BaseResourceTest._ResourceTest):
@@ -23,23 +26,23 @@ class BaseVersionTest(_BaseResourceTest._ResourceTest):
         data = response.json_value()
         self.assertEqual(data['version'], hathor.__version__)
 
-    @patch('hathor.version.BUILD_VERSION_FILE_PATH', '/tmp/BUILD_VERSION')
+    @patch('hathor.version.BUILD_VERSION_FILE_PATH', TMP_DIR + '/BUILD_VERSION')
     def test_local_version(self):
         """Test that we will return a version with the default prefix when the BUILD_VERSION file
             does not exist.
         """
         self.assertEqual(_get_version(), BASE_VERSION + DEFAULT_VERSION_SUFFIX)
 
-    @patch('hathor.version.BUILD_VERSION_FILE_PATH', '/tmp/BUILD_VERSION')
+    @patch('hathor.version.BUILD_VERSION_FILE_PATH', TMP_DIR + '/BUILD_VERSION')
     def test_build_version(self):
         """Test that we will return the version from the BUILD_VERSION file when it exists.
         """
-        with open('/tmp/BUILD_VERSION', 'w') as build_version_file:
+        with open(TMP_DIR + '/BUILD_VERSION', 'w') as build_version_file:
             build_version_file.write(BASE_VERSION + '-nightly')
 
         self.assertEqual(_get_version(), BASE_VERSION + '-nightly')
 
-        os.remove('/tmp/BUILD_VERSION')
+        os.remove(TMP_DIR + '/BUILD_VERSION')
 
 
 class SyncV1VersionTest(unittest.SyncV1Params, BaseVersionTest):
