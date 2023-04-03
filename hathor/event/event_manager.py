@@ -54,6 +54,7 @@ class EventManager:
     """
 
     _peer_id: str
+    _is_running: bool = False
     _load_finished: bool = False
 
     @property
@@ -85,9 +86,11 @@ class EventManager:
     def start(self, peer_id: str) -> None:
         self._peer_id = peer_id
         self._event_ws_factory.start()
+        self._is_running = True
 
     def stop(self):
         self._event_ws_factory.stop()
+        self._is_running = False
 
     def _assert_closed_event_group(self):
         # XXX: we must check that the last event either does not belong to an event group or that it just closed an
@@ -110,6 +113,8 @@ class EventManager:
             self._pubsub.subscribe(event, self._handle_event)
 
     def _handle_event(self, event_type: HathorEvents, event_args: EventArguments) -> None:
+        assert self._is_running, 'Cannot handle event, EventManager is not started.'
+
         event_type = _EVENT_CONVERTERS.get(event_type, event_type)
         event_specific_handlers = {
             HathorEvents.LOAD_FINISHED: self._handle_load_finished
