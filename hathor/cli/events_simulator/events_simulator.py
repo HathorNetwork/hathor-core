@@ -14,12 +14,11 @@
 
 from argparse import ArgumentParser, Namespace
 
-from hathor.cli.events_simulator.scenario import Scenario
-
 DEFAULT_PORT = 8080
 
 
 def create_parser() -> ArgumentParser:
+    from hathor.cli.events_simulator.scenario import Scenario
     from hathor.cli.util import create_parser
 
     parser = create_parser()
