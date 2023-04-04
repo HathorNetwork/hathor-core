@@ -187,12 +187,12 @@ StatusResource.openapi = {
                                             'latest_timestamp': 1539271483,
                                             'best_block_tips': [
                                                 {
-                                                    'hash': '000006c',
+                                                    'hash': '000007eb968a6cdf0499e2d033faf1e163e0dc9cf41876acad4d421836972038',  # noqa: E501
                                                     'height': 0
                                                 }
                                             ],
                                             'best_block': {
-                                                'hash': '000006c',
+                                                'hash': '000007eb968a6cdf0499e2d033faf1e163e0dc9cf41876acad4d421836972038',  # noqa: E501
                                                 'height': 0
                                             }
                                         }
