@@ -6,6 +6,7 @@ from hathor.p2p.resources import StatusResource
 from hathor.simulator import FakeConnection
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
+from hathor.conf.unittests import SETTINGS
 
 
 class BaseStatusTest(_BaseResourceTest._ResourceTest):
@@ -38,20 +39,14 @@ class BaseStatusTest(_BaseResourceTest._ResourceTest):
         self.assertIn('height', dag_data['best_block_tips'][0])
         self.assertIsInstance(dag_data['best_block_tips'][0]['hash'], str)
         self.assertIsInstance(dag_data['best_block_tips'][0]['height'], int)
-        self.assertEqual(
-            dag_data['best_block_tips'][0]['hash'],
-            '339f47da87435842b0b1b528ecd9eac2495ce983b3e9c923a37e1befbe12c792'
-        )
+        self.assertEqual(dag_data['best_block_tips'][0]['hash'], SETTINGS.GENESIS_BLOCK_HASH.hex())
         self.assertEqual(dag_data['best_block_tips'][0]['height'], 0)
         self.assertIsNotNone(dag_data['best_block'])
         self.assertIn('hash', dag_data['best_block'])
         self.assertIn('height', dag_data['best_block'])
         self.assertIsInstance(dag_data['best_block']['hash'], str)
         self.assertIsInstance(dag_data['best_block']['height'], int)
-        self.assertEqual(
-            dag_data['best_block']['hash'],
-            '339f47da87435842b0b1b528ecd9eac2495ce983b3e9c923a37e1befbe12c792'
-        )
+        self.assertEqual(dag_data['best_block']['hash'], SETTINGS.GENESIS_BLOCK_HASH.hex())
         self.assertEqual(dag_data['best_block']['height'], 0)
 
     @inlineCallbacks
