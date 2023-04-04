@@ -49,7 +49,7 @@ jobs:
         export SECRETS_DOCKERHUB_IMAGE='${{ secrets.DOCKERHUB_IMAGE }}'
         export SECRETS_GHCR_IMAGE='${{ secrets.GHCR_IMAGE }}'
 
-        python .github/workflows/prep.py
+        python extras/github/docker.py
     - name: Check version
       if: steps.prep.outputs.check-version
       run: |
@@ -122,7 +122,7 @@ jobs:
         cache-from: type=local,src=/tmp/.buildx-cache
         cache-to: type=local,dest=/tmp/.buildx-cache
     - name: Slack Notification
-      if: ${{ steps.prep.outputs.slack-notification-version && steps.prep_base_version.outputs.should-notify-slack == 'true' && job.status == 'success' }}
+      if: ${{ steps.prep.outputs.slack-notification-version && steps.prep_base_version.outputs.disable-slack-notification == 'false' && job.status == 'success' }}
       uses: rtCamp/action-slack-notify@28e8b353eabda5998a2e1203aed33c5999944779
       env:
         SLACK_COLOR: ${{ job.status }} # It can turn the job status into a color. Success will be green.

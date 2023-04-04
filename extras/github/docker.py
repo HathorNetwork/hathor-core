@@ -1,26 +1,20 @@
 import re
 import os
+from typing import Dict
 
-GITHUB_REF = os.environ['GITHUB_REF'] 
-GITHUB_EVENT_NAME = os.environ['GITHUB_EVENT_NAME'] 
-GITHUB_SHA = os.environ['GITHUB_SHA'] 
-GITHUB_EVENT_DEFAULT_BRANCH = os.environ['GITHUB_EVENT_DEFAULT_BRANCH'] 
-GITHUB_EVENT_NUMBER = os.environ['GITHUB_EVENT_NUMBER'] 
-
-MATRIX_PYTHON_IMPL = os.environ['MATRIX_PYTHON_IMPL'] 
-MATRIX_PYTHON_VERSION = os.environ['MATRIX_PYTHON_VERSION'] 
-
-SECRETS_DOCKERHUB_IMAGE = os.environ['SECRETS_DOCKERHUB_IMAGE']
-SECRETS_GHCR_IMAGE = os.environ['SECRETS_GHCR_IMAGE']
-
-
-def print_output(output: dict):
+def print_output(output: Dict):
     for k, v in output.items():
         print(f'::set-output name={k}::{v}')
 
 
-def prep_base_version():
-    ref = GITHUB_REF 
+def prep_base_version(environ: Dict):
+    GITHUB_REF = environ.get('GITHUB_REF')
+    GITHUB_EVENT_NAME = environ.get('GITHUB_EVENT_NAME')
+    GITHUB_SHA = environ.get('GITHUB_SHA')
+    GITHUB_EVENT_DEFAULT_BRANCH = environ.get('GITHUB_EVENT_DEFAULT_BRANCH')
+    GITHUB_EVENT_NUMBER = environ.get('GITHUB_EVENT_NUMBER')
+
+    ref = GITHUB_REF
 
     # Set base_version according to the github ref type
     is_release_candidate = False
@@ -64,14 +58,22 @@ def prep_base_version():
         base_version = 'noop'
 
     overwrite_hathor_core_version = is_release or is_release_candidate or is_nightly
-    # This is not the only condition to notify slack.
-    # We will also check if the Python version being built is the default one.
-    output['should-notify-slack'] = is_release or is_release_candidate
+    # We don't know for sure at this point in which cases we should enable Slack notification,
+    # but we know when we should disable it for sure
+    output['disable-slack-notification'] = not (is_release or is_release_candidate)
 
     return output, base_version, is_release_candidate, overwrite_hathor_core_version
 
 
-def prep_tags(base_version, is_release_candidate):
+def prep_tags(environ: Dict, base_version: str, is_release_candidate: bool):
+    MATRIX_PYTHON_IMPL = environ.get('MATRIX_PYTHON_IMPL')
+    MATRIX_PYTHON_VERSION = environ.get('MATRIX_PYTHON_VERSION')
+
+    SECRETS_DOCKERHUB_IMAGE = environ.get('SECRETS_DOCKERHUB_IMAGE')
+    SECRETS_GHCR_IMAGE = environ.get('SECRETS_GHCR_IMAGE')
+
+    GITHUB_EVENT_NAME = environ.get('GITHUB_EVENT_NAME')
+
     import datetime
     import re
 
@@ -133,9 +135,9 @@ def prep_tags(base_version, is_release_candidate):
     ghcr_image = SECRETS_GHCR_IMAGE
     if ghcr_image:
         images.append(ghcr_image)
-        output['logic-ghcr'] = 'true'
+        output['login-ghcr'] = 'true'
     else:
-        output['logic-ghcr'] = 'false'
+        output['login-ghcr'] = 'false'
     if images and tags:
         output['tags'] = ','.join(f'{i}:{t}' for i in images for t in tags)
         output['push'] = 'true'
@@ -157,10 +159,10 @@ def overwrite_version(base_version: str):
 
 
 if __name__ == '__main__':
-    output, base_version, is_release_candidate, overwrite_hathor_core_version = prep_base_version()
+    output, base_version, is_release_candidate, overwrite_hathor_core_version = prep_base_version(os.environ)
     print_output(output)
 
-    output = prep_tags(base_version, is_release_candidate)
+    output = prep_tags(os.environ, base_version, is_release_candidate)
     print_output(output)
 
     if overwrite_hathor_core_version:
