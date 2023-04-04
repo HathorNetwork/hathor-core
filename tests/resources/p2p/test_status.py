@@ -2,11 +2,11 @@ from twisted.internet import endpoints
 from twisted.internet.defer import inlineCallbacks
 
 import hathor
+from hathor.conf.unittests import SETTINGS
 from hathor.p2p.resources import StatusResource
 from hathor.simulator import FakeConnection
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
-from hathor.conf.unittests import SETTINGS
 
 
 class BaseStatusTest(_BaseResourceTest._ResourceTest):
