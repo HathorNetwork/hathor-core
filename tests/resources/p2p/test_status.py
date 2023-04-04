@@ -32,17 +32,27 @@ class BaseStatusTest(_BaseResourceTest._ResourceTest):
         # We have the genesis block
         self.assertEqual(len(dag_data['best_block_tips']), 1)
         self.assertIsNotNone(dag_data['best_block_tips'][0])
-        # As we don't have a type, we most check if the keys are there,
+        # As we don't have a type, we must check if the keys are there,
         # and the types are correct
         self.assertIn('hash', dag_data['best_block_tips'][0])
         self.assertIn('height', dag_data['best_block_tips'][0])
         self.assertIsInstance(dag_data['best_block_tips'][0]['hash'], str)
         self.assertIsInstance(dag_data['best_block_tips'][0]['height'], int)
+        self.assertEqual(
+            dag_data['best_block_tips'][0]['hash'],
+            '339f47da87435842b0b1b528ecd9eac2495ce983b3e9c923a37e1befbe12c792'
+        )
+        self.assertEqual(dag_data['best_block_tips'][0]['height'], 0)
         self.assertIsNotNone(dag_data['best_block'])
         self.assertIn('hash', dag_data['best_block'])
         self.assertIn('height', dag_data['best_block'])
         self.assertIsInstance(dag_data['best_block']['hash'], str)
         self.assertIsInstance(dag_data['best_block']['height'], int)
+        self.assertEqual(
+            dag_data['best_block']['hash'],
+            '339f47da87435842b0b1b528ecd9eac2495ce983b3e9c923a37e1befbe12c792'
+        )
+        self.assertEqual(dag_data['best_block']['height'], 0)
 
     @inlineCallbacks
     def test_handshaking(self):
