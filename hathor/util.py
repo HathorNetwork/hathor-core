@@ -136,17 +136,13 @@ class ReactorThread(Enum):
     def get_current_thread(cls, reactor: Reactor) -> 'ReactorThread':
         """ Returns if the code is being run on the reactor thread, if it's running already.
         """
-        running = getattr(reactor, 'running', None)
-        if running is not None:
-            if running:
-                return cls.MAIN_THREAD if isInIOThread() else cls.NOT_MAIN_THREAD
-            else:
-                # if reactor is not running yet, there's no threading
-                return cls.NOT_RUNNING
-        else:
-            # on tests, we use Clock instead of a real Reactor, so there's
-            # no threading. We consider that the reactor is running
-            return cls.MAIN_THREAD
+        running = getattr(reactor, 'running', False)
+
+        if running:
+            return cls.MAIN_THREAD if isInIOThread() else cls.NOT_MAIN_THREAD
+
+        # if reactor is not running yet, there's no threading
+        return cls.NOT_RUNNING
 
 
 def abbrev(data: bytes, max_len: int = 256, gap: bytes = b' [...] ') -> bytes:
