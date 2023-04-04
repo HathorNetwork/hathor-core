@@ -24,7 +24,9 @@ def prep_base_version():
 
     # Set base_version according to the github ref type
     is_release_candidate = False
-    enable_docker_cache = True
+    is_release = False
+    is_nightly = False
+
     overwrite_hathor_core_version = False
 
     output = {}
@@ -32,8 +34,7 @@ def prep_base_version():
     if GITHUB_EVENT_NAME == 'schedule':
         commit_short_sha = GITHUB_SHA[:8]
         base_version = 'nightly-' + commit_short_sha
-        enable_docker_cache = False
-        overwrite_hathor_core_version = True
+        is_nightly = True
     elif ref.startswith('refs/tags/'):
         git_tag = ref[10:]
         base_version = git_tag.split('-', 1)[0]
@@ -51,6 +52,8 @@ def prep_base_version():
                 is_release_candidate = True
             else:
                 raise ValueError(f'Invalid Tag Value: {git_tag}')
+        else:
+            is_release = True
     elif ref.startswith('refs/heads/'):
         base_version = ref[11:].replace('/', '-')
         if base_version == GITHUB_EVENT_DEFAULT_BRANCH:
@@ -60,7 +63,10 @@ def prep_base_version():
     else:
         base_version = 'noop'
 
-    output['enable-docker-cache'] = 'true' if enable_docker_cache else 'false'
+    overwrite_hathor_core_version = is_release or is_release_candidate or is_nightly
+    # This is not the only condition to notify slack.
+    # We will also check if the Python version being built is the default one.
+    output['should-notify-slack'] = is_release or is_release_candidate
 
     return output, base_version, is_release_candidate, overwrite_hathor_core_version
 
@@ -102,7 +108,7 @@ def prep_tags(base_version, is_release_candidate):
 
     if suffix == default_python:
         tags.add(base_version)
-        output['notify-slack'] = base_version
+        output['slack-notification-version'] = base_version
     elif suffix == default_pypy:
         tags.add(base_version + '-pypy')
 
@@ -143,9 +149,11 @@ def prep_tags(base_version, is_release_candidate):
     return output
 
 
-def overwrite_version(version: str):
+def overwrite_version(base_version: str):
     with open('BUILD_VERSION', 'w') as file:
-        file.write(version + '\n')
+        if base_version.startswith('v'):
+            base_version = base_version[1:]
+        file.write(base_version + '\n')
 
 
 if __name__ == '__main__':
