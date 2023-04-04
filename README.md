@@ -199,3 +199,5 @@ redoc-cli bundle hathor/cli/openapi_files/openapi.json --output index.html
 
 [open-issue]: https://github.com/HathorNetwork/hathor-core/issues/new
 [create-pr]: https://github.com/HathorNetwork/hathor-core/compare
+
+.
