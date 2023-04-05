@@ -13,6 +13,7 @@ def prep_base_version(environ: Dict):
     GITHUB_SHA = environ.get('GITHUB_SHA')
     GITHUB_EVENT_DEFAULT_BRANCH = environ.get('GITHUB_EVENT_DEFAULT_BRANCH')
     GITHUB_EVENT_NUMBER = environ.get('GITHUB_EVENT_NUMBER')
+    GITHUB_REPOSITORY = environ.get('GITHUB_REPOSITORY')
 
     ref = GITHUB_REF
 
@@ -61,6 +62,9 @@ def prep_base_version(environ: Dict):
     # We don't know for sure at this point in which cases we should enable Slack notification,
     # but we know when we should disable it for sure
     output['disable-slack-notification'] = not (is_release or is_release_candidate)
+
+    if GITHUB_REPOSITORY.lower() != 'hathornetwork/hathor-core':
+        output['disable-slack-notification'] = True
 
     return output, base_version, is_release_candidate, overwrite_hathor_core_version
 
