@@ -35,12 +35,28 @@ class BaseVersionTest(_BaseResourceTest._ResourceTest):
 
     @patch('hathor.version.BUILD_VERSION_FILE_PATH', TMP_DIR + '/BUILD_VERSION')
     def test_build_version(self):
-        """Test that we will return the version from the BUILD_VERSION file when it exists.
+        """Test that we will return the version from the BUILD_VERSION file if it is valid,
+            or the local version if the BUILD_VERSION is invalid.
         """
         with open(TMP_DIR + '/BUILD_VERSION', 'w') as build_version_file:
-            build_version_file.write(BASE_VERSION + '-nightly')
+            build_version_file.write(BASE_VERSION)
+        self.assertEqual(_get_version(), BASE_VERSION)
 
-        self.assertEqual(_get_version(), BASE_VERSION + '-nightly')
+        with open(TMP_DIR + '/BUILD_VERSION', 'w') as build_version_file:
+            build_version_file.write(BASE_VERSION + '-rc.1')
+        self.assertEqual(_get_version(), BASE_VERSION + '-rc.1')
+
+        with open(TMP_DIR + '/BUILD_VERSION', 'w') as build_version_file:
+            build_version_file.write('nightly-a4b3f9c2')
+        self.assertEqual(_get_version(), 'nightly-a4b3f9c2')
+
+        with open(TMP_DIR + '/BUILD_VERSION', 'w') as build_version_file:
+            build_version_file.write('v1.2.3')
+        self.assertEqual(_get_version(), BASE_VERSION + '-local')
+
+        with open(TMP_DIR + '/BUILD_VERSION', 'w') as build_version_file:
+            build_version_file.write('1.2.3-beta')
+        self.assertEqual(_get_version(), BASE_VERSION + '-local')
 
         os.remove(TMP_DIR + '/BUILD_VERSION')
 
