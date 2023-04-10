@@ -48,10 +48,14 @@ class EventWebsocketFactory(WebSocketServerFactory):
 
     def start(self):
         """Start the WebSocket server. Required to be able to send events."""
+        assert self._is_running is False, 'Cannot start, EventWebsocketFactory is already running'
+
         self._is_running = True
 
     def stop(self):
         """Stop the WebSocket server. No events can be sent."""
+        assert self._is_running is True, 'Cannot stop, EventWebsocketFactory is not running'
+
         self._is_running = False
 
         for connection in self._connections:

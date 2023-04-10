@@ -84,11 +84,15 @@ class EventManager:
         self._subscribe_events()
 
     def start(self, peer_id: str) -> None:
+        assert self._is_running is False, 'Cannot start, EventManager is already running'
+
         self._peer_id = peer_id
         self._event_ws_factory.start()
         self._is_running = True
 
     def stop(self):
+        assert self._is_running is True, 'Cannot stop, EventManager is not running'
+
         self._event_ws_factory.stop()
         self._is_running = False
 
