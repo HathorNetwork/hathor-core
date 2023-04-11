@@ -269,6 +269,9 @@ class HathorManager:
                 )
                 sys.exit(-1)
 
+        if self._event_manager:
+            self._event_manager.start(not_none(self.my_peer.id))
+
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
         self.connections.start()
@@ -304,9 +307,6 @@ class HathorManager:
 
         if self.stratum_factory:
             self.stratum_factory.start()
-
-        if self._event_manager:
-            self._event_manager.start(not_none(self.my_peer.id))
 
         # Start running
         self.tx_storage.start_running_manager()
