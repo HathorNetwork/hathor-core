@@ -9,6 +9,7 @@ from twisted.internet.threads import deferToThread
 from twisted.trial import unittest
 
 from hathor.conf import HathorSettings
+from hathor.consensus import ConsensusAlgorithm
 from hathor.daa import TestMode, _set_test_mode
 from hathor.pubsub import PubSubManager
 from hathor.simulator.clock import MemoryReactorHeapClock
@@ -57,7 +58,17 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.tmpdir = tempfile.mkdtemp()
         wallet = Wallet(directory=self.tmpdir)
         wallet.unlock(b'teste')
-        self.manager = HathorManager(self.reactor, pubsub=self.pubsub, tx_storage=self.tx_storage, wallet=wallet)
+
+        soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
+        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub=self.pubsub)
+
+        self.manager = HathorManager(
+            self.reactor,
+            pubsub=self.pubsub,
+            consensus_algorithm=consensus_algorithm,
+            tx_storage=self.tx_storage,
+            wallet=wallet
+        )
 
         self.tx_storage.indexes.enable_address_index(self.manager.pubsub)
         self.tx_storage.indexes.enable_tokens_index()

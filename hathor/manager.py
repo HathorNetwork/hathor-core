@@ -16,7 +16,7 @@ import datetime
 import sys
 import time
 from enum import Enum
-from typing import Any, Iterable, Iterator, List, NamedTuple, Optional, Set, Tuple, Union
+from typing import Any, Iterable, Iterator, List, NamedTuple, Optional, Tuple, Union
 
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
@@ -80,15 +80,25 @@ class HathorManager:
     # This is the interval to be used by the task to check if the node is synced
     CHECK_SYNC_STATE_INTERVAL = 30  # seconds
 
-    def __init__(self, reactor: Reactor, *, pubsub: PubSubManager, peer_id: Optional[PeerId] = None,
-                 network: Optional[str] = None, hostname: Optional[str] = None,
-                 wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
+    def __init__(self,
+                 reactor: Reactor,
+                 *,
+                 pubsub: PubSubManager,
+                 consensus_algorithm: ConsensusAlgorithm,
+                 peer_id: Optional[PeerId] = None,
+                 network: Optional[str] = None,
+                 hostname: Optional[str] = None,
+                 wallet: Optional[BaseWallet] = None,
+                 tx_storage: Optional[TransactionStorage] = None,
                  event_manager: Optional[EventManager] = None,
-                 stratum_port: Optional[int] = None, ssl: bool = True,
-                 enable_sync_v1: bool = True, enable_sync_v2: bool = False,
-                 capabilities: Optional[List[str]] = None, checkpoints: Optional[List[Checkpoint]] = None,
-                 rng: Optional[Random] = None, soft_voided_tx_ids: Optional[Set[bytes]] = None,
-                 environment_info: Optional[EnvironmentInfo] = None) -> None:
+                 stratum_port: Optional[int] = None,
+                 ssl: bool = True,
+                 enable_sync_v1: bool = True,
+                 enable_sync_v2: bool = False,
+                 capabilities: Optional[List[str]] = None,
+                 checkpoints: Optional[List[Checkpoint]] = None,
+                 rng: Optional[Random] = None,
+                 environment_info: Optional[EnvironmentInfo] = None):
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node. If not given, a new one is created.
@@ -166,8 +176,7 @@ class HathorManager:
             self.tx_storage.indexes.enable_deps_index()
             self.tx_storage.indexes.enable_mempool_index()
 
-        self.soft_voided_tx_ids = soft_voided_tx_ids or set()
-        self.consensus_algorithm = ConsensusAlgorithm(self.soft_voided_tx_ids, pubsub=self.pubsub)
+        self.consensus_algorithm = consensus_algorithm
 
         self.peer_discoveries: List[PeerDiscovery] = []
 
@@ -402,7 +411,7 @@ class HathorManager:
         # a database that already has the soft voided transaction before marking them in the metadata
         # Any new sync from the beginning should work fine or starting with the latest snapshot
         # that already has the soft voided transactions marked
-        for soft_voided_id in settings.SOFT_VOIDED_TX_IDS:
+        for soft_voided_id in self.consensus_algorithm.soft_voided_tx_ids:
             try:
                 soft_voided_tx = self.tx_storage.get_transaction(soft_voided_id)
             except TransactionDoesNotExist:
@@ -595,7 +604,7 @@ class HathorManager:
         # a database that already has the soft voided transaction before marking them in the metadata
         # Any new sync from the beginning should work fine or starting with the latest snapshot
         # that already has the soft voided transactions marked
-        for soft_voided_id in settings.SOFT_VOIDED_TX_IDS:
+        for soft_voided_id in self.consensus_algorithm.soft_voided_tx_ids:
             try:
                 soft_voided_tx = self.tx_storage.get_transaction(soft_voided_id)
             except TransactionDoesNotExist:

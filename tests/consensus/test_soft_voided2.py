@@ -56,8 +56,8 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         self.graphviz.labels[txF1.hash] = f'txF1-{i}'
 
         if not self.skip_asserts:
-            self.assertIn(txF1.hash, manager1.soft_voided_tx_ids)
-            self.assertIn(txF2.hash, manager1.soft_voided_tx_ids)
+            self.assertIn(txF1.hash, manager1.consensus_algorithm.soft_voided_tx_ids)
+            self.assertIn(txF2.hash, manager1.consensus_algorithm.soft_voided_tx_ids)
 
         txG = add_custom_tx(manager1, [(txF2, 0)], base_parent=tx_base, address=address)
         self.graphviz.labels[txG.hash] = f'txG-{i}'

@@ -1,6 +1,7 @@
 from typing import Iterator
 
 from hathor.conf import HathorSettings
+from hathor.consensus import ConsensusAlgorithm
 from hathor.manager import HathorManager
 from hathor.pubsub import PubSubManager
 from hathor.transaction import BaseTransaction
@@ -41,35 +42,69 @@ class SimpleManagerInitializationTestCase(unittest.TestCase):
         self.tx_storage = ModifiedTransactionMemoryStorage()
         self.pubsub = PubSubManager(self.clock)
 
+        soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
+        self.consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub=self.pubsub)
+
     def test_invalid_arguments(self):
         # this is a base case, it shouldn't raise any error
         # (otherwise we might not be testing the correct thing below)
-        manager = HathorManager(self.clock, pubsub=self.pubsub, tx_storage=self.tx_storage)
+        manager = HathorManager(
+            self.clock,
+            pubsub=self.pubsub,
+            consensus_algorithm=self.consensus_algorithm,
+            tx_storage=self.tx_storage
+        )
         del manager
 
         # disabling both sync versions should be invalid
         with self.assertRaises(TypeError):
-            HathorManager(self.clock, pubsub=self.pubsub, tx_storage=self.tx_storage,
-                          enable_sync_v1=False, enable_sync_v2=False)
+            HathorManager(
+                self.clock,
+                pubsub=self.pubsub,
+                consensus_algorithm=self.consensus_algorithm,
+                tx_storage=self.tx_storage,
+                enable_sync_v1=False,
+                enable_sync_v2=False
+            )
 
         # not passing a storage should be invalid
         with self.assertRaises(TypeError):
-            HathorManager(self.clock)
+            HathorManager(
+                self.clock,
+                pubsub=self.pubsub,
+                consensus_algorithm=self.consensus_algorithm,
+            )
 
     def tests_init_with_stratum(self):
-        manager = HathorManager(self.clock, pubsub=self.pubsub, tx_storage=self.tx_storage, stratum_port=50505)
+        manager = HathorManager(
+            self.clock,
+            pubsub=self.pubsub,
+            consensus_algorithm=self.consensus_algorithm,
+            tx_storage=self.tx_storage,
+            stratum_port=50505
+        )
         manager.start()
         manager.stop()
         del manager
 
     def test_double_start(self):
-        manager = HathorManager(self.clock, pubsub=self.pubsub, tx_storage=self.tx_storage)
+        manager = HathorManager(
+            self.clock,
+            pubsub=self.pubsub,
+            consensus_algorithm=self.consensus_algorithm,
+            tx_storage=self.tx_storage
+        )
         manager.start()
         with self.assertRaises(Exception):
             manager.start()
 
     def test_wrong_stop(self):
-        manager = HathorManager(self.clock, pubsub=self.pubsub, tx_storage=self.tx_storage)
+        manager = HathorManager(
+            self.clock,
+            pubsub=self.pubsub,
+            consensus_algorithm=self.consensus_algorithm,
+            tx_storage=self.tx_storage
+        )
         with self.assertRaises(Exception):
             manager.stop()
         manager.start()

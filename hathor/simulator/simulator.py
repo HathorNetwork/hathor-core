@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Generator, List, Optional, Set
 from mnemonic import Mnemonic
 from structlog import get_logger
 
+from hathor.consensus import ConsensusAlgorithm
 from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
@@ -138,6 +139,10 @@ class Simulator:
 
         pubsub = PubSubManager(self._clock)
 
+        if soft_voided_tx_ids is None:
+            soft_voided_tx_ids = set()
+        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub=pubsub)
+
         assert peer_id is not None  # XXX: temporary, for checking that tests are using the peer_id
         if peer_id is None:
             peer_id = PeerId()
@@ -145,6 +150,7 @@ class Simulator:
         manager = HathorManager(
             self._clock,
             pubsub=pubsub,
+            consensus_algorithm=consensus_algorithm,
             peer_id=peer_id,
             network=network,
             wallet=wallet,
@@ -152,7 +158,6 @@ class Simulator:
             enable_sync_v2=enable_sync_v2,
             tx_storage=tx_storage,
             rng=Random(self.rng.getrandbits(64)),
-            soft_voided_tx_ids=soft_voided_tx_ids,
         )
 
         manager.reactor = self._clock

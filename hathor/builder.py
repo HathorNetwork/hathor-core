@@ -26,6 +26,7 @@ from twisted.internet.posixbase import PosixReactorBase
 from twisted.web import server
 from twisted.web.resource import Resource
 
+from hathor.consensus import ConsensusAlgorithm
 from hathor.event import EventManager
 from hathor.event.resources.event import EventResource
 from hathor.exception import BuilderError
@@ -163,6 +164,9 @@ class CliBuilder:
             self.log.debug('enable utxo index')
             tx_storage.indexes.enable_utxo_index()
 
+        soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
+        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub=pubsub)
+
         self.manager = HathorManager(
             reactor,
             pubsub=pubsub,
@@ -177,7 +181,7 @@ class CliBuilder:
             checkpoints=settings.CHECKPOINTS,
             enable_sync_v1=enable_sync_v1,
             enable_sync_v2=enable_sync_v2,
-            soft_voided_tx_ids=set(settings.SOFT_VOIDED_TX_IDS),
+            consensus_algorithm=consensus_algorithm,
             environment_info=get_environment_info(args=str(args), peer_id=peer_id.id),
         )
 

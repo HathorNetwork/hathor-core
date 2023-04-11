@@ -11,6 +11,7 @@ from twisted.trial import unittest
 
 from hathor.builder import CliBuilder
 from hathor.conf import HathorSettings
+from hathor.consensus import ConsensusAlgorithm
 from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
@@ -169,9 +170,13 @@ class TestCase(unittest.TestCase):
         if utxo_index:
             tx_storage.indexes.enable_utxo_index()
 
+        soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
+        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub=pubsub)
+
         manager = HathorManager(
             self.clock,
             pubsub=pubsub,
+            consensus_algorithm=consensus_algorithm,
             peer_id=peer_id,
             network=network,
             wallet=wallet,
