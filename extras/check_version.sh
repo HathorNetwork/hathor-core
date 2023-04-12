@@ -1,5 +1,13 @@
 #!/bin/bash
 
+###
+# This script will check all source files containing the project version and exit with an error code -1 in case
+# they don't match.
+#
+# An optional argument is also accepted containing a version string to be checked agaisnt the others.
+# E.g: ./extras/check_version.sh 0.52.1
+###
+
 OPENAPI_FILE="hathor/cli/openapi_files/openapi_base.json"
 SRC_FILE="hathor/version.py"
 PACKAGE_FILE="pyproject.toml"
