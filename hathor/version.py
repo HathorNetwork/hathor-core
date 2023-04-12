@@ -14,13 +14,14 @@
 
 import os
 import re
+import subprocess
 from typing import Optional
 
 from structlog import get_logger
 
 BASE_VERSION = '0.53.0'
 
-DEFAULT_VERSION_SUFFIX = "-local"
+DEFAULT_VERSION_SUFFIX = "local"
 BUILD_VERSION_FILE_PATH = "./BUILD_VERSION"
 
 # Valid formats: 1.2.3, 1.2.3-rc.1 and nightly-ab49c20f
@@ -49,13 +50,32 @@ def _get_build_version() -> Optional[str]:
             return None
 
 
+def _get_git_revision_short_hash() -> Optional[str]:
+    try:
+        return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
+    except subprocess.CalledProcessError:
+        logger.warn((
+            "Error while trying to get local git head. We are probably not in a git repo. "
+            "Will report local version without any git info."
+        ))
+        return None
+
+
+def _get_local_version() -> str:
+    git_head = _get_git_revision_short_hash()
+
+    if git_head:
+        return f"{BASE_VERSION}-{_get_git_revision_short_hash()}-{DEFAULT_VERSION_SUFFIX}"
+
+    return f"{BASE_VERSION}-{DEFAULT_VERSION_SUFFIX}"
+
+
 def _get_version() -> str:
     """Get the current hathor-core version from the build version or the default one with a local suffix
 
     :return: The current hathor-core version
     """
-    local_version = BASE_VERSION + DEFAULT_VERSION_SUFFIX
-    return _get_build_version() or local_version
+    return _get_build_version() or _get_local_version()
 
 
 __version__ = _get_version()

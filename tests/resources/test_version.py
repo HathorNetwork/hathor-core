@@ -1,4 +1,5 @@
 import os
+import subprocess
 import tempfile
 from unittest.mock import patch
 
@@ -31,13 +32,15 @@ class BaseVersionTest(_BaseResourceTest._ResourceTest):
         """Test that we will return a version with the default prefix when the BUILD_VERSION file
             does not exist.
         """
-        self.assertEqual(_get_version(), BASE_VERSION + DEFAULT_VERSION_SUFFIX)
+        git_head = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
+        self.assertEqual(_get_version(), f"{BASE_VERSION}-{git_head}-{DEFAULT_VERSION_SUFFIX}")
 
     @patch('hathor.version.BUILD_VERSION_FILE_PATH', TMP_DIR + '/BUILD_VERSION')
     def test_build_version(self):
         """Test that we will return the version from the BUILD_VERSION file if it is valid,
             or the local version if the BUILD_VERSION is invalid.
         """
+        # Valid BUILD_VERSION files
         with open(TMP_DIR + '/BUILD_VERSION', 'w') as build_version_file:
             build_version_file.write(BASE_VERSION)
         self.assertEqual(_get_version(), BASE_VERSION)
@@ -50,13 +53,16 @@ class BaseVersionTest(_BaseResourceTest._ResourceTest):
             build_version_file.write('nightly-a4b3f9c2')
         self.assertEqual(_get_version(), 'nightly-a4b3f9c2')
 
+        # Invalid BUILD_VERSION files
+        git_head = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
+
         with open(TMP_DIR + '/BUILD_VERSION', 'w') as build_version_file:
             build_version_file.write('v1.2.3')
-        self.assertEqual(_get_version(), BASE_VERSION + '-local')
+        self.assertEqual(_get_version(), f"{BASE_VERSION}-{git_head}-{DEFAULT_VERSION_SUFFIX}")
 
         with open(TMP_DIR + '/BUILD_VERSION', 'w') as build_version_file:
             build_version_file.write('1.2.3-beta')
-        self.assertEqual(_get_version(), BASE_VERSION + '-local')
+        self.assertEqual(_get_version(), f"{BASE_VERSION}-{git_head}-{DEFAULT_VERSION_SUFFIX}")
 
         os.remove(TMP_DIR + '/BUILD_VERSION')
 
