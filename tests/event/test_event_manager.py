@@ -1,6 +1,7 @@
 from unittest.mock import Mock
 
 from hathor.event import EventManager
+from hathor.event.model.event_type import EventType
 from hathor.event.storage.memory_storage import EventMemoryStorage
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.pubsub import HathorEvents, PubSubManager
@@ -55,10 +56,10 @@ class BaseEventManagerTest(unittest.TestCase):
         event2 = self.event_storage.get_event(2)
         event3 = self.event_storage.get_event(3)
         event4 = self.event_storage.get_event(4)
-        self.assertEqual(HathorEvents(event0.type), HathorEvents.LOAD_FINISHED)
-        self.assertEqual(HathorEvents(event1.type), HathorEvents.REORG_STARTED)
+        self.assertEqual(EventType(event0.type), EventType.LOAD_FINISHED)
+        self.assertEqual(EventType(event1.type), EventType.REORG_STARTED)
         self.assertIsNotNone(event1.group_id)
-        self.assertEqual(HathorEvents(event2.type), HathorEvents.REORG_FINISHED)
+        self.assertEqual(EventType(event2.type), EventType.REORG_FINISHED)
         self.assertIsNotNone(event2.group_id)
         self.assertEqual(event1.group_id, event2.group_id)
         self.assertNotEqual(event2.group_id, event3.group_id)

@@ -12,23 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, Optional, Type
+from typing import Optional
 
 from pydantic import NonNegativeInt, validator
 
-from hathor.event.model.event_data import BaseEventData, EmptyData, EventData, ReorgData, TxData
-from hathor.pubsub import EventArguments, HathorEvents
+from hathor.event.model.event_data import EventData
+from hathor.event.model.event_type import EventType
+from hathor.pubsub import EventArguments
 from hathor.utils.pydantic import BaseModel
-
-_EVENT_DATA_MAP: Dict[HathorEvents, Type[BaseEventData]] = {
-    HathorEvents.LOAD_FINISHED: EmptyData,
-    HathorEvents.NETWORK_NEW_TX_ACCEPTED: TxData,
-    HathorEvents.REORG_STARTED: ReorgData,
-    HathorEvents.REORG_FINISHED: EmptyData,
-    HathorEvents.VERTEX_METADATA_CHANGED: TxData,
-    HathorEvents.CONSENSUS_TX_UPDATE: TxData,
-    HathorEvents.CONSENSUS_TX_REMOVED: TxData,
-}
 
 
 class BaseEvent(BaseModel, use_enum_values=True):
@@ -41,7 +32,7 @@ class BaseEvent(BaseModel, use_enum_values=True):
     # events it's possible that timestamps will temporarily decrease.
     timestamp: float
     # One of the event types
-    type: HathorEvents
+    type: EventType
     # Variable for event type
     data: EventData
     # Used to link events, for example, many TX_METADATA_CHANGED will have the same group_id when they belong to the
@@ -54,14 +45,11 @@ class BaseEvent(BaseModel, use_enum_values=True):
         peer_id: str,
         event_id: NonNegativeInt,
         timestamp: float,
-        event_type: HathorEvents,
+        event_type: EventType,
         event_args: EventArguments,
         group_id: Optional[NonNegativeInt]
     ) -> 'BaseEvent':
-        event_data_type = _EVENT_DATA_MAP.get(event_type)
-
-        if event_data_type is None:
-            raise ValueError(f'The given event type ({event_type}) is not a supported event')
+        event_data_type = event_type.data_type()
 
         return cls(
             peer_id=peer_id,
@@ -74,8 +62,8 @@ class BaseEvent(BaseModel, use_enum_values=True):
 
     @validator('data')
     def data_type_must_match_event_type(cls, v, values):
-        event_type = HathorEvents(values['type'])
-        expected_data_type = _EVENT_DATA_MAP.get(event_type)
+        event_type = EventType(values['type'])
+        expected_data_type = event_type.data_type()
 
         if type(v) != expected_data_type:
             raise ValueError('event data type does not match event type')

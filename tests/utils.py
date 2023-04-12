@@ -16,8 +16,8 @@ from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key, get_private_key_from_bytes
 from hathor.event.model.base_event import BaseEvent
 from hathor.event.model.event_data import TxData, TxMetadata
+from hathor.event.model.event_type import EventType
 from hathor.manager import HathorManager
-from hathor.pubsub import HathorEvents
 from hathor.transaction import BaseTransaction, Transaction, TxInput, TxOutput, genesis
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
@@ -695,7 +695,7 @@ class EventMocker:
             id=event_id or self.gen_next_id(),
             peer_id=peer_id_mock,
             timestamp=1658892990,
-            type=HathorEvents.VERTEX_METADATA_CHANGED,
+            type=EventType.VERTEX_METADATA_CHANGED,
             group_id=group_id,
             data=self.tx_data,
         )
@@ -714,6 +714,6 @@ class EventMocker:
             peer_id='123',
             id=event_id,
             timestamp=123456,
-            type=HathorEvents.VERTEX_METADATA_CHANGED,
+            type=EventType.VERTEX_METADATA_CHANGED,
             data=cls.tx_data
         )

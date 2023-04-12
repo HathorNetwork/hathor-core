@@ -135,8 +135,6 @@ class HathorEvents(Enum):
 
     REORG_FINISHED = 'reorg:finished'
 
-    VERTEX_METADATA_CHANGED = 'vertex:metadata_changed'
-
 
 class EventArguments:
     """Simple object for storing event arguments.

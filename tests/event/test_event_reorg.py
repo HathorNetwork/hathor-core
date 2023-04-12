@@ -2,6 +2,7 @@ from unittest.mock import Mock
 
 from hathor.conf import HathorSettings
 from hathor.event import EventManager
+from hathor.event.model.event_type import EventType
 from hathor.event.storage import EventMemoryStorage
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.pubsub import PubSubManager
@@ -38,8 +39,6 @@ class BaseEventReorgTest(unittest.TestCase):
         self.genesis_public_key = self.genesis_private_key.public_key()
 
     def test_reorg_events(self):
-        from hathor.pubsub import HathorEvents
-
         assert settings.REWARD_SPEND_MIN_BLOCKS == 10, 'this test was made with this hardcoded value in mind'
 
         # add some blocks
@@ -72,48 +71,48 @@ class BaseEventReorgTest(unittest.TestCase):
             pass
         expected_events_grouped = [
             [
-                (HathorEvents.LOAD_FINISHED, {})
+                (EventType.LOAD_FINISHED, {})
             ],
             # XXX: the order of the following events can vary depending on which genesis is spent/confirmed first
             unsorted([
-                (HathorEvents.VERTEX_METADATA_CHANGED, {'hash': settings.GENESIS_TX1_HASH.hex()}),
-                (HathorEvents.VERTEX_METADATA_CHANGED, {'hash': settings.GENESIS_TX2_HASH.hex()}),
-                (HathorEvents.VERTEX_METADATA_CHANGED, {'hash': blocks[0].hash_hex}),
+                (EventType.VERTEX_METADATA_CHANGED, {'hash': settings.GENESIS_TX1_HASH.hex()}),
+                (EventType.VERTEX_METADATA_CHANGED, {'hash': settings.GENESIS_TX2_HASH.hex()}),
+                (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[0].hash_hex}),
             ]),
             # XXX: these events must always have this order
             [
-                (HathorEvents.NETWORK_NEW_TX_ACCEPTED, {'hash': blocks[0].hash_hex}),
-                (HathorEvents.VERTEX_METADATA_CHANGED, {'hash': blocks[1].hash_hex}),
-                (HathorEvents.NETWORK_NEW_TX_ACCEPTED, {'hash': blocks[1].hash_hex}),
-                (HathorEvents.VERTEX_METADATA_CHANGED, {'hash': blocks[2].hash_hex}),
-                (HathorEvents.NETWORK_NEW_TX_ACCEPTED, {'hash': blocks[2].hash_hex}),
-                (HathorEvents.VERTEX_METADATA_CHANGED, {'hash': blocks[3].hash_hex}),
-                (HathorEvents.NETWORK_NEW_TX_ACCEPTED, {'hash': blocks[3].hash_hex}),
-                (HathorEvents.VERTEX_METADATA_CHANGED, {'hash': blocks[4].hash_hex}),
-                (HathorEvents.NETWORK_NEW_TX_ACCEPTED, {'hash': blocks[4].hash_hex}),
-                (HathorEvents.VERTEX_METADATA_CHANGED, {'hash': blocks[5].hash_hex}),
-                (HathorEvents.NETWORK_NEW_TX_ACCEPTED, {'hash': blocks[5].hash_hex}),
-                (HathorEvents.VERTEX_METADATA_CHANGED, {'hash': blocks[6].hash_hex}),
-                (HathorEvents.NETWORK_NEW_TX_ACCEPTED, {'hash': blocks[6].hash_hex}),
-                (HathorEvents.VERTEX_METADATA_CHANGED, {'hash': blocks[7].hash_hex}),
-                (HathorEvents.NETWORK_NEW_TX_ACCEPTED, {'hash': blocks[7].hash_hex}),
-                (HathorEvents.VERTEX_METADATA_CHANGED, {'hash': blocks[8].hash_hex}),
-                (HathorEvents.NETWORK_NEW_TX_ACCEPTED, {'hash': blocks[8].hash_hex}),
-                (HathorEvents.VERTEX_METADATA_CHANGED, {'hash': blocks[9].hash_hex}),
-                (HathorEvents.NETWORK_NEW_TX_ACCEPTED, {'hash': blocks[9].hash_hex}),
-                (HathorEvents.REORG_STARTED, {'reorg_size': 2, 'previous_best_block': blocks[9].hash_hex,
-                                              'new_best_block': b0.hash_hex}),
+                (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[0].hash_hex}),
+                (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[1].hash_hex}),
+                (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[1].hash_hex}),
+                (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[2].hash_hex}),
+                (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[2].hash_hex}),
+                (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[3].hash_hex}),
+                (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[3].hash_hex}),
+                (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[4].hash_hex}),
+                (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[4].hash_hex}),
+                (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[5].hash_hex}),
+                (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[5].hash_hex}),
+                (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[6].hash_hex}),
+                (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[6].hash_hex}),
+                (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[7].hash_hex}),
+                (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[7].hash_hex}),
+                (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[8].hash_hex}),
+                (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[8].hash_hex}),
+                (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[9].hash_hex}),
+                (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[9].hash_hex}),
+                (EventType.REORG_STARTED, {'reorg_size': 2, 'previous_best_block': blocks[9].hash_hex,
+                                           'new_best_block': b0.hash_hex}),
             ],
             # XXX: for some reason the metadata update order of these events isn't always the same
             unsorted([
-                (HathorEvents.VERTEX_METADATA_CHANGED, {'hash': blocks[8].hash_hex}),
-                (HathorEvents.VERTEX_METADATA_CHANGED, {'hash': blocks[9].hash_hex}),
-                (HathorEvents.VERTEX_METADATA_CHANGED, {'hash': b0.hash_hex}),
+                (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[8].hash_hex}),
+                (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[9].hash_hex}),
+                (EventType.VERTEX_METADATA_CHANGED, {'hash': b0.hash_hex}),
             ]),
             # XXX: these events must always have this order
             [
-                (HathorEvents.REORG_FINISHED, {}),
-                (HathorEvents.NETWORK_NEW_TX_ACCEPTED, {'hash': b0.hash_hex}),
+                (EventType.REORG_FINISHED, {}),
+                (EventType.NEW_VERTEX_ACCEPTED, {'hash': b0.hash_hex}),
             ],
         ]
 
@@ -133,7 +132,7 @@ class BaseEventReorgTest(unittest.TestCase):
                 expected_events.sort(key=lambda i: i[1].get('hash', ''))
             for actual_event, expected_event in zip(actual_events, expected_events):
                 expected_event_type, expected_partial_data = expected_event
-                self.assertEqual(HathorEvents(actual_event.type), expected_event_type)
+                self.assertEqual(EventType(actual_event.type), expected_event_type)
                 for expected_data_key, expected_data_value in expected_partial_data.items():
                     self.assertEqual(actual_event.data.dict()[expected_data_key], expected_data_value)
 
