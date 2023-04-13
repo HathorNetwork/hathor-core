@@ -143,12 +143,8 @@ class CliBuilder:
                 event_storage=event_storage,
                 event_ws_factory=self.event_ws_factory,
                 pubsub=pubsub,
-                reactor=reactor,
-                emit_load_events=args.x_emit_load_events
+                reactor=reactor
             )
-        else:
-            self.check_or_raise(not args.x_emit_load_events, '--x-emit-load-events cannot be used without '
-                                                             '--x-enable-event-queue')
 
         if args.wallet_index and tx_storage.indexes is not None:
             self.log.debug('enable wallet indexes')
@@ -232,7 +228,7 @@ class CliBuilder:
 
             self.manager.enable_event_queue = True
             self.log.info('--x-enable-event-queue flag provided. '
-                          'The events detected by the full node will be stored and retrieved to clients')
+                          'The events detected by the full node will be stored and can be retrieved by clients')
 
         for description in args.listen:
             self.manager.add_listen_address(description)
