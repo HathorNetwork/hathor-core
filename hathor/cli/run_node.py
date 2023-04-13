@@ -96,8 +96,6 @@ class RunNode:
         parser.add_argument('--x-localhost-only', action='store_true', help='Only connect to peers on localhost')
         parser.add_argument('--x-rocksdb-indexes', action='store_true', help=SUPPRESS)
         parser.add_argument('--x-enable-event-queue', action='store_true', help='Enable event queue mechanism')
-        parser.add_argument('--x-emit-load-events', action='store_true', help='Enable emission of events during the '
-                                                                              'LOAD phase')
         parser.add_argument('--peer-id-blacklist', action='extend', default=[], nargs='+', type=str,
                             help='Peer IDs to forbid connection')
         return parser
