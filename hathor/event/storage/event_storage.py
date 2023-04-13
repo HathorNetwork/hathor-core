@@ -16,6 +16,7 @@ from abc import ABC, abstractmethod
 from typing import Iterator, Optional
 
 from hathor.event.model.base_event import BaseEvent
+from hathor.event.model.node_state import NodeState
 
 
 class EventStorage(ABC):
@@ -42,4 +43,19 @@ class EventStorage(ABC):
     @abstractmethod
     def iter_from_event(self, key: int) -> Iterator[BaseEvent]:
         """ Iterate through events starting from the event with the given key"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def clear_events(self) -> None:
+        """Clear all stored events and related metadata."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_node_state(self, state: NodeState) -> None:
+        """Save a node state in the storage"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_node_state(self) -> Optional[NodeState]:
+        """Get the node state from the storage"""
         raise NotImplementedError

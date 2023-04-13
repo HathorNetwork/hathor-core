@@ -9,6 +9,7 @@ from tests import unittest
 from tests.utils import HAS_ROCKSDB, EventMocker
 
 
+# TODO: Implement tests for new methods
 class EventStorageBaseTest(unittest.TestCase):
     __test__ = False
 
