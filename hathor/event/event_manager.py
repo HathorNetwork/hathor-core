@@ -12,15 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Callable, Optional
+from typing import Callable, Iterator, Optional
 
 from structlog import get_logger
 
 from hathor.event.model.base_event import BaseEvent
 from hathor.event.model.event_type import EventType
+from hathor.event.model.node_state import NodeState
 from hathor.event.storage import EventStorage
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
+from hathor.transaction import BaseTransaction
 from hathor.util import Reactor
 
 logger = get_logger()
@@ -51,7 +53,7 @@ class EventManager:
 
     _peer_id: str
     _is_running: bool = False
-    _load_finished: bool = False
+    _previous_node_state: Optional[NodeState] = None
 
     @property
     def event_storage(self) -> EventStorage:
@@ -79,6 +81,11 @@ class EventManager:
 
     def start(self, peer_id: str) -> None:
         assert self._is_running is False, 'Cannot start, EventManager is already running'
+
+        self._previous_node_state = self._event_storage.get_node_state()
+
+        if self._should_reload_events():
+            self._event_storage.clear_events()
 
         self._peer_id = peer_id
         self._event_ws_factory.start()
@@ -108,13 +115,18 @@ class EventManager:
         """ Subscribe to defined events for the pubsub received
         """
         for event in _SUBSCRIBE_EVENTS:
-            self._pubsub.subscribe(event, self._handle_event)
+            self._pubsub.subscribe(event, self._handle_hathor_event)
 
-    def _handle_event(self, hathor_event: HathorEvents, event_args: EventArguments) -> None:
+    def _handle_hathor_event(self, hathor_event: HathorEvents, event_args: EventArguments) -> None:
+        event_type = EventType.from_hathor_event(hathor_event)
+
+        self._handle_event(event_type, event_args)
+
+    def _handle_event(self, event_type: EventType, event_args: EventArguments) -> None:
         assert self._is_running, 'Cannot handle event, EventManager is not started.'
 
-        event_type = EventType.from_hathor_event(hathor_event)
         event_specific_handlers = {
+            EventType.LOAD_STARTED: self._handle_load_started,
             EventType.LOAD_FINISHED: self._handle_load_finished
         }
 
@@ -180,9 +192,6 @@ class EventManager:
             group_id=group_id,
         )
 
-    def _handle_load_finished(self):
-        self._load_finished = True
-
     def _create_event(
         self,
         event_type: EventType,
@@ -197,3 +206,22 @@ class EventManager:
             event_args=event_args,
             group_id=group_id,
         )
+
+    def _handle_load_started(self):
+        self._event_storage.save_node_state(NodeState.LOAD)
+
+    def _handle_load_finished(self):
+        self._event_storage.save_node_state(NodeState.SYNC)
+
+    def _should_reload_events(self) -> bool:
+        return self._previous_node_state in [None, NodeState.LOAD]
+
+    def handle_load_phase_events(self, topological_iterator: Iterator[BaseTransaction]) -> None:
+        """Either generates load phase events or not, depending on previous node state."""
+
+        if not self._should_reload_events():
+            return
+
+        for vertex in topological_iterator:
+            args = EventArguments(tx=vertex)
+            self._handle_event(EventType.NEW_VERTEX_ACCEPTED, args)
