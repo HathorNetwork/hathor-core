@@ -649,6 +649,12 @@ class HathorManager:
 
         # XXX: last step before actually starting is updating the last started at timestamps
         self.tx_storage.update_last_started_at(started_at)
+
+        # TODO: Can be moved to the outer method, allowing full verification? I think so, but publish(HathorEvents.LOAD_FINISHED) also has to be moved
+        if self._event_manager:
+            topological_iterator = self.tx_storage.topological_iterator()
+            self._event_manager.handle_load_phase_events(topological_iterator)
+
         self.state = self.NodeState.READY
         self.pubsub.publish(HathorEvents.LOAD_FINISHED)
 
