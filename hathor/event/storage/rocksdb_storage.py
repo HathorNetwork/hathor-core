@@ -29,9 +29,12 @@ _KEY_NODE_STATE = b'node-state'
 
 class EventRocksDBStorage(EventStorage):
     def __init__(self, rocksdb_storage: RocksDBStorage):
-        self._db = rocksdb_storage.get_db()
-        self._cf_event = rocksdb_storage.get_or_create_column_family(_CF_NAME_EVENT)
-        self._cf_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_META)
+        self._rocksdb_storage = rocksdb_storage
+
+        self._db = self._rocksdb_storage.get_db()
+        self._cf_event = self._rocksdb_storage.get_or_create_column_family(_CF_NAME_EVENT)
+        self._cf_meta = self._rocksdb_storage.get_or_create_column_family(_CF_NAME_META)
+
         self._last_event: Optional[BaseEvent] = self._db_get_last_event()
         self._last_group_id: Optional[int] = self._db_get_last_group_id()
 
@@ -88,14 +91,23 @@ class EventRocksDBStorage(EventStorage):
         return self._last_group_id
 
     def clear_events(self) -> None:
-        self._db.drop_column_family(self._cf_event)
+        self._last_event = None
+        self._last_group_id = None
+
         self._db.delete((self._cf_meta, _KEY_LAST_GROUP_ID))
+        self._db.drop_column_family(self._cf_event)
+
+        self._cf_event = self._rocksdb_storage.get_or_create_column_family(_CF_NAME_EVENT)
 
     def save_node_state(self, state: NodeState) -> None:
         self._db.put((self._cf_meta, _KEY_NODE_STATE), int_to_bytes(state.value, 8))
 
     def get_node_state(self) -> Optional[NodeState]:
         node_state_bytes = self._db.get((self._cf_meta, _KEY_NODE_STATE))
+
+        if node_state_bytes is None:
+            return None
+
         node_state_int = bytes_to_int(node_state_bytes)
 
         return NodeState(node_state_int)
