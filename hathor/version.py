@@ -65,7 +65,7 @@ def _get_local_version() -> str:
     git_head = _get_git_revision_short_hash()
 
     if git_head:
-        return f"{BASE_VERSION}-{_get_git_revision_short_hash()}-{DEFAULT_VERSION_SUFFIX}"
+        return f"{BASE_VERSION}-{git_head}-{DEFAULT_VERSION_SUFFIX}"
 
     return f"{BASE_VERSION}-{DEFAULT_VERSION_SUFFIX}"
 
