@@ -4,8 +4,11 @@
 # This script will check all source files containing the project version and exit with an error code -1 in case
 # they don't match.
 #
-# An optional argument is also accepted containing a version string to be checked agaisnt the others.
-# E.g: ./extras/check_version.sh 0.52.1
+# usage: ./extras/check_version.sh [version]
+#
+# example: ./extras/check_version.sh 0.52.1
+#
+# When a version is provided, it is checked against the package version.
 ###
 
 OPENAPI_FILE="hathor/cli/openapi_files/openapi_base.json"
