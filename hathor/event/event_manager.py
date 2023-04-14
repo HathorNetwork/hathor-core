@@ -54,6 +54,8 @@ class EventManager:
     _peer_id: str
     _is_running: bool = False
     _previous_node_state: Optional[NodeState] = None
+    _last_event: Optional[BaseEvent] = None
+    _last_existing_group_id: Optional[int] = None
 
     @property
     def event_storage(self) -> EventStorage:
@@ -68,13 +70,10 @@ class EventManager:
     ):
         self.log = logger.new()
 
-        self._clock = reactor
+        self._reactor = reactor
         self._event_storage = event_storage
         self._event_ws_factory = event_ws_factory
         self._pubsub = pubsub
-
-        self._last_event = self._event_storage.get_last_event()
-        self._last_existing_group_id = self._event_storage.get_last_group_id()
 
         self._assert_closed_event_group()
         self._subscribe_events()
@@ -86,6 +85,9 @@ class EventManager:
 
         if self._should_reload_events():
             self._event_storage.clear_events()
+        else:
+            self._last_event = self._event_storage.get_last_event()
+            self._last_existing_group_id = self._event_storage.get_last_group_id()
 
         self._peer_id = peer_id
         self._event_ws_factory.start()
@@ -201,7 +203,7 @@ class EventManager:
         return BaseEvent.from_event_arguments(
             event_id=0 if self._last_event is None else self._last_event.id + 1,
             peer_id=self._peer_id,
-            timestamp=self._clock.seconds(),
+            timestamp=self._reactor.seconds(),
             event_type=event_type,
             event_args=event_args,
             group_id=group_id,
@@ -217,11 +219,19 @@ class EventManager:
         return self._previous_node_state in [None, NodeState.LOAD]
 
     def handle_load_phase_events(self, topological_iterator: Iterator[BaseTransaction]) -> None:
-        """Either generates load phase events or not, depending on previous node state."""
+        """
+        Either generates load phase events or not, depending on previous node state.
+        Does so asynchronously so events generated here are not processed before normal event handling.
+        """
+        assert self._is_running, 'Cannot handle load phase events, EventManager is not started.'
 
         if not self._should_reload_events():
             return
 
         for vertex in topological_iterator:
             args = EventArguments(tx=vertex)
-            self._handle_event(EventType.NEW_VERTEX_ACCEPTED, args)
+
+            self._reactor.callLater(
+                delay=0,
+                callable=lambda: self._handle_event(EventType.NEW_VERTEX_ACCEPTED, args)
+            )
