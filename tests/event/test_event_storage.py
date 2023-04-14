@@ -1,7 +1,9 @@
 import tempfile
+from typing import Optional
 
 import pytest
 
+from hathor.event.model.node_state import NodeState
 from hathor.event.storage.memory_storage import EventMemoryStorage
 from hathor.event.storage.rocksdb_storage import EventRocksDBStorage
 from hathor.storage.rocksdb_storage import RocksDBStorage
@@ -9,7 +11,6 @@ from tests import unittest
 from tests.utils import HAS_ROCKSDB, EventMocker
 
 
-# TODO: Implement tests for new methods
 class EventStorageBaseTest(unittest.TestCase):
     __test__ = False
 
@@ -93,14 +94,61 @@ class EventStorageBaseTest(unittest.TestCase):
 
     def test_save_events_and_retrieve_last_group_id(self):
         expected_group_id = 4
-        for i in range(10):
-            group_id = i if i <= expected_group_id else None
-            event = self.event_mocker.generate_mocked_event(i, group_id)
-            self.event_storage.save_event(event)
+
+        self._populate_events_and_last_group_id(n_events=10, last_group_id=expected_group_id)
 
         actual_group_id = self.event_storage.get_last_group_id()
 
         assert expected_group_id == actual_group_id
+
+    def _populate_events_and_last_group_id(self, n_events: int, last_group_id: int) -> None:
+        for i in range(n_events):
+            group_id = i if i <= last_group_id else None
+            event = self.event_mocker.generate_mocked_event(i, group_id)
+            self.event_storage.save_event(event)
+
+    def test_get_empty_node_state(self):
+        node_state = self.event_storage.get_node_state()
+
+        assert node_state is None
+
+    def test_save_node_state_and_retrieve(self):
+        self.event_storage.save_node_state(NodeState.SYNC)
+        node_state = self.event_storage.get_node_state()
+
+        assert node_state == NodeState.SYNC
+
+    def test_clear_events_empty_database(self):
+        self._test_clear_events()
+
+    def _test_clear_events(self, expected_node_state: Optional[NodeState] = None):
+        self.event_storage.clear_events()
+
+        events = list(self.event_storage.iter_from_event(0))
+        last_group_id = self.event_storage.get_last_group_id()
+        node_state = self.event_storage.get_node_state()
+
+        assert events == []
+        assert last_group_id is None
+        assert node_state == expected_node_state
+
+    def test_clear_events_full_database(self):
+        n_events = 10
+        expected_last_group_id = 4
+        expected_node_state = NodeState.SYNC
+
+        self._populate_events_and_last_group_id(n_events=n_events, last_group_id=4)
+        self.event_storage.save_node_state(expected_node_state)
+
+        events = list(self.event_storage.iter_from_event(0))
+        last_group_id = self.event_storage.get_last_group_id()
+        node_state = self.event_storage.get_node_state()
+
+        assert len(events) == n_events
+        assert last_group_id == expected_last_group_id
+        assert node_state == expected_node_state
+
+        self._test_clear_events(expected_node_state)
 
 
 @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
