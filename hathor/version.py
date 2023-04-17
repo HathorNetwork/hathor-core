@@ -53,9 +53,9 @@ def _get_build_version() -> Optional[str]:
 def _get_git_revision_short_hash() -> Optional[str]:
     try:
         return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         logger.warn((
-            "Error while trying to get local git head. We are probably not in a git repo. "
+            "Error while trying to get local git head. There is either no git available or we aren't in a git repo. "
             "Will report local version without any git info."
         ))
         return None
