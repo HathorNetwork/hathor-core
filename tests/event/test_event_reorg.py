@@ -10,8 +10,6 @@ from tests.utils import add_new_blocks, get_genesis_key, zip_chunkify
 settings = HathorSettings()
 
 
-# TODO: This test fails with Clock because of pubsub event ordering caused by
-#  ReactorThread.get_current_thread. Changing MAIN_THREAD to NOT_RUNNING makes it work
 class BaseEventReorgTest(unittest.TestCase):
     __test__ = False
 
