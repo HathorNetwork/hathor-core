@@ -135,10 +135,6 @@ class EventManager:
         if event_specific_handler := event_specific_handlers.get(event_type):
             event_specific_handler()
 
-        # TODO: Are there any events being emitted during the load phase that are not emitted from this class?
-        # if not self._load_finished:
-        #     return
-
         self._handle_event_creation(event_type, event_args)
 
     def _handle_event_creation(self, event_type: EventType, event_args: EventArguments) -> None:
