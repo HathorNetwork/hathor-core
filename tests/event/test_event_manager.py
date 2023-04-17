@@ -7,8 +7,6 @@ from hathor.pubsub import HathorEvents
 from tests import unittest
 
 
-# TODO: This test fails with Clock because of pubsub event ordering caused by
-#  ReactorThread.get_current_thread. Changing MAIN_THREAD to NOT_RUNNING makes it work
 class BaseEventManagerTest(unittest.TestCase):
     __test__ = False
 

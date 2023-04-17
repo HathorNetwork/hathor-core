@@ -214,7 +214,7 @@ class EventManager:
     def _should_reload_events(self) -> bool:
         return self._previous_node_state in [None, NodeState.LOAD]
 
-    def handle_load_phase_events(self, topological_iterator: Iterator[BaseTransaction]) -> None:
+    def handle_load_phase_vertices(self, topological_iterator: Iterator[BaseTransaction]) -> None:
         """
         Either generates load phase events or not, depending on previous node state.
         Does so asynchronously so events generated here are not processed before normal event handling.

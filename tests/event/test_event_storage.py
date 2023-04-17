@@ -4,6 +4,7 @@ from typing import Optional
 import pytest
 
 from hathor.event.model.node_state import NodeState
+from hathor.event.storage import EventStorage
 from hathor.event.storage.memory_storage import EventMemoryStorage
 from hathor.event.storage.rocksdb_storage import EventRocksDBStorage
 from hathor.storage.rocksdb_storage import RocksDBStorage
@@ -13,6 +14,8 @@ from tests.utils import HAS_ROCKSDB, EventMocker
 
 class EventStorageBaseTest(unittest.TestCase):
     __test__ = False
+
+    event_storage: EventStorage
 
     def setUp(self):
         super().setUp()
@@ -121,7 +124,7 @@ class EventStorageBaseTest(unittest.TestCase):
     def test_clear_events_empty_database(self):
         self._test_clear_events()
 
-    def _test_clear_events(self, expected_node_state: Optional[NodeState] = None):
+    def _test_clear_events(self, expected_node_state: Optional[NodeState] = None) -> None:
         self.event_storage.clear_events()
 
         events = list(self.event_storage.iter_from_event(0))
