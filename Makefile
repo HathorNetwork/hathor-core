@@ -71,7 +71,7 @@ isort-check:
 
 .PHONY: check-version
 check-version:
-	bash ./extras/check_version.sh
+	bash ./extras/check_version.sh $(VERSION)
 
 .PHONY: check
 check: check-version flake8 isort-check mypy

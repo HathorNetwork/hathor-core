@@ -12,4 +12,70 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-__version__ = '0.53.0'
+import os
+import re
+import subprocess
+from typing import Optional
+
+from structlog import get_logger
+
+BASE_VERSION = '0.53.0'
+
+DEFAULT_VERSION_SUFFIX = "local"
+BUILD_VERSION_FILE_PATH = "./BUILD_VERSION"
+
+# Valid formats: 1.2.3, 1.2.3-rc.1 and nightly-ab49c20f
+BUILD_VERSION_REGEX = r"^(\d+\.\d+\.\d+(-rc\.\d+)?|nightly-[a-f0-9]{7,8})$"
+
+
+logger = get_logger()
+
+
+def _get_build_version() -> Optional[str]:
+    """Try to get the build version from BUILD_VERSION_FILE_PATH and validate it.
+
+    :return: The build version or None, if there is no file or the version is invalid.
+    """
+    if not os.path.isfile(BUILD_VERSION_FILE_PATH):
+        return None
+
+    with open(BUILD_VERSION_FILE_PATH, 'r') as f:
+        build_version = f.readline()
+        match = re.match(BUILD_VERSION_REGEX, build_version)
+
+        if match:
+            return build_version
+        else:
+            logger.warn("A build version with an invalid format was found. Ignoring it.", build_version=build_version)
+            return None
+
+
+def _get_git_revision_short_hash() -> Optional[str]:
+    try:
+        return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
+    except subprocess.CalledProcessError:
+        logger.warn((
+            "Error while trying to get local git head. We are probably not in a git repo. "
+            "Will report local version without any git info."
+        ))
+        return None
+
+
+def _get_local_version() -> str:
+    git_head = _get_git_revision_short_hash()
+
+    if git_head:
+        return f"{BASE_VERSION}-{git_head}-{DEFAULT_VERSION_SUFFIX}"
+
+    return f"{BASE_VERSION}-{DEFAULT_VERSION_SUFFIX}"
+
+
+def _get_version() -> str:
+    """Get the current hathor-core version from the build version or the default one with a local suffix
+
+    :return: The current hathor-core version
+    """
+    return _get_build_version() or _get_local_version()
+
+
+__version__ = _get_version()
