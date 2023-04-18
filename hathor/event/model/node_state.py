@@ -16,5 +16,5 @@ from enum import Enum, auto
 
 
 class NodeState(Enum):
-    LOAD = auto()
-    SYNC = auto()
+    LOAD = 0
+    SYNC = 1
