@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from structlog import get_logger
 
@@ -32,13 +32,14 @@ class MinerSimulator:
     """ Simulate block mining with actually solving the block. It is supposed to be used
     with Simulator class. The mining part is simulated using the geometrical distribution.
     """
-    def __init__(self, manager: 'HathorManager', rng: Random, *, hashpower: float):
+    def __init__(self, manager: 'HathorManager', rng: Random, *, hashpower: float, address: Optional[bytes] = None):
         """
         :param: hashpower: Number of hashes per second
         """
         self.blocks_found = 0
         self.manager = manager
         self.hashpower = hashpower
+        self.address = address
         self.clock = manager.reactor
         self.block = None
         self.delayedcall = None
@@ -87,7 +88,7 @@ class MinerSimulator:
             self.block = None
 
         if self.manager.can_start_mining():
-            block = self.manager.generate_mining_block()
+            block = self.manager.generate_mining_block(address=self.address)
             geometric_p = 2**(-block.weight)
             trials = self.rng.geometric(geometric_p)
             dt = 1.0 * trials / self.hashpower
@@ -95,6 +96,7 @@ class MinerSimulator:
             self.log.debug('randomized step: start mining new block', dt=dt, parents=[h.hex() for h in block.parents],
                            block_timestamp=block.timestamp)
         else:
+            self.log.debug('cannot start mining now... waiting 60 seconds')
             dt = 60
 
         if dt > settings.WEIGHT_DECAY_ACTIVATE_DISTANCE:
