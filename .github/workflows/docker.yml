@@ -36,26 +36,44 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v3
-    - name: Prepare tags
-      id: prep
+    - name: Prepare base version
+      id: prep_base_version
       shell: python
       run: |
-        import datetime
         import re
-        def extract_pyver(filename):
-            for line in open(filename).readlines():
-                if line.startswith('ARG PYTHON'):
-                    return line.split('=')[1].strip()
+        import os
+
         ref = '${{ github.ref }}'
-        dockerfile_cpython = 'Dockerfile'
-        dockerfile_pypy = 'Dockerfile.pypy'
-        default_python = 'python' + extract_pyver(dockerfile_cpython)
-        default_pypy = 'pypy' + extract_pyver(dockerfile_pypy)
+
+        # Set base_version according to the github ref type
+        is_release_candidate = False
+        is_release = False
+        is_nightly = False
+
+        overwrite_hathor_core_version = False
+
         if '${{ github.event_name }}' == 'schedule':
             commit_short_sha = '${{ github.sha }}'[:8]
             base_version = 'nightly-' + commit_short_sha
+            is_nightly = True
         elif ref.startswith('refs/tags/'):
-            base_version = ref[10:].split('-', 1)[0]
+            git_tag = ref[10:]
+            base_version = git_tag.split('-', 1)[0]
+
+            pre_release = (git_tag.split('-', 1)[1:] or [None])[0]
+            # This will be used to check against the versions in our source files
+            check_version = base_version[1:]
+            print('::set-output name=check-version::' + check_version)
+
+            # Check if this is a release-candidate
+            if pre_release:
+                if re.match(r'^rc\.[0-9]{1,3}$', pre_release):
+                    base_version = base_version + '-' + pre_release
+                    is_release_candidate = True
+                else:
+                    raise ValueError(f'Invalid Tag Value: {git_tag}')
+            else:
+                is_release = True
         elif ref.startswith('refs/heads/'):
             base_version = ref[11:].replace('/', '-')
             if base_version == '${{ github.event.repository.default_branch }}':
@@ -64,25 +82,92 @@ jobs:
             base_version = 'pr-${{ github.event.number }}'
         else:
             base_version = 'noop'
+
+        overwrite_hathor_core_version = is_release or is_release_candidate or is_nightly
+        # This is not the only condition to notify slack.
+        # We will also check if the Python version being built is the default one.
+        should_notify_slack = is_release or is_release_candidate
+
+        github_repository = os.environ['GITHUB_REPOSITORY']
+        if github_repository.lower() != 'hathornetwork/hathor-core':
+            should_notify_slack = False
+
+        print('::set-output name=base-version::' + base_version)
+        print('::set-output name=is-release-candidate::' + ('true' if is_release_candidate else 'false'))
+        print('::set-output name=is-release::' + ('true' if is_release else 'false'))
+        print('::set-output name=is-nightly::' + ('true' if is_nightly else 'false'))
+        print('::set-output name=overwrite-hathor-core-version::' + ('true' if overwrite_hathor_core_version else 'false'))
+        print('::set-output name=should-notify-slack::' + ('true' if should_notify_slack else 'false'))
+    - name: Overwrite version
+      if: steps.prep_base_version.outputs.overwrite-hathor-core-version == 'true'
+      shell: python
+      run: |
+        base_version = '${{ steps.prep_base_version.outputs.base-version }}'
+
+        with open('BUILD_VERSION', 'w') as file:
+            if base_version.startswith('v'):
+                base_version = base_version[1:]
+            print('base_version', base_version)
+            file.write(base_version + '\n')
+    - name: Check version
+      if: steps.prep_base_version.outputs.check-version
+      run: |
+        make check-version VERSION='${{ steps.prep_base_version.outputs.check-version }}'
+    - name: Prepare tags
+      id: prep
+      shell: python
+      run: |
+        import datetime
+        import re
+
+        base_version = '${{ steps.prep_base_version.outputs.base-version }}'
+        is_release_candidate = '${{ steps.prep_base_version.outputs.is-release-candidate }}' == 'true'
+
+        # Extract default python versions from the Dockerfiles
+        def extract_pyver(filename):
+            for line in open(filename).readlines():
+                if line.startswith('ARG PYTHON'):
+                    return line.split('=')[1].strip()
+        dockerfile_cpython = 'Dockerfile'
+        dockerfile_pypy = 'Dockerfile.pypy'
+        default_python = 'python' + extract_pyver(dockerfile_cpython)
+        default_pypy = 'pypy' + extract_pyver(dockerfile_pypy)
+
+        # Set which Dockerfile to use based on the versions matrix
         if '${{ matrix.python-impl }}' == 'pypy':
             dockerfile = dockerfile_pypy
             suffix = 'pypy${{ matrix.python-version }}'
         else:
             dockerfile = dockerfile_cpython
             suffix = 'python${{ matrix.python-version }}'
-        version = base_version + '-' + suffix
-        tags = {version}
+
+        # Build the tag list
+
+        tags = set()
+
+        # We don't want a tag with a python suffix for release-candidates
+        if is_release_candidate:
+            version = base_version
+        else:
+            version = base_version + '-' + suffix
+            tags.add(version)
+
         if suffix == default_python:
             tags.add(base_version)
+            print('::set-output name=slack-notification-version::' + base_version)
         elif suffix == default_pypy:
             tags.add(base_version + '-pypy')
+
+        # Check if this is a stable release
         if re.match(r'^v[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$', base_version):
             minor = base_version.rpartition('.')[0]
             tags.add(minor + '-' + suffix)
             if suffix == default_python:
                 tags.add('latest')
-        elif '${{ github.event_name }}' == 'push':
+        elif '${{ github.event_name }}' == 'push' and not is_release_candidate:
             tags.add('sha-' + '${{ github.sha }}'[:8])
+
+        # Build the image list and set outputs
         print('::set-output name=version::' + version)
         images = []
         docker_image = '${{ secrets.DOCKERHUB_IMAGE }}'
@@ -97,7 +182,7 @@ jobs:
             print('::set-output name=login-ghcr::true')
         else:
             print('::set-output name=login-ghcr::false')
-        if images:
+        if images and tags:
             print('::set-output name=tags::' + ','.join(f'{i}:{t}' for i in images for t in tags))
             print('::set-output name=push::true')
         else:
@@ -115,22 +200,23 @@ jobs:
         driver-opts: network=host
     - name: Login to DockerHub
       uses: docker/login-action@v2
-      if: steps.prep.outputs.login-dockerhub
+      if: steps.prep.outputs.login-dockerhub == 'true'
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
     - name: Login to GitHub Container Registry
       uses: docker/login-action@v2
-      if: steps.prep.outputs.login-ghcr
+      if: steps.prep.outputs.login-ghcr == 'true'
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     - name: Cache Docker layers
       uses: actions/cache@v3
+      if: steps.prep_base_version.outputs.is-nightly == 'false'
       with:
         path: /tmp/.buildx-cache
-        # this key is setup such that every branch has its cache and new branches can reuse dev's cache, but not the other way around
+        # this key is setup such that every branch has its cache and new branches can reuse master's cache, but not the other way around
         key: ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-${{ github.head_ref || github.ref }}-${{ github.sha }}
         restore-keys: |
           ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-refs/heads/master-
@@ -150,6 +236,7 @@ jobs:
     - name: Build and push
       uses: docker/build-push-action@v3
       continue-on-error: ${{ matrix.python-impl == 'pypy' }}  # PyPy is not first-class and has been causing some build failures
+      if: ${{ !env.ACT }}  # Skip this steps when testing locally with https://github.com/nektos/act
       with:
         context: .
         file: ${{ steps.prep.outputs.dockerfile }}
@@ -170,3 +257,13 @@ jobs:
           org.opencontainers.image.licenses=${{ github.event.repository.license.spdx_id }}
         cache-from: type=local,src=/tmp/.buildx-cache
         cache-to: type=local,dest=/tmp/.buildx-cache
+    - name: Slack Notification
+      if: ${{ steps.prep.outputs.slack-notification-version && steps.prep_base_version.outputs.should-notify-slack == 'true' && job.status == 'success' }}
+      uses: rtCamp/action-slack-notify@28e8b353eabda5998a2e1203aed33c5999944779
+      env:
+        SLACK_COLOR: ${{ job.status }} # It can turn the job status into a color. Success will be green.
+        SLACK_MESSAGE: 'We will be deploying this new image soon. Get in touch with the hathor-core team if you want to talk about this deployment.'
+        SLACK_TITLE: 'Hathor Core - new ${{ steps.prep.outputs.slack-notification-version }} Docker image pushed :rocket:'
+        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        SLACK_FOOTER: ''
+        MSG_MINIMAL: actions url
