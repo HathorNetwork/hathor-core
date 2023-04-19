@@ -225,9 +225,9 @@ class EventManager:
             return
 
         for vertex in topological_iterator:
-            args = EventArguments(tx=vertex)
-
             self._reactor.callLater(
                 delay=0,
-                callable=lambda: self._handle_event(EventType.NEW_VERTEX_ACCEPTED, args)
+                callable=self._handle_event,
+                event_type=EventType.NEW_VERTEX_ACCEPTED,
+                event_args=EventArguments(tx=vertex)
             )
