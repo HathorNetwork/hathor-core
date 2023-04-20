@@ -42,6 +42,10 @@ logger = get_logger()
 
 
 class CliBuilder:
+    """CliBuilder builds the core objects from args.
+
+    TODO Refactor to use Builder. It could even be ported to a Builder.from_args classmethod.
+    """
     def __init__(self) -> None:
         self.log = logger.new()
 

@@ -9,9 +9,7 @@ from twisted.internet.threads import deferToThread
 from twisted.trial import unittest
 
 from hathor.conf import HathorSettings
-from hathor.consensus import ConsensusAlgorithm
 from hathor.daa import TestMode, _set_test_mode
-from hathor.pubsub import PubSubManager
 from hathor.simulator.clock import MemoryReactorHeapClock
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
@@ -19,7 +17,7 @@ from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage, TransactionRocksDBStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.transaction_metadata import ValidationState
-from hathor.wallet import Wallet
+from tests.unittest import TestBuilder
 from tests.utils import (
     BURN_ADDRESS,
     HAS_ROCKSDB,
@@ -38,40 +36,32 @@ class BaseTransactionStorageTest(unittest.TestCase):
     __test__ = False
 
     def setUp(self, tx_storage, reactor=None):
-        from hathor.manager import HathorManager
+        self.tmpdir = tempfile.mkdtemp()
 
-        if not reactor:
-            self.reactor = MemoryReactorHeapClock()
-        else:
-            self.reactor = reactor
+        builder = TestBuilder()
+        builder.set_tx_storage(tx_storage)
+        builder.enable_keypair_wallet(self.tmpdir, unlock=b'teste')
+        builder.enable_address_index()
+        builder.enable_tokens_index()
+        if reactor is not None:
+            builder.set_reactor(reactor)
+
+        artifacts = builder.build()
+        self.reactor = artifacts.reactor
+        self.pubsub = artifacts.pubsub
+        self.manager = artifacts.manager
+        self.tx_storage = artifacts.tx_storage
+
+        assert artifacts.wallet is not None
+
         self.reactor.advance(time.time())
-        self.tx_storage = tx_storage
-        self.pubsub = PubSubManager(self.reactor)
 
-        tx_storage._manually_initialize()
+        self.tx_storage._manually_initialize()
         assert tx_storage.first_timestamp > 0
 
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
-
-        self.tmpdir = tempfile.mkdtemp()
-        wallet = Wallet(directory=self.tmpdir)
-        wallet.unlock(b'teste')
-
-        soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
-        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub=self.pubsub)
-
-        self.manager = HathorManager(
-            self.reactor,
-            pubsub=self.pubsub,
-            consensus_algorithm=consensus_algorithm,
-            tx_storage=self.tx_storage,
-            wallet=wallet
-        )
-
-        self.tx_storage.indexes.enable_address_index(self.manager.pubsub)
-        self.tx_storage.indexes.enable_tokens_index()
 
         block_parents = [tx.hash for tx in chain(self.genesis_blocks, self.genesis_txs)]
         output = TxOutput(200, P2PKH.create_output_script(BURN_ADDRESS))

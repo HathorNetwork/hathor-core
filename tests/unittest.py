@@ -9,17 +9,14 @@ from structlog import get_logger
 from twisted.internet.task import Clock
 from twisted.trial import unittest
 
-from hathor.builder import CliBuilder
+from hathor.builder import Builder
 from hathor.conf import HathorSettings
-from hathor.consensus import ConsensusAlgorithm
 from hathor.daa import TestMode, _set_test_mode
-from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
-from hathor.pubsub import PubSubManager
-from hathor.storage.rocksdb_storage import RocksDBStorage
+from hathor.simulator.clock import MemoryReactorHeapClock
 from hathor.transaction import BaseTransaction
-from hathor.util import Random, get_environment_info, reactor
+from hathor.util import Random, Reactor, reactor
 from hathor.wallet import HDWallet, Wallet
 
 logger = get_logger()
@@ -71,6 +68,22 @@ class SyncV2Params:
 class SyncBridgeParams:
     _enable_sync_v1 = True
     _enable_sync_v2 = True
+
+
+class TestBuilder(Builder):
+    def __init__(self) -> None:
+        super().__init__()
+        self.set_network('testnet')
+
+    def _get_peer_id(self) -> PeerId:
+        if self._peer_id is not None:
+            return self._peer_id
+        return PeerId()
+
+    def _get_reactor(self) -> Reactor:
+        if self._reactor:
+            return self._reactor
+        return MemoryReactorHeapClock()
 
 
 class TestCase(unittest.TestCase):
@@ -143,52 +156,63 @@ class TestCase(unittest.TestCase):
             enable_sync_v2 = self._enable_sync_v2
         assert enable_sync_v1 or enable_sync_v2, 'enable at least one sync version'
 
+        builder = TestBuilder()
+        builder.set_rng(self.rng)
+        builder.set_reactor(self.clock)
+        builder.set_network(network)
+
+        if checkpoints is not None:
+            builder.set_checkpoints(checkpoints)
+
+        if pubsub:
+            builder.set_pubsub(pubsub)
+
         if peer_id is None:
             peer_id = PeerId()
+        builder.set_peer_id(peer_id)
+
         if not wallet:
             wallet = self._create_test_wallet()
             if unlock_wallet:
                 wallet.unlock(b'MYPASS')
-        if tx_storage is None:
-            if self.use_memory_storage:
-                from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
-                tx_storage = TransactionMemoryStorage()
-            else:
-                from hathor.transaction.storage.rocksdb_storage import TransactionRocksDBStorage
-                directory = tempfile.mkdtemp()
-                self.tmpdirs.append(directory)
-                rocksdb_storage = RocksDBStorage(path=directory)
-                self._pending_cleanups.append(rocksdb_storage.close)
-                tx_storage = TransactionRocksDBStorage(rocksdb_storage, use_memory_indexes=use_memory_index)
+        builder.set_wallet(wallet)
 
-        pubsub = pubsub or PubSubManager(self.clock)
+        if event_manager:
+            builder.set_event_manager(event_manager)
 
-        builder = CliBuilder()
+        if tx_storage is not None:
+            builder.set_tx_storage(tx_storage)
+        elif self.use_memory_storage:
+            builder.use_memory()
+        else:
+            directory = tempfile.mkdtemp()
+            self.tmpdirs.append(directory)
+            builder.use_rocksdb(directory)
+
+        if use_memory_index is True:
+            builder.force_memory_index()
+
+        if enable_sync_v1 is True:
+            builder.enable_sync_v1()
+        elif enable_sync_v1 is False:
+            builder.disable_sync_v1()
+
+        if enable_sync_v2 is True:
+            builder.enable_sync_v2()
+        elif enable_sync_v2 is False:
+            builder.disable_sync_v2()
+
         if wallet_index:
-            builder.enable_wallet_index(tx_storage.indexes, pubsub)
+            builder.enable_wallet_index()
 
         if utxo_index:
-            tx_storage.indexes.enable_utxo_index()
+            builder.enable_utxo_index()
 
-        soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
-        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub=pubsub)
+        artifacts = builder.build()
+        manager = artifacts.manager
 
-        manager = HathorManager(
-            self.clock,
-            pubsub=pubsub,
-            consensus_algorithm=consensus_algorithm,
-            peer_id=peer_id,
-            network=network,
-            wallet=wallet,
-            tx_storage=tx_storage,
-            event_manager=event_manager,
-            capabilities=capabilities,
-            rng=self.rng,
-            enable_sync_v1=enable_sync_v1,
-            enable_sync_v2=enable_sync_v2,
-            checkpoints=checkpoints,
-            environment_info=get_environment_info("", peer_id.id)
-        )
+        if artifacts.rocksdb_storage:
+            self._pending_cleanups.append(artifacts.rocksdb_storage.close)
 
         # XXX: just making sure that tests set this up correctly
         if enable_sync_v2:

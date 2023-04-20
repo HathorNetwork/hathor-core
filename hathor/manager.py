@@ -85,11 +85,11 @@ class HathorManager:
                  *,
                  pubsub: PubSubManager,
                  consensus_algorithm: ConsensusAlgorithm,
-                 peer_id: Optional[PeerId] = None,
-                 network: Optional[str] = None,
+                 peer_id: PeerId,
+                 tx_storage: TransactionStorage,
+                 network: str,
                  hostname: Optional[str] = None,
                  wallet: Optional[BaseWallet] = None,
-                 tx_storage: Optional[TransactionStorage] = None,
                  event_manager: Optional[EventManager] = None,
                  stratum_port: Optional[int] = None,
                  ssl: bool = True,
@@ -101,7 +101,7 @@ class HathorManager:
                  environment_info: Optional[EnvironmentInfo] = None):
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
-        :param peer_id: Id of this node. If not given, a new one is created.
+        :param peer_id: Id of this node.
         :param network: Name of the network this node participates. Usually it is either testnet or mainnet.
         :type network: string
 
@@ -120,9 +120,6 @@ class HathorManager:
 
         if not (enable_sync_v1 or enable_sync_v2):
             raise TypeError(f'{type(self).__name__}() at least one sync version is required')
-
-        if tx_storage is None:
-            raise TypeError(f'{type(self).__name__}() missing 1 required positional argument: \'tx_storage\'')
 
         self._enable_sync_v1 = enable_sync_v1
         self._enable_sync_v2 = enable_sync_v2
@@ -147,8 +144,8 @@ class HathorManager:
         # Remote address, which can be different from local address.
         self.remote_address = None
 
-        self.my_peer = peer_id or PeerId()
-        self.network = network or 'testnet'
+        self.my_peer = peer_id
+        self.network = network
 
         self.is_started: bool = False
 

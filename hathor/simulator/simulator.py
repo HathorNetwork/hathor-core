@@ -130,6 +130,7 @@ class Simulator:
     def create_peer(self, network: Optional[str] = None, peer_id: Optional[PeerId] = None,
                     enable_sync_v1: bool = True, enable_sync_v2: bool = True,
                     soft_voided_tx_ids: Optional[Set[bytes]] = None) -> HathorManager:
+        # TODO Refactor to use Builder.
         assert self._started
         if network is None:
             network = self._network
