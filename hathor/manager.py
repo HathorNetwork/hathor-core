@@ -98,7 +98,8 @@ class HathorManager:
                  capabilities: Optional[List[str]] = None,
                  checkpoints: Optional[List[Checkpoint]] = None,
                  rng: Optional[Random] = None,
-                 environment_info: Optional[EnvironmentInfo] = None):
+                 environment_info: Optional[EnvironmentInfo] = None,
+                 full_verification: bool = False):
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node.
@@ -216,7 +217,7 @@ class HathorManager:
 
         # Full verification execute all validations for transactions and blocks when initializing the node
         # Can be activated on the command line with --full-verification
-        self._full_verification = False
+        self._full_verification = full_verification
 
         # Activated with --x-enable-event-queue flag
         # It activates the event mechanism inside full node
