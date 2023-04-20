@@ -4,6 +4,11 @@ import unittest
 from extras.github.docker import prep_base_version, prep_tags
 
 class DockerWorkflowTest(unittest.TestCase):
+    def setUp(self):
+        os.environ.update({
+            'GITHUB_REPOSITORY': 'hathornetwork/hathor-core',
+        })
+
     def test_nightly_build_no_github_secret(self):
         os.environ.update({
             'GITHUB_REF': 'refs/heads/ci/extract-python-scripts',
