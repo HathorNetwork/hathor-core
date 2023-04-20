@@ -14,7 +14,6 @@
 OPENAPI_FILE="hathor/cli/openapi_files/openapi_base.json"
 SRC_FILE="hathor/version.py"
 PACKAGE_FILE="pyproject.toml"
-BUILD_VERSION_FILE="BUILD_VERSION"
 
 OPENAPI_VERSION=`grep "version\":" ${OPENAPI_FILE} | cut -d'"' -f4`
 SRC_VERSION=`grep "BASE_VERSION =" ${SRC_FILE} | cut -d "'" -f2`
