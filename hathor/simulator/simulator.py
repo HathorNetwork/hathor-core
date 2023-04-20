@@ -141,20 +141,18 @@ class Simulator:
         wallet = HDWallet(gap_limit=2)
         wallet._manually_initialize()
 
-        artifacts = (
-            Builder()
-                .set_reactor(self._clock)
-                .set_peer_id(peer_id or PeerId())
-                .set_network(network or self._network)
-                .set_wallet(wallet)
-                .set_rng(Random(self.rng.getrandbits(64)))
-                .set_tx_storage(TransactionMemoryStorage())
-                .set_enable_sync_v1(enable_sync_v1)
-                .set_enable_sync_v2(enable_sync_v2)
-                .set_full_verification(full_verification)
-                .set_soft_voided_tx_ids(soft_voided_tx_ids or set())
-                .build()
-        )
+        artifacts = Builder() \
+            .set_reactor(self._clock) \
+            .set_peer_id(peer_id or PeerId()) \
+            .set_network(network or self._network) \
+            .set_wallet(wallet) \
+            .set_rng(Random(self.rng.getrandbits(64))) \
+            .set_tx_storage(TransactionMemoryStorage()) \
+            .set_enable_sync_v1(enable_sync_v1) \
+            .set_enable_sync_v2(enable_sync_v2) \
+            .set_full_verification(full_verification) \
+            .set_soft_voided_tx_ids(soft_voided_tx_ids or set()) \
+            .build()
 
         artifacts.manager.start()
         self.run_to_completion()

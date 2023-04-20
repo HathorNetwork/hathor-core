@@ -156,13 +156,11 @@ class TestCase(unittest.TestCase):
             enable_sync_v2 = self._enable_sync_v2
         assert enable_sync_v1 or enable_sync_v2, 'enable at least one sync version'
 
-        builder = (
-            TestBuilder()
-                .set_rng(self.rng)
-                .set_reactor(self.clock)
-                .set_network(network)
-                .set_full_verification(full_verification)
-        )
+        builder = TestBuilder() \
+            .set_rng(self.rng) \
+            .set_reactor(self.clock) \
+            .set_network(network) \
+            .set_full_verification(full_verification)
 
         if checkpoints is not None:
             builder.set_checkpoints(checkpoints)
