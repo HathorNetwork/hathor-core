@@ -163,7 +163,6 @@ class BuilderTestCase(unittest.TestCase):
         self.assertIsInstance(manager._event_manager, EventManager)
         self.assertIsInstance(manager._event_manager._event_storage, EventRocksDBStorage)
         self.assertIsInstance(manager._event_manager._event_ws_factory, EventWebsocketFactory)
-        self.assertFalse(manager._event_manager.emit_load_events)
 
     def test_event_queue_with_memory_storage(self):
         manager = self._build(['--x-enable-event-queue', '--memory-storage'])
@@ -171,16 +170,7 @@ class BuilderTestCase(unittest.TestCase):
         self.assertIsInstance(manager._event_manager, EventManager)
         self.assertIsInstance(manager._event_manager._event_storage, EventMemoryStorage)
         self.assertIsInstance(manager._event_manager._event_ws_factory, EventWebsocketFactory)
-        self.assertFalse(manager._event_manager.emit_load_events)
 
     def test_event_queue_with_full_verification(self):
         args = ['--x-enable-event-queue', '--memory-storage', '--x-full-verification']
         self._build_with_error(args, '--x-full-verification cannot be used with --x-enable-event-queue')
-
-    def test_event_queue_with_emit_load_events(self):
-        manager = self._build(['--x-enable-event-queue', '--memory-storage', '--x-emit-load-events'])
-
-        self.assertIsInstance(manager._event_manager, EventManager)
-        self.assertIsInstance(manager._event_manager._event_storage, EventMemoryStorage)
-        self.assertIsInstance(manager._event_manager._event_ws_factory, EventWebsocketFactory)
-        self.assertTrue(manager._event_manager.emit_load_events)
