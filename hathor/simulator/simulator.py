@@ -162,7 +162,7 @@ class Simulator:
         m = Mnemonic('english')
         words = m.to_mnemonic(self.rng.randbytes(32))
         self.log.debug('randomized step: generate wallet', words=words)
-        wallet.unlock(words=words, tx_storage=artifacts.manager.tx_storage)
+        wallet.unlock(words=words, tx_storage=artifacts.tx_storage)
 
         return artifacts.manager
 
