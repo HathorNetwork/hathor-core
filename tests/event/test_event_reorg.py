@@ -47,10 +47,7 @@ class BaseEventReorgTest(unittest.TestCase):
         self.run_to_completion()
 
         # check events
-        event_count = self.event_storage.get_last_event().id + 1
-        events = []
-        for i in range(event_count):
-            events.append(self.event_storage.get_event(i))
+        actual_events = list(self.event_storage.iter_from_event(0))
 
         # events are separated into portions that are sorted (indicated by using lists) and portions that are unsorted
         # (indicated by using a custom class), the unsorted parts mean that the given events must be present, but not
@@ -106,23 +103,26 @@ class BaseEventReorgTest(unittest.TestCase):
             ],
         ]
 
-        def zipchunkify(iterable, groups):
-            it = iter(iterable)
-            for group in groups:
-                list_to_yield = []
-                for _ in range(len(group)):
-                    list_to_yield.append(next(it))
-                yield list_to_yield, group
+        def zip_chunkify(events, event_groups):
+            events_iter = iter(events)
 
-        self.assertEqual(len(events), sum(map(len, expected_events_grouped)))
+            for group in event_groups:
+                event_list = [next(events_iter) for _ in group]
 
-        for actual_events, expected_events in zipchunkify(events, expected_events_grouped):
+                yield event_list, group
+
+        self.assertEqual(len(actual_events), sum(map(len, expected_events_grouped)))
+
+        for actual_events, expected_events in zip_chunkify(actual_events, expected_events_grouped):
             if isinstance(expected_events, unsorted):
                 actual_events.sort(key=lambda i: i.data.hash)
                 expected_events.sort(key=lambda i: i[1].get('hash', ''))
+
             for actual_event, expected_event in zip(actual_events, expected_events):
                 expected_event_type, expected_partial_data = expected_event
+
                 self.assertEqual(EventType(actual_event.type), expected_event_type)
+
                 for expected_data_key, expected_data_value in expected_partial_data.items():
                     self.assertEqual(actual_event.data.dict()[expected_data_key], expected_data_value)
 
