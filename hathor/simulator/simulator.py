@@ -21,6 +21,7 @@ from mnemonic import Mnemonic
 from structlog import get_logger
 
 from hathor.builder import Builder
+from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
@@ -34,6 +35,7 @@ from hathor.wallet import HDWallet
 
 if TYPE_CHECKING:
     from hathor.simulator.fake_connection import FakeConnection
+    from hathor.simulator.trigger import Trigger
 
 
 logger = get_logger()
@@ -104,6 +106,7 @@ class Simulator:
             seed = secrets.randbits(64)
         self.seed = seed
         self.rng = Random(self.seed)
+        self.settings = HathorSettings()
         self._network = 'testnet'
         self._clock = HeapClock()
         self._peers: OrderedDict[str, HathorManager] = OrderedDict()
@@ -186,6 +189,9 @@ class Simulator:
             raise ValueError('Duplicate peer name')
         self._peers[name] = peer
 
+    def get_reactor(self) -> HeapClock:
+        return self._clock
+
     def get_peer(self, name: str) -> HathorManager:
         return self._peers[name]
 
@@ -242,7 +248,18 @@ class Simulator:
     def run(self,
             interval: float,
             step: float = DEFAULT_STEP_INTERVAL,
-            status_interval: float = DEFAULT_STATUS_INTERVAL) -> None:
+            status_interval: float = DEFAULT_STATUS_INTERVAL,
+            *,
+            trigger: Optional['Trigger'] = None) -> bool:
+        """Return True if it successfully ends the execution.
+
+        If no trigger is provided, it always returns True.
+        If a trigger is provided, it returns True if the trigger stops the execution. Otherwise, it returns False.
+        """
         assert self._started
         for _ in self._run(interval, step, status_interval):
-            pass
+            if trigger is not None and trigger.should_stop():
+                return True
+        if trigger is not None:
+            return False
+        return True

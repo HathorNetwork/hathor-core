@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from hathor.conf import HathorSettings
 from hathor.manager import HathorEvents
@@ -22,6 +22,7 @@ from hathor.util import Random
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
     from hathor.pubsub import EventArguments
+    from hathor.transaction import Block
 
 settings = HathorSettings()
 
@@ -37,7 +38,8 @@ class GeometricMiner(AbstractMiner):
         super().__init__(manager, rng)
 
         self._hashpower = hashpower
-        self._block = None
+        self._block: Optional[Block] = None
+        self._blocks_found: int = 0
 
     def _on_new_tx(self, key: HathorEvents, args: 'EventArguments') -> None:
         """ Called when a new tx or block is received. It updates the current mining to the
@@ -49,6 +51,7 @@ class GeometricMiner(AbstractMiner):
         if not self._block:
             return
 
+        assert tx.storage is not None
         tips = tx.storage.get_best_block_tips()
         if self._block.parents[0] not in tips:
             # Head changed
@@ -61,6 +64,7 @@ class GeometricMiner(AbstractMiner):
             self._block.update_hash()
             self.log.debug('randomized step: found new block', hash=self._block.hash_hex, nonce=self._block.nonce)
             self._manager.propagate_tx(self._block, fails_silently=False)
+            self._blocks_found += 1
             self._block = None
 
         if self._manager.can_start_mining():
@@ -81,3 +85,6 @@ class GeometricMiner(AbstractMiner):
         if self._delayed_call and self._delayed_call.active():
             self._delayed_call.cancel()
         self._delayed_call = self._clock.callLater(dt, self._schedule_next_block)
+
+    def get_blocks_found(self) -> int:
+        return self._blocks_found

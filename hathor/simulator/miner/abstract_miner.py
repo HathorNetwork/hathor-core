@@ -63,3 +63,7 @@ class AbstractMiner(ABC):
     def _schedule_next_block(self):
         """Schedule the propagation of the next block, and propagate a block if it has been found."""
         raise NotImplementedError
+
+    @abstractmethod
+    def get_blocks_found(self) -> int:
+        raise NotImplementedError
