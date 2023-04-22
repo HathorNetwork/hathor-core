@@ -15,7 +15,7 @@
 import secrets
 import time
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Any, Generator, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Generator, List, Optional, Set, Type, TypeVar
 
 from mnemonic import Mnemonic
 from structlog import get_logger
@@ -26,7 +26,8 @@ from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.pubsub import PubSubManager
 from hathor.simulator.clock import HeapClock
-from hathor.simulator.miner import MinerSimulator
+from hathor.simulator.miner.abstract_miner import AbstractMiner
+from hathor.simulator.miner.geometric_miner import GeometricMiner
 from hathor.simulator.tx_generator import RandomTransactionGenerator
 from hathor.transaction.genesis import _get_genesis_transactions_unsafe
 from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
@@ -177,8 +178,10 @@ class Simulator:
     def create_tx_generator(self, peer: HathorManager, *args: Any, **kwargs: Any) -> RandomTransactionGenerator:
         return RandomTransactionGenerator(peer, self.rng, *args, **kwargs)
 
-    def create_miner(self, peer: HathorManager, *args: Any, **kwargs: Any) -> MinerSimulator:
-        return MinerSimulator(peer, self.rng, *args, **kwargs)
+    T = TypeVar('T', bound=AbstractMiner)
+
+    def create_miner(self, peer: HathorManager, miner_class: Type[T] = GeometricMiner, *args: Any, **kwargs: Any) -> T:
+        return miner_class(peer, self.rng, *args, **kwargs)
 
     def run_to_completion(self):
         """ This will advance the test's clock until all calls scheduled are done.

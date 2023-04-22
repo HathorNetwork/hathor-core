@@ -19,7 +19,7 @@ from structlog import get_logger
 from twisted.internet.interfaces import IDelayedCall
 
 from hathor.manager import HathorManager
-from hathor.pubsub import HathorEvents, EventArguments
+from hathor.pubsub import EventArguments, HathorEvents
 from hathor.simulator.clock import HeapClock
 from hathor.util import Random
 
