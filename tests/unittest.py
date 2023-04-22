@@ -17,7 +17,7 @@ from hathor.p2p.sync_version import SyncVersion
 from hathor.simulator.clock import MemoryReactorHeapClock
 from hathor.transaction import BaseTransaction
 from hathor.util import Random, Reactor, reactor
-from hathor.wallet import HDWallet, Wallet
+from hathor.wallet import HDWallet, KeyPairWallet
 
 logger = get_logger()
 main = ut_main
@@ -139,13 +139,13 @@ class TestCase(unittest.TestCase):
         self.tmpdirs.append(tmpdir)
         return tmpdir
 
-    def _create_test_wallet(self):
+    def _create_test_wallet(self, manager: 'HathorManager'):
         """ Generate a Wallet with a number of keypairs for testing
-            :rtype: Wallet
+            :rtype: KeyPairWallet
         """
         tmpdir = self.mkdtemp()
 
-        wallet = Wallet(directory=tmpdir)
+        wallet = KeyPairWallet(manager, directory=tmpdir)
         wallet.unlock(b'MYPASS')
         wallet.generate_keys(count=20)
         wallet.lock()
@@ -180,12 +180,6 @@ class TestCase(unittest.TestCase):
         if peer_id is None:
             peer_id = PeerId()
         builder.set_peer_id(peer_id)
-
-        if not wallet:
-            wallet = self._create_test_wallet()
-            if unlock_wallet:
-                wallet.unlock(b'MYPASS')
-        builder.set_wallet(wallet)
 
         if event_storage:
             builder.set_event_storage(event_storage)
@@ -229,6 +223,12 @@ class TestCase(unittest.TestCase):
 
         artifacts = builder.build()
         manager = artifacts.manager
+
+        if not wallet:
+            wallet = self._create_test_wallet(manager)
+            if unlock_wallet:
+                wallet.unlock(b'MYPASS')
+            manager.wallet = wallet
 
         if artifacts.rocksdb_storage:
             self._pending_cleanups.append(artifacts.rocksdb_storage.close)
@@ -403,18 +403,18 @@ class TestCase(unittest.TestCase):
         if required_to_quiesce and active:
             self.fail('Reactor was still active when it was required to be quiescent.')
 
-    def get_wallet(self) -> HDWallet:
+    def get_wallet(self, manager: 'HathorManager') -> HDWallet:
         words = ('bind daring above film health blush during tiny neck slight clown salmon '
                  'wine brown good setup later omit jaguar tourist rescue flip pet salute')
 
-        hd = HDWallet(words=words)
+        hd = HDWallet(manager, words=words)
         hd._manually_initialize()
         return hd
 
-    def get_address(self, index: int) -> Optional[str]:
+    def get_address(self, manager: 'HathorManager', index: int) -> Optional[str]:
         """ Generate a fixed HD Wallet and return an address
         """
-        hd = self.get_wallet()
+        hd = self.get_wallet(manager)
 
         if index >= hd.gap_limit:
             return None

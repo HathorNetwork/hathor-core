@@ -22,7 +22,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         blocks = add_new_blocks(self.manager, 3, advance_clock=15)
         self.blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
 
-        address = self.get_address(0)
+        address = self.get_address(self.manager, 0)
         value = 100
 
         self.initial_balance = sum(self.blocks_tokens[:3]) - 100
@@ -260,7 +260,7 @@ class BaseHathorSyncMethodsTestCase(unittest.TestCase):
         tx2.parents = [self.tx1.parents[1], self.tx1.parents[0]]
         tx2.resolve()
 
-        address = self.get_address(0)
+        address = self.get_address(self.manager, 0)
         value = 100
 
         outputs = [

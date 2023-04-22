@@ -34,7 +34,7 @@ from hathor.p2p.utils import discover_hostname
 from hathor.pubsub import PubSubManager
 from hathor.stratum import StratumFactory
 from hathor.util import Random
-from hathor.wallet import BaseWallet, HDWallet, Wallet
+from hathor.wallet import BaseWallet, HDWallet, KeyPairWallet
 
 logger = get_logger()
 
@@ -217,6 +217,9 @@ class CliBuilder:
         if args.data:
             self.manager.set_cmd_path(args.data)
 
+        if wallet is not None:
+            self.wallet.set_manager(self.manager)
+
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
 
@@ -307,9 +310,9 @@ class CliBuilder:
         elif args.wallet == 'keypair':
             print('Using KeyPairWallet')
             if args.data:
-                wallet = Wallet(directory=args.data)
+                wallet = KeyPairWallet(directory=args.data)
             else:
-                wallet = Wallet()
+                wallet = KeyPairWallet()
 
             wallet.flush_to_disk_interval = 5  # seconds
 

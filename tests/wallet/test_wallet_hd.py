@@ -15,9 +15,12 @@ class BaseWalletHDTest(unittest.TestCase):
 
     def setUp(self):
         super().setUp()
-        self.wallet = HDWallet(gap_limit=2)
+        self.manager = self.create_peer('testnet', unlock_wallet=False)
+
+        self.wallet = HDWallet(self.manager, gap_limit=2)
         self.wallet._manually_initialize()
-        self.manager = self.create_peer('testnet', wallet=self.wallet, unlock_wallet=False)
+        self.manager.wallet = self.wallet
+
         self.tx_storage = self.manager.tx_storage
         self.wallet.unlock(tx_storage=self.tx_storage)
 
@@ -108,7 +111,7 @@ class BaseWalletHDTest(unittest.TestCase):
 
     def test_exceptions(self):
         with self.assertRaises(ValueError):
-            HDWallet(word_count=3)
+            HDWallet(self.manager, word_count=3)
 
 
 class SyncV1WalletHDTest(unittest.SyncV1Params, BaseWalletHDTest):
