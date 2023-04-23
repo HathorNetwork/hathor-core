@@ -5,7 +5,7 @@ from hathor.event.model.event_type import EventType
 from hathor.event.storage import EventMemoryStorage
 from hathor.event.websocket import EventWebsocketFactory
 from tests import unittest
-from tests.utils import add_new_blocks, get_genesis_key
+from tests.utils import add_new_blocks, get_genesis_key, zip_chunkify
 
 settings = HathorSettings()
 
@@ -102,16 +102,6 @@ class BaseEventReorgTest(unittest.TestCase):
                 (EventType.NEW_VERTEX_ACCEPTED, {'hash': b0.hash_hex}),
             ],
         ]
-
-        def zip_chunkify(events, event_groups):
-            events_iter = iter(events)
-
-            for group in event_groups:
-                event_list = [next(events_iter) for _ in group]
-
-                yield event_list, group
-
-        self.assertEqual(len(actual_events), sum(map(len, expected_events_grouped)))
 
         for actual_events, expected_events in zip_chunkify(actual_events, expected_events_grouped):
             if isinstance(expected_events, unsorted):
