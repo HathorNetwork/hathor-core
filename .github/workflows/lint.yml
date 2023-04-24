@@ -1,0 +1,66 @@
+name: lints
+on:
+  push:
+    branches:
+    - master
+    - dev
+    tags:
+    - v*
+  pull_request:
+    branches:
+    - dev
+jobs:
+  test:
+    name: python-${{ matrix.python }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120  # default is 360
+    strategy:
+      fail-fast: false
+      matrix:
+        python:
+        - 3.7
+        - 3.8
+        - 3.9
+        os:
+        - ubuntu-latest
+        - macos-latest
+        include:
+        - os: windows-latest
+          python: 3.7
+        # these still have some errors:
+        # - os: windows-latest
+        #   python: 3.8
+        # - os: windows-latest
+        #   python: 3.9
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Set up Python ${{ matrix.python }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python }}
+    - name: Install Ubuntu dependencies
+      if: matrix.os == 'ubuntu-latest'
+      run: sudo apt-get -y -q install graphviz librocksdb-dev libsnappy-dev liblz4-dev
+    - name: Install macOS dependencies
+      if: matrix.os == 'macos-latest'
+      run: brew install -q graphviz rocksdb
+    - name: Install Poetry
+      run: pip -q --no-input install poetry
+    - name: Install Poetry dependencies (with rocksdb)
+      if: matrix.os != 'windows-latest'
+      run: poetry install -n -E rocksdb --no-root
+    - name: Install Poetry dependencies (without rocksdb)
+      if: matrix.os == 'windows-latest'
+      run: poetry install -n --no-root
+    - name: Cache mypy
+      uses: actions/cache@v2
+      with:
+        path: .mypy_cache
+        # this key is setup such that every branch has its cache and new branches can reuse dev's cache, but not the other way around
+        key: ${{ runner.os }}-py${{ matrix.python }}-mypy-${{ github.head_ref || github.ref }}
+        restore-keys: |
+          ${{ runner.os }}-py${{ matrix.python }}-mypy-refs/heads/dev-
+          ${{ runner.os }}-py${{ matrix.python }}-mypy-
+    - name: Run linters
+      run: poetry run make check

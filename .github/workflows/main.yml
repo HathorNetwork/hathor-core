@@ -92,8 +92,6 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-py${{ matrix.python }}-mypy-refs/heads/dev-
           ${{ runner.os }}-py${{ matrix.python }}-mypy-
-    - name: Run linters
-      run: poetry run make check
     - name: Run tests
       run: poetry run make tests
     - name: Upload coverage
