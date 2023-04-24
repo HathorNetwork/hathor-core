@@ -37,7 +37,7 @@ def execute(args: Namespace) -> None:
 
     storage = EventMemoryStorage()
 
-    for event in args.scenario.get_events():
+    for event in args.scenario.value:
         storage.save_event(event)
 
     factory = EventWebsocketFactory(reactor, storage)
