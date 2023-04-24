@@ -20,7 +20,6 @@ from hathor.event.model.event_data import EmptyData, ReorgData, SpentOutput, TxD
 from hathor.event.model.event_type import EventType
 from hathor.p2p.peer_id import PeerId
 from hathor.simulator import Simulator
-from hathor.simulator.miner.dummy_miner import DummyMiner
 from tests.utils import zip_chunkify
 
 SIMULATOR_SEED = 9922163193306864793
@@ -96,7 +95,7 @@ def test_single_chain_one_block():
     )
     main_manager.allow_mining_without_peers()
 
-    miner = simulator.create_miner(main_manager, DummyMiner, block_times=[120])
+    miner = simulator.create_dummy_miner(main_manager, block_times=[120])
     miner.start()
 
     simulator.run(2 * 60)
@@ -191,7 +190,7 @@ def test_single_chain_blocks_and_transactions():
     )
     main_manager.allow_mining_without_peers()
 
-    miner = simulator.create_miner(main_manager, DummyMiner, block_times=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 120])
+    miner = simulator.create_dummy_miner(main_manager, block_times=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 120])
     miner.start()
 
     tx_gen = simulator.create_tx_generator(main_manager, rate=0.2, hashpower=1e12, ignore_no_funds=True)
@@ -287,7 +286,7 @@ def test_reorg():
     )
     main_manager.allow_mining_without_peers()
 
-    miner = simulator.create_miner(main_manager, DummyMiner, block_times=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 120])
+    miner = simulator.create_dummy_miner(main_manager, block_times=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 120])
     miner.start()
 
     tx_gen = simulator.create_tx_generator(main_manager, rate=0.2, hashpower=1e12, ignore_no_funds=True)
