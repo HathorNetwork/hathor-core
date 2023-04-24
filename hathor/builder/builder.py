@@ -101,7 +101,7 @@ class Builder:
 
         self._stratum_port: Optional[int] = None
 
-        self._full_verification: bool = False
+        self._full_verification: Optional[bool] = None
 
         self._soft_voided_tx_ids: Optional[Set[bytes]] = None
 
@@ -149,6 +149,9 @@ class Builder:
         if self._event_manager is not None:
             kwargs['event_manager'] = self._event_manager
 
+        if self._full_verification is not None:
+            kwargs['full_verification'] = self._full_verification
+
         manager = HathorManager(
             reactor,
             pubsub=pubsub,
@@ -161,7 +164,6 @@ class Builder:
             checkpoints=self._checkpoints,
             capabilities=self._capabilities,
             environment_info=get_environment_info(self._cmdline, peer_id.id),
-            full_verification=self._full_verification,
             **kwargs
         )
 
