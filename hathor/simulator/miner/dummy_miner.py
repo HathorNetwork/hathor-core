@@ -20,6 +20,7 @@ from hathor.conf import HathorSettings
 from hathor.manager import HathorEvents, HathorManager
 from hathor.pubsub import EventArguments
 from hathor.simulator.miner.abstract_miner import AbstractMiner
+from hathor.transaction import Block
 from hathor.util import Random
 
 settings = HathorSettings()
@@ -30,6 +31,7 @@ class DummyMiner(AbstractMiner):
     """Simulate blocks mined at pre-determined times."""
 
     _start_time: int
+    blocks: List[Block] = []
 
     def __init__(self, manager: HathorManager, rng: Random, *, block_times: List[int]):
         super().__init__(manager, rng)
@@ -58,5 +60,6 @@ class DummyMiner(AbstractMiner):
 
             self.log.debug('new pre-determined block', hash=block.hash_hex, nonce=block.nonce, time=time)
             self._manager.propagate_tx(block, fails_silently=False)
+            self.blocks.append(block)
 
         self.delayed_call = self._clock.callLater(1, self._schedule_next_block)
