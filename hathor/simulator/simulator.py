@@ -15,7 +15,7 @@
 import secrets
 import time
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Any, Generator, List, Optional, Set, Type, TypeVar
+from typing import TYPE_CHECKING, Any, Generator, List, Optional, Set
 
 from mnemonic import Mnemonic
 from structlog import get_logger
@@ -178,10 +178,8 @@ class Simulator:
     def create_tx_generator(self, peer: HathorManager, *args: Any, **kwargs: Any) -> RandomTransactionGenerator:
         return RandomTransactionGenerator(peer, self.rng, *args, **kwargs)
 
-    T = TypeVar('T', bound=AbstractMiner)
-
-    def create_miner(self, peer: HathorManager, miner_class: Type[T] = GeometricMiner, *args: Any, **kwargs: Any) -> T:
-        return miner_class(peer, self.rng, *args, **kwargs)
+    def create_miner(self, peer: HathorManager, *args: Any, **kwargs: Any) -> GeometricMiner:
+        return GeometricMiner(peer, self.rng, *args, **kwargs)
 
     def run_to_completion(self):
         """ This will advance the test's clock until all calls scheduled are done.

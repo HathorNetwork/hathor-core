@@ -20,7 +20,6 @@ from twisted.internet.interfaces import IDelayedCall
 
 from hathor.manager import HathorManager
 from hathor.pubsub import EventArguments, HathorEvents
-from hathor.simulator.clock import HeapClock
 from hathor.util import Random
 
 logger = get_logger()
@@ -37,7 +36,7 @@ class AbstractMiner(ABC):
         self._manager = manager
         self._rng = rng
 
-        self._clock: HeapClock = self._manager.reactor
+        self._clock = self._manager.reactor
 
         self.log = logger.new()
 
