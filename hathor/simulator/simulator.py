@@ -26,7 +26,6 @@ from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.pubsub import PubSubManager
 from hathor.simulator.clock import HeapClock
-from hathor.simulator.miner.abstract_miner import AbstractMiner
 from hathor.simulator.miner.geometric_miner import GeometricMiner
 from hathor.simulator.tx_generator import RandomTransactionGenerator
 from hathor.transaction.genesis import _get_genesis_transactions_unsafe
