@@ -6,7 +6,7 @@ import subprocess
 import time
 import urllib.parse
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, TypeVar, cast
+from typing import Iterator, List, Optional, Tuple, TypeVar, cast
 
 import requests
 from hathorlib.scripts import DataScript
@@ -722,7 +722,7 @@ class EventMocker:
 T = TypeVar('T')
 
 
-def zip_chunkify(flat_list: List[T], chunked_list: List[List[T]]) -> List[Tuple[List[T], List[T]]]:
+def zip_chunkify(flat_list: List[T], chunked_list: List[List[T]]) -> Iterator[Tuple[List[T], List[T]]]:
     """
     Takes two lists, one flat and one chunked. Chunks the first one into chunks of the same size as the second.
     Returns a zipped list where each item is a tuple of chunks, one from each list.
