@@ -22,6 +22,8 @@ from hathor.conf import HathorSettings
 from hathor.conf.settings import HathorSettings as HathorSettingsType
 from hathor.consensus import ConsensusAlgorithm
 from hathor.event import EventManager
+from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
+from hathor.event.websocket import EventWebsocketFactory
 from hathor.indexes import IndexesManager
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
@@ -266,6 +268,28 @@ class Builder:
             )
 
         raise NotImplementedError
+
+    def _get_event_storage(self) -> EventStorage:
+        if self._storage_type == StorageType.MEMORY:
+            return EventMemoryStorage()
+
+        if self._storage_type == StorageType.ROCKSDB:
+            rocksdb_storage = self._get_or_create_rocksdb_storage()
+            return EventRocksDBStorage(rocksdb_storage)
+
+        raise NotImplementedError
+
+    def with_event_manager(self, *, event_ws_factory: EventWebsocketFactory) -> 'Builder':
+        self.check_if_can_modify()
+
+        self._event_manager = EventManager(
+            reactor=self._get_reactor(),
+            pubsub=self._get_or_create_pubsub(),
+            event_storage=self._get_event_storage(),
+            event_ws_factory=event_ws_factory
+        )
+
+        return self
 
     def use_memory(self) -> 'Builder':
         self.check_if_can_modify()
