@@ -86,7 +86,7 @@ class Builder:
         self._rocksdb_path: Optional[str] = None
         self._rocksdb_storage: Optional[RocksDBStorage] = None
         self._rocksdb_cache_capacity: Optional[int] = None
-        self._with_rocksdb_index: bool = True
+        self._with_rocksdb_index: Optional[bool] = None
 
         self._tx_storage: Optional[TransactionStorage] = None
 
@@ -245,26 +245,40 @@ class Builder:
 
     def _get_or_create_rocksdb_storage(self) -> RocksDBStorage:
         assert self._rocksdb_path is not None
-        if self._rocksdb_storage is None:
-            self._rocksdb_storage = RocksDBStorage(
-                path=self._rocksdb_path,
-                cache_capacity=self._rocksdb_cache_capacity
-            )
+
+        if self._rocksdb_storage is not None:
+            return self._rocksdb_storage
+
+        kwargs = {}
+        if self._rocksdb_cache_capacity is not None:
+            kwargs = dict(cache_capacity=self._rocksdb_cache_capacity)
+
+        self._rocksdb_storage = RocksDBStorage(
+            path=self._rocksdb_path,
+            **kwargs
+        )
 
         return self._rocksdb_storage
 
     def _get_or_create_tx_storage(self) -> TransactionStorage:
         if self._tx_storage is not None:
             return self._tx_storage
+
         if self._storage_type == StorageType.MEMORY:
             return TransactionMemoryStorage()
-        elif self._storage_type == StorageType.ROCKSDB:
+
+        if self._storage_type == StorageType.ROCKSDB:
             rocksdb_storage = self._get_or_create_rocksdb_storage()
             use_memory_index = self._force_memory_index
+
+            kwargs = {}
+            if self._with_rocksdb_index is not None:
+                kwargs = dict(with_index=self._with_rocksdb_index)
+
             return TransactionRocksDBStorage(
                 rocksdb_storage,
-                with_index=self._with_rocksdb_index,
-                use_memory_indexes=use_memory_index
+                use_memory_indexes=use_memory_index,
+                **kwargs
             )
 
         raise NotImplementedError
@@ -296,7 +310,12 @@ class Builder:
         self._storage_type = StorageType.MEMORY
         return self
 
-    def use_rocksdb(self, path: str, with_index: bool, cache_capacity: Optional[int]) -> 'Builder':
+    def use_rocksdb(
+        self,
+        path: str,
+        with_index: Optional[bool] = None,
+        cache_capacity: Optional[int] = None
+    ) -> 'Builder':
         self.check_if_can_modify()
         self._storage_type = StorageType.ROCKSDB
         self._rocksdb_path = path
