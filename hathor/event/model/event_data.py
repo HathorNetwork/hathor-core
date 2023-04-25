@@ -14,7 +14,7 @@
 
 from typing import List, Optional, Union
 
-from pydantic import Extra
+from pydantic import Extra, validator
 
 from hathor.pubsub import EventArguments
 from hathor.utils.pydantic import BaseModel
@@ -23,7 +23,7 @@ from hathor.utils.pydantic import BaseModel
 class TxInput(BaseModel):
     tx_id: str
     index: int
-    data: int
+    data: str
 
 
 class TxOutput(BaseModel):
@@ -37,13 +37,9 @@ class SpentOutput(BaseModel):
     tx_ids: List[str]
 
 
-class SpentOutputs(BaseModel):
-    spent_output: List[SpentOutput]
-
-
 class TxMetadata(BaseModel, extra=Extra.ignore):
     hash: str
-    spent_outputs: List[SpentOutputs]
+    spent_outputs: List[SpentOutput]
     conflict_with: List[str]
     voided_by: List[str]
     received_by: List[int]
@@ -54,6 +50,15 @@ class TxMetadata(BaseModel, extra=Extra.ignore):
     first_block: Optional[str]
     height: int
     validation: str
+
+    @validator('spent_outputs', pre=True, each_item=True)
+    def parse_spent_outputs(cls, spent_output):
+        if isinstance(spent_output, SpentOutput):
+            return spent_output
+
+        index, tx_ids = spent_output
+
+        return SpentOutput(index=index, tx_ids=tx_ids)
 
 
 class BaseEventData(BaseModel):
