@@ -41,6 +41,7 @@ class StorageType(Enum):
 
 class BuildArtifacts(NamedTuple):
     """Artifacts created by a builder."""
+    peer_id: PeerId
     settings: HathorSettingsType
     rng: Random
     reactor: Reactor
@@ -82,6 +83,8 @@ class Builder:
 
         self._rocksdb_path: Optional[str] = None
         self._rocksdb_storage: Optional[RocksDBStorage] = None
+        self._rocksdb_cache_capacity: Optional[int] = None
+        self._with_rocksdb_index: bool = True
 
         self._tx_storage: Optional[TransactionStorage] = None
 
@@ -168,6 +171,7 @@ class Builder:
         )
 
         self.artifacts = BuildArtifacts(
+            peer_id=peer_id,
             settings=settings,
             rng=self._rng,
             reactor=reactor,
@@ -240,7 +244,11 @@ class Builder:
     def _get_or_create_rocksdb_storage(self) -> RocksDBStorage:
         assert self._rocksdb_path is not None
         if self._rocksdb_storage is None:
-            self._rocksdb_storage = RocksDBStorage(path=self._rocksdb_path)
+            self._rocksdb_storage = RocksDBStorage(
+                path=self._rocksdb_path,
+                cache_capacity=self._rocksdb_cache_capacity
+            )
+
         return self._rocksdb_storage
 
     def _get_or_create_tx_storage(self) -> TransactionStorage:
@@ -251,7 +259,12 @@ class Builder:
         elif self._storage_type == StorageType.ROCKSDB:
             rocksdb_storage = self._get_or_create_rocksdb_storage()
             use_memory_index = self._force_memory_index
-            return TransactionRocksDBStorage(rocksdb_storage, use_memory_indexes=use_memory_index)
+            return TransactionRocksDBStorage(
+                rocksdb_storage,
+                with_index=self._with_rocksdb_index,
+                use_memory_indexes=use_memory_index
+            )
+
         raise NotImplementedError
 
     def use_memory(self) -> 'Builder':
@@ -259,10 +272,12 @@ class Builder:
         self._storage_type = StorageType.MEMORY
         return self
 
-    def use_rocksdb(self, path: str) -> 'Builder':
+    def use_rocksdb(self, path: str, with_index: bool, cache_capacity: Optional[int]) -> 'Builder':
         self.check_if_can_modify()
         self._storage_type = StorageType.ROCKSDB
         self._rocksdb_path = path
+        self._with_rocksdb_index = with_index
+        self._rocksdb_cache_capacity = cache_capacity
         return self
 
     def force_memory_index(self) -> 'Builder':
