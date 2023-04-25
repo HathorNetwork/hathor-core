@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from enum import Enum
-from typing import Any, Dict, List, NamedTuple, Optional
+from typing import Any, Dict, List, NamedTuple, Optional, Set
 
 from structlog import get_logger
 
@@ -101,6 +101,10 @@ class Builder:
 
         self._stratum_port: Optional[int] = None
 
+        self._full_verification: Optional[bool] = None
+
+        self._soft_voided_tx_ids: Optional[Set[bytes]] = None
+
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
             raise ValueError('cannot call build twice')
@@ -111,7 +115,7 @@ class Builder:
 
         peer_id = self._get_peer_id()
 
-        soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
+        soft_voided_tx_ids = self._get_soft_voided_tx_ids()
         consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub)
 
         wallet = self._get_or_create_wallet()
@@ -144,6 +148,9 @@ class Builder:
 
         if self._event_manager is not None:
             kwargs['event_manager'] = self._event_manager
+
+        if self._full_verification is not None:
+            kwargs['full_verification'] = self._full_verification
 
         manager = HathorManager(
             reactor,
@@ -211,6 +218,14 @@ class Builder:
         if self._reactor is not None:
             return self._reactor
         raise ValueError('reactor not set')
+
+    def _get_soft_voided_tx_ids(self) -> Set[bytes]:
+        if self._soft_voided_tx_ids is not None:
+            return self._soft_voided_tx_ids
+
+        settings = self._get_settings()
+
+        return set(settings.SOFT_VOIDED_TX_IDS)
 
     def _get_peer_id(self) -> PeerId:
         if self._peer_id is not None:
@@ -325,6 +340,16 @@ class Builder:
         self._network = network
         return self
 
+    def set_enable_sync_v1(self, enable_sync_v1: bool) -> 'Builder':
+        self.check_if_can_modify()
+        self._enable_sync_v1 = enable_sync_v1
+        return self
+
+    def set_enable_sync_v2(self, enable_sync_v2: bool) -> 'Builder':
+        self.check_if_can_modify()
+        self._enable_sync_v2 = enable_sync_v2
+        return self
+
     def enable_sync_v1(self) -> 'Builder':
         self.check_if_can_modify()
         self._enable_sync_v1 = True
@@ -343,4 +368,14 @@ class Builder:
     def disable_sync_v2(self) -> 'Builder':
         self.check_if_can_modify()
         self._enable_sync_v2 = False
+        return self
+
+    def set_full_verification(self, full_verification: bool) -> 'Builder':
+        self.check_if_can_modify()
+        self._full_verification = full_verification
+        return self
+
+    def set_soft_voided_tx_ids(self, soft_voided_tx_ids: Set[bytes]) -> 'Builder':
+        self.check_if_can_modify()
+        self._soft_voided_tx_ids = soft_voided_tx_ids
         return self

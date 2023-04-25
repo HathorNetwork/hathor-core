@@ -156,10 +156,11 @@ class TestCase(unittest.TestCase):
             enable_sync_v2 = self._enable_sync_v2
         assert enable_sync_v1 or enable_sync_v2, 'enable at least one sync version'
 
-        builder = TestBuilder()
-        builder.set_rng(self.rng)
-        builder.set_reactor(self.clock)
-        builder.set_network(network)
+        builder = TestBuilder() \
+            .set_rng(self.rng) \
+            .set_reactor(self.clock) \
+            .set_network(network) \
+            .set_full_verification(full_verification)
 
         if checkpoints is not None:
             builder.set_checkpoints(checkpoints)
@@ -225,7 +226,7 @@ class TestCase(unittest.TestCase):
             assert SyncVersion.V1 not in manager.connections._sync_factories
 
         manager.avg_time_between_blocks = 0.0001
-        manager._full_verification = full_verification
+
         if start_manager:
             manager.start()
             self.run_to_completion()

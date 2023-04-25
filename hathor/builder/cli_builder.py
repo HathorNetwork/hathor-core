@@ -168,6 +168,12 @@ class CliBuilder:
             self.log.debug('enable utxo index')
             tx_storage.indexes.enable_utxo_index()
 
+        full_verification = False
+        if args.x_full_verification:
+            self.check_or_raise(not args.x_enable_event_queue, '--x-full-verification cannot be used with '
+                                                               '--x-enable-event-queue')
+            full_verification = True
+
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
         consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub=pubsub)
 
@@ -187,6 +193,7 @@ class CliBuilder:
             enable_sync_v2=enable_sync_v2,
             consensus_algorithm=consensus_algorithm,
             environment_info=get_environment_info(args=str(args), peer_id=peer_id.id),
+            full_verification=full_verification
         )
 
         if args.allow_mining_without_peers:
@@ -213,10 +220,6 @@ class CliBuilder:
             if self.wallet:
                 self.wallet.test_mode = True
 
-        if args.x_full_verification:
-            self.check_or_raise(not args.x_enable_event_queue, '--x-full-verification cannot be used with '
-                                                               '--x-enable-event-queue')
-            self.manager._full_verification = True
         if args.x_fast_init_beta:
             self.log.warn('--x-fast-init-beta is now the default, no need to specify it')
         if args.x_rocksdb_indexes:
