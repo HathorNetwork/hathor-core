@@ -2,8 +2,8 @@
 
 [![Mainnet](https://img.shields.io/badge/mainnet-live-success)](https://explorer.hathor.network/)
 [![Version](https://img.shields.io/github/v/release/HathorNetwork/hathor-core)](https://github.com/HathorNetwork/hathor-core/releases/latest)
-[![Testing](https://img.shields.io/github/workflow/status/HathorNetwork/hathor-core/tests?label=tests&logo=github)](https://github.com/HathorNetwork/hathor-core/actions?query=workflow%3Atests+branch%3Amaster)
-[![Ｄocker](https://img.shields.io/github/workflow/status/HathorNetwork/hathor-core/docker?label=build&logo=docker)](https://hub.docker.com/repository/docker/hathornetwork/hathor-core)
+[![Testing](https://img.shields.io/github/actions/workflow/status/HathorNetwork/hathor-core/main.yml?branch=master&label=tests&logo=github)](https://github.com/HathorNetwork/hathor-core/actions?query=workflow%3Atests+branch%3Amaster)
+[![Docker](https://img.shields.io/github/actions/workflow/status/HathorNetwork/hathor-core/docker.yml?branch=master&label=build&logo=docker)](https://hub.docker.com/repository/docker/hathornetwork/hathor-core)
 [![Codecov](https://img.shields.io/codecov/c/github/HathorNetwork/hathor-core?logo=codecov)](https://codecov.io/gh/hathornetwork/hathor-core)
 [![Discord](https://img.shields.io/discord/566500848570466316?logo=discord)](https://discord.com/invite/35mFEhk)
 [![License](https://img.shields.io/github/license/HathorNetwork/hathor-core)](./LICENSE.txt)
@@ -59,11 +59,11 @@ First, you need to have Python >=3.8 installed. If you don't, we recommend you t
   brew install pyenv
   ```
 
-  then Python 3.10 (you could check the latest 3.10.x version with `pyenv install --list`):
+  then Python 3.11 (you could check the latest 3.11.x version with `pyenv install --list`):
 
   ```
-  pyenv install 3.10.6
-  pyenv local 3.10.6
+  pyenv install 3.11.0
+  pyenv local 3.11.0
   pip install -U poetry
   ```
 
@@ -75,7 +75,7 @@ First, you need to have Python >=3.8 installed. If you don't, we recommend you t
 - on Windows 10 (using [winget](https://github.com/microsoft/winget-cli)):
 
   ```
-  winget install python-3.10
+  winget install python-3.11
   pip install -U poetry
   ```
 

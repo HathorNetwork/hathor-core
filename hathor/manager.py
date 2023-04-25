@@ -16,7 +16,7 @@ import datetime
 import sys
 import time
 from enum import Enum
-from typing import Any, Iterable, Iterator, List, NamedTuple, Optional, Set, Tuple, Union
+from typing import Any, Iterable, Iterator, List, NamedTuple, Optional, Tuple, Union
 
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
@@ -30,7 +30,6 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.event.event_manager import EventManager
-from hathor.event.storage import EventStorage
 from hathor.exception import (
     DoubleSpendingError,
     HathorError,
@@ -81,36 +80,36 @@ class HathorManager:
     # This is the interval to be used by the task to check if the node is synced
     CHECK_SYNC_STATE_INTERVAL = 30  # seconds
 
-    def __init__(self, reactor: Reactor, peer_id: Optional[PeerId] = None, network: Optional[str] = None,
-                 hostname: Optional[str] = None, pubsub: Optional[PubSubManager] = None,
-                 wallet: Optional[BaseWallet] = None, tx_storage: Optional[TransactionStorage] = None,
-                 event_storage: Optional[EventStorage] = None,
-                 peer_storage: Optional[Any] = None, wallet_index: bool = False, utxo_index: bool = False,
-                 stratum_port: Optional[int] = None, ssl: bool = True,
-                 enable_sync_v1: bool = True, enable_sync_v2: bool = False,
-                 capabilities: Optional[List[str]] = None, checkpoints: Optional[List[Checkpoint]] = None,
-                 rng: Optional[Random] = None, soft_voided_tx_ids: Optional[Set[bytes]] = None,
-                 environment_info: Optional[EnvironmentInfo] = None) -> None:
+    def __init__(self,
+                 reactor: Reactor,
+                 *,
+                 pubsub: PubSubManager,
+                 consensus_algorithm: ConsensusAlgorithm,
+                 peer_id: PeerId,
+                 tx_storage: TransactionStorage,
+                 network: str,
+                 hostname: Optional[str] = None,
+                 wallet: Optional[BaseWallet] = None,
+                 event_manager: Optional[EventManager] = None,
+                 stratum_port: Optional[int] = None,
+                 ssl: bool = True,
+                 enable_sync_v1: bool = True,
+                 enable_sync_v2: bool = False,
+                 capabilities: Optional[List[str]] = None,
+                 checkpoints: Optional[List[Checkpoint]] = None,
+                 rng: Optional[Random] = None,
+                 environment_info: Optional[EnvironmentInfo] = None):
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
-        :param peer_id: Id of this node. If not given, a new one is created.
+        :param peer_id: Id of this node.
         :param network: Name of the network this node participates. Usually it is either testnet or mainnet.
         :type network: string
 
         :param hostname: The hostname of this node. It is used to generate its entrypoints.
         :type hostname: string
 
-        :param pubsub: If not given, a new one is created.
-        :type pubsub: :py:class:`hathor.pubsub.PubSubManager`
-
         :param tx_storage: Required storage backend.
         :type tx_storage: :py:class:`hathor.transaction.storage.transaction_storage.TransactionStorage`
-
-        :param peer_storage: If not given, a new one is created.
-        :type peer_storage: :py:class:`hathor.p2p.peer_storage.PeerStorage`
-
-        :param wallet_index: If should add a wallet index in the storage
-        :type wallet_index: bool
 
         :param stratum_port: Stratum server port. Stratum server will only be created if it is not None.
         :type stratum_port: Optional[int]
@@ -121,9 +120,6 @@ class HathorManager:
 
         if not (enable_sync_v1 or enable_sync_v2):
             raise TypeError(f'{type(self).__name__}() at least one sync version is required')
-
-        if tx_storage is None:
-            raise TypeError(f'{type(self).__name__}() missing 1 required positional argument: \'tx_storage\'')
 
         self._enable_sync_v1 = enable_sync_v1
         self._enable_sync_v2 = enable_sync_v2
@@ -148,8 +144,8 @@ class HathorManager:
         # Remote address, which can be different from local address.
         self.remote_address = None
 
-        self.my_peer = peer_id or PeerId()
-        self.network = network or 'testnet'
+        self.my_peer = peer_id
+        self.network = network
 
         self.is_started: bool = False
 
@@ -165,30 +161,19 @@ class HathorManager:
             self.checkpoints_ready[0] = True
 
         # XXX Should we use a singleton or a new PeerStorage? [msbrogli 2018-08-29]
-        self.pubsub = pubsub or PubSubManager(self.reactor)
+        self.pubsub = pubsub
         self.tx_storage = tx_storage
         self.tx_storage.pubsub = self.pubsub
-        if wallet_index and self.tx_storage.with_index:
-            assert self.tx_storage.indexes is not None
-            self.log.debug('enable wallet indexes')
-            self.tx_storage.indexes.enable_address_index(self.pubsub)
-            self.tx_storage.indexes.enable_tokens_index()
-        if utxo_index and self.tx_storage.with_index:
-            assert self.tx_storage.indexes is not None
-            self.log.debug('enable utxo index')
-            self.tx_storage.indexes.enable_utxo_index()
-        self.event_manager: Optional[EventManager] = None
-        if event_storage is not None:
-            self.event_manager = EventManager(event_storage, self.reactor, not_none(self.my_peer.id))
-            self.event_manager.subscribe(self.pubsub)
+
+        self._event_manager = event_manager
+
         if enable_sync_v2:
             assert self.tx_storage.indexes is not None
             self.log.debug('enable sync-v2 indexes')
             self.tx_storage.indexes.enable_deps_index()
             self.tx_storage.indexes.enable_mempool_index()
 
-        self.soft_voided_tx_ids = soft_voided_tx_ids or set()
-        self.consensus_algorithm = ConsensusAlgorithm(self.soft_voided_tx_ids, pubsub=self.pubsub)
+        self.consensus_algorithm = consensus_algorithm
 
         self.peer_discoveries: List[PeerDiscovery] = []
 
@@ -236,10 +221,6 @@ class HathorManager:
         # Activated with --x-enable-event-queue flag
         # It activates the event mechanism inside full node
         self.enable_event_queue = False
-
-        # Activated with --x-retain-events flag. It will be ignored if --enable-event-queue is not provided
-        # It tells full node to retain all generated events. Otherwise, they will be deleted after retrieval
-        self.retain_events = False
 
         # List of whitelisted peers
         self.peers_whitelist: List[str] = []
@@ -293,6 +274,9 @@ class HathorManager:
                     'or remove your storage and do a full sync.'
                 )
                 sys.exit(-1)
+
+        if self._event_manager:
+            self._event_manager.start(not_none(self.my_peer.id))
 
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
@@ -361,6 +345,9 @@ class HathorManager:
             if wait_stratum:
                 waits.append(wait_stratum)
 
+        if self._event_manager:
+            self._event_manager.stop()
+
         self.tx_storage.flush()
 
         return defer.DeferredList(waits)
@@ -399,6 +386,8 @@ class HathorManager:
 
         This method runs through all transactions, verifying them and updating our wallet.
         """
+        assert not self._event_manager, 'this method cannot be used if the events feature is enabled.'
+
         self.log.info('initialize')
         if self.wallet:
             self.wallet._manually_initialize()
@@ -419,7 +408,7 @@ class HathorManager:
         # a database that already has the soft voided transaction before marking them in the metadata
         # Any new sync from the beginning should work fine or starting with the latest snapshot
         # that already has the soft voided transactions marked
-        for soft_voided_id in settings.SOFT_VOIDED_TX_IDS:
+        for soft_voided_id in self.consensus_algorithm.soft_voided_tx_ids:
             try:
                 soft_voided_tx = self.tx_storage.get_transaction(soft_voided_id)
             except TransactionDoesNotExist:
@@ -573,6 +562,7 @@ class HathorManager:
 
         # self.stop_profiler(save_to='profiles/initializing.prof')
         self.state = self.NodeState.READY
+
         total_load_time = LogDuration(t2 - t0)
         tx_rate = '?' if total_load_time == 0 else cnt / total_load_time
 
@@ -611,7 +601,7 @@ class HathorManager:
         # a database that already has the soft voided transaction before marking them in the metadata
         # Any new sync from the beginning should work fine or starting with the latest snapshot
         # that already has the soft voided transactions marked
-        for soft_voided_id in settings.SOFT_VOIDED_TX_IDS:
+        for soft_voided_id in self.consensus_algorithm.soft_voided_tx_ids:
             try:
                 soft_voided_tx = self.tx_storage.get_transaction(soft_voided_id)
             except TransactionDoesNotExist:
@@ -650,6 +640,7 @@ class HathorManager:
         # XXX: last step before actually starting is updating the last started at timestamps
         self.tx_storage.update_last_started_at(started_at)
         self.state = self.NodeState.READY
+        self.pubsub.publish(HathorEvents.LOAD_FINISHED)
 
         t1 = time.time()
         total_load_time = LogDuration(t1 - t0)

@@ -20,9 +20,11 @@ from typing import TYPE_CHECKING, Any, Generator, List, Optional, Set
 from mnemonic import Mnemonic
 from structlog import get_logger
 
+from hathor.consensus import ConsensusAlgorithm
 from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
+from hathor.pubsub import PubSubManager
 from hathor.simulator.clock import HeapClock
 from hathor.simulator.miner import MinerSimulator
 from hathor.simulator.tx_generator import RandomTransactionGenerator
@@ -128,6 +130,7 @@ class Simulator:
     def create_peer(self, network: Optional[str] = None, peer_id: Optional[PeerId] = None,
                     enable_sync_v1: bool = True, enable_sync_v2: bool = True,
                     soft_voided_tx_ids: Optional[Set[bytes]] = None) -> HathorManager:
+        # TODO Refactor to use Builder.
         assert self._started
         if network is None:
             network = self._network
@@ -135,12 +138,20 @@ class Simulator:
         wallet = HDWallet(gap_limit=2)
         wallet._manually_initialize()
 
+        pubsub = PubSubManager(self._clock)
+
+        if soft_voided_tx_ids is None:
+            soft_voided_tx_ids = set()
+        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub=pubsub)
+
         assert peer_id is not None  # XXX: temporary, for checking that tests are using the peer_id
         if peer_id is None:
             peer_id = PeerId()
         tx_storage = TransactionMemoryStorage()
         manager = HathorManager(
             self._clock,
+            pubsub=pubsub,
+            consensus_algorithm=consensus_algorithm,
             peer_id=peer_id,
             network=network,
             wallet=wallet,
@@ -148,7 +159,6 @@ class Simulator:
             enable_sync_v2=enable_sync_v2,
             tx_storage=tx_storage,
             rng=Random(self.rng.getrandbits(64)),
-            soft_voided_tx_ids=soft_voided_tx_ids,
         )
 
         manager.reactor = self._clock

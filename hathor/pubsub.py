@@ -14,11 +14,14 @@
 
 from collections import defaultdict, deque
 from enum import Enum
-from typing import Any, Callable, Deque, Dict, List, Tuple, cast
+from typing import TYPE_CHECKING, Any, Callable, Deque, Dict, List, Tuple, cast
 
 from twisted.internet.interfaces import IReactorFromThreads
 
 from hathor.util import Reactor, ReactorThread
+
+if TYPE_CHECKING:
+    from hathor.transaction import BaseTransaction, Block
 
 
 class HathorEvents(Enum):
@@ -30,18 +33,6 @@ class HathorEvents(Enum):
         NETWORK_PEER_CONNECTION_FAILURE:
             Triggered when a peer connection to the network fails
             Publishes the peer id and the peers count
-
-        NETWORK_NEW_TX_VOIDED
-            Triggered when a new transaction is voided in the network
-            Publishes a tx object
-
-        NETWORK_BEST_BLOCK_FOUND
-            Triggered when a new block is accepted in the network
-            Publishes a block object
-
-        NETWORK_ORPHAN_BLOCK_FOUND
-            Triggered when a new block is voided in the network
-            Publishes a block object
 
         NETWORK_PEER_CONNECTED:
             Triggered when a new peer connects to the network
@@ -91,9 +82,6 @@ class HathorEvents(Enum):
         WALLET_ELEMENT_VOIDED:
             Triggered when a wallet element is marked as voided
 
-        LOAD_STARTED
-            Triggered when manager has started reading data from the local database
-
         LOAD_FINISHED
             Triggered when manager finishes reading local data and it is ready to sync
 
@@ -103,11 +91,8 @@ class HathorEvents(Enum):
         REORG_FINISHED
             Triggered when consensus algorithm ends all changes involved in a reorg
 
-        TX_METADATA_CHANGED
-            Triggered when consensus algorithm changes a metadata of an existing transaction
-
-        BLOCK_METADATA_CHANGED
-            Triggered when consensus algorithm changes a metadata from an existing block
+        VERTEX_METADATA_CHANGED
+            Triggered when consensus algorithm changes a metadata of an existing vertex (transaction or block)
     """
     MANAGER_ON_START = 'manager:on_start'
     MANAGER_ON_STOP = 'manager:on_stop'
@@ -125,12 +110,6 @@ class HathorEvents(Enum):
     CONSENSUS_TX_UPDATE = 'consensus:tx_update'
 
     CONSENSUS_TX_REMOVED = 'consensus:tx_removed'
-
-    NETWORK_NEW_TX_VOIDED = 'network:new_tx_voided'
-
-    NETWORK_BEST_BLOCK_FOUND = 'network:best_block_found'
-
-    NETWORK_ORPHAN_BLOCK_FOUND = 'network:orphan_block_found'
 
     WALLET_OUTPUT_RECEIVED = 'wallet:output_received'
 
@@ -150,22 +129,23 @@ class HathorEvents(Enum):
 
     WALLET_ELEMENT_VOIDED = 'wallet:element_voided'
 
-    LOAD_STARTED = 'manager:load_started'
-
     LOAD_FINISHED = 'manager:load_finished'
 
     REORG_STARTED = 'reorg:started'
 
     REORG_FINISHED = 'reorg:finished'
 
-    TX_METADATA_CHANGED = 'tx:metadata_changed'
-
-    BLOCK_METADATA_CHANGED = 'block:metadata_changed'
-
 
 class EventArguments:
     """Simple object for storing event arguments.
     """
+
+    # XXX: add these as needed, these attributes don't always exist, but when they do these are their types
+    tx: 'BaseTransaction'
+    reorg_size: int
+    old_best_block: 'Block'
+    new_best_block: 'Block'
+    common_block: 'Block'
 
     def __init__(self, **kwargs: Any) -> None:
         for key, value in kwargs.items():

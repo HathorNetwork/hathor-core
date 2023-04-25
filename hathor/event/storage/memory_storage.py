@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Optional
+from typing import Iterator, List, Optional
 
-from hathor.event.base_event import BaseEvent
+from hathor.event.model.base_event import BaseEvent
 from hathor.event.storage.event_storage import EventStorage
 
 
@@ -25,8 +25,6 @@ class EventMemoryStorage(EventStorage):
         self._last_group_id: Optional[int] = None
 
     def save_event(self, event: BaseEvent) -> None:
-        if event.id < 0:
-            raise ValueError('event.id must be non-negative')
         if event.id != len(self._events):
             raise ValueError('invalid event.id, ids must be sequential and leave no gaps')
         self._last_event = event
@@ -36,7 +34,7 @@ class EventMemoryStorage(EventStorage):
 
     def get_event(self, key: int) -> Optional[BaseEvent]:
         if key < 0:
-            raise ValueError('key must be non-negative')
+            raise ValueError(f'event.id \'{key}\' must be non-negative')
         if key >= len(self._events):
             return None
         event = self._events[key]
@@ -48,3 +46,11 @@ class EventMemoryStorage(EventStorage):
 
     def get_last_group_id(self) -> Optional[int]:
         return self._last_group_id
+
+    def iter_from_event(self, key: int) -> Iterator[BaseEvent]:
+        if key < 0:
+            raise ValueError(f'event.id \'{key}\' must be non-negative')
+
+        while key < len(self._events):
+            yield self._events[key]
+            key += 1

@@ -1,10 +1,11 @@
 from typing import Iterator
 
 from hathor.conf import HathorSettings
-from hathor.manager import HathorManager
+from hathor.pubsub import PubSubManager
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
+from tests.unittest import TestBuilder
 from tests.utils import (
     add_blocks_unlock_reward,
     add_new_block,
@@ -24,12 +25,12 @@ class ModifiedTransactionMemoryStorage(TransactionMemoryStorage):
     def set_first_tx(self, tx: BaseTransaction) -> None:
         self._first_tx = tx
 
-    def get_all_transactions(self) -> Iterator[BaseTransaction]:
+    def get_all_transactions(self, *, include_partial: bool = False) -> Iterator[BaseTransaction]:
         skip_hash = None
         if self._first_tx:
             yield self._first_tx
             skip_hash = self._first_tx.hash
-        for tx in super().get_all_transactions():
+        for tx in super().get_all_transactions(include_partial=include_partial):
             if tx.hash != skip_hash:
                 yield tx
 
@@ -38,35 +39,49 @@ class SimpleManagerInitializationTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.tx_storage = ModifiedTransactionMemoryStorage()
+        self.pubsub = PubSubManager(self.clock)
 
     def test_invalid_arguments(self):
         # this is a base case, it shouldn't raise any error
         # (otherwise we might not be testing the correct thing below)
-        manager = HathorManager(self.clock, tx_storage=self.tx_storage)
+        builder = TestBuilder()
+        builder.set_tx_storage(self.tx_storage)
+        artifacts = builder.build()
+        manager = artifacts.manager
         del manager
 
         # disabling both sync versions should be invalid
         with self.assertRaises(TypeError):
-            HathorManager(self.clock, tx_storage=self.tx_storage, enable_sync_v1=False, enable_sync_v2=False)
-
-        # not passing a storage should be invalid
-        with self.assertRaises(TypeError):
-            HathorManager(self.clock)
+            builder = TestBuilder()
+            builder.set_tx_storage(self.tx_storage)
+            builder.disable_sync_v1()
+            builder.disable_sync_v2()
+            builder.build()
 
     def tests_init_with_stratum(self):
-        manager = HathorManager(self.clock, tx_storage=self.tx_storage, stratum_port=50505)
+        builder = TestBuilder()
+        builder.set_tx_storage(self.tx_storage)
+        builder.enable_stratum_server(50505)
+        artifacts = builder.build()
+        manager = artifacts.manager
         manager.start()
         manager.stop()
         del manager
 
     def test_double_start(self):
-        manager = HathorManager(self.clock, tx_storage=self.tx_storage)
+        builder = TestBuilder()
+        builder.set_tx_storage(self.tx_storage)
+        artifacts = builder.build()
+        manager = artifacts.manager
         manager.start()
         with self.assertRaises(Exception):
             manager.start()
 
     def test_wrong_stop(self):
-        manager = HathorManager(self.clock, tx_storage=self.tx_storage)
+        builder = TestBuilder()
+        builder.set_tx_storage(self.tx_storage)
+        artifacts = builder.build()
+        manager = artifacts.manager
         with self.assertRaises(Exception):
             manager.stop()
         manager.start()

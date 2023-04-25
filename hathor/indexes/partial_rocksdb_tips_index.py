@@ -22,6 +22,7 @@ from structlog import get_logger
 
 from hathor.indexes.memory_tips_index import MemoryTipsIndex
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
+from hathor.indexes.tips_index import ScopeType
 from hathor.util import LogDuration
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -111,11 +112,11 @@ class PartialRocksDBTipsIndex(MemoryTipsIndex, RocksDBIndexUtils):
     # It is useful because the interval tree allows access only by the interval.
     tx_last_interval: Dict[bytes, Interval]
 
-    def __init__(self, db: 'rocksdb.DB', name: str) -> None:
-        MemoryTipsIndex.__init__(self)
+    def __init__(self, db: 'rocksdb.DB', *, scope_type: ScopeType):
+        MemoryTipsIndex.__init__(self, scope_type=scope_type)
+        self._name = scope_type.get_name()
         self.log = logger.new()  # XXX: override MemoryTipsIndex logger so it shows the correct module
-        RocksDBIndexUtils.__init__(self, db, f'tips-{name}'.encode())
-        self._name = name
+        RocksDBIndexUtils.__init__(self, db, f'tips-{self._name}'.encode())
 
     def get_db_name(self) -> Optional[str]:
         return f'tips_{self._name}'

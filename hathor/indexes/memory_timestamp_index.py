@@ -17,7 +17,7 @@ from typing import Iterator, List, Optional, Tuple
 from sortedcontainers import SortedKeyList
 from structlog import get_logger
 
-from hathor.indexes.timestamp_index import RangeIdx, TimestampIndex
+from hathor.indexes.timestamp_index import RangeIdx, ScopeType, TimestampIndex
 from hathor.indexes.utils import (
     TransactionIndexElement,
     get_newer_sorted_key_list,
@@ -35,7 +35,8 @@ class MemoryTimestampIndex(TimestampIndex):
 
     _index: 'SortedKeyList[TransactionIndexElement]'
 
-    def __init__(self) -> None:
+    def __init__(self, *, scope_type: ScopeType):
+        super().__init__(scope_type=scope_type)
         self.log = logger.new()
         self.force_clear()
 

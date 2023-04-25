@@ -7,6 +7,7 @@ all: check tests
 
 tests_cli = tests/cli/
 tests_lib = $(filter-out ${tests_cli} tests/__pycache__/, $(dir $(wildcard tests/*/.)))
+tests_ci = extras/github/
 
 pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov-report=xml --cov=hathor
 
@@ -44,8 +45,12 @@ tests-genesis:
 	HATHOR_TEST_CONFIG_FILE=hathor.conf.mainnet pytest tests/tx/test_genesis.py
 	HATHOR_TEST_CONFIG_FILE=hathor.conf.testnet pytest tests/tx/test_genesis.py
 
+.PHONY: tests-ci
+tests-ci:
+	pytest $(tests_ci)
+
 .PHONY: tests
-tests: tests-cli tests-lib tests-genesis
+tests: tests-cli tests-lib tests-genesis tests-ci
 
 .PHONY: tests-full
 tests-full:
@@ -57,6 +62,10 @@ tests-full:
 mypy:
 	mypy -p hathor -p tests
 
+.PHONY: dmypy
+dmypy:
+	dmypy run --timeout 86400 -- -p hathor -p tests
+
 .PHONY: flake8
 flake8:
 	flake8 $(py_sources)
@@ -67,10 +76,13 @@ isort-check:
 
 .PHONY: check-version
 check-version:
-	bash ./extras/check_version.sh
+	bash ./extras/check_version.sh $(VERSION)
 
 .PHONY: check
 check: check-version flake8 isort-check mypy
+
+.PHONY: dcheck
+dcheck: check-version flake8 isort-check dmypy
 
 # formatting:
 

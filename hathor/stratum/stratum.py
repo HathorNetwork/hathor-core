@@ -117,11 +117,14 @@ class ServerJob:
 
 class MinerJob(NamedTuple):
     """ Data class used to share job data between mining processes """
-    data: 'ctypes.Array[ctypes.c_ubyte]' = Array('B', 2048)
-    data_size: 'ctypes.c_uint' = Value('I')
-    job_id: 'ctypes.Array[ctypes.c_ubyte]' = Array('B', 16)
-    nonce_size: 'ctypes.c_uint' = Value('I')
-    weight: 'ctypes.c_double' = Value('d')
+    # XXX: these typings are causing too much trouble, since this module hasn't been touched for a while and won't be
+    #      touched for the foreseeable future (and will possibly even removed before any changes) it seems fine to just
+    #      use Any so there aren't any mypy complaints anymore
+    data: Any = Array('B', 2048)
+    data_size: Any = Value('I')
+    job_id: Any = Array('B', 16)
+    nonce_size: Any = Value('I')
+    weight: Any = Value('d')
 
     def update_job(self, params: Dict[str, Any]) -> bool:
         """
@@ -818,7 +821,7 @@ class StratumClient(JSONRPC):
     job: Dict
     miners: List[Process]
     loop: Optional[task.LoopingCall]
-    signal: 'ctypes.c_ubyte'
+    signal: Any
     job_data: MinerJob
 
     address: Optional[bytes]

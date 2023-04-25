@@ -12,6 +12,7 @@ cover/
 /coverage*
 
 .mypy_cache
+.dmypy.json
 .pytest_cache
 
 extras/docker/_build/

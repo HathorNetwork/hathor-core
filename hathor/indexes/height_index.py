@@ -16,9 +16,16 @@ from abc import abstractmethod
 from typing import List, NamedTuple, Optional, Tuple
 
 from hathor.indexes.base_index import BaseIndex
+from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction, Block
 from hathor.transaction.genesis import BLOCK_GENESIS
 from hathor.util import not_none
+
+SCOPE = Scope(
+    include_blocks=True,
+    include_txs=False,
+    include_voided=True,
+)
 
 
 class IndexEntry(NamedTuple):
@@ -39,6 +46,9 @@ class _AddToIndexItem(NamedTuple):
 class HeightIndex(BaseIndex):
     """Store the block hash for each given height
     """
+
+    def get_scope(self) -> Scope:
+        return SCOPE
 
     def init_loop_step(self, tx: BaseTransaction) -> None:
         if not tx.is_block:

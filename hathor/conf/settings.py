@@ -362,3 +362,7 @@ class HathorSettings(NamedTuple):
     SOFT_VOIDED_ID: bytes = b'tx-non-grata'
 
     ENABLE_EVENT_QUEUE_FEATURE: bool = False
+
+    EVENT_API_DEFAULT_BATCH_SIZE: int = 100
+
+    EVENT_API_MAX_BATCH_SIZE: int = 1000

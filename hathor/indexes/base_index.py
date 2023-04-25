@@ -15,6 +15,7 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional
 
+from hathor.indexes.scope import Scope
 from hathor.transaction.base_transaction import BaseTransaction
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -34,6 +35,11 @@ class BaseIndex(ABC):
         It comes with a no-op implementation by default because usually indexes will not need this.
         """
         pass
+
+    @abstractmethod
+    def get_scope(self) -> Scope:
+        """ Returns the scope of interest of this index, whether the scope is configurable is up to the index."""
+        raise NotImplementedError
 
     @abstractmethod
     def get_db_name(self) -> Optional[str]:

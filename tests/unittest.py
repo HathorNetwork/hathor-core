@@ -9,14 +9,14 @@ from structlog import get_logger
 from twisted.internet.task import Clock
 from twisted.trial import unittest
 
+from hathor.builder import Builder
 from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
-from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
-from hathor.storage.rocksdb_storage import RocksDBStorage
+from hathor.simulator.clock import MemoryReactorHeapClock
 from hathor.transaction import BaseTransaction
-from hathor.util import Random, get_environment_info, reactor
+from hathor.util import Random, Reactor, reactor
 from hathor.wallet import HDWallet, Wallet
 
 logger = get_logger()
@@ -30,12 +30,24 @@ def shorten_hash(container):
     return container_type(h[-2:].hex() for h in container)
 
 
-def _load_peer_id_pool(file_path: str = 'tests/peer_id_pool.json') -> Iterator[PeerId]:
+def _load_peer_id_pool(file_path: Optional[str] = None) -> Iterator[PeerId]:
     import json
+
+    if file_path is None:
+        file_path = _get_default_peer_id_pool_filepath()
+
     with open(file_path) as peer_id_pool_file:
         peer_id_pool_dict = json.load(peer_id_pool_file)
         for peer_id_dict in peer_id_pool_dict:
             yield PeerId.create_from_json(peer_id_dict)
+
+
+def _get_default_peer_id_pool_filepath():
+    this_file_path = os.path.dirname(__file__)
+    file_name = 'peer_id_pool.json'
+    file_path = os.path.join(this_file_path, file_name)
+
+    return file_path
 
 
 PEER_ID_POOL = list(_load_peer_id_pool())
@@ -56,6 +68,22 @@ class SyncV2Params:
 class SyncBridgeParams:
     _enable_sync_v1 = True
     _enable_sync_v2 = True
+
+
+class TestBuilder(Builder):
+    def __init__(self) -> None:
+        super().__init__()
+        self.set_network('testnet')
+
+    def _get_peer_id(self) -> PeerId:
+        if self._peer_id is not None:
+            return self._peer_id
+        return PeerId()
+
+    def _get_reactor(self) -> Reactor:
+        if self._reactor:
+            return self._reactor
+        return MemoryReactorHeapClock()
 
 
 class TestCase(unittest.TestCase):
@@ -106,8 +134,7 @@ class TestCase(unittest.TestCase):
         """ Generate a Wallet with a number of keypairs for testing
             :rtype: Wallet
         """
-        tmpdir = tempfile.mkdtemp()
-        self.tmpdirs.append(tmpdir)
+        tmpdir = self.mkdtemp()
 
         wallet = Wallet(directory=tmpdir)
         wallet.unlock(b'MYPASS')
@@ -117,7 +144,8 @@ class TestCase(unittest.TestCase):
 
     def create_peer(self, network, peer_id=None, wallet=None, tx_storage=None, unlock_wallet=True, wallet_index=False,
                     capabilities=None, full_verification=True, enable_sync_v1=None, enable_sync_v2=None,
-                    checkpoints=None, utxo_index=False, event_storage=None):
+                    checkpoints=None, utxo_index=False, event_manager=None, use_memory_index=None, start_manager=True,
+                    pubsub=None):
         if enable_sync_v1 is None:
             assert hasattr(self, '_enable_sync_v1'), ('`_enable_sync_v1` has no default by design, either set one on '
                                                       'the test class or pass `enable_sync_v1` by argument')
@@ -128,39 +156,63 @@ class TestCase(unittest.TestCase):
             enable_sync_v2 = self._enable_sync_v2
         assert enable_sync_v1 or enable_sync_v2, 'enable at least one sync version'
 
+        builder = TestBuilder()
+        builder.set_rng(self.rng)
+        builder.set_reactor(self.clock)
+        builder.set_network(network)
+
+        if checkpoints is not None:
+            builder.set_checkpoints(checkpoints)
+
+        if pubsub:
+            builder.set_pubsub(pubsub)
+
         if peer_id is None:
             peer_id = PeerId()
+        builder.set_peer_id(peer_id)
+
         if not wallet:
             wallet = self._create_test_wallet()
             if unlock_wallet:
                 wallet.unlock(b'MYPASS')
-        if tx_storage is None:
-            if self.use_memory_storage:
-                from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
-                tx_storage = TransactionMemoryStorage()
-            else:
-                from hathor.transaction.storage.rocksdb_storage import TransactionRocksDBStorage
-                directory = tempfile.mkdtemp()
-                self.tmpdirs.append(directory)
-                rocksdb_storage = RocksDBStorage(path=directory)
-                self._pending_cleanups.append(rocksdb_storage.close)
-                tx_storage = TransactionRocksDBStorage(rocksdb_storage)
-        manager = HathorManager(
-            self.clock,
-            peer_id=peer_id,
-            network=network,
-            wallet=wallet,
-            tx_storage=tx_storage,
-            event_storage=event_storage,
-            wallet_index=wallet_index,
-            utxo_index=utxo_index,
-            capabilities=capabilities,
-            rng=self.rng,
-            enable_sync_v1=enable_sync_v1,
-            enable_sync_v2=enable_sync_v2,
-            checkpoints=checkpoints,
-            environment_info=get_environment_info("", peer_id.id)
-        )
+        builder.set_wallet(wallet)
+
+        if event_manager:
+            builder.set_event_manager(event_manager)
+
+        if tx_storage is not None:
+            builder.set_tx_storage(tx_storage)
+        elif self.use_memory_storage:
+            builder.use_memory()
+        else:
+            directory = tempfile.mkdtemp()
+            self.tmpdirs.append(directory)
+            builder.use_rocksdb(directory)
+
+        if use_memory_index is True:
+            builder.force_memory_index()
+
+        if enable_sync_v1 is True:
+            builder.enable_sync_v1()
+        elif enable_sync_v1 is False:
+            builder.disable_sync_v1()
+
+        if enable_sync_v2 is True:
+            builder.enable_sync_v2()
+        elif enable_sync_v2 is False:
+            builder.disable_sync_v2()
+
+        if wallet_index:
+            builder.enable_wallet_index()
+
+        if utxo_index:
+            builder.enable_utxo_index()
+
+        artifacts = builder.build()
+        manager = artifacts.manager
+
+        if artifacts.rocksdb_storage:
+            self._pending_cleanups.append(artifacts.rocksdb_storage.close)
 
         # XXX: just making sure that tests set this up correctly
         if enable_sync_v2:
@@ -174,8 +226,9 @@ class TestCase(unittest.TestCase):
 
         manager.avg_time_between_blocks = 0.0001
         manager._full_verification = full_verification
-        manager.start()
-        self.run_to_completion()
+        if start_manager:
+            manager.start()
+            self.run_to_completion()
         return manager
 
     def run_to_completion(self):
