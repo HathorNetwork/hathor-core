@@ -59,3 +59,18 @@ class EventStorage(ABC):
     def get_node_state(self) -> Optional[NodeState]:
         """Get the node state from the storage"""
         raise NotImplementedError
+
+    @abstractmethod
+    def save_event_queue_enabled(self) -> None:
+        """Save that event queue feature is enabled in the storage"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_event_queue_disabled(self) -> None:
+        """Save that event queue feature is disabled in the storage"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_event_queue_state(self) -> bool:
+        """Get whether the event queue feature is enabled from the storage"""
+        raise NotImplementedError

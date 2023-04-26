@@ -25,6 +25,7 @@ class EventMemoryStorage(EventStorage):
         self._last_event: Optional[BaseEvent] = None
         self._last_group_id: Optional[int] = None
         self._node_state: Optional[NodeState] = None
+        self._event_queue_enabled: bool = False
 
     def save_event(self, event: BaseEvent) -> None:
         if event.id != len(self._events):
@@ -67,3 +68,12 @@ class EventMemoryStorage(EventStorage):
 
     def get_node_state(self) -> Optional[NodeState]:
         return self._node_state
+
+    def save_event_queue_enabled(self) -> None:
+        self._event_queue_enabled = True
+
+    def save_event_queue_disabled(self) -> None:
+        self._event_queue_enabled = False
+
+    def get_event_queue_state(self) -> bool:
+        return self._event_queue_enabled
