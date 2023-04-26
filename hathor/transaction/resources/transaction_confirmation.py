@@ -125,7 +125,7 @@ TransactionAccWeightResource.openapi = {
                                 'success': {
                                     'summary': 'Success',
                                     'value': {
-                                        'accumulated_weight': 15.4,
+                                        'accumulated_weight': 43237,
                                         'confirmation_level': 0.88,
                                         'stop_value': 14.5,
                                         'accumulated_bigger': True,

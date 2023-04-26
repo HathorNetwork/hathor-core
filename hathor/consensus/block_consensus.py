@@ -18,8 +18,9 @@ from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
 from structlog import get_logger
 
 from hathor.conf.get_settings import get_global_settings
-from hathor.transaction import BaseTransaction, Block, Transaction, sum_weights
+from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.util import classproperty
+from hathor.utils.weight import weight_to_work
 
 if TYPE_CHECKING:
     from hathor.consensus.context import ConsensusAlgorithmContext
@@ -117,7 +118,7 @@ class BlockConsensusAlgorithm:
         for h in voided_by:
             tx = storage.get_transaction(h)
             tx_meta = tx.get_metadata()
-            tx_meta.accumulated_weight = sum_weights(tx_meta.accumulated_weight, block.weight)
+            tx_meta.accumulated_weight += weight_to_work(block.weight)
             self.context.save(tx)
 
         # Check conflicts of the transactions voiding us.
@@ -156,27 +157,27 @@ class BlockConsensusAlgorithm:
                       is_connected_to_the_best_chain=is_connected_to_the_best_chain)
 
             # First, void this block.
+            # We need to void this block first, because otherwise it would always be one of the heads.
             self.mark_as_voided(block, skip_remove_first_block_markers=True)
 
             # Get the score of the best chains.
-            # We need to void this block first, because otherwise it would always be one of the heads.
             heads = [cast(Block, storage.get_transaction(h)) for h in storage.get_best_block_tips()]
-            best_score = None
+            best_score: int | None = None
             for head in heads:
                 head_meta = head.get_metadata(force_reload=True)
                 if best_score is None:
                     best_score = head_meta.score
                 else:
                     # All heads must have the same score.
-                    assert abs(best_score - head_meta.score) < 1e-10
-            assert isinstance(best_score, (int, float))
+                    assert best_score == head_meta.score
+            assert best_score is not None
 
             # Calculate the score.
             # We cannot calculate score before getting the heads.
             score = self.calculate_score(block)
 
             # Finally, check who the winner is.
-            if score <= best_score - self._settings.WEIGHT_TOL:
+            if score < best_score:
                 # Just update voided_by from parents.
                 self.update_voided_by_from_parents(block)
 
@@ -197,7 +198,7 @@ class BlockConsensusAlgorithm:
                 common_block = self._find_first_parent_in_best_chain(block)
                 self.add_voided_by_to_multiple_chains(block, heads, common_block)
 
-                if score >= best_score + self._settings.WEIGHT_TOL:
+                if score > best_score:
                     # We have a new winner candidate.
                     self.update_score_and_mark_as_the_best_chain_if_possible(block)
                     # As `update_score_and_mark_as_the_best_chain_if_possible` may affect `voided_by`,
@@ -285,28 +286,30 @@ class BlockConsensusAlgorithm:
         self.update_score_and_mark_as_the_best_chain(block)
         self.remove_voided_by_from_chain(block)
 
+        best_score: int
         if self.update_voided_by_from_parents(block):
             storage = block.storage
             heads = [cast(Block, storage.get_transaction(h)) for h in storage.get_best_block_tips()]
-            best_score = 0.0
+            best_score = 0
             best_heads: list[Block]
             for head in heads:
                 head_meta = head.get_metadata(force_reload=True)
-                if head_meta.score <= best_score - self._settings.WEIGHT_TOL:
+                if head_meta.score < best_score:
                     continue
 
-                if head_meta.score >= best_score + self._settings.WEIGHT_TOL:
+                if head_meta.score > best_score:
                     best_heads = [head]
                     best_score = head_meta.score
                 else:
-                    assert abs(best_score - head_meta.score) < 1e-10
+                    assert best_score == head_meta.score
                     best_heads.append(head)
-            assert isinstance(best_score, (int, float)) and best_score > 0
+            assert isinstance(best_score, int) and best_score > 0
 
             assert len(best_heads) > 0
             first_block = self._find_first_parent_in_best_chain(best_heads[0])
             self.add_voided_by_to_multiple_chains(best_heads[0], [block], first_block)
             if len(best_heads) == 1:
+                assert best_heads[0].hash != block.hash
                 self.update_score_and_mark_as_the_best_chain_if_possible(best_heads[0])
 
     def update_score_and_mark_as_the_best_chain(self, block: Block) -> None:
@@ -444,7 +447,7 @@ class BlockConsensusAlgorithm:
             self.context.save(tx)
 
     def _score_block_dfs(self, block: BaseTransaction, used: set[bytes],
-                         mark_as_best_chain: bool, newest_timestamp: int) -> float:
+                         mark_as_best_chain: bool, newest_timestamp: int) -> int:
         """ Internal method to run a DFS. It is used by `calculate_score()`.
         """
         assert block.storage is not None
@@ -453,7 +456,7 @@ class BlockConsensusAlgorithm:
         storage = block.storage
 
         from hathor.transaction import Block
-        score = block.weight
+        score = weight_to_work(block.weight)
         for parent in block.get_parents():
             if parent.is_block:
                 assert isinstance(parent, Block)
@@ -462,7 +465,7 @@ class BlockConsensusAlgorithm:
                     x = meta.score
                 else:
                     x = self._score_block_dfs(parent, used, mark_as_best_chain, newest_timestamp)
-                score = sum_weights(score, x)
+                score += x
 
             else:
                 from hathor.transaction.storage.traversal import BFSTimestampWalk
@@ -487,7 +490,7 @@ class BlockConsensusAlgorithm:
                         meta.first_block = block.hash
                         self.context.save(tx)
 
-                    score = sum_weights(score, tx.weight)
+                    score += weight_to_work(tx.weight)
 
         # Always save the score when it is calculated.
         meta = block.get_metadata()
@@ -499,12 +502,12 @@ class BlockConsensusAlgorithm:
             # Thus, if we have already calculated it, we just check the consistency of the calculation.
             # Unfortunately we may have to calculate it more than once when a new block arrives in a side
             # side because the `first_block` points only to the best chain.
-            assert abs(meta.score - score) < 1e-10, \
+            assert meta.score == score, \
                    'hash={} meta.score={} score={}'.format(block.hash.hex(), meta.score, score)
 
         return score
 
-    def calculate_score(self, block: Block, *, mark_as_best_chain: bool = False) -> float:
+    def calculate_score(self, block: Block, *, mark_as_best_chain: bool = False) -> int:
         """ Calculate block's score, which is the accumulated work of the verified transactions and blocks.
 
         :param: mark_as_best_chain: If `True`, the transactions' will point `meta.first_block` to
@@ -514,9 +517,9 @@ class BlockConsensusAlgorithm:
         if block.is_genesis:
             if mark_as_best_chain:
                 meta = block.get_metadata()
-                meta.score = block.weight
+                meta.score = weight_to_work(block.weight)
                 self.context.save(block)
-            return block.weight
+            return weight_to_work(block.weight)
 
         parent = self._find_first_parent_in_best_chain(block)
         newest_timestamp = parent.timestamp
