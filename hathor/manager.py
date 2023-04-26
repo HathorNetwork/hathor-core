@@ -125,6 +125,11 @@ class HathorManager:
         if not (enable_sync_v1 or enable_sync_v1_1 or enable_sync_v2):
             raise TypeError(f'{type(self).__name__}() at least one sync version is required')
 
+        if event_storage.get_event_queue_state() is True and not event_manager:
+            raise ValueError(
+                'cannot start manager without event queue feature, as it was enabled in the previous startup'
+            )
+
         self._enable_sync_v1 = enable_sync_v1
         self._enable_sync_v2 = enable_sync_v2
 
@@ -175,6 +180,10 @@ class HathorManager:
 
         if self._event_manager:
             assert self._event_manager.event_storage == event_storage
+
+            event_storage.save_event_queue_enabled()
+        else:
+            event_storage.save_event_queue_disabled()
 
         if enable_sync_v2:
             assert self.tx_storage.indexes is not None

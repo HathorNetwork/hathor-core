@@ -24,6 +24,7 @@ from hathor.consensus import ConsensusAlgorithm
 from hathor.event import EventManager
 from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
 from hathor.event.websocket import EventWebsocketFactory
+from hathor.event.storage import EventStorage, EventMemoryStorage, EventRocksDBStorage
 from hathor.indexes import IndexesManager
 from hathor.manager import HathorManager
 from hathor.p2p.manager import ConnectionsManager
@@ -131,6 +132,7 @@ class Builder:
         event_storage = self._get_or_create_event_storage()
         event_manager = self._get_or_create_event_manager()
         tx_storage = self._get_or_create_tx_storage()
+        event_storage = self._get_or_create_event_storage()
         indexes = tx_storage.indexes
         assert indexes is not None
 
