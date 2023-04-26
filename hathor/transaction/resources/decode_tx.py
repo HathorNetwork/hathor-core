@@ -149,8 +149,8 @@ DecodeTxResource.openapi = {
                                             'conflict_with': [],
                                             'voided_by': [],
                                             'twins': [],
-                                            'accumulated_weight': 10,
-                                            'score': 12,
+                                            'accumulated_weight': '1024',
+                                            'score': '4096',
                                             'first_block': None
                                         },
                                         'spent_outputs': {

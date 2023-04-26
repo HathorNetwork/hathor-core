@@ -309,7 +309,8 @@ SendTokensResource.openapi = {
                                             'inputs': [],
                                             'outputs': [],
                                             'tokens': [],
-                                            'accumulated_weight': 14
+                                            'accumulated_weight': 14.0,
+                                            'accumulated_weight_raw': '16384'
                                         }
                                     }
                                 }

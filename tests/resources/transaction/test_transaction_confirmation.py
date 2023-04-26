@@ -2,6 +2,7 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.resources import TransactionAccWeightResource
+from hathor.utils.weight import weight_to_work
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_transactions
@@ -24,7 +25,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
         )
         data_success = response_success.json_value()
         self.assertTrue(data_success['success'])
-        self.assertEqual(data_success['accumulated_weight'], genesis_tx.weight)
+        self.assertEqual(data_success['accumulated_weight'], weight_to_work(genesis_tx.weight))
         self.assertEqual(data_success['confirmation_level'], 0)
 
         # Adding blocks to have funds
@@ -38,7 +39,7 @@ class BaseTransactionTest(_BaseResourceTest._ResourceTest):
             {b'id': bytes(tx.hash.hex(), 'utf-8')}
         )
         data_success2 = response_success2.json_value()
-        self.assertGreater(data_success2['accumulated_weight'], tx.weight)
+        self.assertGreater(data_success2['accumulated_weight'], weight_to_work(tx.weight))
         self.assertEqual(data_success2['confirmation_level'], 1)
 
         # Test sending hash that does not exist
