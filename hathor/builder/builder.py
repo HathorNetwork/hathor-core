@@ -24,7 +24,6 @@ from hathor.consensus import ConsensusAlgorithm
 from hathor.event import EventManager
 from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
 from hathor.event.websocket import EventWebsocketFactory
-from hathor.event.storage import EventStorage, EventMemoryStorage, EventRocksDBStorage
 from hathor.indexes import IndexesManager
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
