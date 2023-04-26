@@ -50,7 +50,7 @@ from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transact
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.util import EnvironmentInfo, LogDuration, Random, Reactor, not_none
+from hathor.util import EnvironmentInfo, LogDuration, Random, Reactor, calculate_min_significant_weight, not_none
 from hathor.wallet import BaseWallet
 
 settings = HathorSettings()
@@ -854,8 +854,12 @@ class HathorManager:
         else:
             timestamp_max = timestamp_abs_max
         timestamp = min(max(current_timestamp, timestamp_min), timestamp_max)
-        weight = daa.calculate_next_weight(parent_block, timestamp)
         parent_block_metadata = parent_block.get_metadata()
+        # this is the min weight to cause an increase of twice the WEIGHT_TOL, we make sure to generate a template with
+        # at least this weight (note that the user of the API can set its own weight, the block sumit API will also
+        # protect agains a weight that is too small but using WEIGHT_TOL instead of 2*WEIGHT_TOL)
+        min_significant_weight = calculate_min_significant_weight(parent_block_metadata.score, 2 * settings.WEIGHT_TOL)
+        weight = max(daa.calculate_next_weight(parent_block, timestamp), min_significant_weight)
         height = parent_block_metadata.height + 1
         parents = [parent_block.hash] + parent_txs.must_include
         parents_any = parent_txs.can_include
@@ -915,6 +919,12 @@ class HathorManager:
         if parent_hash not in tips:
             self.log.warn('submit_block(): Ignoring block: parent not a tip', blk=blk.hash_hex)
             return False
+        parent_block = self.tx_storage.get_transaction(parent_hash)
+        parent_block_metadata = parent_block.get_metadata()
+        # this is the smallest weight that won't cause the score to increase, anything equal or smaller is bad
+        min_insignificant_weight = calculate_min_significant_weight(parent_block_metadata.score, settings.WEIGHT_TOL)
+        if blk.weight <= min_insignificant_weight:
+            self.log.warn('submit_block(): insignificant weight? accepted anyway', blk=blk.hash_hex, weight=blk.weight)
         return self.propagate_tx(blk, fails_silently=fails_silently)
 
     def push_tx(self, tx: Transaction, allow_non_standard_script: bool = False,

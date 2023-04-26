@@ -344,3 +344,10 @@ class TransactionMetadata:
         """
         # XXX: using json serialization for simplicity, should it use pickle? manual fields? other alternative?
         return self.create_from_json(self.to_json())
+
+    def add_voided_by(self, item: bytes) -> None:
+        """Add `item` to `self.voided_by`. Note that this method does not save the change."""
+        if not self.voided_by:
+            self.voided_by = {item}
+        else:
+            self.voided_by.add(item)

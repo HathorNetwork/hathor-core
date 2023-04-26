@@ -9,6 +9,7 @@ on:
   pull_request:
     branches:
     - dev
+    - release
 jobs:
   matrix:
     runs-on: ubuntu-latest
