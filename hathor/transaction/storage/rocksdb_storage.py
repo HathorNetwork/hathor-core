@@ -75,7 +75,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         return bytes(tx)
 
     def _meta_to_bytes(self, meta: 'TransactionMetadata') -> bytes:
-        return json_dumpb(meta.to_json())
+        return json_dumpb(meta.to_storage_json())
 
     def get_migration_state(self, migration_name: str) -> MigrationState:
         key = migration_name.encode('ascii')

@@ -55,6 +55,8 @@ class TxMetadata(BaseModel, extra=Extra.ignore):
     twins: list[str]
     accumulated_weight: float
     score: float
+    accumulated_weight_raw: str
+    score_raw: str
     first_block: Optional[str]
     height: int
     validation: str
@@ -112,7 +114,7 @@ class TxData(BaseEventData, extra=Extra.ignore):
     # TODO: Token name and symbol could be in a different class because they're only used by TokenCreationTransaction
     token_name: Optional[str]
     token_symbol: Optional[str]
-    metadata: 'TxMetadata'
+    metadata: TxMetadata
     aux_pow: Optional[str] = None
 
     @classmethod
