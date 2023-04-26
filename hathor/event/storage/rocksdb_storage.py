@@ -25,6 +25,7 @@ _CF_NAME_EVENT = b'event'
 _CF_NAME_META = b'event-metadata'
 _KEY_LAST_GROUP_ID = b'last-group-id'
 _KEY_NODE_STATE = b'node-state'
+_KEY_EVENT_QUEUE_ENABLED = b'event-queue-enabled'
 
 
 class EventRocksDBStorage(EventStorage):
@@ -111,3 +112,23 @@ class EventRocksDBStorage(EventStorage):
         node_state_int = bytes_to_int(node_state_bytes)
 
         return NodeState(node_state_int)
+
+    def save_event_queue_enabled(self) -> None:
+        self._save_event_queue_state(True)
+
+    def save_event_queue_disabled(self) -> None:
+        self._save_event_queue_state(False)
+
+    def _save_event_queue_state(self, enabled: bool) -> None:
+        self._db.put(
+            (self._cf_meta, _KEY_EVENT_QUEUE_ENABLED),
+            enabled.to_bytes(length=1, byteorder='big')
+        )
+
+    def get_event_queue_state(self) -> bool:
+        enabled_bytes = self._db.get((self._cf_meta, _KEY_EVENT_QUEUE_ENABLED))
+
+        if enabled_bytes is None:
+            return False
+
+        return bool.from_bytes(enabled_bytes, byteorder='big')
