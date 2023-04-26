@@ -132,7 +132,6 @@ class Builder:
         event_storage = self._get_or_create_event_storage()
         event_manager = self._get_or_create_event_manager()
         tx_storage = self._get_or_create_tx_storage()
-        event_storage = self._get_or_create_event_storage()
         indexes = tx_storage.indexes
         assert indexes is not None
 
