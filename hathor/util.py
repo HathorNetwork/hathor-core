@@ -794,3 +794,9 @@ def get_environment_info(args: str, peer_id: Optional[str]) -> EnvironmentInfo:
 
 def get_hathor_core_version():
     return hathor.__version__
+
+
+def calculate_min_significant_weight(score: float, tol: float) -> float:
+    """ This function will return the min significant weight to increase score by tol.
+    """
+    return score + math.log2(2 ** tol - 1)
