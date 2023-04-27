@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import List, Optional, Union
+from typing import List, Optional, Union, cast
 
 from pydantic import Extra, validator
 
@@ -52,13 +52,21 @@ class TxMetadata(BaseModel, extra=Extra.ignore):
     validation: str
 
     @validator('spent_outputs', pre=True, each_item=True)
-    def parse_spent_outputs(cls, spent_output):
+    def _parse_spent_outputs(cls, spent_output: Union[SpentOutput, List[Union[int, List[str]]]]) -> SpentOutput:
+        """
+        This validator method is called by pydantic when parsing models, and is not supposed to be called directly.
+        It either returns a SpentOutput if it receives one, or tries to parse it as a list (as returned from
+        metadata.to_json() method).
+        """
         if isinstance(spent_output, SpentOutput):
             return spent_output
 
         index, tx_ids = spent_output
 
-        return SpentOutput(index=index, tx_ids=tx_ids)
+        return SpentOutput(
+            index=cast(int, index),
+            tx_ids=cast(List[str], tx_ids)
+        )
 
 
 class BaseEventData(BaseModel):
