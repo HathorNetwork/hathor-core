@@ -78,10 +78,11 @@ class Builder:
         self._network: Optional[str] = None
         self._cmdline: str = ''
 
-        self._storage_type: Optional[StorageType] = None
+        self._storage_type: StorageType = StorageType.MEMORY
         self._force_memory_index: bool = False
 
         self._event_manager: Optional[EventManager] = None
+        self._event_ws_factory: Optional[EventWebsocketFactory] = None
 
         self._rocksdb_path: Optional[str] = None
         self._rocksdb_storage: Optional[RocksDBStorage] = None
@@ -89,6 +90,7 @@ class Builder:
         self._with_rocksdb_index: Optional[bool] = None
 
         self._tx_storage: Optional[TransactionStorage] = None
+        self._event_storage: Optional[EventStorage] = None
 
         self._reactor: Optional[Reactor] = None
         self._pubsub: Optional[PubSubManager] = None
@@ -124,6 +126,8 @@ class Builder:
         consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub)
 
         wallet = self._get_or_create_wallet()
+        event_storage = self._get_or_create_event_storage()
+        event_manager = self._get_or_create_event_manager()
         tx_storage = self._get_or_create_tx_storage()
         indexes = tx_storage.indexes
         assert indexes is not None
@@ -151,9 +155,6 @@ class Builder:
         if self._network is None:
             raise TypeError('you must set a network')
 
-        if self._event_manager is not None:
-            kwargs['event_manager'] = self._event_manager
-
         if self._full_verification is not None:
             kwargs['full_verification'] = self._full_verification
 
@@ -163,12 +164,14 @@ class Builder:
             consensus_algorithm=consensus_algorithm,
             peer_id=peer_id,
             tx_storage=tx_storage,
+            event_storage=event_storage,
             network=self._network,
             wallet=wallet,
             rng=self._rng,
             checkpoints=self._checkpoints,
             capabilities=self._capabilities,
             environment_info=get_environment_info(self._cmdline, peer_id.id),
+            event_manager=event_manager,
             **kwargs
         )
 
@@ -283,26 +286,33 @@ class Builder:
 
         raise NotImplementedError
 
-    def _get_event_storage(self) -> EventStorage:
-        if self._storage_type == StorageType.MEMORY:
-            return EventMemoryStorage()
-
-        if self._storage_type == StorageType.ROCKSDB:
+    def _get_or_create_event_storage(self) -> EventStorage:
+        if self._event_storage is not None:
+            pass
+        elif self._storage_type == StorageType.MEMORY:
+            self._event_storage = EventMemoryStorage()
+        elif self._storage_type == StorageType.ROCKSDB:
             rocksdb_storage = self._get_or_create_rocksdb_storage()
-            return EventRocksDBStorage(rocksdb_storage)
+            self._event_storage = EventRocksDBStorage(rocksdb_storage)
+        else:
+            raise NotImplementedError
 
-        raise NotImplementedError
+        return self._event_storage
+
+    def _get_or_create_event_manager(self) -> Optional[EventManager]:
+        if self._event_manager is None and self._event_ws_factory is not None:
+            self._event_manager = EventManager(
+                reactor=self._get_reactor(),
+                pubsub=self._get_or_create_pubsub(),
+                event_storage=self._get_or_create_event_storage(),
+                event_ws_factory=self._event_ws_factory
+            )
+
+        return self._event_manager
 
     def with_event_manager(self, *, event_ws_factory: EventWebsocketFactory) -> 'Builder':
         self.check_if_can_modify()
-
-        self._event_manager = EventManager(
-            reactor=self._get_reactor(),
-            pubsub=self._get_or_create_pubsub(),
-            event_storage=self._get_event_storage(),
-            event_ws_factory=event_ws_factory
-        )
-
+        self._event_ws_factory = event_ws_factory
         return self
 
     def use_memory(self) -> 'Builder':
@@ -381,6 +391,11 @@ class Builder:
     def set_tx_storage(self, tx_storage: TransactionStorage) -> 'Builder':
         self.check_if_can_modify()
         self._tx_storage = tx_storage
+        return self
+
+    def set_event_storage(self, event_storage: EventStorage) -> 'Builder':
+        self.check_if_can_modify()
+        self._event_storage = event_storage
         return self
 
     def set_reactor(self, reactor: Reactor) -> 'Builder':

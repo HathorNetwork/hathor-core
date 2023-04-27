@@ -30,6 +30,7 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.event.event_manager import EventManager
+from hathor.event.storage import EventStorage
 from hathor.exception import (
     DoubleSpendingError,
     HathorError,
@@ -87,6 +88,7 @@ class HathorManager:
                  consensus_algorithm: ConsensusAlgorithm,
                  peer_id: PeerId,
                  tx_storage: TransactionStorage,
+                 event_storage: EventStorage,
                  network: str,
                  hostname: Optional[str] = None,
                  wallet: Optional[BaseWallet] = None,
@@ -167,6 +169,9 @@ class HathorManager:
         self.tx_storage.pubsub = self.pubsub
 
         self._event_manager = event_manager
+
+        if self._event_manager:
+            assert self._event_manager.event_storage == event_storage
 
         if enable_sync_v2:
             assert self.tx_storage.indexes is not None
