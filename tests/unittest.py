@@ -185,7 +185,7 @@ class TestCase(unittest.TestCase):
             builder.set_event_manager(event_manager)
 
         if event_ws_factory:
-            builder.with_event_manager(event_ws_factory=event_ws_factory)
+            builder.enable_event_manager(event_ws_factory=event_ws_factory)
 
         if tx_storage is not None:
             builder.set_tx_storage(tx_storage)

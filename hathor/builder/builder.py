@@ -310,11 +310,6 @@ class Builder:
 
         return self._event_manager
 
-    def with_event_manager(self, *, event_ws_factory: EventWebsocketFactory) -> 'Builder':
-        self.check_if_can_modify()
-        self._event_ws_factory = event_ws_factory
-        return self
-
     def use_memory(self) -> 'Builder':
         self.check_if_can_modify()
         self._storage_type = StorageType.MEMORY
@@ -386,6 +381,11 @@ class Builder:
         self.check_if_can_modify()
         self.enable_address_index()
         self.enable_tokens_index()
+        return self
+
+    def enable_event_manager(self, *, event_ws_factory: EventWebsocketFactory) -> 'Builder':
+        self.check_if_can_modify()
+        self._event_ws_factory = event_ws_factory
         return self
 
     def set_tx_storage(self, tx_storage: TransactionStorage) -> 'Builder':

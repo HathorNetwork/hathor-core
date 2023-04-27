@@ -159,7 +159,7 @@ class Simulator:
             .use_memory()
 
         if event_ws_factory:
-            builder.with_event_manager(event_ws_factory=event_ws_factory)
+            builder.enable_event_manager(event_ws_factory=event_ws_factory)
 
         artifacts = builder.build()
 
