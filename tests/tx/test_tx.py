@@ -30,6 +30,7 @@ from hathor.transaction.exceptions import (
 )
 from hathor.transaction.scripts import P2PKH, parse_address_script
 from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.transaction.transaction_metadata import ValidationState
 from hathor.transaction.util import int_to_bytes
 from hathor.wallet import Wallet
 from tests import unittest
@@ -197,6 +198,7 @@ class BaseTransactionTest(unittest.TestCase):
 
     def test_children_update(self):
         tx = self._gen_tx_spending_genesis_block()
+        tx.get_metadata().validation = ValidationState.FULL
 
         # get info before update
         children_len = []

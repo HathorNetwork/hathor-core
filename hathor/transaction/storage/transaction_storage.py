@@ -351,10 +351,26 @@ class TransactionStorage(ABC):
         """
         assert tx.hash is not None
         meta = tx.get_metadata()
+        self.pre_save_validation(tx, meta)
 
-        # XXX: we can only add to cache and publish txs that are fully connected (which also implies it's valid)
-        if not meta.validation.is_fully_connected():
-            return
+    def pre_save_validation(self, tx: BaseTransaction, tx_meta: TransactionMetadata) -> None:
+        """ Must be run before every save, only raises AssertionError.
+
+        A failure means there is a bug in the code that allowed the condition to reach the "save" code. This is a last
+        second measure to prevent persisting a bad transaction/metadata.
+
+        This method receives the transaction AND the metadata in order to avoid calling ".get_metadata()" which could
+        potentially create a fresh metadata.
+        """
+        assert tx.hash is not None
+        assert tx_meta.hash is not None
+        assert tx.hash == tx_meta.hash, f'{tx.hash.hex()} != {tx_meta.hash.hex()}'
+        voided_by = tx_meta.get_frozen_voided_by()
+        # XXX: PARTIALLY_VALIDATED_ID must be included if the tx is fully connected and must not be included otherwise
+        has_partially_validated_marker = settings.PARTIALLY_VALIDATED_ID in voided_by
+        validation_is_fully_connected = tx_meta.validation.is_fully_connected()
+        assert (not has_partially_validated_marker) == validation_is_fully_connected, \
+               'Inconsistent ValidationState and voided_by'
 
     @abstractmethod
     def remove_transaction(self, tx: BaseTransaction) -> None:
@@ -685,6 +701,7 @@ class TransactionStorage(ABC):
         assert self.indexes is not None
 
         if self._always_use_topological_dfs:
+            self.log.debug('force choosing DFS iterator')
             return self._topological_sort_dfs()
 
         db_last_started_at = self.get_last_started_at()
@@ -697,8 +714,10 @@ class TransactionStorage(ABC):
 
         iter_tx: Iterator[BaseTransaction]
         if can_use_timestamp_index:
+            self.log.debug('choosing timestamp-index iterator')
             iter_tx = self._topological_sort_timestamp_index()
         else:
+            self.log.debug('choosing metadata iterator')
             iter_tx = self._topological_sort_metadata()
 
         return iter_tx

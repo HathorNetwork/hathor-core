@@ -366,11 +366,14 @@ class HathorSettings(NamedTuple):
     # List of soft voided transaction.
     SOFT_VOIDED_TX_IDS: List[bytes] = []
 
-    # Identifier used in metadata's voided_by.
+    # Identifier used in metadata's voided_by to mark a tx as soft-voided.
     SOFT_VOIDED_ID: bytes = b'tx-non-grata'
 
     # Identifier used in metadata's voided_by when an unexpected exception occurs at consensus.
     CONSENSUS_FAIL_ID: bytes = b'consensus-fail'
+
+    # Identifier used in metadata's voided_by to mark a tx as partially validated.
+    PARTIALLY_VALIDATED_ID: bytes = b'pending-validation'
 
     ENABLE_EVENT_QUEUE_FEATURE: bool = False
 

@@ -223,6 +223,21 @@ class BaseTransactionStorageTest(unittest.TestCase):
     def test_save_tx(self):
         self.validate_save(self.tx)
 
+    def test_pre_save_validation_invalid_tx_1(self):
+        self.tx.get_metadata().validation = ValidationState.BASIC
+        with self.assertRaises(AssertionError):
+            self.validate_save(self.tx)
+
+    def test_pre_save_validation_invalid_tx_2(self):
+        self.tx.get_metadata().add_voided_by(settings.PARTIALLY_VALIDATED_ID)
+        with self.assertRaises(AssertionError):
+            self.validate_save(self.tx)
+
+    def test_pre_save_validation_success(self):
+        self.tx.get_metadata().validation = ValidationState.BASIC
+        self.tx.get_metadata().add_voided_by(settings.PARTIALLY_VALIDATED_ID)
+        self.validate_save(self.tx)
+
     def test_save_token_creation_tx(self):
         tx = create_tokens(self.manager, propagate=False)
         tx.get_metadata().validation = ValidationState.FULL

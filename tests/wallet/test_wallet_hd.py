@@ -25,6 +25,8 @@ class BaseWalletHDTest(unittest.TestCase):
         self.TOKENS = self.BLOCK_TOKENS
 
     def test_transaction_and_balance(self):
+        from hathor.transaction.transaction_metadata import ValidationState
+
         # generate a new block and check if we increase balance
         new_address = self.wallet.get_unused_address()
         out = WalletOutputInfo(decode_address(new_address), self.TOKENS, timelock=None)
@@ -42,6 +44,7 @@ class BaseWalletHDTest(unittest.TestCase):
         tx1.update_hash()
         tx1.verify_script(tx1.inputs[0], block)
         tx1.storage = self.tx_storage
+        tx1.get_metadata().validation = ValidationState.FULL
         self.wallet.on_new_tx(tx1)
         self.tx_storage.save_transaction(tx1)
         self.assertEqual(len(self.wallet.spent_txs), 1)
@@ -60,6 +63,7 @@ class BaseWalletHDTest(unittest.TestCase):
         tx2.update_hash()
         tx2.storage = self.tx_storage
         tx2.verify_script(tx2.inputs[0], tx1)
+        tx2.get_metadata().validation = ValidationState.FULL
         self.tx_storage.save_transaction(tx2)
         self.wallet.on_new_tx(tx2)
         self.assertEqual(len(self.wallet.spent_txs), 2)

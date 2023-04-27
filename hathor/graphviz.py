@@ -52,6 +52,7 @@ class GraphvizVisualizer:
         self.voided_attrs = dict(style='dashed,filled', penwidth='0.25', fillcolor='#BDC3C7')
         self.soft_voided_attrs = dict(style='dashed,filled', penwidth='0.25', fillcolor='#CCCCFF')
         self.conflict_attrs = dict(style='dashed,filled', penwidth='2.0', fillcolor='#BDC3C7')
+        self.not_fully_validated_attrs = dict(style='dashed,filled', penwidth='0.25', fillcolor='#F9FFAB')
 
         # Labels
         self.labels: Dict[bytes, str] = {}
@@ -95,6 +96,9 @@ class GraphvizVisualizer:
                 node_attrs.update(self.soft_voided_attrs)
             else:
                 node_attrs.update(self.voided_attrs)
+
+        if not meta.validation.is_fully_connected():
+            node_attrs.update(self.not_fully_validated_attrs)
 
         return node_attrs
 

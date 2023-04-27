@@ -319,12 +319,12 @@ class MemoryIndexesManager(IndexesManager):
         if self.utxo is None:
             self.utxo = MemoryUtxoIndex()
 
-    def enable_deps_index(self) -> None:
+    def enable_mempool_index(self) -> None:
         from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
         if self.mempool_tips is None:
             self.mempool_tips = MemoryMempoolTipsIndex()
 
-    def enable_mempool_index(self) -> None:
+    def enable_deps_index(self) -> None:
         from hathor.indexes.memory_deps_index import MemoryDepsIndex
         if self.deps is None:
             self.deps = MemoryDepsIndex()
@@ -373,13 +373,13 @@ class RocksDBIndexesManager(IndexesManager):
         if self.utxo is None:
             self.utxo = RocksDBUtxoIndex(self._db)
 
-    def enable_deps_index(self) -> None:
+    def enable_mempool_index(self) -> None:
         from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
         if self.mempool_tips is None:
             # XXX: use of RocksDBMempoolTipsIndex is very slow and was suspended
             self.mempool_tips = MemoryMempoolTipsIndex()
 
-    def enable_mempool_index(self) -> None:
+    def enable_deps_index(self) -> None:
         from hathor.indexes.memory_deps_index import MemoryDepsIndex
         if self.deps is None:
             # XXX: use of RocksDBDepsIndex is currently suspended until it is fixed

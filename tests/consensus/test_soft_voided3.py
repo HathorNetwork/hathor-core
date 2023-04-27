@@ -1,6 +1,7 @@
 from hathor.conf import HathorSettings
 from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator import FakeConnection, Simulator
+from hathor.simulator.trigger import StopAfterNTransactions
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import add_custom_tx, gen_custom_tx, gen_new_tx
@@ -44,8 +45,8 @@ class BaseSoftVoidedTestCase(SimulatorTestCase):
         gen_tx2 = simulator.create_tx_generator(manager2, rate=10 / 60., hashpower=1e6, ignore_no_funds=True)
         gen_tx2.start()
 
-        while not gen_tx2.latest_transactions:
-            simulator.run(300)
+        trigger = StopAfterNTransactions(gen_tx2, quantity=1)
+        self.assertTrue(simulator.run(7200, trigger=trigger))
 
         yield gen_tx2
 

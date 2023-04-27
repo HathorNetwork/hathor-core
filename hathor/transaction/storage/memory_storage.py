@@ -85,6 +85,7 @@ class TransactionMemoryStorage(BaseTransactionStorage):
             tx = self._clone(self.transactions[hash_bytes])
             if hash_bytes in self.metadata:
                 tx._metadata = self._clone(self.metadata[hash_bytes])
+            assert tx._metadata is not None
             return tx
         else:
             raise TransactionDoesNotExist(hash_bytes.hex())

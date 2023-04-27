@@ -215,8 +215,8 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.conn.run_one_step()
         conn.run_one_step()
         # continue until messages stop
-        self.conn.run_until_complete()
-        conn.run_until_complete()
+        self.conn.run_until_empty()
+        conn.run_until_empty()
         self.run_to_completion()
         # one of the peers will close the connection. We don't know which on, as it depends
         # on the peer ids

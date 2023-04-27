@@ -24,6 +24,7 @@ class MemoryHeightIndex(HeightIndex):
     _index: List[IndexEntry]
 
     def __init__(self) -> None:
+        super().__init__()
         self.force_clear()
 
     def get_db_name(self) -> Optional[str]:
@@ -37,11 +38,17 @@ class MemoryHeightIndex(HeightIndex):
             raise ValueError(f'parent hash required (current height: {len(self._index)}, new height: {height})')
         elif len(self._index) == height:
             self._index.append(IndexEntry(block_hash, timestamp))
-        elif self._index[height] != block_hash:
+        elif self._index[height].hash != block_hash:
             if can_reorg:
                 del self._index[height:]
                 self._index.append(IndexEntry(block_hash, timestamp))
             else:
+                self.log.error(
+                    'adding would cause a re-org',
+                    height=height,
+                    current_block=self._index[height].hash.hex(),
+                    new_block=block_hash.hex()
+                )
                 raise ValueError('adding would cause a re-org, use can_reorg=True to accept re-orgs')
         else:
             # nothing to do (there are more blocks, but the block at height currently matches the added block)

@@ -494,6 +494,7 @@ class BaseTransaction(ABC):
         self.verify_checkpoint(checkpoints)
 
         meta.validation = ValidationState.CHECKPOINT
+        self.mark_partially_validated()
         return True
 
     def validate_basic(self, skip_block_weight_verification: bool = False) -> bool:
@@ -508,6 +509,7 @@ class BaseTransaction(ABC):
         self.verify_basic(skip_block_weight_verification=skip_block_weight_verification)
 
         meta.validation = ValidationState.BASIC
+        self.mark_partially_validated()
         return True
 
     def validate_full(self, skip_block_weight_verification: bool = False, sync_checkpoints: bool = False,
@@ -522,7 +524,10 @@ class BaseTransaction(ABC):
         # skip full validation when it is a checkpoint
         if meta.validation.is_checkpoint():
             meta.validation = ValidationState.CHECKPOINT_FULL
+            # at last, remove the partially validated mark
+            self.unmark_partially_validated()
             return True
+
         # XXX: in some cases it might be possible that this transaction is verified by a checkpoint but we went
         #      directly into trying a full validation so we should check it here to make sure the validation states
         #      ends up being CHECKPOINT_FULL instead of FULL
@@ -535,7 +540,30 @@ class BaseTransaction(ABC):
             meta.validation = ValidationState.CHECKPOINT_FULL
         else:
             meta.validation = ValidationState.FULL
+
+        # at last, remove the partially validated mark
+        self.unmark_partially_validated()
         return True
+
+    def mark_partially_validated(self) -> None:
+        """ This function is used to add the partially-validated mark from the voided-by metadata.
+
+        It is idempotent: calling it multiple time has the same effect as calling it once. But it must only be called
+        when the validation state is *NOT* "fully connected", otherwise it'll raise an assertion error.
+        """
+        tx_meta = self.get_metadata()
+        assert not tx_meta.validation.is_fully_connected()
+        tx_meta.add_voided_by(settings.PARTIALLY_VALIDATED_ID)
+
+    def unmark_partially_validated(self) -> None:
+        """ This function is used to remove the partially-validated mark from the voided-by metadata.
+
+        It is idempotent: calling it multiple time has the same effect as calling it once. But it must only be called
+        when the validation state is "fully connected", otherwise it'll raise an assertion error.
+        """
+        tx_meta = self.get_metadata()
+        assert tx_meta.validation.is_fully_connected()
+        tx_meta.del_voided_by(settings.PARTIALLY_VALIDATED_ID)
 
     @abstractmethod
     def verify_checkpoint(self, checkpoints: List[Checkpoint]) -> None:
@@ -702,6 +730,9 @@ class BaseTransaction(ABC):
 
         if hash_bytes:
             self.hash = hash_bytes
+            metadata = getattr(self, '_metadata', None)
+            if metadata is not None and metadata.hash is not None:
+                metadata.hash = hash_bytes
             return True
         else:
             return False
@@ -850,12 +881,18 @@ class BaseTransaction(ABC):
         """ Reset transaction's metadata. It is used when a node is initializing and
         recalculating all metadata.
         """
+        from hathor.transaction.transaction_metadata import ValidationState
         assert self.storage is not None
         score = self.weight if self.is_genesis else 0
-        self._metadata = TransactionMetadata(hash=self.hash, score=score,
-                                             accumulated_weight=self.weight,
-                                             height=self.calculate_height(),
-                                             min_height=self.calculate_min_height())
+        self._metadata = TransactionMetadata(hash=self.hash,
+                                             score=score,
+                                             accumulated_weight=self.weight)
+        if self.is_genesis:
+            self._metadata.validation = ValidationState.CHECKPOINT_FULL
+            self._metadata.voided_by = set()
+        else:
+            self._metadata.validation = ValidationState.INITIAL
+            self._metadata.voided_by = {settings.PARTIALLY_VALIDATED_ID}
         self._metadata._tx_ref = weakref.ref(self)
         self.storage.save_transaction(self, only_metadata=True)
 
@@ -910,11 +947,17 @@ class BaseTransaction(ABC):
 
         It is called when a new transaction/block is received by HathorManager.
         """
+        self._update_height_metadata()
         self._update_parents_children_metadata()
         self._update_reward_lock_metadata()
         if save:
             assert self.storage is not None
             self.storage.save_transaction(self, only_metadata=True)
+
+    def _update_height_metadata(self) -> None:
+        """Update the vertice height metadata."""
+        meta = self.get_metadata()
+        meta.height = self.calculate_height()
 
     def _update_reward_lock_metadata(self) -> None:
         """Update the txs/block min_height metadata."""
@@ -1056,6 +1099,17 @@ class BaseTransaction(ABC):
     @abstractmethod
     def get_token_uid(self, index: int) -> bytes:
         raise NotImplementedError
+
+    def is_ready_for_validation(self) -> bool:
+        """Check whether the transaction is ready to be validated: all dependencies exist and are fully connected."""
+        assert self.storage is not None
+        for dep_hash in self.get_all_dependencies():
+            dep_meta = self.storage.get_metadata(dep_hash)
+            if dep_meta is None:
+                return False
+            if not dep_meta.validation.is_fully_connected():
+                return False
+        return True
 
 
 class TxInput:

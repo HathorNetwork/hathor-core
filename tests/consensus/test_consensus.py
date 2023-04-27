@@ -120,8 +120,8 @@ class BaseConsensusTestCase(unittest.TestCase):
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
 
         # Mine a few blocks in a row with no transaction but the genesis
-        blocks = add_new_blocks(manager, 3, advance_clock=15)
-        add_blocks_unlock_reward(manager)
+        add_new_blocks(manager, 3, advance_clock=15)
+        blocks = add_blocks_unlock_reward(manager)
 
         # Add some transactions between blocks
         add_new_transactions(manager, 5, advance_clock=15)
