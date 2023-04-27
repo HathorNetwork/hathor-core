@@ -87,7 +87,7 @@ class Builder:
         self._rocksdb_path: Optional[str] = None
         self._rocksdb_storage: Optional[RocksDBStorage] = None
         self._rocksdb_cache_capacity: Optional[int] = None
-        self._with_rocksdb_index: Optional[bool] = None
+        self._rocksdb_with_index: Optional[bool] = None
 
         self._tx_storage: Optional[TransactionStorage] = None
         self._event_storage: Optional[EventStorage] = None
@@ -275,8 +275,8 @@ class Builder:
             use_memory_index = self._force_memory_index
 
             kwargs = {}
-            if self._with_rocksdb_index is not None:
-                kwargs = dict(with_index=self._with_rocksdb_index)
+            if self._rocksdb_with_index is not None:
+                kwargs = dict(with_index=self._rocksdb_with_index)
 
             return TransactionRocksDBStorage(
                 rocksdb_storage,
@@ -329,7 +329,7 @@ class Builder:
         self.check_if_can_modify()
         self._storage_type = StorageType.ROCKSDB
         self._rocksdb_path = path
-        self._with_rocksdb_index = with_index
+        self._rocksdb_with_index = with_index
         self._rocksdb_cache_capacity = cache_capacity
         return self
 
