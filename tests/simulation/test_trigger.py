@@ -19,6 +19,10 @@ class TriggerTestCase(unittest.TestCase):
         print('Simulation seed config:', self.simulator.seed)
         print('-' * 30)
 
+    def tearDown(self):
+        super().tearDown()
+        self.simulator.stop()
+
     def test_stop_after_n_mined_blocks(self):
         miner1 = self.simulator.create_miner(self.manager1, hashpower=1e6)
         miner1.start()
