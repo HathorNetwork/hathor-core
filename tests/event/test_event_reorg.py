@@ -1,11 +1,9 @@
 from unittest.mock import Mock
 
 from hathor.conf import HathorSettings
-from hathor.event import EventManager
 from hathor.event.model.event_type import EventType
 from hathor.event.storage import EventMemoryStorage
 from hathor.event.websocket import EventWebsocketFactory
-from hathor.pubsub import PubSubManager
 from tests import unittest
 from tests.utils import add_new_blocks, get_genesis_key
 
@@ -18,20 +16,12 @@ class BaseEventReorgTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.network = 'testnet'
-        self.event_ws_factory = Mock(spec_set=EventWebsocketFactory)
         self.event_storage = EventMemoryStorage()
-        pubsub = PubSubManager(self.clock)
-        self.event_manager = EventManager(
-            event_storage=self.event_storage,
-            event_ws_factory=self.event_ws_factory,
-            pubsub=pubsub,
-            reactor=self.clock
-        )
         self.manager = self.create_peer(
             self.network,
-            event_manager=self.event_manager,
-            pubsub=pubsub,
-            full_verification=False
+            event_ws_factory=Mock(spec_set=EventWebsocketFactory),
+            full_verification=False,
+            event_storage=self.event_storage
         )
 
         # read genesis keys

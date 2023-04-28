@@ -97,16 +97,15 @@ class CliBuilder:
         )
 
         tx_storage: TransactionStorage
+        event_storage: EventStorage
         rocksdb_storage: RocksDBStorage
-        self.event_storage: Optional[EventStorage] = None
         self.event_ws_factory: Optional[EventWebsocketFactory] = None
 
         if args.memory_storage:
             self.check_or_raise(not args.data, '--data should not be used with --memory-storage')
             # if using MemoryStorage, no need to have cache
             tx_storage = TransactionMemoryStorage()
-            if args.x_enable_event_queue:
-                self.event_storage = EventMemoryStorage()
+            event_storage = EventMemoryStorage()
             self.check_or_raise(not args.x_rocksdb_indexes, 'RocksDB indexes require RocksDB data')
             self.log.info('with storage', storage_class=type(tx_storage).__name__)
         else:
@@ -118,8 +117,7 @@ class CliBuilder:
             tx_storage = TransactionRocksDBStorage(rocksdb_storage,
                                                    with_index=(not args.cache),
                                                    use_memory_indexes=args.memory_indexes)
-            if args.x_enable_event_queue:
-                self.event_storage = EventRocksDBStorage(rocksdb_storage)
+            event_storage = EventRocksDBStorage(rocksdb_storage)
 
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
         if args.cache:
@@ -147,10 +145,9 @@ class CliBuilder:
 
         event_manager: Optional[EventManager] = None
         if args.x_enable_event_queue:
-            assert self.event_storage is not None, 'cannot create EventManager without EventStorage'
-            self.event_ws_factory = EventWebsocketFactory(reactor, self.event_storage)
+            self.event_ws_factory = EventWebsocketFactory(reactor, event_storage)
             event_manager = EventManager(
-                event_storage=self.event_storage,
+                event_storage=event_storage,
                 event_ws_factory=self.event_ws_factory,
                 pubsub=pubsub,
                 reactor=reactor,
@@ -184,6 +181,7 @@ class CliBuilder:
             network=network,
             hostname=hostname,
             tx_storage=tx_storage,
+            event_storage=event_storage,
             event_manager=event_manager,
             wallet=self.wallet,
             stratum_port=args.stratum,
