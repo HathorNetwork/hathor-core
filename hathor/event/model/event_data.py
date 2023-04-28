@@ -56,7 +56,12 @@ class TxMetadata(BaseModel, extra=Extra.ignore):
         """
         This validator method is called by pydantic when parsing models, and is not supposed to be called directly.
         It either returns a SpentOutput if it receives one, or tries to parse it as a list (as returned from
-        metadata.to_json() method).
+        metadata.to_json() method). Examples:
+
+        >>> TxMetadata._parse_spent_outputs(SpentOutput(index=0, tx_ids=['tx1', 'tx2']))
+        SpentOutput(index=0, tx_ids=['tx1', 'tx2'])
+        >>> TxMetadata._parse_spent_outputs([0, ['tx1', 'tx2']])
+        SpentOutput(index=0, tx_ids=['tx1', 'tx2'])
         """
         if isinstance(spent_output, SpentOutput):
             return spent_output
