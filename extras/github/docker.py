@@ -77,6 +77,7 @@ def prep_tags(environ: Dict, base_version: str, is_release_candidate: bool):
     SECRETS_GHCR_IMAGE = environ.get('SECRETS_GHCR_IMAGE')
 
     GITHUB_EVENT_NAME = environ.get('GITHUB_EVENT_NAME')
+    GITHUB_SHA = environ.get('GITHUB_SHA')
 
     import datetime
     import re
@@ -125,7 +126,7 @@ def prep_tags(environ: Dict, base_version: str, is_release_candidate: bool):
         if suffix == default_python:
             tags.add('latest')
     elif GITHUB_EVENT_NAME == 'push' and not is_release_candidate:
-        tags.add('sha-' + '${{ github.sha }}'[:8])
+        tags.add('sha-' + GITHUB_SHA[:8])
 
     # Build the image list and set outputs
     output['version'] = version
