@@ -62,6 +62,7 @@ class Simulator:
 
         def verify_pow(self: BaseTransaction, *args: Any, **kwargs: Any) -> None:
             assert self.hash is not None
+            logger.new().debug('Skipping BaseTransaction.verify_pow() for simulator')
 
         cls._original_verify_pow = BaseTransaction.verify_pow
         BaseTransaction.verify_pow = verify_pow
