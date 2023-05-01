@@ -12,9 +12,9 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import List, Optional, Union
+from typing import List, Optional, Union, cast
 
-from pydantic import Extra
+from pydantic import Extra, validator
 
 from hathor.pubsub import EventArguments
 from hathor.utils.pydantic import BaseModel
@@ -23,7 +23,7 @@ from hathor.utils.pydantic import BaseModel
 class TxInput(BaseModel):
     tx_id: str
     index: int
-    data: int
+    data: str
 
 
 class TxOutput(BaseModel):
@@ -37,13 +37,9 @@ class SpentOutput(BaseModel):
     tx_ids: List[str]
 
 
-class SpentOutputs(BaseModel):
-    spent_output: List[SpentOutput]
-
-
 class TxMetadata(BaseModel, extra=Extra.ignore):
     hash: str
-    spent_outputs: List[SpentOutputs]
+    spent_outputs: List[SpentOutput]
     conflict_with: List[str]
     voided_by: List[str]
     received_by: List[int]
@@ -54,6 +50,28 @@ class TxMetadata(BaseModel, extra=Extra.ignore):
     first_block: Optional[str]
     height: int
     validation: str
+
+    @validator('spent_outputs', pre=True, each_item=True)
+    def _parse_spent_outputs(cls, spent_output: Union[SpentOutput, List[Union[int, List[str]]]]) -> SpentOutput:
+        """
+        This validator method is called by pydantic when parsing models, and is not supposed to be called directly.
+        It either returns a SpentOutput if it receives one, or tries to parse it as a list (as returned from
+        metadata.to_json() method). Examples:
+
+        >>> TxMetadata._parse_spent_outputs(SpentOutput(index=0, tx_ids=['tx1', 'tx2']))
+        SpentOutput(index=0, tx_ids=['tx1', 'tx2'])
+        >>> TxMetadata._parse_spent_outputs([0, ['tx1', 'tx2']])
+        SpentOutput(index=0, tx_ids=['tx1', 'tx2'])
+        """
+        if isinstance(spent_output, SpentOutput):
+            return spent_output
+
+        index, tx_ids = spent_output
+
+        return SpentOutput(
+            index=cast(int, index),
+            tx_ids=cast(List[str], tx_ids)
+        )
 
 
 class BaseEventData(BaseModel):
