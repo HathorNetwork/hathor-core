@@ -126,13 +126,13 @@ class EventStorageBaseTest(unittest.TestCase):
         assert enabled is False
 
     def test_save_event_queue_enabled_and_retrieve(self):
-        self.event_storage.save_event_queue_enabled()
+        self.event_storage.save_event_queue_state(True)
         enabled = self.event_storage.get_event_queue_state()
 
         assert enabled is True
 
     def test_save_event_queue_disabled_and_retrieve(self):
-        self.event_storage.save_event_queue_disabled()
+        self.event_storage.save_event_queue_state(False)
         enabled = self.event_storage.get_event_queue_state()
 
         assert enabled is False
@@ -158,7 +158,7 @@ class EventStorageBaseTest(unittest.TestCase):
 
         self._populate_events_and_last_group_id(n_events=n_events, last_group_id=4)
         self.event_storage.save_node_state(expected_node_state)
-        self.event_storage.save_event_queue_enabled()
+        self.event_storage.save_event_queue_state(True)
 
         events = list(self.event_storage.iter_from_event(0))
         last_group_id = self.event_storage.get_last_group_id()

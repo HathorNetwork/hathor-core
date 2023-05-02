@@ -143,15 +143,15 @@ class CliBuilder:
 
         pubsub = PubSubManager(reactor)
 
-        event_manager: Optional[EventManager] = None
         if args.x_enable_event_queue:
             self.event_ws_factory = EventWebsocketFactory(reactor, event_storage)
-            event_manager = EventManager(
-                event_storage=event_storage,
-                event_ws_factory=self.event_ws_factory,
-                pubsub=pubsub,
-                reactor=reactor
-            )
+
+        event_manager = EventManager(
+            event_storage=event_storage,
+            event_ws_factory=self.event_ws_factory,
+            pubsub=pubsub,
+            reactor=reactor
+        )
 
         if args.wallet_index and tx_storage.indexes is not None:
             self.log.debug('enable wallet indexes')
@@ -177,7 +177,6 @@ class CliBuilder:
             network=network,
             hostname=hostname,
             tx_storage=tx_storage,
-            event_storage=event_storage,
             event_manager=event_manager,
             wallet=self.wallet,
             stratum_port=args.stratum,
@@ -187,7 +186,8 @@ class CliBuilder:
             enable_sync_v2=enable_sync_v2,
             consensus_algorithm=consensus_algorithm,
             environment_info=get_environment_info(args=str(args), peer_id=peer_id.id),
-            full_verification=full_verification
+            full_verification=full_verification,
+            enable_event_queue=bool(args.x_enable_event_queue)
         )
 
         if args.allow_mining_without_peers:
@@ -504,7 +504,7 @@ class CliBuilder:
         ws_factory.subscribe(self.manager.pubsub)
 
         # Event websocket resource
-        if args.x_enable_event_queue and self.event_ws_factory is not None:
+        if args.x_enable_event_queue:
             root.putChild(b'event_ws', WebSocketResource(self.event_ws_factory))
             root.putChild(b'event', EventResource(self.manager._event_manager))
 

@@ -113,13 +113,7 @@ class EventRocksDBStorage(EventStorage):
 
         return NodeState(node_state_int)
 
-    def save_event_queue_enabled(self) -> None:
-        self._save_event_queue_state(True)
-
-    def save_event_queue_disabled(self) -> None:
-        self._save_event_queue_state(False)
-
-    def _save_event_queue_state(self, enabled: bool) -> None:
+    def save_event_queue_state(self, enabled: bool) -> None:
         self._db.put(
             (self._cf_meta, _KEY_EVENT_QUEUE_ENABLED),
             enabled.to_bytes(length=1, byteorder='big')

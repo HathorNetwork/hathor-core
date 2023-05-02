@@ -64,9 +64,9 @@ class EventManager:
     def __init__(
         self,
         event_storage: EventStorage,
-        event_ws_factory: EventWebsocketFactory,
         pubsub: PubSubManager,
-        reactor: Reactor
+        reactor: Reactor,
+        event_ws_factory: Optional[EventWebsocketFactory] = None,
     ):
         self.log = logger.new()
 
@@ -75,11 +75,10 @@ class EventManager:
         self._event_ws_factory = event_ws_factory
         self._pubsub = pubsub
 
-        self._assert_closed_event_group()
-        self._subscribe_events()
-
     def start(self, peer_id: str) -> None:
         assert self._is_running is False, 'Cannot start, EventManager is already running'
+        assert self._event_ws_factory is not None, 'Cannot start, EventWebsocketFactory is not set'
+        assert self.get_event_queue_state() is True, 'Cannot start, event queue feature is disabled'
 
         self._previous_node_state = self._event_storage.get_node_state()
 
@@ -89,12 +88,16 @@ class EventManager:
             self._last_event = self._event_storage.get_last_event()
             self._last_existing_group_id = self._event_storage.get_last_group_id()
 
+        self._assert_closed_event_group()
+        self._subscribe_events()
+
         self._peer_id = peer_id
         self._event_ws_factory.start()
         self._is_running = True
 
     def stop(self):
         assert self._is_running is True, 'Cannot stop, EventManager is not running'
+        assert self._event_ws_factory is not None
 
         self._event_ws_factory.stop()
         self._is_running = False
@@ -138,6 +141,7 @@ class EventManager:
         self._handle_event_creation(event_type, event_args)
 
     def _handle_event_creation(self, event_type: EventType, event_args: EventArguments) -> None:
+        assert self._event_ws_factory is not None
         create_event_fn: Callable[[EventType, EventArguments], BaseEvent]
 
         if event_type in _GROUP_START_EVENTS:
@@ -213,6 +217,13 @@ class EventManager:
 
     def _should_reload_events(self) -> bool:
         return self._previous_node_state in [None, NodeState.LOAD]
+
+    def get_event_queue_state(self) -> bool:
+        """Get whether the event queue feature is enabled from the storage"""
+        return self._event_storage.get_event_queue_state()
+
+    def save_event_queue_state(self, state: bool) -> None:
+        self._event_storage.save_event_queue_state(state)
 
     def handle_load_phase_vertices(self, topological_iterator: Iterator[BaseTransaction]) -> None:
         """

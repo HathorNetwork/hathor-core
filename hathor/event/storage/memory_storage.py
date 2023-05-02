@@ -69,11 +69,8 @@ class EventMemoryStorage(EventStorage):
     def get_node_state(self) -> Optional[NodeState]:
         return self._node_state
 
-    def save_event_queue_enabled(self) -> None:
-        self._event_queue_enabled = True
-
-    def save_event_queue_disabled(self) -> None:
-        self._event_queue_enabled = False
+    def save_event_queue_state(self, enabled: bool) -> None:
+        self._event_queue_enabled = enabled
 
     def get_event_queue_state(self) -> bool:
         return self._event_queue_enabled
