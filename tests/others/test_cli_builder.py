@@ -58,7 +58,7 @@ class BuilderTestCase(unittest.TestCase):
         self.assertNotIn(SyncVersion.V2, manager.connections._sync_factories)
         self.assertFalse(self.resources_builder._built_prometheus)
         self.assertFalse(self.resources_builder._built_status)
-        self.assertIsNone(manager._event_manager)
+        self.assertFalse(manager._enable_event_queue)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_cache_storage(self):

@@ -61,13 +61,8 @@ class EventStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def save_event_queue_enabled(self) -> None:
-        """Save that event queue feature is enabled in the storage"""
-        raise NotImplementedError
-
-    @abstractmethod
-    def save_event_queue_disabled(self) -> None:
-        """Save that event queue feature is disabled in the storage"""
+    def save_event_queue_state(self, enabled: bool) -> None:
+        """Save whether the event queue feature is enabled in the storage"""
         raise NotImplementedError
 
     @abstractmethod
