@@ -194,6 +194,9 @@ class CliBuilder:
             full_verification=full_verification
         )
 
+        if args.data:
+            self.manager.set_cmd_path(args.data)
+
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
 

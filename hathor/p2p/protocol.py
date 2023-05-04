@@ -134,7 +134,7 @@ class HathorProtocol:
         self.state: Optional[BaseState] = None
 
         # Default rate limit
-        self.ratelimit: RateLimiter = RateLimiter()
+        self.ratelimit: RateLimiter = RateLimiter(self.reactor)
         # self.ratelimit.set_limit(self.RateLimitKeys.GLOBAL, 120, 60)
 
         # Connection string of the peer
@@ -359,6 +359,27 @@ class HathorProtocol:
         """ Executed when an ERROR command is received.
         """
         self.log.warn('remote error', payload=payload)
+
+    def is_sync_enabled(self) -> bool:
+        """Return true if sync is enabled for this connection."""
+        if not self.is_state(self.PeerState.READY):
+            return False
+        assert isinstance(self.state, ReadyState)
+        return self.state.sync_manager.is_sync_enabled()
+
+    def enable_sync(self) -> None:
+        """Enable sync for this connection."""
+        assert self.is_state(self.PeerState.READY)
+        assert isinstance(self.state, ReadyState)
+        self.log.info('enable sync')
+        self.state.sync_manager.enable_sync()
+
+    def disable_sync(self) -> None:
+        """Disable sync for this connection."""
+        assert self.is_state(self.PeerState.READY)
+        assert isinstance(self.state, ReadyState)
+        self.log.info('disable sync')
+        self.state.sync_manager.disable_sync()
 
 
 class HathorLineReceiver(LineReceiver, HathorProtocol):

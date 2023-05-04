@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from twisted.python.failure import Failure  # noqa: F401
 
     from hathor.p2p.protocol import HathorProtocol  # noqa: F401
+    from hathor.p2p.rate_limiter import RateLimiter
 
 
 def _get_deps(tx: BaseTransaction) -> Iterator[bytes]:
@@ -198,6 +199,11 @@ class NodeSyncTimestamp(SyncManager):
             reactor = twisted_reactor
         self.reactor: Reactor = reactor
 
+        # Rate limit for this connection.
+        assert protocol.connections is not None
+        self.global_rate_limiter: 'RateLimiter' = protocol.connections.rate_limiter
+        self.GlobalRateLimiter = protocol.connections.GlobalRateLimiter
+
         self.call_later_id: Optional[IDelayedCall] = None
         self.call_later_interval: int = 1  # seconds
 
@@ -223,6 +229,10 @@ class NodeSyncTimestamp(SyncManager):
         # Indicate whether the sync manager has been started.
         self._started: bool = False
 
+        # Indicate whether the synchronization is enabled.
+        # When the sync is disabled, it will keep the last synced_timestamp.
+        self.is_enabled: bool = False
+
         # Indicate whether the synchronization is running.
         self.is_running: bool = False
 
@@ -233,6 +243,7 @@ class NodeSyncTimestamp(SyncManager):
         """ Return the status of the sync.
         """
         return {
+            'is_enabled': self.is_enabled,
             'latest_timestamp': self.peer_timestamp,
             'synced_timestamp': self.synced_timestamp,
         }
@@ -296,6 +307,8 @@ class NodeSyncTimestamp(SyncManager):
         return False
 
     def send_tx_to_peer_if_possible(self, tx: BaseTransaction) -> None:
+        if not self.is_enabled:
+            return
         if self.peer_timestamp is None:
             return
         if self.synced_timestamp is None:
@@ -474,6 +487,9 @@ class NodeSyncTimestamp(SyncManager):
     def _next_step(self) -> Generator[Deferred, Any, None]:
         """ Run the next step to keep nodes synced.
         """
+        if not self.is_enabled:
+            self.log.debug('sync is disabled')
+            return
         if not self.is_running or not self._started:
             self.log.debug('already stopped')
             return
@@ -492,6 +508,11 @@ class NodeSyncTimestamp(SyncManager):
             self.log.debug('already running')
             return
 
+        if not self.is_enabled:
+            self.log.debug('sync is disabled')
+            self.schedule_next_step_call()
+            return
+
         try:
             self.is_running = True
             yield self._next_step()
@@ -499,11 +520,15 @@ class NodeSyncTimestamp(SyncManager):
             self.log.warn('_next_step error', exc_info=True)
             raise
         else:
-            if self.call_later_id and self.call_later_id.active():
-                self.call_later_id.cancel()
-            self.call_later_id = self.reactor.callLater(self.call_later_interval, self.next_step)
+            self.schedule_next_step_call()
         finally:
             self.is_running = False
+
+    def schedule_next_step_call(self) -> None:
+        """Schedule `next_step()` call."""
+        if self.call_later_id and self.call_later_id.active():
+            self.call_later_id.cancel()
+        self.call_later_id = self.reactor.callLater(self.call_later_interval, self.next_step)
 
     def send_message(self, cmd: ProtocolMessages, payload: Optional[str] = None) -> None:
         """ Helper to send a message.
@@ -587,6 +612,14 @@ class NodeSyncTimestamp(SyncManager):
             self.send_tips(args.timestamp, args.include_hashes, args.offset)
 
     def send_tips(self, timestamp: Optional[int] = None, include_hashes: bool = False, offset: int = 0) -> None:
+        """Try to send a TIPS message. If rate limit has been reached, it schedules to send it later."""
+        if not self.global_rate_limiter.add_hit(self.GlobalRateLimiter.SEND_TIPS):
+            self.log.debug('send_tips throttled')
+            self.reactor.callLater(1, self.send_tips, timestamp, include_hashes, offset)
+            return
+        self._send_tips(timestamp, include_hashes, offset)
+
+    def _send_tips(self, timestamp: Optional[int] = None, include_hashes: bool = False, offset: int = 0) -> None:
         """ Send a TIPS message.
         """
         if timestamp is None:
@@ -765,3 +798,15 @@ class NodeSyncTimestamp(SyncManager):
             We should just log a warning because it will continue the sync and will try to get this tx again.
         """
         self.log.warn('failed to download tx', tx=hash_bytes.hex(), reason=reason)
+
+    def is_sync_enabled(self) -> bool:
+        """Return True if sync is enabled for this connection."""
+        return self.is_enabled
+
+    def enable_sync(self) -> None:
+        """Enable sync for this connection."""
+        self.is_enabled = True
+
+    def disable_sync(self) -> None:
+        """Disable sync for this connection."""
+        self.is_enabled = False

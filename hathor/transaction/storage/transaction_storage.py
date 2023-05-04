@@ -24,6 +24,7 @@ from structlog import get_logger
 
 from hathor.conf import HathorSettings
 from hathor.indexes import IndexesManager, MemoryIndexesManager
+from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction
 from hathor.transaction.block import Block
@@ -34,6 +35,7 @@ from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.util import not_none
 
 settings = HathorSettings()
+cpu = get_cpu_profiler()
 
 # these are the timestamp values to be used when resetting them, 1 is used for the node instead of 0, so it can be
 # greater, that way if both are reset (which also happens on a database that never run this implementation before) we
@@ -552,6 +554,7 @@ class TransactionStorage(ABC):
 
         return highest_height
 
+    @cpu.profiler('get_merkle_tree')
     def get_merkle_tree(self, timestamp: int) -> Tuple[bytes, List[bytes]]:
         """ Generate a hash to check whether the DAG is the same at that timestamp.
 

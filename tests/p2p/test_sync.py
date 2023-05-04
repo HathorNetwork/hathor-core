@@ -460,7 +460,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
     def test_downloader_disconnect(self):
         """ This is related to test_downloader_retry_reorder, but it basically tests the change in behavior instead.
 
-        When a peer disconnects it should be immediately remvoed from the tx-detail's connections list.
+        When a peer disconnects it should be immediately removed from the tx-detail's connections list.
         """
         self._downloader_bug_setup()
 

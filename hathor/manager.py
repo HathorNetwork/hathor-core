@@ -127,6 +127,8 @@ class HathorManager:
         self._enable_sync_v1 = enable_sync_v1
         self._enable_sync_v2 = enable_sync_v2
 
+        self._cmd_path: Optional[str] = None
+
         self.log = logger.new()
 
         if rng is None:
@@ -1222,6 +1224,14 @@ class HathorManager:
                           vertex_count=vertex_count, **self.environment_info.as_dict())
 
             self.lc_check_sync_state.stop()
+
+    def set_cmd_path(self, path: str) -> None:
+        """Set the cmd path, where sysadmins can place files to communicate with the full node."""
+        self._cmd_path = path
+
+    def get_cmd_path(self) -> Optional[str]:
+        """Return the cmd path. If no cmd path is set, returns None."""
+        return self._cmd_path
 
 
 class ParentTxs(NamedTuple):

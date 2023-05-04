@@ -40,7 +40,7 @@ class RateLimiter:
             reactor = twisted_reactor
         self.reactor = reactor
 
-    def set_limit(self, key: str, max_hits: int, window_seconds: int) -> None:
+    def set_limit(self, key: str, max_hits: int, window_seconds: float) -> None:
         """ Set a limit to a given key, e.g., `max_hits = 10` and
         `window_seconds = 60` means at most 10 hits per minute.
 

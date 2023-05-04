@@ -9,7 +9,7 @@ from structlog import get_logger
 from twisted.internet.task import Clock
 from twisted.trial import unittest
 
-from hathor.builder import Builder
+from hathor.builder import BuildArtifacts, Builder
 from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
 from hathor.p2p.peer_id import PeerId
@@ -74,6 +74,13 @@ class TestBuilder(Builder):
     def __init__(self) -> None:
         super().__init__()
         self.set_network('testnet')
+
+    def build(self) -> BuildArtifacts:
+        artifacts = super().build()
+        # We disable rate limiter by default for tests because most tests were designed
+        # to run without rate limits. You can enable it in your unittest if you need.
+        artifacts.manager.connections.disable_rate_limiter()
+        return artifacts
 
     def _get_peer_id(self) -> PeerId:
         if self._peer_id is not None:
