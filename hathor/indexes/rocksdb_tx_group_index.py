@@ -70,6 +70,11 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
         """Extract the keys related to a given tx. The transaction will be added to all extracted keys."""
         raise NotImplementedError
 
+    def _iter_items(self) -> Iterable[Tuple[KT, int, bytes]]:
+        """Iterate over all items on the database yielding tuples of (KT, timestamp, tx_hash)."""
+        for k, _ in self._iter_raw_items():
+            yield self._from_rocksdb_key(k)
+
     def _to_rocksdb_key(self, key: KT, tx: Optional[BaseTransaction] = None) -> bytes:
         import struct
         rocksdb_key = self._serialize_key(key)

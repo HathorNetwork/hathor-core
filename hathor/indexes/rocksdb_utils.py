@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections.abc import Collection
-from typing import TYPE_CHECKING, Dict, Iterable, Iterator, NewType
+from typing import TYPE_CHECKING, Dict, Iterable, Iterator, NewType, Tuple
 
 from hathor.conf import HathorSettings
 
@@ -116,9 +116,14 @@ class RocksDBIndexUtils:
 
     def _clone_into_dict(self) -> Dict[bytes, bytes]:
         """This method will make a copy of the database into a plain dict, be careful when running on large dbs."""
+        return {k: v for k, v in self._iter_raw_items()}
+
+    def _iter_raw_items(self) -> Iterator[Tuple[bytes, bytes]]:
+        """This method will yield every pair of (key, value) in the database."""
         it = self._db.iteritems(self._cf)
         it.seek_to_first()
-        return {k: v for (_, k), v in it}
+        for (_, k), v in it:
+            yield (k, v)
 
 
 # XXX: should be `Collection[bytes]`, which only works on Python 3.9+
