@@ -42,6 +42,9 @@ class DummyMiner(AbstractMiner):
         self._start_time = int(self._clock.seconds())
         super().start()
 
+    def get_blocks_found(self) -> int:
+        return len(self.blocks)
+
     def _on_new_tx(self, key: HathorEvents, args: EventArguments) -> None:
         # DummyMiner currently doesn't support receiving new transactions and ignores them.
         pass
