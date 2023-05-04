@@ -235,9 +235,11 @@ class TestCase(unittest.TestCase):
         else:
             assert SyncVersion.V2 not in manager.connections._sync_factories
         if enable_sync_v1:
-            assert SyncVersion.V1 in manager.connections._sync_factories
+            assert SyncVersion.V1 not in manager.connections._sync_factories
+            assert SyncVersion.V1_1 in manager.connections._sync_factories
         else:
             assert SyncVersion.V1 not in manager.connections._sync_factories
+            assert SyncVersion.V1_1 not in manager.connections._sync_factories
 
         manager.avg_time_between_blocks = 0.0001
 

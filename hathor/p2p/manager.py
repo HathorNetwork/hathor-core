@@ -102,10 +102,12 @@ class ConnectionsManager:
 
     def __init__(self, reactor: Reactor, my_peer: PeerId, server_factory: 'HathorServerFactory',
                  client_factory: 'HathorClientFactory', pubsub: PubSubManager, manager: 'HathorManager',
-                 ssl: bool, rng: Random, whitelist_only: bool, enable_sync_v1: bool, enable_sync_v2: bool) -> None:
+                 ssl: bool, rng: Random, whitelist_only: bool, enable_sync_v1: bool, enable_sync_v2: bool,
+                 enable_sync_v1_1: bool) -> None:
+        from hathor.p2p.sync_v1_1_factory import SyncV11Factory
         from hathor.p2p.sync_v1_factory import SyncV1Factory
 
-        if not (enable_sync_v1 or enable_sync_v2):
+        if not (enable_sync_v1 or enable_sync_v1_1 or enable_sync_v2):
             raise TypeError(f'{type(self).__name__}() at least one sync version is required')
 
         self.log = logger.new()
@@ -182,6 +184,8 @@ class ConnectionsManager:
         self._sync_factories = {}
         if enable_sync_v1:
             self._sync_factories[SyncVersion.V1] = SyncV1Factory(self)
+        if enable_sync_v1_1:
+            self._sync_factories[SyncVersion.V1_1] = SyncV11Factory(self)
         if enable_sync_v2:
             self._sync_factories[SyncVersion.V2] = SyncV1Factory(self)
 

@@ -138,7 +138,8 @@ class CliBuilder:
 
         hostname = self.get_hostname(args)
         network = settings.NETWORK_NAME
-        enable_sync_v1 = not args.x_sync_v2_only
+        enable_sync_v1 = args.x_enable_legacy_sync_v1_0
+        enable_sync_v1_1 = not args.x_sync_v2_only
         enable_sync_v2 = args.x_sync_v2_only or args.x_sync_bridge
 
         pubsub = PubSubManager(reactor)
@@ -188,6 +189,7 @@ class CliBuilder:
             ssl=True,
             checkpoints=settings.CHECKPOINTS,
             enable_sync_v1=enable_sync_v1,
+            enable_sync_v1_1=enable_sync_v1_1,
             enable_sync_v2=enable_sync_v2,
             consensus_algorithm=consensus_algorithm,
             environment_info=get_environment_info(args=str(args), peer_id=peer_id.id),

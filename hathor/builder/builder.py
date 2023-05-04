@@ -144,7 +144,8 @@ class Builder:
         kwargs: Dict[str, Any] = {}
 
         if self._enable_sync_v1 is not None:
-            kwargs['enable_sync_v1'] = self._enable_sync_v1
+            # XXX: the interface of the Builder was kept using v1 instead of v1_1 to minimize the changes needed
+            kwargs['enable_sync_v1_1'] = self._enable_sync_v1
 
         if self._enable_sync_v2 is not None:
             kwargs['enable_sync_v2'] = self._enable_sync_v2

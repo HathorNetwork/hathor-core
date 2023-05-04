@@ -88,6 +88,8 @@ class RunNode:
         parser.add_argument('--sentry-dsn', help='Sentry DSN')
         parser.add_argument('--enable-debug-api', action='store_true', help='Enable _debug/* endpoints')
         parser.add_argument('--enable-crash-api', action='store_true', help='Enable _crash/* endpoints')
+        parser.add_argument('--x-enable-legacy-sync-v1_0', action='store_true', help='Enable sync-v1.0, will not '
+                            'disable sync-v1.1')
         v2args = parser.add_mutually_exclusive_group()
         v2args.add_argument('--x-sync-bridge', action='store_true',
                             help='Enable support for running both sync protocols. DO NOT ENABLE, IT WILL BREAK.')

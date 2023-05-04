@@ -95,7 +95,8 @@ class HathorManager:
                  event_manager: Optional[EventManager] = None,
                  stratum_port: Optional[int] = None,
                  ssl: bool = True,
-                 enable_sync_v1: bool = True,
+                 enable_sync_v1: bool = False,
+                 enable_sync_v1_1: bool = True,
                  enable_sync_v2: bool = False,
                  capabilities: Optional[List[str]] = None,
                  checkpoints: Optional[List[Checkpoint]] = None,
@@ -121,7 +122,7 @@ class HathorManager:
         from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
         from hathor.p2p.manager import ConnectionsManager
 
-        if not (enable_sync_v1 or enable_sync_v2):
+        if not (enable_sync_v1 or enable_sync_v1_1 or enable_sync_v2):
             raise TypeError(f'{type(self).__name__}() at least one sync version is required')
 
         self._enable_sync_v1 = enable_sync_v1
@@ -190,7 +191,8 @@ class HathorManager:
         self.client_factory = HathorClientFactory(self.network, self.my_peer, node=self, use_ssl=ssl)
         self.connections = ConnectionsManager(self.reactor, self.my_peer, self.server_factory, self.client_factory,
                                               self.pubsub, self, ssl, whitelist_only=False, rng=self.rng,
-                                              enable_sync_v1=enable_sync_v1, enable_sync_v2=enable_sync_v2)
+                                              enable_sync_v1=enable_sync_v1, enable_sync_v2=enable_sync_v2,
+                                              enable_sync_v1_1=enable_sync_v1_1)
 
         self.metrics = Metrics(
             pubsub=self.pubsub,
