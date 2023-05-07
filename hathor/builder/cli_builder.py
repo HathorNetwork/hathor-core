@@ -28,6 +28,7 @@ from twisted.web.resource import Resource
 
 from hathor.consensus import ConsensusAlgorithm
 from hathor.event import EventManager
+from hathor.event.model.EventQueueOptions import EventQueueOptions
 from hathor.event.resources.event import EventResource
 from hathor.exception import BuilderError
 from hathor.indexes import IndexesManager
@@ -170,6 +171,11 @@ class CliBuilder:
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
         consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub=pubsub)
 
+        event_queue_options = EventQueueOptions(
+            enable=bool(args.x_enable_event_queue),
+            reset=bool(args.x_reset_event_queue)
+        )
+
         self.manager = HathorManager(
             reactor,
             pubsub=pubsub,
@@ -187,7 +193,7 @@ class CliBuilder:
             consensus_algorithm=consensus_algorithm,
             environment_info=get_environment_info(args=str(args), peer_id=peer_id.id),
             full_verification=full_verification,
-            enable_event_queue=bool(args.x_enable_event_queue)
+            event_queue_options=event_queue_options
         )
 
         if args.allow_mining_without_peers:

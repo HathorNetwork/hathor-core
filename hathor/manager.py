@@ -30,6 +30,7 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.event.event_manager import EventManager
+from hathor.event.model.EventQueueOptions import EventQueueOptions
 from hathor.exception import (
     DoubleSpendingError,
     HathorError,
@@ -100,7 +101,7 @@ class HathorManager:
                  rng: Optional[Random] = None,
                  environment_info: Optional[EnvironmentInfo] = None,
                  full_verification: bool = False,
-                 enable_event_queue: bool = False):
+                 event_queue_options: EventQueueOptions = EventQueueOptions()):
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node.
@@ -123,7 +124,10 @@ class HathorManager:
         if not (enable_sync_v1 or enable_sync_v2):
             raise TypeError(f'{type(self).__name__}() at least one sync version is required')
 
-        if event_manager.get_event_queue_state() is True and not enable_event_queue:
+        if event_queue_options.reset:
+            event_manager.reset_all()
+
+        if event_manager.get_event_queue_state() is True and not event_queue_options.enable:
             raise ValueError(
                 'cannot start manager without event queue feature, as it was enabled in the previous startup'
             )
@@ -173,8 +177,8 @@ class HathorManager:
         self.tx_storage.pubsub = self.pubsub
 
         self._event_manager = event_manager
-        self._event_manager.save_event_queue_state(enable_event_queue)
-        self._enable_event_queue = enable_event_queue
+        self._event_manager.save_event_queue_state(event_queue_options.enable)
+        self._event_queue_options = event_queue_options
 
         if enable_sync_v2:
             assert self.tx_storage.indexes is not None
@@ -226,10 +230,6 @@ class HathorManager:
         # Full verification execute all validations for transactions and blocks when initializing the node
         # Can be activated on the command line with --full-verification
         self._full_verification = full_verification
-
-        # Activated with --x-enable-event-queue flag
-        # It activates the event mechanism inside full node
-        self.enable_event_queue = False
 
         # List of whitelisted peers
         self.peers_whitelist: List[str] = []
@@ -284,7 +284,7 @@ class HathorManager:
                 )
                 sys.exit(-1)
 
-        if self._enable_event_queue:
+        if self._event_queue_options.enable:
             self._event_manager.start(not_none(self.my_peer.id))
 
         self.state = self.NodeState.INITIALIZING
@@ -354,7 +354,7 @@ class HathorManager:
             if wait_stratum:
                 waits.append(wait_stratum)
 
-        if self._enable_event_queue:
+        if self._event_queue_options.enable:
             self._event_manager.stop()
 
         self.tx_storage.flush()
@@ -395,7 +395,7 @@ class HathorManager:
 
         This method runs through all transactions, verifying them and updating our wallet.
         """
-        assert not self._enable_event_queue, 'this method cannot be used if the events feature is enabled.'
+        assert not self._event_queue_options.enable, 'this method cannot be used if the events feature is enabled.'
 
         self.log.info('initialize')
         if self.wallet:
@@ -649,7 +649,7 @@ class HathorManager:
         # XXX: last step before actually starting is updating the last started at timestamps
         self.tx_storage.update_last_started_at(started_at)
 
-        if self._enable_event_queue:
+        if self._event_queue_options.enable:
             topological_iterator = self.tx_storage.topological_iterator()
             self._event_manager.handle_load_phase_vertices(topological_iterator)
 

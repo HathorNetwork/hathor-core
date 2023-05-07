@@ -58,10 +58,15 @@ class EventMemoryStorage(EventStorage):
             yield self._events[key]
             key += 1
 
-    def clear_events(self) -> None:
+    def reset_events(self) -> None:
         self._events = []
         self._last_event = None
         self._last_group_id = None
+
+    def reset_all(self) -> None:
+        self.reset_events()
+        self._node_state = None
+        self._event_queue_enabled = False
 
     def save_node_state(self, state: NodeState) -> None:
         self._node_state = state
