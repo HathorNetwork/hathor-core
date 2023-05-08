@@ -38,6 +38,7 @@ def test_only_load():
     main_manager.allow_mining_without_peers()
 
     simulator.run(2 * 60)
+    simulator.stop()
 
     actual_event_iterator = main_manager._event_manager.event_storage.iter_from_event(0)
     actual_events = list(actual_event_iterator)
@@ -99,6 +100,7 @@ def test_single_chain_one_block():
     miner.start()
 
     simulator.run(2 * 60)
+    simulator.stop()
 
     actual_event_iterator = main_manager._event_manager.event_storage.iter_from_event(0)
     actual_events = list(actual_event_iterator)
@@ -197,6 +199,7 @@ def test_single_chain_blocks_and_transactions():
     tx_gen.start()
 
     simulator.run(2 * 60)
+    simulator.stop()
 
     actual_event_iterator = main_manager._event_manager.event_storage.iter_from_event(0)
     actual_events = list(actual_event_iterator)
@@ -306,6 +309,7 @@ def test_reorg():
     main_manager.propagate_tx(reorg_block, fails_silently=False)
 
     simulator.run(60)
+    simulator.stop()
 
     actual_event_iterator = main_manager._event_manager.event_storage.iter_from_event(0)
     actual_events = list(actual_event_iterator)
