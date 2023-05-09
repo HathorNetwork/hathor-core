@@ -16,12 +16,12 @@ import datetime
 import sys
 import time
 from enum import Enum
-from typing import Any, Iterable, Iterator, List, NamedTuple, Optional, Tuple, Union
+from typing import Any, Generator, Iterable, Iterator, List, NamedTuple, Optional, Tuple, Union
 
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
 from twisted.internet import defer
-from twisted.internet.defer import Deferred
+from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.internet.task import LoopingCall
 from twisted.python.threadpool import ThreadPool
 
@@ -217,7 +217,8 @@ class HathorManager:
         self.lc_check_sync_state.clock = self.reactor
         self.lc_check_sync_state_interval = self.CHECK_SYNC_STATE_INTERVAL
 
-    def start(self) -> None:
+    @inlineCallbacks
+    def start(self) -> Generator[Any, Any, None]:
         """ A factory must be started only once. And it is usually automatically started.
         """
         if self.is_started:
@@ -258,8 +259,6 @@ class HathorManager:
 
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
-        self.connections.start()
-        self.pow_thread_pool.start()
 
         # Disable get transaction lock when initializing components
         self.tx_storage.disable_lock()
@@ -271,8 +270,11 @@ class HathorManager:
             # finish it. It's just to know if the full node has stopped a full initialization in the middle
             self.tx_storage.finish_full_verification()
         else:
-            self._initialize_components_new()
+            yield self._initialize_components_new()
         self.tx_storage.enable_lock()
+
+        self.connections.start()
+        self.pow_thread_pool.start()
 
         # Metric starts to capture data
         self.metrics.start()
@@ -553,7 +555,8 @@ class HathorManager:
         self.log.info('ready', vertex_count=cnt, tx_rate=tx_rate, total_load_time=total_load_time, height=h,
                       blocks=block_count, txs=tx_count, **environment_info)
 
-    def _initialize_components_new(self) -> None:
+    @inlineCallbacks
+    def _initialize_components_new(self) -> Generator[Any, Any, None]:
         """You are not supposed to run this method manually. You should run `doStart()` to initialize the
         manager.
 
@@ -605,7 +608,7 @@ class HathorManager:
         # TODO: move support for full-verification here, currently we rely on the original _initialize_components
         #       method for full-verification to work, if we implement it here we'll reduce a lot of duplicate and
         #       complex code
-        self.tx_storage.indexes._manually_initialize(self.tx_storage)
+        yield self.tx_storage.indexes._manually_initialize(self.tx_storage)
 
         # Verify if all checkpoints that exist in the database are correct
         try:

@@ -14,6 +14,7 @@
 
 import os
 from argparse import Namespace
+from functools import partial
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from autobahn.twisted.resource import WebSocketResource
@@ -21,9 +22,11 @@ from structlog import get_logger
 from twisted.web import server
 from twisted.web.resource import Resource
 
+from hathor.conf import HathorSettings
 from hathor.event.resources.event import EventResource
 from hathor.exception import BuilderError
 from hathor.prometheus import PrometheusMetricsExporter
+from hathor.pubsub import EventArguments, HathorEvents
 
 if TYPE_CHECKING:
     from hathor.event.websocket.factory import EventWebsocketFactory
@@ -45,9 +48,27 @@ class ResourcesBuilder:
     def build(self, args: Namespace) -> Optional[server.Site]:
         if args.prometheus:
             self.create_prometheus(args)
-        if args.status:
-            return self.create_resources(args)
-        return None
+        if not args.status:
+            return None
+
+        root = Resource()
+        self.build_before_loading(args, root)
+
+        self.manager.pubsub.subscribe(HathorEvents.LOAD_FINISHED, partial(self.on_load_finished, args, root))
+
+        settings = HathorSettings()
+
+        real_root = Resource()
+        real_root.putChild(settings.API_VERSION_PREFIX.encode('ascii'), root)
+
+        from hathor.profiler.site import SiteProfiler
+        status_server = SiteProfiler(real_root)
+
+        return status_server
+
+    def on_load_finished(self, args: Namespace, root: Resource, ev_key: HathorEvents, ev_args: EventArguments) -> None:
+        assert self._built_status is False
+        self.build_after_loading(args, root)
 
     def create_prometheus(self, args: Namespace) -> PrometheusMetricsExporter:
         kwargs: Dict[str, Any] = {
@@ -66,8 +87,9 @@ class ResourcesBuilder:
         self._built_prometheus = True
         return prometheus
 
-    def create_resources(self, args: Namespace) -> server.Site:
-        from hathor.conf import HathorSettings
+    def build_before_loading(self, args: Namespace, root: Resource) -> None:
+        """This method builds the resources that are safe to run while the full node is
+        loading."""
         from hathor.debug_resources import (
             DebugCrashResource,
             DebugLogResource,
@@ -76,6 +98,43 @@ class ResourcesBuilder:
             DebugRaiseResource,
             DebugRejectResource,
         )
+        from hathor.profiler import get_cpu_profiler
+        from hathor.profiler.resources import CPUProfilerResource, ProfilerResource
+        from hathor.version_resource import VersionResource
+
+        cpu = get_cpu_profiler()
+
+        resources = []
+
+        if args.enable_debug_api:
+            debug_resource = Resource()
+            root.putChild(b'_debug', debug_resource)
+            resources.extend([
+                (b'log', DebugLogResource(), debug_resource),
+                (b'raise', DebugRaiseResource(), debug_resource),
+                (b'reject', DebugRejectResource(), debug_resource),
+                (b'print', DebugPrintResource(), debug_resource),
+            ])
+
+        if args.enable_crash_api:
+            crash_resource = Resource()
+            root.putChild(b'_crash', crash_resource)
+            resources.extend([
+                (b'exit', DebugCrashResource(), crash_resource),
+                (b'mess_around', DebugMessAroundResource(self.manager), crash_resource),
+            ])
+
+        resources.extend([
+            (b'version', VersionResource(self.manager), root),
+            (b'profiler', ProfilerResource(self.manager), root),
+            (b'top', CPUProfilerResource(self.manager, cpu), root),
+        ])
+
+        for url_path, resource, parent in resources:
+            parent.putChild(url_path, resource)
+
+    def build_after_loading(self, args: Namespace, root: Resource) -> None:
+        """This method builds all other resources after the loading is complete."""
         from hathor.mining.ws import MiningWebsocketFactory
         from hathor.p2p.resources import (
             AddPeersResource,
@@ -85,8 +144,6 @@ class ResourcesBuilder:
             NetfilterRuleResource,
             StatusResource,
         )
-        from hathor.profiler import get_cpu_profiler
-        from hathor.profiler.resources import CPUProfilerResource, ProfilerResource
         from hathor.transaction.resources import (
             BlockAtHeightResource,
             CreateTxResource,
@@ -104,7 +161,6 @@ class ResourcesBuilder:
             UtxoSearchResource,
             ValidateAddressResource,
         )
-        from hathor.version_resource import VersionResource
         from hathor.wallet.resources import (
             AddressResource,
             BalanceResource,
@@ -130,11 +186,7 @@ class ResourcesBuilder:
         )
         from hathor.websocket import HathorAdminWebsocketFactory, WebsocketStatsResource
 
-        settings = HathorSettings()
-        cpu = get_cpu_profiler()
-
         # TODO get this from a file. How should we do with the factory?
-        root = Resource()
         wallet_resource = Resource()
         root.putChild(b'wallet', wallet_resource)
         thin_wallet_resource = Resource()
@@ -153,7 +205,6 @@ class ResourcesBuilder:
 
         resources = [
             (b'status', StatusResource(self.manager), root),
-            (b'version', VersionResource(self.manager), root),
             (b'create_tx', CreateTxResource(self.manager), root),
             (b'decode_tx', DecodeTxResource(self.manager), root),
             (b'validate_address', ValidateAddressResource(self.manager), root),
@@ -165,8 +216,6 @@ class ResourcesBuilder:
             (b'block_at_height', BlockAtHeightResource(self.manager), root),
             (b'transaction_acc_weight', TransactionAccWeightResource(self.manager), root),
             (b'dashboard_tx', DashboardTransactionResource(self.manager), root),
-            (b'profiler', ProfilerResource(self.manager), root),
-            (b'top', CPUProfilerResource(self.manager, cpu), root),
             (b'mempool', MempoolResource(self.manager), root),
             # mining
             (b'mining', MiningResource(self.manager), root),
@@ -194,23 +243,6 @@ class ResourcesBuilder:
         if args.utxo_index:
             resources.extend([
                 (b'utxo_search', UtxoSearchResource(self.manager), root),
-            ])
-
-        if args.enable_debug_api:
-            debug_resource = Resource()
-            root.putChild(b'_debug', debug_resource)
-            resources.extend([
-                (b'log', DebugLogResource(), debug_resource),
-                (b'raise', DebugRaiseResource(), debug_resource),
-                (b'reject', DebugRejectResource(), debug_resource),
-                (b'print', DebugPrintResource(), debug_resource),
-            ])
-        if args.enable_crash_api:
-            crash_resource = Resource()
-            root.putChild(b'_crash', crash_resource)
-            resources.extend([
-                (b'exit', DebugCrashResource(), crash_resource),
-                (b'mess_around', DebugMessAroundResource(self.manager), crash_resource),
             ])
 
         for url_path, resource, parent in resources:
@@ -257,15 +289,9 @@ class ResourcesBuilder:
         # Websocket stats resource
         root.putChild(b'websocket_stats', WebsocketStatsResource(ws_factory))
 
-        real_root = Resource()
-        real_root.putChild(settings.API_VERSION_PREFIX.encode('ascii'), root)
-
-        from hathor.profiler.site import SiteProfiler
-        status_server = SiteProfiler(real_root)
         self.log.info('with status', listen=args.status, with_wallet_api=with_wallet_api)
 
         # Set websocket factory in metrics
         self.manager.metrics.websocket_factory = ws_factory
 
         self._built_status = True
-        return status_server

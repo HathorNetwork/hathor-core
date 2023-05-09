@@ -141,10 +141,6 @@ class RunNode:
 
         self.tx_storage = self.manager.tx_storage
         self.wallet = self.manager.wallet
-        self.start_manager(args)
-
-        if args.stratum:
-            self.reactor.listenTCP(args.stratum, self.manager.stratum_factory)
 
         if register_resources:
             resources_builder = ResourcesBuilder(self.manager, builder.event_ws_factory)
@@ -171,6 +167,13 @@ class RunNode:
             rocksdb_storage=getattr(builder, 'rocksdb_storage', None),
             stratum_factory=self.manager.stratum_factory,
         )
+        if args.sysctl:
+            self.init_sysctl(args.sysctl)
+
+    def on_load_finished(self, args: Namespace) -> None:
+        # resources_builder.build_after_loading(args, root)
+        if args.stratum:
+            self.reactor.listenTCP(args.stratum, self.manager.stratum_factory)
 
     def start_sentry_if_possible(self, args: Namespace) -> None:
         """Start Sentry integration if possible."""
@@ -194,8 +197,8 @@ class RunNode:
         )
 
     def start_manager(self, args: Namespace) -> None:
-        self.start_sentry_if_possible(args)
-        self.manager.start()
+        self.manager.pubsub.subscribe(HathorEvents.LOAD_FINISHED, partial(self.on_load_finished, args))
+        self.reactor.callLater(0, self.manager.start)
 
     def register_signal_handlers(self, args: Namespace) -> None:
         """Register signal handlers."""
@@ -334,8 +337,9 @@ class RunNode:
 
         self.prepare(args)
         self.register_signal_handlers(args)
-        if args.sysctl:
-            self.init_sysctl(args.sysctl)
+        self.prepare(args)
+        self.start_sentry_if_possible(args)
+        self.start_manager(args)
 
     def init_sysctl(self, description: str) -> None:
         """Initialize sysctl and listen for connections.

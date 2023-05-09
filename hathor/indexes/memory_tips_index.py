@@ -19,9 +19,11 @@ from intervaltree import Interval, IntervalTree
 from structlog import get_logger
 
 from hathor.indexes.tips_index import ScopeType, TipsIndex
+from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction
 
 logger = get_logger()
+cpu = get_cpu_profiler()
 
 
 class MemoryTipsIndex(TipsIndex):
@@ -66,13 +68,16 @@ class MemoryTipsIndex(TipsIndex):
             return
         self.add_tx(tx)
 
+    @cpu.profiler('_add_interval')
     def _add_interval(self, interval: Interval) -> None:
         self.tree.add(interval)
         self.tx_last_interval[interval.data] = interval
 
+    @cpu.profiler('_del_interval')
     def _del_interval(self, interval: Interval) -> None:
         self.tree.remove(interval)
 
+    @cpu.profiler(key=lambda _, tx: 'add_tx!{}'.format(tx.hash.hex()))
     def add_tx(self, tx: BaseTransaction) -> bool:
         """ Add a new transaction to the index
 
@@ -107,6 +112,7 @@ class MemoryTipsIndex(TipsIndex):
         self._add_interval(interval)
         return True
 
+    @cpu.profiler(key=lambda _, tx: 'del_tx!{}'.format(tx.hash.hex()))
     def del_tx(self, tx: BaseTransaction, *, relax_assert: bool = False) -> None:
         """ Remove a transaction from the index.
         """

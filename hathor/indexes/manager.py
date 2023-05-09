@@ -13,11 +13,14 @@
 # limitations under the License.
 
 import operator
+import time
 from abc import ABC, abstractmethod
 from functools import reduce
-from typing import TYPE_CHECKING, Iterator, List, Optional
+from typing import TYPE_CHECKING, Any, Generator, Iterator, List, Optional
 
 from structlog import get_logger
+from twisted.internet.defer import inlineCallbacks
+from twisted.internet.task import deferLater
 
 from hathor.indexes.address_index import AddressIndex
 from hathor.indexes.base_index import BaseIndex
@@ -29,6 +32,7 @@ from hathor.indexes.timestamp_index import ScopeType as TimestampScopeType, Time
 from hathor.indexes.tips_index import ScopeType as TipsScopeType, TipsIndex
 from hathor.indexes.tokens_index import TokensIndex
 from hathor.indexes.utxo_index import UtxoIndex
+from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction
 from hathor.util import progress
 
@@ -37,8 +41,10 @@ if TYPE_CHECKING:  # pragma: no cover
 
     from hathor.pubsub import PubSubManager
     from hathor.transaction.storage import TransactionStorage
+    from hathor.util import Reactor
 
 logger = get_logger()
+cpu = get_cpu_profiler()
 
 MAX_CACHE_SIZE_DURING_LOAD = 1000
 
@@ -51,6 +57,8 @@ class IndexesManager(ABC):
     """
 
     log = get_logger()
+
+    reactor: 'Reactor'
 
     info: InfoIndex
     all_tips: TipsIndex
@@ -129,7 +137,8 @@ class IndexesManager(ABC):
         for index in self.iter_all_indexes():
             index.force_clear()
 
-    def _manually_initialize(self, tx_storage: 'TransactionStorage') -> None:
+    @inlineCallbacks
+    def _manually_initialize(self, tx_storage: 'TransactionStorage') -> Generator[Any, Any, None]:
         """ Initialize the indexes, checking the indexes that need initialization, and the optimal iterator to use.
         """
         from hathor.transaction.storage.transaction_storage import NULL_INDEX_LAST_STARTED_AT
@@ -168,7 +177,8 @@ class IndexesManager(ABC):
 
         self.log.debug('indexes pre-init')
         for index in self.iter_all_indexes():
-            index.init_start(self)
+            self.log.debug('index.init_start', index=index)
+            yield index.init_start(self.reactor, self)
 
         if indexes_to_init:
             overall_scope = reduce(operator.__or__, map(lambda i: i.get_scope(), indexes_to_init))
@@ -179,11 +189,24 @@ class IndexesManager(ABC):
             tx_iter = iter([])
             self.log.debug('indexes init')
 
+        t0 = time.time()
         for tx in tx_iter:
+            t1 = time.time()
+            if t1 - t0 > 0.1:
+                yield deferLater(self.reactor, 0, lambda: None)
+                t0 = t1
             # feed each transaction to the indexes that they are interested in
+            cpu.mark_begin('IndexManager.init_loop_step')
             for index in indexes_to_init:
                 if index.get_scope().matches(tx):
-                    index.init_loop_step(tx)
+                    db_name = index.get_db_name() or ''
+                    key = f'{index.__class__.__name__}.init_loop_step!{db_name}'
+                    try:
+                        cpu.mark_begin(key)
+                        index.init_loop_step(tx)
+                    finally:
+                        cpu.mark_end(key)
+            cpu.mark_end('IndexManager.init_loop_step')
 
         # Restore cache capacity.
         if isinstance(tx_storage, TransactionCacheStorage):
@@ -279,11 +302,13 @@ class IndexesManager(ABC):
 
 
 class MemoryIndexesManager(IndexesManager):
-    def __init__(self) -> None:
+    def __init__(self, reactor: 'Reactor') -> None:
         from hathor.indexes.memory_height_index import MemoryHeightIndex
         from hathor.indexes.memory_info_index import MemoryInfoIndex
         from hathor.indexes.memory_timestamp_index import MemoryTimestampIndex
         from hathor.indexes.memory_tips_index import MemoryTipsIndex
+
+        self.reactor = reactor
 
         self.info = MemoryInfoIndex()
         self.all_tips = MemoryTipsIndex(scope_type=TipsScopeType.ALL)
@@ -331,12 +356,13 @@ class MemoryIndexesManager(IndexesManager):
 
 
 class RocksDBIndexesManager(IndexesManager):
-    def __init__(self, db: 'rocksdb.DB') -> None:
+    def __init__(self, reactor: 'Reactor', db: 'rocksdb.DB') -> None:
         from hathor.indexes.partial_rocksdb_tips_index import PartialRocksDBTipsIndex
         from hathor.indexes.rocksdb_height_index import RocksDBHeightIndex
         from hathor.indexes.rocksdb_info_index import RocksDBInfoIndex
         from hathor.indexes.rocksdb_timestamp_index import RocksDBTimestampIndex
 
+        self.reactor = reactor
         self._db = db
 
         self.info = RocksDBInfoIndex(self._db)

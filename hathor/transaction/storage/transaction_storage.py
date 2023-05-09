@@ -17,11 +17,12 @@ from abc import ABC, abstractmethod, abstractproperty
 from collections import defaultdict, deque
 from contextlib import AbstractContextManager
 from threading import Lock
-from typing import Any, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple, Type, cast
+from typing import Any, Dict, Generator, Iterator, List, NamedTuple, Optional, Set, Tuple, Type, cast
 from weakref import WeakValueDictionary
 
 from intervaltree.interval import Interval
 from structlog import get_logger
+from twisted.internet.defer import inlineCallbacks
 
 from hathor.conf import HathorSettings
 from hathor.indexes import IndexesManager, MemoryIndexesManager
@@ -86,6 +87,9 @@ class TransactionStorage(ABC):
     _migrations: List[BaseMigration]
 
     def __init__(self) -> None:
+        from hathor.util import Reactor, reactor as twisted_reactor
+        self.reactor: Reactor = twisted_reactor
+
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
         self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
         self._tx_weakref_disabled: bool = False
@@ -750,7 +754,8 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def _manually_initialize(self) -> None:
+    @inlineCallbacks
+    def _manually_initialize(self) -> Generator[Any, Any, None]:
         # XXX: maybe refactor, this is actually part of the public interface
         """Caches must be initialized. This function should not be called, because
         usually the HathorManager will handle all this initialization.
@@ -1067,7 +1072,7 @@ class BaseTransactionStorage(TransactionStorage):
         raise NotImplementedError
 
     def _build_indexes_manager(self) -> IndexesManager:
-        return MemoryIndexesManager()
+        return MemoryIndexesManager(self.reactor)
 
     def reset_indexes(self) -> None:
         """Reset all indexes. This function should not be called unless you know what you are doing."""
@@ -1178,12 +1183,14 @@ class BaseTransactionStorage(TransactionStorage):
         txs = [self.get_transaction(tx_hash) for tx_hash in tx_hashes]
         return txs, has_more
 
-    def _manually_initialize(self) -> None:
-        self._manually_initialize_indexes()
+    @inlineCallbacks
+    def _manually_initialize(self) -> Generator[Any, Any, None]:
+        yield self._manually_initialize_indexes()
 
-    def _manually_initialize_indexes(self) -> None:
+    @inlineCallbacks
+    def _manually_initialize_indexes(self) -> Generator[Any, Any, None]:
         if self.indexes is not None:
-            self.indexes._manually_initialize(self)
+            yield self.indexes._manually_initialize(self)
 
     def _topological_sort_timestamp_index(self) -> Iterator[BaseTransaction]:
         assert self.indexes is not None

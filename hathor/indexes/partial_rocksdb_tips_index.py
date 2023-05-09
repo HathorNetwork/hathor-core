@@ -14,16 +14,18 @@
 
 import math
 import time
-from typing import TYPE_CHECKING, Dict, Iterator, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Generator, Iterator, Optional, Union
 
 import structlog
 from intervaltree import Interval, IntervalTree
 from structlog import get_logger
+from twisted.internet.defer import inlineCallbacks
+from twisted.internet.task import deferLater
 
 from hathor.indexes.memory_tips_index import MemoryTipsIndex
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
 from hathor.indexes.tips_index import ScopeType
-from hathor.util import LogDuration
+from hathor.util import LogDuration, Reactor
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -140,7 +142,8 @@ class PartialRocksDBTipsIndex(MemoryTipsIndex, RocksDBIndexUtils):
         assert len(tx_id) == 32
         return Interval(_from_db_value(begin), _from_db_value(end), tx_id)
 
-    def init_start(self, indexes_manager: 'IndexesManager') -> None:
+    @inlineCallbacks
+    def init_start(self, reactor: 'Reactor', indexes_manager: 'IndexesManager') -> Generator[Any, Any, None]:
         log = self.log.new(index=f'tips-{self._name}')
         total: Optional[int]
         if self is indexes_manager.all_tips:
@@ -153,6 +156,7 @@ class PartialRocksDBTipsIndex(MemoryTipsIndex, RocksDBIndexUtils):
             log.info('index not identified, skipping total count')
             total = None
         for iv in progress(self._iter_intervals_db(), log=log, total=total):
+            yield deferLater(reactor, 0, lambda: None)
             self.tree.add(iv)
             self.tx_last_interval[iv.data] = iv
 

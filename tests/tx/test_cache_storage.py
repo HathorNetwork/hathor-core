@@ -1,3 +1,5 @@
+from twisted.internet.defer import inlineCallbacks
+
 from hathor.daa import TestMode, _set_test_mode
 from hathor.transaction import Transaction, TransactionMetadata
 from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
@@ -10,12 +12,13 @@ CACHE_SIZE = 5
 class BaseCacheStorageTest(unittest.TestCase):
     __test__ = False
 
+    @inlineCallbacks
     def setUp(self):
         super().setUp()
 
         store = TransactionMemoryStorage(with_index=False)
         self.cache_storage = TransactionCacheStorage(store, self.clock, capacity=5)
-        self.cache_storage._manually_initialize()
+        yield self.cache_storage._manually_initialize()
         self.cache_storage.pre_init()
 
         self.genesis = self.cache_storage.get_all_genesis()
