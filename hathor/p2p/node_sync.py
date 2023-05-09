@@ -444,7 +444,9 @@ class NodeSyncTimestamp(SyncManager):
         step = 1
         while tips.merkle_tree != local_merkle_tree:
             if cur <= self.manager.tx_storage.first_timestamp:
-                raise Exception('We cannot go before genesis. Is it an attacker?!')
+                raise Exception(
+                    'We cannot go before genesis. Peer is probably running with wrong configuration or database.'
+                )
             prev_cur = cur
             assert self.manager.tx_storage.first_timestamp > 0
             cur = max(cur - step, self.manager.tx_storage.first_timestamp)
