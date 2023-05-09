@@ -98,7 +98,7 @@ class CliBuilder:
 
         tx_storage: TransactionStorage
         event_storage: EventStorage
-        rocksdb_storage: RocksDBStorage
+        self.rocksdb_storage: Optional[RocksDBStorage] = None
         self.event_ws_factory: Optional[EventWebsocketFactory] = None
 
         if args.memory_storage:
@@ -113,11 +113,11 @@ class CliBuilder:
             if args.rocksdb_storage:
                 self.log.warn('--rocksdb-storage is now implied, no need to specify it')
             cache_capacity = args.rocksdb_cache
-            rocksdb_storage = RocksDBStorage(path=args.data, cache_capacity=cache_capacity)
-            tx_storage = TransactionRocksDBStorage(rocksdb_storage,
+            self.rocksdb_storage = RocksDBStorage(path=args.data, cache_capacity=cache_capacity)
+            tx_storage = TransactionRocksDBStorage(self.rocksdb_storage,
                                                    with_index=(not args.cache),
                                                    use_memory_indexes=args.memory_indexes)
-            event_storage = EventRocksDBStorage(rocksdb_storage)
+            event_storage = EventRocksDBStorage(self.rocksdb_storage)
 
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
         if args.cache:

@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, NamedTuple, Optional, Set, Union
 
 from structlog import get_logger
 from twisted.internet import endpoints
@@ -48,18 +47,6 @@ settings = HathorSettings()
 
 # The timeout in seconds for the whitelist GET request
 WHITELIST_REQUEST_TIMEOUT = 45
-
-
-def parse_text(text: str) -> List[str]:
-    ret: List[str] = []
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        if line.startswith('#'):
-            continue
-        ret.append(line)
-    return ret
 
 
 class _SyncRotateInfo(NamedTuple):
@@ -634,108 +621,13 @@ class ConnectionsManager:
     def sync_update(self) -> None:
         """Update the subset of connections that running the sync algorithm."""
         try:
-            self._sync_update_cmds()
-        except Exception:
-            self.log.error('_sync_update_cmds failed', exc_info=True)
-
-        try:
             self._sync_rotate_if_needed()
         except Exception:
             self.log.error('_sync_rotate_if_needed failed', exc_info=True)
 
-    def _sync_update_cmds(self) -> None:
-        """Run sync_update commands.
-        """
-        self._sync_update_cmd_always_enable_sync()
-        self._sync_update_cmd_p2p_params()
-
-    def _sync_update_cmd_p2p_params(self) -> None:
-        """`p2p_params.txt` should contain a list of parameters and their values.
-
-        Supported parameters:
-        - p2p.max_enabled_sync [quantity:int]
-        - p2p.rate_limiter.global.send_tips [max_hits:int] [window_seconds:float]
-        """
-        cmd_path = self.manager.get_cmd_path()
-        if cmd_path is None:
-            return
-
-        p2p_params_path = os.path.join(cmd_path, 'p2p_params.txt')
-        if not os.path.isfile(p2p_params_path):
-            return
-
-        params = []
-        with open(p2p_params_path, 'r') as fp:
-            for line in parse_text(fp.read()):
-                parts = [x.strip() for x in line.split(' ')]
-                parts = [x for x in parts if x.strip()]
-                if len(parts) == 0:
-                    continue
-                params.append((parts[0], parts[1:]))
-
-        self._execute_cmds(params)
-
-    def _execute_cmds(self, params: List[Tuple[str, List[str]]]) -> None:
-        key_processors = {
-            'p2p.max_enabled_sync': self._cmd_p2p_max_enabled_sync,
-            'p2p.rate_limiter.global.send_tips': self._cmd_rate_limiter_global_send_tips,
-        }
-        for key, args in params:
-            if key not in key_processors:
-                self.log.warn('execution failed: unknown key', key=key, args=args)
-                continue
-            fn = key_processors[key]
-            fn(key, args)
-
-    def _cmd_p2p_max_enabled_sync(self, key: str, args: List[str]) -> None:
-        if len(args) != 1:
-            self.log.warn('execution failed: invalid args', key=key, args=args)
-            return
-        try:
-            value = int(args[0])
-        except ValueError:
-            self.log.warn('execution failed: invalid args', key=key, args=args)
-            return
-        if value == self.MAX_ENABLED_SYNC:
-            return
-        self.log.warn(f'{key} changed', old=self.MAX_ENABLED_SYNC, new=value)
-        self.MAX_ENABLED_SYNC = value
-        self._sync_rotate_if_needed(force=True)
-
-    def _cmd_rate_limiter_global_send_tips(self, key: str, args: List[str]) -> None:
-        if len(args) != 2:
-            self.log.warn('execution failed: invalid args', key=key, args=args)
-            return
-        try:
-            max_hits = int(args[0])
-            window_seconds = float(args[1])
-        except ValueError:
-            self.log.warn('execution failed: invalid args', key=key, args=args)
-            return
-        limit = self.rate_limiter.get_limit(self.GlobalRateLimiter.SEND_TIPS)
-        if (max_hits, window_seconds) == limit:
-            return
-        self.log.warn(f'{key} changed', old=limit, new=(max_hits, window_seconds))
-        if window_seconds == 0:
-            self.disable_rate_limiter()
-        else:
-            self.enable_rate_limiter(max_hits, window_seconds)
-
-    def _sync_update_cmd_always_enable_sync(self) -> None:
-        """`always_enable_sync.txt` should contain a list of peer ids that will always have sync enabled.
-        It ignores lines starting with '#'.
-        """
-        cmd_path = self.manager.get_cmd_path()
-        if cmd_path is None:
-            return
-
-        always_sync_path = os.path.join(cmd_path, 'always_enable_sync.txt')
-        if not os.path.isfile(always_sync_path):
-            return
-
-        new: Set[str]
-        with open(always_sync_path, 'r') as fp:
-            new = set(parse_text(fp.read()))
+    def set_always_enable_sync(self, values: List[str]) -> None:
+        """Set a new list of peers to always enable sync. This operation completely replaces the previous list."""
+        new: Set[str] = set(values)
 
         old = self.always_enable_sync
         if new == old:
@@ -757,20 +649,6 @@ class ConnectionsManager:
             self.connected_peers[peer_id].disable_sync()
 
         self.always_enable_sync = new
-
-    def _check_force_sync_rotate(self) -> bool:
-        """Check if sync rotate should forcefully run now."""
-        cmd_path = self.manager.get_cmd_path()
-        if cmd_path is None:
-            return False
-
-        force_rotate_path = os.path.join(cmd_path, 'force_sync_rotate')
-        if not os.path.isfile(force_rotate_path):
-            return False
-
-        self.log.info('force sync rotate detected')
-        os.remove(force_rotate_path)
-        return True
 
     def _calculate_sync_rotate(self) -> _SyncRotateInfo:
         """Calculate new sync rotation."""
@@ -799,9 +677,6 @@ class ConnectionsManager:
 
     def _sync_rotate_if_needed(self, *, force: bool = False) -> None:
         """Rotate peers who we are syncing from."""
-        if not force:
-            force = self._check_force_sync_rotate()
-
         now = self.reactor.seconds()
         dt = now - self._last_sync_rotate
         if not force and dt < self.SYNC_UPDATE_INTERVAL:
