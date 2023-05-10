@@ -95,7 +95,7 @@ class HathorClient(IHathorClient):
 
     USER_AGENT = 'hathor-merged-mining'
 
-    def __init__(self, server_url, api_version=REQUIRED_HATHOR_API_VERSION):
+    def __init__(self, server_url: str, api_version: str = REQUIRED_HATHOR_API_VERSION) -> None:
         server_url = server_url.rstrip('/') + '/'
         if not (server_url.startswith('http://') or server_url.startswith('https://')):
             server_url = 'http://' + server_url

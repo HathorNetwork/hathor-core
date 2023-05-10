@@ -12,10 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Set, Union
+from typing import TYPE_CHECKING, Set, Union
 
 from autobahn.twisted.websocket import WebSocketServerProtocol
 from structlog import get_logger
+
+if TYPE_CHECKING:
+    from hathor.websocket.factory import HathorAdminWebsocketFactory
 
 logger = get_logger()
 
@@ -27,7 +30,7 @@ class HathorAdminWebsocketProtocol(WebSocketServerProtocol):
         can send the data update to the clients
     """
 
-    def __init__(self, factory):
+    def __init__(self, factory: 'HathorAdminWebsocketFactory') -> None:
         self.log = logger.new()
         self.factory = factory
         self.subscribed_to: Set[str] = set()

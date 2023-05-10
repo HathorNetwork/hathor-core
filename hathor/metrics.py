@@ -119,7 +119,7 @@ class Metrics:
     # Peers known
     known_peers: int = 0
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.log = logger.new()
 
         # Stores caculated tx weights saved in tx storage

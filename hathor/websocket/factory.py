@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections import defaultdict, deque
-from typing import Any, DefaultDict, Deque, Dict, Optional, Set
+from typing import Any, DefaultDict, Deque, Dict, Optional, Set, Union
 
 from autobahn.exception import Disconnected
 from autobahn.twisted.websocket import WebSocketServerFactory
@@ -24,8 +24,8 @@ from hathor.conf import HathorSettings
 from hathor.indexes import AddressIndex
 from hathor.metrics import Metrics
 from hathor.p2p.rate_limiter import RateLimiter
-from hathor.pubsub import HathorEvents
-from hathor.util import json_dumpb, json_loadb, reactor
+from hathor.pubsub import EventArguments, HathorEvents
+from hathor.util import json_dumpb, json_loadb, json_loads, reactor
 from hathor.websocket.protocol import HathorAdminWebsocketProtocol
 
 settings = HathorSettings()
@@ -171,7 +171,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         data['type'] = key.value
         self.send_or_enqueue(data)
 
-    def serialize_message_data(self, event, args):
+    def serialize_message_data(self, event: HathorEvents, args: EventArguments) -> Dict[str, Any]:
         """ Receives the event and the args from the pubsub
             and serializes the data so it can be passed in the websocket
         """
@@ -295,9 +295,12 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
                                   data_type=data_type)
                 break
 
-    def handle_message(self, connection: HathorAdminWebsocketProtocol, data: bytes) -> None:
+    def handle_message(self, connection: HathorAdminWebsocketProtocol, data: Union[bytes, str]) -> None:
         """ General message handler, detects type and deletages to specific handler."""
-        message = json_loadb(data)
+        if isinstance(data, bytes):
+            message = json_loadb(data)
+        else:
+            message = json_loads(data)
         # we only handle ping messages for now
         if message['type'] == 'ping':
             self._handle_ping(connection, message)

@@ -30,6 +30,7 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.event.event_manager import EventManager
+from hathor.event.storage import EventStorage
 from hathor.exception import (
     DoubleSpendingError,
     HathorError,
@@ -49,7 +50,7 @@ from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transact
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.util import EnvironmentInfo, LogDuration, Random, Reactor, not_none
+from hathor.util import EnvironmentInfo, LogDuration, Random, Reactor, calculate_min_significant_weight, not_none
 from hathor.wallet import BaseWallet
 
 settings = HathorSettings()
@@ -87,18 +88,21 @@ class HathorManager:
                  consensus_algorithm: ConsensusAlgorithm,
                  peer_id: PeerId,
                  tx_storage: TransactionStorage,
+                 event_storage: EventStorage,
                  network: str,
                  hostname: Optional[str] = None,
                  wallet: Optional[BaseWallet] = None,
                  event_manager: Optional[EventManager] = None,
                  stratum_port: Optional[int] = None,
                  ssl: bool = True,
-                 enable_sync_v1: bool = True,
+                 enable_sync_v1: bool = False,
+                 enable_sync_v1_1: bool = True,
                  enable_sync_v2: bool = False,
                  capabilities: Optional[List[str]] = None,
                  checkpoints: Optional[List[Checkpoint]] = None,
                  rng: Optional[Random] = None,
-                 environment_info: Optional[EnvironmentInfo] = None):
+                 environment_info: Optional[EnvironmentInfo] = None,
+                 full_verification: bool = False):
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node.
@@ -118,11 +122,13 @@ class HathorManager:
         from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
         from hathor.p2p.manager import ConnectionsManager
 
-        if not (enable_sync_v1 or enable_sync_v2):
+        if not (enable_sync_v1 or enable_sync_v1_1 or enable_sync_v2):
             raise TypeError(f'{type(self).__name__}() at least one sync version is required')
 
         self._enable_sync_v1 = enable_sync_v1
         self._enable_sync_v2 = enable_sync_v2
+
+        self._cmd_path: Optional[str] = None
 
         self.log = logger.new()
 
@@ -167,6 +173,9 @@ class HathorManager:
 
         self._event_manager = event_manager
 
+        if self._event_manager:
+            assert self._event_manager.event_storage == event_storage
+
         if enable_sync_v2:
             assert self.tx_storage.indexes is not None
             self.log.debug('enable sync-v2 indexes')
@@ -182,7 +191,8 @@ class HathorManager:
         self.client_factory = HathorClientFactory(self.network, self.my_peer, node=self, use_ssl=ssl)
         self.connections = ConnectionsManager(self.reactor, self.my_peer, self.server_factory, self.client_factory,
                                               self.pubsub, self, ssl, whitelist_only=False, rng=self.rng,
-                                              enable_sync_v1=enable_sync_v1, enable_sync_v2=enable_sync_v2)
+                                              enable_sync_v1=enable_sync_v1, enable_sync_v2=enable_sync_v2,
+                                              enable_sync_v1_1=enable_sync_v1_1)
 
         self.metrics = Metrics(
             pubsub=self.pubsub,
@@ -216,7 +226,7 @@ class HathorManager:
 
         # Full verification execute all validations for transactions and blocks when initializing the node
         # Can be activated on the command line with --full-verification
-        self._full_verification = False
+        self._full_verification = full_verification
 
         # Activated with --x-enable-event-queue flag
         # It activates the event mechanism inside full node
@@ -845,8 +855,12 @@ class HathorManager:
         else:
             timestamp_max = timestamp_abs_max
         timestamp = min(max(current_timestamp, timestamp_min), timestamp_max)
-        weight = daa.calculate_next_weight(parent_block, timestamp)
         parent_block_metadata = parent_block.get_metadata()
+        # this is the min weight to cause an increase of twice the WEIGHT_TOL, we make sure to generate a template with
+        # at least this weight (note that the user of the API can set its own weight, the block sumit API will also
+        # protect agains a weight that is too small but using WEIGHT_TOL instead of 2*WEIGHT_TOL)
+        min_significant_weight = calculate_min_significant_weight(parent_block_metadata.score, 2 * settings.WEIGHT_TOL)
+        weight = max(daa.calculate_next_weight(parent_block, timestamp), min_significant_weight)
         height = parent_block_metadata.height + 1
         parents = [parent_block.hash] + parent_txs.must_include
         parents_any = parent_txs.can_include
@@ -906,6 +920,12 @@ class HathorManager:
         if parent_hash not in tips:
             self.log.warn('submit_block(): Ignoring block: parent not a tip', blk=blk.hash_hex)
             return False
+        parent_block = self.tx_storage.get_transaction(parent_hash)
+        parent_block_metadata = parent_block.get_metadata()
+        # this is the smallest weight that won't cause the score to increase, anything equal or smaller is bad
+        min_insignificant_weight = calculate_min_significant_weight(parent_block_metadata.score, settings.WEIGHT_TOL)
+        if blk.weight <= min_insignificant_weight:
+            self.log.warn('submit_block(): insignificant weight? accepted anyway', blk=blk.hash_hex, weight=blk.weight)
         return self.propagate_tx(blk, fails_silently=fails_silently)
 
     def push_tx(self, tx: Transaction, allow_non_standard_script: bool = False,
@@ -1206,6 +1226,14 @@ class HathorManager:
                           vertex_count=vertex_count, **self.environment_info.as_dict())
 
             self.lc_check_sync_state.stop()
+
+    def set_cmd_path(self, path: str) -> None:
+        """Set the cmd path, where sysadmins can place files to communicate with the full node."""
+        self._cmd_path = path
+
+    def get_cmd_path(self) -> Optional[str]:
+        """Return the cmd path. If no cmd path is set, returns None."""
+        return self._cmd_path
 
 
 class ParentTxs(NamedTuple):

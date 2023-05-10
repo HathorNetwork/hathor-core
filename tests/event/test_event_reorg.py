@@ -1,13 +1,11 @@
 from unittest.mock import Mock
 
 from hathor.conf import HathorSettings
-from hathor.event import EventManager
 from hathor.event.model.event_type import EventType
 from hathor.event.storage import EventMemoryStorage
 from hathor.event.websocket import EventWebsocketFactory
-from hathor.pubsub import PubSubManager
 from tests import unittest
-from tests.utils import add_new_blocks, get_genesis_key
+from tests.utils import add_new_blocks, get_genesis_key, zip_chunkify
 
 settings = HathorSettings()
 
@@ -18,20 +16,12 @@ class BaseEventReorgTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.network = 'testnet'
-        self.event_ws_factory = Mock(spec_set=EventWebsocketFactory)
         self.event_storage = EventMemoryStorage()
-        pubsub = PubSubManager(self.clock)
-        self.event_manager = EventManager(
-            event_storage=self.event_storage,
-            event_ws_factory=self.event_ws_factory,
-            pubsub=pubsub,
-            reactor=self.clock
-        )
         self.manager = self.create_peer(
             self.network,
-            event_manager=self.event_manager,
-            pubsub=pubsub,
-            full_verification=False
+            event_ws_factory=Mock(spec_set=EventWebsocketFactory),
+            full_verification=False,
+            event_storage=self.event_storage
         )
 
         # read genesis keys
@@ -57,10 +47,7 @@ class BaseEventReorgTest(unittest.TestCase):
         self.run_to_completion()
 
         # check events
-        event_count = self.event_storage.get_last_event().id + 1
-        events = []
-        for i in range(event_count):
-            events.append(self.event_storage.get_event(i))
+        actual_events = list(self.event_storage.iter_from_event(0))
 
         # events are separated into portions that are sorted (indicated by using lists) and portions that are unsorted
         # (indicated by using a custom class), the unsorted parts mean that the given events must be present, but not
@@ -116,23 +103,16 @@ class BaseEventReorgTest(unittest.TestCase):
             ],
         ]
 
-        def zipchunkify(iterable, groups):
-            it = iter(iterable)
-            for group in groups:
-                list_to_yield = []
-                for _ in range(len(group)):
-                    list_to_yield.append(next(it))
-                yield list_to_yield, group
-
-        self.assertEqual(len(events), sum(map(len, expected_events_grouped)))
-
-        for actual_events, expected_events in zipchunkify(events, expected_events_grouped):
+        for actual_events, expected_events in zip_chunkify(actual_events, expected_events_grouped):
             if isinstance(expected_events, unsorted):
                 actual_events.sort(key=lambda i: i.data.hash)
                 expected_events.sort(key=lambda i: i[1].get('hash', ''))
+
             for actual_event, expected_event in zip(actual_events, expected_events):
                 expected_event_type, expected_partial_data = expected_event
+
                 self.assertEqual(EventType(actual_event.type), expected_event_type)
+
                 for expected_data_key, expected_data_value in expected_partial_data.items():
                     self.assertEqual(actual_event.data.dict()[expected_data_key], expected_data_value)
 

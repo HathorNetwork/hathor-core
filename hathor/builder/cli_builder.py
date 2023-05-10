@@ -97,16 +97,15 @@ class CliBuilder:
         )
 
         tx_storage: TransactionStorage
+        event_storage: EventStorage
         rocksdb_storage: RocksDBStorage
-        self.event_storage: Optional[EventStorage] = None
         self.event_ws_factory: Optional[EventWebsocketFactory] = None
 
         if args.memory_storage:
             self.check_or_raise(not args.data, '--data should not be used with --memory-storage')
             # if using MemoryStorage, no need to have cache
             tx_storage = TransactionMemoryStorage()
-            if args.x_enable_event_queue:
-                self.event_storage = EventMemoryStorage()
+            event_storage = EventMemoryStorage()
             self.check_or_raise(not args.x_rocksdb_indexes, 'RocksDB indexes require RocksDB data')
             self.log.info('with storage', storage_class=type(tx_storage).__name__)
         else:
@@ -118,8 +117,7 @@ class CliBuilder:
             tx_storage = TransactionRocksDBStorage(rocksdb_storage,
                                                    with_index=(not args.cache),
                                                    use_memory_indexes=args.memory_indexes)
-            if args.x_enable_event_queue:
-                self.event_storage = EventRocksDBStorage(rocksdb_storage)
+            event_storage = EventRocksDBStorage(rocksdb_storage)
 
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
         if args.cache:
@@ -140,17 +138,17 @@ class CliBuilder:
 
         hostname = self.get_hostname(args)
         network = settings.NETWORK_NAME
-        enable_sync_v1 = not args.x_sync_v2_only
+        enable_sync_v1 = args.x_enable_legacy_sync_v1_0
+        enable_sync_v1_1 = not args.x_sync_v2_only
         enable_sync_v2 = args.x_sync_v2_only or args.x_sync_bridge
 
         pubsub = PubSubManager(reactor)
 
         event_manager: Optional[EventManager] = None
         if args.x_enable_event_queue:
-            assert self.event_storage is not None, 'cannot create EventManager without EventStorage'
-            self.event_ws_factory = EventWebsocketFactory(reactor, self.event_storage)
+            self.event_ws_factory = EventWebsocketFactory(reactor, event_storage)
             event_manager = EventManager(
-                event_storage=self.event_storage,
+                event_storage=event_storage,
                 event_ws_factory=self.event_ws_factory,
                 pubsub=pubsub,
                 reactor=reactor,
@@ -168,6 +166,12 @@ class CliBuilder:
             self.log.debug('enable utxo index')
             tx_storage.indexes.enable_utxo_index()
 
+        full_verification = False
+        if args.x_full_verification:
+            self.check_or_raise(not args.x_enable_event_queue, '--x-full-verification cannot be used with '
+                                                               '--x-enable-event-queue')
+            full_verification = True
+
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
         consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub=pubsub)
 
@@ -178,16 +182,22 @@ class CliBuilder:
             network=network,
             hostname=hostname,
             tx_storage=tx_storage,
+            event_storage=event_storage,
             event_manager=event_manager,
             wallet=self.wallet,
             stratum_port=args.stratum,
             ssl=True,
             checkpoints=settings.CHECKPOINTS,
             enable_sync_v1=enable_sync_v1,
+            enable_sync_v1_1=enable_sync_v1_1,
             enable_sync_v2=enable_sync_v2,
             consensus_algorithm=consensus_algorithm,
             environment_info=get_environment_info(args=str(args), peer_id=peer_id.id),
+            full_verification=full_verification
         )
+
+        if args.data:
+            self.manager.set_cmd_path(args.data)
 
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
@@ -213,10 +223,6 @@ class CliBuilder:
             if self.wallet:
                 self.wallet.test_mode = True
 
-        if args.x_full_verification:
-            self.check_or_raise(not args.x_enable_event_queue, '--x-full-verification cannot be used with '
-                                                               '--x-enable-event-queue')
-            self.manager._full_verification = True
         if args.x_fast_init_beta:
             self.log.warn('--x-fast-init-beta is now the default, no need to specify it')
         if args.x_rocksdb_indexes:

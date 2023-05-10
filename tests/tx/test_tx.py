@@ -2,6 +2,7 @@ import base64
 import hashlib
 from math import isinf, isnan
 
+from hathor import daa
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_from_public_key, get_private_key_from_bytes
 from hathor.daa import TestMode, _set_test_mode
@@ -540,6 +541,18 @@ class BaseTransactionTest(unittest.TestCase):
 
         tx.resolve()
         tx.verify()
+
+    def test_tx_weight_too_high(self):
+        parents = [tx.hash for tx in self.genesis_txs]
+        outputs = [TxOutput(1, b'')]
+        inputs = [TxInput(b'', 0, b'')]
+        tx = Transaction(weight=1, inputs=inputs, outputs=outputs, parents=parents,
+                         storage=self.tx_storage, timestamp=self.last_block.timestamp + 1)
+        tx.weight = daa.minimum_tx_weight(tx)
+        tx.weight += settings.MAX_TX_WEIGHT_DIFF + 0.1
+        tx.update_hash()
+        with self.assertRaises(WeightError):
+            tx.verify_weight()
 
     def test_weight_nan(self):
         # this should succeed

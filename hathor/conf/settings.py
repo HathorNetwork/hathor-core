@@ -204,6 +204,10 @@ class HathorSettings(NamedTuple):
     #     print('w1 is greater than or equal to w2')
     WEIGHT_TOL: float = 1e-10
 
+    # Maximum difference between the weight and the min_weight.
+    MAX_TX_WEIGHT_DIFF: float = 4.0
+    MAX_TX_WEIGHT_DIFF_ACTIVATION: float = 32.0
+
     # Maximum number of txs or blocks (each, not combined) to show on the dashboard
     MAX_DASHBOARD_COUNT: int = 15
 
@@ -361,8 +365,17 @@ class HathorSettings(NamedTuple):
     # Identifier used in metadata's voided_by.
     SOFT_VOIDED_ID: bytes = b'tx-non-grata'
 
+    # Identifier used in metadata's voided_by when an unexpected exception occurs at consensus.
+    CONSENSUS_FAIL_ID: bytes = b'consensus-fail'
+
     ENABLE_EVENT_QUEUE_FEATURE: bool = False
 
     EVENT_API_DEFAULT_BATCH_SIZE: int = 100
 
     EVENT_API_MAX_BATCH_SIZE: int = 1000
+
+    # Maximum number of sync running simultaneously.
+    MAX_ENABLED_SYNC: int = 16
+
+    # Time to update the peers that are running sync.
+    SYNC_UPDATE_INTERVAL: int = 10 * 60  # seconds

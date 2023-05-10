@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict, Iterable, NamedTuple, Optional, Set, Union
+import os
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple, Union
 
 from structlog import get_logger
 from twisted.internet import endpoints
@@ -27,6 +28,7 @@ from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import PeerStorage
 from hathor.p2p.protocol import HathorProtocol
+from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states.ready import ReadyState
 from hathor.p2p.sync_factory import SyncManagerFactory
 from hathor.p2p.sync_version import SyncVersion
@@ -48,6 +50,26 @@ settings = HathorSettings()
 WHITELIST_REQUEST_TIMEOUT = 45
 
 
+def parse_text(text: str) -> List[str]:
+    ret: List[str] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith('#'):
+            continue
+        ret.append(line)
+    return ret
+
+
+class _SyncRotateInfo(NamedTuple):
+    candidates: List[str]
+    old: Set[str]
+    new: Set[str]
+    to_disable: Set[str]
+    to_enable: Set[str]
+
+
 class _ConnectingPeer(NamedTuple):
     connection_string: str
     endpoint_deferred: Deferred
@@ -63,6 +85,11 @@ class PeerConnectionsMetrics(NamedTuple):
 class ConnectionsManager:
     """ It manages all peer-to-peer connections and events related to control messages.
     """
+    MAX_ENABLED_SYNC = settings.MAX_ENABLED_SYNC
+    SYNC_UPDATE_INTERVAL = settings.SYNC_UPDATE_INTERVAL
+
+    class GlobalRateLimiter:
+        SEND_TIPS = 'NodeSyncTimestamp.send_tips'
 
     connections: Set[HathorProtocol]
     connected_peers: Dict[str, HathorProtocol]
@@ -71,12 +98,16 @@ class ConnectionsManager:
     whitelist_only: bool
     _sync_factories: Dict[SyncVersion, SyncManagerFactory]
 
+    rate_limiter: RateLimiter
+
     def __init__(self, reactor: Reactor, my_peer: PeerId, server_factory: 'HathorServerFactory',
                  client_factory: 'HathorClientFactory', pubsub: PubSubManager, manager: 'HathorManager',
-                 ssl: bool, rng: Random, whitelist_only: bool, enable_sync_v1: bool, enable_sync_v2: bool) -> None:
+                 ssl: bool, rng: Random, whitelist_only: bool, enable_sync_v1: bool, enable_sync_v2: bool,
+                 enable_sync_v1_1: bool) -> None:
+        from hathor.p2p.sync_v1_1_factory import SyncV11Factory
         from hathor.p2p.sync_v1_factory import SyncV1Factory
 
-        if not (enable_sync_v1 or enable_sync_v2):
+        if not (enable_sync_v1 or enable_sync_v1_1 or enable_sync_v2):
             raise TypeError(f'{type(self).__name__}() at least one sync version is required')
 
         self.log = logger.new()
@@ -97,6 +128,10 @@ class ConnectionsManager:
         self.client_factory.connections = self
 
         self.max_connections: int = settings.PEER_MAX_CONNECTIONS
+
+        # Global rate limiter for all connections.
+        self.rate_limiter = RateLimiter(self.reactor)
+        self.enable_rate_limiter()
 
         # All connections.
         self.connections = set()
@@ -121,6 +156,17 @@ class ConnectionsManager:
         self.lc_reconnect = LoopingCall(self.reconnect_to_all)
         self.lc_reconnect.clock = self.reactor
 
+        # A timer to update sync of all peers.
+        self.lc_sync_update = LoopingCall(self.sync_update)
+        self.lc_sync_update.clock = self.reactor
+        self.lc_sync_update_interval: float = 5  # seconds
+
+        # Peers that always have sync enabled.
+        self.always_enable_sync: Set[str] = set()
+
+        # Timestamp of the last time sync was updated.
+        self._last_sync_rotate: float = 0.
+
         # A timer to try to reconnect to the disconnect known peers.
         if settings.ENABLE_PEER_WHITELIST:
             self.wl_reconnect = LoopingCall(self.update_whitelist)
@@ -138,11 +184,26 @@ class ConnectionsManager:
         self._sync_factories = {}
         if enable_sync_v1:
             self._sync_factories[SyncVersion.V1] = SyncV1Factory(self)
+        if enable_sync_v1_1:
+            self._sync_factories[SyncVersion.V1_1] = SyncV11Factory(self)
         if enable_sync_v2:
             self._sync_factories[SyncVersion.V2] = SyncV1Factory(self)
 
+    def disable_rate_limiter(self) -> None:
+        """Disable global rate limiter."""
+        self.rate_limiter.unset_limit(self.GlobalRateLimiter.SEND_TIPS)
+
+    def enable_rate_limiter(self, max_hits: int = 16, window_seconds: float = 1) -> None:
+        """Enable global rate limiter. This method can be called to change the current rate limit."""
+        self.rate_limiter.set_limit(
+            self.GlobalRateLimiter.SEND_TIPS,
+            max_hits,
+            window_seconds
+        )
+
     def start(self) -> None:
         self.lc_reconnect.start(5, now=False)
+        self.lc_sync_update.start(self.lc_sync_update_interval, now=False)
         if settings.ENABLE_PEER_WHITELIST:
             self._start_whitelist_reconnect()
 
@@ -164,6 +225,9 @@ class ConnectionsManager:
     def stop(self) -> None:
         if self.lc_reconnect.running:
             self.lc_reconnect.stop()
+
+        if self.lc_sync_update.running:
+            self.lc_sync_update.stop()
 
     def _get_peers_count(self) -> PeerConnectionsMetrics:
         """Get a dict containing the count of peers in each state"""
@@ -279,6 +343,12 @@ class ConnectionsManager:
 
         # In case it was a retry, we must reset the data only here, after it gets ready
         protocol.peer.reset_retry_timestamp()
+
+        if len(self.connected_peers) <= self.MAX_ENABLED_SYNC:
+            protocol.enable_sync()
+
+        if protocol.peer.id in self.always_enable_sync:
+            protocol.enable_sync()
 
         # Notify other peers about this new peer connection.
         for conn in self.iter_ready_connections():
@@ -560,3 +630,197 @@ class ConnectionsManager:
         protocol = self.connected_peers.get(peer_id)
         if protocol:
             self.drop_connection(protocol)
+
+    def sync_update(self) -> None:
+        """Update the subset of connections that running the sync algorithm."""
+        try:
+            self._sync_update_cmds()
+        except Exception:
+            self.log.error('_sync_update_cmds failed', exc_info=True)
+
+        try:
+            self._sync_rotate_if_needed()
+        except Exception:
+            self.log.error('_sync_rotate_if_needed failed', exc_info=True)
+
+    def _sync_update_cmds(self) -> None:
+        """Run sync_update commands.
+        """
+        self._sync_update_cmd_always_enable_sync()
+        self._sync_update_cmd_p2p_params()
+
+    def _sync_update_cmd_p2p_params(self) -> None:
+        """`p2p_params.txt` should contain a list of parameters and their values.
+
+        Supported parameters:
+        - p2p.max_enabled_sync [quantity:int]
+        - p2p.rate_limiter.global.send_tips [max_hits:int] [window_seconds:float]
+        """
+        cmd_path = self.manager.get_cmd_path()
+        if cmd_path is None:
+            return
+
+        p2p_params_path = os.path.join(cmd_path, 'p2p_params.txt')
+        if not os.path.isfile(p2p_params_path):
+            return
+
+        params = []
+        with open(p2p_params_path, 'r') as fp:
+            for line in parse_text(fp.read()):
+                parts = [x.strip() for x in line.split(' ')]
+                parts = [x for x in parts if x.strip()]
+                if len(parts) == 0:
+                    continue
+                params.append((parts[0], parts[1:]))
+
+        self._execute_cmds(params)
+
+    def _execute_cmds(self, params: List[Tuple[str, List[str]]]) -> None:
+        key_processors = {
+            'p2p.max_enabled_sync': self._cmd_p2p_max_enabled_sync,
+            'p2p.rate_limiter.global.send_tips': self._cmd_rate_limiter_global_send_tips,
+        }
+        for key, args in params:
+            if key not in key_processors:
+                self.log.warn('execution failed: unknown key', key=key, args=args)
+                continue
+            fn = key_processors[key]
+            fn(key, args)
+
+    def _cmd_p2p_max_enabled_sync(self, key: str, args: List[str]) -> None:
+        if len(args) != 1:
+            self.log.warn('execution failed: invalid args', key=key, args=args)
+            return
+        try:
+            value = int(args[0])
+        except ValueError:
+            self.log.warn('execution failed: invalid args', key=key, args=args)
+            return
+        if value == self.MAX_ENABLED_SYNC:
+            return
+        self.log.warn(f'{key} changed', old=self.MAX_ENABLED_SYNC, new=value)
+        self.MAX_ENABLED_SYNC = value
+        self._sync_rotate_if_needed(force=True)
+
+    def _cmd_rate_limiter_global_send_tips(self, key: str, args: List[str]) -> None:
+        if len(args) != 2:
+            self.log.warn('execution failed: invalid args', key=key, args=args)
+            return
+        try:
+            max_hits = int(args[0])
+            window_seconds = float(args[1])
+        except ValueError:
+            self.log.warn('execution failed: invalid args', key=key, args=args)
+            return
+        limit = self.rate_limiter.get_limit(self.GlobalRateLimiter.SEND_TIPS)
+        if (max_hits, window_seconds) == limit:
+            return
+        self.log.warn(f'{key} changed', old=limit, new=(max_hits, window_seconds))
+        if window_seconds == 0:
+            self.disable_rate_limiter()
+        else:
+            self.enable_rate_limiter(max_hits, window_seconds)
+
+    def _sync_update_cmd_always_enable_sync(self) -> None:
+        """`always_enable_sync.txt` should contain a list of peer ids that will always have sync enabled.
+        It ignores lines starting with '#'.
+        """
+        cmd_path = self.manager.get_cmd_path()
+        if cmd_path is None:
+            return
+
+        always_sync_path = os.path.join(cmd_path, 'always_enable_sync.txt')
+        if not os.path.isfile(always_sync_path):
+            return
+
+        new: Set[str]
+        with open(always_sync_path, 'r') as fp:
+            new = set(parse_text(fp.read()))
+
+        old = self.always_enable_sync
+        if new == old:
+            return
+
+        to_enable = new - old
+        to_disable = old - new
+
+        self.log.info('update always_enable_sync', new=new, to_enable=to_enable, to_disable=to_disable)
+
+        for peer_id in new:
+            if peer_id not in self.connected_peers:
+                continue
+            self.connected_peers[peer_id].enable_sync()
+
+        for peer_id in to_disable:
+            if peer_id not in self.connected_peers:
+                continue
+            self.connected_peers[peer_id].disable_sync()
+
+        self.always_enable_sync = new
+
+    def _check_force_sync_rotate(self) -> bool:
+        """Check if sync rotate should forcefully run now."""
+        cmd_path = self.manager.get_cmd_path()
+        if cmd_path is None:
+            return False
+
+        force_rotate_path = os.path.join(cmd_path, 'force_sync_rotate')
+        if not os.path.isfile(force_rotate_path):
+            return False
+
+        self.log.info('force sync rotate detected')
+        os.remove(force_rotate_path)
+        return True
+
+    def _calculate_sync_rotate(self) -> _SyncRotateInfo:
+        """Calculate new sync rotation."""
+        current_enabled: Set[str] = set()
+        for peer_id, conn in self.connected_peers.items():
+            if conn.is_sync_enabled():
+                current_enabled.add(peer_id)
+
+        candidates = list(self.connected_peers.keys())
+        self.rng.shuffle(candidates)
+        selected_peers: Set[str] = set(candidates[:self.MAX_ENABLED_SYNC])
+
+        to_disable = current_enabled - selected_peers
+        to_enable = selected_peers - current_enabled
+
+        # Do not disable peers in the `always_enable_sync`.
+        to_disable.difference_update(self.always_enable_sync)
+
+        return _SyncRotateInfo(
+            candidates=candidates,
+            old=current_enabled,
+            new=selected_peers,
+            to_disable=to_disable,
+            to_enable=to_enable,
+        )
+
+    def _sync_rotate_if_needed(self, *, force: bool = False) -> None:
+        """Rotate peers who we are syncing from."""
+        if not force:
+            force = self._check_force_sync_rotate()
+
+        now = self.reactor.seconds()
+        dt = now - self._last_sync_rotate
+        if not force and dt < self.SYNC_UPDATE_INTERVAL:
+            return
+        self._last_sync_rotate = now
+
+        info = self._calculate_sync_rotate()
+
+        self.log.info(
+            'sync rotate',
+            candidates=len(info.candidates),
+            old=info.old,
+            new=info.new,
+            to_enable=info.to_enable,
+            to_disable=info.to_disable,
+        )
+
+        for peer_id in info.to_disable:
+            self.connected_peers[peer_id].disable_sync()
+
+        for peer_id in info.to_enable:
+            self.connected_peers[peer_id].enable_sync()

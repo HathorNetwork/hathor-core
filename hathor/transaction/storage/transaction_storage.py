@@ -24,6 +24,7 @@ from structlog import get_logger
 
 from hathor.conf import HathorSettings
 from hathor.indexes import IndexesManager, MemoryIndexesManager
+from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction
 from hathor.transaction.block import Block
@@ -34,6 +35,7 @@ from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.util import not_none
 
 settings = HathorSettings()
+cpu = get_cpu_profiler()
 
 # these are the timestamp values to be used when resetting them, 1 is used for the node instead of 0, so it can be
 # greater, that way if both are reset (which also happens on a database that never run this implementation before) we
@@ -77,7 +79,7 @@ class TransactionStorage(ABC):
 
     _migrations: List[BaseMigration]
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
         self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
         self._tx_weakref_disabled: bool = False
@@ -94,7 +96,7 @@ class TransactionStorage(ABC):
 
         # Cache for the best block tips
         # This cache is updated in the consensus algorithm.
-        self._best_block_tips_cache = None
+        self._best_block_tips_cache: Optional[List[bytes]] = None
 
         # If should create lock when getting a transaction
         self._should_lock = False
@@ -160,7 +162,7 @@ class TransactionStorage(ABC):
     def set_migration_state(self, migration_name: str, state: MigrationState) -> None:
         raise NotImplementedError
 
-    def _check_and_apply_migrations(self):
+    def _check_and_apply_migrations(self) -> None:
         """Check which migrations have not been run yet and apply them in order."""
         from hathor.transaction.storage.exceptions import OutOfOrderMigrationError, PartialMigrationError
         db_is_empty = self.is_empty()
@@ -552,6 +554,7 @@ class TransactionStorage(ABC):
 
         return highest_height
 
+    @cpu.profiler('get_merkle_tree')
     def get_merkle_tree(self, timestamp: int) -> Tuple[bytes, List[bytes]]:
         """ Generate a hash to check whether the DAG is the same at that timestamp.
 

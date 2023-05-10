@@ -29,5 +29,8 @@ ARG PYTHON
 RUN apt-get -qy update
 RUN apt-get -qy install libssl1.1 graphviz librocksdb6.11
 COPY --from=stage-0 /app/.venv/lib/python${PYTHON}/site-packages/ /usr/local/lib/python${PYTHON}/site-packages/
+# XXX: copy optional BUILD_VERSION file using ...VERSIO[N] instead of ...VERSION* to ensure only one file will be copied
+# XXX: also copying the README.md because we need at least one existing file
+COPY README.md BUILD_VERSIO[N] /
 EXPOSE 40403 8080
 ENTRYPOINT ["python", "-m", "hathor"]

@@ -39,6 +39,7 @@ from hathor.transaction.exceptions import (
     TimestampError,
     TooManyInputs,
     TooManySigOps,
+    WeightError,
 )
 from hathor.transaction.util import VerboseCallback, get_deposit_amount, get_withdraw_amount, unpack, unpack_len
 
@@ -297,9 +298,13 @@ class Transaction(BaseTransaction):
     def verify_weight(self) -> None:
         """Validate minimum tx difficulty."""
         min_tx_weight = daa.minimum_tx_weight(self)
+        max_tx_weight = min_tx_weight + settings.MAX_TX_WEIGHT_DIFF
         if self.weight < min_tx_weight - settings.WEIGHT_TOL:
-            raise InvalidNewTransaction(f'Invalid new tx {self.hash_hex}: weight ({self.weight}) is '
-                                        f'smaller than the minimum weight ({min_tx_weight})')
+            raise WeightError(f'Invalid new tx {self.hash_hex}: weight ({self.weight}) is '
+                              f'smaller than the minimum weight ({min_tx_weight})')
+        elif min_tx_weight > settings.MAX_TX_WEIGHT_DIFF_ACTIVATION and self.weight > max_tx_weight:
+            raise WeightError(f'Invalid new tx {self.hash_hex}: weight ({self.weight}) is '
+                              f'greater than the maximum allowed ({max_tx_weight})')
 
     @cpu.profiler(key=lambda self: 'tx-verify!{}'.format(self.hash.hex()))
     def verify(self, reject_locked_reward: bool = True) -> None:

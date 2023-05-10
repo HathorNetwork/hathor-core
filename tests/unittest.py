@@ -9,7 +9,7 @@ from structlog import get_logger
 from twisted.internet.task import Clock
 from twisted.trial import unittest
 
-from hathor.builder import Builder
+from hathor.builder import BuildArtifacts, Builder
 from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
 from hathor.p2p.peer_id import PeerId
@@ -74,6 +74,13 @@ class TestBuilder(Builder):
     def __init__(self) -> None:
         super().__init__()
         self.set_network('testnet')
+
+    def build(self) -> BuildArtifacts:
+        artifacts = super().build()
+        # We disable rate limiter by default for tests because most tests were designed
+        # to run without rate limits. You can enable it in your unittest if you need.
+        artifacts.manager.connections.disable_rate_limiter()
+        return artifacts
 
     def _get_peer_id(self) -> PeerId:
         if self._peer_id is not None:
@@ -145,7 +152,7 @@ class TestCase(unittest.TestCase):
     def create_peer(self, network, peer_id=None, wallet=None, tx_storage=None, unlock_wallet=True, wallet_index=False,
                     capabilities=None, full_verification=True, enable_sync_v1=None, enable_sync_v2=None,
                     checkpoints=None, utxo_index=False, event_manager=None, use_memory_index=None, start_manager=True,
-                    pubsub=None):
+                    pubsub=None, event_storage=None, event_ws_factory=None):
         if enable_sync_v1 is None:
             assert hasattr(self, '_enable_sync_v1'), ('`_enable_sync_v1` has no default by design, either set one on '
                                                       'the test class or pass `enable_sync_v1` by argument')
@@ -156,10 +163,11 @@ class TestCase(unittest.TestCase):
             enable_sync_v2 = self._enable_sync_v2
         assert enable_sync_v1 or enable_sync_v2, 'enable at least one sync version'
 
-        builder = TestBuilder()
-        builder.set_rng(self.rng)
-        builder.set_reactor(self.clock)
-        builder.set_network(network)
+        builder = TestBuilder() \
+            .set_rng(self.rng) \
+            .set_reactor(self.clock) \
+            .set_network(network) \
+            .set_full_verification(full_verification)
 
         if checkpoints is not None:
             builder.set_checkpoints(checkpoints)
@@ -177,12 +185,19 @@ class TestCase(unittest.TestCase):
                 wallet.unlock(b'MYPASS')
         builder.set_wallet(wallet)
 
+        if event_storage:
+            builder.set_event_storage(event_storage)
+
         if event_manager:
             builder.set_event_manager(event_manager)
 
+        if event_ws_factory:
+            builder.enable_event_manager(event_ws_factory=event_ws_factory)
+
         if tx_storage is not None:
             builder.set_tx_storage(tx_storage)
-        elif self.use_memory_storage:
+
+        if self.use_memory_storage:
             builder.use_memory()
         else:
             directory = tempfile.mkdtemp()
@@ -220,12 +235,14 @@ class TestCase(unittest.TestCase):
         else:
             assert SyncVersion.V2 not in manager.connections._sync_factories
         if enable_sync_v1:
-            assert SyncVersion.V1 in manager.connections._sync_factories
+            assert SyncVersion.V1 not in manager.connections._sync_factories
+            assert SyncVersion.V1_1 in manager.connections._sync_factories
         else:
             assert SyncVersion.V1 not in manager.connections._sync_factories
+            assert SyncVersion.V1_1 not in manager.connections._sync_factories
 
         manager.avg_time_between_blocks = 0.0001
-        manager._full_verification = full_verification
+
         if start_manager:
             manager.start()
             self.run_to_completion()

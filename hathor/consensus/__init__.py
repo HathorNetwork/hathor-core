@@ -12,13 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-from hathor.simulator.fake_connection import FakeConnection
-from hathor.simulator.simulator import Simulator
-from hathor.simulator.tx_generator import RandomTransactionGenerator
+from hathor.consensus.consensus import ConsensusAlgorithm
 
 __all__ = [
-    'FakeConnection',
-    'RandomTransactionGenerator',
-    'Simulator',
+    'ConsensusAlgorithm',
 ]
