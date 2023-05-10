@@ -904,7 +904,7 @@ class SyncV1MemoryIndexesTest(unittest.SyncV1Params, BaseMemoryIndexesTest):
 class SyncV2MemoryIndexesTest(unittest.SyncV2Params, BaseMemoryIndexesTest):
     __test__ = True
 
-    def test_deps_index(self):
+    def test_deps_index(self) -> None:
         from hathor.indexes.memory_deps_index import MemoryDepsIndex
 
         add_new_blocks(self.manager, 5, advance_clock=15)
@@ -949,11 +949,11 @@ class SyncV1RocksDBIndexesTest(unittest.SyncV1Params, BaseRocksDBIndexesTest):
 class SyncV2RocksDBIndexesTest(unittest.SyncV2Params, BaseRocksDBIndexesTest):
     __test__ = True
 
-    def test_deps_index(self):
+    def test_deps_index(self) -> None:
         from hathor.indexes.rocksdb_deps_index import RocksDBDepsIndex
 
         indexes = self.manager.tx_storage.indexes
-        deps_index = indexes.deps = RocksDBDepsIndex(indexes._db, _force=True)
+        indexes.deps = RocksDBDepsIndex(indexes._db, _force=True)
 
         add_new_blocks(self.manager, 5, advance_clock=15)
         add_blocks_unlock_reward(self.manager)

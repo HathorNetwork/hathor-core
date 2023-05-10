@@ -669,7 +669,7 @@ if sys.platform != 'win32':
             self.error: str = ''
             self.error_count: int = 0
 
-            self.latest_data = None
+            self.latest_data: Optional[ProfileData] = None
 
             self.update_interval = update_interval
             self.task = None
@@ -692,7 +692,7 @@ if sys.platform != 'win32':
                 data = await resp.json()
                 return data
 
-        async def run(self):
+        async def run(self) -> Any:
             while True:
                 try:
                     data_dict: Dict[str, Any] = await self.fetch()
@@ -716,7 +716,7 @@ if sys.platform != 'win32':
                 return data
 
     class DefaultColor:
-        def __init__(self):
+        def __init__(self) -> None:
             self._color_map: Dict[Tuple[int, int], int] = {}
 
             A_NONE = 0

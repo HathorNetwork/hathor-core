@@ -19,7 +19,7 @@ from hathor.event.storage.event_storage import EventStorage
 
 
 class EventMemoryStorage(EventStorage):
-    def __init__(self):
+    def __init__(self) -> None:
         self._events: List[BaseEvent] = []
         self._last_event: Optional[BaseEvent] = None
         self._last_group_id: Optional[int] = None
