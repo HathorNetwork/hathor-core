@@ -81,13 +81,14 @@ def get_genesis_short_hash() -> str:
 def get_settings_hello_dict() -> Dict[str, Any]:
     """ Return a dict of settings values that must be validated in the hello state
     """
-    settings_dict = {}
-    for key in settings.P2P_SETTINGS_HASH_FIELDS:
-        value = getattr(settings, key)
-        # We are going to json.dumps this dict, so we can't have bytes here
-        if type(value) == bytes:
-            value = value.hex()
-        settings_dict[key] = value
+    settings_dict = {
+        'P2PKH_VERSION_BYTE': settings.P2PKH_VERSION_BYTE.hex(),
+        'MULTISIG_VERSION_BYTE': settings.MULTISIG_VERSION_BYTE.hex(),
+        'MIN_BLOCK_WEIGHT': settings.MIN_BLOCK_WEIGHT,
+        'MIN_TX_WEIGHT': settings.MIN_TX_WEIGHT,
+        'BLOCK_DATA_MAX_SIZE': settings.BLOCK_DATA_MAX_SIZE
+    }
+
     return settings_dict
 
 
