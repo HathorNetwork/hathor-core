@@ -1923,6 +1923,18 @@ files = [
 types-cryptography = "*"
 
 [[package]]
+name = "types-pyyaml"
+version = "6.0.12.9"
+description = "Typing stubs for PyYAML"
+category = "dev"
+optional = false
+python-versions = "*"
+files = [
+    {file = "types-PyYAML-6.0.12.9.tar.gz", hash = "sha256:c51b1bd6d99ddf0aa2884a7a328810ebf70a4262c292195d3f4f9a0005f9eeb6"},
+    {file = "types_PyYAML-6.0.12.9-py3-none-any.whl", hash = "sha256:5aed5aa66bd2d2e158f75dda22b059570ede988559f030cf294871d3b647e3e8"},
+]
+
+[[package]]
 name = "types-requests"
 version = "2.28.11.4"
 description = "Typing stubs for requests"
@@ -2178,4 +2190,4 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8.1,<4"
-content-hash = "d76cdcb2c10a43bce9d8e1d0e5405fc7c400e0abd247d6135908933a48606bd5"
+content-hash = "2d2335465cb1a0892c565ed36dc88f778e7fde48b8cd7350751243e4dd3de827"

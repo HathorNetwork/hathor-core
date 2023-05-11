@@ -48,6 +48,7 @@ pytest-xdist = "~3.2.0"
 # stubs:
 types-requests = "=2.28.11.4"
 types-pyopenssl = "=22.1.0.2"
+types-pyyaml = "=6.0.12.9"
 
 [tool.poetry.dependencies]
 python = ">=3.8.1,<4"
