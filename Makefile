@@ -76,7 +76,7 @@ isort-check:
 
 .PHONY: yamllint
 yamllint:
-	yamllint ./hathor ./tests
+	yamllint .
 
 .PHONY: check-version
 check-version:

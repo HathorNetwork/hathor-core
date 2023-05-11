@@ -7,7 +7,7 @@ coverage:
   # https://docs.codecov.io/docs/commit-status
   status:
     # TODO: re-enable patch in the future
-    patch: off
+    patch: false
     project:
       default:
         # minimum coverage ratio that the commit must meet to be considered a success
