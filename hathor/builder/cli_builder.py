@@ -26,6 +26,7 @@ from twisted.internet.posixbase import PosixReactorBase
 from twisted.web import server
 from twisted.web.resource import Resource
 
+from hathor.conf import constants
 from hathor.consensus import ConsensusAlgorithm
 from hathor.event import EventManager
 from hathor.event.resources.event import EventResource
@@ -234,7 +235,7 @@ class CliBuilder:
             self.log.warn('--memory-indexes is implied for memory storage or JSON storage')
 
         if args.x_enable_event_queue:
-            if not settings.ENABLE_EVENT_QUEUE_FEATURE:
+            if not constants.ENABLE_EVENT_QUEUE_FEATURE:
                 self.log.error('The event queue feature is not available yet')
                 sys.exit(-1)
 
