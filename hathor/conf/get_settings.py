@@ -12,38 +12,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import importlib
 import os
-from types import ModuleType
 from typing import Optional
 
+import yaml
+
+from hathor import conf
 from hathor.conf.settings import HathorSettings as Settings
 
-_config_file: Optional[str] = None
+_settings_filepath: Optional[str] = None
 
 
 def HathorSettings() -> Settings:
-    """ Return configuration file namedtuple
-        Get the file from environment variable 'HATHOR_CONFIG_FILE'
-        If not set we return the config file of the mainnet
-    """
-    settings_module = get_settings_module()
-    settings = getattr(settings_module, 'SETTINGS')
-    assert isinstance(settings, Settings)
-    return settings
+    settings_filepath = get_settings_filepath()
+
+    with open(settings_filepath, 'r') as file:
+        settings_dict = yaml.safe_load(file)
+
+        return Settings(**settings_dict)
 
 
-def get_settings_module() -> ModuleType:
-    global _config_file
-    # Import config file for network
-    default_file = 'hathor.conf.mainnet'
-    config_file = os.environ.get('HATHOR_CONFIG_FILE', default_file)
-    if _config_file is None:
-        _config_file = config_file
-    elif _config_file != config_file:
+def get_settings_filepath() -> str:
+    global _settings_filepath
+
+    new_settings_filepath = os.environ.get('HATHOR_CONFIG_FILE', conf.MAINNET_SETTINGS_FILEPATH)
+
+    if _settings_filepath is not None and _settings_filepath != new_settings_filepath:
         raise Exception('loading config twice with a different file')
-    try:
-        module = importlib.import_module(config_file)
-    except ModuleNotFoundError:
-        module = importlib.import_module(default_file)
-    return module
+
+    _settings_filepath = new_settings_filepath
+
+    return new_settings_filepath
