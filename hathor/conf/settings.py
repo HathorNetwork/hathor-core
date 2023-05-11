@@ -14,9 +14,12 @@
 
 import os
 from math import log
-from typing import List, NamedTuple, Optional
+from typing import Dict, List, Optional, Union
+
+from pydantic import validator
 
 from hathor.checkpoint import Checkpoint
+from hathor.utils import pydantic
 
 DECIMAL_PLACES = 2
 
@@ -24,7 +27,7 @@ GENESIS_TOKEN_UNITS = 1 * (10**9)  # 1B
 GENESIS_TOKENS = GENESIS_TOKEN_UNITS * (10**DECIMAL_PLACES)  # 100B
 
 
-class HathorSettings(NamedTuple):
+class HathorSettings(pydantic.BaseModel):
     # Version byte of the address in P2PKH
     P2PKH_VERSION_BYTE: bytes
 
