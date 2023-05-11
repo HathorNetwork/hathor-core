@@ -4,3 +4,5 @@ rules:
   document-start: disable
   line-length:
     max: 100
+  new-lines:
+    type: platform
