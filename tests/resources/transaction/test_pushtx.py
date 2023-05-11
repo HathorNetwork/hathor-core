@@ -2,7 +2,7 @@ from typing import Generator, List, Optional
 
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction, TxInput
 from hathor.transaction.resources import PushTxResource
@@ -12,8 +12,6 @@ from hathor.wallet.resources import SendTokensResource
 from tests import unittest
 from tests.resources.base_resource import StubSite, _BaseResourceTest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks, add_tx_with_data_script, create_tokens
-
-settings = HathorSettings()
 
 
 class BasePushTxTest(_BaseResourceTest._ResourceTest):
@@ -182,7 +180,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         tx = self.get_tx()
 
         # Invalid tx (output script is too long)
-        tx.outputs[0].script = b'*' * (settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE + 1)
+        tx.outputs[0].script = b'*' * (constants.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE + 1)
         tx.resolve()
         tx_hex = tx.get_struct().hex()
         response = yield self.push_tx({'hex_tx': tx_hex})
@@ -252,7 +250,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
 
         # Now we set this tx2 as voided and try to push a tx3 that spends tx2
         tx_meta = tx2.get_metadata()
-        tx_meta.voided_by = {settings.SOFT_VOIDED_ID}
+        tx_meta.voided_by = {constants.SOFT_VOIDED_ID}
         self.manager.tx_storage.save_transaction(tx2, only_metadata=True)
 
         # Try to push again with soft voided id as voided by

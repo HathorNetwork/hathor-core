@@ -33,7 +33,7 @@ from twisted.internet.protocol import Factory, connectionDone
 from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
-from hathor.conf import HathorSettings
+from hathor.conf import HathorSettings, constants
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
 from hathor.p2p.utils import format_address
@@ -374,7 +374,7 @@ class StratumProtocol(JSONRPC):
         self.miner_id = None
         self.miner_address = None
         self.job_ids = []
-        self.mine_txs = settings.STRATUM_MINE_TXS_DEFAULT
+        self.mine_txs = constants.STRATUM_MINE_TXS_DEFAULT
         self.estimated_hash_rate = 0.0
         self.completed_jobs = 0
         self.connection_start_time = 0
@@ -665,7 +665,7 @@ class StratumProtocol(JSONRPC):
         assert self.miner_id is not None
 
         # Only get first 32 bytes of peer_id because block data is limited to 100 bytes
-        data = '{}-{}-{}'.format(peer_id[:32], self.miner_id.hex, jobid.hex).encode()[:settings.BLOCK_DATA_MAX_SIZE]
+        data = '{}-{}-{}'.format(peer_id[:32], self.miner_id.hex, jobid.hex).encode()[:constants.BLOCK_DATA_MAX_SIZE]
         block = self.manager.generate_mining_block(data=data, address=self.miner_address,
                                                    merge_mined=self.merged_mining)
         self.log.debug('prepared block for mining', block=block)

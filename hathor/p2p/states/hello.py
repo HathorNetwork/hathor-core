@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Dict, Set
 from structlog import get_logger
 
 import hathor
-from hathor.conf import HathorSettings
+from hathor.conf import HathorSettings, constants
 from hathor.exception import HathorError
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.states.base import BaseState
@@ -103,7 +103,7 @@ class HelloState(BaseState):
             protocol.send_error_and_close_connection('Invalid payload.')
             return
 
-        if settings.ENABLE_PEER_WHITELIST and settings.CAPABILITY_WHITELIST not in data['capabilities']:
+        if settings.ENABLE_PEER_WHITELIST and constants.CAPABILITY_WHITELIST not in data['capabilities']:
             # If peer is not sending whitelist capability we must close the connection
             protocol.send_error_and_close_connection('Must have whitelist capability.')
             return
@@ -139,7 +139,7 @@ class HelloState(BaseState):
             return
 
         dt = data['timestamp'] - protocol.node.reactor.seconds()
-        if abs(dt) > settings.MAX_FUTURE_TIMESTAMP_ALLOWED / 2:
+        if abs(dt) > constants.MAX_FUTURE_TIMESTAMP_ALLOWED / 2:
             protocol.send_error_and_close_connection('Nodes timestamps too far apart.')
             return
 
@@ -170,7 +170,7 @@ class HelloState(BaseState):
 
 def _parse_sync_versions(hello_data: Dict[str, Any]) -> Set[SyncVersion]:
     """Versions that are not recognized will not be included."""
-    if settings.CAPABILITY_SYNC_VERSION in hello_data['capabilities']:
+    if constants.CAPABILITY_SYNC_VERSION in hello_data['capabilities']:
         if 'sync_versions' not in hello_data:
             raise HathorError('protocol error, expected sync_versions field')
         known_values = set(x.value for x in SyncVersion)

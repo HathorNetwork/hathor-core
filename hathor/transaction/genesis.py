@@ -14,7 +14,7 @@
 
 from typing import TYPE_CHECKING, List, Optional
 
-from hathor.conf import HathorSettings
+from hathor.conf import HathorSettings, constants
 from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ BLOCK_GENESIS = Block(
     timestamp=settings.GENESIS_TIMESTAMP,
     weight=settings.MIN_BLOCK_WEIGHT,
     outputs=[
-        TxOutput(settings.GENESIS_TOKENS, settings.GENESIS_OUTPUT_SCRIPT),
+        TxOutput(constants.GENESIS_TOKENS, settings.GENESIS_OUTPUT_SCRIPT),
     ],
 )
 

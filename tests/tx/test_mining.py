@@ -1,4 +1,4 @@
-from hathor.conf import HathorSettings
+from hathor.conf import HathorSettings, constants
 from hathor.mining import BlockTemplate
 from hathor.transaction import sum_weights
 from hathor.transaction.storage import TransactionMemoryStorage
@@ -37,7 +37,7 @@ class BaseMiningTest(unittest.TestCase):
         self.assertEqual(len(block_templates), 1)
         self.assertEqual(block_templates[0], BlockTemplate(
             versions={0, 3},
-            reward=settings.INITIAL_TOKEN_UNITS_PER_BLOCK * 100,
+            reward=constants.INITIAL_TOKEN_UNITS_PER_BLOCK * 100,
             weight=1.0,
             timestamp_now=int(manager.reactor.seconds()),
             timestamp_min=settings.GENESIS_TIMESTAMP + 3,
@@ -59,11 +59,11 @@ class BaseMiningTest(unittest.TestCase):
         self.assertEqual(len(block_templates), 1)
         self.assertEqual(block_templates[0], BlockTemplate(
             versions={0, 3},
-            reward=settings.INITIAL_TOKEN_UNITS_PER_BLOCK * 100,
+            reward=constants.INITIAL_TOKEN_UNITS_PER_BLOCK * 100,
             weight=1.0,
             timestamp_now=int(manager.reactor.seconds()),
             timestamp_min=blocks[-1].timestamp + 1,
-            timestamp_max=blocks[-1].timestamp + settings.MAX_DISTANCE_BETWEEN_BLOCKS - 1,
+            timestamp_max=blocks[-1].timestamp + constants.MAX_DISTANCE_BETWEEN_BLOCKS - 1,
             # parents=[blocks[-1].hash, self.genesis_txs[-1].hash, self.genesis_txs[-2].hash],
             parents=block_templates[0].parents,
             parents_any=[],

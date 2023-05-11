@@ -1,4 +1,4 @@
-from hathor.conf import HathorSettings
+from hathor.conf import HathorSettings, constants
 from hathor.daa import TestMode, _set_test_mode, calculate_block_difficulty, minimum_tx_weight
 from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
@@ -52,7 +52,7 @@ class GenesisTest(unittest.TestCase):
         genesis_blocks = [tx for tx in genesis if tx.is_block]
         genesis_block = genesis_blocks[0]
 
-        self.assertEqual(settings.GENESIS_TOKENS, sum([output.value for output in genesis_block.outputs]))
+        self.assertEqual(constants.GENESIS_TOKENS, sum([output.value for output in genesis_block.outputs]))
 
     def test_genesis_weight(self):
         genesis = self.storage.get_all_genesis()

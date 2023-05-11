@@ -24,7 +24,7 @@ from hathor.api_util import (
     set_cors,
 )
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.crypto.util import decode_address
 from hathor.util import json_dumpb
 from hathor.wallet.exceptions import InvalidAddress
@@ -33,9 +33,6 @@ if TYPE_CHECKING:
     from twisted.web.http import Request
 
     from hathor.manager import HathorManager
-
-
-settings = HathorSettings()
 
 
 @register_resource
@@ -86,7 +83,7 @@ class UtxoSearchResource(Resource):
         # token_uid parameter must be a valid hash
         try:
             token_uid = bytes.fromhex(args['token_uid'])
-            if token_uid != settings.HATHOR_TOKEN_UID and len(token_uid) != 32:
+            if token_uid != constants.HATHOR_TOKEN_UID and len(token_uid) != 32:
                 raise ValueError('not a valid hash length')
         except ValueError as e:
             return json_dumpb({

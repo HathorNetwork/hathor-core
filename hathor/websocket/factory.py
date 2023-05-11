@@ -20,7 +20,7 @@ from autobahn.twisted.websocket import WebSocketServerFactory
 from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.indexes import AddressIndex
 from hathor.metrics import Metrics
 from hathor.p2p.rate_limiter import RateLimiter
@@ -28,7 +28,6 @@ from hathor.pubsub import EventArguments, HathorEvents
 from hathor.util import json_dumpb, json_loadb, json_loads, reactor
 from hathor.websocket.protocol import HathorAdminWebsocketProtocol
 
-settings = HathorSettings()
 logger = get_logger()
 
 # CONTROLLED_TYPES define each Rate Limit parameter for each message type that should be limited
@@ -117,7 +116,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         self._setup_rate_limit()
 
         # Start metric sender
-        self._lc_send_metrics.start(settings.WS_SEND_METRICS_INTERVAL, now=False)
+        self._lc_send_metrics.start(constants.WS_SEND_METRICS_INTERVAL, now=False)
 
     def stop(self):
         if self._lc_send_metrics.running:
@@ -201,7 +200,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             data['first_block'] = first_block_hex
             return data
         elif event == HathorEvents.WALLET_BALANCE_UPDATED:
-            data['balance'] = data['balance'][settings.HATHOR_TOKEN_UID]._asdict()
+            data['balance'] = data['balance'][constants.HATHOR_TOKEN_UID]._asdict()
             return data
         else:
             raise ValueError('Should never have entered here! We dont know this event')
@@ -318,13 +317,13 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         """ Handler for subscription to an address, consideirs subscription limits."""
         addr: str = message['address']
         subs: Set[str] = connection.subscribed_to
-        if len(subs) >= settings.WS_MAX_SUBS_ADDRS_CONN:
+        if len(subs) >= constants.WS_MAX_SUBS_ADDRS_CONN:
             payload = json_dumpb({'message': 'Reached maximum number of subscribed '
-                                             f'addresses ({settings.WS_MAX_SUBS_ADDRS_CONN}).',
+                                             f'addresses ({constants.WS_MAX_SUBS_ADDRS_CONN}).',
                                   'type': 'subscribe_address', 'success': False})
-        elif self.address_index and _count_empty(subs, self.address_index) >= settings.WS_MAX_SUBS_ADDRS_EMPTY:
+        elif self.address_index and _count_empty(subs, self.address_index) >= constants.WS_MAX_SUBS_ADDRS_EMPTY:
             payload = json_dumpb({'message': 'Reached maximum number of subscribed '
-                                             f'addresses without output ({settings.WS_MAX_SUBS_ADDRS_EMPTY}).',
+                                             f'addresses without output ({constants.WS_MAX_SUBS_ADDRS_EMPTY}).',
                                   'type': 'subscribe_address', 'success': False})
         else:
             self.address_connections[addr].add(connection)

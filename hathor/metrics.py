@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Deque, Dict, List, NamedTuple, Optional
 from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.p2p.manager import ConnectionsManager, PeerConnectionsMetrics
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.transaction.base_transaction import sum_weights
@@ -34,7 +34,6 @@ if TYPE_CHECKING:
     from hathor.websocket.factory import HathorAdminWebsocketFactory  # noqa: F401
 
 logger = get_logger()
-settings = HathorSettings()
 
 
 class WeightValue(NamedTuple):
@@ -85,7 +84,7 @@ class Metrics:
     # If metric capture data is running
     is_running: bool = False
     # Time between method call to collect data
-    collect_data_interval: int = settings.METRICS_COLLECT_DATA_INTERVAL
+    collect_data_interval: int = constants.METRICS_COLLECT_DATA_INTERVAL
     # Websocket data stored
     websocket_connections: int = 0
     subscribed_addresses: int = 0
@@ -106,7 +105,7 @@ class Metrics:
     transaction_cache_hits: int = 0
     transaction_cache_misses: int = 0
     # The time interval to control periodic collection of RocksDB data
-    txstorage_data_interval = settings.METRICS_COLLECT_ROCKSDB_DATA_INTERVAL
+    txstorage_data_interval = constants.METRICS_COLLECT_ROCKSDB_DATA_INTERVAL
     # Variables to store the last block when we updated the RocksDB storage metrics
     last_txstorage_data_block: Optional[int] = None
 
@@ -139,7 +138,7 @@ class Metrics:
         # The number of blocks interval to control periodic collection of RocksDB data
         # We use it instead of a time interval because it's better to make sure we update the
         # storage during sync.
-        self.txstorage_data_block_interval = self.txstorage_data_interval / settings.AVG_TIME_BETWEEN_BLOCKS
+        self.txstorage_data_block_interval = self.txstorage_data_interval / constants.AVG_TIME_BETWEEN_BLOCKS
 
     def _start_initial_values(self) -> None:
         """ When we start the metrics object we set the transaction and block count already in the network

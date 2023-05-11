@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Iterator, List, NamedTuple, Optional, Tuple, T
 
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.indexes.rocksdb_utils import (
     InternalUid,
     RocksDBIndexUtils,
@@ -34,7 +34,6 @@ from hathor.util import collect_n, json_dumpb, json_loadb
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
 
-settings = HathorSettings()
 logger = get_logger()
 
 _CF_NAME_TOKENS_INDEX = b'tokens-index'
@@ -219,16 +218,16 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
 
     def _create_genesis_info(self) -> None:
         self._create_token_info(
-            settings.HATHOR_TOKEN_UID,
-            settings.HATHOR_TOKEN_NAME,
-            settings.HATHOR_TOKEN_SYMBOL,
-            settings.GENESIS_TOKENS,
+            constants.HATHOR_TOKEN_UID,
+            constants.HATHOR_TOKEN_NAME,
+            constants.HATHOR_TOKEN_SYMBOL,
+            constants.GENESIS_TOKENS,
         )
 
     def _add_to_total(self, token_uid: bytes, amount: int) -> None:
         key_info = self._to_key_info(token_uid)
         old_value_info = self._db.get((self._cf, key_info))
-        if token_uid == settings.HATHOR_TOKEN_UID and old_value_info is None:
+        if token_uid == constants.HATHOR_TOKEN_UID and old_value_info is None:
             self._create_genesis_info()
             old_value_info = self._db.get((self._cf, key_info))
         assert old_value_info is not None
@@ -240,7 +239,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
     def _subtract_from_total(self, token_uid: bytes, amount: int) -> None:
         key_info = self._to_key_info(token_uid)
         old_value_info = self._db.get((self._cf, key_info))
-        if token_uid == settings.HATHOR_TOKEN_UID and old_value_info is None:
+        if token_uid == constants.HATHOR_TOKEN_UID and old_value_info is None:
             self._create_genesis_info()
             old_value_info = self._db.get((self._cf, key_info))
         assert old_value_info is not None

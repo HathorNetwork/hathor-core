@@ -24,12 +24,10 @@ from hathor.api_util import (
     validate_tx_hash,
 )
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.transaction.base_transaction import BaseTransaction, TxVersion
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.util import json_dumpb
-
-settings = HathorSettings()
 
 GET_LIST_ARGS = ['count', 'type']
 
@@ -78,7 +76,7 @@ def get_tx_extra_data(tx: BaseTransaction) -> Dict[str, Any]:
                     break
 
     # Maps the token uid to the token_data value
-    token_uid_map: Dict[bytes, int] = {settings.HATHOR_TOKEN_UID: 0}
+    token_uid_map: Dict[bytes, int] = {constants.HATHOR_TOKEN_UID: 0}
 
     # Sending also output information for each input
     inputs = []
@@ -214,7 +212,7 @@ class TransactionResource(Resource):
         error = None
 
         try:
-            count = parse_int(args['count'], cap=settings.MAX_TX_COUNT)
+            count = parse_int(args['count'], cap=constants.MAX_TX_COUNT)
         except ValueError as e:
             error = {
                 'success': False,

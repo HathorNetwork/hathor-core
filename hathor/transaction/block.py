@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from hathor import daa
 from hathor.checkpoint import Checkpoint
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, TxOutput, TxVersion
 from hathor.transaction.exceptions import (
@@ -35,7 +35,6 @@ from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpac
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
-settings = HathorSettings()
 cpu = get_cpu_profiler()
 
 # Version (H), outputs len (B)
@@ -231,7 +230,7 @@ class Block(BaseTransaction):
         :rtype: bytes
         """
         assert index == 0
-        return settings.HATHOR_TOKEN_UID
+        return constants.HATHOR_TOKEN_UID
 
     # TODO: maybe introduce convention on serialization methods names (e.g. to_json vs get_struct)
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
@@ -279,7 +278,7 @@ class Block(BaseTransaction):
     def verify_weight(self) -> None:
         """Validate minimum block difficulty."""
         block_weight = daa.calculate_block_difficulty(self)
-        if self.weight < block_weight - settings.WEIGHT_TOL:
+        if self.weight < block_weight - constants.WEIGHT_TOL:
             raise WeightError(f'Invalid new block {self.hash_hex}: weight ({self.weight}) is '
                               f'smaller than the minimum weight ({block_weight})')
 
@@ -311,7 +310,7 @@ class Block(BaseTransaction):
                 raise BlockWithTokensError('in output: {}'.format(output.to_human_readable()))
 
     def verify_data(self) -> None:
-        if len(self.data) > settings.BLOCK_DATA_MAX_SIZE:
+        if len(self.data) > constants.BLOCK_DATA_MAX_SIZE:
             raise TransactionDataError('block data has {} bytes'.format(len(self.data)))
 
     def verify_without_storage(self) -> None:

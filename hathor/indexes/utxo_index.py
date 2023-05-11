@@ -18,7 +18,7 @@ from typing import Iterator, Optional
 
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
+from hathor.conf import HathorSettings, constants
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction, TxOutput
@@ -204,7 +204,7 @@ class UtxoIndex(BaseIndex):
                    target_height: Optional[int] = None) -> Iterator[UtxoIndexItem]:
         """ Search UTXOs for a given token_uid+address+target_value, if no token_uid is given, HTR is assumed.
         """
-        actual_token_uid = token_uid if token_uid is not None else settings.HATHOR_TOKEN_UID
+        actual_token_uid = token_uid if token_uid is not None else constants.HATHOR_TOKEN_UID
         iter_nolock = self._iter_utxos_nolock(token_uid=actual_token_uid, address=address,
                                               target_amount=target_amount)
         iter_timelock = self._iter_utxos_timelock(token_uid=actual_token_uid, address=address,
@@ -247,7 +247,7 @@ class UtxoIndex(BaseIndex):
                 break
             # there's also no point in yielding more outputs than can be used as inputs, if there are more, the caller
             # will just have to use the larger than target_amount UTXO (if there is any), or consolidate UTXOs first
-            if count_utxos >= settings.MAX_NUM_INPUTS:
+            if count_utxos >= constants.MAX_NUM_INPUTS:
                 break
             amount_sum += utxo_item.amount
             count_utxos += 1

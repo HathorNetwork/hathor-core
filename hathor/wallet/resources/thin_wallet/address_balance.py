@@ -19,7 +19,7 @@ from twisted.web.http import Request
 
 from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.crypto.util import decode_address
 from hathor.transaction.scripts import parse_address_script
 from hathor.util import json_dumpb
@@ -27,8 +27,6 @@ from hathor.wallet.exceptions import InvalidAddress
 
 if TYPE_CHECKING:
     from hathor.transaction import TxOutput
-
-settings = HathorSettings()
 
 
 class TokenData:
@@ -123,9 +121,9 @@ class AddressBalanceResource(Resource):
 
         return_tokens_data: Dict[str, Dict[str, Any]] = {}
         for token_uid in tokens_data.keys():
-            if token_uid == settings.HATHOR_TOKEN_UID:
-                tokens_data[token_uid].name = settings.HATHOR_TOKEN_NAME
-                tokens_data[token_uid].symbol = settings.HATHOR_TOKEN_SYMBOL
+            if token_uid == constants.HATHOR_TOKEN_UID:
+                tokens_data[token_uid].name = constants.HATHOR_TOKEN_NAME
+                tokens_data[token_uid].symbol = constants.HATHOR_TOKEN_SYMBOL
             else:
                 try:
                     token_info = tokens_index.get_token_info(token_uid)

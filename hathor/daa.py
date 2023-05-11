@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, List
 
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
+from hathor.conf import HathorSettings, constants
 from hathor.profiler import get_cpu_profiler
 from hathor.util import iwindows
 
@@ -37,7 +37,6 @@ settings = HathorSettings()
 cpu = get_cpu_profiler()
 
 MIN_BLOCK_WEIGHT = settings.MIN_BLOCK_WEIGHT
-AVG_TIME_BETWEEN_BLOCKS = settings.AVG_TIME_BETWEEN_BLOCKS
 
 
 class TestMode(IntFlag):
@@ -85,7 +84,7 @@ def calculate_next_weight(parent_block: 'Block', timestamp: int) -> float:
     root = parent_block
     N = min(2 * settings.BLOCK_DIFFICULTY_N_BLOCKS, parent_block.get_metadata().height - 1)
     K = N // 2
-    T = AVG_TIME_BETWEEN_BLOCKS
+    T = constants.AVG_TIME_BETWEEN_BLOCKS
     S = 5
     if N < 10:
         return MIN_BLOCK_WEIGHT
@@ -138,16 +137,16 @@ def calculate_next_weight(parent_block: 'Block', timestamp: int) -> float:
 
 def get_weight_decay_amount(distance: int) -> float:
     """Return the amount to be reduced in the weight of the block."""
-    if not settings.WEIGHT_DECAY_ENABLED:
+    if not constants.WEIGHT_DECAY_ENABLED:
         return 0.0
-    if distance < settings.WEIGHT_DECAY_ACTIVATE_DISTANCE:
+    if distance < constants.WEIGHT_DECAY_ACTIVATE_DISTANCE:
         return 0.0
 
-    dt = distance - settings.WEIGHT_DECAY_ACTIVATE_DISTANCE
+    dt = distance - constants.WEIGHT_DECAY_ACTIVATE_DISTANCE
 
     # Calculate the number of windows.
-    n_windows = 1 + (dt // settings.WEIGHT_DECAY_WINDOW_SIZE)
-    return n_windows * settings.WEIGHT_DECAY_AMOUNT
+    n_windows = 1 + (dt // constants.WEIGHT_DECAY_WINDOW_SIZE)
+    return n_windows * constants.WEIGHT_DECAY_AMOUNT
 
 
 def minimum_tx_weight(tx: 'Transaction') -> float:
@@ -177,7 +176,7 @@ def minimum_tx_weight(tx: 'Transaction') -> float:
     # We need to take into consideration the decimal places because it is inside the amount.
     # For instance, if one wants to transfer 20 HTRs, the amount will be 2000.
     # Max below is preventing division by 0 when handling authority methods that have no outputs
-    amount = max(1, tx.sum_outputs) / (10 ** settings.DECIMAL_PLACES)
+    amount = max(1, tx.sum_outputs) / (10 ** constants.DECIMAL_PLACES)
     weight = (
         + settings.MIN_TX_WEIGHT_COEFFICIENT * log(tx_size, 2)
         + 4 / (1 + settings.MIN_TX_WEIGHT_K / amount) + 4
@@ -192,17 +191,17 @@ def minimum_tx_weight(tx: 'Transaction') -> float:
 def get_tokens_issued_per_block(height: int) -> int:
     """Return the number of tokens issued (aka reward) per block of a given height."""
     if settings.BLOCKS_PER_HALVING is None:
-        assert settings.MINIMUM_TOKENS_PER_BLOCK == settings.INITIAL_TOKENS_PER_BLOCK
-        return settings.MINIMUM_TOKENS_PER_BLOCK
+        assert constants.MINIMUM_TOKENS_PER_BLOCK == constants.INITIAL_TOKENS_PER_BLOCK
+        return constants.MINIMUM_TOKENS_PER_BLOCK
 
     number_of_halvings = (height - 1) // settings.BLOCKS_PER_HALVING
     number_of_halvings = max(0, number_of_halvings)
 
-    if number_of_halvings > settings.MAXIMUM_NUMBER_OF_HALVINGS:
-        return settings.MINIMUM_TOKENS_PER_BLOCK
+    if number_of_halvings > constants.MAXIMUM_NUMBER_OF_HALVINGS:
+        return constants.MINIMUM_TOKENS_PER_BLOCK
 
-    amount = settings.INITIAL_TOKENS_PER_BLOCK // (2**number_of_halvings)
-    amount = max(amount, settings.MINIMUM_TOKENS_PER_BLOCK)
+    amount = constants.INITIAL_TOKENS_PER_BLOCK // (2**number_of_halvings)
+    amount = max(amount, constants.MINIMUM_TOKENS_PER_BLOCK)
     return amount
 
 
@@ -215,14 +214,14 @@ def get_mined_tokens(height: int) -> int:
 
     blocks_in_this_halving = height - number_of_halvings * settings.BLOCKS_PER_HALVING
 
-    tokens_per_block = settings.INITIAL_TOKENS_PER_BLOCK
+    tokens_per_block = constants.INITIAL_TOKENS_PER_BLOCK
     mined_tokens = 0
 
     # Sum the past halvings
     for _ in range(number_of_halvings):
         mined_tokens += settings.BLOCKS_PER_HALVING * tokens_per_block
         tokens_per_block //= 2
-        tokens_per_block = max(tokens_per_block, settings.MINIMUM_TOKENS_PER_BLOCK)
+        tokens_per_block = max(tokens_per_block, constants.MINIMUM_TOKENS_PER_BLOCK)
 
     # Sum the blocks in the current halving
     mined_tokens += blocks_in_this_halving * tokens_per_block

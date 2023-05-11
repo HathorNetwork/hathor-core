@@ -18,13 +18,11 @@ from typing import TYPE_CHECKING, Dict
 from prometheus_client import CollectorRegistry, Gauge, write_to_textfile
 from twisted.internet.task import LoopingCall
 
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.util import reactor
 
 if TYPE_CHECKING:
     from hathor.metrics import Metrics
-
-settings = HathorSettings()
 
 # Define prometheus metrics and it's explanation
 METRIC_INFO = {
@@ -99,7 +97,7 @@ class PrometheusMetricsExporter:
         self.running: bool = False
 
         # Interval in which the write data method will be called (in seconds)
-        self.call_interval: int = settings.PROMETHEUS_WRITE_INTERVAL
+        self.call_interval: int = constants.PROMETHEUS_WRITE_INTERVAL
 
         # A timer to periodically write data to prometheus
         self._lc_write_data = LoopingCall(self._write_data)

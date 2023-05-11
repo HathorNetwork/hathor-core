@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Generator
 from structlog import get_logger
 from twisted.internet.defer import inlineCallbacks
 
-from hathor.conf import HathorSettings
+from hathor.conf import HathorSettings, constants
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.states.base import BaseState
@@ -103,7 +103,7 @@ class PeerIdState(BaseState):
 
         # is it on the whitelist?
         if peer.id and self._should_block_peer(peer.id):
-            if settings.WHITELIST_WARN_BLOCKED_PEERS:
+            if constants.WHITELIST_WARN_BLOCKED_PEERS:
                 protocol.send_error_and_close_connection(f'Blocked (by {peer.id}). Get in touch with Hathor team.')
             else:
                 protocol.send_error_and_close_connection('Connection rejected.')

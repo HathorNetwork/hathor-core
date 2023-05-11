@@ -18,6 +18,7 @@ from enum import Enum
 from typing import Any, Dict, List, NamedTuple, Optional, TextIO, Tuple
 
 from hathor.cli.openapi_json import get_openapi_dict
+from hathor.conf import constants
 
 BASE_PATH = os.path.join(os.path.dirname(__file__), 'nginx_files')
 
@@ -115,10 +116,7 @@ def generate_nginx_config(openapi: Dict[str, Any], *, out_file: TextIO, rate_k: 
     """
     from datetime import datetime
 
-    from hathor.conf import HathorSettings
-
-    settings = HathorSettings()
-    api_prefix = settings.API_VERSION_PREFIX
+    api_prefix = constants.API_VERSION_PREFIX
 
     locations: Dict[str, Dict[str, Any]] = {}
     limit_rate_zones: List[RateLimitZone] = []

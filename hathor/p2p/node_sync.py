@@ -24,7 +24,7 @@ from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.internet.interfaces import IConsumer, IDelayedCall, IPushProducer
 from zope.interface import implementer
 
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.p2p.downloader import Downloader
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
 from hathor.p2p.sync_manager import SyncManager
@@ -33,7 +33,6 @@ from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.util import Reactor, json_dumps, json_loads, verified_cast
 
-settings = HathorSettings()
 logger = get_logger()
 
 if TYPE_CHECKING:
@@ -224,7 +223,7 @@ class NodeSyncTimestamp(SyncManager):
 
         # Maximum difference between our latest timestamp and synced timestamp to consider
         # that the peer is synced (in seconds).
-        self.sync_threshold: int = settings.P2P_SYNC_THRESHOLD
+        self.sync_threshold: int = constants.P2P_SYNC_THRESHOLD
 
         # Indicate whether the sync manager has been started.
         self._started: bool = False

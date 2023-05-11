@@ -3,14 +3,12 @@ from json import JSONDecodeError
 from twisted.internet.defer import inlineCallbacks
 from twisted.python.failure import Failure
 
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from hathor.simulator import FakeConnection
 from hathor.util import json_dumps
 from tests import unittest
-
-settings = HathorSettings()
 
 
 class BaseHathorProtocolTestCase(unittest.TestCase):
@@ -141,7 +139,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         # hello with clocks too far apart
         self.conn.tr1.clear()
         data = self.conn.proto2.state._get_hello_data()
-        data['timestamp'] = data['timestamp'] + settings.MAX_FUTURE_TIMESTAMP_ALLOWED/2 + 1
+        data['timestamp'] = data['timestamp'] + constants.MAX_FUTURE_TIMESTAMP_ALLOWED/2 + 1
         self._send_cmd(
             self.conn.proto1,
             'HELLO',
@@ -348,7 +346,7 @@ class BaseHathorProtocolTestCase(unittest.TestCase):
         self.conn.run_one_step()
 
     def test_idle_connection(self):
-        self.clock.advance(settings.PEER_IDLE_TIMEOUT - 10)
+        self.clock.advance(constants.PEER_IDLE_TIMEOUT - 10)
         self.assertIsConnected(self.conn)
         self.clock.advance(15)
         self.assertIsNotConnected(self.conn)

@@ -1,14 +1,12 @@
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.simulator import FakeConnection
 from tests import unittest
-
-settings = HathorSettings()
 
 
 class SyncV1HathorCapabilitiesTestCase(unittest.SyncV1Params, unittest.TestCase):
     def test_capabilities(self):
         network = 'testnet'
-        manager1 = self.create_peer(network, capabilities=[settings.CAPABILITY_WHITELIST])
+        manager1 = self.create_peer(network, capabilities=[constants.CAPABILITY_WHITELIST])
         manager2 = self.create_peer(network, capabilities=[])
 
         conn = FakeConnection(manager1, manager2)
@@ -22,8 +20,8 @@ class SyncV1HathorCapabilitiesTestCase(unittest.SyncV1Params, unittest.TestCase)
         self.assertEqual(conn._proto1.state.state_name, 'READY')
         self.assertEqual(conn._proto2.state.state_name, 'READY')
 
-        manager3 = self.create_peer(network, capabilities=[settings.CAPABILITY_WHITELIST])
-        manager4 = self.create_peer(network, capabilities=[settings.CAPABILITY_WHITELIST])
+        manager3 = self.create_peer(network, capabilities=[constants.CAPABILITY_WHITELIST])
+        manager4 = self.create_peer(network, capabilities=[constants.CAPABILITY_WHITELIST])
 
         conn2 = FakeConnection(manager3, manager4)
 

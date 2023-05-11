@@ -1,6 +1,6 @@
 import base58
 
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.crypto.util import decode_address, get_private_key_from_bytes, get_public_key_bytes_compressed
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import ScriptError
@@ -9,8 +9,6 @@ from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
 from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_blocks
-
-settings = HathorSettings()
 
 
 class BaseMultisigTestCase(unittest.TestCase):
@@ -57,7 +55,7 @@ class BaseMultisigTestCase(unittest.TestCase):
         # Adding funds to the wallet
         blocks = add_new_blocks(self.manager, 2, advance_clock=15)
         add_blocks_unlock_reward(self.manager)
-        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
+        self.assertEqual(self.manager.wallet.balance[constants.HATHOR_TOKEN_UID],
                          WalletBalance(0, sum(blk.outputs[0].value for blk in blocks)))
 
         first_block_amount = blocks[0].outputs[0].value
@@ -76,7 +74,7 @@ class BaseMultisigTestCase(unittest.TestCase):
         self.manager.propagate_tx(tx1)
         self.clock.advance(10)
 
-        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
+        self.assertEqual(self.manager.wallet.balance[constants.HATHOR_TOKEN_UID],
                          WalletBalance(0, first_block_amount))
 
         # Then we create a new tx that spends this tokens from multisig wallet
@@ -125,7 +123,7 @@ class BaseMultisigTestCase(unittest.TestCase):
         # Now we propagate the correct
         self.assertTrue(self.manager.propagate_tx(tx))
 
-        self.assertEqual(self.manager.wallet.balance[settings.HATHOR_TOKEN_UID],
+        self.assertEqual(self.manager.wallet.balance[constants.HATHOR_TOKEN_UID],
                          WalletBalance(0, first_block_amount + 300))
 
         # Testing the MultiSig class methods

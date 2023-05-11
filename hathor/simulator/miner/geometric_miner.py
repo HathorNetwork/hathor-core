@@ -14,7 +14,7 @@
 
 from typing import TYPE_CHECKING, Optional
 
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.manager import HathorEvents
 from hathor.simulator.miner.abstract_miner import AbstractMiner
 from hathor.util import Random
@@ -23,8 +23,6 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager
     from hathor.pubsub import EventArguments
     from hathor.transaction import Block
-
-settings = HathorSettings()
 
 
 class GeometricMiner(AbstractMiner):
@@ -78,9 +76,9 @@ class GeometricMiner(AbstractMiner):
         else:
             dt = 60
 
-        if dt > settings.WEIGHT_DECAY_ACTIVATE_DISTANCE:
+        if dt > constants.WEIGHT_DECAY_ACTIVATE_DISTANCE:
             self._block = None
-            dt = settings.WEIGHT_DECAY_ACTIVATE_DISTANCE
+            dt = constants.WEIGHT_DECAY_ACTIVATE_DISTANCE
 
         if self._delayed_call and self._delayed_call.active():
             self._delayed_call.cancel()

@@ -23,7 +23,7 @@ from twisted.internet.task import LoopingCall
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
 
-from hathor.conf import HathorSettings
+from hathor.conf import HathorSettings, constants
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import PeerStorage
@@ -85,8 +85,6 @@ class PeerConnectionsMetrics(NamedTuple):
 class ConnectionsManager:
     """ It manages all peer-to-peer connections and events related to control messages.
     """
-    MAX_ENABLED_SYNC = settings.MAX_ENABLED_SYNC
-    SYNC_UPDATE_INTERVAL = settings.SYNC_UPDATE_INTERVAL
 
     class GlobalRateLimiter:
         SEND_TIPS = 'NodeSyncTimestamp.send_tips'
@@ -127,7 +125,7 @@ class ConnectionsManager:
         self.client_factory = client_factory
         self.client_factory.connections = self
 
-        self.max_connections: int = settings.PEER_MAX_CONNECTIONS
+        self.max_connections: int = constants.PEER_MAX_CONNECTIONS
 
         # Global rate limiter for all connections.
         self.rate_limiter = RateLimiter(self.reactor)
@@ -696,9 +694,9 @@ class ConnectionsManager:
         except ValueError:
             self.log.warn('execution failed: invalid args', key=key, args=args)
             return
-        if value == self.MAX_ENABLED_SYNC:
+        if value == constants.MAX_ENABLED_SYNC:
             return
-        self.log.warn(f'{key} changed', old=self.MAX_ENABLED_SYNC, new=value)
+        self.log.warn(f'{key} changed', old=constants.MAX_ENABLED_SYNC, new=value)
         self.MAX_ENABLED_SYNC = value
         self._sync_rotate_if_needed(force=True)
 
@@ -804,7 +802,7 @@ class ConnectionsManager:
 
         now = self.reactor.seconds()
         dt = now - self._last_sync_rotate
-        if not force and dt < self.SYNC_UPDATE_INTERVAL:
+        if not force and dt < constants.SYNC_UPDATE_INTERVAL:
             return
         self._last_sync_rotate = now
 

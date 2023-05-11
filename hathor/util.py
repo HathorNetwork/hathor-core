@@ -52,7 +52,7 @@ from zope.interface import Interface
 from zope.interface.verify import verifyObject
 
 import hathor
-from hathor.conf import HathorSettings
+from hathor.conf import HathorSettings, constants
 
 if TYPE_CHECKING:
     import structlog
@@ -756,7 +756,7 @@ def is_token_uid_valid(token_uid: bytes) -> bool:
     >>> is_token_uid_valid(bytes.fromhex('000003a3b261e142d3dfd84970d3a50a93b5bc3a66a3b6ba973956148a3eb82400'))
     False
     """
-    if token_uid == settings.HATHOR_TOKEN_UID:
+    if token_uid == constants.HATHOR_TOKEN_UID:
         return True
     elif len(token_uid) == 32:
         return True

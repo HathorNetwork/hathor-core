@@ -19,7 +19,7 @@ import base58
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from hathor.conf import HathorSettings
+from hathor.conf import HathorSettings, constants
 from hathor.crypto.util import get_hash160, get_private_key_from_bytes
 from hathor.transaction.scripts import HathorScript, Opcode
 from hathor.transaction.transaction import Transaction
@@ -41,9 +41,9 @@ def generate_multisig_redeem_script(signatures_required: int, public_key_bytes: 
         :return: The redeem script for the multisig wallet
         :rtype: bytes
     """
-    if signatures_required > settings.MAX_MULTISIG_SIGNATURES:
+    if signatures_required > constants.MAX_MULTISIG_SIGNATURES:
         raise ValueError('Signatures required {} is over the limit'.format(signatures_required))
-    if len(public_key_bytes) > settings.MAX_MULTISIG_PUBKEYS:
+    if len(public_key_bytes) > constants.MAX_MULTISIG_PUBKEYS:
         raise ValueError('PubKeys length {} is over the limit'.format(len(public_key_bytes)))
 
     redeem_script = HathorScript()

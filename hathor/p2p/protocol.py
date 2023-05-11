@@ -23,7 +23,7 @@ from twisted.internet.protocol import connectionDone
 from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.rate_limiter import RateLimiter
@@ -36,7 +36,6 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
     from hathor.p2p.manager import ConnectionsManager  # noqa: F401
 
-settings = HathorSettings()
 logger = get_logger()
 cpu = get_cpu_profiler()
 
@@ -109,7 +108,7 @@ class HathorProtocol:
         self.inbound = inbound
 
         # Maximum period without receiving any messages.
-        self.idle_timeout = settings.PEER_IDLE_TIMEOUT
+        self.idle_timeout = constants.PEER_IDLE_TIMEOUT
         self._idle_timeout_call_later: Optional[IDelayedCall] = None
 
         self._state_instances = {}

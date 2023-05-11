@@ -12,7 +12,7 @@ import requests
 from hathorlib.scripts import DataScript
 from twisted.internet.task import Clock
 
-from hathor.conf import HathorSettings
+from hathor.conf import HathorSettings, constants
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key, get_private_key_from_bytes
 from hathor.event.model.base_event import BaseEvent
 from hathor.event.model.event_data import TxData, TxMetadata
@@ -369,7 +369,7 @@ def run_server(hostname='localhost', listen=8005, status=8085, bootstrap=None, t
     return process
 
 
-def request_server(path, method, host='http://localhost', port=8085, data=None, prefix=settings.API_VERSION_PREFIX):
+def request_server(path, method, host='http://localhost', port=8085, data=None, prefix=constants.API_VERSION_PREFIX):
     """ Execute a request for status server
 
         :param path: Url path of the request
@@ -404,7 +404,7 @@ def request_server(path, method, host='http://localhost', port=8085, data=None, 
 
 
 def execute_mining(path='mining', *, count, host='http://localhost', port=8085, data=None,
-                   prefix=settings.API_VERSION_PREFIX):
+                   prefix=constants.API_VERSION_PREFIX):
     """Execute a mining on a given server"""
     from hathor.cli.mining import create_parser, execute
     partial_url = '{}:{}/{}/'.format(host, port, prefix)
@@ -415,7 +415,7 @@ def execute_mining(path='mining', *, count, host='http://localhost', port=8085, 
 
 
 def execute_tx_gen(*, count, address=None, value=None, timestamp=None, host='http://localhost', port=8085, data=None,
-                   prefix=settings.API_VERSION_PREFIX):
+                   prefix=constants.API_VERSION_PREFIX):
     """Execute a tx generator on a given server"""
     from hathor.cli.tx_generator import create_parser, execute
     url = '{}:{}/{}/'.format(host, port, prefix)

@@ -21,7 +21,7 @@ from mnemonic import Mnemonic
 from structlog import get_logger
 
 from hathor.builder import Builder
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.daa import TestMode, _set_test_mode
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.manager import HathorManager
@@ -70,7 +70,7 @@ class Simulator:
         _set_test_mode(TestMode.DISABLED)
 
         from hathor import daa
-        cls._original_avg_time_between_blocks = daa.AVG_TIME_BETWEEN_BLOCKS
+        cls._original_avg_time_between_blocks = constants.AVG_TIME_BETWEEN_BLOCKS
         daa.AVG_TIME_BETWEEN_BLOCKS = 64
 
     @classmethod
@@ -107,7 +107,6 @@ class Simulator:
             seed = secrets.randbits(64)
         self.seed = seed
         self.rng = Random(self.seed)
-        self.settings = HathorSettings()
         self._network = 'testnet'
         self._clock = HeapClock()
         self._peers: OrderedDict[str, HathorManager] = OrderedDict()

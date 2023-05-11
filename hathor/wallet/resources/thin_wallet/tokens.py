@@ -18,10 +18,8 @@ from twisted.web.http import Request
 
 from hathor.api_util import Resource, get_args, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.util import is_token_uid_valid, json_dumpb
-
-settings = HathorSettings()
 
 
 @register_resource
@@ -85,7 +83,7 @@ class TokenResource(Resource):
         limit = 200
         truncated = False
         for uid, token_info in all_tokens:
-            if uid == settings.HATHOR_TOKEN_UID:
+            if uid == constants.HATHOR_TOKEN_UID:
                 continue
 
             if count >= limit:

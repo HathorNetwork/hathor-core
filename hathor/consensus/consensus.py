@@ -16,7 +16,7 @@ from typing import Set
 
 from structlog import get_logger
 
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.consensus.block_consensus import BlockConsensusAlgorithmFactory
 from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
@@ -25,7 +25,6 @@ from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
 
 logger = get_logger()
-settings = HathorSettings()
 cpu = get_cpu_profiler()
 
 _base_transaction_log = logger.new()
@@ -74,7 +73,7 @@ class ConsensusAlgorithm:
             self._unsafe_update(base)
         except Exception:
             meta = base.get_metadata()
-            meta.add_voided_by(settings.CONSENSUS_FAIL_ID)
+            meta.add_voided_by(constants.CONSENSUS_FAIL_ID)
             assert base.storage is not None
             base.storage.save_transaction(base, only_metadata=True)
             raise
@@ -140,7 +139,7 @@ class ConsensusAlgorithm:
             return voided_by
         ret = set()
         for h in voided_by:
-            if h == settings.SOFT_VOIDED_ID:
+            if h == constants.SOFT_VOIDED_ID:
                 continue
             if h == tx.hash:
                 continue

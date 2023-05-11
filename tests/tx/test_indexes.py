@@ -1,6 +1,6 @@
 import pytest
 
-from hathor.conf import HathorSettings
+from hathor.conf import HathorSettings, constants
 from hathor.crypto.util import decode_address
 from hathor.graphviz import GraphvizVisualizer
 from hathor.storage.rocksdb_storage import RocksDBStorage
@@ -311,7 +311,7 @@ class BaseIndexesTest(unittest.TestCase):
         from hathor.indexes.utxo_index import UtxoIndexItem
         from tests.utils import GENESIS_ADDRESS_B58
 
-        HTR_UID = settings.HATHOR_TOKEN_UID
+        HTR_UID = constants.HATHOR_TOKEN_UID
 
         assert self.tx_storage.indexes is not None
         utxo_index = self.tx_storage.indexes.utxo
@@ -323,7 +323,7 @@ class BaseIndexesTest(unittest.TestCase):
                 tx_id=settings.GENESIS_BLOCK_HASH,
                 index=0,
                 address=GENESIS_ADDRESS_B58,
-                amount=settings.GENESIS_TOKENS,
+                amount=constants.GENESIS_TOKENS,
                 timelock=None,
                 heightlock=settings.REWARD_SPEND_MIN_BLOCKS,
             ),
@@ -331,24 +331,24 @@ class BaseIndexesTest(unittest.TestCase):
 
         # height just not enough should be empty
         self.assertEqual(
-            list(utxo_index.iter_utxos(address=GENESIS_ADDRESS_B58, token_uid=settings.HATHOR_TOKEN_UID,
-                                       target_amount=settings.GENESIS_TOKEN_UNITS,
+            list(utxo_index.iter_utxos(address=GENESIS_ADDRESS_B58, token_uid=constants.HATHOR_TOKEN_UID,
+                                       target_amount=constants.GENESIS_TOKEN_UNITS,
                                        target_height=settings.REWARD_SPEND_MIN_BLOCKS - 1)),
             [],
         )
 
         # height is now enough
         self.assertEqual(
-            list(utxo_index.iter_utxos(address=GENESIS_ADDRESS_B58, token_uid=settings.HATHOR_TOKEN_UID,
-                                       target_amount=settings.GENESIS_TOKEN_UNITS,
+            list(utxo_index.iter_utxos(address=GENESIS_ADDRESS_B58, token_uid=constants.HATHOR_TOKEN_UID,
+                                       target_amount=constants.GENESIS_TOKEN_UNITS,
                                        target_height=settings.REWARD_SPEND_MIN_BLOCKS)),
             expected_genesis_utxos,
         )
 
         # otherwise we can leave out the height and it should give the utxos
         self.assertEqual(
-            list(utxo_index.iter_utxos(address=GENESIS_ADDRESS_B58, token_uid=settings.HATHOR_TOKEN_UID,
-                                       target_amount=settings.GENESIS_TOKEN_UNITS)),
+            list(utxo_index.iter_utxos(address=GENESIS_ADDRESS_B58, token_uid=constants.HATHOR_TOKEN_UID,
+                                       target_amount=constants.GENESIS_TOKEN_UNITS)),
             expected_genesis_utxos,
         )
 
@@ -371,7 +371,7 @@ class BaseIndexesTest(unittest.TestCase):
             actual = list(utxo_index.iter_utxos(address=address, target_amount=9999999))
             expected = [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=constants.HATHOR_TOKEN_UID,
                     tx_id=tx_id,
                     index=index,
                     address=address,
@@ -475,7 +475,7 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address, target_amount=1)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=constants.HATHOR_TOKEN_UID,
                     tx_id=b.hash,
                     index=0,
                     address=address,
@@ -490,7 +490,7 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address, target_amount=6500)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=constants.HATHOR_TOKEN_UID,
                     tx_id=b.hash,
                     index=0,
                     address=address,
@@ -505,7 +505,7 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address, target_amount=25600)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=constants.HATHOR_TOKEN_UID,
                     tx_id=b.hash,
                     index=0,
                     address=address,
@@ -520,7 +520,7 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address, target_amount=30000)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=constants.HATHOR_TOKEN_UID,
                     tx_id=b.hash,
                     index=0,
                     address=address,
@@ -565,7 +565,7 @@ class BaseIndexesTest(unittest.TestCase):
             print('check target_amount =', target_amount)
             expected = [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=constants.HATHOR_TOKEN_UID,
                     tx_id=tx.hash,
                     index=1,
                     address=address,
@@ -587,11 +587,11 @@ class BaseIndexesTest(unittest.TestCase):
             self.assertEqual(actual, expected)
 
         # now check that at most 255 utxos will be returned when we check for a large enough amount
-        max_outputs = settings.MAX_NUM_OUTPUTS
+        max_outputs = constants.MAX_NUM_OUTPUTS
         actual = list(utxo_index.iter_utxos(address=address, target_amount=sum(range(301))))
         expected = [
             UtxoIndexItem(
-                token_uid=settings.HATHOR_TOKEN_UID,
+                token_uid=constants.HATHOR_TOKEN_UID,
                 tx_id=tx.hash,
                 index=1,
                 address=address,
@@ -632,7 +632,7 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address, target_amount=1)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=constants.HATHOR_TOKEN_UID,
                     tx_id=b.hash,
                     index=0,
                     address=address,
@@ -670,7 +670,7 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address1, target_amount=6400)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=constants.HATHOR_TOKEN_UID,
                     tx_id=tx1.hash,
                     index=0,
                     address=address1,
@@ -704,7 +704,7 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address, target_amount=1)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=constants.HATHOR_TOKEN_UID,
                     tx_id=b.hash,
                     index=0,
                     address=address,
@@ -742,7 +742,7 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address1, target_amount=transfer_value)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=constants.HATHOR_TOKEN_UID,
                     tx_id=tx1.hash,
                     index=1,
                     address=address1,
@@ -757,7 +757,7 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address, target_amount=change_value)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=constants.HATHOR_TOKEN_UID,
                     tx_id=tx1.hash,
                     index=0,
                     address=address,
@@ -774,7 +774,7 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address1, target_amount=1)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=constants.HATHOR_TOKEN_UID,
                     tx_id=tx1.hash,
                     index=1,
                     address=address1,
@@ -789,7 +789,7 @@ class BaseIndexesTest(unittest.TestCase):
             list(utxo_index.iter_utxos(address=address, target_amount=1)),
             [
                 UtxoIndexItem(
-                    token_uid=settings.HATHOR_TOKEN_UID,
+                    token_uid=constants.HATHOR_TOKEN_UID,
                     tx_id=tx1.hash,
                     index=0,
                     address=address,

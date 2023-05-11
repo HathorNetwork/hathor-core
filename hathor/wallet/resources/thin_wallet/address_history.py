@@ -19,12 +19,10 @@ from twisted.web.http import Request
 
 from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.crypto.util import decode_address
 from hathor.util import json_dumpb, json_loadb
 from hathor.wallet.exceptions import InvalidAddress
-
-settings = HathorSettings()
 
 
 @register_resource
@@ -201,7 +199,7 @@ class AddressHistoryResource(Resource):
             to_iterate = hashes[start_index:]
             did_break = False
             for index, tx_hash in enumerate(to_iterate):
-                if total_added == settings.MAX_TX_ADDRESSES_HISTORY:
+                if total_added == constants.MAX_TX_ADDRESSES_HISTORY:
                     # If already added the max number of elements possible, then break
                     # I need to add this if at the beginning of the loop to handle the case
                     # when the first tx of the address exceeds the limit, so we must return
@@ -212,7 +210,7 @@ class AddressHistoryResource(Resource):
                 if tx_hash not in seen:
                     tx = self.manager.tx_storage.get_transaction(tx_hash)
                     tx_elements = len(tx.inputs) + len(tx.outputs)
-                    if total_elements + tx_elements > settings.MAX_INPUTS_OUTPUTS_ADDRESS_HISTORY:
+                    if total_elements + tx_elements > constants.MAX_INPUTS_OUTPUTS_ADDRESS_HISTORY:
                         # If the adition of this tx overcomes the maximum number of inputs and outputs, then break
                         # It's important to validate also the maximum number of inputs and outputs because some txs
                         # are really big and the response payload becomes too big

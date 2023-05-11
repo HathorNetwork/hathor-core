@@ -5,7 +5,7 @@ import pytest
 from structlog.testing import capture_logs
 
 from hathor.cli.twin_tx import create_parser, execute
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.transaction import Transaction, TransactionMetadata
 from hathor.util import json_loadb
 from tests import unittest
@@ -18,8 +18,6 @@ from tests.utils import (
     request_server,
     run_server,
 )
-
-settings = HathorSettings()
 
 
 class BaseTwinTxTest(unittest.TestCase):
@@ -93,7 +91,7 @@ class BaseTwinTxTest(unittest.TestCase):
         tx = response['tx']
 
         # Twin different weight and parents
-        host = 'http://localhost:8085/{}/'.format(settings.API_VERSION_PREFIX)
+        host = 'http://localhost:8085/{}/'.format(constants.API_VERSION_PREFIX)
         params = ['--url', host, '--hash', tx['hash'], '--parents', '--weight', '14']
         args = self.parser.parse_args(params)
 

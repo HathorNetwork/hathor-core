@@ -18,11 +18,9 @@ from typing import Dict, Iterator, Set
 
 from graphviz import Digraph
 
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage import TransactionStorage
-
-settings = HathorSettings()
 
 
 class GraphvizVisualizer:
@@ -91,7 +89,7 @@ class GraphvizVisualizer:
         if meta.voided_by and len(meta.voided_by) > 0:
             if meta.voided_by and tx.hash in meta.voided_by:
                 node_attrs.update(self.conflict_attrs)
-            if settings.SOFT_VOIDED_ID in meta.voided_by:
+            if constants.SOFT_VOIDED_ID in meta.voided_by:
                 node_attrs.update(self.soft_voided_attrs)
             else:
                 node_attrs.update(self.voided_attrs)

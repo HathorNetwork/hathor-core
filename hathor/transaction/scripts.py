@@ -24,7 +24,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from hathor.conf import HathorSettings
+from hathor.conf import HathorSettings, constants
 from hathor.crypto.util import (
     decode_address,
     get_address_b58_from_bytes,
@@ -928,7 +928,7 @@ def count_sigops(data: bytes) -> int:
                 # Unconventional OP_CHECKMULTISIG:
                 # We count the limit for PUBKEYS, since this is also the upper limit on signature operations
                 # that any op_checkmultisig would run
-                n_ops += settings.MAX_MULTISIG_PUBKEYS
+                n_ops += constants.MAX_MULTISIG_PUBKEYS
         last_opcode = opcode
     return n_ops
 
@@ -1543,10 +1543,10 @@ def op_checkmultisig(stack: Stack, log: List[str], extras: ScriptExtras) -> None
     if not isinstance(pubkey_count, int):
         raise InvalidStackData('OP_CHECKMULTISIG: pubkey count should be an integer')
 
-    if pubkey_count > settings.MAX_MULTISIG_PUBKEYS:
+    if pubkey_count > constants.MAX_MULTISIG_PUBKEYS:
         raise InvalidStackData('OP_CHECKMULTISIG: pubkey count ({}) exceeded the limit ({})'.format(
                 pubkey_count,
-                settings.MAX_MULTISIG_PUBKEYS,
+                constants.MAX_MULTISIG_PUBKEYS,
                 )
             )
 
@@ -1568,10 +1568,10 @@ def op_checkmultisig(stack: Stack, log: List[str], extras: ScriptExtras) -> None
     if not isinstance(signatures_count, int):
         raise InvalidStackData('OP_CHECKMULTISIG: signatures count should be an integer')
 
-    if signatures_count > settings.MAX_MULTISIG_SIGNATURES:
+    if signatures_count > constants.MAX_MULTISIG_SIGNATURES:
         raise InvalidStackData('OP_CHECKMULTISIG: signature count ({}) exceeded the limit ({})'.format(
                 signatures_count,
-                settings.MAX_MULTISIG_SIGNATURES,
+                constants.MAX_MULTISIG_SIGNATURES,
                 )
             )
 

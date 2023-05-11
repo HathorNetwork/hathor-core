@@ -24,7 +24,7 @@ from pycoin.key.Key import Key
 from structlog import get_logger
 from twisted.internet.interfaces import IDelayedCall
 
-from hathor.conf import HathorSettings
+from hathor.conf import HathorSettings, constants
 from hathor.crypto.util import decode_address
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction, TxInput, TxOutput
@@ -54,7 +54,7 @@ class WalletOutputInfo(NamedTuple):
     address: bytes
     value: int
     timelock: Optional[int]
-    token_uid: str = settings.HATHOR_TOKEN_UID.hex()
+    token_uid: str = constants.HATHOR_TOKEN_UID.hex()
 
 
 class WalletBalance(NamedTuple):
@@ -214,7 +214,7 @@ class BaseWallet:
         tokens = []         # List[bytes] = List[token_uid]
         for txout in outputs:
             token_uid = bytes.fromhex(txout.token_uid)
-            if token_uid == settings.HATHOR_TOKEN_UID:
+            if token_uid == constants.HATHOR_TOKEN_UID:
                 token_index = 0
             elif token_uid in token_dict:
                 token_index = token_dict[token_uid]
@@ -422,7 +422,7 @@ class BaseWallet:
                 _input.data = P2PKH.create_input_data(public_key_bytes, signature)
 
     def handle_change_tx(self, sum_inputs: int, sum_outputs: int,
-                         token_uid: bytes = settings.HATHOR_TOKEN_UID) -> Optional[WalletOutputInfo]:
+                         token_uid: bytes = constants.HATHOR_TOKEN_UID) -> Optional[WalletOutputInfo]:
         """Creates an output transaction with the change value
 
         :param sum_inputs: Sum of the input amounts
@@ -448,7 +448,7 @@ class BaseWallet:
 
     def get_inputs_from_amount(
         self, amount: int, tx_storage: 'TransactionStorage',
-        token_uid: bytes = settings.HATHOR_TOKEN_UID, max_ts: Optional[int] = None
+        token_uid: bytes = constants.HATHOR_TOKEN_UID, max_ts: Optional[int] = None
     ) -> Tuple[List[WalletInputInfo], int]:
         """Creates inputs from our pool of unspent tx given a value
 

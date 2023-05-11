@@ -18,7 +18,7 @@ from twisted.web.http import Request
 
 from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_int, set_cors
 from hathor.cli.openapi_files.register import register_resource
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.crypto.util import decode_address
 from hathor.transaction.scripts import parse_address_script
 from hathor.util import json_dumpb
@@ -26,8 +26,6 @@ from hathor.wallet.exceptions import InvalidAddress
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
-
-settings = HathorSettings()
 
 
 @register_resource
@@ -108,7 +106,7 @@ class AddressSearchResource(Resource):
             })
 
         try:
-            count = parse_int(raw_args[b'count'][0], cap=settings.MAX_TX_COUNT)
+            count = parse_int(raw_args[b'count'][0], cap=constants.MAX_TX_COUNT)
         except ValueError as e:
             return json_dumpb({
                 'success': False,

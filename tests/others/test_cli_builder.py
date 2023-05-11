@@ -1,4 +1,5 @@
 from typing import List
+from unittest.mock import patch
 
 import pytest
 
@@ -154,6 +155,7 @@ class BuilderTestCase(unittest.TestCase):
         self._build_with_error(args, 'You cannot use --memory-indexes and --x-rocksdb-indexes.')
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
+    @patch('hathor.conf.constants.ENABLE_EVENT_QUEUE_FEATURE', True)
     def test_event_queue_with_rocksdb_storage(self):
         data_dir = self.mkdtemp()
         manager = self._build(['--x-enable-event-queue', '--rocksdb-storage', '--data', data_dir])
@@ -163,6 +165,7 @@ class BuilderTestCase(unittest.TestCase):
         self.assertIsInstance(manager._event_manager._event_ws_factory, EventWebsocketFactory)
         self.assertFalse(manager._event_manager.emit_load_events)
 
+    @patch('hathor.conf.constants.ENABLE_EVENT_QUEUE_FEATURE', True)
     def test_event_queue_with_memory_storage(self):
         manager = self._build(['--x-enable-event-queue', '--memory-storage'])
 
@@ -175,6 +178,7 @@ class BuilderTestCase(unittest.TestCase):
         args = ['--x-enable-event-queue', '--memory-storage', '--x-full-verification']
         self._build_with_error(args, '--x-full-verification cannot be used with --x-enable-event-queue')
 
+    @patch('hathor.conf.constants.ENABLE_EVENT_QUEUE_FEATURE', True)
     def test_event_queue_with_emit_load_events(self):
         manager = self._build(['--x-enable-event-queue', '--memory-storage', '--x-emit-load-events'])
 

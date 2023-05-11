@@ -27,7 +27,7 @@ from cryptography.x509.oid import NameOID
 from twisted.internet.defer import inlineCallbacks
 from twisted.internet.interfaces import IAddress
 
-from hathor.conf import HathorSettings
+from hathor.conf import HathorSettings, constants
 from hathor.p2p.peer_discovery import DNSPeerDiscovery
 from hathor.transaction.genesis import GENESIS_HASH
 
@@ -86,7 +86,7 @@ def get_settings_hello_dict() -> Dict[str, Any]:
         'MULTISIG_VERSION_BYTE': settings.MULTISIG_VERSION_BYTE.hex(),
         'MIN_BLOCK_WEIGHT': settings.MIN_BLOCK_WEIGHT,
         'MIN_TX_WEIGHT': settings.MIN_TX_WEIGHT,
-        'BLOCK_DATA_MAX_SIZE': settings.BLOCK_DATA_MAX_SIZE
+        'BLOCK_DATA_MAX_SIZE': constants.BLOCK_DATA_MAX_SIZE
     }
 
     return settings_dict

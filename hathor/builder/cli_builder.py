@@ -331,7 +331,6 @@ class CliBuilder:
         return prometheus
 
     def create_resources(self, args: Namespace) -> server.Site:
-        from hathor.conf import HathorSettings
         from hathor.debug_resources import (
             DebugCrashResource,
             DebugLogResource,
@@ -394,7 +393,6 @@ class CliBuilder:
         )
         from hathor.websocket import HathorAdminWebsocketFactory, WebsocketStatsResource
 
-        settings = HathorSettings()
         cpu = get_cpu_profiler()
 
         # TODO get this from a file. How should we do with the factory?
@@ -522,7 +520,7 @@ class CliBuilder:
         root.putChild(b'websocket_stats', WebsocketStatsResource(ws_factory))
 
         real_root = Resource()
-        real_root.putChild(settings.API_VERSION_PREFIX.encode('ascii'), root)
+        real_root.putChild(constants.API_VERSION_PREFIX.encode('ascii'), root)
 
         from hathor.profiler.site import SiteProfiler
         status_server = SiteProfiler(real_root)
