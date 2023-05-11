@@ -26,10 +26,7 @@ _settings_filepath: Optional[str] = None
 def HathorSettings() -> Settings:
     settings_filepath = get_settings_filepath()
 
-    with open(settings_filepath, 'r') as file:
-        settings_dict = yaml.safe_load(file)
-
-        return Settings(**settings_dict)
+    return Settings.from_yaml(filepath=settings_filepath)
 
 
 def get_settings_filepath() -> str:
