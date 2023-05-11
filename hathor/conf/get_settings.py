@@ -15,8 +15,6 @@
 import os
 from typing import Optional
 
-import yaml
-
 from hathor import conf
 from hathor.conf.settings import HathorSettings as Settings
 

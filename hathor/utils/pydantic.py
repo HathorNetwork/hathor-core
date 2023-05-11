@@ -12,12 +12,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Union, TypeVar
+from typing import Type, TypeVar, Union
 
 import yaml
 from pydantic import BaseModel as PydanticBaseModel, Extra
 from pydantic.generics import GenericModel as PydanticGenericModel
-
 
 T = TypeVar('T', bound='BaseModel')
 
@@ -36,7 +35,7 @@ class BaseModel(PydanticBaseModel):
         return json_dumpb(self.dict())
 
     @classmethod
-    def from_yaml(cls, *, filepath: str) -> T:
+    def from_yaml(cls: Type[T], *, filepath: str) -> T:
         with open(filepath, 'r') as file:
             obj = yaml.safe_load(file)
 
