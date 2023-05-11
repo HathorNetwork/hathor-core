@@ -382,3 +382,34 @@ class HathorSettings(pydantic.BaseModel):
 
     # Time to update the peers that are running sync.
     SYNC_UPDATE_INTERVAL: int = 10 * 60  # seconds
+
+    @validator('CHECKPOINTS', pre=True)
+    def _parse_checkpoints(cls, checkpoints: Union[Dict[int, str], List[Checkpoint]]) -> List[Checkpoint]:
+        if isinstance(checkpoints, Dict):
+            return [
+                Checkpoint(height, bytes.fromhex(_hash))
+                for height, _hash in checkpoints.items()
+            ]
+
+        if not isinstance(checkpoints, List):
+            raise TypeError(f'expected \'Dict[int, str]\' or \'List[Checkpoint]\', got {checkpoints}')
+
+        return checkpoints
+
+    _parse_hex_str = validator(
+        'P2PKH_VERSION_BYTE',
+        'MULTISIG_VERSION_BYTE',
+        'GENESIS_OUTPUT_SCRIPT',
+        'GENESIS_BLOCK_HASH',
+        'GENESIS_TX1_HASH',
+        'GENESIS_TX2_HASH',
+        pre=True,
+        allow_reuse=True
+    )(pydantic.parse_hex_str)
+
+    _parse_soft_voided_tx_id = validator(
+        'SOFT_VOIDED_TX_IDS',
+        pre=True,
+        each_item=True,
+        allow_reuse=True
+    )(pydantic.parse_hex_str)
