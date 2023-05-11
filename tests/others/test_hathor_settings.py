@@ -11,6 +11,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+from pathlib import Path
 
 import pytest
 
@@ -21,11 +22,14 @@ from hathor.conf.settings import HathorSettings
 from hathor.conf.testnet import SETTINGS as TESTNET_SETTINGS
 from hathor.conf.unittests import SETTINGS as UNITTESTS_SETTINGS
 
-SETTINGS_YAML_FIXTURE = './hathor_settings_fixture.yml'
+HATHOR_SETTINGS_FIXTURE_FILE = 'hathor_settings_fixture.yml'
 
 
 def test_hathor_settings_from_yaml(hathor_settings):
-    assert hathor_settings == HathorSettings.from_yaml(filepath=SETTINGS_YAML_FIXTURE)
+    parent_dir = Path(__file__).parent
+    settings_filepath = str(parent_dir / HATHOR_SETTINGS_FIXTURE_FILE)
+
+    assert hathor_settings == HathorSettings.from_yaml(filepath=settings_filepath)
 
 
 @pytest.fixture
