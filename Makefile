@@ -42,8 +42,8 @@ tests-quick:
 
 .PHONY: tests-genesis
 tests-genesis:
-	HATHOR_TEST_CONFIG_FILE='./hathor/conf/mainnet.yaml' pytest tests/tx/test_genesis.py
-	HATHOR_TEST_CONFIG_FILE='./hathor/conf/testnet.yaml' pytest tests/tx/test_genesis.py
+	HATHOR_TEST_CONFIG_FILE='./hathor/conf/mainnet.yml' pytest tests/tx/test_genesis.py
+	HATHOR_TEST_CONFIG_FILE='./hathor/conf/testnet.yml' pytest tests/tx/test_genesis.py
 
 .PHONY: tests-ci
 tests-ci:

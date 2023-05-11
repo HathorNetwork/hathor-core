@@ -21,7 +21,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.conf.testnet import SETTINGS as TESTNET_SETTINGS
 from hathor.conf.unittests import SETTINGS as UNITTESTS_SETTINGS
 
-SETTINGS_YAML_FIXTURE = './hathor_settings_fixture.yaml'
+SETTINGS_YAML_FIXTURE = './hathor_settings_fixture.yml'
 
 
 def test_hathor_settings_from_yaml(hathor_settings):
