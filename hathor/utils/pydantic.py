@@ -58,7 +58,7 @@ class GenericModel(BaseModel, PydanticGenericModel):
 
 def parse_hex_str(hex_str: Union[str, bytes]) -> bytes:
     if isinstance(hex_str, str):
-        return bytes.fromhex(hex_str)
+        return bytes.fromhex(hex_str.lstrip('x'))
 
     if not isinstance(hex_str, bytes):
         raise TypeError(f'expected \'str\' or \'bytes\', got {hex_str}')
