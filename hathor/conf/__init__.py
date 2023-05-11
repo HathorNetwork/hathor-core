@@ -18,9 +18,9 @@ from hathor.conf.get_settings import HathorSettings
 
 parent_dir = Path(__file__).parent
 
-MAINNET_SETTINGS_FILEPATH = str(parent_dir / 'mainnet.yaml')
-TESTNET_SETTINGS_FILEPATH = str(parent_dir / 'testnet.yaml')
-UNITTESTS_SETTINGS_FILEPATH = str(parent_dir / 'unittests.yaml')
+MAINNET_SETTINGS_FILEPATH = str(parent_dir / 'mainnet.yml')
+TESTNET_SETTINGS_FILEPATH = str(parent_dir / 'testnet.yml')
+UNITTESTS_SETTINGS_FILEPATH = str(parent_dir / 'unittests.yml')
 
 __all__ = [
     'MAINNET_SETTINGS_FILEPATH',
