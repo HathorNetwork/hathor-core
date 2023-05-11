@@ -19,6 +19,8 @@ from typing import Any, Callable, List, Tuple
 
 from structlog import get_logger
 
+from hathor.conf import TESTNET_SETTINGS_FILEPATH
+
 logger = get_logger()
 # LOGGING_CAPTURE_STDOUT = True
 
@@ -309,9 +311,11 @@ class RunNode:
             argv = sys.argv[1:]
         self.parser = self.create_parser()
         args = self.parse_args(argv)
+
         if args.testnet:
             if not os.environ.get('HATHOR_CONFIG_FILE'):
-                os.environ['HATHOR_CONFIG_FILE'] = 'hathor.conf.testnet'
+                os.environ['HATHOR_CONFIG_FILE'] = TESTNET_SETTINGS_FILEPATH
+
         self.prepare(args)
         self.register_signal_handlers(args)
         if args.sysctl:
