@@ -74,15 +74,19 @@ flake8:
 isort-check:
 	isort --ac --check-only $(py_sources)
 
+.PHONY: yamllint
+yamllint:
+	yamllint .
+
 .PHONY: check-version
 check-version:
 	bash ./extras/check_version.sh $(VERSION)
 
 .PHONY: check
-check: check-version flake8 isort-check mypy
+check: check-version yamllint flake8 isort-check mypy
 
 .PHONY: dcheck
-dcheck: check-version flake8 isort-check dmypy
+dcheck: check-version yamllint flake8 isort-check dmypy
 
 # formatting:
 
