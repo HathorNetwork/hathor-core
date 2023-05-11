@@ -1,11 +1,8 @@
-from hathor.conf import HathorSettings
 from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator import FakeConnection, Simulator
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import add_custom_tx, gen_new_double_spending
-
-settings = HathorSettings()
 
 
 class BaseSoftVoidedTestCase(SimulatorTestCase):

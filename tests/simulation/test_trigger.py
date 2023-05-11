@@ -1,3 +1,4 @@
+from hathor.conf import constants
 from hathor.p2p.peer_id import PeerId
 from hathor.simulator import Simulator
 from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlocks
@@ -51,10 +52,9 @@ class TriggerTestCase(unittest.TestCase):
         miner1.start()
 
         wallet = self.manager1.wallet
-        settings = self.simulator.settings
 
         minimum_balance = 1000_00   # 16 blocks
-        token_uid = settings.HATHOR_TOKEN_UID
+        token_uid = constants.HATHOR_TOKEN_UID
 
         trigger = StopAfterMinimumBalance(wallet, token_uid, minimum_balance)
         self.assertLess(wallet.balance[token_uid].available, minimum_balance)

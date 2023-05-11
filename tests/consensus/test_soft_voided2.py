@@ -1,11 +1,9 @@
-from hathor.conf import HathorSettings
+from hathor.conf import constants
 from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator import Simulator
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import BURN_ADDRESS, add_custom_tx, gen_new_tx
-
-settings = HathorSettings()
 
 
 class BaseConsensusSimulatorTestCase(SimulatorTestCase):
@@ -158,8 +156,8 @@ class BaseConsensusSimulatorTestCase(SimulatorTestCase):
         for tx in manager1.tx_storage.get_all_transactions():
             meta = tx.get_metadata()
             voided_by = meta.voided_by or set()
-            if settings.SOFT_VOIDED_ID in voided_by:
-                self.assertTrue({settings.SOFT_VOIDED_ID, tx.hash}.issubset(voided_by))
+            if constants.SOFT_VOIDED_ID in voided_by:
+                self.assertTrue({constants.SOFT_VOIDED_ID, tx.hash}.issubset(voided_by))
 
         txF1 = self.txF1_0
         txF2 = self.txF2_0

@@ -172,15 +172,6 @@ STRATUM_MINE_TXS_DEFAULT: bool = True
 # See for further information, see [rfc 0011-token-deposit].
 TOKEN_DEPOSIT_PERCENTAGE: float = 0.01
 
-# Array with the settings parameters that are used when calculating the settings hash
-P2P_SETTINGS_HASH_FIELDS: List[str] = [
-    'P2PKH_VERSION_BYTE',
-    'MULTISIG_VERSION_BYTE',
-    'MIN_BLOCK_WEIGHT',
-    'MIN_TX_WEIGHT',
-    'BLOCK_DATA_MAX_SIZE'
-]
-
 # Maximum difference allowed between current time and a received tx timestamp (in seconds). Also used
 # during peer connection. Peers shouldn't have their clocks more than MAX_FUTURE_TIMESTAMP_ALLOWED/2 apart
 MAX_FUTURE_TIMESTAMP_ALLOWED: int = 5 * 60

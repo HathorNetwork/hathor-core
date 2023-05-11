@@ -342,7 +342,7 @@ class ConnectionsManager:
         # In case it was a retry, we must reset the data only here, after it gets ready
         protocol.peer.reset_retry_timestamp()
 
-        if len(self.connected_peers) <= self.MAX_ENABLED_SYNC:
+        if len(self.connected_peers) <= constants.MAX_ENABLED_SYNC:
             protocol.enable_sync()
 
         if protocol.peer.id in self.always_enable_sync:
