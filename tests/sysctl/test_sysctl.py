@@ -1,5 +1,5 @@
 from typing import cast
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from twisted.test import proto_helpers
 
@@ -11,6 +11,8 @@ from tests import unittest
 
 
 class SysctlTest(unittest.TestCase):
+    # We need this patch because pydantic.validate_arguments fails when it gets a mock function.
+    @patch('hathor.sysctl.sysctl.validate_arguments', new=lambda x: x)
     def setUp(self) -> None:
         super().setUp()
 
@@ -23,7 +25,7 @@ class SysctlTest(unittest.TestCase):
         net.register(
             'readonly',
             MagicMock(return_value=0.25),  # float
-            None
+            None,
         )
         net.register(
             'rate_limit',

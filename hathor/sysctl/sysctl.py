@@ -14,6 +14,8 @@
 
 from typing import Any, Callable, Dict, Iterator, NamedTuple, Optional, Tuple
 
+from pydantic import validate_arguments
+
 from hathor.sysctl.exception import SysctlEntryNotFound, SysctlReadOnlyEntry, SysctlWriteOnlyEntry
 
 Getter = Callable[[], Any]
@@ -40,6 +42,8 @@ class Sysctl:
     def register(self, path: str, getter: Optional[Getter], setter: Optional[Setter]) -> None:
         """Register a new parameter for sysctl."""
         assert path not in self._commands
+        if setter is not None:
+            setter = validate_arguments(setter)
         self._commands[path] = SysctlCommand(
             getter=getter,
             setter=setter,

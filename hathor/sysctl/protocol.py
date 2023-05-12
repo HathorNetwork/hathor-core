@@ -15,6 +15,7 @@
 import json
 from typing import TYPE_CHECKING, Any
 
+from pydantic import ValidationError
 from twisted.protocols.basic import LineReceiver
 
 from hathor.sysctl.exception import SysctlEntryNotFound, SysctlException, SysctlReadOnlyEntry, SysctlWriteOnlyEntry
@@ -64,6 +65,8 @@ class SysctlProtocol(LineReceiver):
         except SysctlReadOnlyEntry:
             self.sendError(f'cannot write to {path}')
         except SysctlException as e:
+            self.sendError(str(e))
+        except ValidationError as e:
             self.sendError(str(e))
         except TypeError as e:
             self.sendError(str(e))
