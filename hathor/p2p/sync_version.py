@@ -47,6 +47,10 @@ class SyncVersion(Enum):
         else:
             raise ValueError('value is either invalid for this enum or not implemented')
 
+    def is_v1(self) -> bool:
+        """Return True for V1 and V1_1."""
+        return self.get_priority() < 20
+
     # XXX: total_ordering decorator will implement the other methods: __le__, __gt__, and __ge__
     def __lt__(self, other):
         """Used to sort versions by considering the value on get_priority."""

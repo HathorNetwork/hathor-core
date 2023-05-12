@@ -58,6 +58,11 @@ class BaseVersionTest(_BaseResourceTest._ResourceTest):
                 build_version_file.write('nightly-a4b3f9c2')
             self.assertEqual(_get_version(), 'nightly-a4b3f9c2')
 
+            # BUILD_VERSION with white spaces
+            with open(file_path, 'w') as build_version_file:
+                build_version_file.write('  ' + BASE_VERSION + '-rc.1  ')
+            self.assertEqual(_get_version(), BASE_VERSION + '-rc.1')
+
             # Invalid BUILD_VERSION files
             git_head = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
 
