@@ -2,7 +2,7 @@ from typing import List
 
 import pytest
 
-from hathor.builder import CliBuilder
+from hathor.builder import CliBuilder, ResourcesBuilder
 from hathor.event import EventManager
 from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage
 from hathor.event.websocket import EventWebsocketFactory
@@ -26,18 +26,20 @@ class BuilderTestCase(unittest.TestCase):
         self.parser = RunNode.create_parser()
         self.builder = CliBuilder()
 
-    def _build_with_error(self, args: List[str], err_msg: str) -> None:
-        args = self.parser.parse_args(args)
+    def _build_with_error(self, cmd_args: List[str], err_msg: str) -> None:
+        args = self.parser.parse_args(cmd_args)
         with self.assertRaises(BuilderError) as cm:
-            self.builder.create_manager(self.reactor, args)
-            self.builder.register_resources(args, dry_run=True)
+            manager = self.builder.create_manager(self.reactor, args)
+            self.resources_builder = ResourcesBuilder(manager, self.builder.event_ws_factory)
+            self.resources_builder.build(args)
         self.assertEqual(err_msg, str(cm.exception))
 
-    def _build(self, args: List[str]) -> HathorManager:
-        args = self.parser.parse_args(args)
+    def _build(self, cmd_args: List[str]) -> HathorManager:
+        args = self.parser.parse_args(cmd_args)
         manager = self.builder.create_manager(self.reactor, args)
         self.assertIsNotNone(manager)
-        self.builder.register_resources(args, dry_run=True)
+        self.resources_builder = ResourcesBuilder(manager, self.builder.event_ws_factory)
+        self.resources_builder.build(args)
         return manager
 
     def test_empty(self):
@@ -54,8 +56,8 @@ class BuilderTestCase(unittest.TestCase):
         self.assertNotIn(SyncVersion.V1, manager.connections._sync_factories)
         self.assertIn(SyncVersion.V1_1, manager.connections._sync_factories)
         self.assertNotIn(SyncVersion.V2, manager.connections._sync_factories)
-        self.assertFalse(self.builder._build_prometheus)
-        self.assertFalse(self.builder._build_status)
+        self.assertFalse(self.resources_builder._built_prometheus)
+        self.assertFalse(self.resources_builder._built_status)
         self.assertIsNone(manager._event_manager)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
@@ -133,7 +135,7 @@ class BuilderTestCase(unittest.TestCase):
             '--enable-debug-api',
             '--enable-crash-api'
         ])
-        self.assertTrue(self.builder._build_status)
+        self.assertTrue(self.resources_builder._built_status)
         self.clean_pending(required_to_quiesce=False)
 
     def test_prometheus_no_data(self):
@@ -144,7 +146,7 @@ class BuilderTestCase(unittest.TestCase):
     def test_prometheus(self):
         data_dir = self.mkdtemp()
         self._build(['--prometheus', '--data', data_dir])
-        self.assertTrue(self.builder._build_prometheus)
+        self.assertTrue(self.resources_builder._built_prometheus)
         self.clean_pending(required_to_quiesce=False)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')

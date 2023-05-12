@@ -128,7 +128,7 @@ class RunNode:
         from hathor.util import reactor
         self.reactor = reactor
 
-        from hathor.builder import CliBuilder
+        from hathor.builder import CliBuilder, ResourcesBuilder
         from hathor.exception import BuilderError
         builder = CliBuilder()
         try:
@@ -140,7 +140,10 @@ class RunNode:
         self.wallet = self.manager.wallet
         self.start_manager(args)
         if register_resources:
-            builder.register_resources(args)
+            resources_builder = ResourcesBuilder(self.manager, builder.event_ws_factory)
+            status_server = resources_builder.build(args)
+            if args.status:
+                self.reactor.listenTCP(args.status, status_server)
 
         from hathor.conf import HathorSettings
         settings = HathorSettings()
