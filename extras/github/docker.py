@@ -160,7 +160,7 @@ def overwrite_version(base_version: str):
     with open('BUILD_VERSION', 'w') as file:
         if base_version.startswith('v'):
             base_version = base_version[1:]
-        file.write(base_version + '\n')
+        file.write(base_version)
 
 
 if __name__ == '__main__':

@@ -40,7 +40,7 @@ def _get_build_version() -> Optional[str]:
         return None
 
     with open(BUILD_VERSION_FILE_PATH, 'r') as f:
-        build_version = f.readline()
+        build_version = f.readline().strip()
         match = re.match(BUILD_VERSION_REGEX, build_version)
 
         if match:
