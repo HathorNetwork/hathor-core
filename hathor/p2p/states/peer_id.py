@@ -21,7 +21,6 @@ from hathor.conf import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.states.base import BaseState
-from hathor.p2p.sync_version import SyncVersion
 from hathor.util import json_dumps, json_loads
 
 if TYPE_CHECKING:
@@ -156,8 +155,8 @@ class PeerIdState(BaseState):
 
         # when ENABLE_PEER_WHITELIST is set, we check if we're on sync-v1 to block non-whitelisted peers
         if settings.ENABLE_PEER_WHITELIST:
-            protocol_is_v1 = self.protocol.sync_version is SyncVersion.V1
-            if protocol_is_v1 and not peer_is_whitelisted:
+            assert self.protocol.sync_version is not None
+            if self.protocol.sync_version.is_v1() and not peer_is_whitelisted:
                 return True
 
         # otherwise we block non-whitelisted peers when on "whitelist-only mode"
