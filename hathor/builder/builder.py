@@ -26,6 +26,7 @@ from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventS
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.indexes import IndexesManager
 from hathor.manager import HathorManager
+from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.pubsub import PubSubManager
 from hathor.storage import RocksDBStorage
@@ -48,6 +49,7 @@ class BuildArtifacts(NamedTuple):
     rng: Random
     reactor: Reactor
     manager: HathorManager
+    p2p_manager: ConnectionsManager
     pubsub: PubSubManager
     consensus: ConsensusAlgorithm
     tx_storage: TransactionStorage
@@ -182,6 +184,7 @@ class Builder:
             rng=self._rng,
             reactor=reactor,
             manager=manager,
+            p2p_manager=manager.connections,
             pubsub=pubsub,
             consensus=consensus_algorithm,
             tx_storage=tx_storage,

@@ -446,8 +446,7 @@ def progress(iter_tx: Iterator['BaseTransaction'], *, log: Optional['structlog.s
     if log is None:
         log = logger.new()
 
-    with manualgc():
-        yield from _progress(iter_tx, log=log, total=total)
+    yield from _progress(iter_tx, log=log, total=total)
 
 
 def _progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib.BoundLogger', total: Optional[int]
@@ -495,11 +494,6 @@ def _progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib.Bo
                 log.info(f'loading... {math.floor(progress * 100):2.0f}%', progress=progress, **kwargs)
             else:
                 log.info('loading...', **kwargs)
-            # XXX: this collections will happen every _DT_LOG_PROGRESS (=30s) on average, which is good, and because
-            #      automatic collection should be disabled, it won't happen during processing of transactions, which
-            #      can make it seem like a transaction took more time to be processed when has nothing to do with the
-            #      transaction itself
-            gc.collect()
             count_log_prev = count
         count += 1
 
@@ -515,10 +509,10 @@ def _progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib.Bo
         dt_yield = t_after_yield - t_before_yield
         if dt_yield > _DT_YIELD_WARN:
             dt = LogDuration(dt_yield)
-            log.warn('tx took too long to be processed', tx=tx.hash_hex, dt=dt)
-
-    # one final collection before finishing the loading process
-    gc.collect()
+            # The loglevel was changed to debug because most of the causes of slowness
+            # is related to the gc acting during the tx processing. We had previously
+            # disabled the gc but it caused a too high CPU usage.
+            log.debug('tx took too long to be processed (gc?!)', tx=tx.hash_hex, dt=dt)
 
     t_final = time.time()
     dt_total = LogDuration(t_final - t_start)
