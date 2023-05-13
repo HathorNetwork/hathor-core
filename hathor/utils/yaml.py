@@ -12,12 +12,12 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Dict
+from typing import Any, Dict
 
 import yaml
 
 
-def dict_from(*, filepath: str) -> Dict:
+def dict_from(*, filepath: str) -> Dict[str, Any]:
     """Takes a filepath to a yaml file and returns a dictionary with its contents."""
     with open(filepath, 'r') as file:
         return yaml.safe_load(file)
