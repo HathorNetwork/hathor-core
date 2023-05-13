@@ -14,7 +14,7 @@
 
 import os
 from math import log
-from typing import Dict, List, NamedTuple, Optional, Union
+from typing import Any, Dict, List, NamedTuple, Optional, Union
 
 import pydantic
 
@@ -392,7 +392,7 @@ class HathorSettings(NamedTuple):
         return HathorSettings.from_dict(settings_dict)
 
     @classmethod
-    def from_dict(cls, settings: Dict) -> 'HathorSettings':
+    def from_dict(cls, settings: Dict[str, Any]) -> 'HathorSettings':
         """Takes a settings dict and returns a validated HathorSettings instance."""
         # This intermediate step shouldn't be necessary, but for some reason pydantic.create_model_from_namedtuple
         # doesn't support default attribute values, so we do this to add them
