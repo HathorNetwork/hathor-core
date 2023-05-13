@@ -14,6 +14,7 @@
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf import MAINNET_SETTINGS_FILEPATH, TESTNET_SETTINGS_FILEPATH, UNITTESTS_SETTINGS_FILEPATH
@@ -22,14 +23,32 @@ from hathor.conf.settings import HathorSettings
 from hathor.conf.testnet import SETTINGS as TESTNET_SETTINGS
 from hathor.conf.unittests import SETTINGS as UNITTESTS_SETTINGS
 
-HATHOR_SETTINGS_FIXTURE_FILE = 'hathor_settings_fixture.yml'
+VALID_HATHOR_SETTINGS_FIXTURE_FILE = 'resources/valid_hathor_settings_fixture.yml'
+INVALID_HATHOR_SETTINGS_FIXTURE_FILE = 'resources/invalid_hathor_settings_fixture.yml'
+MISSING_HATHOR_SETTINGS_FIXTURE_FILE = 'resources/missing_hathor_settings_fixture.yml'
 
 
-def test_hathor_settings_from_yaml(hathor_settings):
+def test_valid_hathor_settings_from_yaml(hathor_settings):
     parent_dir = Path(__file__).parent
-    settings_filepath = str(parent_dir / HATHOR_SETTINGS_FIXTURE_FILE)
+    settings_filepath = str(parent_dir / VALID_HATHOR_SETTINGS_FIXTURE_FILE)
 
     assert hathor_settings == HathorSettings.from_yaml(filepath=settings_filepath)
+
+
+def test_invalid_hathor_settings_from_yaml():
+    parent_dir = Path(__file__).parent
+    settings_filepath = str(parent_dir / INVALID_HATHOR_SETTINGS_FIXTURE_FILE)
+
+    with pytest.raises(ValidationError):
+        HathorSettings.from_yaml(filepath=settings_filepath)
+
+
+def test_missing_hathor_settings_from_yaml():
+    parent_dir = Path(__file__).parent
+    settings_filepath = str(parent_dir / MISSING_HATHOR_SETTINGS_FIXTURE_FILE)
+
+    with pytest.raises(TypeError):
+        HathorSettings.from_yaml(filepath=settings_filepath)
 
 
 @pytest.fixture
