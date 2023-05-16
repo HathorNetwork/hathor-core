@@ -81,6 +81,15 @@ class StatusResource(Resource):
             })
 
         app = 'Hathor v{}'.format(hathor.__version__)
+
+        best_block_tips = []
+        for tip in self.manager.tx_storage.get_best_block_tips():
+            tx = self.manager.tx_storage.get_transaction(tip)
+            meta = tx.get_metadata()
+            best_block_tips.append({'hash': tx.hash_hex, 'height': meta.height})
+
+        best_block = self.manager.tx_storage.get_best_block()
+
         data = {
             'server': {
                 'id': self.manager.connections.my_peer.id,
@@ -100,6 +109,11 @@ class StatusResource(Resource):
             'dag': {
                 'first_timestamp': self.manager.tx_storage.first_timestamp,
                 'latest_timestamp': self.manager.tx_storage.latest_timestamp,
+                'best_block_tips': best_block_tips,
+                'best_block': {
+                    'hash': best_block.hash_hex,
+                    'height': best_block.get_metadata().height,
+                },
             }
         }
         return json_dumpb(data)
@@ -170,7 +184,17 @@ StatusResource.openapi = {
                                         },
                                         'dag': {
                                             'first_timestamp': 1539271481,
-                                            'latest_timestamp': 1539271483
+                                            'latest_timestamp': 1539271483,
+                                            'best_block_tips': [
+                                                {
+                                                    'hash': '000007eb968a6cdf0499e2d033faf1e163e0dc9cf41876acad4d421836972038',  # noqa: E501
+                                                    'height': 0
+                                                }
+                                            ],
+                                            'best_block': {
+                                                'hash': '000007eb968a6cdf0499e2d033faf1e163e0dc9cf41876acad4d421836972038',  # noqa: E501
+                                                'height': 0
+                                            }
                                         }
                                     }
                                 }

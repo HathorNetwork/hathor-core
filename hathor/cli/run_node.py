@@ -45,6 +45,8 @@ class RunNode:
                             help='Reduces tx weight to 1 for testing purposes')
         parser.add_argument('--dns', action='append', help='Seed DNS')
         parser.add_argument('--peer', help='json file with peer info')
+        parser.add_argument('--sysctl',
+                            help='Endpoint description (eg: unix:/path/sysctl.sock, tcp:5000:interface:127.0.0.1)')
         parser.add_argument('--listen', action='append', default=[],
                             help='Address to listen for new connections (eg: tcp:8000)')
         parser.add_argument('--bootstrap', action='append', help='Address to connect to (eg: tcp:127.0.0.1:8000')
@@ -88,6 +90,8 @@ class RunNode:
         parser.add_argument('--sentry-dsn', help='Sentry DSN')
         parser.add_argument('--enable-debug-api', action='store_true', help='Enable _debug/* endpoints')
         parser.add_argument('--enable-crash-api', action='store_true', help='Enable _crash/* endpoints')
+        parser.add_argument('--x-enable-legacy-sync-v1_0', action='store_true', help='Enable sync-v1.0, will not '
+                            'disable sync-v1.1')
         v2args = parser.add_mutually_exclusive_group()
         v2args.add_argument('--x-sync-bridge', action='store_true',
                             help='Enable support for running both sync protocols. DO NOT ENABLE, IT WILL BREAK.')
@@ -96,7 +100,8 @@ class RunNode:
         parser.add_argument('--x-localhost-only', action='store_true', help='Only connect to peers on localhost')
         parser.add_argument('--x-rocksdb-indexes', action='store_true', help=SUPPRESS)
         parser.add_argument('--x-enable-event-queue', action='store_true', help='Enable event queue mechanism')
-        parser.add_argument('--x-retain-events', action='store_true', help='Retain all events in the local database')
+        parser.add_argument('--x-emit-load-events', action='store_true', help='Enable emission of events during the '
+                                                                              'LOAD phase')
         parser.add_argument('--peer-id-blacklist', action='extend', default=[], nargs='+', type=str,
                             help='Peer IDs to forbid connection')
         return parser
@@ -136,6 +141,25 @@ class RunNode:
         self.start_manager(args)
         if register_resources:
             builder.register_resources(args)
+
+        from hathor.conf import HathorSettings
+        settings = HathorSettings()
+
+        from hathor.builder.builder import BuildArtifacts
+        self.artifacts = BuildArtifacts(
+            peer_id=self.manager.my_peer,
+            settings=settings,
+            rng=self.manager.rng,
+            reactor=self.manager.reactor,
+            manager=self.manager,
+            p2p_manager=self.manager.connections,
+            pubsub=self.manager.pubsub,
+            consensus=self.manager.consensus_algorithm,
+            tx_storage=self.manager.tx_storage,
+            indexes=self.manager.tx_storage.indexes,
+            wallet=self.manager.wallet,
+            rocksdb_storage=getattr(builder, 'rocksdb_storage', None),
+        )
 
     def start_sentry_if_possible(self, args: Namespace) -> None:
         """Start Sentry integration if possible."""
@@ -289,6 +313,32 @@ class RunNode:
                 os.environ['HATHOR_CONFIG_FILE'] = 'hathor.conf.testnet'
         self.prepare(args)
         self.register_signal_handlers(args)
+        if args.sysctl:
+            self.init_sysctl(args.sysctl)
+
+    def init_sysctl(self, description: str) -> None:
+        """Initialize sysctl and listen for connections.
+
+        Examples of description:
+        - tcp:5000
+        - tcp:5000:interface=127.0.0.1
+        - unix:/path/sysctl.sock
+        - unix:/path/sysctl.sock:mode=660
+
+        For the full documentation, check the link below:
+        https://docs.twisted.org/en/stable/api/twisted.internet.endpoints.html#serverFromString
+        """
+        from twisted.internet.endpoints import serverFromString
+
+        from hathor.builder.sysctl_builder import SysctlBuilder
+        from hathor.sysctl.factory import SysctlFactory
+
+        builder = SysctlBuilder(self.artifacts)
+        root = builder.build()
+
+        factory = SysctlFactory(root)
+        endpoint = serverFromString(self.reactor, description)
+        endpoint.listen(factory)
 
     def parse_args(self, argv: List[str]) -> Namespace:
         return self.parser.parse_args(argv)

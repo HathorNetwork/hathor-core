@@ -26,18 +26,29 @@ from twisted.internet.posixbase import PosixReactorBase
 from twisted.web import server
 from twisted.web.resource import Resource
 
+from hathor.consensus import ConsensusAlgorithm
+from hathor.event import EventManager
+from hathor.event.resources.event import EventResource
 from hathor.exception import BuilderError
+from hathor.indexes import IndexesManager
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import discover_hostname
 from hathor.prometheus import PrometheusMetricsExporter
+from hathor.pubsub import PubSubManager
 from hathor.wallet import BaseWallet, HDWallet, Wallet
 
 logger = get_logger()
 
 
 class CliBuilder:
+    """CliBuilder builds the core objects from args.
+
+    TODO Refactor to use Builder. It could even be ported to a Builder.from_args classmethod.
+    """
     def __init__(self) -> None:
+        self.log = logger.new()
+
         self._build_prometheus = False
         self._build_status = False
 
@@ -47,13 +58,12 @@ class CliBuilder:
             raise BuilderError(message)
 
     def create_manager(self, reactor: PosixReactorBase, args: Namespace) -> HathorManager:
-        self.log = logger.new()
-
         import hathor
         from hathor.conf import HathorSettings
         from hathor.conf.get_settings import get_settings_module
         from hathor.daa import TestMode, _set_test_mode
         from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
+        from hathor.event.websocket.factory import EventWebsocketFactory
         from hathor.p2p.netfilter.utils import add_peer_id_blacklist
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
         from hathor.storage import RocksDBStorage
@@ -87,14 +97,15 @@ class CliBuilder:
         )
 
         tx_storage: TransactionStorage
-        rocksdb_storage: RocksDBStorage
-        event_storage: Optional[EventStorage] = None
+        event_storage: EventStorage
+        self.rocksdb_storage: Optional[RocksDBStorage] = None
+        self.event_ws_factory: Optional[EventWebsocketFactory] = None
+
         if args.memory_storage:
             self.check_or_raise(not args.data, '--data should not be used with --memory-storage')
             # if using MemoryStorage, no need to have cache
             tx_storage = TransactionMemoryStorage()
-            if args.x_enable_event_queue:
-                event_storage = EventMemoryStorage()
+            event_storage = EventMemoryStorage()
             self.check_or_raise(not args.x_rocksdb_indexes, 'RocksDB indexes require RocksDB data')
             self.log.info('with storage', storage_class=type(tx_storage).__name__)
         else:
@@ -102,12 +113,11 @@ class CliBuilder:
             if args.rocksdb_storage:
                 self.log.warn('--rocksdb-storage is now implied, no need to specify it')
             cache_capacity = args.rocksdb_cache
-            rocksdb_storage = RocksDBStorage(path=args.data, cache_capacity=cache_capacity)
-            tx_storage = TransactionRocksDBStorage(rocksdb_storage,
+            self.rocksdb_storage = RocksDBStorage(path=args.data, cache_capacity=cache_capacity)
+            tx_storage = TransactionRocksDBStorage(self.rocksdb_storage,
                                                    with_index=(not args.cache),
                                                    use_memory_indexes=args.memory_indexes)
-            if args.x_enable_event_queue:
-                event_storage = EventRocksDBStorage(rocksdb_storage)
+            event_storage = EventRocksDBStorage(self.rocksdb_storage)
 
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
         if args.cache:
@@ -128,27 +138,66 @@ class CliBuilder:
 
         hostname = self.get_hostname(args)
         network = settings.NETWORK_NAME
-        enable_sync_v1 = not args.x_sync_v2_only
+        enable_sync_v1 = args.x_enable_legacy_sync_v1_0
+        enable_sync_v1_1 = not args.x_sync_v2_only
         enable_sync_v2 = args.x_sync_v2_only or args.x_sync_bridge
+
+        pubsub = PubSubManager(reactor)
+
+        event_manager: Optional[EventManager] = None
+        if args.x_enable_event_queue:
+            self.event_ws_factory = EventWebsocketFactory(reactor, event_storage)
+            event_manager = EventManager(
+                event_storage=event_storage,
+                event_ws_factory=self.event_ws_factory,
+                pubsub=pubsub,
+                reactor=reactor,
+                emit_load_events=args.x_emit_load_events
+            )
+        else:
+            self.check_or_raise(not args.x_emit_load_events, '--x-emit-load-events cannot be used without '
+                                                             '--x-enable-event-queue')
+
+        if args.wallet_index and tx_storage.indexes is not None:
+            self.log.debug('enable wallet indexes')
+            self.enable_wallet_index(tx_storage.indexes, pubsub)
+
+        if args.utxo_index and tx_storage.indexes is not None:
+            self.log.debug('enable utxo index')
+            tx_storage.indexes.enable_utxo_index()
+
+        full_verification = False
+        if args.x_full_verification:
+            self.check_or_raise(not args.x_enable_event_queue, '--x-full-verification cannot be used with '
+                                                               '--x-enable-event-queue')
+            full_verification = True
+
+        soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
+        consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub=pubsub)
 
         self.manager = HathorManager(
             reactor,
+            pubsub=pubsub,
             peer_id=peer_id,
             network=network,
             hostname=hostname,
             tx_storage=tx_storage,
             event_storage=event_storage,
+            event_manager=event_manager,
             wallet=self.wallet,
-            wallet_index=args.wallet_index,
-            utxo_index=args.utxo_index,
             stratum_port=args.stratum,
             ssl=True,
             checkpoints=settings.CHECKPOINTS,
             enable_sync_v1=enable_sync_v1,
+            enable_sync_v1_1=enable_sync_v1_1,
             enable_sync_v2=enable_sync_v2,
-            soft_voided_tx_ids=set(settings.SOFT_VOIDED_TX_IDS),
+            consensus_algorithm=consensus_algorithm,
             environment_info=get_environment_info(args=str(args), peer_id=peer_id.id),
+            full_verification=full_verification
         )
+
+        if args.data:
+            self.manager.set_cmd_path(args.data)
 
         if args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
@@ -174,8 +223,6 @@ class CliBuilder:
             if self.wallet:
                 self.wallet.test_mode = True
 
-        if args.x_full_verification:
-            self.manager._full_verification = True
         if args.x_fast_init_beta:
             self.log.warn('--x-fast-init-beta is now the default, no need to specify it')
         if args.x_rocksdb_indexes:
@@ -195,11 +242,6 @@ class CliBuilder:
             self.log.info('--x-enable-event-queue flag provided. '
                           'The events detected by the full node will be stored and retrieved to clients')
 
-            self.manager.retain_events = args.x_retain_events is True
-        elif args.x_retain_events:
-            self.log.error('You cannot use --x-retain-events without --x-enable-event-queue.')
-            sys.exit(-1)
-
         for description in args.listen:
             self.manager.add_listen_address(description)
 
@@ -208,6 +250,11 @@ class CliBuilder:
             add_peer_id_blacklist(args.peer_id_blacklist)
 
         return self.manager
+
+    def enable_wallet_index(self, indexes: IndexesManager, pubsub: PubSubManager) -> None:
+        self.log.debug('enable wallet indexes')
+        indexes.enable_address_index(pubsub)
+        indexes.enable_tokens_index()
 
     def get_hostname(self, args: Namespace) -> str:
         if args.hostname and args.auto_hostname:
@@ -464,6 +511,11 @@ class CliBuilder:
         root.putChild(b'mining_ws', WebSocketResource(mining_ws_factory))
 
         ws_factory.subscribe(self.manager.pubsub)
+
+        # Event websocket resource
+        if args.x_enable_event_queue and self.event_ws_factory is not None:
+            root.putChild(b'event_ws', WebSocketResource(self.event_ws_factory))
+            root.putChild(b'event', EventResource(self.manager._event_manager))
 
         # Websocket stats resource
         root.putChild(b'websocket_stats', WebsocketStatsResource(ws_factory))

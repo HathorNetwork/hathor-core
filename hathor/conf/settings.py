@@ -369,3 +369,13 @@ class HathorSettings(NamedTuple):
     CONSENSUS_FAIL_ID: bytes = b'consensus-fail'
 
     ENABLE_EVENT_QUEUE_FEATURE: bool = False
+
+    EVENT_API_DEFAULT_BATCH_SIZE: int = 100
+
+    EVENT_API_MAX_BATCH_SIZE: int = 1000
+
+    # Maximum number of sync running simultaneously.
+    MAX_ENABLED_SYNC: int = 16
+
+    # Time to update the peers that are running sync.
+    SYNC_UPDATE_INTERVAL: int = 10 * 60  # seconds

@@ -17,7 +17,7 @@ import random
 import signal
 import sys
 import time
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from json.decoder import JSONDecodeError
 from typing import Any, Dict
 
@@ -43,7 +43,7 @@ def create_parser() -> ArgumentParser:
     return parser
 
 
-def execute(args):
+def execute(args: Namespace) -> None:
     import urllib.parse
 
     from requests.exceptions import ConnectionError
@@ -68,6 +68,7 @@ def execute(args):
         addresses = args.address
     else:
         address_url = urllib.parse.urljoin(args.url, 'wallet/address') + '?new=false'
+        response = None
         while True:
             try:
                 response = requests.get(address_url)
@@ -86,6 +87,7 @@ def execute(args):
                     continue
             else:
                 conn_retries = 0
+        assert response is not None
         addresses = [response.json()['address']]
 
     print('Addresses: {}'.format(addresses))

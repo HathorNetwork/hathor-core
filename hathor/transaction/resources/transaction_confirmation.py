@@ -32,7 +32,7 @@ class TransactionAccWeightResource(Resource):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
 
-    def _render_GET_data(self, requested_hash):
+    def _render_GET_data(self, requested_hash: str) -> Dict[str, Any]:
         success, message = validate_tx_hash(requested_hash, self.manager.tx_storage)
         if not success:
             return {'success': False, 'message': message}

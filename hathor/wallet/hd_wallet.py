@@ -51,7 +51,9 @@ def _register_pycoin_networks() -> None:
 
 
 class HDWallet(BaseWallet):
-    """ Hierarchical Deterministic Wallet based in BIP32 (https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki)
+    """ Hierarchical Deterministic Wallet based on BIP32.
+
+    See: https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
     """
 
     def __init__(self, *, words: Optional[Any] = None, language: str = 'english', passphrase: bytes = b'',

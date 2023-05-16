@@ -50,7 +50,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
                                  transaction/blocks/metadata when returning those objects.
         :type _clone_if_needed: bool
         """
-        if store.with_index:
+        if store.indexes is not None:
             raise ValueError('internal storage cannot have indexes enabled')
 
         store.remove_cache()

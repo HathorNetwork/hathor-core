@@ -27,9 +27,10 @@ def main():
                         help='Where to read json logs from, defaults to stdin.')
     parser.add_argument('output', type=argparse.FileType('w', encoding='UTF-8'), default=sys.stdout, nargs='?',
                         help='Where to write pretty logs to, defaults to stdout.')
+    parser.add_argument('--color', action='store_true')
     args = parser.parse_args()
 
-    renderer = ConsoleRenderer(colors=args.output.isatty())
+    renderer = ConsoleRenderer(colors=args.color or args.output.isatty())
 
     while True:
         line_with_break = args.input.readline()

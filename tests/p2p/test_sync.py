@@ -268,7 +268,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
         self.assertTrue(isinstance(conn.proto1.state, PeerIdState))
         self.assertTrue(isinstance(conn.proto2.state, PeerIdState))
 
-        downloader = conn.proto2.connections._sync_factories[SyncVersion.V1].downloader
+        downloader = conn.proto2.connections._sync_factories[SyncVersion.V1_1].downloader
 
         node_sync1 = NodeSyncTimestamp(conn.proto1, downloader, reactor=conn.proto1.node.reactor)
         node_sync1.start()
@@ -361,7 +361,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
 
         # create the peer that will experience the bug
         self.manager_bug = self.create_peer(self.network)
-        self.downloader = self.manager_bug.connections._sync_factories[SyncVersion.V1].downloader
+        self.downloader = self.manager_bug.connections._sync_factories[SyncVersion.V1_1].downloader
         self.downloader.window_size = 1
         self.conn1 = FakeConnection(self.manager_bug, self.manager1)
         self.conn2 = FakeConnection(self.manager_bug, self.manager2)
@@ -460,7 +460,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
     def test_downloader_disconnect(self):
         """ This is related to test_downloader_retry_reorder, but it basically tests the change in behavior instead.
 
-        When a peer disconnects it should be immediately remvoed from the tx-detail's connections list.
+        When a peer disconnects it should be immediately removed from the tx-detail's connections list.
         """
         self._downloader_bug_setup()
 

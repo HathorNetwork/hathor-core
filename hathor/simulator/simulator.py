@@ -20,19 +20,22 @@ from typing import TYPE_CHECKING, Any, Generator, List, Optional, Set
 from mnemonic import Mnemonic
 from structlog import get_logger
 
+from hathor.builder import Builder
+from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
+from hathor.event.websocket import EventWebsocketFactory
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.simulator.clock import HeapClock
-from hathor.simulator.miner import MinerSimulator
+from hathor.simulator.miner.geometric_miner import GeometricMiner
 from hathor.simulator.tx_generator import RandomTransactionGenerator
 from hathor.transaction.genesis import _get_genesis_transactions_unsafe
-from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.util import Random
 from hathor.wallet import HDWallet
 
 if TYPE_CHECKING:
     from hathor.simulator.fake_connection import FakeConnection
+    from hathor.simulator.trigger import Trigger
 
 
 logger = get_logger()
@@ -59,6 +62,7 @@ class Simulator:
 
         def verify_pow(self: BaseTransaction, *args: Any, **kwargs: Any) -> None:
             assert self.hash is not None
+            logger.new().debug('Skipping BaseTransaction.verify_pow() for simulator')
 
         cls._original_verify_pow = BaseTransaction.verify_pow
         BaseTransaction.verify_pow = verify_pow
@@ -103,6 +107,7 @@ class Simulator:
             seed = secrets.randbits(64)
         self.seed = seed
         self.rng = Random(self.seed)
+        self.settings = HathorSettings()
         self._network = 'testnet'
         self._clock = HeapClock()
         self._peers: OrderedDict[str, HathorManager] = OrderedDict()
@@ -125,35 +130,40 @@ class Simulator:
         self._started = False
         self._patches_rc_decrement()
 
-    def create_peer(self, network: Optional[str] = None, peer_id: Optional[PeerId] = None,
-                    enable_sync_v1: bool = True, enable_sync_v2: bool = True,
-                    soft_voided_tx_ids: Optional[Set[bytes]] = None) -> HathorManager:
-        assert self._started
-        if network is None:
-            network = self._network
+    def create_peer(
+        self,
+        network: Optional[str] = None,
+        peer_id: Optional[PeerId] = None,
+        enable_sync_v1: bool = True,
+        enable_sync_v2: bool = True,
+        soft_voided_tx_ids: Optional[Set[bytes]] = None,
+        full_verification: bool = True,
+        event_ws_factory: Optional[EventWebsocketFactory] = None
+    ) -> HathorManager:
+        assert self._started, 'Simulator is not started.'
+        assert peer_id is not None  # XXX: temporary, for checking that tests are using the peer_id
 
         wallet = HDWallet(gap_limit=2)
         wallet._manually_initialize()
 
-        assert peer_id is not None  # XXX: temporary, for checking that tests are using the peer_id
-        if peer_id is None:
-            peer_id = PeerId()
-        tx_storage = TransactionMemoryStorage()
-        manager = HathorManager(
-            self._clock,
-            peer_id=peer_id,
-            network=network,
-            wallet=wallet,
-            enable_sync_v1=enable_sync_v1,
-            enable_sync_v2=enable_sync_v2,
-            tx_storage=tx_storage,
-            rng=Random(self.rng.getrandbits(64)),
-            soft_voided_tx_ids=soft_voided_tx_ids,
-        )
+        builder = Builder() \
+            .set_reactor(self._clock) \
+            .set_peer_id(peer_id or PeerId()) \
+            .set_network(network or self._network) \
+            .set_wallet(wallet) \
+            .set_rng(Random(self.rng.getrandbits(64))) \
+            .set_enable_sync_v1(enable_sync_v1) \
+            .set_enable_sync_v2(enable_sync_v2) \
+            .set_full_verification(full_verification) \
+            .set_soft_voided_tx_ids(soft_voided_tx_ids or set()) \
+            .use_memory()
 
-        manager.reactor = self._clock
-        manager._full_verification = True
-        manager.start()
+        if event_ws_factory:
+            builder.enable_event_manager(event_ws_factory=event_ws_factory)
+
+        artifacts = builder.build()
+
+        artifacts.manager.start()
         self.run_to_completion()
 
         # Don't use it anywhere else. It is unsafe to generate mnemonic words like this.
@@ -161,14 +171,15 @@ class Simulator:
         m = Mnemonic('english')
         words = m.to_mnemonic(self.rng.randbytes(32))
         self.log.debug('randomized step: generate wallet', words=words)
-        wallet.unlock(words=words, tx_storage=manager.tx_storage)
-        return manager
+        wallet.unlock(words=words, tx_storage=artifacts.tx_storage)
+
+        return artifacts.manager
 
     def create_tx_generator(self, peer: HathorManager, *args: Any, **kwargs: Any) -> RandomTransactionGenerator:
         return RandomTransactionGenerator(peer, self.rng, *args, **kwargs)
 
-    def create_miner(self, peer: HathorManager, *args: Any, **kwargs: Any) -> MinerSimulator:
-        return MinerSimulator(peer, self.rng, *args, **kwargs)
+    def create_miner(self, peer: HathorManager, *args: Any, **kwargs: Any) -> GeometricMiner:
+        return GeometricMiner(peer, self.rng, *args, **kwargs)
 
     def run_to_completion(self):
         """ This will advance the test's clock until all calls scheduled are done.
@@ -183,6 +194,9 @@ class Simulator:
         if name in self._peers:
             raise ValueError('Duplicate peer name')
         self._peers[name] = peer
+
+    def get_reactor(self) -> HeapClock:
+        return self._clock
 
     def get_peer(self, name: str) -> HathorManager:
         return self._peers[name]
@@ -240,7 +254,18 @@ class Simulator:
     def run(self,
             interval: float,
             step: float = DEFAULT_STEP_INTERVAL,
-            status_interval: float = DEFAULT_STATUS_INTERVAL) -> None:
+            status_interval: float = DEFAULT_STATUS_INTERVAL,
+            *,
+            trigger: Optional['Trigger'] = None) -> bool:
+        """Return True if it successfully ends the execution.
+
+        If no trigger is provided, it always returns True.
+        If a trigger is provided, it returns True if the trigger stops the execution. Otherwise, it returns False.
+        """
         assert self._started
         for _ in self._run(interval, step, status_interval):
-            pass
+            if trigger is not None and trigger.should_stop():
+                return True
+        if trigger is not None:
+            return False
+        return True

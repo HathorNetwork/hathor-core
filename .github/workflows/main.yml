@@ -7,9 +7,6 @@ on:
     tags:
     - v*
   pull_request:
-    branches:
-    - dev
-    - release
 jobs:
   matrix:
     runs-on: ubuntu-latest
@@ -22,7 +19,7 @@ jobs:
         import os
         import json
         full_matrix = {
-          'python': ['3.8', '3.9', '3.10'],
+          'python': ['3.8', '3.9', '3.10', '3.11'],
           # available OS's: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idruns-on
           'os': ['ubuntu-22.04', 'macos-12', 'windows-2022'],
           'include': [
@@ -82,8 +79,8 @@ jobs:
       if: startsWith(matrix.os, 'macos')
       run: |
         brew cleanup -q
-        brew update -q
-        brew install -q graphviz rocksdb
+        # brew update -q
+        brew install -q graphviz rocksdb pkg-config
     - name: Install Poetry dependencies
       run: poetry install -n --no-root
     - name: Cache mypy

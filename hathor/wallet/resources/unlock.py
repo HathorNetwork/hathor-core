@@ -53,7 +53,7 @@ class UnlockWalletResource(Resource):
             # Wallet HD
             return self.unlock_wallet_hd(post_data)
 
-    def unlock_wallet_hd(self, data):
+    def unlock_wallet_hd(self, data: Dict[str, Any]) -> bytes:
         words = None
         if 'words' in data:
             words = data['words']
@@ -72,7 +72,7 @@ class UnlockWalletResource(Resource):
 
         return json_dumpb(ret)
 
-    def unlock_wallet_keypair(self, data):
+    def unlock_wallet_keypair(self, data: Dict[str, Any]) -> bytes:
         password = bytes(data['password'], 'utf-8')
         ret: Dict[str, Any] = {}
         success = True

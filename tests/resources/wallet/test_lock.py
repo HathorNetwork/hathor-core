@@ -9,7 +9,7 @@ class BaseLockTest(_BaseResourceTest._ResourceTest):
     __test__ = False
 
     def setUp(self):
-        super().setUp()
+        super().setUp(unlock_wallet=False)
         self.web = StubSite(LockWalletResource(self.manager))
         self.web_unlock = StubSite(UnlockWalletResource(self.manager))
         self.web_state = StubSite(StateWalletResource(self.manager))

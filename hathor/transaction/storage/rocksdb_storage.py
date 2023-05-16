@@ -146,7 +146,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             self._save_to_weakref(tx)
         return tx
 
-    def get_all_transactions(self) -> Iterator['BaseTransaction']:
+    def get_all_transactions(self, *, include_partial: bool = False) -> Iterator['BaseTransaction']:
         tx: Optional['BaseTransaction']
 
         items = self._db.iteritems(self._cf_tx)
@@ -163,6 +163,10 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
                 tx = self._get_tx(hash_bytes, tx_data)
 
             assert tx is not None
+            if not include_partial:
+                assert tx._metadata is not None
+                if not tx._metadata.validation.is_fully_connected():
+                    continue
             yield tx
 
     def is_empty(self) -> bool:

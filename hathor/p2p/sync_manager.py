@@ -54,3 +54,15 @@ class SyncManager(ABC):
     def is_errored(self) -> bool:
         """Whether the manager entered an error state"""
         raise NotImplementedError
+
+    def is_sync_enabled(self) -> bool:
+        """Return true if the sync is enabled."""
+        raise NotImplementedError
+
+    def enable_sync(self) -> None:
+        """Enable sync."""
+        raise NotImplementedError
+
+    def disable_sync(self) -> None:
+        """Disable sync."""
+        raise NotImplementedError
