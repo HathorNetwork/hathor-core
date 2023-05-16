@@ -85,6 +85,7 @@ class Builder:
 
         self._event_manager: Optional[EventManager] = None
         self._event_ws_factory: Optional[EventWebsocketFactory] = None
+        self._enable_event_queue: Optional[bool] = None
 
         self._rocksdb_path: Optional[str] = None
         self._rocksdb_storage: Optional[RocksDBStorage] = None
@@ -128,7 +129,6 @@ class Builder:
         consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub)
 
         wallet = self._get_or_create_wallet()
-        event_storage = self._get_or_create_event_storage()
         event_manager = self._get_or_create_event_manager()
         tx_storage = self._get_or_create_tx_storage()
         indexes = tx_storage.indexes
@@ -161,20 +161,22 @@ class Builder:
         if self._full_verification is not None:
             kwargs['full_verification'] = self._full_verification
 
+        if self._enable_event_queue is not None:
+            kwargs['enable_event_queue'] = self._enable_event_queue
+
         manager = HathorManager(
             reactor,
             pubsub=pubsub,
             consensus_algorithm=consensus_algorithm,
             peer_id=peer_id,
             tx_storage=tx_storage,
-            event_storage=event_storage,
+            event_manager=event_manager,
             network=self._network,
             wallet=wallet,
             rng=self._rng,
             checkpoints=self._checkpoints,
             capabilities=self._capabilities,
             environment_info=get_environment_info(self._cmdline, peer_id.id),
-            event_manager=event_manager,
             **kwargs
         )
 
@@ -303,8 +305,8 @@ class Builder:
 
         return self._event_storage
 
-    def _get_or_create_event_manager(self) -> Optional[EventManager]:
-        if self._event_manager is None and self._event_ws_factory is not None:
+    def _get_or_create_event_manager(self) -> EventManager:
+        if self._event_manager is None:
             self._event_manager = EventManager(
                 reactor=self._get_reactor(),
                 pubsub=self._get_or_create_pubsub(),
@@ -389,6 +391,7 @@ class Builder:
 
     def enable_event_manager(self, *, event_ws_factory: EventWebsocketFactory) -> 'Builder':
         self.check_if_can_modify()
+        self._enable_event_queue = True
         self._event_ws_factory = event_ws_factory
         return self
 

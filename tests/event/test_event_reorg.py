@@ -58,6 +58,10 @@ class BaseEventReorgTest(unittest.TestCase):
             pass
         expected_events_grouped = [
             [
+                (EventType.LOAD_STARTED, {}),
+                (EventType.NEW_VERTEX_ACCEPTED, {'hash': settings.GENESIS_BLOCK_HASH.hex()}),
+                (EventType.NEW_VERTEX_ACCEPTED, {'hash': settings.GENESIS_TX1_HASH.hex()}),
+                (EventType.NEW_VERTEX_ACCEPTED, {'hash': settings.GENESIS_TX2_HASH.hex()}),
                 (EventType.LOAD_FINISHED, {})
             ],
             # XXX: the order of the following events can vary depending on which genesis is spent/confirmed first

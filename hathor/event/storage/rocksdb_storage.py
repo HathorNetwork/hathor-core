@@ -15,21 +15,27 @@
 from typing import Iterator, Optional
 
 from hathor.event.model.base_event import BaseEvent
+from hathor.event.model.node_state import NodeState
 from hathor.event.storage.event_storage import EventStorage
 from hathor.storage.rocksdb_storage import RocksDBStorage
-from hathor.transaction.util import int_to_bytes
+from hathor.transaction.util import bytes_to_int, int_to_bytes
 from hathor.util import json_dumpb
 
 _CF_NAME_EVENT = b'event'
 _CF_NAME_META = b'event-metadata'
 _KEY_LAST_GROUP_ID = b'last-group-id'
+_KEY_NODE_STATE = b'node-state'
+_KEY_EVENT_QUEUE_ENABLED = b'event-queue-enabled'
 
 
 class EventRocksDBStorage(EventStorage):
     def __init__(self, rocksdb_storage: RocksDBStorage):
-        self._db = rocksdb_storage.get_db()
-        self._cf_event = rocksdb_storage.get_or_create_column_family(_CF_NAME_EVENT)
-        self._cf_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_META)
+        self._rocksdb_storage = rocksdb_storage
+
+        self._db = self._rocksdb_storage.get_db()
+        self._cf_event = self._rocksdb_storage.get_or_create_column_family(_CF_NAME_EVENT)
+        self._cf_meta = self._rocksdb_storage.get_or_create_column_family(_CF_NAME_META)
+
         self._last_event: Optional[BaseEvent] = self._db_get_last_event()
         self._last_group_id: Optional[int] = self._db_get_last_group_id()
 
@@ -57,11 +63,11 @@ class EventRocksDBStorage(EventStorage):
         last_group_id = self._db.get((self._cf_meta, _KEY_LAST_GROUP_ID))
         if last_group_id is None:
             return None
-        return int.from_bytes(last_group_id, byteorder='big', signed=False)
+        return bytes_to_int(last_group_id)
 
     def save_event(self, event: BaseEvent) -> None:
         if (self._last_event is None and event.id != 0) or \
-                (self._last_event is not None and event.id > self._last_event.id + 1):
+                (self._last_event is not None and event.id != self._last_event.id + 1):
             raise ValueError('invalid event.id, ids must be sequential and leave no gaps')
         event_data = json_dumpb(event.dict())
         key = int_to_bytes(event.id, 8)
@@ -84,3 +90,39 @@ class EventRocksDBStorage(EventStorage):
 
     def get_last_group_id(self) -> Optional[int]:
         return self._last_group_id
+
+    def clear_events(self) -> None:
+        self._last_event = None
+        self._last_group_id = None
+
+        self._db.delete((self._cf_meta, _KEY_LAST_GROUP_ID))
+        self._db.drop_column_family(self._cf_event)
+
+        self._cf_event = self._rocksdb_storage.get_or_create_column_family(_CF_NAME_EVENT)
+
+    def save_node_state(self, state: NodeState) -> None:
+        self._db.put((self._cf_meta, _KEY_NODE_STATE), int_to_bytes(state.value, 8))
+
+    def get_node_state(self) -> Optional[NodeState]:
+        node_state_bytes = self._db.get((self._cf_meta, _KEY_NODE_STATE))
+
+        if node_state_bytes is None:
+            return None
+
+        node_state_int = bytes_to_int(node_state_bytes)
+
+        return NodeState(node_state_int)
+
+    def save_event_queue_state(self, enabled: bool) -> None:
+        self._db.put(
+            (self._cf_meta, _KEY_EVENT_QUEUE_ENABLED),
+            enabled.to_bytes(length=1, byteorder='big')
+        )
+
+    def get_event_queue_state(self) -> bool:
+        enabled_bytes = self._db.get((self._cf_meta, _KEY_EVENT_QUEUE_ENABLED))
+
+        if enabled_bytes is None:
+            return False
+
+        return bool.from_bytes(enabled_bytes, byteorder='big')
