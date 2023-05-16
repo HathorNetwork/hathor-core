@@ -83,7 +83,7 @@ class EventManager:
         self._previous_node_state = self._event_storage.get_node_state()
 
         if self._should_reload_events():
-            self._event_storage.clear_events()
+            self._event_storage.reset_events()
         else:
             self._last_event = self._event_storage.get_last_event()
             self._last_existing_group_id = self._event_storage.get_last_group_id()
@@ -217,6 +217,10 @@ class EventManager:
 
     def _should_reload_events(self) -> bool:
         return self._previous_node_state in [None, NodeState.LOAD]
+
+    def reset_all(self) -> None:
+        """Reset all data."""
+        self._event_storage.reset_all()
 
     def get_event_queue_state(self) -> bool:
         """Get whether the event queue feature is enabled from the storage"""

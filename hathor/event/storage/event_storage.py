@@ -46,8 +46,13 @@ class EventStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def clear_events(self) -> None:
-        """Clear all stored events and related metadata."""
+    def reset_events(self) -> None:
+        """Reset stored events and related metadata."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def reset_all(self) -> None:
+        """Reset all data."""
         raise NotImplementedError
 
     @abstractmethod

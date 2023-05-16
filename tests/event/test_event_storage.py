@@ -137,11 +137,14 @@ class EventStorageBaseTest(unittest.TestCase):
 
         assert enabled is False
 
-    def test_clear_events_empty_database(self):
-        self._test_clear_events()
+    def test_reset_events_empty_database(self):
+        self._test_reset_events()
 
-    def _test_clear_events(self) -> None:
-        self.event_storage.clear_events()
+    def test_reset_all_empty_database(self):
+        self._test_reset_events()
+
+    def _test_reset_events(self) -> None:
+        self.event_storage.reset_events()
 
         events = list(self.event_storage.iter_from_event(0))
         last_event = self.event_storage.get_last_event()
@@ -151,7 +154,22 @@ class EventStorageBaseTest(unittest.TestCase):
         assert last_event is None
         assert last_group_id is None
 
-    def test_clear_events_full_database(self):
+    def _test_reset_all(self) -> None:
+        self.event_storage.reset_all()
+
+        events = list(self.event_storage.iter_from_event(0))
+        last_event = self.event_storage.get_last_event()
+        last_group_id = self.event_storage.get_last_group_id()
+        node_state = self.event_storage.get_node_state()
+        event_queue_state = self.event_storage.get_event_queue_state()
+
+        assert events == []
+        assert last_event is None
+        assert last_group_id is None
+        assert node_state is None
+        assert event_queue_state is False
+
+    def test_reset_events_full_database(self):
         n_events = 10
         expected_last_group_id = 4
         expected_node_state = NodeState.SYNC
@@ -170,13 +188,40 @@ class EventStorageBaseTest(unittest.TestCase):
         assert node_state == expected_node_state
         assert event_queue_state is True
 
-        self._test_clear_events()
+        self._test_reset_events()
 
         node_state = self.event_storage.get_node_state()
         event_queue_state = self.event_storage.get_event_queue_state()
 
         assert node_state == expected_node_state
         assert event_queue_state is True
+
+    def test_reset_all_full_database(self):
+        n_events = 10
+        expected_last_group_id = 4
+        expected_node_state = NodeState.SYNC
+
+        self._populate_events_and_last_group_id(n_events=n_events, last_group_id=4)
+        self.event_storage.save_node_state(expected_node_state)
+        self.event_storage.save_event_queue_state(True)
+
+        events = list(self.event_storage.iter_from_event(0))
+        last_group_id = self.event_storage.get_last_group_id()
+        node_state = self.event_storage.get_node_state()
+        event_queue_state = self.event_storage.get_event_queue_state()
+
+        assert len(events) == n_events
+        assert last_group_id == expected_last_group_id
+        assert node_state == expected_node_state
+        assert event_queue_state is True
+
+        self._test_reset_all()
+
+        node_state = self.event_storage.get_node_state()
+        event_queue_state = self.event_storage.get_event_queue_state()
+
+        assert node_state is None
+        assert event_queue_state is False
 
 
 @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')

@@ -91,7 +91,7 @@ class EventRocksDBStorage(EventStorage):
     def get_last_group_id(self) -> Optional[int]:
         return self._last_group_id
 
-    def clear_events(self) -> None:
+    def reset_events(self) -> None:
         self._last_event = None
         self._last_group_id = None
 
@@ -99,6 +99,11 @@ class EventRocksDBStorage(EventStorage):
         self._db.drop_column_family(self._cf_event)
 
         self._cf_event = self._rocksdb_storage.get_or_create_column_family(_CF_NAME_EVENT)
+
+    def reset_all(self) -> None:
+        self.reset_events()
+        self._db.delete((self._cf_meta, _KEY_NODE_STATE))
+        self._db.delete((self._cf_meta, _KEY_EVENT_QUEUE_ENABLED))
 
     def save_node_state(self, state: NodeState) -> None:
         self._db.put((self._cf_meta, _KEY_NODE_STATE), int_to_bytes(state.value, 8))
