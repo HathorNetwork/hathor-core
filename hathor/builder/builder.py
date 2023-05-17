@@ -88,7 +88,6 @@ class Builder:
 
         self._event_manager: Optional[EventManager] = None
         self._event_ws_factory: Optional[EventWebsocketFactory] = None
-        self._enable_event_queue: Optional[bool] = None
         self._event_queue_options: Optional[EventQueueOptions] = None
 
         self._rocksdb_path: Optional[str] = None
@@ -161,9 +160,6 @@ class Builder:
 
         if self._full_verification is not None:
             kwargs['full_verification'] = self._full_verification
-
-        if self._enable_event_queue is not None:
-            kwargs['enable_event_queue'] = self._enable_event_queue
 
         if self._event_queue_options is not None:
             kwargs['event_queue_options'] = self._event_queue_options
@@ -406,7 +402,6 @@ class Builder:
 
     def enable_event_manager(self, *, event_ws_factory: EventWebsocketFactory) -> 'Builder':
         self.check_if_can_modify()
-        self._enable_event_queue = True
         self._event_queue_options = EventQueueOptions(enable=True)
         self._event_ws_factory = event_ws_factory
         return self
