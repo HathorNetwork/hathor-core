@@ -11,7 +11,9 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import pytest
 from pydantic import ValidationError
@@ -31,8 +33,12 @@ MISSING_HATHOR_SETTINGS_FIXTURE_FILE = 'resources/missing_hathor_settings_fixtur
 def test_valid_hathor_settings_from_yaml(hathor_settings):
     parent_dir = Path(__file__).parent
     settings_filepath = str(parent_dir / VALID_HATHOR_SETTINGS_FIXTURE_FILE)
+    mock = Mock()
 
-    assert hathor_settings == HathorSettings.from_yaml(filepath=settings_filepath)
+    with patch('hathor.conf.settings.validate_feature_list', mock):
+        assert hathor_settings == HathorSettings.from_yaml(filepath=settings_filepath)
+
+    assert mock.call_count == 1
 
 
 def test_invalid_hathor_settings_from_yaml():
