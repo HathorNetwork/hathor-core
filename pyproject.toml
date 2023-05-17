@@ -23,7 +23,6 @@ homepage = "https://hathor.network/"
 repository = "https://github.com/HathorNetwork/hathor-core/"
 # https://pypi.org/classifiers/
 classifiers = [
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -51,7 +50,7 @@ types-requests = "=2.28.11.4"
 types-pyopenssl = "=22.1.0.2"
 
 [tool.poetry.dependencies]
-python = ">=3.8.1,<4"
+python = ">=3.9,<4"
 twisted = "~22.10.0"
 autobahn = "~22.7.1"
 base58 = "~2.1.1"
