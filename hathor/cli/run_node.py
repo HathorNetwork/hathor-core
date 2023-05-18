@@ -19,6 +19,8 @@ from typing import Any, Callable, List, Tuple
 
 from structlog import get_logger
 
+from hathor.conf import TESTNET_SETTINGS_FILEPATH
+
 logger = get_logger()
 # LOGGING_CAPTURE_STDOUT = True
 
@@ -102,6 +104,7 @@ class RunNode:
         parser.add_argument('--x-enable-event-queue', action='store_true', help='Enable event queue mechanism')
         parser.add_argument('--peer-id-blacklist', action='extend', default=[], nargs='+', type=str,
                             help='Peer IDs to forbid connection')
+        parser.add_argument('--config-yaml', type=str, help='Configuration yaml filepath')
         return parser
 
     def prepare(self, args: Namespace, *, register_resources: bool = True) -> None:
@@ -309,9 +312,12 @@ class RunNode:
             argv = sys.argv[1:]
         self.parser = self.create_parser()
         args = self.parse_args(argv)
-        if args.testnet:
-            if not os.environ.get('HATHOR_CONFIG_FILE'):
-                os.environ['HATHOR_CONFIG_FILE'] = 'hathor.conf.testnet'
+
+        if args.config_yaml:
+            os.environ['HATHOR_CONFIG_YAML'] = args.config_yaml
+        elif args.testnet:
+            os.environ['HATHOR_CONFIG_YAML'] = TESTNET_SETTINGS_FILEPATH
+
         self.prepare(args)
         self.register_signal_handlers(args)
         if args.sysctl:

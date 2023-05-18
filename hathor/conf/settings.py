@@ -14,9 +14,13 @@
 
 import os
 from math import log
-from typing import List, NamedTuple, Optional
+from typing import Any, Dict, List, NamedTuple, Optional, Union
+
+import pydantic
 
 from hathor.checkpoint import Checkpoint
+from hathor.utils import yaml
+from hathor.utils.pydantic import BaseModel
 
 DECIMAL_PLACES = 2
 
@@ -379,3 +383,73 @@ class HathorSettings(NamedTuple):
 
     # Time to update the peers that are running sync.
     SYNC_UPDATE_INTERVAL: int = 10 * 60  # seconds
+
+    @classmethod
+    def from_yaml(cls, *, filepath: str) -> 'HathorSettings':
+        """Takes a filepath to a yaml file and returns a validated HathorSettings instance."""
+        settings_dict = yaml.dict_from(filepath=filepath)
+
+        return HathorSettings.from_dict(settings_dict)
+
+    @classmethod
+    def from_dict(cls, settings: Dict[str, Any]) -> 'HathorSettings':
+        """Takes a settings dict and returns a validated HathorSettings instance."""
+        # This intermediate step shouldn't be necessary, but for some reason pydantic.create_model_from_namedtuple
+        # doesn't support default attribute values, so we do this to add them
+        all_settings = HathorSettings(**settings)
+        validated_settings = _ValidatedHathorSettings(**all_settings._asdict())
+
+        return HathorSettings(**validated_settings.dict())
+
+
+def _parse_checkpoints(checkpoints: Union[Dict[int, str], List[Checkpoint]]) -> List[Checkpoint]:
+    """Parse a dictionary of raw checkpoint data into a list of checkpoints."""
+    if isinstance(checkpoints, Dict):
+        return [
+            Checkpoint(height, bytes.fromhex(_hash))
+            for height, _hash in checkpoints.items()
+        ]
+
+    if not isinstance(checkpoints, List):
+        raise TypeError(f'expected \'Dict[int, str]\' or \'List[Checkpoint]\', got {checkpoints}')
+
+    return checkpoints
+
+
+def _parse_hex_str(hex_str: Union[str, bytes]) -> bytes:
+    """Parse a raw hex string into bytes."""
+    if isinstance(hex_str, str):
+        return bytes.fromhex(hex_str.lstrip('x'))
+
+    if not isinstance(hex_str, bytes):
+        raise TypeError(f'expected \'str\' or \'bytes\', got {hex_str}')
+
+    return hex_str
+
+
+_ValidatedHathorSettings = pydantic.create_model_from_namedtuple(
+    HathorSettings,
+    __base__=BaseModel,
+    __validators__=dict(
+        _parse_hex_str=pydantic.validator(
+            'P2PKH_VERSION_BYTE',
+            'MULTISIG_VERSION_BYTE',
+            'GENESIS_OUTPUT_SCRIPT',
+            'GENESIS_BLOCK_HASH',
+            'GENESIS_TX1_HASH',
+            'GENESIS_TX2_HASH',
+            pre=True,
+            allow_reuse=True
+        )(_parse_hex_str),
+        _parse_soft_voided_tx_id=pydantic.validator(
+            'SOFT_VOIDED_TX_IDS',
+            pre=True,
+            allow_reuse=True,
+            each_item=True
+        )(_parse_hex_str),
+        _parse_checkpoints=pydantic.validator(
+            'CHECKPOINTS',
+            pre=True
+        )(_parse_checkpoints)
+    )
+)

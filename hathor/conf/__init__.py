@@ -12,8 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pathlib import Path
+
 from hathor.conf.get_settings import HathorSettings
 
+parent_dir = Path(__file__).parent
+
+MAINNET_SETTINGS_FILEPATH = str(parent_dir / 'mainnet.yml')
+TESTNET_SETTINGS_FILEPATH = str(parent_dir / 'testnet.yml')
+UNITTESTS_SETTINGS_FILEPATH = str(parent_dir / 'unittests.yml')
+
 __all__ = [
+    'MAINNET_SETTINGS_FILEPATH',
+    'TESTNET_SETTINGS_FILEPATH',
+    'UNITTESTS_SETTINGS_FILEPATH',
     'HathorSettings',
 ]
