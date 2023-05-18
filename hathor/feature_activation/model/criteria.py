@@ -77,11 +77,11 @@ class Criteria(BaseModel, validate_all=True):
         return timeout_height
 
     @validator('threshold')
-    def _validate_threshold(cls, threshold: int) -> int:
+    def _validate_threshold(cls, threshold: Optional[int]) -> Optional[int]:
         """Validates that the threshold is not greater than the evaluation_interval."""
         assert Criteria.evaluation_interval is not None, 'Criteria.evaluation_interval must be set'
 
-        if threshold > Criteria.evaluation_interval:
+        if threshold is not None and threshold > Criteria.evaluation_interval:
             raise ValueError(
                 f'threshold must not be greater than evaluation_interval: {threshold} > {Criteria.evaluation_interval}'
             )

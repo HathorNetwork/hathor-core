@@ -36,5 +36,6 @@ CHECKPOINTS:
   1_500_000: 000000000c3591805f4748480b59ac1788f754fc004930985a487580e2b5de8f
   1_600_000: 00000000060adfdfd7d488d4d510b5779cf35a3c50df7bcff941fbb6957be4d2
 
-FEATURE_ACTIVATION:
-  default_threshold: 30240 # 30240 = 75% of evaluation_interval (40320)
+# TODO: Enable this config when settings via python modules are no longer used
+# FEATURE_ACTIVATION:
+#   default_threshold: 30240 # 30240 = 75% of evaluation_interval (40320)

@@ -13,7 +13,6 @@
 #  limitations under the License.
 
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 import pytest
 from pydantic import ValidationError
@@ -25,41 +24,13 @@ from hathor.conf.settings import HathorSettings
 from hathor.conf.testnet import SETTINGS as TESTNET_SETTINGS
 from hathor.conf.unittests import SETTINGS as UNITTESTS_SETTINGS
 
-VALID_HATHOR_SETTINGS_FIXTURE_FILE = 'resources/valid_hathor_settings_fixture.yml'
-INVALID_HATHOR_SETTINGS_FIXTURE_FILE = 'resources/invalid_hathor_settings_fixture.yml'
-MISSING_HATHOR_SETTINGS_FIXTURE_FILE = 'resources/missing_hathor_settings_fixture.yml'
 
-
-def test_valid_hathor_settings_from_yaml(hathor_settings):
+@pytest.mark.parametrize('filepath', ['fixtures/valid_hathor_settings_fixture.yml'])
+def test_valid_hathor_settings_from_yaml(filepath):
     parent_dir = Path(__file__).parent
-    settings_filepath = str(parent_dir / VALID_HATHOR_SETTINGS_FIXTURE_FILE)
-    mock = Mock()
+    settings_filepath = str(parent_dir / filepath)
 
-    with patch('hathor.conf.settings.validate_feature_list', mock):
-        assert hathor_settings == HathorSettings.from_yaml(filepath=settings_filepath)
-
-    assert mock.call_count == 1
-
-
-def test_invalid_hathor_settings_from_yaml():
-    parent_dir = Path(__file__).parent
-    settings_filepath = str(parent_dir / INVALID_HATHOR_SETTINGS_FIXTURE_FILE)
-
-    with pytest.raises(ValidationError):
-        HathorSettings.from_yaml(filepath=settings_filepath)
-
-
-def test_missing_hathor_settings_from_yaml():
-    parent_dir = Path(__file__).parent
-    settings_filepath = str(parent_dir / MISSING_HATHOR_SETTINGS_FIXTURE_FILE)
-
-    with pytest.raises(TypeError):
-        HathorSettings.from_yaml(filepath=settings_filepath)
-
-
-@pytest.fixture
-def hathor_settings():
-    return HathorSettings(
+    expected_hathor_settings = HathorSettings(
         P2PKH_VERSION_BYTE=b'\x28',
         MULTISIG_VERSION_BYTE=b'\x64',
         NETWORK_NAME='testing',
@@ -95,6 +66,40 @@ def hathor_settings():
         MAX_TX_WEIGHT_DIFF=25.0,
         BLOCK_DIFFICULTY_N_BLOCKS=20,
     )
+
+    assert expected_hathor_settings == HathorSettings.from_yaml(filepath=settings_filepath)
+
+
+@pytest.mark.parametrize(
+    ['filepath', 'error'],
+    [
+        ('fixtures/invalid_byte_hathor_settings_fixture.yml', "expected 'str' or 'bytes', got 64"),
+        (
+            'fixtures/invalid_features_hathor_settings_fixture.yml',
+            'Should be a multiple of evaluation_interval: 1001 % 1000 != 0'
+        )
+    ]
+)
+def test_invalid_hathor_settings_from_yaml(filepath, error):
+    parent_dir = Path(__file__).parent
+    settings_filepath = str(parent_dir / filepath)
+
+    with pytest.raises(ValidationError) as e:
+        HathorSettings.from_yaml(filepath=settings_filepath)
+
+    errors = e.value.errors()
+    assert errors[0]['msg'] == error
+
+
+@pytest.mark.parametrize('filepath', ['fixtures/missing_hathor_settings_fixture.yml'])
+def test_missing_hathor_settings_from_yaml(filepath):
+    parent_dir = Path(__file__).parent
+    settings_filepath = str(parent_dir / filepath)
+
+    with pytest.raises(TypeError) as e:
+        HathorSettings.from_yaml(filepath=settings_filepath)
+
+    assert str(e.value) == "HathorSettings.__new__() missing 1 required positional argument: 'NETWORK_NAME'"
 
 
 # TODO: Tests below are temporary while settings via python coexist with settings via yaml, just to make sure
