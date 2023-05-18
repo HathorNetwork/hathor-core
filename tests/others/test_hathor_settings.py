@@ -99,7 +99,7 @@ def test_missing_hathor_settings_from_yaml(filepath):
     with pytest.raises(TypeError) as e:
         HathorSettings.from_yaml(filepath=settings_filepath)
 
-    assert str(e.value) == "HathorSettings.__new__() missing 1 required positional argument: 'NETWORK_NAME'"
+    assert "missing 1 required positional argument: 'NETWORK_NAME'" in str(e.value)
 
 
 # TODO: Tests below are temporary while settings via python coexist with settings via yaml, just to make sure
