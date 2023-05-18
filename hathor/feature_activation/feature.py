@@ -12,13 +12,15 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from enum import Enum
+from enum import Enum, unique
 
 
+@unique
 class Feature(Enum):
     """
     An enum containing all features that participate in the feature activation process, past or future,
     activated or not, for all networks. Features should NOT be removed from this enum, to preserve history.
     """
 
-    NOP_FEATURE = 0
+    NOP_FEATURE_1 = 'NOP_FEATURE_1'
+    NOP_FEATURE_2 = 'NOP_FEATURE_2'

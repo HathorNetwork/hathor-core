@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import Field, NonNegativeInt, PositiveInt, validator
 
+from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.criteria import Criteria
 from hathor.utils.pydantic import BaseModel
 
@@ -35,10 +36,10 @@ class Settings(BaseModel, validate_all=True):
     # Usually calculated from a percentage of evaluation_interval.
     default_threshold: NonNegativeInt = 36288  # 36288 = 90% of evaluation_interval (40320)
 
-    # List of criteria for all features that participate in the feature activation process for a network,
-    # past or future, activated or not. Features should NOT be removed from this list, and neither their
-    # values changed, to preserve history.
-    features: List[Criteria] = []
+    # Dictionary of Feature enum to Criteria definition for all features that participate in the feature activation
+    # process for a network, past or future, activated or not. Features should NOT be removed from this list, and
+    # neither their values changed, to preserve history.
+    features: dict[Feature, Criteria] = {}
 
     @validator('evaluation_interval')
     def _process_evaluation_interval(cls, evaluation_interval: int) -> int:
@@ -61,43 +62,30 @@ class Settings(BaseModel, validate_all=True):
         return default_threshold
 
     @validator('features')
-    def _validate_features(cls, features: List[Criteria]) -> List[Criteria]:
-        """Validates all configured features."""
-        _validate_duplicate_names(features)
-        _validate_conflicting_bits(features)
+    def _validate_conflicting_bits(cls, features: dict[Feature, Criteria]) -> dict[Feature, Criteria]:
+        """
+        Validates that a bit is only reused if the start_height of a new feature is
+        greater than the timeout_height of the previous feature that used that bit.
+        """
+        intervals_by_bit = _get_intervals_by_bit(features)
+        intervals_has_overlaps = [
+            _has_any_overlap(intervals)
+            for intervals in intervals_by_bit.values()
+        ]
+
+        if any(intervals_has_overlaps):
+            raise ValueError(
+                'One or more Features have the same bit configured for an overlapping interval'
+            )
+
         return features
 
 
-def _validate_duplicate_names(features: List[Criteria]) -> None:
-    """Validates that no two features share the same name."""
-    feature_names = [criteria.name for criteria in features]
-
-    if len(feature_names) != len(set(feature_names)):
-        raise ValueError('Feature names should be unique')
-
-
-def _validate_conflicting_bits(features: List[Criteria]) -> None:
-    """
-    Validates that a bit is only reused if the start_height of a new feature is
-    greater than the timeout_height of the previous feature that used that bit.
-    """
-    intervals_by_bit = _get_intervals_by_bit(features)
-    intervals_has_overlaps = [
-        _has_any_overlap(intervals)
-        for intervals in intervals_by_bit.values()
-    ]
-
-    if any(intervals_has_overlaps):
-        raise ValueError(
-            'One or more Features have the same bit configured for an overlapping interval'
-        )
-
-
-def _get_intervals_by_bit(features: List[Criteria]) -> Dict[int, List[Tuple[int, int]]]:
+def _get_intervals_by_bit(features: dict[Feature, Criteria]) -> Dict[int, List[Tuple[int, int]]]:
     """Returns a list of (start_height, timeout_height) intervals for all features, grouped by bit."""
     intervals_by_bit: Dict[int, List[Tuple[int, int]]] = defaultdict(list)
 
-    for criteria in features:
+    for criteria in features.values():
         intervals = intervals_by_bit[criteria.bit]
         intervals.append((criteria.start_height, criteria.timeout_height))
 

@@ -12,60 +12,47 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from enum import Enum
-from unittest.mock import patch
-
 import pytest
 from pydantic import ValidationError
 
 from hathor.feature_activation.settings import Settings
 
 
-class TestFeature(Enum):
-    FEATURE_1 = 1
-    FEATURE_2 = 2
-
-
-@patch('hathor.feature_activation.model.criteria.Feature', TestFeature)
 @pytest.mark.parametrize(
     'features',
     [
-        [
-            dict(
-                name='FEATURE_1',
+        dict(
+            NOP_FEATURE_1=dict(
                 bit=0,
                 start_height=0,
                 timeout_height=40320,
                 threshold=0,
                 version='0.0.0'
             ),
-            dict(
-                name='FEATURE_2',
+            NOP_FEATURE_2=dict(
                 bit=1,
                 start_height=0,
                 timeout_height=40320,
                 threshold=0,
                 version='0.0.0'
             )
-        ],
-        [
-            dict(
-                name='FEATURE_1',
+        ),
+        dict(
+            NOP_FEATURE_1=dict(
                 bit=0,
                 start_height=0,
                 timeout_height=40320,
                 threshold=0,
                 version='0.0.0'
             ),
-            dict(
-                name='FEATURE_2',
+            NOP_FEATURE_2=dict(
                 bit=0,
                 start_height=2 * 40320,
                 timeout_height=3 * 40320,
                 threshold=0,
                 version='0.0.0'
             )
-        ]
+        )
     ]
 )
 def test_valid_feature_list(features):
@@ -73,93 +60,57 @@ def test_valid_feature_list(features):
     Settings(**data)
 
 
-@patch('hathor.feature_activation.model.criteria.Feature', TestFeature)
-def test_duplicate_names():
-    features = [
-        dict(
-            name='FEATURE_1',
-            bit=0,
-            start_height=0,
-            timeout_height=40320,
-            threshold=0,
-            version='0.0.0'
-        ),
-        dict(
-            name='FEATURE_1',
-            bit=1,
-            start_height=0,
-            timeout_height=40320,
-            threshold=0,
-            version='0.0.0'
-        )
-    ]
-
-    with pytest.raises(ValidationError) as e:
-        data = dict(features=features)
-        Settings(**data)
-
-    errors = e.value.errors()
-    assert errors[0]['msg'] == 'Feature names should be unique'
-
-
-@patch('hathor.feature_activation.model.criteria.Feature', TestFeature)
 @pytest.mark.parametrize(
     'features',
     [
-        [
-            dict(
-                name='FEATURE_1',
+        dict(
+            NOP_FEATURE_1=dict(
                 bit=0,
                 start_height=0,
                 timeout_height=40320,
                 threshold=0,
                 version='0.0.0'
             ),
-            dict(
-                name='FEATURE_2',
+            NOP_FEATURE_2=dict(
                 bit=0,
                 start_height=0,
                 timeout_height=40320,
                 threshold=0,
                 version='0.0.0'
             )
-        ],
-        [
-            dict(
-                name='FEATURE_1',
+        ),
+        dict(
+            NOP_FEATURE_1=dict(
                 bit=0,
                 start_height=0,
                 timeout_height=40320,
                 threshold=0,
                 version='0.0.0'
             ),
-            dict(
-                name='FEATURE_2',
+            NOP_FEATURE_2=dict(
                 bit=0,
                 start_height=40320,
                 timeout_height=2 * 40320,
                 threshold=0,
                 version='0.0.0'
             )
-        ],
-        [
-            dict(
-                name='FEATURE_1',
+        ),
+        dict(
+            NOP_FEATURE_1=dict(
                 bit=1,
                 start_height=10 * 40320,
                 timeout_height=20 * 40320,
                 threshold=0,
                 version='0.0.0'
             ),
-            dict(
-                name='FEATURE_2',
+            NOP_FEATURE_2=dict(
                 bit=1,
                 start_height=15 * 40320,
                 timeout_height=16 * 40320,
                 threshold=0,
                 version='0.0.0'
             )
-        ]
+        )
     ]
 )
 def test_conflicting_bits(features):

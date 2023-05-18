@@ -17,7 +17,6 @@ from typing import Any, ClassVar, Dict, Optional
 from pydantic import Field, NonNegativeInt, validator
 
 from hathor import version
-from hathor.feature_activation.feature import Feature
 from hathor.utils.pydantic import BaseModel
 
 
@@ -29,8 +28,6 @@ class Criteria(BaseModel, validate_all=True):
         evaluation_interval: the number of blocks in the feature activation evaluation interval. Class variable.
 
         max_signal_bits: the number of bits used in the first byte of a block's version field. Class variable.
-
-        name: a string representing the name of the feature.
 
         bit: which bit in the version field of the block is going to be used to signal the feature support by miners.
 
@@ -50,7 +47,6 @@ class Criteria(BaseModel, validate_all=True):
     evaluation_interval: ClassVar[Optional[int]] = None
     max_signal_bits: ClassVar[Optional[int]] = None
 
-    name: str  # TODO: Use enum directly
     bit: NonNegativeInt
     start_height: NonNegativeInt
     timeout_height: NonNegativeInt
@@ -58,16 +54,6 @@ class Criteria(BaseModel, validate_all=True):
     minimum_activation_height: NonNegativeInt = 0
     activate_on_timeout: bool = False
     version: str = Field(..., regex=version.BUILD_VERSION_REGEX)
-
-    @validator('name')
-    def _validate_name(cls, name: str) -> str:
-        """Validates that the name exists."""
-        valid_names = [feature.name for feature in Feature]
-
-        if name not in valid_names:
-            raise ValueError(f"Unknown Feature name: '{name}'. Should be one of {valid_names}")
-
-        return name
 
     @validator('bit')
     def _validate_bit(cls, bit: int) -> int:
