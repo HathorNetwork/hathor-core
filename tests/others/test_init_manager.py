@@ -25,12 +25,12 @@ class ModifiedTransactionMemoryStorage(TransactionMemoryStorage):
     def set_first_tx(self, tx: BaseTransaction) -> None:
         self._first_tx = tx
 
-    def get_all_transactions(self, *, include_partial: bool = False) -> Iterator[BaseTransaction]:
+    def _get_all_transactions(self) -> Iterator[BaseTransaction]:
         skip_hash = None
         if self._first_tx:
             yield self._first_tx
             skip_hash = self._first_tx.hash
-        for tx in super().get_all_transactions(include_partial=include_partial):
+        for tx in super()._get_all_transactions():
             if tx.hash != skip_hash:
                 yield tx
 

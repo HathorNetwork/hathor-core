@@ -413,8 +413,9 @@ class HathorManager:
         # self.start_profiler()
         if self._full_verification:
             self.log.debug('reset all metadata')
-            for tx in self.tx_storage.get_all_transactions():
-                tx.reset_metadata()
+            with self.tx_storage.allow_partially_validated_context():
+                for tx in self.tx_storage.get_all_transactions():
+                    tx.reset_metadata()
 
         self.log.debug('load blocks and transactions')
         for tx in self.tx_storage._topological_sort_dfs():
@@ -459,9 +460,11 @@ class HathorManager:
                             self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
                         if self.tx_storage.indexes.deps is not None:
                             self.sync_v2_step_validations([tx])
+                        self.tx_storage.save_transaction(tx, only_metadata=True)
                     else:
                         assert tx.validate_basic(skip_block_weight_verification=skip_block_weight_verification)
-                    self.tx_storage.save_transaction(tx, only_metadata=True)
+                        with self.tx_storage.allow_partially_validated_context():
+                            self.tx_storage.save_transaction(tx, only_metadata=True)
                 else:
                     # TODO: deal with invalid tx
                     if not tx_meta.validation.is_final():

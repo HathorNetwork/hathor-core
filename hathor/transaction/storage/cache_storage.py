@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections import OrderedDict
-from typing import Any, Optional, Set
+from typing import Any, Iterator, Optional, Set
 
 from twisted.internet import threads
 
@@ -208,9 +208,11 @@ class TransactionCacheStorage(BaseTransactionStorage):
         assert tx is not None
         return tx
 
-    def get_all_transactions(self):
+    def _get_all_transactions(self) -> Iterator[BaseTransaction]:
         self._flush_to_storage(self.dirty_txs.copy())
-        for tx in self.store.get_all_transactions():
+        # XXX: explicitly use _get_all_transaction instead of get_all_transactions because there will already be a
+        #      TransactionCacheStorage.get_all_transactions outer method
+        for tx in self.store._get_all_transactions():
             tx.storage = self
             self._save_to_weakref(tx)
             yield tx

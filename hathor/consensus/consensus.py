@@ -70,6 +70,8 @@ class ConsensusAlgorithm:
 
     @cpu.profiler(key=lambda self, base: 'consensus!{}'.format(base.hash.hex()))
     def update(self, base: BaseTransaction) -> None:
+        assert base.storage is not None
+        assert base.storage.is_only_valid_allowed()
         try:
             self._unsafe_update(base)
         except Exception:
@@ -107,11 +109,16 @@ class ConsensusAlgorithm:
         if new_best_height < best_height:
             self.log.warn('height decreased, re-checking mempool', prev_height=best_height, new_height=new_best_height,
                           prev_block_tip=best_tip.hex(), new_block_tip=new_best_tip.hex())
-            to_remove = storage.get_transactions_that_became_invalid()
+            # XXX: this method will mark as INVALID all transactions in the mempool that became invalid because of a
+            #      reward lock
+            to_remove = storage.compute_transactions_that_became_invalid()
             if to_remove:
                 self.log.warn('some transactions on the mempool became invalid and will be removed',
                               count=len(to_remove))
-                storage.remove_transactions(to_remove)
+                # XXX: because transactions in `to_remove` are marked as invalid, we need this context to be able to
+                #      remove them
+                with storage.allow_invalid_context():
+                    storage.remove_transactions(to_remove)
                 for tx_removed in to_remove:
                     context.pubsub.publish(HathorEvents.CONSENSUS_TX_REMOVED, tx_hash=tx_removed.hash)
 

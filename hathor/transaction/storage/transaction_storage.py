@@ -15,6 +15,7 @@
 import hashlib
 from abc import ABC, abstractmethod, abstractproperty
 from collections import defaultdict, deque
+from contextlib import AbstractContextManager
 from threading import Lock
 from typing import Any, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple, Type, cast
 from weakref import WeakValueDictionary
@@ -28,8 +29,13 @@ from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction
 from hathor.transaction.block import Block
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
+from hathor.transaction.storage.exceptions import (
+    TransactionDoesNotExist,
+    TransactionIsNotABlock,
+    TransactionNotInAllowedScopeError,
+)
 from hathor.transaction.storage.migrations import BaseMigration, MigrationState, add_min_height_metadata
+from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.util import not_none
@@ -93,6 +99,9 @@ class TransactionStorage(ABC):
 
         # This is a global lock used to prevent concurrent access when getting the tx lock in the dict above
         self._weakref_lock: Lock = Lock()
+
+        # Flag to allow/disallow partially validated vertices.
+        self.allow_scope: TxAllowScope = TxAllowScope.VALID
 
         # Cache for the best block tips
         # This cache is updated in the consensus algorithm.
@@ -330,6 +339,43 @@ class TransactionStorage(ABC):
             return None
         return self._tx_weakref.get(hash_bytes, None)
 
+    # TODO: check if the method bellow is currently needed
+    def allow_only_valid_context(self) -> AbstractContextManager[None]:
+        """This method is used to temporarily reset the storage back to only allow valid transactions.
+
+        The implementation will OVERRIDE the current scope to allowing only valid transactions on the observed
+        storage.
+        """
+        return tx_allow_context(self, allow_scope=TxAllowScope.VALID)
+
+    def allow_partially_validated_context(self) -> AbstractContextManager[None]:
+        """This method is used to temporarily make the storage allow partially validated transactions.
+
+        The implementation will INCLUDE allowing partially valid transactions to the current allow scope.
+        """
+        new_allow_scope = self.allow_scope | TxAllowScope.PARTIAL
+        return tx_allow_context(self, allow_scope=new_allow_scope)
+
+    def allow_invalid_context(self) -> AbstractContextManager[None]:
+        """This method is used to temporarily make the storage allow invalid transactions.
+
+        The implementation will INCLUDE allowing invalid transactions to the current allow scope.
+        """
+        new_allow_scope = self.allow_scope | TxAllowScope.INVALID
+        return tx_allow_context(self, allow_scope=new_allow_scope)
+
+    def is_only_valid_allowed(self) -> bool:
+        """Whether only valid transactions are allowed to be returned/accepted by the storage, the default state."""
+        return self.allow_scope is TxAllowScope.VALID
+
+    def is_partially_validated_allowed(self) -> bool:
+        """Whether partially validated transactions are allowed to be returned/accepted by the storage."""
+        return TxAllowScope.PARTIAL in self.allow_scope
+
+    def is_invalid_allowed(self) -> bool:
+        """Whether invalid transactions are allowed to be returned/accepted by the storage."""
+        return TxAllowScope.INVALID in self.allow_scope
+
     def _enable_weakref(self) -> None:
         """ Weakref should never be disabled unless you know exactly what you are doing.
         """
@@ -354,7 +400,7 @@ class TransactionStorage(ABC):
         self.pre_save_validation(tx, meta)
 
     def pre_save_validation(self, tx: BaseTransaction, tx_meta: TransactionMetadata) -> None:
-        """ Must be run before every save, only raises AssertionError.
+        """ Must be run before every save, will raise AssertionError or TransactionNotInAllowedScopeError
 
         A failure means there is a bug in the code that allowed the condition to reach the "save" code. This is a last
         second measure to prevent persisting a bad transaction/metadata.
@@ -365,12 +411,31 @@ class TransactionStorage(ABC):
         assert tx.hash is not None
         assert tx_meta.hash is not None
         assert tx.hash == tx_meta.hash, f'{tx.hash.hex()} != {tx_meta.hash.hex()}'
+        self._validate_partial_marker_consistency(tx_meta)
+        self._validate_transaction_in_scope(tx)
+
+    def post_get_validation(self, tx: BaseTransaction) -> None:
+        """ Must be run before every save, will raise AssertionError or TransactionNotInAllowedScopeError
+
+        A failure means there is a bug in the code that allowed the condition to reach the "get" code. This is a last
+        second measure to prevent getting a transaction while using the wrong scope.
+        """
+        tx_meta = tx.get_metadata()
+        self._validate_partial_marker_consistency(tx_meta)
+        self._validate_transaction_in_scope(tx)
+
+    def _validate_partial_marker_consistency(self, tx_meta: TransactionMetadata) -> None:
         voided_by = tx_meta.get_frozen_voided_by()
         # XXX: PARTIALLY_VALIDATED_ID must be included if the tx is fully connected and must not be included otherwise
         has_partially_validated_marker = settings.PARTIALLY_VALIDATED_ID in voided_by
         validation_is_fully_connected = tx_meta.validation.is_fully_connected()
         assert (not has_partially_validated_marker) == validation_is_fully_connected, \
                'Inconsistent ValidationState and voided_by'
+
+    def _validate_transaction_in_scope(self, tx: BaseTransaction) -> None:
+        if not self.allow_scope.is_allowed(tx):
+            tx_meta = tx.get_metadata()
+            raise TransactionNotInAllowedScopeError(tx.hash_hex, self.allow_scope.name, tx_meta.validation.name)
 
     @abstractmethod
     def remove_transaction(self, tx: BaseTransaction) -> None:
@@ -483,6 +548,7 @@ class TransactionStorage(ABC):
                 tx = self._get_transaction(hash_bytes)
         else:
             tx = self._get_transaction(hash_bytes)
+        self.post_get_validation(tx)
         return tx
 
     def get_metadata(self, hash_bytes: bytes) -> Optional[TransactionMetadata]:
@@ -497,10 +563,16 @@ class TransactionStorage(ABC):
         except TransactionDoesNotExist:
             return None
 
+    def get_all_transactions(self) -> Iterator[BaseTransaction]:
+        """Return all vertices (transactions and blocks) within the allowed scope.
+        """
+        for tx in self._get_all_transactions():
+            if self.allow_scope.is_allowed(tx):
+                yield tx
+
     @abstractmethod
-    def get_all_transactions(self, *, include_partial: bool = False) -> Iterator[BaseTransaction]:
-        # TODO: verify the following claim:
-        """Return all transactions that are not blocks.
+    def _get_all_transactions(self) -> Iterator[BaseTransaction]:
+        """Internal implementation that iterates over all transactions/blocks.
         """
         raise NotImplementedError
 
@@ -950,14 +1022,14 @@ class TransactionStorage(ABC):
         else:
             yield from self.iter_mempool_from_tx_tips()
 
-    def get_transactions_that_became_invalid(self) -> List[BaseTransaction]:
+    def compute_transactions_that_became_invalid(self) -> List[BaseTransaction]:
         """ This method will look for transactions in the mempool that have became invalid due to the reward lock.
         """
         from hathor.transaction.transaction_metadata import ValidationState
         to_remove: List[BaseTransaction] = []
         for tx in self.iter_mempool_from_best_index():
             if tx.is_spent_reward_locked():
-                tx.get_metadata().validation = ValidationState.INVALID
+                tx.set_validation(ValidationState.INVALID)
                 to_remove.append(tx)
         return to_remove
 
@@ -1001,6 +1073,8 @@ class BaseTransactionStorage(TransactionStorage):
         """Reset all indexes. This function should not be called unless you know what you are doing."""
         assert self.indexes is not None, 'Cannot reset indexes because they have not been enabled.'
         self.indexes.force_clear_all()
+        self.update_best_block_tips_cache(None)
+        self._all_tips_cache = None
 
     def remove_cache(self) -> None:
         """Remove all caches in case we don't need it."""
