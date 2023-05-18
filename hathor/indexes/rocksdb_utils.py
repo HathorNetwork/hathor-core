@@ -121,8 +121,7 @@ class RocksDBIndexUtils:
         return {k: v for (_, k), v in it}
 
 
-# XXX: should be `Collection[bytes]`, which only works on Python 3.9+
-class RocksDBSimpleSet(Collection, RocksDBIndexUtils):
+class RocksDBSimpleSet(Collection[bytes], RocksDBIndexUtils):
     def __init__(self, db: 'rocksdb.DB', log: 'structlog.stdlib.BoundLogger', *, cf_name: bytes) -> None:
         self.log = log
         super().__init__(db, cf_name)
