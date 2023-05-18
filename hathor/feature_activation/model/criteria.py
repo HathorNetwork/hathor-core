@@ -12,21 +12,24 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Any, Dict, Optional
+from typing import Any, ClassVar, Dict, Optional
 
-from pydantic import Field, validator
+from pydantic import Field, NonNegativeInt, validator
 
 from hathor import version
-from hathor.feature_activation import constants
 from hathor.feature_activation.feature import Feature
 from hathor.utils.pydantic import BaseModel
 
 
-class Criteria(BaseModel):
+class Criteria(BaseModel, validate_all=True):
     """
     Represents the configuration for a certain feature activation criteria.
 
     Attributes:
+        evaluation_interval: the number of blocks in the feature activation evaluation interval. Class variable.
+
+        max_signal_bits: the number of bits used in the first byte of a block's version field. Class variable.
+
         name: a string representing the name of the feature.
 
         bit: which bit in the version field of the block is going to be used to signal the feature support by miners.
@@ -44,15 +47,17 @@ class Criteria(BaseModel):
 
         version: the client version of hathor-core at which this feature was defined.
     """
+    evaluation_interval: ClassVar[Optional[int]] = None
+    max_signal_bits: ClassVar[Optional[int]] = None
 
-    name: str
-    bit: int = Field(ge=0, lt=constants.MAX_SIGNAL_BITS)
-    start_height: int = Field(ge=0, multiple_of=constants.EVALUATION_INTERVAL)
-    timeout_height: int = Field(ge=0, multiple_of=constants.EVALUATION_INTERVAL)
-    threshold: Optional[int] = Field(ge=0, le=constants.EVALUATION_INTERVAL, default=None)
-    minimum_activation_height: int = Field(ge=0, multiple_of=constants.EVALUATION_INTERVAL, default=0)
+    name: str  # TODO: Use enum directly
+    bit: NonNegativeInt
+    start_height: NonNegativeInt
+    timeout_height: NonNegativeInt
+    threshold: Optional[NonNegativeInt] = None
+    minimum_activation_height: NonNegativeInt = 0
     activate_on_timeout: bool = False
-    version: str = Field(regex=version.BUILD_VERSION_REGEX)
+    version: str = Field(..., regex=version.BUILD_VERSION_REGEX)
 
     @validator('name')
     def _validate_name(cls, name: str) -> str:
@@ -64,13 +69,35 @@ class Criteria(BaseModel):
 
         return name
 
+    @validator('bit')
+    def _validate_bit(cls, bit: int) -> int:
+        """Validates that the bit is lower than the max_signal_bits."""
+        assert Criteria.max_signal_bits is not None, 'Criteria.max_signal_bits must be set'
+
+        if bit >= Criteria.max_signal_bits:
+            raise ValueError(f'bit must be lower than max_signal_bits: {bit} >= {Criteria.max_signal_bits}')
+
+        return bit
+
     @validator('timeout_height')
     def _validate_timeout_height(cls, timeout_height: int, values: Dict[str, Any]) -> int:
-        """Validate that the timeout_height is greater than the start_height."""
+        """Validates that the timeout_height is greater than the start_height."""
         if timeout_height <= values.get('start_height', float('inf')):
             raise ValueError('timeout_height must be greater than start_height')
 
         return timeout_height
+
+    @validator('threshold')
+    def _validate_threshold(cls, threshold: int) -> int:
+        """Validates that the threshold is not greater than the evaluation_interval."""
+        assert Criteria.evaluation_interval is not None, 'Criteria.evaluation_interval must be set'
+
+        if threshold > Criteria.evaluation_interval:
+            raise ValueError(
+                f'threshold must not be greater than evaluation_interval: {threshold} > {Criteria.evaluation_interval}'
+            )
+
+        return threshold
 
     @validator('minimum_activation_height')
     def _validate_minimum_activation_height(cls, minimum_activation_height: int, values: Dict[str, Any]) -> int:
@@ -79,3 +106,15 @@ class Criteria(BaseModel):
             raise ValueError('minimum_activation_height must not be greater than timeout_height')
 
         return minimum_activation_height
+
+    @validator('start_height', 'timeout_height', 'minimum_activation_height')
+    def _validate_evaluation_interval_multiple(cls, value: int) -> int:
+        """Validates that the value is a multiple of evaluation_interval."""
+        assert Criteria.evaluation_interval is not None, 'Criteria.evaluation_interval must be set'
+
+        if value % Criteria.evaluation_interval != 0:
+            raise ValueError(
+                f'Should be a multiple of evaluation_interval: {value} % {Criteria.evaluation_interval} != 0'
+            )
+
+        return value

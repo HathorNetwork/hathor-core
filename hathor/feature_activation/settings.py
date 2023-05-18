@@ -13,16 +13,59 @@
 #  limitations under the License.
 
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from hathor.feature_activation.exception import InvalidFeaturesConfigurationException
+from pydantic import Field, NonNegativeInt, PositiveInt, validator
+
 from hathor.feature_activation.model.criteria import Criteria
+from hathor.utils.pydantic import BaseModel
 
 
-def validate_feature_list(features: List[Criteria]) -> None:
-    """Validates a list of features."""
-    _validate_duplicate_names(features)
-    _validate_conflicting_bits(features)
+class Settings(BaseModel, validate_all=True):
+    """Feature Activation settings."""
+
+    # The number of blocks in the feature activation evaluation interval.
+    # Equivalent to 14 days (40320 * 30 seconds = 14 days)
+    evaluation_interval: PositiveInt = 40320
+
+    # The number of bits used in the first byte of a block's version field. The 4 left-most bits are not used.
+    max_signal_bits: int = Field(ge=1, le=8, default=4)
+
+    # Specifies the default minimum number of blocks per evaluation interval required to activate a feature.
+    # Usually calculated from a percentage of evaluation_interval.
+    default_threshold: NonNegativeInt = 36288  # 36288 = 90% of evaluation_interval (40320)
+
+    # List of criteria for all features that participate in the feature activation process for a network,
+    # past or future, activated or not. Features should NOT be removed from this list, and neither their
+    # values changed, to preserve history.
+    features: List[Criteria] = []
+
+    @validator('evaluation_interval')
+    def _process_evaluation_interval(cls, evaluation_interval: int) -> int:
+        """Sets the evaluation_interval on Criteria."""
+        Criteria.evaluation_interval = evaluation_interval
+        return evaluation_interval
+
+    @validator('max_signal_bits')
+    def _process_max_signal_bits(cls, max_signal_bits: int) -> int:
+        """Sets the max_signal_bits on Criteria."""
+        Criteria.max_signal_bits = max_signal_bits
+        return max_signal_bits
+
+    @validator('default_threshold')
+    def _validate_default_threshold(cls, default_threshold: int, values: Dict[str, Any]) -> int:
+        """Validates that the default_threshold is not greater than the evaluation_interval."""
+        if default_threshold > values.get('evaluation_interval', float('-inf')):
+            raise ValueError('default_threshold must not be greater than evaluation_interval')
+
+        return default_threshold
+
+    @validator('features')
+    def _validate_features(cls, features: List[Criteria]) -> List[Criteria]:
+        """Validates all configured features."""
+        _validate_duplicate_names(features)
+        _validate_conflicting_bits(features)
+        return features
 
 
 def _validate_duplicate_names(features: List[Criteria]) -> None:
@@ -30,7 +73,7 @@ def _validate_duplicate_names(features: List[Criteria]) -> None:
     feature_names = [criteria.name for criteria in features]
 
     if len(feature_names) != len(set(feature_names)):
-        raise InvalidFeaturesConfigurationException('Feature names should be unique')
+        raise ValueError('Feature names should be unique')
 
 
 def _validate_conflicting_bits(features: List[Criteria]) -> None:
@@ -45,7 +88,7 @@ def _validate_conflicting_bits(features: List[Criteria]) -> None:
     ]
 
     if any(intervals_has_overlaps):
-        raise InvalidFeaturesConfigurationException(
+        raise ValueError(
             'One or more Features have the same bit configured for an overlapping interval'
         )
 

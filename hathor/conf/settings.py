@@ -19,8 +19,7 @@ from typing import Any, Dict, List, NamedTuple, Optional, Union
 import pydantic
 
 from hathor.checkpoint import Checkpoint
-from hathor.feature_activation.model.criteria import Criteria
-from hathor.feature_activation.validation import validate_feature_list
+from hathor.feature_activation.settings import Settings as FeatureActivationSettings
 from hathor.utils import yaml
 from hathor.utils.pydantic import BaseModel
 
@@ -389,13 +388,8 @@ class HathorSettings(NamedTuple):
     # Time to update the peers that are running sync.
     SYNC_UPDATE_INTERVAL: int = 10 * 60  # seconds
 
-    # List of criteria for all features that participate in the feature activation process for this network,
-    # past or future, activated or not. Features should NOT be removed from this list, to preserve history.
-    FEATURE_ACTIVATION: List[Criteria] = []
-
-    # Specifies the default minimum number of blocks per evaluation interval required to activate a feature.
-    # Usually calculated from a percentage of feature_activation.constants.EVALUATION_INTERVAL.
-    DEFAULT_FEATURE_ACTIVATION_THRESHOLD: int = 36288  # 36288 = 90% of 40320
+    # All settings related to Feature Activation
+    FEATURE_ACTIVATION: FeatureActivationSettings = FeatureActivationSettings()
 
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':
@@ -440,12 +434,6 @@ def _parse_hex_str(hex_str: Union[str, bytes]) -> bytes:
     return hex_str
 
 
-def _validate_feature_activation_list(features: List[Criteria]) -> List[Criteria]:
-    """Validates all configured features."""
-    validate_feature_list(features)
-    return features
-
-
 _ValidatedHathorSettings = pydantic.create_model_from_namedtuple(
     HathorSettings,
     __base__=BaseModel,
@@ -469,9 +457,6 @@ _ValidatedHathorSettings = pydantic.create_model_from_namedtuple(
         _parse_checkpoints=pydantic.validator(
             'CHECKPOINTS',
             pre=True
-        )(_parse_checkpoints),
-        _validate_feature_activation_list=pydantic.validator(
-            'FEATURE_ACTIVATION'
-        )(_validate_feature_activation_list)
+        )(_parse_checkpoints)
     )
 )

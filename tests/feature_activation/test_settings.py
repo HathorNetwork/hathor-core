@@ -13,13 +13,12 @@
 #  limitations under the License.
 
 from enum import Enum
-from typing import List
+from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
-from hathor.feature_activation.exception import InvalidFeaturesConfigurationException
-from hathor.feature_activation.model.criteria import Criteria
-from hathor.feature_activation.validation import validate_feature_list
+from hathor.feature_activation.settings import Settings
 
 
 class TestFeature(Enum):
@@ -27,11 +26,12 @@ class TestFeature(Enum):
     FEATURE_2 = 2
 
 
+@patch('hathor.feature_activation.model.criteria.Feature', TestFeature)
 @pytest.mark.parametrize(
     'features',
     [
         [
-            Criteria.construct(
+            dict(
                 name='FEATURE_1',
                 bit=0,
                 start_height=0,
@@ -39,7 +39,7 @@ class TestFeature(Enum):
                 threshold=0,
                 version='0.0.0'
             ),
-            Criteria.construct(
+            dict(
                 name='FEATURE_2',
                 bit=1,
                 start_height=0,
@@ -49,7 +49,7 @@ class TestFeature(Enum):
             )
         ],
         [
-            Criteria.construct(
+            dict(
                 name='FEATURE_1',
                 bit=0,
                 start_height=0,
@@ -57,7 +57,7 @@ class TestFeature(Enum):
                 threshold=0,
                 version='0.0.0'
             ),
-            Criteria.construct(
+            dict(
                 name='FEATURE_2',
                 bit=0,
                 start_height=2 * 40320,
@@ -68,13 +68,15 @@ class TestFeature(Enum):
         ]
     ]
 )
-def test_valid_feature_list(features: List[Criteria]) -> None:
-    validate_feature_list(features)
+def test_valid_feature_list(features):
+    data = dict(features=features)
+    Settings(**data)
 
 
+@patch('hathor.feature_activation.model.criteria.Feature', TestFeature)
 def test_duplicate_names():
     features = [
-        Criteria.construct(
+        dict(
             name='FEATURE_1',
             bit=0,
             start_height=0,
@@ -82,7 +84,7 @@ def test_duplicate_names():
             threshold=0,
             version='0.0.0'
         ),
-        Criteria.construct(
+        dict(
             name='FEATURE_1',
             bit=1,
             start_height=0,
@@ -92,17 +94,20 @@ def test_duplicate_names():
         )
     ]
 
-    with pytest.raises(InvalidFeaturesConfigurationException) as e:
-        validate_feature_list(features)
+    with pytest.raises(ValidationError) as e:
+        data = dict(features=features)
+        Settings(**data)
 
-    assert str(e.value) == 'Feature names should be unique'
+    errors = e.value.errors()
+    assert errors[0]['msg'] == 'Feature names should be unique'
 
 
+@patch('hathor.feature_activation.model.criteria.Feature', TestFeature)
 @pytest.mark.parametrize(
     'features',
     [
         [
-            Criteria.construct(
+            dict(
                 name='FEATURE_1',
                 bit=0,
                 start_height=0,
@@ -110,7 +115,7 @@ def test_duplicate_names():
                 threshold=0,
                 version='0.0.0'
             ),
-            Criteria.construct(
+            dict(
                 name='FEATURE_2',
                 bit=0,
                 start_height=0,
@@ -120,7 +125,7 @@ def test_duplicate_names():
             )
         ],
         [
-            Criteria.construct(
+            dict(
                 name='FEATURE_1',
                 bit=0,
                 start_height=0,
@@ -128,7 +133,7 @@ def test_duplicate_names():
                 threshold=0,
                 version='0.0.0'
             ),
-            Criteria.construct(
+            dict(
                 name='FEATURE_2',
                 bit=0,
                 start_height=40320,
@@ -138,7 +143,7 @@ def test_duplicate_names():
             )
         ],
         [
-            Criteria.construct(
+            dict(
                 name='FEATURE_1',
                 bit=1,
                 start_height=10 * 40320,
@@ -146,7 +151,7 @@ def test_duplicate_names():
                 threshold=0,
                 version='0.0.0'
             ),
-            Criteria.construct(
+            dict(
                 name='FEATURE_2',
                 bit=1,
                 start_height=15 * 40320,
@@ -157,8 +162,10 @@ def test_duplicate_names():
         ]
     ]
 )
-def test_conflicting_bits(features: List[Criteria]) -> None:
-    with pytest.raises(InvalidFeaturesConfigurationException) as e:
-        validate_feature_list(features)
+def test_conflicting_bits(features):
+    with pytest.raises(ValidationError) as e:
+        data = dict(features=features)
+        Settings(**data)
 
-    assert str(e.value) == 'One or more Features have the same bit configured for an overlapping interval'
+    errors = e.value.errors()
+    assert errors[0]['msg'] == 'One or more Features have the same bit configured for an overlapping interval'
