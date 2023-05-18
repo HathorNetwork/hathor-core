@@ -68,8 +68,11 @@ class Criteria(BaseModel, validate_all=True):
     @validator('timeout_height')
     def _validate_timeout_height(cls, timeout_height: int, values: Dict[str, Any]) -> int:
         """Validates that the timeout_height is greater than the start_height."""
-        if timeout_height <= values.get('start_height', float('inf')):
-            raise ValueError('timeout_height must be greater than start_height')
+        start_height = values.get('start_height')
+        assert start_height is not None, 'start_height must be set'
+
+        if timeout_height <= start_height:
+            raise ValueError(f'timeout_height must be greater than start_height: {timeout_height} <= {start_height}')
 
         return timeout_height
 
@@ -88,8 +91,14 @@ class Criteria(BaseModel, validate_all=True):
     @validator('minimum_activation_height')
     def _validate_minimum_activation_height(cls, minimum_activation_height: int, values: Dict[str, Any]) -> int:
         """Validates that the minimum_activation_height is not greater than the timeout_height."""
-        if minimum_activation_height > values.get('timeout_height', float('-inf')):
-            raise ValueError('minimum_activation_height must not be greater than timeout_height')
+        timeout_height = values.get('timeout_height')
+        assert timeout_height is not None, 'timeout_height must be set'
+
+        if minimum_activation_height > timeout_height:
+            raise ValueError(
+                f'minimum_activation_height must not be greater than timeout_height: '
+                f'{minimum_activation_height} > {timeout_height}'
+            )
 
         return minimum_activation_height
 

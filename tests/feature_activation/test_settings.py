@@ -55,7 +55,7 @@ from hathor.feature_activation.settings import Settings
         )
     ]
 )
-def test_valid_feature_list(features):
+def test_valid_settings(features):
     data = dict(features=features)
     Settings(**data)
 
@@ -120,3 +120,19 @@ def test_conflicting_bits(features):
 
     errors = e.value.errors()
     assert errors[0]['msg'] == 'One or more Features have the same bit configured for an overlapping interval'
+
+
+@pytest.mark.parametrize(
+    ['evaluation_interval', 'default_threshold', 'error'],
+    [
+        (10, 50, 'default_threshold must not be greater than evaluation_interval: 50 > 10'),
+        (100, 101, 'default_threshold must not be greater than evaluation_interval: 101 > 100')
+    ]
+)
+def test_default_threshold(evaluation_interval, default_threshold, error):
+    with pytest.raises(ValidationError) as e:
+        data = dict(evaluation_interval=evaluation_interval, default_threshold=default_threshold)
+        Settings(**data)
+
+    errors = e.value.errors()
+    assert errors[0]['msg'] == error

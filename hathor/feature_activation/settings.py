@@ -56,8 +56,14 @@ class Settings(BaseModel, validate_all=True):
     @validator('default_threshold')
     def _validate_default_threshold(cls, default_threshold: int, values: Dict[str, Any]) -> int:
         """Validates that the default_threshold is not greater than the evaluation_interval."""
-        if default_threshold > values.get('evaluation_interval', float('-inf')):
-            raise ValueError('default_threshold must not be greater than evaluation_interval')
+        evaluation_interval = values.get('evaluation_interval')
+        assert evaluation_interval is not None, 'evaluation_interval must be set'
+
+        if default_threshold > evaluation_interval:
+            raise ValueError(
+                f'default_threshold must not be greater than evaluation_interval: '
+                f'{default_threshold} > {evaluation_interval}'
+            )
 
         return default_threshold
 
