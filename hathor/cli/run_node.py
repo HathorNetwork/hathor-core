@@ -17,9 +17,11 @@ import sys
 from argparse import SUPPRESS, ArgumentParser, Namespace
 from typing import Any, Callable, List, Tuple
 
+from pydantic import ValidationError
 from structlog import get_logger
 
-from hathor.conf import TESTNET_SETTINGS_FILEPATH
+from hathor.conf import TESTNET_SETTINGS_FILEPATH, HathorSettings
+from hathor.exception import PreInitializationError
 
 logger = get_logger()
 # LOGGING_CAPTURE_STDOUT = True
@@ -323,6 +325,11 @@ class RunNode:
             os.environ['HATHOR_CONFIG_YAML'] = args.config_yaml
         elif args.testnet:
             os.environ['HATHOR_CONFIG_YAML'] = TESTNET_SETTINGS_FILEPATH
+
+        try:
+            HathorSettings()
+        except ValidationError as e:
+            raise PreInitializationError(e)
 
         self.prepare(args)
         self.register_signal_handlers(args)

@@ -20,6 +20,7 @@ class Feature(Enum):
     """
     An enum containing all features that participate in the feature activation process, past or future,
     activated or not, for all networks. Features should NOT be removed from this enum, to preserve history.
+    Their values should NOT be changed either.
     """
 
     NOP_FEATURE_1 = 'NOP_FEATURE_1'

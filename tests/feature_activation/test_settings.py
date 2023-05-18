@@ -15,7 +15,8 @@
 import pytest
 from pydantic import ValidationError
 
-from hathor.feature_activation.settings import Settings
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.settings import FeatureInterval, Settings, _find_overlap
 
 
 @pytest.mark.parametrize(
@@ -119,7 +120,8 @@ def test_conflicting_bits(features):
         Settings(**data)
 
     errors = e.value.errors()
-    assert errors[0]['msg'] == 'One or more Features have the same bit configured for an overlapping interval'
+    assert errors[0]['msg'] == 'At least one pair of Features have the same bit configured for an overlapping ' \
+                               'interval: Feature.NOP_FEATURE_1 and Feature.NOP_FEATURE_2'
 
 
 @pytest.mark.parametrize(
@@ -136,3 +138,27 @@ def test_default_threshold(evaluation_interval, default_threshold, error):
 
     errors = e.value.errors()
     assert errors[0]['msg'] == error
+
+
+@pytest.mark.parametrize(
+    ['intervals', 'expected'],
+    [
+        ([], None),
+        ([FeatureInterval(0, 10, Feature.NOP_FEATURE_1)], None),
+        ([FeatureInterval(0, 10, Feature.NOP_FEATURE_1), FeatureInterval(11, 20, Feature.NOP_FEATURE_1)], None),
+        (
+            [FeatureInterval(0, 10, Feature.NOP_FEATURE_1), FeatureInterval(10, 20, Feature.NOP_FEATURE_1)],
+            (FeatureInterval(0, 10, Feature.NOP_FEATURE_1), FeatureInterval(10, 20, Feature.NOP_FEATURE_1))
+        ),
+        (
+            [
+                FeatureInterval(0, 10, Feature.NOP_FEATURE_1),
+                FeatureInterval(20, 30, Feature.NOP_FEATURE_1),
+                FeatureInterval(15, 25, Feature.NOP_FEATURE_1)
+            ],
+            (FeatureInterval(15, 25, Feature.NOP_FEATURE_1), FeatureInterval(20, 30, Feature.NOP_FEATURE_1))
+        )
+    ]
+)
+def test_find_overlap(intervals, expected):
+    assert expected == _find_overlap(intervals)

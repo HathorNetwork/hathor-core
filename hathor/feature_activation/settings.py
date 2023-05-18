@@ -13,7 +13,7 @@
 #  limitations under the License.
 
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional
 
 from pydantic import Field, NonNegativeInt, PositiveInt, validator
 
@@ -74,51 +74,47 @@ class Settings(BaseModel, validate_all=True):
         greater than the timeout_height of the previous feature that used that bit.
         """
         intervals_by_bit = _get_intervals_by_bit(features)
-        intervals_has_overlaps = [
-            _has_any_overlap(intervals)
-            for intervals in intervals_by_bit.values()
-        ]
 
-        if any(intervals_has_overlaps):
-            raise ValueError(
-                'One or more Features have the same bit configured for an overlapping interval'
-            )
+        for intervals in intervals_by_bit.values():
+            overlap = _find_overlap(intervals)
+
+            if overlap:
+                first, second = overlap
+                raise ValueError(
+                    f'At least one pair of Features have the same bit configured for an overlapping interval: '
+                    f'{first.feature} and {second.feature}'
+                )
 
         return features
 
 
-def _get_intervals_by_bit(features: dict[Feature, Criteria]) -> Dict[int, List[Tuple[int, int]]]:
-    """Returns a list of (start_height, timeout_height) intervals for all features, grouped by bit."""
-    intervals_by_bit: Dict[int, List[Tuple[int, int]]] = defaultdict(list)
+class FeatureInterval(NamedTuple):
+    begin: int
+    end: int
+    feature: Feature
 
-    for criteria in features.values():
+
+def _get_intervals_by_bit(features: dict[Feature, Criteria]) -> dict[int, list[FeatureInterval]]:
+    """Returns a list of (start_height, timeout_height) intervals for all features, grouped by bit."""
+    intervals_by_bit: dict[int, list[FeatureInterval]] = defaultdict(list)
+
+    for feature, criteria in features.items():
         intervals = intervals_by_bit[criteria.bit]
-        intervals.append((criteria.start_height, criteria.timeout_height))
+        interval = FeatureInterval(begin=criteria.start_height, end=criteria.timeout_height, feature=feature)
+        intervals.append(interval)
 
     return intervals_by_bit
 
 
-def _has_any_overlap(intervals: List[Tuple[int, int]]) -> bool:
-    """Takes a list of intervals and returns whether any intervals overlap.
-
-    >>> _has_any_overlap([])
-    False
-    >>> _has_any_overlap([(0, 10)])
-    False
-    >>> _has_any_overlap([(0, 10), (11, 20)])
-    False
-    >>> _has_any_overlap([(0, 10), (10, 20)])
-    True
-    >>> _has_any_overlap([(0, 10), (20, 30), (15, 25)])
-    True
-    """
+def _find_overlap(intervals: List[FeatureInterval]) -> Optional[tuple[FeatureInterval, FeatureInterval]]:
+    """Takes a list of closed intervals and returns the first pair of intervals that overlap, or None otherwise."""
     sorted_intervals = sorted(intervals, key=lambda interval: interval[0])
-    previous_end: Optional[int] = None
+    previous_interval: Optional[FeatureInterval] = None
 
-    for current_begin, current_end in sorted_intervals:
-        if previous_end is not None and current_begin <= previous_end:
-            return True
+    for current_interval in sorted_intervals:
+        if previous_interval is not None and current_interval.begin <= previous_interval.end:
+            return previous_interval, current_interval
 
-        previous_end = current_end
+        previous_interval = current_interval
 
-    return False
+    return None
