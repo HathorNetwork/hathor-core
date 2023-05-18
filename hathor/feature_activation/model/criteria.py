@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Any, ClassVar, Dict, Optional
+from typing import Any, ClassVar, Optional
 
 from pydantic import Field, NonNegativeInt, validator
 
@@ -66,7 +66,7 @@ class Criteria(BaseModel, validate_all=True):
         return bit
 
     @validator('timeout_height')
-    def _validate_timeout_height(cls, timeout_height: int, values: Dict[str, Any]) -> int:
+    def _validate_timeout_height(cls, timeout_height: int, values: dict[str, Any]) -> int:
         """Validates that the timeout_height is greater than the start_height."""
         start_height = values.get('start_height')
         assert start_height is not None, 'start_height must be set'
@@ -89,7 +89,7 @@ class Criteria(BaseModel, validate_all=True):
         return threshold
 
     @validator('minimum_activation_height')
-    def _validate_minimum_activation_height(cls, minimum_activation_height: int, values: Dict[str, Any]) -> int:
+    def _validate_minimum_activation_height(cls, minimum_activation_height: int, values: dict[str, Any]) -> int:
         """Validates that the minimum_activation_height is not greater than the timeout_height."""
         timeout_height = values.get('timeout_height')
         assert timeout_height is not None, 'timeout_height must be set'

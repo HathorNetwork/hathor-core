@@ -13,7 +13,7 @@
 #  limitations under the License.
 
 from collections import defaultdict
-from typing import Any, Dict, List, NamedTuple, Optional
+from typing import Any, NamedTuple, Optional
 
 from pydantic import Field, NonNegativeInt, PositiveInt, validator
 
@@ -54,7 +54,7 @@ class Settings(BaseModel, validate_all=True):
         return max_signal_bits
 
     @validator('default_threshold')
-    def _validate_default_threshold(cls, default_threshold: int, values: Dict[str, Any]) -> int:
+    def _validate_default_threshold(cls, default_threshold: int, values: dict[str, Any]) -> int:
         """Validates that the default_threshold is not greater than the evaluation_interval."""
         evaluation_interval = values.get('evaluation_interval')
         assert evaluation_interval is not None, 'evaluation_interval must be set'
@@ -106,7 +106,7 @@ def _get_intervals_by_bit(features: dict[Feature, Criteria]) -> dict[int, list[F
     return intervals_by_bit
 
 
-def _find_overlap(intervals: List[FeatureInterval]) -> Optional[tuple[FeatureInterval, FeatureInterval]]:
+def _find_overlap(intervals: list[FeatureInterval]) -> Optional[tuple[FeatureInterval, FeatureInterval]]:
     """Takes a list of closed intervals and returns the first pair of intervals that overlap, or None otherwise."""
     sorted_intervals = sorted(intervals, key=lambda interval: interval[0])
     previous_interval: Optional[FeatureInterval] = None
