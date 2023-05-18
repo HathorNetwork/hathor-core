@@ -4,7 +4,6 @@ import pytest
 
 from hathor.builder import CliBuilder, ResourcesBuilder
 from hathor.event import EventManager
-from hathor.event.model.EventQueueOptions import EventQueueOptions
 from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.exception import BuilderError
@@ -59,7 +58,7 @@ class BuilderTestCase(unittest.TestCase):
         self.assertNotIn(SyncVersion.V2, manager.connections._sync_factories)
         self.assertFalse(self.resources_builder._built_prometheus)
         self.assertFalse(self.resources_builder._built_status)
-        self.assertEqual(EventQueueOptions(enable=False, reset=False), manager._event_queue_options)
+        self.assertFalse(manager._enable_event_queue)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')
     def test_cache_storage(self):
@@ -164,7 +163,7 @@ class BuilderTestCase(unittest.TestCase):
         self.assertIsInstance(manager._event_manager, EventManager)
         self.assertIsInstance(manager._event_manager._event_storage, EventRocksDBStorage)
         self.assertIsInstance(manager._event_manager._event_ws_factory, EventWebsocketFactory)
-        self.assertEqual(EventQueueOptions(enable=True, reset=False), manager._event_queue_options)
+        self.assertTrue(manager._enable_event_queue)
 
     def test_event_queue_with_memory_storage(self):
         manager = self._build(['--x-enable-event-queue', '--memory-storage'])
@@ -172,16 +171,8 @@ class BuilderTestCase(unittest.TestCase):
         self.assertIsInstance(manager._event_manager, EventManager)
         self.assertIsInstance(manager._event_manager._event_storage, EventMemoryStorage)
         self.assertIsInstance(manager._event_manager._event_ws_factory, EventWebsocketFactory)
-        self.assertEqual(EventQueueOptions(enable=True, reset=False), manager._event_queue_options)
+        self.assertTrue(manager._enable_event_queue)
 
     def test_event_queue_with_full_verification(self):
         args = ['--x-enable-event-queue', '--memory-storage', '--x-full-verification']
         self._build_with_error(args, '--x-full-verification cannot be used with --x-enable-event-queue')
-
-    def test_reset_event_queue(self):
-        manager = self._build(['--x-reset-event-queue', '--memory-storage'])
-        self.assertEqual(EventQueueOptions(enable=False, reset=True), manager._event_queue_options)
-
-    def test_reset_and_enable_event_queue(self):
-        manager = self._build(['--x-reset-event-queue', '--x-enable-event-queue', '--memory-storage'])
-        self.assertEqual(EventQueueOptions(enable=True, reset=True), manager._event_queue_options)

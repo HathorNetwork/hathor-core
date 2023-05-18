@@ -25,7 +25,6 @@ from twisted.internet.posixbase import PosixReactorBase
 
 from hathor.consensus import ConsensusAlgorithm
 from hathor.event import EventManager
-from hathor.event.model.EventQueueOptions import EventQueueOptions
 from hathor.exception import BuilderError
 from hathor.indexes import IndexesManager
 from hathor.manager import HathorManager
@@ -177,11 +176,6 @@ class CliBuilder:
             self.log.info('--x-enable-event-queue flag provided. '
                           'The events detected by the full node will be stored and can be retrieved by clients')
 
-        event_queue_options = EventQueueOptions(
-            enable=bool(args.x_enable_event_queue),
-            reset=bool(args.x_reset_event_queue)
-        )
-
         self.manager = HathorManager(
             reactor,
             pubsub=pubsub,
@@ -199,7 +193,7 @@ class CliBuilder:
             consensus_algorithm=consensus_algorithm,
             environment_info=get_environment_info(args=str(args), peer_id=peer_id.id),
             full_verification=full_verification,
-            event_queue_options=event_queue_options
+            enable_event_queue=args.x_enable_event_queue
         )
 
         if args.stratum:

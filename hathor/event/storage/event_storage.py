@@ -47,12 +47,18 @@ class EventStorage(ABC):
 
     @abstractmethod
     def reset_events(self) -> None:
-        """Reset stored events and related metadata."""
+        """
+        Reset event-related data: events, last_event, and last_group_id.
+        This should be used to clear old events from the database when reloading events.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def reset_all(self) -> None:
-        """Reset all data."""
+        """
+        Reset all data and metadata: events, last_event, last_group_id, node_state, and event_queue_enabled.
+        This should be used for a full wipe out of the event storage.
+        """
         raise NotImplementedError
 
     @abstractmethod
