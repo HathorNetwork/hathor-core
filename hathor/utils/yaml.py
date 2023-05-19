@@ -62,7 +62,6 @@ def dict_from_extended_yaml(*, filepath: Union[Path, str]) -> dict[str, Any]:
     assert base_filepath.resolve() != Path(filepath).resolve(), 'cannot extend self'
 
     base_dict = dict_from_yaml(filepath=base_filepath)
+    merged_dict = deep_merge(base_dict, extension_dict)
 
-    deep_merge(base_dict, extension_dict)
-
-    return base_dict
+    return merged_dict

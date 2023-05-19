@@ -12,18 +12,34 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-def deep_merge(first: dict, second: dict) -> None:
+from copy import deepcopy
+
+
+def deep_merge(first_dict: dict, second_dict: dict) -> dict:
     """
-    Recursively merges two dicts, altering the first one in place.
+    Recursively merges two dicts, returning a new one with the merged values. Keeps both input dicts intact.
+
+    Note: will raise RecursionError if there's a circular reference in both dicts.
 
     >>> dict1 = dict(a=1, b=dict(c=2, d=3), e=dict(f=4))
     >>> dict2 = dict(b=dict(d=5, e=6), e=7)
-    >>> deep_merge(dict1, dict2)
-    >>> dict1 == dict(a=1, b=dict(c=2, d=5, e=6), e=7)
+    >>> result = deep_merge(dict1, dict2)
+    >>> result == dict(a=1, b=dict(c=2, d=5, e=6), e=7)
+    True
+    >>> dict1 == dict(a=1, b=dict(c=2, d=3), e=dict(f=4))
+    True
+    >>> dict2 == dict(b=dict(d=5, e=6), e=7)
     True
     """
-    for key in second:
-        if key in first and isinstance(first[key], dict) and isinstance(second[key], dict):
-            deep_merge(first[key], second[key])
-        else:
-            first[key] = second[key]
+    merged = deepcopy(first_dict)
+
+    def do_deep_merge(first: dict, second: dict) -> dict:
+        for key in second:
+            if key in first and isinstance(first[key], dict) and isinstance(second[key], dict):
+                do_deep_merge(first[key], second[key])
+            else:
+                first[key] = second[key]
+
+        return first
+
+    return do_deep_merge(merged, second_dict)
