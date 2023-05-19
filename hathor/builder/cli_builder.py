@@ -31,6 +31,7 @@ from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import discover_hostname
 from hathor.pubsub import PubSubManager
+from hathor.stratum import StratumFactory
 from hathor.wallet import BaseWallet, HDWallet, Wallet
 
 logger = get_logger()
@@ -176,7 +177,6 @@ class CliBuilder:
             tx_storage=tx_storage,
             event_manager=event_manager,
             wallet=self.wallet,
-            stratum_port=args.stratum,
             ssl=True,
             checkpoints=settings.CHECKPOINTS,
             enable_sync_v1=enable_sync_v1,
@@ -187,6 +187,11 @@ class CliBuilder:
             full_verification=full_verification,
             enable_event_queue=bool(args.x_enable_event_queue)
         )
+
+        if args.stratum:
+            stratum_factory = StratumFactory(self.manager)
+            self.manager.stratum_factory = stratum_factory
+            self.manager.metrics.stratum_factory = stratum_factory
 
         if args.data:
             self.manager.set_cmd_path(args.data)

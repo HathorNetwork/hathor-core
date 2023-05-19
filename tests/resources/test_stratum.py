@@ -10,11 +10,6 @@ from tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
 class StratumResourceTest(_BaseResourceTest._ResourceTest):
-    def _manager_kwargs(self):
-        kwargs = super()._manager_kwargs()
-        kwargs['stratum_port'] = 8123
-        return kwargs
-
     def setUp(self):
         super().setUp()
         self.web = StubSite(MiningStatsResource(self.manager))

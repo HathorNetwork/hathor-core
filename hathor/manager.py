@@ -45,6 +45,7 @@ from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.stratum import StratumFactory
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion, sum_weights
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
@@ -91,7 +92,6 @@ class HathorManager:
                  network: str,
                  hostname: Optional[str] = None,
                  wallet: Optional[BaseWallet] = None,
-                 stratum_port: Optional[int] = None,
                  ssl: bool = True,
                  enable_sync_v1: bool = False,
                  enable_sync_v1_1: bool = True,
@@ -113,9 +113,6 @@ class HathorManager:
 
         :param tx_storage: Required storage backend.
         :type tx_storage: :py:class:`hathor.transaction.storage.transaction_storage.TransactionStorage`
-
-        :param stratum_port: Stratum server port. Stratum server will only be created if it is not None.
-        :type stratum_port: Optional[int]
         """
         from hathor.metrics import Metrics
         from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
@@ -210,14 +207,9 @@ class HathorManager:
             self.wallet.pubsub = self.pubsub
             self.wallet.reactor = self.reactor
 
-        if stratum_port:
-            # XXX: only import if needed
-            from hathor.stratum import StratumFactory
-            self.stratum_factory: Optional[StratumFactory] = StratumFactory(manager=self, port=stratum_port)
-        else:
-            self.stratum_factory = None
-        # Set stratum factory for metrics object
-        self.metrics.stratum_factory = self.stratum_factory
+        # It will be inject later by the builder.
+        # XXX Remove this attribute after all dependencies are cleared.
+        self.stratum_factory: Optional[StratumFactory] = None
 
         self._allow_mining_without_peers = False
 

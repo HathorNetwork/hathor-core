@@ -137,9 +137,14 @@ class RunNode:
         except BuilderError as err:
             self.log.error(str(err))
             sys.exit(2)
+
         self.tx_storage = self.manager.tx_storage
         self.wallet = self.manager.wallet
         self.start_manager(args)
+
+        if args.stratum:
+            self.reactor.listenTCP(args.stratum, self.manager.stratum_factory)
+
         if register_resources:
             resources_builder = ResourcesBuilder(self.manager, builder.event_ws_factory)
             status_server = resources_builder.build(args)
@@ -163,6 +168,7 @@ class RunNode:
             indexes=self.manager.tx_storage.indexes,
             wallet=self.manager.wallet,
             rocksdb_storage=getattr(builder, 'rocksdb_storage', None),
+            stratum_factory=self.manager.stratum_factory,
         )
 
     def start_sentry_if_possible(self, args: Namespace) -> None:

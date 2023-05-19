@@ -30,6 +30,7 @@ from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.pubsub import PubSubManager
 from hathor.storage import RocksDBStorage
+from hathor.stratum import StratumFactory
 from hathor.transaction.storage import TransactionMemoryStorage, TransactionRocksDBStorage, TransactionStorage
 from hathor.util import Random, Reactor, get_environment_info
 from hathor.wallet import BaseWallet, Wallet
@@ -56,6 +57,7 @@ class BuildArtifacts(NamedTuple):
     indexes: Optional[IndexesManager]
     wallet: Optional[BaseWallet]
     rocksdb_storage: Optional[RocksDBStorage]
+    stratum_factory: Optional[StratumFactory]
 
 
 class Builder:
@@ -109,7 +111,7 @@ class Builder:
         self._enable_sync_v1: Optional[bool] = None
         self._enable_sync_v2: Optional[bool] = None
 
-        self._stratum_port: Optional[int] = None
+        self._enable_stratum_server: Optional[bool] = None
 
         self._full_verification: Optional[bool] = None
 
@@ -152,9 +154,6 @@ class Builder:
         if self._enable_sync_v2 is not None:
             kwargs['enable_sync_v2'] = self._enable_sync_v2
 
-        if self._stratum_port is not None:
-            kwargs['stratum_port'] = self._stratum_port
-
         if self._network is None:
             raise TypeError('you must set a network')
 
@@ -180,6 +179,10 @@ class Builder:
             **kwargs
         )
 
+        stratum_factory: Optional[StratumFactory] = None
+        if self._enable_stratum_server:
+            stratum_factory = self._create_stratum_server(manager)
+
         self.artifacts = BuildArtifacts(
             peer_id=peer_id,
             settings=settings,
@@ -193,6 +196,7 @@ class Builder:
             indexes=indexes,
             wallet=wallet,
             rocksdb_storage=self._rocksdb_storage,
+            stratum_factory=stratum_factory,
         )
 
         return self.artifacts
@@ -251,6 +255,12 @@ class Builder:
         if self._pubsub is None:
             self._pubsub = PubSubManager(self._get_reactor())
         return self._pubsub
+
+    def _create_stratum_server(self, manager: HathorManager) -> StratumFactory:
+        stratum_factory = StratumFactory(manager=manager)
+        manager.stratum_factory = stratum_factory
+        manager.metrics.stratum_factory = stratum_factory
+        return stratum_factory
 
     def _get_or_create_rocksdb_storage(self) -> RocksDBStorage:
         assert self._rocksdb_path is not None
@@ -363,9 +373,9 @@ class Builder:
         self._wallet_unlock = unlock
         return self
 
-    def enable_stratum_server(self, port: int) -> 'Builder':
+    def enable_stratum_server(self) -> 'Builder':
         self.check_if_can_modify()
-        self._stratum_port = port
+        self._enable_stratum_server = True
         return self
 
     def enable_address_index(self) -> 'Builder':

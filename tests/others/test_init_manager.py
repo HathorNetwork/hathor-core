@@ -61,7 +61,7 @@ class SimpleManagerInitializationTestCase(unittest.TestCase):
     def tests_init_with_stratum(self):
         builder = TestBuilder()
         builder.set_tx_storage(self.tx_storage)
-        builder.enable_stratum_server(50505)
+        builder.enable_stratum_server()
         artifacts = builder.build()
         manager = artifacts.manager
         manager.start()
