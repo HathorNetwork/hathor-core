@@ -1,5 +1,3 @@
-import pytest
-
 from hathor.simulator import FakeConnection
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
@@ -46,7 +44,6 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         #      slightly different meaning
         self.manager = self._build_randomized_blockchain()
 
-    @pytest.mark.flaky(max_runs=3, min_passes=1)
     def test_tips_index_initialization(self):
         # XXX: this test makes use of the internals of TipsIndex
         tx_storage = self.manager.tx_storage
@@ -82,7 +79,6 @@ class BaseSimulatorIndexesTestCase(SimulatorTestCase):
         self.assertEqual(newinit_block_tips_tree, base_block_tips_tree)
         self.assertEqual(newinit_tx_tips_tree, base_tx_tips_tree)
 
-    @pytest.mark.flaky(max_runs=3, min_passes=1)
     def test_topological_iterators(self):
         tx_storage = self.manager.tx_storage
 

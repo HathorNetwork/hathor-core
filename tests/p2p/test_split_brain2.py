@@ -1,5 +1,3 @@
-import pytest
-
 from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator import FakeConnection
 from tests import unittest
@@ -9,7 +7,6 @@ from tests.simulation.base import SimulatorTestCase
 class BaseHathorSyncMethodsTestCase(SimulatorTestCase):
     __test__ = False
 
-    @pytest.mark.flaky(max_runs=3, min_passes=1)
     def test_split_brain(self):
         debug_pdf = False
 
