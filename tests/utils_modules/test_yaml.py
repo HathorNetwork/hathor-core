@@ -104,7 +104,7 @@ def test_dict_from_extended_yaml_invalid_extends():
     with pytest.raises(ValueError) as e:
         dict_from_extended_yaml(filepath=filepath)
 
-    assert "/fixtures/unknown_file.yml' is not a file" in str(e.value)
+    assert "unknown_file.yml' is not a file" in str(e.value)
 
 
 def test_dict_from_extended_yaml_self_extends():
