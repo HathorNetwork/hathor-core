@@ -53,8 +53,8 @@ class FakeConnection:
         self.latency = latency
         self.is_connected = True
 
-        self._proto1 = manager1.server_factory.buildProtocol(HostnameAddress(b'fake', 0))
-        self._proto2 = manager2.client_factory.buildProtocol(HostnameAddress(b'fake', 0))
+        self._proto1 = manager1.connections.server_factory.buildProtocol(HostnameAddress(b'fake', 0))
+        self._proto2 = manager2.connections.client_factory.buildProtocol(HostnameAddress(b'fake', 0))
 
         self.tr1 = HathorStringTransport(self._proto2.my_peer)
         self.tr2 = HathorStringTransport(self._proto1.my_peer)

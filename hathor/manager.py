@@ -40,6 +40,7 @@ from hathor.exception import (
     SpendingVoidedError,
 )
 from hathor.mining import BlockTemplate, BlockTemplates
+from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
@@ -88,14 +89,11 @@ class HathorManager:
                  consensus_algorithm: ConsensusAlgorithm,
                  peer_id: PeerId,
                  tx_storage: TransactionStorage,
+                 p2p_manager: ConnectionsManager,
                  event_manager: EventManager,
                  network: str,
                  hostname: Optional[str] = None,
                  wallet: Optional[BaseWallet] = None,
-                 ssl: bool = True,
-                 enable_sync_v1: bool = False,
-                 enable_sync_v1_1: bool = True,
-                 enable_sync_v2: bool = False,
                  capabilities: Optional[List[str]] = None,
                  checkpoints: Optional[List[Checkpoint]] = None,
                  rng: Optional[Random] = None,
@@ -108,27 +106,16 @@ class HathorManager:
         :param network: Name of the network this node participates. Usually it is either testnet or mainnet.
         :type network: string
 
-        :param hostname: The hostname of this node. It is used to generate its entrypoints.
-        :type hostname: string
-
         :param tx_storage: Required storage backend.
         :type tx_storage: :py:class:`hathor.transaction.storage.transaction_storage.TransactionStorage`
         """
         from hathor.metrics import Metrics
-        from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
-        from hathor.p2p.manager import ConnectionsManager
-
-        if not (enable_sync_v1 or enable_sync_v1_1 or enable_sync_v2):
-            raise TypeError(f'{type(self).__name__}() at least one sync version is required')
 
         if event_manager.get_event_queue_state() is True and not enable_event_queue:
             raise InitializationError(
                 'Cannot start manager without event queue feature, as it was enabled in the previous startup. '
                 'Either enable it, or use the reset-event-queue CLI command to remove all event-related data'
             )
-
-        self._enable_sync_v1 = enable_sync_v1
-        self._enable_sync_v2 = enable_sync_v2
 
         self._cmd_path: Optional[str] = None
 
@@ -177,23 +164,11 @@ class HathorManager:
         self._event_manager.save_event_queue_state(enable_event_queue)
         self._enable_event_queue = enable_event_queue
 
-        if enable_sync_v2:
-            assert self.tx_storage.indexes is not None
-            self.log.debug('enable sync-v2 indexes')
-            self.tx_storage.indexes.enable_deps_index()
-            self.tx_storage.indexes.enable_mempool_index()
-
         self.consensus_algorithm = consensus_algorithm
 
         self.peer_discoveries: List[PeerDiscovery] = []
 
-        self.ssl = ssl
-        self.server_factory = HathorServerFactory(self.network, self.my_peer, node=self, use_ssl=ssl)
-        self.client_factory = HathorClientFactory(self.network, self.my_peer, node=self, use_ssl=ssl)
-        self.connections = ConnectionsManager(self.reactor, self.my_peer, self.server_factory, self.client_factory,
-                                              self.pubsub, self, ssl, whitelist_only=False, rng=self.rng,
-                                              enable_sync_v1=enable_sync_v1, enable_sync_v2=enable_sync_v2,
-                                              enable_sync_v1_1=enable_sync_v1_1)
+        self.connections = p2p_manager
 
         self.metrics = Metrics(
             pubsub=self.pubsub,

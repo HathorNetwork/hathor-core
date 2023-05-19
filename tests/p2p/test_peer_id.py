@@ -7,8 +7,8 @@ from twisted.internet.defer import inlineCallbacks
 from hathor.conf import HathorSettings
 from hathor.p2p.peer_id import InvalidPeerIdException, PeerId
 from hathor.p2p.peer_storage import PeerStorage
-from hathor.p2p.protocol import HathorProtocol
 from tests import unittest
+from tests.unittest import TestBuilder
 
 settings = HathorSettings()
 
@@ -150,8 +150,11 @@ class PeerIdTest(unittest.TestCase):
         self.assertEqual(p.retry_timestamp, 0)
 
     def test_validate_certificate(self):
+        builder = TestBuilder()
+        artifacts = builder.build()
+        protocol = artifacts.p2p_manager.server_factory.buildProtocol('127.0.0.1')
+
         peer = PeerId('testnet')
-        protocol = HathorProtocol('testnet', peer, None, node=None, use_ssl=True, inbound=True)
 
         class FakeTransport:
             def getPeerCertificate(self):
@@ -216,7 +219,7 @@ class BasePeerIdTest(unittest.TestCase):
         peer_id.entrypoints = ['tcp://127.0.0.1:40403']
 
         # we consider that we are starting the connection to the peer
-        protocol = HathorProtocol('testnet', peer_id, None, node=manager, use_ssl=True, inbound=False)
+        protocol = manager.connections.client_factory.buildProtocol('127.0.0.1')
         protocol.connection_string = 'tcp://127.0.0.1:40403'
         result = yield peer_id.validate_entrypoint(protocol)
         self.assertTrue(result)

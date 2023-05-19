@@ -50,11 +50,12 @@ class SimpleManagerInitializationTestCase(unittest.TestCase):
         manager = artifacts.manager
         del manager
 
-        # disabling both sync versions should be invalid
+        # disabling all sync versions should be invalid
         with self.assertRaises(TypeError):
             builder = TestBuilder()
             builder.set_tx_storage(self.tx_storage)
             builder.disable_sync_v1()
+            builder.disable_sync_v1_1()
             builder.disable_sync_v2()
             builder.build()
 

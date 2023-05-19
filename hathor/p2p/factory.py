@@ -33,22 +33,20 @@ class HathorServerFactory(protocol.ServerFactory):
     """
 
     manager: Optional[ConnectionsManager]
-    protocol: Optional[Type[MyServerProtocol]] = MyServerProtocol
+    protocol: Type[MyServerProtocol] = MyServerProtocol
 
     def __init__(
             self,
             network: str,
             my_peer: PeerId,
-            connections: Optional[ConnectionsManager] = None,
+            p2p_manager: ConnectionsManager,
             *,
-            node: 'HathorManager',
             use_ssl: bool,
     ):
         super().__init__()
         self.network = network
         self.my_peer = my_peer
-        self.connections = connections
-        self.node = node
+        self.p2p_manager = p2p_manager
         self.use_ssl = use_ssl
 
     def buildProtocol(self, addr: IAddress) -> MyServerProtocol:
@@ -56,8 +54,7 @@ class HathorServerFactory(protocol.ServerFactory):
         p = self.protocol(
             network=self.network,
             my_peer=self.my_peer,
-            connections=self.connections,
-            node=self.node,
+            p2p_manager=self.p2p_manager,
             use_ssl=self.use_ssl,
             inbound=True,
         )
@@ -69,23 +66,20 @@ class HathorClientFactory(protocol.ClientFactory):
     """ HathorClientFactory is used to generate HathorProtocol objects when we connected to another peer.
     """
 
-    manager: Optional[ConnectionsManager]
-    protocol: Optional[Type[MyClientProtocol]] = MyClientProtocol
+    protocol: Type[MyClientProtocol] = MyClientProtocol
 
     def __init__(
             self,
             network: str,
             my_peer: PeerId,
-            connections: Optional[ConnectionsManager] = None,
+            p2p_manager: ConnectionsManager,
             *,
-            node: 'HathorManager',
             use_ssl: bool,
     ):
         super().__init__()
         self.network = network
         self.my_peer = my_peer
-        self.connections = connections
-        self.node = node
+        self.p2p_manager = p2p_manager
         self.use_ssl = use_ssl
 
     def buildProtocol(self, addr: IAddress) -> MyClientProtocol:
@@ -93,8 +87,7 @@ class HathorClientFactory(protocol.ClientFactory):
         p = self.protocol(
             network=self.network,
             my_peer=self.my_peer,
-            connections=self.connections,
-            node=self.node,
+            p2p_manager=self.p2p_manager,
             use_ssl=self.use_ssl,
             inbound=False,
         )

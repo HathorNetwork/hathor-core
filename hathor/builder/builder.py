@@ -108,8 +108,9 @@ class Builder:
         self._enable_tokens_index: bool = False
         self._enable_utxo_index: bool = False
 
-        self._enable_sync_v1: Optional[bool] = None
-        self._enable_sync_v2: Optional[bool] = None
+        self._enable_sync_v1: bool = False
+        self._enable_sync_v1_1: bool = True
+        self._enable_sync_v2: bool = False
 
         self._enable_stratum_server: Optional[bool] = None
 
@@ -121,6 +122,9 @@ class Builder:
         if self.artifacts is not None:
             raise ValueError('cannot call build twice')
 
+        if self._network is None:
+            raise TypeError('you must set a network')
+
         settings = self._get_settings()
         reactor = self._get_reactor()
         pubsub = self._get_or_create_pubsub()
@@ -129,6 +133,8 @@ class Builder:
 
         soft_voided_tx_ids = self._get_soft_voided_tx_ids()
         consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub)
+
+        p2p_manager = self._get_p2p_manager()
 
         wallet = self._get_or_create_wallet()
         event_manager = self._get_or_create_event_manager()
@@ -147,16 +153,6 @@ class Builder:
 
         kwargs: Dict[str, Any] = {}
 
-        if self._enable_sync_v1 is not None:
-            # XXX: the interface of the Builder was kept using v1 instead of v1_1 to minimize the changes needed
-            kwargs['enable_sync_v1_1'] = self._enable_sync_v1
-
-        if self._enable_sync_v2 is not None:
-            kwargs['enable_sync_v2'] = self._enable_sync_v2
-
-        if self._network is None:
-            raise TypeError('you must set a network')
-
         if self._full_verification is not None:
             kwargs['full_verification'] = self._full_verification
 
@@ -165,12 +161,13 @@ class Builder:
 
         manager = HathorManager(
             reactor,
+            network=self._network,
             pubsub=pubsub,
             consensus_algorithm=consensus_algorithm,
             peer_id=peer_id,
             tx_storage=tx_storage,
+            p2p_manager=p2p_manager,
             event_manager=event_manager,
-            network=self._network,
             wallet=wallet,
             rng=self._rng,
             checkpoints=self._checkpoints,
@@ -178,6 +175,8 @@ class Builder:
             environment_info=get_environment_info(self._cmdline, peer_id.id),
             **kwargs
         )
+
+        p2p_manager.set_manager(manager)
 
         stratum_factory: Optional[StratumFactory] = None
         if self._enable_stratum_server:
@@ -189,7 +188,7 @@ class Builder:
             rng=self._rng,
             reactor=reactor,
             manager=manager,
-            p2p_manager=manager.connections,
+            p2p_manager=p2p_manager,
             pubsub=pubsub,
             consensus=consensus_algorithm,
             tx_storage=tx_storage,
@@ -278,6 +277,27 @@ class Builder:
         )
 
         return self._rocksdb_storage
+
+    def _get_p2p_manager(self) -> ConnectionsManager:
+        enable_ssl = True
+        reactor = self._get_reactor()
+        my_peer = self._get_peer_id()
+
+        assert self._network is not None
+
+        p2p_manager = ConnectionsManager(
+            reactor,
+            network=self._network,
+            my_peer=my_peer,
+            pubsub=self._get_or_create_pubsub(),
+            ssl=enable_ssl,
+            whitelist_only=False,
+            rng=self._rng,
+            enable_sync_v1=self._enable_sync_v1,
+            enable_sync_v1_1=self._enable_sync_v1_1,
+            enable_sync_v2=self._enable_sync_v2,
+        )
+        return p2p_manager
 
     def _get_or_create_tx_storage(self) -> TransactionStorage:
         if self._tx_storage is not None:
@@ -435,6 +455,11 @@ class Builder:
         self._enable_sync_v1 = enable_sync_v1
         return self
 
+    def set_enable_sync_v1_1(self, enable_sync_v1_1: bool) -> 'Builder':
+        self.check_if_can_modify()
+        self._enable_sync_v1_1 = enable_sync_v1_1
+        return self
+
     def set_enable_sync_v2(self, enable_sync_v2: bool) -> 'Builder':
         self.check_if_can_modify()
         self._enable_sync_v2 = enable_sync_v2
@@ -448,6 +473,16 @@ class Builder:
     def disable_sync_v1(self) -> 'Builder':
         self.check_if_can_modify()
         self._enable_sync_v1 = False
+        return self
+
+    def enable_sync_v1_1(self) -> 'Builder':
+        self.check_if_can_modify()
+        self._enable_sync_v1_1 = True
+        return self
+
+    def disable_sync_v1_1(self) -> 'Builder':
+        self.check_if_can_modify()
+        self._enable_sync_v1_1 = False
         return self
 
     def enable_sync_v2(self) -> 'Builder':

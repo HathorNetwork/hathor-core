@@ -28,10 +28,12 @@ from hathor.event import EventManager
 from hathor.exception import BuilderError
 from hathor.indexes import IndexesManager
 from hathor.manager import HathorManager
+from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import discover_hostname
 from hathor.pubsub import PubSubManager
 from hathor.stratum import StratumFactory
+from hathor.util import Random
 from hathor.wallet import BaseWallet, HDWallet, Wallet
 
 logger = get_logger()
@@ -176,25 +178,37 @@ class CliBuilder:
             self.log.info('--x-enable-event-queue flag provided. '
                           'The events detected by the full node will be stored and can be retrieved by clients')
 
-        self.manager = HathorManager(
+        p2p_manager = ConnectionsManager(
             reactor,
-            pubsub=pubsub,
-            peer_id=peer_id,
             network=network,
-            hostname=hostname,
-            tx_storage=tx_storage,
-            event_manager=event_manager,
-            wallet=self.wallet,
+            my_peer=peer_id,
+            pubsub=pubsub,
             ssl=True,
-            checkpoints=settings.CHECKPOINTS,
+            whitelist_only=False,
+            rng=Random(),
             enable_sync_v1=enable_sync_v1,
             enable_sync_v1_1=enable_sync_v1_1,
             enable_sync_v2=enable_sync_v2,
+        )
+
+        self.manager = HathorManager(
+            reactor,
+            network=network,
+            hostname=hostname,
+            pubsub=pubsub,
             consensus_algorithm=consensus_algorithm,
+            peer_id=peer_id,
+            tx_storage=tx_storage,
+            p2p_manager=p2p_manager,
+            event_manager=event_manager,
+            wallet=self.wallet,
+            checkpoints=settings.CHECKPOINTS,
             environment_info=get_environment_info(args=str(args), peer_id=peer_id.id),
             full_verification=full_verification,
             enable_event_queue=args.x_enable_event_queue
         )
+
+        p2p_manager.set_manager(self.manager)
 
         if args.stratum:
             stratum_factory = StratumFactory(self.manager)
