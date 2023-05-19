@@ -16,6 +16,7 @@ from collections import OrderedDict
 from typing import Any, Iterator, Optional, Set
 
 from twisted.internet import threads
+from twisted.internet.interfaces import IDelayedCall
 
 from hathor.indexes import IndexesManager
 from hathor.transaction import BaseTransaction
@@ -59,6 +60,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self.interval = interval
         self.capacity = capacity
         self.flush_deferred = None
+        self._flush_call_later: Optional[IDelayedCall] = None
         self._clone_if_needed = _clone_if_needed
         self.cache = OrderedDict()
         # dirty_txs has the txs that have been modified but are not persisted yet
@@ -94,7 +96,17 @@ class TransactionCacheStorage(BaseTransactionStorage):
     def pre_init(self) -> None:
         # XXX: not calling self.store.pre_init() because it would run `BaseTransactionStorage.pre_init` twice.
         super().pre_init()
-        self.reactor.callLater(self.interval, self._start_flush_thread)
+        self._schedule_next_flush()
+
+    def _clean_up(self) -> None:
+        if self._flush_call_later and self._flush_call_later.active():
+            self._flush_call_later.cancel()
+            self._flush_call_later = None
+
+    def _schedule_next_flush(self) -> None:
+        if self._flush_call_later and self._flush_call_later.active():
+            self._flush_call_later.cancel()
+        self._flush_call_later = self.reactor.callLater(self.interval, self._start_flush_thread)
 
     def _enable_weakref(self) -> None:
         super()._enable_weakref()
@@ -112,12 +124,12 @@ class TransactionCacheStorage(BaseTransactionStorage):
             self.flush_deferred = deferred
 
     def _cb_flush_thread(self, flushed_txs: Set[bytes]) -> None:
-        self.reactor.callLater(self.interval, self._start_flush_thread)
+        self._schedule_next_flush()
         self.flush_deferred = None
 
     def _err_flush_thread(self, reason: Any) -> None:
         self.log.error('error flushing transactions', reason=reason)
-        self.reactor.callLater(self.interval, self._start_flush_thread)
+        self._schedule_next_flush()
         self.flush_deferred = None
 
     def _flush_to_storage(self, dirty_txs_copy: Set[bytes]) -> None:

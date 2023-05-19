@@ -1,3 +1,4 @@
+from twisted.internet import defer
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.daa import TestMode, _set_test_mode
@@ -28,10 +29,11 @@ class BaseCacheStorageTest(unittest.TestCase):
         # Save genesis metadata
         self.cache_storage.save_transaction(self.genesis_txs[0], only_metadata=True)
 
-        self.manager = self.create_peer('testnet', tx_storage=self.cache_storage, unlock_wallet=True)
+        self.manager = yield self.create_peer('testnet', tx_storage=self.cache_storage, unlock_wallet=True)
 
     def tearDown(self):
         super().tearDown()
+        self.cache_storage._clean_up()
 
     def _get_new_tx(self, nonce):
         from hathor.transaction.validation_state import ValidationState
