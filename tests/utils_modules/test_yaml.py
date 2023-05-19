@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from hathor.utils.yaml import dict_from_yaml, dict_from_extended_yaml
+from hathor.utils.yaml import dict_from_extended_yaml, dict_from_yaml
 
 
 def test_dict_from_yaml_invalid_filepath():
@@ -124,4 +124,3 @@ def test_dict_from_extended_yaml_valid_extends():
     result = dict_from_extended_yaml(filepath=filepath)
 
     assert result == dict(a='aa', b=dict(c=2, d='dd', e='ee'))
-
