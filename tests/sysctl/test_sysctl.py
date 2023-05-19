@@ -16,11 +16,16 @@ class SysctlTest(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
 
+        getter_max_connections = MagicMock(return_value=3)
+        getter_max_connections.__doc__ = 'Return the number of maximum connections.'
+        setter_max_connections = MagicMock()
+        setter_max_connections.__doc__ = 'Set the number of maximum connections.'
+
         net = Sysctl()
         net.register(
             'max_connections',
-            MagicMock(return_value=3),  # int
-            MagicMock(),
+            getter_max_connections,  # int
+            setter_max_connections,
         )
         net.register(
             'readonly',
@@ -141,6 +146,17 @@ class SysctlTest(unittest.TestCase):
             ('net.readonly', 0.25),
         })
 
+    def test_get_all_paths(self) -> None:
+        all_items = set(self.root.get_all_paths())
+        self.assertEqual(all_items, {
+            'net.max_connections',
+            'core.writeonly',
+            'core.loglevel',
+            'net.rate_limit',
+            'net.readonly',
+            'ab.bc.cd.useless',
+        })
+
     ##################
     # Protocol: Get
     ##################
@@ -228,3 +244,30 @@ class SysctlTest(unittest.TestCase):
             b'net.readonly=0.25',
             b'',    # output ends with a new line (\n)
         })
+
+    def test_proto_help(self) -> None:
+        self.proto.lineReceived(b'!help')
+        output = self.tr.value()
+        lines = set(output.split(b'\n'))
+        self.assertEqual(lines, {
+            b'net.max_connections',
+            b'core.writeonly',
+            b'core.loglevel',
+            b'net.rate_limit',
+            b'net.readonly',
+            b'ab.bc.cd.useless',
+            b'',    # output ends with a new line (\n)
+        })
+
+    def test_proto_help_method(self) -> None:
+        self.proto.lineReceived(b'!help net.max_connections')
+        output = self.tr.value()
+        lines = output.split(b'\n')
+        self.assertEqual(lines, [
+            b'getter(*args, **kwargs):',
+            b'    Return the number of maximum connections.',
+            b'',
+            b'setter(*args, **kwargs):',
+            b'    Set the number of maximum connections.',
+            b''
+        ])

@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import inspect
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable, List, Optional
 
 from pydantic import ValidationError
 from twisted.protocols.basic import LineReceiver
@@ -35,7 +36,11 @@ class SysctlProtocol(LineReceiver):
             line = raw.decode('utf-8').strip()
         except UnicodeDecodeError:
             self.sendError('command is not utf-8 valid')
-        if line == '!backup':
+        if line.startswith('!help'):
+            _, _, path = line.partition(' ')
+            self.help(path)
+            return
+        elif line == '!backup':
             self.backup()
             return
         head, separator, tail = line.partition('=')
@@ -89,6 +94,28 @@ class SysctlProtocol(LineReceiver):
             output = f'{key}={self._serialize(value)}'
             self.sendLine(output.encode('utf-8'))
 
+    def help(self, path: str) -> None:
+        """Show all available commands."""
+        if path == '':
+            self._send_all_commands()
+            return
+        try:
+            cmd = self.root.get_command(path)
+        except SysctlEntryNotFound:
+            self.sendError(f'{path} not found')
+            return
+
+        output: List[str] = []
+        output.extend(self._get_method_help('getter', cmd.getter))
+        output.append('')
+        output.extend(self._get_method_help('setter', cmd.setter))
+        self.sendLine('\n'.join(output).encode('utf-8'))
+
+    def _send_all_commands(self) -> None:
+        all_paths = list(self.root.get_all_paths())
+        for path in sorted(all_paths):
+            self.sendLine(path.encode('utf-8'))
+
     def _serialize(self, value: Any) -> str:
         """Serialize the return of a sysctl getter."""
         output: str
@@ -107,3 +134,16 @@ class SysctlProtocol(LineReceiver):
         if len(parts) > 1:
             return tuple(json.loads(x) for x in parts)
         return json.loads(value_str)
+
+    def _get_method_help(self, method_name: str, method: Optional[Callable]) -> List[str]:
+        """Return a list of strings with the help for `method`."""
+        if method is None:
+            return [f'{method_name}: not available']
+
+        output: List[str] = []
+        doc: str = inspect.getdoc(method) or '(no help found)'
+        signature = inspect.signature(method)
+        output.append(f'{method_name}{signature}:')
+        for line in doc.splitlines():
+            output.append(f'    {line.strip()}')
+        return output
