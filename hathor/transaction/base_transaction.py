@@ -66,9 +66,8 @@ TX_HASH_SIZE = 32   # 256 bits, 32 bytes
 # H = unsigned short (2 bytes), d = double(8), f = float(4), I = unsigned int (4),
 # Q = unsigned long long int (64), B = unsigned char (1 byte)
 
-# Version (H), inputs len (B), and outputs len (B), token uids len (B).
-# H = unsigned short (2 bytes)
-_SIGHASH_ALL_FORMAT_STRING = '!HBBB'
+# Signal bits (B), version (B), inputs len (B), and outputs len (B), token uids len (B).
+_SIGHASH_ALL_FORMAT_STRING = '!BBBBB'
 
 # Weight (d), timestamp (I), and parents len (B)
 _GRAPH_FORMAT_STRING = '!dIB'
@@ -110,14 +109,11 @@ class TxVersion(IntEnum):
     MERGE_MINED_BLOCK = 3
 
     @classmethod
-    def _missing_(cls, value: Any) -> 'TxVersion':
-        # version's first byte is reserved for future use, so we'll ignore it
-        assert isinstance(value, int)
-        version = value & 0xFF
-        if version == value:
-            # Prevent infinite recursion when starting TxVerion with wrong version
-            raise ValueError('Invalid version.')
-        return cls(version)
+    def _missing_(cls, value: Any) -> None:
+        assert isinstance(value, int), f"Value '{value}' must be an integer"
+        assert value <= 0xFF, f'Value {hex(value)} must not be larger than one byte'
+
+        raise ValueError(f'Invalid version: {value}')
 
     def get_cls(self) -> Type['BaseTransaction']:
         from hathor.transaction.block import Block
@@ -172,9 +168,12 @@ class BaseTransaction(ABC):
             Outputs: all outputs that are being created
             Parents: transactions you are confirming (2 transactions and 1 block - in case of a block only)
         """
+        assert version <= 0xFFFF, f'Version {hex(version)} must not be larger than two bytes'
+
         self.nonce = nonce
         self.timestamp = timestamp or int(time.time())
-        self.version = version
+        self.signal_bits = (version >> 8) & 0xFF
+        self.version = version & 0xFF
         self.weight = weight
         self.inputs = inputs or []
         self.outputs = outputs or []
@@ -1353,8 +1352,8 @@ def tx_or_block_from_bytes(data: bytes,
                            storage: Optional['TransactionStorage'] = None) -> BaseTransaction:
     """ Creates the correct tx subclass from a sequence of bytes
     """
-    # version field takes up the first 2 bytes
-    version = int.from_bytes(data[0:2], 'big')
+    # version field takes up the second byte only
+    version = data[1]
     try:
         tx_version = TxVersion(version)
         cls = tx_version.get_cls()

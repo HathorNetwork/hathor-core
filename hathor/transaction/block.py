@@ -38,11 +38,11 @@ if TYPE_CHECKING:
 settings = HathorSettings()
 cpu = get_cpu_profiler()
 
-# Version (H), outputs len (B)
-_FUNDS_FORMAT_STRING = '!HB'
+# Signal bits (B), version (B), outputs len (B)
+_FUNDS_FORMAT_STRING = '!BBB'
 
-# Version (H), inputs len (B) and outputs len (B)
-_SIGHASH_ALL_FORMAT_STRING = '!HBB'
+# Signal bits (B), version (B), inputs len (B) and outputs len (B)
+_SIGHASH_ALL_FORMAT_STRING = '!BBBB'
 
 
 class Block(BaseTransaction):
@@ -165,8 +165,9 @@ class Block(BaseTransaction):
 
         :raises ValueError: when the sequence of bytes is incorect
         """
-        (self.version, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
+        (self.signal_bits, self.version, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
         if verbose:
+            verbose('signal_bits', self.signal_bits)
             verbose('version', self.version)
             verbose('outputs_len', outputs_len)
 
@@ -202,7 +203,7 @@ class Block(BaseTransaction):
         :return: funds data serialization of the block
         :rtype: bytes
         """
-        struct_bytes = pack(_FUNDS_FORMAT_STRING, self.version, len(self.outputs))
+        struct_bytes = pack(_FUNDS_FORMAT_STRING, self.signal_bits, self.version, len(self.outputs))
 
         for tx_output in self.outputs:
             struct_bytes += bytes(tx_output)
