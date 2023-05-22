@@ -168,6 +168,14 @@ class CliBuilder:
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
         consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub=pubsub)
 
+        if args.x_enable_event_queue:
+            if not settings.ENABLE_EVENT_QUEUE_FEATURE:
+                self.log.error('The event queue feature is not available yet')
+                sys.exit(-1)
+
+            self.log.info('--x-enable-event-queue flag provided. '
+                          'The events detected by the full node will be stored and can be retrieved by clients')
+
         self.manager = HathorManager(
             reactor,
             pubsub=pubsub,
@@ -185,7 +193,7 @@ class CliBuilder:
             consensus_algorithm=consensus_algorithm,
             environment_info=get_environment_info(args=str(args), peer_id=peer_id.id),
             full_verification=full_verification,
-            enable_event_queue=bool(args.x_enable_event_queue)
+            enable_event_queue=args.x_enable_event_queue
         )
 
         if args.stratum:
@@ -229,15 +237,6 @@ class CliBuilder:
 
         if args.memory_indexes and args.memory_storage:
             self.log.warn('--memory-indexes is implied for memory storage or JSON storage')
-
-        if args.x_enable_event_queue:
-            if not settings.ENABLE_EVENT_QUEUE_FEATURE:
-                self.log.error('The event queue feature is not available yet')
-                sys.exit(-1)
-
-            self.manager.enable_event_queue = True
-            self.log.info('--x-enable-event-queue flag provided. '
-                          'The events detected by the full node will be stored and can be retrieved by clients')
 
         for description in args.listen:
             self.manager.add_listen_address(description)

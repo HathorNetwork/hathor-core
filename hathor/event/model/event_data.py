@@ -88,7 +88,7 @@ class EmptyData(BaseEventData):
 
 class TxData(BaseEventData, extra=Extra.ignore):
     hash: str
-    nonce: int
+    nonce: Optional[int] = None
     timestamp: int
     version: int
     weight: float
@@ -100,6 +100,7 @@ class TxData(BaseEventData, extra=Extra.ignore):
     token_name: Optional[str]
     token_symbol: Optional[str]
     metadata: 'TxMetadata'
+    aux_pow: Optional[str] = None
 
     @classmethod
     def from_event_arguments(cls, args: EventArguments) -> 'TxData':

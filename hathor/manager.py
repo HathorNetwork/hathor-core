@@ -122,8 +122,9 @@ class HathorManager:
             raise TypeError(f'{type(self).__name__}() at least one sync version is required')
 
         if event_manager.get_event_queue_state() is True and not enable_event_queue:
-            raise ValueError(
-                'cannot start manager without event queue feature, as it was enabled in the previous startup'
+            raise InitializationError(
+                'Cannot start manager without event queue feature, as it was enabled in the previous startup. '
+                'Either enable it, or use the reset-event-queue CLI command to remove all event-related data'
             )
 
         self._enable_sync_v1 = enable_sync_v1
@@ -222,10 +223,6 @@ class HathorManager:
         # Full verification execute all validations for transactions and blocks when initializing the node
         # Can be activated on the command line with --full-verification
         self._full_verification = full_verification
-
-        # Activated with --x-enable-event-queue flag
-        # It activates the event mechanism inside full node
-        self.enable_event_queue = False
 
         # List of whitelisted peers
         self.peers_whitelist: List[str] = []

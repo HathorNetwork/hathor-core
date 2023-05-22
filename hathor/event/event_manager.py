@@ -83,7 +83,7 @@ class EventManager:
         self._previous_node_state = self._event_storage.get_node_state()
 
         if self._should_reload_events():
-            self._event_storage.clear_events()
+            self._event_storage.reset_events()
         else:
             self._last_event = self._event_storage.get_last_event()
             self._last_existing_group_id = self._event_storage.get_last_group_id()
