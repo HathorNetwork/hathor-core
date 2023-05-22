@@ -841,10 +841,22 @@ class BaseTransactionTest(unittest.TestCase):
     def test_tx_version(self):
         from hathor.transaction.base_transaction import TxVersion
 
-        # test the 1st byte of version field is ignored
-        version = TxVersion(0xFF00)
+        # test invalid type
+        with self.assertRaises(AssertionError) as cm:
+            TxVersion('test')
+
+        self.assertEqual(str(cm.exception), "Value 'test' must be an integer")
+
+        # test one byte max value
+        with self.assertRaises(AssertionError) as cm:
+            TxVersion(0x100)
+
+        self.assertEqual(str(cm.exception), 'Value 0x100 must not be larger than one byte')
+
+        # test get the correct class
+        version = TxVersion(0x00)
         self.assertEqual(version.get_cls(), Block)
-        version = TxVersion(0xFF01)
+        version = TxVersion(0x01)
         self.assertEqual(version.get_cls(), Transaction)
 
         # test serialization doesn't mess up with version
@@ -853,7 +865,14 @@ class BaseTransactionTest(unittest.TestCase):
             nonce=100,
             weight=1)
         block2 = block.clone()
+        self.assertEqual(block.signal_bits, block2.signal_bits)
         self.assertEqual(block.version, block2.version)
+
+        # test invalid version init
+        with self.assertRaises(AssertionError) as cm:
+            Block(version=0x10000)
+
+        self.assertEqual(str(cm.exception), 'Version 0x10000 must not be larger than two bytes')
 
     def test_output_sum_ignore_authority(self):
         # sum of tx outputs should ignore authority outputs

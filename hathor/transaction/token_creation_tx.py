@@ -24,11 +24,11 @@ from hathor.transaction.util import VerboseCallback, clean_token_string, int_to_
 
 settings = HathorSettings()
 
-# Version (H), inputs len (B), outputs len (B)
-_FUNDS_FORMAT_STRING = '!HBB'
+# Signal bits (B), version (B), inputs len (B), outputs len (B)
+_FUNDS_FORMAT_STRING = '!BBBB'
 
-# Version (H), inputs len (B), outputs len (B)
-_SIGHASH_ALL_FORMAT_STRING = '!HBB'
+# Signal bist (B), version (B), inputs len (B), outputs len (B)
+_SIGHASH_ALL_FORMAT_STRING = '!BBBB'
 
 # used when (de)serializing token information
 # version 1 expects only token name and symbol
@@ -85,8 +85,9 @@ class TokenCreationTransaction(Transaction):
 
         :raises ValueError: when the sequence of bytes is incorect
         """
-        (self.version, inputs_len, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
+        (self.signal_bits, self.version, inputs_len, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
         if verbose:
+            verbose('signal_bits', self.signal_bits)
             verbose('version', self.version)
             verbose('inputs_len', inputs_len)
             verbose('outputs_len', outputs_len)
@@ -110,7 +111,13 @@ class TokenCreationTransaction(Transaction):
         :return: funds data serialization of the transaction
         :rtype: bytes
         """
-        struct_bytes = pack(_FUNDS_FORMAT_STRING, self.version, len(self.inputs), len(self.outputs))
+        struct_bytes = pack(
+            _FUNDS_FORMAT_STRING,
+            self.signal_bits,
+            self.version,
+            len(self.inputs),
+            len(self.outputs)
+        )
 
         tx_inputs = []
         for tx_input in self.inputs:
@@ -135,7 +142,13 @@ class TokenCreationTransaction(Transaction):
         if self._sighash_cache:
             return self._sighash_cache
 
-        struct_bytes = pack(_SIGHASH_ALL_FORMAT_STRING, self.version, len(self.inputs), len(self.outputs))
+        struct_bytes = pack(
+            _SIGHASH_ALL_FORMAT_STRING,
+            self.signal_bits,
+            self.version,
+            len(self.inputs),
+            len(self.outputs)
+        )
 
         tx_inputs = []
         for tx_input in self.inputs:
