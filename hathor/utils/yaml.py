@@ -11,9 +11,10 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+
 import os
 from pathlib import Path
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 import yaml
 
@@ -39,29 +40,33 @@ def dict_from_yaml(*, filepath: Union[Path, str]) -> dict[str, Any]:
         return contents
 
 
-def dict_from_extended_yaml(*, filepath: Union[Path, str]) -> dict[str, Any]:
+def dict_from_extended_yaml(*, filepath: Union[Path, str], custom_root: Optional[Path] = None) -> dict[str, Any]:
     """
     Takes a filepath to a yaml file and returns a dictionary with its contents.
-    Supports extending another yaml file via the 'extends' key in the file.
+
+    Supports extending another yaml file via the 'extends' key in the file. The 'extends' value can be an absolute path
+    to a yaml file, or a path relative to the base yaml file. The custom_root arg can be provided to set a custom root
+    for relative paths, taking lower precedence.
 
     Note: the 'extends' key is reserved and will not be present in the returned dictionary.
     To opt-out of the extension feature, use dict_from_yaml().
     """
     extension_dict = dict_from_yaml(filepath=filepath)
-    base_file = extension_dict.pop(_EXTENDS_KEY, None)
+    file_to_extend = extension_dict.pop(_EXTENDS_KEY, None)
 
-    if not base_file:
+    if not file_to_extend:
         return extension_dict
 
-    root_path = Path(filepath).parent
-    base_filepath = root_path / str(base_file)
+    filepath_to_extend = Path(filepath).parent / str(file_to_extend)
 
-    if not os.path.isfile(base_filepath):
-        raise ValueError(f"'{base_filepath}' is not a file")
+    if not os.path.isfile(filepath_to_extend) and custom_root:
+        filepath_to_extend = custom_root / str(file_to_extend)
 
-    assert base_filepath.resolve() != Path(filepath).resolve(), 'cannot extend self'
+    try:
+        dict_to_extend = dict_from_extended_yaml(filepath=filepath_to_extend, custom_root=custom_root)
+    except RecursionError as e:
+        raise ValueError('Cannot parse yaml with recursive extensions.') from e
 
-    base_dict = dict_from_yaml(filepath=base_filepath)
-    merged_dict = deep_merge(base_dict, extension_dict)
+    extended_dict = deep_merge(dict_to_extend, extension_dict)
 
-    return merged_dict
+    return extended_dict

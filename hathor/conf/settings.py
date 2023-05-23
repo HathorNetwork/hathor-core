@@ -14,6 +14,7 @@
 
 import os
 from math import log
+from pathlib import Path
 from typing import NamedTuple, Optional, Union
 
 import pydantic
@@ -394,7 +395,7 @@ class HathorSettings(NamedTuple):
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':
         """Takes a filepath to a yaml file and returns a validated HathorSettings instance."""
-        settings_dict = yaml.dict_from_extended_yaml(filepath=filepath)
+        settings_dict = yaml.dict_from_extended_yaml(filepath=filepath, custom_root=Path(__file__).parent)
 
         return validated_named_tuple_from_dict(
             HathorSettings,
