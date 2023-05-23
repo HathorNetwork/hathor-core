@@ -121,8 +121,8 @@ class TxVersion(IntEnum):
         """
         Takes a 2-byte number and returns signal bits and a TxVersion from it.
 
-        Signal bits, extracted from the first byte, carry information about Feature Activation
-        bits and also extra bits reserved for future use, depending on the configuration.
+        Signal bits, extracted from the first byte, carry extra information that
+        may be interpreted differently by each subclass of BaseTransaction.
 
         Args:
             value: a 2-byte number
@@ -170,8 +170,10 @@ class BaseTransaction(ABC):
 
     _metadata: Optional[TransactionMetadata]
 
-    # The first byte extracted from the version field. Carries information about Feature Activation
-    # bits and also extra bits reserved for future use, depending on the configuration.
+    # Bits extracted from the first byte of the version field. They carry extra information that may be interpreted
+    # differently by each subclass of BaseTransaction.
+    # Currently only the Block subclass uses it, carrying information about Feature Activation bits and also extra
+    # bits reserved for future use, depending on the configuration.
     signal_bits: int
 
     def __init__(self,
