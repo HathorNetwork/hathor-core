@@ -29,6 +29,11 @@ class InvalidNewTransaction(HathorError):
     pass
 
 
+class PreInitializationError(HathorError):
+    """Raised when there's anything wrong during pre-initialization that should cause it to be aborted.
+    """
+
+
 class InitializationError(HathorError):
     """Raised when there's anything wrong during initialization that should cause it to be aborted.
     """

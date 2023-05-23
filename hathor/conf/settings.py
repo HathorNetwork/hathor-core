@@ -19,6 +19,7 @@ from typing import Any, Dict, List, NamedTuple, Optional, Union
 import pydantic
 
 from hathor.checkpoint import Checkpoint
+from hathor.feature_activation.settings import Settings as FeatureActivationSettings
 from hathor.utils import yaml
 from hathor.utils.pydantic import BaseModel
 
@@ -386,6 +387,9 @@ class HathorSettings(NamedTuple):
 
     # Time to update the peers that are running sync.
     SYNC_UPDATE_INTERVAL: int = 10 * 60  # seconds
+
+    # All settings related to Feature Activation
+    FEATURE_ACTIVATION: FeatureActivationSettings = FeatureActivationSettings()
 
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':
