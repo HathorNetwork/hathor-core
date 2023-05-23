@@ -328,8 +328,10 @@ class RunNode:
 
         try:
             HathorSettings()
-        except ValidationError as e:
-            raise PreInitializationError(e)
+        except (TypeError, ValidationError) as e:
+            raise PreInitializationError(
+                'An error was found while trying to initialize HathorSettings. See above for details.'
+            ) from e
 
         self.prepare(args)
         self.register_signal_handlers(args)
