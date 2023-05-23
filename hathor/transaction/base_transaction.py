@@ -116,6 +116,25 @@ class TxVersion(IntEnum):
 
         raise ValueError(f'Invalid version: {value}')
 
+    @classmethod
+    def extract_from_bytes(cls, value: int) -> Tuple[int, 'TxVersion']:
+        """
+        Takes a 2-byte number and returns signal bits and a TxVersion from it.
+
+        Signal bits, extracted from the first byte, carry information about Feature Activation
+        bits and also extra bits reserved for future use, depending on the configuration.
+
+        Args:
+            value: a 2-byte number
+
+        Returns: a tuple in the format (signal_bits, tx_version)
+        """
+        assert value <= 0xFFFF, f'Value {hex(value)} must not be larger than two bytes'
+
+        signal_bits, version = int_to_bytes(value, 2)
+
+        return signal_bits, TxVersion(version)
+
     def get_cls(self) -> Type['BaseTransaction']:
         from hathor.transaction.block import Block
         from hathor.transaction.merge_mined_block import MergeMinedBlock
@@ -151,6 +170,10 @@ class BaseTransaction(ABC):
 
     _metadata: Optional[TransactionMetadata]
 
+    # The first byte extracted from the version field. Carries information about Feature Activation
+    # bits and also extra bits reserved for future use, depending on the configuration.
+    signal_bits: int
+
     def __init__(self,
                  nonce: int = 0,
                  timestamp: Optional[int] = None,
@@ -169,12 +192,9 @@ class BaseTransaction(ABC):
             Outputs: all outputs that are being created
             Parents: transactions you are confirming (2 transactions and 1 block - in case of a block only)
         """
-        assert version <= 0xFFFF, f'Version {hex(version)} must not be larger than two bytes'
-
         self.nonce = nonce
         self.timestamp = timestamp or int(time.time())
-        self.signal_bits = (version >> 8) & 0xFF
-        self.version = version & 0xFF
+        self.signal_bits, self.version = TxVersion.extract_from_bytes(version)
         self.weight = weight
         self.inputs = inputs or []
         self.outputs = outputs or []

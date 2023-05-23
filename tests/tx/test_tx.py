@@ -853,6 +853,23 @@ class BaseTransactionTest(unittest.TestCase):
 
         self.assertEqual(str(cm.exception), 'Value 0x100 must not be larger than one byte')
 
+        # test invalid version
+        with self.assertRaises(ValueError) as cm:
+            TxVersion(10)
+
+        self.assertEqual(str(cm.exception), 'Invalid version: 10')
+
+        # test TxVersion.extract_from_bytes
+        with self.assertRaises(AssertionError) as cm:
+            TxVersion.extract_from_bytes(0x54321)
+
+        self.assertEqual(str(cm.exception), 'Value 0x54321 must not be larger than two bytes')
+
+        signal_bits, tx_version = TxVersion.extract_from_bytes(0x4303)
+
+        self.assertEqual(signal_bits, 0x43)
+        self.assertEqual(tx_version, TxVersion.MERGE_MINED_BLOCK)
+
         # test get the correct class
         version = TxVersion(0x00)
         self.assertEqual(version.get_cls(), Block)
@@ -867,12 +884,6 @@ class BaseTransactionTest(unittest.TestCase):
         block2 = block.clone()
         self.assertEqual(block.signal_bits, block2.signal_bits)
         self.assertEqual(block.version, block2.version)
-
-        # test invalid version init
-        with self.assertRaises(AssertionError) as cm:
-            Block(version=0x10000)
-
-        self.assertEqual(str(cm.exception), 'Version 0x10000 must not be larger than two bytes')
 
     def test_output_sum_ignore_authority(self):
         # sum of tx outputs should ignore authority outputs
