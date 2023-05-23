@@ -55,7 +55,7 @@ class CliBuilder:
     def create_manager(self, reactor: PosixReactorBase, args: Namespace) -> HathorManager:
         import hathor
         from hathor.conf import HathorSettings
-        from hathor.conf.get_settings import get_settings_filepath, get_settings_module
+        from hathor.conf.get_settings import get_settings_source
         from hathor.daa import TestMode, _set_test_mode
         from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
         from hathor.event.websocket.factory import EventWebsocketFactory
@@ -74,8 +74,7 @@ class CliBuilder:
         settings = HathorSettings()
 
         # only used for logging its location
-        settings_module = get_settings_module()
-        settings_source = settings_module.__file__ if settings_module is not None else get_settings_filepath()
+        settings_source = get_settings_source()
 
         self.log = logger.new()
         self.reactor = reactor
