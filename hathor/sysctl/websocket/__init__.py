@@ -11,13 +11,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from hathor.sysctl.p2p.manager import ConnectionsManagerSysctl
-from hathor.sysctl.sysctl import Sysctl
-from hathor.sysctl.websocket.manager import WebsocketManagerSysctl
-
-__all__ = [
-    'Sysctl',
-    'ConnectionsManagerSysctl',
-    'WebsocketManagerSysctl',
-]

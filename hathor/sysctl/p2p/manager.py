@@ -69,13 +69,9 @@ class ConnectionsManagerSysctl(Sysctl):
             self.set_always_enable_sync_readtxt,
         )
 
-    #############
-
     def set_force_sync_rotate(self) -> None:
         """Force a sync rotate."""
         self.connections._sync_rotate_if_needed(force=True)
-
-    #############
 
     def get_global_send_tips_rate_limit(self) -> Tuple[int, float]:
         """Return the global rate limiter for SEND_TIPS."""
@@ -97,8 +93,6 @@ class ConnectionsManagerSysctl(Sysctl):
             raise SysctlException('window_seconds must be >= 0')
         self.connections.enable_rate_limiter(max_hits, window_seconds)
 
-    #############
-
     def get_lc_sync_update_interval(self) -> float:
         """Return the interval to rotate sync (in seconds)."""
         return self.connections.lc_sync_update_interval
@@ -111,8 +105,6 @@ class ConnectionsManagerSysctl(Sysctl):
         if self.connections.lc_sync_update.running:
             self.connections.lc_sync_update.stop()
             self.connections.lc_sync_update.start(self.connections.lc_sync_update_interval, now=False)
-
-    #############
 
     def get_always_enable_sync(self) -> List[str]:
         """Return the list of sync-always-enabled peers."""
@@ -130,8 +122,6 @@ class ConnectionsManagerSysctl(Sysctl):
         with open(file_path, 'r') as fp:
             values = parse_text(fp.read())
         self.connections.set_always_enable_sync(values)
-
-    #############
 
     def get_max_enabled_sync(self) -> int:
         """Return the maximum number of peers running sync simultaneously."""

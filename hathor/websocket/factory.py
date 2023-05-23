@@ -78,6 +78,9 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
     """
     protocol = HathorAdminWebsocketProtocol
 
+    max_subs_addrs_conn: Optional[int] = settings.WS_MAX_SUBS_ADDRS_CONN
+    max_subs_addrs_empty: Optional[int] = settings.WS_MAX_SUBS_ADDRS_EMPTY
+
     def buildProtocol(self, addr):
         return self.protocol(self)
 
@@ -318,13 +321,15 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         """ Handler for subscription to an address, consideirs subscription limits."""
         addr: str = message['address']
         subs: Set[str] = connection.subscribed_to
-        if len(subs) >= settings.WS_MAX_SUBS_ADDRS_CONN:
+        if self.max_subs_addrs_conn is not None and len(subs) >= self.max_subs_addrs_conn:
             payload = json_dumpb({'message': 'Reached maximum number of subscribed '
-                                             f'addresses ({settings.WS_MAX_SUBS_ADDRS_CONN}).',
+                                             f'addresses ({self.max_subs_addrs_conn}).',
                                   'type': 'subscribe_address', 'success': False})
-        elif self.address_index and _count_empty(subs, self.address_index) >= settings.WS_MAX_SUBS_ADDRS_EMPTY:
+        elif self.max_subs_addrs_empty is not None and (
+                 self.address_index and _count_empty(subs, self.address_index) >= self.max_subs_addrs_empty
+             ):
             payload = json_dumpb({'message': 'Reached maximum number of subscribed '
-                                             f'addresses without output ({settings.WS_MAX_SUBS_ADDRS_EMPTY}).',
+                                             f'addresses without output ({self.max_subs_addrs_empty}).',
                                   'type': 'subscribe_address', 'success': False})
         else:
             self.address_connections[addr].add(connection)
