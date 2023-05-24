@@ -1,11 +1,12 @@
+# yamllint disable rule:line-length
 name: tests
-on:
+on: # yamllint disable-line rule:truthy
   push:
     branches:
-    - master
-    - dev
+      - master
+      - dev
     tags:
-    - v*
+      - v*
   pull_request:
 jobs:
   matrix:
@@ -13,45 +14,44 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-    - id: set-matrix
-      shell: python
-      run: |
-        import os
-        import json
-        full_matrix = {
-          'python': ['3.8', '3.9', '3.10', '3.11'],
-          # available OS's: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idruns-on
-          'os': ['ubuntu-22.04', 'macos-12', 'windows-2022'],
-          'include': [
-            # XXX: tests fail on these, not sure why, when running them individually each on passes, but not on `make tests`
-            # {'os': 'ubuntu-22.04', 'python': 'pypy-3.8'},
-            # {'os': 'ubuntu-22.04', 'python': 'pypy-3.9'},
-          ],
-        }
-        # this is the fastest one:
-        reduced_matrix = {
-          'python': ['3.9'],
-          'os': ['ubuntu-22.04'],
-        }
-        github_repository = os.environ['GITHUB_REPOSITORY']
-        if github_repository.lower() == 'hathornetwork/hathor-core':
-            matrix = full_matrix
-        else:
-            matrix = reduced_matrix
-        print('::set-output name=matrix::' + json.dumps(matrix))
+      - id: set-matrix
+        shell: python
+        run: |
+          import os
+          import json
+          full_matrix = {
+            'python': ['3.9', '3.10', '3.11'],
+            # available OS's: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idruns-on
+            'os': ['ubuntu-22.04', 'macos-12', 'windows-2022'],
+            'include': [
+              # XXX: tests fail on these, not sure why, when running them individually each on passes, but not on `make tests`
+              # {'os': 'ubuntu-22.04', 'python': 'pypy-3.9'},
+            ],
+          }
+          # this is the fastest one:
+          reduced_matrix = {
+            'python': ['3.9'],
+            'os': ['ubuntu-22.04'],
+          }
+          github_repository = os.environ['GITHUB_REPOSITORY']
+          if github_repository.lower() == 'hathornetwork/hathor-core':
+              matrix = full_matrix
+          else:
+              matrix = reduced_matrix
+          print('::set-output name=matrix::' + json.dumps(matrix))
   check-matrix:
     runs-on: ubuntu-latest
     needs: matrix
     steps:
-    - name: Install json2yaml
-      run: |
-        sudo npm install -g json2yaml
-    - name: Check matrix definition
-      run: |
-        matrix='${{ needs.matrix.outputs.matrix }}'
-        echo $matrix
-        echo $matrix | jq .
-        echo $matrix | json2yaml
+      - name: Install json2yaml
+        run: |
+          sudo npm install -g json2yaml
+      - name: Check matrix definition
+        run: |
+          matrix='${{ needs.matrix.outputs.matrix }}'
+          echo $matrix
+          echo $matrix | jq .
+          echo $matrix | json2yaml
   test:
     name: python-${{ matrix.python }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -61,41 +61,41 @@ jobs:
       fail-fast: false
       matrix: ${{fromJson(needs.matrix.outputs.matrix)}}
     steps:
-    - name: Checkout
-      uses: actions/checkout@v3
-    - name: Install Poetry
-      run: pipx install poetry
-    - name: Set up Python ${{ matrix.python }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python }}
-        cache: 'poetry'
-    - name: Install Ubuntu dependencies
-      if: startsWith(matrix.os, 'ubuntu')
-      run: |
-        sudo apt-get -qy update
-        sudo apt-get -qy install graphviz librocksdb-dev libsnappy-dev liblz4-dev
-    - name: Install macOS dependencies
-      if: startsWith(matrix.os, 'macos')
-      run: |
-        brew cleanup -q
-        # brew update -q
-        brew install -q graphviz rocksdb pkg-config
-    - name: Install Poetry dependencies
-      run: poetry install -n --no-root
-    - name: Cache mypy
-      uses: actions/cache@v3
-      with:
-        path: .mypy_cache
-        # this key is setup such that every branch has its cache and new branches can reuse dev's cache, but not the other way around
-        key: ${{ runner.os }}-py${{ matrix.python }}-mypy-${{ github.head_ref || github.ref }}
-        restore-keys: |
-          ${{ runner.os }}-py${{ matrix.python }}-mypy-refs/heads/dev-
-          ${{ runner.os }}-py${{ matrix.python }}-mypy-
-    - name: Run linters
-      run: poetry run make check
-    - name: Run tests
-      run: poetry run make tests
-    - name: Upload coverage
-      uses: codecov/codecov-action@v3
-      if: matrix.python == 3.9 && startsWith(matrix.os, 'ubuntu')
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install Poetry
+        run: pipx install poetry
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python }}
+          cache: 'poetry'
+      - name: Install Ubuntu dependencies
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get -qy update
+          sudo apt-get -qy install graphviz librocksdb-dev libsnappy-dev liblz4-dev
+      - name: Install macOS dependencies
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew cleanup -q
+          # brew update -q
+          brew install -q graphviz rocksdb pkg-config
+      - name: Install Poetry dependencies
+        run: poetry install -n --no-root
+      - name: Cache mypy
+        uses: actions/cache@v3
+        with:
+          path: .mypy_cache
+          # this key is setup such that every branch has its cache and new branches can reuse dev's cache, but not the other way around
+          key: ${{ runner.os }}-py${{ matrix.python }}-mypy-${{ github.head_ref || github.ref }}
+          restore-keys: |
+            ${{ runner.os }}-py${{ matrix.python }}-mypy-refs/heads/dev-
+            ${{ runner.os }}-py${{ matrix.python }}-mypy-
+      - name: Run linters
+        run: poetry run make check
+      - name: Run tests
+        run: poetry run make tests
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        if: matrix.python == 3.9 && startsWith(matrix.os, 'ubuntu')

@@ -1,14 +1,15 @@
+# yamllint disable rule:line-length
 name: docker
-on:
+on: # yamllint disable-line rule:truthy
   push:
     branches:
-    - master
-    - dev
-    - 'experimental/**'
+      - master
+      - dev
+      - 'experimental/**'
     tags:
-    - v*
+      - v*
   schedule:
-  - cron: '0 4 * * *'  # nightlies at 4am UTC
+    - cron: '0 4 * * *'  # nightlies at 4am UTC
 env:
   TEST_TAG: hathor-core:test
 jobs:
@@ -20,114 +21,113 @@ jobs:
       fail-fast: false
       matrix:
         python-impl:
-        - python
-        - pypy
+          - python
+          - pypy
         python-version:
-        - '3.8'
-        - '3.9'
-        - '3.10'
-        - '3.11'
+          - '3.9'
+          - '3.10'
+          - '3.11'
         exclude:
-        # XXX: neither pypy-3.10 nor pypy-3.11 exist yet, maybe pypy-3.10 will be out on PyPy v7.3.10
-        - python-impl: pypy
-          python-version: '3.10'
-        - python-impl: pypy
-          python-version: '3.11'
+          # XXX: neither pypy-3.10 nor pypy-3.11 exist yet, maybe pypy-3.10 will be out on PyPy v7.3.10
+          - python-impl: pypy
+            python-version: '3.10'
+          - python-impl: pypy
+            python-version: '3.11'
     steps:
-    - name: Checkout
-      uses: actions/checkout@v3
-    - name: Prepare base version
-      id: prep
-      run: |
-        export GITHUB_REF='${{ github.ref }}'
-        export GITHUB_EVENT_NAME='${{ github.event_name }}'
-        export GITHUB_SHA='${{ github.sha }}'
-        export GITHUB_EVENT_DEFAULT_BRANCH='${{ github.event.repository.default_branch }}'
-        export GITHUB_EVENT_NUMBER='${{ github.event.number }}'
-        export MATRIX_PYTHON_IMPL='${{ matrix.python-impl }}'
-        export MATRIX_PYTHON_VERSION='${{ matrix.python-version }}'
-        export SECRETS_DOCKERHUB_IMAGE='${{ secrets.DOCKERHUB_IMAGE }}'
-        export SECRETS_GHCR_IMAGE='${{ secrets.GHCR_IMAGE }}'
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Prepare base version
+        id: prep
+        run: |
+          export GITHUB_REF='${{ github.ref }}'
+          export GITHUB_EVENT_NAME='${{ github.event_name }}'
+          export GITHUB_SHA='${{ github.sha }}'
+          export GITHUB_EVENT_DEFAULT_BRANCH='${{ github.event.repository.default_branch }}'
+          export GITHUB_EVENT_NUMBER='${{ github.event.number }}'
+          export MATRIX_PYTHON_IMPL='${{ matrix.python-impl }}'
+          export MATRIX_PYTHON_VERSION='${{ matrix.python-version }}'
+          export SECRETS_DOCKERHUB_IMAGE='${{ secrets.DOCKERHUB_IMAGE }}'
+          export SECRETS_GHCR_IMAGE='${{ secrets.GHCR_IMAGE }}'
 
-        python extras/github/docker.py
-    - name: Check version
-      if: steps.prep.outputs.check-version
-      run: |
-        make check-version VERSION='${{ steps.prep.outputs.check-version }}'
-    - name: Set up QEMU  # arm64 is not available natively
-      uses: docker/setup-qemu-action@v2
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
-      with:
-        version: latest
-        install: true
-        driver-opts: network=host
-    - name: Login to DockerHub
-      uses: docker/login-action@v2
-      if: steps.prep.outputs.login-dockerhub == 'true'
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-    - name: Login to GitHub Container Registry
-      uses: docker/login-action@v2
-      if: steps.prep.outputs.login-ghcr == 'true'
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    - name: Cache Docker layers
-      uses: actions/cache@v3
-      if: steps.prep_base_version.outputs.is-nightly == 'false'
-      with:
-        path: /tmp/.buildx-cache
-        # this key is setup such that every branch has its cache and new branches can reuse master's cache, but not the other way around
-        key: ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-${{ github.head_ref || github.ref }}-${{ github.sha }}
-        restore-keys: |
-          ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-refs/heads/master-
-    - name: Build and export to Docker
-      uses: docker/build-push-action@v3
-      with:
-        context: .
-        file: ${{ steps.prep.outputs.dockerfile }}
-        build-args: PYTHON=${{ matrix.python-version }}
-        pull: true
-        load: true
-        tags: ${{ env.TEST_TAG }}
-        cache-from: type=local,src=/tmp/.buildx-cache
-        cache-to: type=local,dest=/tmp/.buildx-cache
-    - name: Test image
-      run: docker run --rm ${{ env.TEST_TAG }} quick_test --data / --testnet
-    - name: Build and push
-      uses: docker/build-push-action@v3
-      continue-on-error: ${{ matrix.python-impl == 'pypy' }}  # PyPy is not first-class and has been causing some build failures
-      if: ${{ !env.ACT }}  # Skip this step when testing locally with https://github.com/nektos/act
-      with:
-        context: .
-        file: ${{ steps.prep.outputs.dockerfile }}
-        build-args: PYTHON=${{ matrix.python-version }}
-        platforms: linux/amd64,linux/arm64
-        pull: true
-        push: ${{ github.event_name != 'pull_request' && steps.prep.outputs.push }}
-        tags: ${{ steps.prep.outputs.tags }}
-        # see: https://github.com/opencontainers/image-spec/blob/master/annotations.md
-        labels: |
-          org.opencontainers.image.title=${{ github.event.repository.name }}
-          org.opencontainers.image.description=${{ github.event.repository.description }}
-          org.opencontainers.image.url=${{ github.event.repository.html_url }}
-          org.opencontainers.image.source=${{ github.event.repository.clone_url }}
-          org.opencontainers.image.version=${{ steps.prep.outputs.version }}
-          org.opencontainers.image.created=${{ steps.prep.outputs.created }}
-          org.opencontainers.image.revision=${{ github.sha }}
-          org.opencontainers.image.licenses=${{ github.event.repository.license.spdx_id }}
-        cache-from: type=local,src=/tmp/.buildx-cache
-        cache-to: type=local,dest=/tmp/.buildx-cache
-    - name: Slack Notification
-      if: ${{ steps.prep.outputs.slack-notification-version && steps.prep_base_version.outputs.disable-slack-notification == 'false' && job.status == 'success' }}
-      uses: rtCamp/action-slack-notify@28e8b353eabda5998a2e1203aed33c5999944779
-      env:
-        SLACK_COLOR: ${{ job.status }} # It can turn the job status into a color. Success will be green.
-        SLACK_MESSAGE: 'We will be deploying this new image soon. Get in touch with the hathor-core team if you want to talk about this deployment.'
-        SLACK_TITLE: 'Hathor Core - new ${{ steps.prep.outputs.slack-notification-version }} Docker image pushed :rocket:'
-        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-        SLACK_FOOTER: ''
-        MSG_MINIMAL: actions url
+          python extras/github/docker.py
+      - name: Check version
+        if: steps.prep.outputs.check-version
+        run: |
+          make check-version VERSION='${{ steps.prep.outputs.check-version }}'
+      - name: Set up QEMU  # arm64 is not available natively
+        uses: docker/setup-qemu-action@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        with:
+          version: latest
+          install: true
+          driver-opts: network=host
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        if: steps.prep.outputs.login-dockerhub == 'true'
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        if: steps.prep.outputs.login-ghcr == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        if: steps.prep_base_version.outputs.is-nightly == 'false'
+        with:
+          path: /tmp/.buildx-cache
+          # this key is setup such that every branch has its cache and new branches can reuse master's cache, but not the other way around
+          key: ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-${{ github.head_ref || github.ref }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-${{ matrix.python-impl }}${{ matrix.python-version }}-refs/heads/master-
+      - name: Build and export to Docker
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ${{ steps.prep.outputs.dockerfile }}
+          build-args: PYTHON=${{ matrix.python-version }}
+          pull: true
+          load: true
+          tags: ${{ env.TEST_TAG }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache
+      - name: Test image
+        run: docker run --rm ${{ env.TEST_TAG }} quick_test --data / --testnet
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        continue-on-error: ${{ matrix.python-impl == 'pypy' }}  # PyPy is not first-class and has been causing some build failures
+        if: ${{ !env.ACT }}  # Skip this step when testing locally with https://github.com/nektos/act
+        with:
+          context: .
+          file: ${{ steps.prep.outputs.dockerfile }}
+          build-args: PYTHON=${{ matrix.python-version }}
+          platforms: linux/amd64,linux/arm64
+          pull: true
+          push: ${{ github.event_name != 'pull_request' && steps.prep.outputs.push }}
+          tags: ${{ steps.prep.outputs.tags }}
+          # see: https://github.com/opencontainers/image-spec/blob/master/annotations.md
+          labels: |
+            org.opencontainers.image.title=${{ github.event.repository.name }}
+            org.opencontainers.image.description=${{ github.event.repository.description }}
+            org.opencontainers.image.url=${{ github.event.repository.html_url }}
+            org.opencontainers.image.source=${{ github.event.repository.clone_url }}
+            org.opencontainers.image.version=${{ steps.prep.outputs.version }}
+            org.opencontainers.image.created=${{ steps.prep.outputs.created }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=${{ github.event.repository.license.spdx_id }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache
+      - name: Slack Notification
+        if: ${{ steps.prep.outputs.slack-notification-version && steps.prep_base_version.outputs.disable-slack-notification == 'false' && job.status == 'success' }}
+        uses: rtCamp/action-slack-notify@28e8b353eabda5998a2e1203aed33c5999944779
+        env:
+          SLACK_COLOR: ${{ job.status }} # It can turn the job status into a color. Success will be green.
+          SLACK_MESSAGE: 'We will be deploying this new image soon. Get in touch with the hathor-core team if you want to talk about this deployment.'
+          SLACK_TITLE: 'Hathor Core - new ${{ steps.prep.outputs.slack-notification-version }} Docker image pushed :rocket:'
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_FOOTER: ''
+          MSG_MINIMAL: actions url

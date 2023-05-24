@@ -15,8 +15,6 @@
 from pydantic import BaseModel as PydanticBaseModel, Extra
 from pydantic.generics import GenericModel as PydanticGenericModel
 
-from hathor.util import json_dumpb
-
 
 class BaseModel(PydanticBaseModel):
     """Substitute for pydantic's BaseModel.
@@ -28,6 +26,7 @@ class BaseModel(PydanticBaseModel):
 
     def json_dumpb(self) -> bytes:
         """Utility method for converting a Model into bytes representation of a JSON."""
+        from hathor.util import json_dumpb
         return json_dumpb(self.dict())
 
     class Config:

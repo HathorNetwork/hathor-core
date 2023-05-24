@@ -62,6 +62,7 @@ class RandomTransactionGenerator:
 
         # Most recent transactions generated here.
         # The lowest index has the most recent transaction.
+        self.transactions_found: int = 0
         self.latest_transactions: Deque[Transaction] = deque()
 
         self.double_spending_only = False
@@ -87,6 +88,7 @@ class RandomTransactionGenerator:
         if self.tx:
             ret = self.manager.propagate_tx(self.tx, fails_silently=False)
             assert ret is True
+            self.transactions_found += 1
             self.latest_transactions.appendleft(self.tx.hash)
             if len(self.latest_transactions) > self.MAX_LATEST_TRANSACTIONS_LEN:
                 self.latest_transactions.pop()

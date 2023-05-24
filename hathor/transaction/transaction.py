@@ -275,6 +275,8 @@ class Transaction(BaseTransaction):
 
     def verify_checkpoint(self, checkpoints: List[Checkpoint]) -> None:
         assert self.storage is not None
+        if self.is_genesis:
+            return
         meta = self.get_metadata()
         # at least one child must be checkpoint validated
         for child_tx in map(self.storage.get_transaction, meta.children):

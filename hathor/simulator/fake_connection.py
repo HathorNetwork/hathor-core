@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections import deque
-from typing import TYPE_CHECKING, Deque
+from typing import TYPE_CHECKING, Deque, Optional
 
 from OpenSSL.crypto import X509
 from structlog import get_logger
@@ -53,8 +53,8 @@ class FakeConnection:
         self.latency = latency
         self.is_connected = True
 
-        self._proto1 = manager1.server_factory.buildProtocol(HostnameAddress(b'fake', 0))
-        self._proto2 = manager2.client_factory.buildProtocol(HostnameAddress(b'fake', 0))
+        self._proto1 = manager1.connections.server_factory.buildProtocol(HostnameAddress(b'fake', 0))
+        self._proto2 = manager2.connections.client_factory.buildProtocol(HostnameAddress(b'fake', 0))
 
         self.tr1 = HathorStringTransport(self._proto2.my_peer)
         self.tr2 = HathorStringTransport(self._proto1.my_peer)
@@ -157,9 +157,16 @@ class FakeConnection:
 
         return True
 
-    def run_until_complete(self, debug=False, force=False):
+    def run_until_empty(self, max_steps: Optional[int] = None, debug: bool = False, force: bool = False) -> None:
+        """ Step until the connection reports as empty, optionally raise an assert if it takes more than `max_steps`.
+        """
+        steps = 0
         while not self.is_empty():
+            steps += 1
+            if max_steps is not None and steps > max_steps:
+                raise AssertionError('took more steps than expected')
             self.run_one_step(debug=debug, force=force)
+        self.log.debug('conn empty', steps=steps)
 
     def _deliver_message(self, proto, data, debug=False):
         proto.dataReceived(data)

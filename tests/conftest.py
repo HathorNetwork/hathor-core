@@ -4,7 +4,9 @@ import sys
 
 from twisted.internet import asyncioreactor
 
-os.environ['HATHOR_CONFIG_FILE'] = os.environ.get('HATHOR_TEST_CONFIG_FILE', 'hathor.conf.unittests')
+from hathor.conf import UNITTESTS_SETTINGS_FILEPATH
+
+os.environ['HATHOR_CONFIG_YAML'] = os.environ.get('HATHOR_TEST_CONFIG_YAML', UNITTESTS_SETTINGS_FILEPATH)
 
 if sys.platform == 'win32':
     # See: https://twistedmatrix.com/documents/current/api/twisted.internet.asyncioreactor.AsyncioSelectorReactor.html

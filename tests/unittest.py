@@ -71,6 +71,8 @@ class SyncBridgeParams:
 
 
 class TestBuilder(Builder):
+    __test__ = False
+
     def __init__(self) -> None:
         super().__init__()
         self.set_network('testnet')
@@ -208,9 +210,11 @@ class TestCase(unittest.TestCase):
             builder.force_memory_index()
 
         if enable_sync_v1 is True:
-            builder.enable_sync_v1()
+            # Enable Sync v1.1 (instead of v1.0)
+            builder.enable_sync_v1_1()
         elif enable_sync_v1 is False:
-            builder.disable_sync_v1()
+            # Disable Sync v1.1 (instead of v1.0)
+            builder.disable_sync_v1_1()
 
         if enable_sync_v2 is True:
             builder.enable_sync_v2()

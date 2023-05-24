@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Literal, Optional, Union
+from typing import Annotated, Literal, Optional, Union
 
-from pydantic import NonNegativeInt
+from pydantic import Field, NonNegativeInt
 
 from hathor.utils.pydantic import BaseModel
 
@@ -54,9 +54,7 @@ class StopStreamRequest(BaseModel):
     type: Literal['STOP_STREAM']
 
 
-# This could be more performatic in Python 3.9:
-# Request = Annotated[StartStreamRequest | AckRequest | StopStreamRequest, Field(discriminator='type')]
-Request = Union[StartStreamRequest, AckRequest, StopStreamRequest]
+Request = Annotated[Union[StartStreamRequest, AckRequest, StopStreamRequest], Field(discriminator='type')]
 
 
 class RequestWrapper(BaseModel):

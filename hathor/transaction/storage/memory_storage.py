@@ -85,11 +85,12 @@ class TransactionMemoryStorage(BaseTransactionStorage):
             tx = self._clone(self.transactions[hash_bytes])
             if hash_bytes in self.metadata:
                 tx._metadata = self._clone(self.metadata[hash_bytes])
+            assert tx._metadata is not None
             return tx
         else:
             raise TransactionDoesNotExist(hash_bytes.hex())
 
-    def get_all_transactions(self, *, include_partial: bool = False) -> Iterator[BaseTransaction]:
+    def _get_all_transactions(self) -> Iterator[BaseTransaction]:
         for tx in self.transactions.values():
             tx = self._clone(tx)
             if tx.hash in self.metadata:

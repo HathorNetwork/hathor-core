@@ -74,7 +74,7 @@ class HathorProtocol:
 
     network: str
     my_peer: PeerId
-    connections: Optional['ConnectionsManager']
+    connections: 'ConnectionsManager'
     node: 'HathorManager'
     app_version: str
     last_message: float
@@ -91,19 +91,17 @@ class HathorProtocol:
     idle_timeout: int
     sync_version: Optional[SyncVersion]  # version chosen to be used on this connection
 
-    def __init__(self, network: str, my_peer: PeerId, connections: Optional['ConnectionsManager'] = None, *,
-                 node: 'HathorManager', use_ssl: bool, inbound: bool) -> None:
+    def __init__(self, network: str, my_peer: PeerId, p2p_manager: 'ConnectionsManager',
+                 *, use_ssl: bool, inbound: bool) -> None:
         self.network = network
         self.my_peer = my_peer
-        self.connections = connections
-        self.node = node
+        self.connections = p2p_manager
 
-        if self.connections is not None:
-            assert self.connections.reactor is not None
-            self.reactor = self.connections.reactor
-        else:
-            from hathor.util import reactor
-            self.reactor = reactor
+        assert p2p_manager.manager is not None
+        self.node = p2p_manager.manager
+
+        assert self.connections.reactor is not None
+        self.reactor = self.connections.reactor
 
         # Indicate whether it is an inbound connection (true) or an outbound connection (false).
         self.inbound = inbound
@@ -292,7 +290,7 @@ class HathorProtocol:
         """
         assert self.state is not None
 
-        self.last_message = self.node.reactor.seconds()
+        self.last_message = self.reactor.seconds()
         self.reset_idle_timeout()
 
         if not self.ratelimit.add_hit(self.RateLimitKeys.GLOBAL):

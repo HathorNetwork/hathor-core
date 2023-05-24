@@ -14,36 +14,85 @@
 
 import importlib
 import os
-from types import ModuleType
-from typing import Optional
+from typing import NamedTuple, Optional
 
+from structlog import get_logger
+
+from hathor import conf
 from hathor.conf.settings import HathorSettings as Settings
 
-_config_file: Optional[str] = None
+logger = get_logger()
+
+
+class _SettingsMetadata(NamedTuple):
+    source: str
+    is_yaml: bool
+    settings: Settings
+
+
+_settings_singleton: Optional[_SettingsMetadata] = None
 
 
 def HathorSettings() -> Settings:
-    """ Return configuration file namedtuple
-        Get the file from environment variable 'HATHOR_CONFIG_FILE'
-        If not set we return the config file of the mainnet
     """
-    settings_module = get_settings_module()
+    Returns the configuration named tuple.
+
+    Tries to get the configuration from a python module in the 'HATHOR_CONFIG_FILE' env var, which will be deprecated.
+    If not found, tries to get it from a yaml filepath in the 'HATHOR_YAML_CONFIG', which will be the new standard.
+
+    If neither is set, or if the module import fails, the mainnet configuration is returned.
+    """
+
+    settings_module_filepath = os.environ.get('HATHOR_CONFIG_FILE')
+    if settings_module_filepath is not None:
+        return _load_settings_singleton(settings_module_filepath, is_yaml=False)
+
+    settings_yaml_filepath = os.environ.get('HATHOR_CONFIG_YAML', conf.MAINNET_SETTINGS_FILEPATH)
+    return _load_settings_singleton(settings_yaml_filepath, is_yaml=True)
+
+
+def get_settings_source() -> str:
+    """ Returns the path of the settings module or YAML file that was loaded.
+
+    XXX: Will raise an assertion error if HathorSettings() wasn't used before.
+    """
+    global _settings_singleton
+    assert _settings_singleton is not None, 'HathorSettings() not called before'
+    return _settings_singleton.source
+
+
+def _load_settings_singleton(source: str, *, is_yaml: bool) -> Settings:
+    global _settings_singleton
+
+    if _settings_singleton is not None:
+        if _settings_singleton.is_yaml != is_yaml:
+            raise Exception('loading config twice with a different file type')
+        if _settings_singleton.source != source:
+            raise Exception('loading config twice with a different file')
+
+        return _settings_singleton.settings
+
+    settings_loader = _load_yaml_settings if is_yaml else _load_module_settings
+    _settings_singleton = _SettingsMetadata(
+        source=source,
+        is_yaml=is_yaml,
+        settings=settings_loader(source)
+    )
+
+    return _settings_singleton.settings
+
+
+def _load_module_settings(module_path: str) -> Settings:
+    log = logger.new()
+    log.warn(
+        "Setting a config module via the 'HATHOR_CONFIG_FILE' env var will be deprecated soon. "
+        "Use the '--config-yaml' CLI option or the 'HATHOR_CONFIG_YAML' env var to set a yaml filepath instead."
+    )
+    settings_module = importlib.import_module(module_path)
     settings = getattr(settings_module, 'SETTINGS')
     assert isinstance(settings, Settings)
     return settings
 
 
-def get_settings_module() -> ModuleType:
-    global _config_file
-    # Import config file for network
-    default_file = 'hathor.conf.mainnet'
-    config_file = os.environ.get('HATHOR_CONFIG_FILE', default_file)
-    if _config_file is None:
-        _config_file = config_file
-    elif _config_file != config_file:
-        raise Exception('loading config twice with a different file')
-    try:
-        module = importlib.import_module(config_file)
-    except ModuleNotFoundError:
-        module = importlib.import_module(default_file)
-    return module
+def _load_yaml_settings(filepath: str) -> Settings:
+    return Settings.from_yaml(filepath=filepath)

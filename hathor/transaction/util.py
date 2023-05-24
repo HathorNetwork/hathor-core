@@ -28,6 +28,19 @@ def int_to_bytes(number: int, size: int, signed: bool = False) -> bytes:
     return number.to_bytes(size, byteorder='big', signed=signed)
 
 
+def bytes_to_int(data: bytes, *, signed: bool = False) -> int:
+    """
+    Converts data in bytes to an int. Assumes big-endian format.
+
+    Args:
+        data: bytes to be converted
+        signed: whether two's complement is used to represent the integer.
+
+    Returns: the converted data as int
+    """
+    return int.from_bytes(data, byteorder='big', signed=signed)
+
+
 def unpack(fmt: str, buf: bytes) -> Any:
     size = struct.calcsize(fmt)
     return struct.unpack(fmt, buf[:size]), buf[size:]

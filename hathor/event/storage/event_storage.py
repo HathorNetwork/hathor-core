@@ -16,6 +16,7 @@ from abc import ABC, abstractmethod
 from typing import Iterator, Optional
 
 from hathor.event.model.base_event import BaseEvent
+from hathor.event.model.node_state import NodeState
 
 
 class EventStorage(ABC):
@@ -42,4 +43,40 @@ class EventStorage(ABC):
     @abstractmethod
     def iter_from_event(self, key: int) -> Iterator[BaseEvent]:
         """ Iterate through events starting from the event with the given key"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def reset_events(self) -> None:
+        """
+        Reset event-related data: events, last_event, and last_group_id.
+        This should be used to clear old events from the database when reloading events.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def reset_all(self) -> None:
+        """
+        Reset all data and metadata: events, last_event, last_group_id, node_state, and event_queue_enabled.
+        This should be used for a full wipe out of the event storage.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_node_state(self, state: NodeState) -> None:
+        """Save a node state in the storage"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_node_state(self) -> Optional[NodeState]:
+        """Get the node state from the storage"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_event_queue_state(self, enabled: bool) -> None:
+        """Save whether the event queue feature is enabled in the storage"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_event_queue_state(self) -> bool:
+        """Get whether the event queue feature is enabled from the storage"""
         raise NotImplementedError

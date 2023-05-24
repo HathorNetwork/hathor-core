@@ -726,16 +726,14 @@ class StratumFactory(Factory):
     jobs: Set[UUID]
     manager: 'HathorManager'
     miner_protocols: Dict[UUID, StratumProtocol]
-    port: int
     tx_queue: List[bytes]
     mining_tx_pool: Dict[bytes, BaseTransaction]
     mined_txs: Dict[bytes, Transaction]
     deferreds_tx: Dict[bytes, Deferred]
 
-    def __init__(self, manager: 'HathorManager', port: int, reactor: Reactor = reactor):
+    def __init__(self, manager: 'HathorManager', reactor: Reactor = reactor):
         self.log = logger.new()
         self.manager = manager
-        self.port = port
         self.reactor = reactor
 
         self.jobs = set()
@@ -769,13 +767,9 @@ class StratumFactory(Factory):
                 self.update_jobs()
 
         self.manager.pubsub.subscribe(HathorEvents.NETWORK_NEW_TX_ACCEPTED, on_new_block)
-        # XXX: self.reactor is IReactorTime, which does not guarantee listenTCP method, normally it will have that
-        #      method, but on tests we use a Clock instead, which does not have listenTCP, there shouldn't be any
-        #      issues using the "default" reactor though
-        self._listen = reactor.listenTCP(self.port, self)
 
     def stop(self) -> Optional[Deferred]:
-        return self._listen.stopListening()
+        return None
 
     def mine_transaction(self, tx: Transaction, deferred: Deferred) -> None:
         """

@@ -14,7 +14,7 @@
 
 from collections import defaultdict
 from enum import IntEnum, unique
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, FrozenSet, List, Optional, Set
 
 from hathor.util import practically_equal
 
@@ -69,7 +69,7 @@ class ValidationState(IntEnum):
 
     def is_valid(self) -> bool:
         """Short-hand property."""
-        return self in {ValidationState.FULL, ValidationState.CHECKPOINT}
+        return self in {ValidationState.FULL, ValidationState.CHECKPOINT, ValidationState.CHECKPOINT_FULL}
 
     def is_checkpoint(self) -> bool:
         """Short-hand property."""
@@ -78,6 +78,10 @@ class ValidationState(IntEnum):
     def is_fully_connected(self) -> bool:
         """Short-hand property."""
         return self in {ValidationState.FULL, ValidationState.CHECKPOINT_FULL}
+
+    def is_partial(self) -> bool:
+        """Short-hand property."""
+        return self in {ValidationState.INITIAL, ValidationState.BASIC, ValidationState.CHECKPOINT}
 
     def is_invalid(self) -> bool:
         """Short-hand property."""
@@ -138,12 +142,11 @@ class TransactionMetadata:
         # Hash of the transactions that conflicts with this transaction.
         self.conflict_with = None
 
-        # Hash of the transactions that void this transaction.
-        #
-        # When a transaction has a conflict and is voided because of this conflict, its own hash is added to
+        # - Hashes of the transactions that void this transaction.
+        # - When a transaction has a conflict and is voided because of this conflict, its own hash is added to
         # voided_by. The logic is that the transaction is voiding itself.
-        #
-        # When a block is voided, its own hash is added to voided_by.
+        # - When a block is voided, its own hash is added to voided_by.
+        # - When it is constructed it will be voided by "partially validated" until it is validated
         self.voided_by = None
         self._last_voided_by_hash = None
 
@@ -351,3 +354,22 @@ class TransactionMetadata:
             self.voided_by = {item}
         else:
             self.voided_by.add(item)
+
+    def del_voided_by(self, item: bytes) -> None:
+        """Deletes `item` from `self.voided_by`. Note that this method does not save the change."""
+        if self.voided_by is not None:
+            self.voided_by.discard(item)
+            if not self.voided_by:
+                self.voided_by = None
+
+    def get_frozen_voided_by(self) -> FrozenSet[bytes]:
+        """Return a frozen set copy of voided_by."""
+        if self.voided_by is None:
+            return frozenset()
+        return frozenset(self.voided_by)
+
+    def is_in_voided_by(self, item: bytes) -> bool:
+        """Return True if item exists in voided_by."""
+        if self.voided_by is None:
+            return False
+        return item in self.voided_by

@@ -40,7 +40,6 @@ if TYPE_CHECKING:
     from twisted.internet.interfaces import IDelayedCall
 
     from hathor.manager import HathorManager
-    from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
 
 logger = get_logger()
 settings = HathorSettings()
@@ -78,6 +77,7 @@ class ConnectionsManager:
     class GlobalRateLimiter:
         SEND_TIPS = 'NodeSyncTimestamp.send_tips'
 
+    manager: Optional['HathorManager']
     connections: Set[HathorProtocol]
     connected_peers: Dict[str, HathorProtocol]
     connecting_peers: Dict[IStreamClientEndpoint, _ConnectingPeer]
@@ -87,9 +87,16 @@ class ConnectionsManager:
 
     rate_limiter: RateLimiter
 
-    def __init__(self, reactor: Reactor, my_peer: PeerId, server_factory: 'HathorServerFactory',
-                 client_factory: 'HathorClientFactory', pubsub: PubSubManager, manager: 'HathorManager',
-                 ssl: bool, rng: Random, whitelist_only: bool, enable_sync_v1: bool, enable_sync_v2: bool,
+    def __init__(self,
+                 reactor: Reactor,
+                 network: str,
+                 my_peer: PeerId,
+                 pubsub: PubSubManager,
+                 ssl: bool,
+                 rng: Random,
+                 whitelist_only: bool,
+                 enable_sync_v1: bool,
+                 enable_sync_v2: bool,
                  enable_sync_v1_1: bool) -> None:
         from hathor.p2p.sync_v1_1_factory import SyncV11Factory
         from hathor.p2p.sync_v1_factory import SyncV1Factory
@@ -99,21 +106,23 @@ class ConnectionsManager:
 
         self.log = logger.new()
         self.rng = rng
-        self.manager = manager
+        self.manager = None
 
         self.reactor = reactor
         self.my_peer = my_peer
+
+        self.network = network
 
         # Options
         self.localhost_only = False
 
         # Factories.
-        self.server_factory = server_factory
-        self.server_factory.connections = self
+        from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
+        self.use_ssl = ssl
+        self.server_factory = HathorServerFactory(self.network, self.my_peer, p2p_manager=self, use_ssl=self.use_ssl)
+        self.client_factory = HathorClientFactory(self.network, self.my_peer, p2p_manager=self, use_ssl=self.use_ssl)
 
-        self.client_factory = client_factory
-        self.client_factory.connections = self
-
+        # Global maximum number of connections.
         self.max_connections: int = settings.PEER_MAX_CONNECTIONS
 
         # Global rate limiter for all connections.
@@ -162,10 +171,12 @@ class ConnectionsManager:
         # Pubsub object to publish events
         self.pubsub = pubsub
 
-        self.ssl = ssl
-
         # Parameter to explicitly enable whitelist-only mode, when False it will still check the whitelist for sync-v1
         self.whitelist_only = whitelist_only
+
+        self.enable_sync_v1 = enable_sync_v1
+        self.enable_sync_v1_1 = enable_sync_v1_1
+        self.enable_sync_v2 = enable_sync_v2
 
         # sync-manager factories
         self._sync_factories = {}
@@ -175,6 +186,16 @@ class ConnectionsManager:
             self._sync_factories[SyncVersion.V1_1] = SyncV11Factory(self)
         if enable_sync_v2:
             self._sync_factories[SyncVersion.V2] = SyncV1Factory(self)
+
+    def set_manager(self, manager: 'HathorManager') -> None:
+        """Set the manager. This method must be called before start()."""
+        self.manager = manager
+        if self.enable_sync_v2:
+            assert self.manager.tx_storage.indexes is not None
+            indexes = self.manager.tx_storage.indexes
+            self.log.debug('enable sync-v2 indexes')
+            indexes.enable_deps_index()
+            indexes.enable_mempool_index()
 
     def disable_rate_limiter(self) -> None:
         """Disable global rate limiter."""
@@ -228,6 +249,7 @@ class ConnectionsManager:
 
     def get_sync_versions(self) -> Set[SyncVersion]:
         """Set of versions that were enabled and are supported."""
+        assert self.manager is not None
         if self.manager.has_sync_version_capability():
             return set(self._sync_factories.keys())
         else:
@@ -410,6 +432,7 @@ class ConnectionsManager:
         TODO(epnichols): Should we always connect to *all*? Should there be a max #?
         """
         # when we have no connected peers left, run the discovery process again
+        assert self.manager is not None
         if len(self.connected_peers) < 1:
             self.manager.do_discovery()
         now = int(self.reactor.seconds())
@@ -458,6 +481,7 @@ class ConnectionsManager:
         self.log.error('update whitelist failed', args=args, kwargs=kwargs)
 
     def _update_whitelist_cb(self, body: Optional[bytes]) -> None:
+        assert self.manager is not None
         if body is None:
             self.log.warn('update whitelist got no response')
             return
@@ -521,7 +545,7 @@ class ConnectionsManager:
                 return
 
         if use_ssl is None:
-            use_ssl = self.ssl
+            use_ssl = self.use_ssl
         connection_string, peer_id = description_to_connection_string(description)
         # When using twisted endpoints we can't have // in the connection string
         endpoint_url = connection_string.replace('//', '')
@@ -564,7 +588,7 @@ class ConnectionsManager:
         endpoint = endpoints.serverFromString(self.reactor, description)
 
         if use_ssl is None:
-            use_ssl = self.ssl
+            use_ssl = self.use_ssl
 
         factory: IProtocolFactory
         if use_ssl:

@@ -102,3 +102,10 @@ class Sysctl:
                 continue
             value = cmd.getter()
             yield (self.path_join(prefix, path), value)
+
+    def get_all_paths(self, prefix: str = '') -> Iterator[str]:
+        """Return all available paths."""
+        for path, child in self._children.items():
+            yield from child.get_all_paths(self.path_join(prefix, path))
+        for path, cmd in self._commands.items():
+            yield self.path_join(prefix, path)
