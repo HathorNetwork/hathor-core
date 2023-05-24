@@ -349,3 +349,11 @@ class Block(BaseTransaction):
         self.verify_parents()
 
         self.verify_height()
+
+    def get_feature_activation_bits(self) -> int:
+        """Returns the feature activation bits from the signal bits."""
+        assert self.signal_bits <= 0xFF, 'signal_bits must be one byte at most'
+
+        bitmask = (1 << settings.FEATURE_ACTIVATION.max_signal_bits) - 1
+
+        return self.signal_bits & bitmask
