@@ -19,51 +19,71 @@ import pytest
 from pydantic import ValidationError
 
 from hathor.utils.named_tuple import validated_named_tuple_from_dict
+from hathor.utils.pydantic import BaseModel
 
 
-class TestTuple(NamedTuple):
+class InnerTuple(NamedTuple):
+    x: str
+
+
+class InnerModel(BaseModel):
+    y: str
+
+
+class OuterTuple(NamedTuple):
     a: int
-    b: int
-    c: str
+    b: InnerTuple
+    c: InnerModel
 
     @classmethod
-    def validate_b(cls, b: int) -> int:
-        if b > 10:
-            raise ValueError('b cannot be greater than 10')
+    def validate_a(cls, a: int) -> int:
+        if a > 10:
+            raise ValueError('"a" cannot be greater than 10')
 
-        return b
+        return a
 
 
 VALIDATORS = dict(
-    validate_b=pydantic.validator('b')(TestTuple.validate_b)
+    validate_a=pydantic.validator('a')(OuterTuple.validate_a)
 )
 
 
 @pytest.mark.parametrize(
     ['attributes', 'expected'],
     [
-        (dict(a=1, b=0, c='a'), TestTuple(1, 0, 'a')),
-        (dict(a=123, b=5, c='aa'), TestTuple(123, 5, 'aa')),
-        (dict(a=1010, b=10, c='aaa'), TestTuple(1010, 10, 'aaa')),
+        (
+            dict(a=0, b=('b',), c=dict(y='c')),
+            OuterTuple(a=0, b=InnerTuple(x='b'), c=InnerModel(y='c'))
+        ),
+        (
+            dict(a=5, b=('bb',), c=dict(y='cc')),
+            OuterTuple(a=5, b=InnerTuple(x='bb'), c=InnerModel(y='cc'))
+        ),
+        (
+            dict(a=10, b=('bbb',), c=dict(y='ccc')),
+            OuterTuple(a=10, b=InnerTuple(x='bbb'), c=InnerModel(y='ccc'))
+        ),
     ]
 )
 def test_validated_named_tuple_from_dict(attributes, expected):
-    result = validated_named_tuple_from_dict(TestTuple, attributes, validators=VALIDATORS)
+    result = validated_named_tuple_from_dict(OuterTuple, attributes, validators=VALIDATORS)
 
+    assert isinstance(result.b, InnerTuple)
+    assert isinstance(result.c, InnerModel)
     assert result == expected
 
 
 @pytest.mark.parametrize(
     'attributes',
     [
-        dict(a=1, b=11, c='a'),
-        dict(a=123, b=50, c='aa'),
-        dict(a=1010, b=100, c='aaa'),
+        dict(a=11, b=('b',), c=dict(y='c')),
+        dict(a=50, b=('bb',), c=dict(y='cc')),
+        dict(a=100, b=('bbb',), c=dict(y='ccc')),
     ]
 )
 def test_validated_named_tuple_from_dict_error(attributes):
     with pytest.raises(ValidationError) as e:
-        validated_named_tuple_from_dict(TestTuple, attributes, validators=VALIDATORS)
+        validated_named_tuple_from_dict(OuterTuple, attributes, validators=VALIDATORS)
 
     errors = e.value.errors()
-    assert errors[0]['msg'] == 'b cannot be greater than 10'
+    assert errors[0]['msg'] == '"a" cannot be greater than 10'

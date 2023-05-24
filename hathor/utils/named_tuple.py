@@ -48,5 +48,6 @@ def validated_named_tuple_from_dict(
     # doesn't support default attribute values, so we do this to add them
     all_attributes = named_tuple_type(**attributes_dict)
     validated_attributes = model(**all_attributes._asdict())
+    validated_attributes_dict = {k: v for k, v in validated_attributes}
 
-    return named_tuple_type(**validated_attributes.dict())
+    return named_tuple_type(**validated_attributes_dict)
