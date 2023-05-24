@@ -138,6 +138,7 @@ class FeatureService:
 
     def get_bit_count(self, *, boundary_block: Block, bit: int) -> int:
         """Returns the count of blocks with this bit enabled in the previous evaluation interval."""
+        assert not boundary_block.is_genesis, 'cannot calculate bit count for genesis'
         assert boundary_block.calculate_height() % self._settings.evaluation_interval == 0, (
             'cannot calculate bit count for a non-boundary block'
         )
