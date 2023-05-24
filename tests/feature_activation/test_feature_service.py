@@ -1,0 +1,185 @@
+#  Copyright 2023 Hathor Labs
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
+from unittest.mock import Mock
+import pytest
+
+from hathor.feature_activation import feature_service
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.feature_service import FeatureService
+from hathor.feature_activation.model.criteria import Criteria
+from hathor.feature_activation.model.feature_state import FeatureState
+from hathor.feature_activation.settings import Settings
+from hathor.transaction import Block
+
+
+@pytest.fixture
+def block_mocks() -> list[Block]:
+    mocks = []
+    feature_activation_bits = [
+        0b0000,  # 0: boundary block
+        0b0000,
+        0b0000,
+        0b0000,
+
+        0b0000,  # 4: boundary block
+        0b0000,
+        0b0000,
+        0b0000,
+
+        0b0000,  # 8: boundary block
+        0b0000,
+        0b0000,
+        0b0000,
+
+        0b0000,  # 12: boundary block
+        0b0000,
+        0b0000,
+        0b0000,
+
+        0b0000,  # 16: boundary block
+        0b0000,
+        0b0000,
+        0b0000,
+
+        0b0000,  # 20: boundary block
+        0b0000,
+    ]
+
+    for i, bits in enumerate(feature_activation_bits):
+        mock = Mock(spec_set=Block)
+        mocks.append(mock)
+
+        # mock.is_genesis = i == 0
+        mock.calculate_height = Mock(return_value=i)
+        mock.get_block_parent = Mock(return_value=mocks[i - 1])
+        # mock.get_feature_activation_bits = Mock(return_value=bits)
+
+    return mocks
+
+
+@pytest.fixture
+def service() -> FeatureService:
+    settings = Settings(
+        evaluation_interval=4,
+        default_threshold=3
+    )
+    service = FeatureService(settings=settings)
+
+    return service
+
+
+# def test_get_state_genesis(block_mocks: list[Block], service: FeatureService):
+#     block = block_mocks[0]
+#     result = service.get_state(block=block, feature=Mock())
+#
+#     assert result == FeatureState.DEFINED
+
+
+# @pytest.mark.parametrize('block_height', [0, 1, 2, 3])
+# def test_get_state_first_interval(block_mocks: list[Block], service: FeatureService, block_height: int):
+#     block = block_mocks[block_height]
+#     result = service.get_state(block=block, feature=Mock())
+#
+#     assert result == FeatureState.DEFINED
+
+
+# @pytest.mark.parametrize('block_height', [4, 5, 6, 7])
+# @pytest.mark.parametrize(
+#     ['feature', 'expected_state'],
+#     [
+#         (Feature.NOP_FEATURE_1, FeatureState.STARTED),
+#         (Feature.NOP_FEATURE_2, FeatureState.STARTED),
+#         (Feature.NOP_FEATURE_3, FeatureState.DEFINED),
+#     ]
+# )
+# def test_get_state_second_interval(
+#     block_mocks: list[Block],
+#     service: FeatureService,
+#     block_height: int,
+#     feature: Feature,
+#     expected_state: FeatureState
+# ):
+#     block = block_mocks[block_height]
+#     result = service.get_state(block=block, feature=feature)
+#
+#     assert result == expected_state
+
+
+# def test_get_state_third_interval(
+#     block_mocks: list[Block],
+#     service: FeatureService,
+#     block_height: int,
+#     feature: Feature,
+#     expected_state: FeatureState
+# ):
+#     block = block_mocks[block_height]
+#     result = service.get_state(block=block, feature=feature)
+#
+#     assert result == expected_state
+
+
+@pytest.mark.parametrize('block_height', [1, 2, 3, 5, 18, 21])
+def test_get_bit_count_invalid(block_mocks: list[Block], service: FeatureService, block_height: int):
+    block = block_mocks[block_height]
+
+    with pytest.raises(AssertionError) as e:
+        service.get_bit_count(boundary_block=block, bit=0)
+
+    assert str(e.value) == 'cannot calculate bit count for a non-boundary block'
+
+
+def test_get_bit_count(block_mocks: list[Block], service: FeatureService, block_height: int):
+    raise NotImplementedError
+
+
+@pytest.mark.parametrize(
+    ['block_height', 'ancestor_height'],
+    [
+        (21, 21),
+        (21, 100),
+        (10, 15),
+        (10, 11),
+        (0, 0),
+    ]
+)
+def test_get_ancestor_at_height_invalid(block_mocks: list[Block], block_height: int, ancestor_height: int):
+    block = block_mocks[block_height]
+    _block = feature_service._Block.from_block(block)
+
+    with pytest.raises(AssertionError) as e:
+        feature_service._get_ancestor_at_height(_block=_block, height=ancestor_height)
+
+    assert str(e.value) == (
+        f"ancestor height must be lower than the block's height: {ancestor_height} >= {block_height}"
+    )
+
+
+@pytest.mark.parametrize(
+    ['block_height', 'ancestor_height'],
+    [
+        (21, 20),
+        (21, 10),
+        (21, 0),
+        (15, 10),
+        (15, 0),
+        (1, 0),
+    ]
+)
+def test_get_ancestor_at_height(block_mocks: list[Block], block_height: int, ancestor_height: int):
+    block = block_mocks[block_height]
+    _block = feature_service._Block.from_block(block)
+    result = feature_service._get_ancestor_at_height(_block=_block, height=ancestor_height)
+
+    assert result.calculate_height() == ancestor_height

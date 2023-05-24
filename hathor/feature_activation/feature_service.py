@@ -66,7 +66,7 @@ class FeatureService:
 
         return self._calculate_new_state(
             boundary_block=_block,
-            criteria=self._settings.features[feature],
+            feature=feature,
             previous_state=previous_state
         )
 
@@ -74,13 +74,14 @@ class FeatureService:
         self,
         *,
         boundary_block: _Block,
-        criteria: Criteria,
+        feature: Feature,
         previous_state: FeatureState
     ) -> FeatureState:
         """Returns the new feature state based on the new block, the criteria, and the previous state."""
         assert boundary_block.height % self._settings.evaluation_interval == 0, (
             'cannot calculate new state for a non-boundary block'
         )
+        criteria = self._get_criteria(feature=feature)
 
         if previous_state is FeatureState.DEFINED:
             if boundary_block.height >= criteria.start_height:
@@ -118,6 +119,15 @@ class FeatureService:
             return FeatureState.FAILED
 
         raise ValueError(f'Unknown previous state: {previous_state}')
+
+    def _get_criteria(self, *, feature: Feature) -> Criteria:
+        criteria = self._settings.features.get(feature)
+
+        # TODO: Test
+        if not criteria:
+            raise ValueError(f"Criteria not defined for feature '{feature}'.")
+
+        return criteria
 
     def get_bits_description(self, *, block: Block) -> dict[Feature, tuple[Criteria, FeatureState]]:
         """Returns the criteria definition and feature state for all features at a certain block."""
