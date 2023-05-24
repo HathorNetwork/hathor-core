@@ -14,14 +14,15 @@
 
 import os
 from math import log
-from typing import Any, Dict, List, NamedTuple, Optional, Union
+from pathlib import Path
+from typing import NamedTuple, Optional, Union
 
 import pydantic
 
 from hathor.checkpoint import Checkpoint
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
 from hathor.utils import yaml
-from hathor.utils.pydantic import BaseModel
+from hathor.utils.named_tuple import validated_named_tuple_from_dict
 
 DECIMAL_PLACES = 2
 
@@ -40,7 +41,7 @@ class HathorSettings(NamedTuple):
     NETWORK_NAME: str
 
     # Initial bootstrap servers
-    BOOTSTRAP_DNS: List[str] = []
+    BOOTSTRAP_DNS: list[str] = []
 
     # enable peer whitelist
     ENABLE_PEER_WHITELIST: bool = False
@@ -243,7 +244,7 @@ class HathorSettings(NamedTuple):
     TOKEN_DEPOSIT_PERCENTAGE: float = 0.01
 
     # Array with the settings parameters that are used when calculating the settings hash
-    P2P_SETTINGS_HASH_FIELDS: List[str] = [
+    P2P_SETTINGS_HASH_FIELDS: list[str] = [
         'P2PKH_VERSION_BYTE',
         'MULTISIG_VERSION_BYTE',
         'MIN_BLOCK_WEIGHT',
@@ -359,13 +360,13 @@ class HathorSettings(NamedTuple):
     METRICS_COLLECT_ROCKSDB_DATA_INTERVAL: int = 86400  # 1 day
 
     # Block checkpoints
-    CHECKPOINTS: List[Checkpoint] = []
+    CHECKPOINTS: list[Checkpoint] = []
 
     # Used on testing to enable slow asserts that help catch bugs but we don't want to run in production
     SLOW_ASSERTS: bool = False
 
     # List of soft voided transaction.
-    SOFT_VOIDED_TX_IDS: List[bytes] = []
+    SOFT_VOIDED_TX_IDS: list[bytes] = []
 
     # Identifier used in metadata's voided_by to mark a tx as soft-voided.
     SOFT_VOIDED_ID: bytes = b'tx-non-grata'
@@ -394,30 +395,24 @@ class HathorSettings(NamedTuple):
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':
         """Takes a filepath to a yaml file and returns a validated HathorSettings instance."""
-        settings_dict = yaml.dict_from(filepath=filepath)
+        settings_dict = yaml.dict_from_extended_yaml(filepath=filepath, custom_root=Path(__file__).parent)
 
-        return HathorSettings.from_dict(settings_dict)
-
-    @classmethod
-    def from_dict(cls, settings: Dict[str, Any]) -> 'HathorSettings':
-        """Takes a settings dict and returns a validated HathorSettings instance."""
-        # This intermediate step shouldn't be necessary, but for some reason pydantic.create_model_from_namedtuple
-        # doesn't support default attribute values, so we do this to add them
-        all_settings = HathorSettings(**settings)
-        validated_settings = _ValidatedHathorSettings(**all_settings._asdict())
-
-        return HathorSettings(**validated_settings.dict())
+        return validated_named_tuple_from_dict(
+            HathorSettings,
+            settings_dict,
+            validators=_VALIDATORS
+        )
 
 
-def _parse_checkpoints(checkpoints: Union[Dict[int, str], List[Checkpoint]]) -> List[Checkpoint]:
+def _parse_checkpoints(checkpoints: Union[dict[int, str], list[Checkpoint]]) -> list[Checkpoint]:
     """Parse a dictionary of raw checkpoint data into a list of checkpoints."""
-    if isinstance(checkpoints, Dict):
+    if isinstance(checkpoints, dict):
         return [
             Checkpoint(height, bytes.fromhex(_hash))
             for height, _hash in checkpoints.items()
         ]
 
-    if not isinstance(checkpoints, List):
+    if not isinstance(checkpoints, list):
         raise TypeError(f'expected \'Dict[int, str]\' or \'List[Checkpoint]\', got {checkpoints}')
 
     return checkpoints
@@ -434,29 +429,25 @@ def _parse_hex_str(hex_str: Union[str, bytes]) -> bytes:
     return hex_str
 
 
-_ValidatedHathorSettings = pydantic.create_model_from_namedtuple(
-    HathorSettings,
-    __base__=BaseModel,
-    __validators__=dict(
-        _parse_hex_str=pydantic.validator(
-            'P2PKH_VERSION_BYTE',
-            'MULTISIG_VERSION_BYTE',
-            'GENESIS_OUTPUT_SCRIPT',
-            'GENESIS_BLOCK_HASH',
-            'GENESIS_TX1_HASH',
-            'GENESIS_TX2_HASH',
-            pre=True,
-            allow_reuse=True
-        )(_parse_hex_str),
-        _parse_soft_voided_tx_id=pydantic.validator(
-            'SOFT_VOIDED_TX_IDS',
-            pre=True,
-            allow_reuse=True,
-            each_item=True
-        )(_parse_hex_str),
-        _parse_checkpoints=pydantic.validator(
-            'CHECKPOINTS',
-            pre=True
-        )(_parse_checkpoints)
-    )
+_VALIDATORS = dict(
+    _parse_hex_str=pydantic.validator(
+        'P2PKH_VERSION_BYTE',
+        'MULTISIG_VERSION_BYTE',
+        'GENESIS_OUTPUT_SCRIPT',
+        'GENESIS_BLOCK_HASH',
+        'GENESIS_TX1_HASH',
+        'GENESIS_TX2_HASH',
+        pre=True,
+        allow_reuse=True
+    )(_parse_hex_str),
+    _parse_soft_voided_tx_id=pydantic.validator(
+        'SOFT_VOIDED_TX_IDS',
+        pre=True,
+        allow_reuse=True,
+        each_item=True
+    )(_parse_hex_str),
+    _parse_checkpoints=pydantic.validator(
+        'CHECKPOINTS',
+        pre=True
+    )(_parse_checkpoints)
 )
