@@ -65,7 +65,7 @@ class FeatureService:
             return previous_state
 
         return self._calculate_new_state(
-            _block=_block,
+            boundary_block=_block,
             criteria=self._settings.features[feature],
             previous_state=previous_state
         )
@@ -73,46 +73,51 @@ class FeatureService:
     def _calculate_new_state(
         self,
         *,
-        _block: _Block,
+        boundary_block: _Block,
         criteria: Criteria,
         previous_state: FeatureState
     ) -> FeatureState:
         """Returns the new feature state based on the new block, the criteria, and the previous state."""
-        match previous_state:
-            case FeatureState.DEFINED:
-                if _block.height >= criteria.start_height:
-                    return FeatureState.STARTED
+        assert boundary_block.height % self._settings.evaluation_interval == 0, (
+            'cannot calculate new state for a non-boundary block'
+        )
 
-                return FeatureState.DEFINED
-
-            case FeatureState.STARTED:
-                if _block.height >= criteria.timeout_height and not criteria.activate_on_timeout:
-                    return FeatureState.FAILED
-
-                if (
-                    _block.height >= criteria.timeout_height
-                    and criteria.activate_on_timeout
-                    and _block.height >= criteria.minimum_activation_height
-                ):
-                    return FeatureState.ACTIVE
-
-                count = self.get_bit_count(block=_block.data, bit=criteria.bit)
-                threshold = criteria.threshold if criteria.threshold is not None else self._settings.default_threshold
-
-                if (
-                    _block.height < criteria.timeout_height
-                    and count >= threshold
-                    and _block.height >= criteria.minimum_activation_height
-                ):
-                    return FeatureState.ACTIVE
-
+        if previous_state is FeatureState.DEFINED:
+            if boundary_block.height >= criteria.start_height:
                 return FeatureState.STARTED
 
-            case FeatureState.ACTIVE:
+            return FeatureState.DEFINED
+
+        if previous_state is FeatureState.STARTED:
+            if boundary_block.height >= criteria.timeout_height and not criteria.activate_on_timeout:
+                return FeatureState.FAILED
+
+            if (
+                boundary_block.height >= criteria.timeout_height
+                and criteria.activate_on_timeout
+                and boundary_block.height >= criteria.minimum_activation_height
+            ):
                 return FeatureState.ACTIVE
 
-            case FeatureState.FAILED:
-                return FeatureState.FAILED
+            count = self.get_bit_count(boundary_block=boundary_block.data, bit=criteria.bit)
+            threshold = criteria.threshold if criteria.threshold is not None else self._settings.default_threshold
+
+            if (
+                boundary_block.height < criteria.timeout_height
+                and count >= threshold
+                and boundary_block.height >= criteria.minimum_activation_height
+            ):
+                return FeatureState.ACTIVE
+
+            return FeatureState.STARTED
+
+        if previous_state is FeatureState.ACTIVE:
+            return FeatureState.ACTIVE
+
+        if previous_state is FeatureState.FAILED:
+            return FeatureState.FAILED
+
+        raise ValueError(f'Unknown previous state: {previous_state}')
 
     def get_bits_description(self, *, block: Block) -> dict[Feature, tuple[Criteria, FeatureState]]:
         """Returns the criteria definition and feature state for all features at a certain block."""
@@ -121,9 +126,13 @@ class FeatureService:
             for feature, criteria in self._settings.features.items()
         }
 
-    def get_bit_count(self, *, block: Block, bit: int) -> int:
+    def get_bit_count(self, *, boundary_block: Block, bit: int) -> int:
         """Returns the count of blocks with this bit enabled in the previous evaluation interval."""
+        assert boundary_block.calculate_height() % self._settings.evaluation_interval == 0, (
+            'cannot calculate bit count for a non-boundary block'
+        )
         count = 0
+        block = boundary_block
 
         for _ in range(self._settings.evaluation_interval):
             block = block.get_block_parent()
@@ -140,8 +149,9 @@ def _get_ancestor_at_height(*, _block: _Block, height: int) -> Block:
     """Given a block, returns its ancestor at a specific height."""
     # TODO: there may be more optimized ways of doing this using the height index,
     #  but what if we're not in the best blockchain?
-    assert height < _block.height, f"ancestor height must be lower than the block's height: " \
-                                   f"{height} >= {_block.height}"
+    assert height < _block.height, (
+        f"ancestor height must be lower than the block's height: {height} >= {_block.height}"
+    )
 
     ancestor = _block.data
     while ancestor.calculate_height() > height:
