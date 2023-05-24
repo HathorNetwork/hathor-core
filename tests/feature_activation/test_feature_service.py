@@ -80,54 +80,231 @@ def service() -> FeatureService:
     return service
 
 
-# def test_get_state_genesis(block_mocks: list[Block], service: FeatureService):
-#     block = block_mocks[0]
-#     result = service.get_state(block=block, feature=Mock())
-#
-#     assert result == FeatureState.DEFINED
+def test_get_state_genesis(block_mocks: list[Block], service: FeatureService):
+    block = block_mocks[0]
+    result = service.get_state(block=block, feature=Mock())
+
+    assert result == FeatureState.DEFINED
 
 
-# @pytest.mark.parametrize('block_height', [0, 1, 2, 3])
-# def test_get_state_first_interval(block_mocks: list[Block], service: FeatureService, block_height: int):
-#     block = block_mocks[block_height]
-#     result = service.get_state(block=block, feature=Mock())
-#
-#     assert result == FeatureState.DEFINED
+@pytest.mark.parametrize('block_height', [0, 1, 2, 3])
+def test_get_state_first_interval(block_mocks: list[Block], service: FeatureService, block_height: int):
+    block = block_mocks[block_height]
+    result = service.get_state(block=block, feature=Mock())
+
+    assert result == FeatureState.DEFINED
 
 
-# @pytest.mark.parametrize('block_height', [4, 5, 6, 7])
-# @pytest.mark.parametrize(
-#     ['feature', 'expected_state'],
-#     [
-#         (Feature.NOP_FEATURE_1, FeatureState.STARTED),
-#         (Feature.NOP_FEATURE_2, FeatureState.STARTED),
-#         (Feature.NOP_FEATURE_3, FeatureState.DEFINED),
-#     ]
-# )
-# def test_get_state_second_interval(
-#     block_mocks: list[Block],
-#     service: FeatureService,
-#     block_height: int,
-#     feature: Feature,
-#     expected_state: FeatureState
-# ):
-#     block = block_mocks[block_height]
-#     result = service.get_state(block=block, feature=feature)
-#
-#     assert result == expected_state
+@pytest.mark.parametrize('block_height', [4, 5, 6, 7])
+@pytest.mark.parametrize(
+    ['start_height', 'expected_state'],
+    [
+        (0, FeatureState.STARTED),
+        (4, FeatureState.STARTED),
+        (8, FeatureState.DEFINED)
+    ]
+)
+def test_get_state_from_defined(
+    block_mocks: list[Block],
+    block_height: int,
+    start_height: int,
+    expected_state: FeatureState
+):
+    settings = Settings.construct(
+        evaluation_interval=4,
+        features={
+            Feature.NOP_FEATURE_1: Criteria.construct(start_height=start_height)
+        }
+    )
+    service = FeatureService(settings=settings)
+    block = block_mocks[block_height]
+
+    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+
+    assert result == expected_state
 
 
-# def test_get_state_third_interval(
-#     block_mocks: list[Block],
-#     service: FeatureService,
-#     block_height: int,
-#     feature: Feature,
-#     expected_state: FeatureState
-# ):
-#     block = block_mocks[block_height]
-#     result = service.get_state(block=block, feature=feature)
-#
-#     assert result == expected_state
+@pytest.mark.parametrize('block_height', [8, 9, 10, 11, 12, 13])
+@pytest.mark.parametrize('timeout_height', [4, 8])
+def test_get_state_from_started_to_failed(block_mocks: list[Block], block_height: int, timeout_height: int):
+    settings = Settings.construct(
+        evaluation_interval=4,
+        features={
+            Feature.NOP_FEATURE_1: Criteria.construct(
+                start_height=0,
+                timeout_height=timeout_height,
+                activate_on_timeout=False
+            )
+        }
+    )
+    service = FeatureService(settings=settings)
+    block = block_mocks[block_height]
+
+    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+
+    assert result == FeatureState.FAILED
+
+
+@pytest.mark.parametrize('block_height', [8, 9, 10, 11, 12, 13])
+@pytest.mark.parametrize('timeout_height', [4, 8])
+@pytest.mark.parametrize('minimum_activation_height', [0, 4, 8])
+def test_get_state_from_started_to_active_on_timeout(
+    block_mocks: list[Block],
+    block_height: int,
+    timeout_height: int,
+    minimum_activation_height: int
+):
+    settings = Settings.construct(
+        evaluation_interval=4,
+        features={
+            Feature.NOP_FEATURE_1: Criteria.construct(
+                start_height=0,
+                timeout_height=timeout_height,
+                activate_on_timeout=True,
+                minimum_activation_height=minimum_activation_height
+            )
+        }
+    )
+    service = FeatureService(settings=settings)
+    block = block_mocks[block_height]
+
+    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+
+    assert result == FeatureState.ACTIVE
+
+
+@pytest.mark.parametrize('block_height', [8, 9, 10, 11, 12, 13])
+@pytest.mark.parametrize('minimum_activation_height', [0, 4, 8])
+@pytest.mark.parametrize('default_threshold', [0, 1, 2, 3])
+def test_get_state_from_started_to_active_on_default_threshold(
+    block_mocks: list[Block],
+    block_height: int,
+    minimum_activation_height: int,
+    default_threshold: int
+):
+    settings = Settings.construct(
+        evaluation_interval=4,
+        default_threshold=default_threshold,
+        features={
+            Feature.NOP_FEATURE_1: Criteria.construct(
+                bit=1,
+                start_height=0,
+                timeout_height=400,
+                threshold=None,
+                minimum_activation_height=minimum_activation_height
+            )
+        }
+    )
+    service = FeatureService(settings=settings)
+    block = block_mocks[block_height]
+
+    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+
+    assert result == FeatureState.ACTIVE
+
+
+@pytest.mark.parametrize('block_height', [8, 9, 10, 11, 12, 13])
+@pytest.mark.parametrize('minimum_activation_height', [0, 4, 8])
+@pytest.mark.parametrize('custom_threshold', [0, 1, 2, 3])
+def test_get_state_from_started_to_active_on_custom_threshold(
+    block_mocks: list[Block],
+    block_height: int,
+    minimum_activation_height: int,
+    custom_threshold: int
+):
+    settings = Settings.construct(
+        evaluation_interval=4,
+        features={
+            Feature.NOP_FEATURE_1: Criteria.construct(
+                bit=1,
+                start_height=0,
+                timeout_height=400,
+                threshold=custom_threshold,
+                minimum_activation_height=minimum_activation_height
+            )
+        }
+    )
+    service = FeatureService(settings=settings)
+    block = block_mocks[block_height]
+
+    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+
+    assert result == FeatureState.ACTIVE
+
+
+@pytest.mark.parametrize('block_height', [8, 9, 10, 11])
+@pytest.mark.parametrize(
+    ['activate_on_timeout', 'timeout_height', 'minimum_activation_height'],
+    [
+        (False, 12, 0),
+        (True, 4, 12),
+        (True, 8, 12),
+    ]
+)
+def test_get_state_from_started_to_started(
+    block_mocks: list[Block],
+    block_height: int,
+    timeout_height: int,
+    activate_on_timeout: int,
+    minimum_activation_height: int
+):
+    settings = Settings.construct(
+        evaluation_interval=4,
+        features={
+            Feature.NOP_FEATURE_1: Criteria.construct(
+                bit=3,
+                start_height=0,
+                timeout_height=timeout_height,
+                activate_on_timeout=activate_on_timeout,
+                minimum_activation_height=minimum_activation_height
+            )
+        }
+    )
+    service = FeatureService(settings=settings)
+    block = block_mocks[block_height]
+
+    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+
+    assert result == FeatureState.STARTED
+
+
+@pytest.mark.parametrize('block_height', [12, 13, 14, 15])
+def test_get_state_from_active(block_mocks: list[Block], block_height: int):
+    settings = Settings.construct(
+        evaluation_interval=4,
+        features={
+            Feature.NOP_FEATURE_1: Criteria.construct(
+                start_height=0,
+                timeout_height=4,
+                activate_on_timeout=True
+            )
+        }
+    )
+    service = FeatureService(settings=settings)
+    block = block_mocks[block_height]
+
+    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+
+    assert result == FeatureState.ACTIVE
+
+
+@pytest.mark.parametrize('block_height', [12, 13, 14, 15])
+def test_get_state_from_failed(block_mocks: list[Block], block_height: int):
+    settings = Settings.construct(
+        evaluation_interval=4,
+        features={
+            Feature.NOP_FEATURE_1: Criteria.construct(
+                start_height=0,
+                timeout_height=4
+            )
+        }
+    )
+    service = FeatureService(settings=settings)
+    block = block_mocks[block_height]
+
+    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+
+    assert result == FeatureState.FAILED
 
 
 def test_get_bits_description():
