@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 import pytest
 
 from hathor.feature_activation import feature_service
@@ -128,6 +128,35 @@ def service() -> FeatureService:
 #     result = service.get_state(block=block, feature=feature)
 #
 #     assert result == expected_state
+
+
+def test_get_bits_description():
+    criteria_mock_1 = Criteria.construct()
+    criteria_mock_2 = Criteria.construct()
+    settings = Settings.construct(
+        features={
+            Feature.NOP_FEATURE_1: criteria_mock_1,
+            Feature.NOP_FEATURE_2: criteria_mock_2
+        }
+    )
+    service = FeatureService(settings=settings)
+
+    def get_state(self, *, block: Block, feature: Feature):
+        states = {
+            Feature.NOP_FEATURE_1: FeatureState.STARTED,
+            Feature.NOP_FEATURE_2: FeatureState.FAILED
+        }
+        return states[feature]
+
+    with patch('hathor.feature_activation.feature_service.FeatureService.get_state', get_state):
+        result = service.get_bits_description(block=Mock())
+
+    expected = {
+        Feature.NOP_FEATURE_1: (criteria_mock_1, FeatureState.STARTED),
+        Feature.NOP_FEATURE_2: (criteria_mock_2, FeatureState.FAILED),
+    }
+
+    assert result == expected
 
 
 def test_get_bit_count_genesis(block_mocks: list[Block], service: FeatureService):
