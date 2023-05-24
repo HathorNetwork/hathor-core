@@ -69,7 +69,7 @@ class ValidationState(IntEnum):
 
     def is_valid(self) -> bool:
         """Short-hand property."""
-        return self in {ValidationState.FULL, ValidationState.CHECKPOINT}
+        return self in {ValidationState.FULL, ValidationState.CHECKPOINT, ValidationState.CHECKPOINT_FULL}
 
     def is_checkpoint(self) -> bool:
         """Short-hand property."""
@@ -78,6 +78,10 @@ class ValidationState(IntEnum):
     def is_fully_connected(self) -> bool:
         """Short-hand property."""
         return self in {ValidationState.FULL, ValidationState.CHECKPOINT_FULL}
+
+    def is_partial(self) -> bool:
+        """Short-hand property."""
+        return self in {ValidationState.INITIAL, ValidationState.BASIC, ValidationState.CHECKPOINT}
 
     def is_invalid(self) -> bool:
         """Short-hand property."""

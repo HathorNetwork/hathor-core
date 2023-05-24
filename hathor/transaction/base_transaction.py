@@ -42,7 +42,7 @@ from hathor.transaction.exceptions import (
     TxValidationError,
     WeightError,
 )
-from hathor.transaction.transaction_metadata import TransactionMetadata
+from hathor.transaction.transaction_metadata import TransactionMetadata, ValidationState
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 from hathor.util import classproperty
 
@@ -482,19 +482,25 @@ class BaseTransaction(ABC):
                 return True
         return all_exist and all_valid
 
+    def set_validation(self, validation: ValidationState) -> None:
+        """ This method will set the internal validation state AND the appropriate voided_by marker.
+
+        NOTE: THIS METHOD WILL NOT SAVE THE TRANSACTION
+        """
+        meta = self.get_metadata()
+        meta.validation = validation
+        if validation.is_fully_connected():
+            self._unmark_partially_validated()
+        else:
+            self._mark_partially_validated()
+
     def validate_checkpoint(self, checkpoints: List[Checkpoint]) -> bool:
         """ Run checkpoint validations  and update the validation state.
 
         If no exception is raised, the ValidationState will end up as `CHECKPOINT` and return `True`.
         """
-        from hathor.transaction.transaction_metadata import ValidationState
-
-        meta = self.get_metadata()
-
         self.verify_checkpoint(checkpoints)
-
-        meta.validation = ValidationState.CHECKPOINT
-        self.mark_partially_validated()
+        self.set_validation(ValidationState.CHECKPOINT)
         return True
 
     def validate_basic(self, skip_block_weight_verification: bool = False) -> bool:
@@ -502,14 +508,8 @@ class BaseTransaction(ABC):
 
         If no exception is raised, the ValidationState will end up as `BASIC` and return `True`.
         """
-        from hathor.transaction.transaction_metadata import ValidationState
-
-        meta = self.get_metadata()
-
         self.verify_basic(skip_block_weight_verification=skip_block_weight_verification)
-
-        meta.validation = ValidationState.BASIC
-        self.mark_partially_validated()
+        self.set_validation(ValidationState.BASIC)
         return True
 
     def validate_full(self, skip_block_weight_verification: bool = False, sync_checkpoints: bool = False,
@@ -523,9 +523,7 @@ class BaseTransaction(ABC):
         meta = self.get_metadata()
         # skip full validation when it is a checkpoint
         if meta.validation.is_checkpoint():
-            meta.validation = ValidationState.CHECKPOINT_FULL
-            # at last, remove the partially validated mark
-            self.unmark_partially_validated()
+            self.set_validation(ValidationState.CHECKPOINT_FULL)
             return True
 
         # XXX: in some cases it might be possible that this transaction is verified by a checkpoint but we went
@@ -536,16 +534,11 @@ class BaseTransaction(ABC):
             self.verify_basic(skip_block_weight_verification=skip_block_weight_verification)
 
         self.verify(reject_locked_reward=reject_locked_reward)
-        if sync_checkpoints:
-            meta.validation = ValidationState.CHECKPOINT_FULL
-        else:
-            meta.validation = ValidationState.FULL
-
-        # at last, remove the partially validated mark
-        self.unmark_partially_validated()
+        validation = ValidationState.CHECKPOINT_FULL if sync_checkpoints else ValidationState.FULL
+        self.set_validation(validation)
         return True
 
-    def mark_partially_validated(self) -> None:
+    def _mark_partially_validated(self) -> None:
         """ This function is used to add the partially-validated mark from the voided-by metadata.
 
         It is idempotent: calling it multiple time has the same effect as calling it once. But it must only be called
@@ -555,7 +548,7 @@ class BaseTransaction(ABC):
         assert not tx_meta.validation.is_fully_connected()
         tx_meta.add_voided_by(settings.PARTIALLY_VALIDATED_ID)
 
-    def unmark_partially_validated(self) -> None:
+    def _unmark_partially_validated(self) -> None:
         """ This function is used to remove the partially-validated mark from the voided-by metadata.
 
         It is idempotent: calling it multiple time has the same effect as calling it once. But it must only be called
