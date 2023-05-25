@@ -27,6 +27,7 @@ class MergeMinedBlock(Block):
     def __init__(self,
                  nonce: int = 0,
                  timestamp: Optional[int] = None,
+                 signal_bits: int = 0,
                  version: int = TxVersion.MERGE_MINED_BLOCK,
                  weight: float = 0,
                  outputs: Optional[List[TxOutput]] = None,
@@ -35,8 +36,8 @@ class MergeMinedBlock(Block):
                  data: bytes = b'',
                  aux_pow: Optional[BitcoinAuxPow] = None,
                  storage: Optional['TransactionStorage'] = None) -> None:
-        super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight, data=data,
-                         outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
+        super().__init__(nonce=nonce, timestamp=timestamp, signal_bits=signal_bits, version=version, weight=weight,
+                         data=data, outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.aux_pow = aux_pow
 
     def _get_formatted_fields_dict(self, short: bool = True) -> Dict[str, str]:

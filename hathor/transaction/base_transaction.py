@@ -80,6 +80,9 @@ _TX_PARENTS_BLOCKS = 0
 _BLOCK_PARENTS_TXS = 2
 _BLOCK_PARENTS_BLOCKS = 1
 
+# The int value of one byte
+_ONE_BYTE = 0xFF
+
 
 def sum_weights(w1: float, w2: float) -> float:
     return aux_calc_weight(w1, w2, 1)
@@ -111,28 +114,9 @@ class TxVersion(IntEnum):
     @classmethod
     def _missing_(cls, value: Any) -> None:
         assert isinstance(value, int), f"Value '{value}' must be an integer"
-        assert value <= 0xFF, f'Value {hex(value)} must not be larger than one byte'
+        assert value <= _ONE_BYTE, f'Value {hex(value)} must not be larger than one byte'
 
         raise ValueError(f'Invalid version: {value}')
-
-    @classmethod
-    def extract_from_bytes(cls, value: int) -> Tuple[int, 'TxVersion']:
-        """
-        Takes a 2-byte number and returns signal bits and a TxVersion from it.
-
-        Signal bits, extracted from the first byte, carry extra information that
-        may be interpreted differently by each subclass of BaseTransaction.
-
-        Args:
-            value: a 2-byte number
-
-        Returns: a tuple in the format (signal_bits, tx_version)
-        """
-        assert value <= 0xFFFF, f'Value {hex(value)} must not be larger than two bytes'
-
-        signal_bits, version = int_to_bytes(value, 2)
-
-        return signal_bits, TxVersion(version)
 
     def get_cls(self) -> Type['BaseTransaction']:
         from hathor.transaction.block import Block
@@ -178,6 +162,7 @@ class BaseTransaction(ABC):
     def __init__(self,
                  nonce: int = 0,
                  timestamp: Optional[int] = None,
+                 signal_bits: int = 0,
                  version: int = TxVersion.REGULAR_BLOCK,
                  weight: float = 0,
                  inputs: Optional[List['TxInput']] = None,
@@ -188,14 +173,19 @@ class BaseTransaction(ABC):
         """
             Nonce: nonce used for the proof-of-work
             Timestamp: moment of creation
+            Signal bits: bits used to carry extra information that may be interpreted differently by each subclass
             Version: version when it was created
             Weight: different for transactions and blocks
             Outputs: all outputs that are being created
             Parents: transactions you are confirming (2 transactions and 1 block - in case of a block only)
         """
+        assert signal_bits <= _ONE_BYTE, f'signal_bits {hex(signal_bits)} must not be larger than one byte'
+        assert version <= _ONE_BYTE, f'version {hex(version)} must not be larger than one byte'
+
         self.nonce = nonce
         self.timestamp = timestamp or int(time.time())
-        self.signal_bits, self.version = TxVersion.extract_from_bytes(version)
+        self.signal_bits = signal_bits
+        self.version = version
         self.weight = weight
         self.inputs = inputs or []
         self.outputs = outputs or []
