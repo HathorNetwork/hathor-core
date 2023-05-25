@@ -18,18 +18,18 @@ from hathor.transaction import Block
 
 
 @pytest.mark.parametrize(
-    ['version', 'expected_bits'],
+    ['signal_bits', 'expected_bits'],
     [
-        (0x0001, 0),
-        (0x0101, 1),
-        (0xF101, 1),
-        (0x0601, 6),
-        (0xF601, 6),
-        (0x0F01, 0xF),
-        (0xFF01, 0xF),
+        (0x00, 0),
+        (0x01, 1),
+        (0xF1, 1),
+        (0x06, 6),
+        (0xF6, 6),
+        (0x0F, 0xF),
+        (0xFF, 0xF),
     ]
 )
-def test_get_feature_activation_bits(version, expected_bits):
-    block = Block(version=version)
+def test_get_feature_activation_bits(signal_bits: int, expected_bits: int) -> None:
+    block = Block(signal_bits=signal_bits)
 
     assert block.get_feature_activation_bits() == expected_bits

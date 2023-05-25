@@ -304,6 +304,28 @@ def test_get_state_from_active(block_mocks: list[Block], block_height: int) -> N
 
 
 @pytest.mark.parametrize('block_height', [12, 13, 14, 15])
+def test_is_feature_active(block_mocks: list[Block], block_height: int) -> None:
+    settings = Settings.construct(
+        evaluation_interval=4,
+        features={
+            Feature.NOP_FEATURE_1: Criteria.construct(
+                bit=Mock(),
+                start_height=0,
+                timeout_height=4,
+                activate_on_timeout=True,
+                version=Mock()
+            )
+        }
+    )
+    service = FeatureService(settings=settings)
+    block = block_mocks[block_height]
+
+    result = service.is_feature_active(block=block, feature=Feature.NOP_FEATURE_1)
+
+    assert result is True
+
+
+@pytest.mark.parametrize('block_height', [12, 13, 14, 15])
 def test_get_state_from_failed(block_mocks: list[Block], block_height: int) -> None:
     settings = Settings.construct(
         evaluation_interval=4,
