@@ -39,6 +39,7 @@ class TokenCreationTransaction(Transaction):
     def __init__(self,
                  nonce: int = 0,
                  timestamp: Optional[int] = None,
+                 signal_bits: int = 0,
                  version: int = TxVersion.TOKEN_CREATION_TRANSACTION,
                  weight: float = 0,
                  inputs: Optional[List[TxInput]] = None,
@@ -48,8 +49,8 @@ class TokenCreationTransaction(Transaction):
                  token_name: str = '',
                  token_symbol: str = '',
                  storage: Optional['TransactionStorage'] = None) -> None:
-        super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight, inputs=inputs,
-                         outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
+        super().__init__(nonce=nonce, timestamp=timestamp, signal_bits=signal_bits, version=version, weight=weight,
+                         inputs=inputs, outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.token_name = token_name
         self.token_symbol = token_symbol
         # for this special tx, its own hash is used as the created token uid. We're artificially

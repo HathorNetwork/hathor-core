@@ -74,6 +74,7 @@ class Transaction(BaseTransaction):
     def __init__(self,
                  nonce: int = 0,
                  timestamp: Optional[int] = None,
+                 signal_bits: int = 0,
                  version: int = TxVersion.REGULAR_TRANSACTION,
                  weight: float = 0,
                  inputs: Optional[List[TxInput]] = None,
@@ -86,8 +87,8 @@ class Transaction(BaseTransaction):
             Creating new init just to make sure inputs will always be empty array
             Inputs: all inputs that are being used (empty in case of a block)
         """
-        super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight, inputs=inputs
-                         or [], outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
+        super().__init__(nonce=nonce, timestamp=timestamp, signal_bits=signal_bits, version=version, weight=weight,
+                         inputs=inputs or [], outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.tokens = tokens or []
         self._sighash_cache: Optional[bytes] = None
         self._sighash_data_cache: Optional[bytes] = None

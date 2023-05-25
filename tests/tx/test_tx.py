@@ -838,7 +838,7 @@ class BaseTransactionTest(unittest.TestCase):
         with self.assertRaises(InvalidOutputValue):
             TxOutput(-1, script)
 
-    def test_tx_version(self):
+    def test_tx_version_and_signal_bits(self):
         from hathor.transaction.base_transaction import TxVersion
 
         # test invalid type
@@ -859,26 +859,27 @@ class BaseTransactionTest(unittest.TestCase):
 
         self.assertEqual(str(cm.exception), 'Invalid version: 10')
 
-        # test TxVersion.extract_from_bytes
-        with self.assertRaises(AssertionError) as cm:
-            TxVersion.extract_from_bytes(0x54321)
-
-        self.assertEqual(str(cm.exception), 'Value 0x54321 must not be larger than two bytes')
-
-        signal_bits, tx_version = TxVersion.extract_from_bytes(0x4303)
-
-        self.assertEqual(signal_bits, 0x43)
-        self.assertEqual(tx_version, TxVersion.MERGE_MINED_BLOCK)
-
         # test get the correct class
         version = TxVersion(0x00)
         self.assertEqual(version.get_cls(), Block)
         version = TxVersion(0x01)
         self.assertEqual(version.get_cls(), Transaction)
 
+        # test Block.__init__() fails
+        with self.assertRaises(AssertionError) as cm:
+            Block(signal_bits=0x100)
+
+        self.assertEqual(str(cm.exception), 'signal_bits 0x100 must not be larger than one byte')
+
+        with self.assertRaises(AssertionError) as cm:
+            Block(version=0x200)
+
+        self.assertEqual(str(cm.exception), 'version 0x200 must not be larger than one byte')
+
         # test serialization doesn't mess up with version
         block = Block(
-            version=0xFF00,
+            signal_bits=0xF0,
+            version=0x0F,
             nonce=100,
             weight=1)
         block2 = block.clone()

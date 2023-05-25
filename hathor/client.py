@@ -392,8 +392,7 @@ def create_tx_from_dict(data: Dict[str, Any], update_hash: bool = False,
     if storage:
         data['storage'] = storage
 
-    _, tx_version = TxVersion.extract_from_bytes(data['version'])
-    cls = tx_version.get_cls()
+    cls = TxVersion(data['version']).get_cls()
     metadata = data.pop('metadata', None)
     tx = cls(**data)
     if update_hash:

@@ -51,6 +51,7 @@ class Block(BaseTransaction):
     def __init__(self,
                  nonce: int = 0,
                  timestamp: Optional[int] = None,
+                 signal_bits: int = 0,
                  version: int = TxVersion.REGULAR_BLOCK,
                  weight: float = 0,
                  outputs: Optional[List[TxOutput]] = None,
@@ -58,7 +59,7 @@ class Block(BaseTransaction):
                  hash: Optional[bytes] = None,
                  data: bytes = b'',
                  storage: Optional['TransactionStorage'] = None) -> None:
-        super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight,
+        super().__init__(nonce=nonce, timestamp=timestamp, signal_bits=signal_bits, version=version, weight=weight,
                          outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.data = data
 
