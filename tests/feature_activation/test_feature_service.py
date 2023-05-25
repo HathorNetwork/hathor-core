@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 from unittest.mock import Mock, patch
+
 import pytest
 
 from hathor.feature_activation import feature_service
@@ -26,7 +27,7 @@ from hathor.transaction import Block
 
 @pytest.fixture
 def block_mocks() -> list[Block]:
-    mocks = []
+    mocks: list[Block] = []
     feature_activation_bits = [
         0b0110,  # 0: boundary block
         0b0010,
@@ -80,7 +81,7 @@ def service() -> FeatureService:
     return service
 
 
-def test_get_state_genesis(block_mocks: list[Block], service: FeatureService):
+def test_get_state_genesis(block_mocks: list[Block], service: FeatureService) -> None:
     block = block_mocks[0]
     result = service.get_state(block=block, feature=Mock())
 
@@ -88,7 +89,7 @@ def test_get_state_genesis(block_mocks: list[Block], service: FeatureService):
 
 
 @pytest.mark.parametrize('block_height', [0, 1, 2, 3])
-def test_get_state_first_interval(block_mocks: list[Block], service: FeatureService, block_height: int):
+def test_get_state_first_interval(block_mocks: list[Block], service: FeatureService, block_height: int) -> None:
     block = block_mocks[block_height]
     result = service.get_state(block=block, feature=Mock())
 
@@ -109,11 +110,16 @@ def test_get_state_from_defined(
     block_height: int,
     start_height: int,
     expected_state: FeatureState
-):
+) -> None:
     settings = Settings.construct(
         evaluation_interval=4,
         features={
-            Feature.NOP_FEATURE_1: Criteria.construct(start_height=start_height)
+            Feature.NOP_FEATURE_1: Criteria.construct(
+                bit=Mock(),
+                start_height=start_height,
+                timeout_height=Mock(),
+                version=Mock()
+            )
         }
     )
     service = FeatureService(settings=settings)
@@ -126,14 +132,16 @@ def test_get_state_from_defined(
 
 @pytest.mark.parametrize('block_height', [8, 9, 10, 11, 12, 13])
 @pytest.mark.parametrize('timeout_height', [4, 8])
-def test_get_state_from_started_to_failed(block_mocks: list[Block], block_height: int, timeout_height: int):
+def test_get_state_from_started_to_failed(block_mocks: list[Block], block_height: int, timeout_height: int) -> None:
     settings = Settings.construct(
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
+                bit=Mock(),
                 start_height=0,
                 timeout_height=timeout_height,
-                activate_on_timeout=False
+                activate_on_timeout=False,
+                version=Mock()
             )
         }
     )
@@ -153,15 +161,17 @@ def test_get_state_from_started_to_active_on_timeout(
     block_height: int,
     timeout_height: int,
     minimum_activation_height: int
-):
+) -> None:
     settings = Settings.construct(
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
+                bit=Mock(),
                 start_height=0,
                 timeout_height=timeout_height,
                 activate_on_timeout=True,
-                minimum_activation_height=minimum_activation_height
+                minimum_activation_height=minimum_activation_height,
+                version=Mock()
             )
         }
     )
@@ -181,7 +191,7 @@ def test_get_state_from_started_to_active_on_default_threshold(
     block_height: int,
     minimum_activation_height: int,
     default_threshold: int
-):
+) -> None:
     settings = Settings.construct(
         evaluation_interval=4,
         default_threshold=default_threshold,
@@ -191,7 +201,8 @@ def test_get_state_from_started_to_active_on_default_threshold(
                 start_height=0,
                 timeout_height=400,
                 threshold=None,
-                minimum_activation_height=minimum_activation_height
+                minimum_activation_height=minimum_activation_height,
+                version=Mock()
             )
         }
     )
@@ -211,7 +222,7 @@ def test_get_state_from_started_to_active_on_custom_threshold(
     block_height: int,
     minimum_activation_height: int,
     custom_threshold: int
-):
+) -> None:
     settings = Settings.construct(
         evaluation_interval=4,
         features={
@@ -220,7 +231,8 @@ def test_get_state_from_started_to_active_on_custom_threshold(
                 start_height=0,
                 timeout_height=400,
                 threshold=custom_threshold,
-                minimum_activation_height=minimum_activation_height
+                minimum_activation_height=minimum_activation_height,
+                version=Mock()
             )
         }
     )
@@ -244,10 +256,10 @@ def test_get_state_from_started_to_active_on_custom_threshold(
 def test_get_state_from_started_to_started(
     block_mocks: list[Block],
     block_height: int,
+    activate_on_timeout: bool,
     timeout_height: int,
-    activate_on_timeout: int,
     minimum_activation_height: int
-):
+) -> None:
     settings = Settings.construct(
         evaluation_interval=4,
         features={
@@ -256,7 +268,8 @@ def test_get_state_from_started_to_started(
                 start_height=0,
                 timeout_height=timeout_height,
                 activate_on_timeout=activate_on_timeout,
-                minimum_activation_height=minimum_activation_height
+                minimum_activation_height=minimum_activation_height,
+                version=Mock()
             )
         }
     )
@@ -269,14 +282,16 @@ def test_get_state_from_started_to_started(
 
 
 @pytest.mark.parametrize('block_height', [12, 13, 14, 15])
-def test_get_state_from_active(block_mocks: list[Block], block_height: int):
+def test_get_state_from_active(block_mocks: list[Block], block_height: int) -> None:
     settings = Settings.construct(
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
+                bit=Mock(),
                 start_height=0,
                 timeout_height=4,
-                activate_on_timeout=True
+                activate_on_timeout=True,
+                version=Mock()
             )
         }
     )
@@ -289,13 +304,15 @@ def test_get_state_from_active(block_mocks: list[Block], block_height: int):
 
 
 @pytest.mark.parametrize('block_height', [12, 13, 14, 15])
-def test_get_state_from_failed(block_mocks: list[Block], block_height: int):
+def test_get_state_from_failed(block_mocks: list[Block], block_height: int) -> None:
     settings = Settings.construct(
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
+                bit=Mock(),
                 start_height=0,
-                timeout_height=4
+                timeout_height=4,
+                version=Mock()
             )
         }
     )
@@ -318,7 +335,7 @@ def test_get_bits_description():
     )
     service = FeatureService(settings=settings)
 
-    def get_state(self, *, block: Block, feature: Feature):
+    def get_state(self: FeatureService, *, block: Block, feature: Feature) -> FeatureState:
         states = {
             Feature.NOP_FEATURE_1: FeatureState.STARTED,
             Feature.NOP_FEATURE_2: FeatureState.FAILED
@@ -336,7 +353,7 @@ def test_get_bits_description():
     assert result == expected
 
 
-def test_get_bit_count_genesis(block_mocks: list[Block], service: FeatureService):
+def test_get_bit_count_genesis(block_mocks: list[Block], service: FeatureService) -> None:
     block = block_mocks[0]
 
     with pytest.raises(AssertionError) as e:
@@ -346,7 +363,7 @@ def test_get_bit_count_genesis(block_mocks: list[Block], service: FeatureService
 
 
 @pytest.mark.parametrize('block_height', [1, 2, 3, 5, 18, 21])
-def test_get_bit_count_invalid(block_mocks: list[Block], service: FeatureService, block_height: int):
+def test_get_bit_count_invalid(block_mocks: list[Block], service: FeatureService, block_height: int) -> None:
     block = block_mocks[block_height]
 
     with pytest.raises(AssertionError) as e:
@@ -373,7 +390,7 @@ def test_get_bit_count(
     block_height: int,
     bit: int,
     expected_count: int
-):
+) -> None:
     block = block_mocks[block_height]
     result = service.get_bit_count(boundary_block=block, bit=bit)
 
@@ -390,7 +407,7 @@ def test_get_bit_count(
         (0, 0),
     ]
 )
-def test_get_ancestor_at_height_invalid(block_mocks: list[Block], block_height: int, ancestor_height: int):
+def test_get_ancestor_at_height_invalid(block_mocks: list[Block], block_height: int, ancestor_height: int) -> None:
     block = block_mocks[block_height]
     _block = feature_service._Block.from_block(block)
 
@@ -413,7 +430,7 @@ def test_get_ancestor_at_height_invalid(block_mocks: list[Block], block_height: 
         (1, 0),
     ]
 )
-def test_get_ancestor_at_height(block_mocks: list[Block], block_height: int, ancestor_height: int):
+def test_get_ancestor_at_height(block_mocks: list[Block], block_height: int, ancestor_height: int) -> None:
     block = block_mocks[block_height]
     _block = feature_service._Block.from_block(block)
     result = feature_service._get_ancestor_at_height(_block=_block, height=ancestor_height)
