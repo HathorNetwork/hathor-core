@@ -324,6 +324,15 @@ def test_get_state_from_failed(block_mocks: list[Block], block_height: int) -> N
     assert result == FeatureState.FAILED
 
 
+def test_get_state_undefined_feature(block_mocks: list[Block], service: FeatureService) -> None:
+    block = block_mocks[10]
+
+    with pytest.raises(ValueError) as e:
+        service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+
+    assert str(e.value) == f"Criteria not defined for feature '{Feature.NOP_FEATURE_1}'."
+
+
 def test_get_bits_description():
     criteria_mock_1 = Criteria.construct()
     criteria_mock_2 = Criteria.construct()

@@ -123,7 +123,6 @@ class FeatureService:
     def _get_criteria(self, *, feature: Feature) -> Criteria:
         criteria = self._settings.features.get(feature)
 
-        # TODO: Test
         if not criteria:
             raise ValueError(f"Criteria not defined for feature '{feature}'.")
 
