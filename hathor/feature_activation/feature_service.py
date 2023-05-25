@@ -12,26 +12,12 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import NamedTuple
-
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.criteria import Criteria
+from hathor.feature_activation.model.feature_description import FeatureDescription
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings
 from hathor.transaction import Block
-
-
-class _Block(NamedTuple):
-    """A Block wrapper including the calculated height."""
-    data: Block
-    height: int
-
-    @classmethod
-    def from_block(cls, block: Block) -> '_Block':
-        return _Block(
-            data=block,
-            height=block.calculate_height()
-        )
 
 
 class FeatureService:
@@ -55,17 +41,17 @@ class FeatureService:
 
         # All blocks within the same evaluation interval have the same state, that is, the state is only defined for
         # the block in each interval boundary. Therefore, we get the state of the previous boundary.
-        _block = _Block.from_block(block)
-        offset_to_boundary = _block.height % self._settings.evaluation_interval
-        previous_boundary_height = _block.height - (offset_to_boundary or self._settings.evaluation_interval)
-        previous_boundary_block = _get_ancestor_at_height(_block=_block, height=previous_boundary_height)
+        offset_to_boundary = block.height % self._settings.evaluation_interval
+        offset_to_previous_boundary = offset_to_boundary or self._settings.evaluation_interval
+        previous_boundary_height = block.height - offset_to_previous_boundary
+        previous_boundary_block = _get_ancestor_at_height(block=block, height=previous_boundary_height)
         previous_state = self.get_state(block=previous_boundary_block, feature=feature)
 
         if offset_to_boundary != 0:
             return previous_state
 
         return self._calculate_new_state(
-            boundary_block=_block,
+            boundary_block=block,
             feature=feature,
             previous_state=previous_state
         )
@@ -73,7 +59,7 @@ class FeatureService:
     def _calculate_new_state(
         self,
         *,
-        boundary_block: _Block,
+        boundary_block: Block,
         feature: Feature,
         previous_state: FeatureState
     ) -> FeatureState:
@@ -100,7 +86,7 @@ class FeatureService:
             ):
                 return FeatureState.ACTIVE
 
-            count = self.get_bit_count(boundary_block=boundary_block.data, bit=criteria.bit)
+            count = self.get_bit_count(boundary_block=boundary_block, bit=criteria.bit)
             threshold = criteria.threshold if criteria.threshold is not None else self._settings.default_threshold
 
             if (
@@ -121,6 +107,7 @@ class FeatureService:
         raise ValueError(f'Unknown previous state: {previous_state}')
 
     def _get_criteria(self, *, feature: Feature) -> Criteria:
+        """Get the Criteria defined for a specific Feature."""
         criteria = self._settings.features.get(feature)
 
         if not criteria:
@@ -128,17 +115,20 @@ class FeatureService:
 
         return criteria
 
-    def get_bits_description(self, *, block: Block) -> dict[Feature, tuple[Criteria, FeatureState]]:
+    def get_bits_description(self, *, block: Block) -> dict[Feature, FeatureDescription]:
         """Returns the criteria definition and feature state for all features at a certain block."""
         return {
-            feature: (criteria, self.get_state(block=block, feature=feature))
+            feature: FeatureDescription(
+                criteria=criteria,
+                state=self.get_state(block=block, feature=feature)
+            )
             for feature, criteria in self._settings.features.items()
         }
 
     def get_bit_count(self, *, boundary_block: Block, bit: int) -> int:
         """Returns the count of blocks with this bit enabled in the previous evaluation interval."""
         assert not boundary_block.is_genesis, 'cannot calculate bit count for genesis'
-        assert boundary_block.calculate_height() % self._settings.evaluation_interval == 0, (
+        assert boundary_block.height % self._settings.evaluation_interval == 0, (
             'cannot calculate bit count for a non-boundary block'
         )
         count = 0
@@ -155,16 +145,16 @@ class FeatureService:
         return count
 
 
-def _get_ancestor_at_height(*, _block: _Block, height: int) -> Block:
+def _get_ancestor_at_height(*, block: Block, height: int) -> Block:
     """Given a block, returns its ancestor at a specific height."""
     # TODO: there may be more optimized ways of doing this using the height index,
     #  but what if we're not in the best blockchain?
-    assert height < _block.height, (
-        f"ancestor height must be lower than the block's height: {height} >= {_block.height}"
+    assert height < block.height, (
+        f"ancestor height must be lower than the block's height: {height} >= {block.height}"
     )
 
-    ancestor = _block.data
-    while ancestor.calculate_height() > height:
+    ancestor = block
+    while ancestor.height > height:
         ancestor = ancestor.get_block_parent()
 
     return ancestor

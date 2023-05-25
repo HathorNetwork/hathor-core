@@ -20,6 +20,7 @@ from hathor.feature_activation import feature_service
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.criteria import Criteria
+from hathor.feature_activation.model.feature_description import FeatureDescription
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings
 from hathor.transaction import Block
@@ -63,7 +64,7 @@ def block_mocks() -> list[Block]:
         mocks.append(mock)
 
         mock.is_genesis = i == 0
-        mock.calculate_height = Mock(return_value=i)
+        mock.height = i
         mock.get_block_parent = Mock(return_value=mocks[i - 1])
         mock.get_feature_activation_bits = Mock(return_value=bits)
 
@@ -377,8 +378,8 @@ def test_get_bits_description():
         result = service.get_bits_description(block=Mock())
 
     expected = {
-        Feature.NOP_FEATURE_1: (criteria_mock_1, FeatureState.STARTED),
-        Feature.NOP_FEATURE_2: (criteria_mock_2, FeatureState.FAILED),
+        Feature.NOP_FEATURE_1: FeatureDescription(criteria_mock_1, FeatureState.STARTED),
+        Feature.NOP_FEATURE_2: FeatureDescription(criteria_mock_2, FeatureState.FAILED),
     }
 
     assert result == expected
@@ -440,10 +441,9 @@ def test_get_bit_count(
 )
 def test_get_ancestor_at_height_invalid(block_mocks: list[Block], block_height: int, ancestor_height: int) -> None:
     block = block_mocks[block_height]
-    _block = feature_service._Block.from_block(block)
 
     with pytest.raises(AssertionError) as e:
-        feature_service._get_ancestor_at_height(_block=_block, height=ancestor_height)
+        feature_service._get_ancestor_at_height(block=block, height=ancestor_height)
 
     assert str(e.value) == (
         f"ancestor height must be lower than the block's height: {ancestor_height} >= {block_height}"
@@ -463,7 +463,6 @@ def test_get_ancestor_at_height_invalid(block_mocks: list[Block], block_height: 
 )
 def test_get_ancestor_at_height(block_mocks: list[Block], block_height: int, ancestor_height: int) -> None:
     block = block_mocks[block_height]
-    _block = feature_service._Block.from_block(block)
-    result = feature_service._get_ancestor_at_height(_block=_block, height=ancestor_height)
+    result = feature_service._get_ancestor_at_height(block=block, height=ancestor_height)
 
-    assert result.calculate_height() == ancestor_height
+    assert result.height == ancestor_height

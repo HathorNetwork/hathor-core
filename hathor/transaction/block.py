@@ -79,6 +79,11 @@ class Block(BaseTransaction):
         """Returns true if this is a transaction"""
         return False
 
+    @property
+    def height(self) -> int:
+        """Returns the block's height."""
+        return self.get_metadata().height
+
     @classmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
                            *, verbose: VerboseCallback = None) -> 'Block':

@@ -12,9 +12,29 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from unittest.mock import Mock
+
 import pytest
 
+from hathor.event.model.event_data import TxMetadata
 from hathor.transaction import Block
+from hathor.transaction.storage import TransactionStorage
+
+
+def test_height():
+    block_hash = b'some_hash'
+    block_height = 10
+
+    metadata = Mock(spec=TxMetadata)
+    metadata.hash = block_hash
+    metadata.height = block_height
+
+    storage = Mock(spec_set=TransactionStorage)
+    storage.get_metadata = Mock(side_effect=lambda _hash: metadata if _hash == block_hash else None)
+
+    block = Block(hash=block_hash, storage=storage)
+
+    assert block.height == block_height
 
 
 @pytest.mark.parametrize(
