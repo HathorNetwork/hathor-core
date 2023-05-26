@@ -79,11 +79,6 @@ class Block(BaseTransaction):
         """Returns true if this is a transaction"""
         return False
 
-    @property
-    def height(self) -> int:
-        """Returns the block's height."""
-        return self.get_metadata().height
-
     @classmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
                            *, verbose: VerboseCallback = None) -> 'Block':
@@ -355,10 +350,21 @@ class Block(BaseTransaction):
 
         self.verify_height()
 
+    def get_height(self) -> int:
+        """Returns the block's height."""
+        return self.get_metadata().height
+
     def get_feature_activation_bits(self) -> int:
         """Returns the feature activation bits from the signal bits."""
         assert self.signal_bits <= 0xFF, 'signal_bits must be one byte at most'
 
-        bitmask = (1 << settings.FEATURE_ACTIVATION.max_signal_bits) - 1
+        bitmask = self._get_feature_activation_bitmask()
 
         return self.signal_bits & bitmask
+
+    @classmethod
+    def _get_feature_activation_bitmask(cls) -> int:
+        """Returns the bitmask that gets feature activation bits from signal bits."""
+        bitmask = (1 << settings.FEATURE_ACTIVATION.max_signal_bits) - 1
+
+        return bitmask

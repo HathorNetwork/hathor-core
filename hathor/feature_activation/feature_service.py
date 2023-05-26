@@ -41,9 +41,10 @@ class FeatureService:
 
         # All blocks within the same evaluation interval have the same state, that is, the state is only defined for
         # the block in each interval boundary. Therefore, we get the state of the previous boundary.
-        offset_to_boundary = block.height % self._settings.evaluation_interval
+        height = block.get_height()
+        offset_to_boundary = height % self._settings.evaluation_interval
         offset_to_previous_boundary = offset_to_boundary or self._settings.evaluation_interval
-        previous_boundary_height = block.height - offset_to_previous_boundary
+        previous_boundary_height = height - offset_to_previous_boundary
         previous_boundary_block = _get_ancestor_at_height(block=block, height=previous_boundary_height)
         previous_state = self.get_state(block=previous_boundary_block, feature=feature)
 
@@ -64,25 +65,26 @@ class FeatureService:
         previous_state: FeatureState
     ) -> FeatureState:
         """Returns the new feature state based on the new block, the criteria, and the previous state."""
-        assert boundary_block.height % self._settings.evaluation_interval == 0, (
+        height = boundary_block.get_height()
+        assert height % self._settings.evaluation_interval == 0, (
             'cannot calculate new state for a non-boundary block'
         )
         criteria = self._get_criteria(feature=feature)
 
         if previous_state is FeatureState.DEFINED:
-            if boundary_block.height >= criteria.start_height:
+            if height >= criteria.start_height:
                 return FeatureState.STARTED
 
             return FeatureState.DEFINED
 
         if previous_state is FeatureState.STARTED:
-            if boundary_block.height >= criteria.timeout_height and not criteria.activate_on_timeout:
+            if height >= criteria.timeout_height and not criteria.activate_on_timeout:
                 return FeatureState.FAILED
 
             if (
-                boundary_block.height >= criteria.timeout_height
+                height >= criteria.timeout_height
                 and criteria.activate_on_timeout
-                and boundary_block.height >= criteria.minimum_activation_height
+                and height >= criteria.minimum_activation_height
             ):
                 return FeatureState.ACTIVE
 
@@ -90,9 +92,9 @@ class FeatureService:
             threshold = criteria.threshold if criteria.threshold is not None else self._settings.default_threshold
 
             if (
-                boundary_block.height < criteria.timeout_height
+                height < criteria.timeout_height
                 and count >= threshold
-                and boundary_block.height >= criteria.minimum_activation_height
+                and height >= criteria.minimum_activation_height
             ):
                 return FeatureState.ACTIVE
 
@@ -128,12 +130,14 @@ class FeatureService:
     def get_bit_count(self, *, boundary_block: Block, bit: int) -> int:
         """Returns the count of blocks with this bit enabled in the previous evaluation interval."""
         assert not boundary_block.is_genesis, 'cannot calculate bit count for genesis'
-        assert boundary_block.height % self._settings.evaluation_interval == 0, (
+        assert boundary_block.get_height() % self._settings.evaluation_interval == 0, (
             'cannot calculate bit count for a non-boundary block'
         )
         count = 0
         block = boundary_block
 
+        # TODO: We can implement this as O(1) instead of O(evaluation_interval)
+        #  by persisting the count in block metadata incrementally
         for _ in range(self._settings.evaluation_interval):
             block = block.get_block_parent()
             feature_bits = block.get_feature_activation_bits()
@@ -149,12 +153,12 @@ def _get_ancestor_at_height(*, block: Block, height: int) -> Block:
     """Given a block, returns its ancestor at a specific height."""
     # TODO: there may be more optimized ways of doing this using the height index,
     #  but what if we're not in the best blockchain?
-    assert height < block.height, (
-        f"ancestor height must be lower than the block's height: {height} >= {block.height}"
+    assert height < block.get_height(), (
+        f"ancestor height must be lower than the block's height: {height} >= {block.get_height()}"
     )
 
     ancestor = block
-    while ancestor.height > height:
+    while ancestor.get_height() > height:
         ancestor = ancestor.get_block_parent()
 
     return ancestor

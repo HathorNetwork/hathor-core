@@ -64,7 +64,7 @@ def block_mocks() -> list[Block]:
         mocks.append(mock)
 
         mock.is_genesis = i == 0
-        mock.height = i
+        mock.get_height = Mock(return_value=i)
         mock.get_block_parent = Mock(return_value=mocks[i - 1])
         mock.get_feature_activation_bits = Mock(return_value=bits)
 
@@ -465,4 +465,4 @@ def test_get_ancestor_at_height(block_mocks: list[Block], block_height: int, anc
     block = block_mocks[block_height]
     result = feature_service._get_ancestor_at_height(block=block, height=ancestor_height)
 
-    assert result.height == ancestor_height
+    assert result.get_height() == ancestor_height
