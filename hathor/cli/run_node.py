@@ -107,6 +107,7 @@ class RunNode:
         parser.add_argument('--peer-id-blacklist', action='extend', default=[], nargs='+', type=str,
                             help='Peer IDs to forbid connection')
         parser.add_argument('--config-yaml', type=str, help='Configuration yaml filepath')
+        parser.add_argument('--json-logs', help='Enable JSON log', default=None)
         return parser
 
     def prepare(self, args: Namespace, *, register_resources: bool = True) -> None:
