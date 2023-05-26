@@ -34,6 +34,13 @@ class DummyMiner(AbstractMiner):
     blocks: List[Block] = []
 
     def __init__(self, manager: HathorManager, rng: Random, *, block_times: List[int]):
+        """
+        Creates a DummyMiner where each block will be generated at the times specified in block_times, in absolute
+        seconds from the manager's clock.
+
+        For example, block_times=[1, 2, 3] would generate blocks at seconds 1, 2, and 3 (assuming the miner was started
+        before the simulator).
+        """
         super().__init__(manager, rng)
 
         self._block_times: List[int] = block_times
