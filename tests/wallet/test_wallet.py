@@ -55,7 +55,7 @@ class BaseBasicWalletTest(unittest.TestCase):
             self.assertEqual(key, key2)
 
     def test_wallet_create_transaction(self):
-        from hathor.transaction.transaction_metadata import ValidationState
+        from hathor.transaction.validation_state import ValidationState
 
         genesis_private_key_bytes = get_private_key_bytes(
             self.genesis_private_key,

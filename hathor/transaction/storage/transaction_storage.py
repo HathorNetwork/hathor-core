@@ -1025,7 +1025,7 @@ class TransactionStorage(ABC):
     def compute_transactions_that_became_invalid(self) -> List[BaseTransaction]:
         """ This method will look for transactions in the mempool that have became invalid due to the reward lock.
         """
-        from hathor.transaction.transaction_metadata import ValidationState
+        from hathor.transaction.validation_state import ValidationState
         to_remove: List[BaseTransaction] = []
         for tx in self.iter_mempool_from_best_index():
             if tx.is_spent_reward_locked():

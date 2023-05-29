@@ -30,8 +30,8 @@ from hathor.transaction.exceptions import (
 )
 from hathor.transaction.scripts import P2PKH, parse_address_script
 from hathor.transaction.storage import TransactionMemoryStorage
-from hathor.transaction.transaction_metadata import ValidationState
 from hathor.transaction.util import int_to_bytes
+from hathor.transaction.validation_state import ValidationState
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import (

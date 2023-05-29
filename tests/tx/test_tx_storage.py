@@ -16,7 +16,7 @@ from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage, TransactionRocksDBStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.transaction.transaction_metadata import ValidationState
+from hathor.transaction.validation_state import ValidationState
 from tests.unittest import TestBuilder
 from tests.utils import (
     BURN_ADDRESS,
