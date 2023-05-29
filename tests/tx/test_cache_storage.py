@@ -31,7 +31,7 @@ class BaseCacheStorageTest(unittest.TestCase):
         super().tearDown()
 
     def _get_new_tx(self, nonce):
-        from hathor.transaction.transaction_metadata import ValidationState
+        from hathor.transaction.validation_state import ValidationState
         tx = Transaction(nonce=nonce, storage=self.cache_storage)
         tx.update_hash()
         meta = TransactionMetadata(hash=tx.hash)

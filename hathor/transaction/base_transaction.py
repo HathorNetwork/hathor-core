@@ -42,8 +42,9 @@ from hathor.transaction.exceptions import (
     TxValidationError,
     WeightError,
 )
-from hathor.transaction.transaction_metadata import TransactionMetadata, ValidationState
+from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.transaction.validation_state import ValidationState
 from hathor.util import classproperty
 
 if TYPE_CHECKING:

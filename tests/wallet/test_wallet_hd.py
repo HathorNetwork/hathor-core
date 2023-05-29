@@ -25,7 +25,7 @@ class BaseWalletHDTest(unittest.TestCase):
         self.TOKENS = self.BLOCK_TOKENS
 
     def test_transaction_and_balance(self):
-        from hathor.transaction.transaction_metadata import ValidationState
+        from hathor.transaction.validation_state import ValidationState
 
         # generate a new block and check if we increase balance
         new_address = self.wallet.get_unused_address()

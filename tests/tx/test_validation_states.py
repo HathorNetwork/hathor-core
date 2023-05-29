@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor.transaction.transaction_metadata import ValidationState
+from hathor.transaction.validation_state import ValidationState
 
 
 def test_validation_states_list_unchanged():
