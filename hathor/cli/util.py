@@ -16,7 +16,7 @@ import sys
 from argparse import ArgumentParser
 from collections import OrderedDict
 from datetime import datetime
-from typing import Any, List
+from typing import Any, Dict, List
 
 import configargparse
 import structlog
@@ -117,6 +117,42 @@ class ConsoleRenderer(structlog.dev.ConsoleRenderer):
             return str(val)
         else:
             return super()._repr(val)
+
+
+class AlertLogProcessor:
+    def __init__(self, queue_url: str):
+        import boto3
+        session = boto3.Session(region_name='us-east-1')
+        self.client = session.client("sqs")
+        self.queue_url = queue_url
+
+    def __call__(self, logger, __, event_dict):
+        import botocore
+        import json
+        event = event_dict.get('event', None)
+        if event == 'disconnected':
+            alert = {
+                "title": "test",
+                "message": "testing alert",
+                "severity": "warning",
+                "application": "node-monitor",
+                "environment": "dev",
+                "link": ""
+            }
+            try:
+                message = json.dumps(alert)
+                self.client.send_message(
+                    QueueUrl=self.queue_url,
+                    MessageBody=message
+                )
+                logger.info("sent...")
+            except botocore.exceptions.ClientError as error:
+                # raise Exception(error)
+                logger.info('something wrong while sending...')
+            except botocore.exceptions.ParamValidationError as error:
+                # raise Exception("The parameters you provided are incorrect: {}".format(error))
+                logger.info('param wrong...')
+        return event_dict
 
 
 def setup_logging(
@@ -229,6 +265,7 @@ def setup_logging(
         structlog.stdlib.PositionalArgumentsFormatter(),
         kwargs_formatter,
         timestamper,
+        AlertLogProcessor("..."),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
         structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
