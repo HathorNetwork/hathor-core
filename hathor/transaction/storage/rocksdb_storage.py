@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Iterator, Optional
 
 from structlog import get_logger
 
-from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
+from hathor.indexes import IndexesManager
 from hathor.storage import RocksDBStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.migrations import MigrationState
@@ -43,16 +43,14 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
     It uses Protobuf serialization internally.
     """
 
-    def __init__(self, rocksdb_storage: RocksDBStorage, with_index: bool = True, use_memory_indexes: bool = False):
-        self._use_memory_indexes = use_memory_indexes
-
+    def __init__(self, rocksdb_storage: RocksDBStorage, indexes: Optional[IndexesManager] = None):
         self._cf_tx = rocksdb_storage.get_or_create_column_family(_CF_NAME_TX)
         self._cf_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_META)
         self._cf_attr = rocksdb_storage.get_or_create_column_family(_CF_NAME_ATTR)
         self._cf_migrations = rocksdb_storage.get_or_create_column_family(_CF_NAME_MIGRATIONS)
 
         self._db = rocksdb_storage.get_db()
-        super().__init__(with_index=with_index)
+        super().__init__(indexes=indexes)
 
     def _load_from_bytes(self, tx_data: bytes, meta_data: bytes) -> 'BaseTransaction':
         from hathor.transaction.base_transaction import tx_or_block_from_bytes
@@ -62,12 +60,6 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         tx._metadata = TransactionMetadata.create_from_json(json_loadb(meta_data))
         tx.storage = self
         return tx
-
-    def _build_indexes_manager(self) -> IndexesManager:
-        if self._use_memory_indexes:
-            return MemoryIndexesManager()
-        else:
-            return RocksDBIndexesManager(self._db)
 
     def _tx_to_bytes(self, tx: 'BaseTransaction') -> bytes:
         return bytes(tx)

@@ -32,7 +32,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
     dirty_txs: Set[bytes]
 
     def __init__(self, store: 'BaseTransactionStorage', reactor: Reactor, interval: int = 5,
-                 capacity: int = 10000, *, _clone_if_needed: bool = False):
+                 capacity: int = 10000, *, indexes: Optional[IndexesManager], _clone_if_needed: bool = False):
         """
         :param store: a subclass of BaseTransactionStorage
         :type store: :py:class:`hathor.transaction.storage.BaseTransactionStorage`
@@ -67,7 +67,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
         # we need to use only one weakref dict, so we must first initialize super, and then
         # attribute the same weakref for both.
-        super().__init__()
+        super().__init__(indexes=indexes)
         self._tx_weakref = store._tx_weakref
 
     def set_capacity(self, capacity: int) -> None:
@@ -148,9 +148,6 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
     def get_all_genesis(self) -> Set[BaseTransaction]:
         return self.store.get_all_genesis()
-
-    def _build_indexes_manager(self) -> IndexesManager:
-        return self.store._build_indexes_manager()
 
     def _save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         """Saves the transaction without modifying TimestampIndex entries (in superclass)."""

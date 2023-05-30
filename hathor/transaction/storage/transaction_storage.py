@@ -24,7 +24,7 @@ from intervaltree.interval import Interval
 from structlog import get_logger
 
 from hathor.conf import HathorSettings
-from hathor.indexes import IndexesManager, MemoryIndexesManager
+from hathor.indexes import IndexesManager
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction
@@ -1037,17 +1037,14 @@ class TransactionStorage(ABC):
 class BaseTransactionStorage(TransactionStorage):
     indexes: Optional[IndexesManager]
 
-    def __init__(self, with_index: bool = True, pubsub: Optional[Any] = None) -> None:
+    def __init__(self, indexes: Optional[IndexesManager] = None, pubsub: Optional[Any] = None) -> None:
         super().__init__()
 
         # Pubsub is used to publish tx voided and winner but it's optional
         self.pubsub = pubsub
 
-        # Initialize index if needed.
-        if with_index:
-            self.indexes = self._build_indexes_manager()
-        else:
-            self.indexes = None
+        # Indexes.
+        self.indexes = indexes
 
         # Either save or verify all genesis.
         self._save_or_verify_genesis()
@@ -1065,9 +1062,6 @@ class BaseTransactionStorage(TransactionStorage):
     @abstractmethod
     def _save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
         raise NotImplementedError
-
-    def _build_indexes_manager(self) -> IndexesManager:
-        return MemoryIndexesManager()
 
     def reset_indexes(self) -> None:
         """Reset all indexes. This function should not be called unless you know what you are doing."""

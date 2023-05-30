@@ -26,7 +26,7 @@ from twisted.internet.posixbase import PosixReactorBase
 from hathor.consensus import ConsensusAlgorithm
 from hathor.event import EventManager
 from hathor.exception import BuilderError
-from hathor.indexes import IndexesManager
+from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
@@ -96,13 +96,15 @@ class CliBuilder:
 
         tx_storage: TransactionStorage
         event_storage: EventStorage
+        indexes: IndexesManager
         self.rocksdb_storage: Optional[RocksDBStorage] = None
         self.event_ws_factory: Optional[EventWebsocketFactory] = None
 
         if args.memory_storage:
             self.check_or_raise(not args.data, '--data should not be used with --memory-storage')
             # if using MemoryStorage, no need to have cache
-            tx_storage = TransactionMemoryStorage()
+            indexes = MemoryIndexesManager()
+            tx_storage = TransactionMemoryStorage(indexes)
             event_storage = EventMemoryStorage()
             self.check_or_raise(not args.x_rocksdb_indexes, 'RocksDB indexes require RocksDB data')
             self.log.info('with storage', storage_class=type(tx_storage).__name__)
@@ -112,15 +114,25 @@ class CliBuilder:
                 self.log.warn('--rocksdb-storage is now implied, no need to specify it')
             cache_capacity = args.rocksdb_cache
             self.rocksdb_storage = RocksDBStorage(path=args.data, cache_capacity=cache_capacity)
-            tx_storage = TransactionRocksDBStorage(self.rocksdb_storage,
-                                                   with_index=(not args.cache),
-                                                   use_memory_indexes=args.memory_indexes)
+
+            # Initialize indexes manager.
+            if args.memory_indexes:
+                indexes = MemoryIndexesManager()
+            else:
+                indexes = RocksDBIndexesManager(self.rocksdb_storage)
+
+            kwargs = {}
+            if not args.cache:
+                # We should only pass indexes if cache is disabled. Otherwise,
+                # only TransactionCacheStorage should have indexes.
+                kwargs['indexes'] = indexes
+            tx_storage = TransactionRocksDBStorage(self.rocksdb_storage, **kwargs)
             event_storage = EventRocksDBStorage(self.rocksdb_storage)
 
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=args.data)
         if args.cache:
             self.check_or_raise(not args.memory_storage, '--cache should not be used with --memory-storage')
-            tx_storage = TransactionCacheStorage(tx_storage, reactor)
+            tx_storage = TransactionCacheStorage(tx_storage, reactor, indexes=indexes)
             if args.cache_size:
                 tx_storage.capacity = args.cache_size
             if args.cache_interval:

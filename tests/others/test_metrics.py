@@ -7,8 +7,7 @@ from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents
-from hathor.storage import RocksDBStorage
-from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage, TransactionRocksDBStorage
+from hathor.transaction.storage import TransactionCacheStorage, TransactionMemoryStorage
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import HAS_ROCKSDB, add_new_blocks
@@ -91,11 +90,11 @@ class BaseMetricsTest(unittest.TestCase):
         self.tmpdirs.append(path)
 
         def _init_manager():
-            rocksdb_storage = RocksDBStorage(path=path, cache_capacity=100)
-            tx_storage = TransactionRocksDBStorage(rocksdb_storage,
-                                                   with_index=True,
-                                                   use_memory_indexes=True)
-            manager = self.create_peer('testnet', tx_storage=tx_storage, start_manager=False)
+            builder = self.get_builder('testnet') \
+                .use_rocksdb(path, cache_capacity=100) \
+                .force_memory_index() \
+                .set_wallet(self._create_test_wallet(unlocked=True))
+            manager = self.create_peer_from_builder(builder, start_manager=False)
             return manager
 
         manager = _init_manager()
@@ -107,6 +106,8 @@ class BaseMetricsTest(unittest.TestCase):
             b'meta': 0.0,
             b'attr': 0.0,
             b'migrations': 0.0,
+            b'event': 0.0,
+            b'event-metadata': 0.0,
         })
 
         manager.tx_storage.pre_init()
@@ -139,14 +140,13 @@ class BaseMetricsTest(unittest.TestCase):
         self.tmpdirs.append(path)
 
         def _init_manager():
-            rocksdb_storage = RocksDBStorage(path=path, cache_capacity=100)
-            tx_storage = TransactionRocksDBStorage(rocksdb_storage,
-                                                   with_index=False,
-                                                   use_memory_indexes=True)
-            tx_storage = TransactionCacheStorage(tx_storage, self.clock)
-
-            wallet = self._create_test_wallet()
-            return self.create_peer('testnet', tx_storage=tx_storage, wallet=wallet, start_manager=False)
+            builder = self.get_builder('testnet') \
+                .use_rocksdb(path, cache_capacity=100) \
+                .force_memory_index() \
+                .set_wallet(self._create_test_wallet(unlocked=True)) \
+                .use_tx_storage_cache()
+            manager = self.create_peer_from_builder(builder, start_manager=False)
+            return manager
 
         manager = _init_manager()
         manager.metrics._collect_data()
@@ -158,6 +158,8 @@ class BaseMetricsTest(unittest.TestCase):
             b'meta': 0.0,
             b'attr': 0.0,
             b'migrations': 0.0,
+            b'event': 0.0,
+            b'event-metadata': 0.0,
         })
 
         manager.tx_storage.pre_init()
@@ -255,8 +257,8 @@ class BaseMetricsTest(unittest.TestCase):
             TransactionCacheStorage
         """
         # Preparation
-        base_storage = TransactionMemoryStorage(with_index=False)
-        tx_storage = TransactionCacheStorage(base_storage, self.clock)
+        base_storage = TransactionMemoryStorage()
+        tx_storage = TransactionCacheStorage(base_storage, self.clock, indexes=None)
 
         manager = self.create_peer('testnet', tx_storage=tx_storage)
 

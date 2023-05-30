@@ -26,7 +26,6 @@ from hathor.transaction.base_transaction import sum_weights
 from hathor.transaction.block import Block
 from hathor.transaction.storage import TransactionRocksDBStorage, TransactionStorage
 from hathor.transaction.storage.cache_storage import TransactionCacheStorage
-from hathor.transaction.storage.memory_storage import TransactionMemoryStorage
 from hathor.util import Reactor
 
 if TYPE_CHECKING:
@@ -62,7 +61,7 @@ class Metrics:
     pubsub: PubSubManager
     avg_time_between_blocks: int
     connections: ConnectionsManager
-    tx_storage: TransactionStorage = TransactionMemoryStorage()
+    tx_storage: TransactionStorage
     # Twisted reactor that handles the time and callLater
     reactor: Optional[Reactor] = None
 

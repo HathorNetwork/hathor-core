@@ -24,14 +24,19 @@ from hathor.consensus import ConsensusAlgorithm
 from hathor.event import EventManager
 from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
 from hathor.event.websocket import EventWebsocketFactory
-from hathor.indexes import IndexesManager
+from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.pubsub import PubSubManager
 from hathor.storage import RocksDBStorage
 from hathor.stratum import StratumFactory
-from hathor.transaction.storage import TransactionMemoryStorage, TransactionRocksDBStorage, TransactionStorage
+from hathor.transaction.storage import (
+    TransactionCacheStorage,
+    TransactionMemoryStorage,
+    TransactionRocksDBStorage,
+    TransactionStorage,
+)
 from hathor.util import Random, Reactor, get_environment_info
 from hathor.wallet import BaseWallet, Wallet
 
@@ -92,8 +97,11 @@ class Builder:
         self._rocksdb_path: Optional[str] = None
         self._rocksdb_storage: Optional[RocksDBStorage] = None
         self._rocksdb_cache_capacity: Optional[int] = None
-        self._rocksdb_with_index: Optional[bool] = None
 
+        self._tx_storage_cache: bool = False
+        self._tx_storage_cache_capacity: Optional[int] = None
+
+        self._indexes_manager: Optional[IndexesManager] = None
         self._tx_storage: Optional[TransactionStorage] = None
         self._event_storage: Optional[EventStorage] = None
 
@@ -138,9 +146,8 @@ class Builder:
 
         wallet = self._get_or_create_wallet()
         event_manager = self._get_or_create_event_manager()
-        tx_storage = self._get_or_create_tx_storage()
-        indexes = tx_storage.indexes
-        assert indexes is not None
+        indexes = self._get_or_create_indexes_manager()
+        tx_storage = self._get_or_create_tx_storage(indexes)
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -299,28 +306,50 @@ class Builder:
         )
         return p2p_manager
 
-    def _get_or_create_tx_storage(self) -> TransactionStorage:
+    def _get_or_create_indexes_manager(self) -> IndexesManager:
+        if self._indexes_manager is not None:
+            return self._indexes_manager
+
+        if self._force_memory_index or self._storage_type == StorageType.MEMORY:
+            self._indexes_manager = MemoryIndexesManager()
+
+        elif self._storage_type == StorageType.ROCKSDB:
+            rocksdb_storage = self._get_or_create_rocksdb_storage()
+            self._indexes_manager = RocksDBIndexesManager(rocksdb_storage)
+
+        else:
+            raise NotImplementedError
+
+        return self._indexes_manager
+
+    def _get_or_create_tx_storage(self, indexes: IndexesManager) -> TransactionStorage:
         if self._tx_storage is not None:
+            # If a tx storage is provided, set the indexes manager to it.
+            self._tx_storage.indexes = indexes
             return self._tx_storage
 
+        store_indexes: Optional[IndexesManager] = indexes
+        if self._tx_storage_cache:
+            store_indexes = None
+
         if self._storage_type == StorageType.MEMORY:
-            return TransactionMemoryStorage()
+            self._tx_storage = TransactionMemoryStorage(indexes=store_indexes)
 
-        if self._storage_type == StorageType.ROCKSDB:
+        elif self._storage_type == StorageType.ROCKSDB:
             rocksdb_storage = self._get_or_create_rocksdb_storage()
-            use_memory_index = self._force_memory_index
+            self._tx_storage = TransactionRocksDBStorage(rocksdb_storage, indexes=store_indexes)
 
-            kwargs = {}
-            if self._rocksdb_with_index is not None:
-                kwargs = dict(with_index=self._rocksdb_with_index)
+        else:
+            raise NotImplementedError
 
-            return TransactionRocksDBStorage(
-                rocksdb_storage,
-                use_memory_indexes=use_memory_index,
-                **kwargs
-            )
+        if self._tx_storage_cache:
+            reactor = self._get_reactor()
+            kwargs: dict[str, Any] = {}
+            if self._tx_storage_cache_capacity is not None:
+                kwargs['capacity'] = self._tx_storage_cache_capacity
+            self._tx_storage = TransactionCacheStorage(self._tx_storage, reactor, indexes=indexes, **kwargs)
 
-        raise NotImplementedError
+        return self._tx_storage
 
     def _get_or_create_event_storage(self) -> EventStorage:
         if self._event_storage is not None:
@@ -354,14 +383,18 @@ class Builder:
     def use_rocksdb(
         self,
         path: str,
-        with_index: Optional[bool] = None,
         cache_capacity: Optional[int] = None
     ) -> 'Builder':
         self.check_if_can_modify()
         self._storage_type = StorageType.ROCKSDB
         self._rocksdb_path = path
-        self._rocksdb_with_index = with_index
         self._rocksdb_cache_capacity = cache_capacity
+        return self
+
+    def use_tx_storage_cache(self, capacity: Optional[int] = None) -> 'Builder':
+        self.check_if_can_modify()
+        self._tx_storage_cache = True
+        self._tx_storage_cache_capacity = capacity
         return self
 
     def force_memory_index(self) -> 'Builder':

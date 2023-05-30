@@ -29,7 +29,6 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.scripts import P2PKH, parse_address_script
-from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.transaction.util import int_to_bytes
 from hathor.transaction.validation_state import ValidationState
 from hathor.wallet import Wallet
@@ -52,17 +51,19 @@ class BaseTransactionTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.wallet = Wallet()
-        self.tx_storage = TransactionMemoryStorage()
-        self.genesis = self.tx_storage.get_all_genesis()
-        self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
-        self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
+
+        # this makes sure we can spend the genesis outputs
+        self.manager = self.create_peer('testnet', unlock_wallet=True, wallet_index=True, use_memory_storage=True)
+        self.tx_storage = self.manager.tx_storage
 
         # read genesis keys
         self.genesis_private_key = get_genesis_key()
         self.genesis_public_key = self.genesis_private_key.public_key()
 
-        # this makes sure we can spend the genesis outputs
-        self.manager = self.create_peer('testnet', tx_storage=self.tx_storage, unlock_wallet=True, wallet_index=True)
+        self.genesis = self.tx_storage.get_all_genesis()
+        self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
+        self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
+
         blocks = add_blocks_unlock_reward(self.manager)
         self.last_block = blocks[-1]
 

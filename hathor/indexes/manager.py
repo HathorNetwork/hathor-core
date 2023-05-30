@@ -33,9 +33,8 @@ from hathor.transaction import BaseTransaction
 from hathor.util import tx_progress
 
 if TYPE_CHECKING:  # pragma: no cover
-    import rocksdb
-
     from hathor.pubsub import PubSubManager
+    from hathor.storage import RocksDBStorage
     from hathor.transaction.storage import TransactionStorage
 
 logger = get_logger()
@@ -331,13 +330,13 @@ class MemoryIndexesManager(IndexesManager):
 
 
 class RocksDBIndexesManager(IndexesManager):
-    def __init__(self, db: 'rocksdb.DB') -> None:
+    def __init__(self, rocksdb_storage: 'RocksDBStorage') -> None:
         from hathor.indexes.partial_rocksdb_tips_index import PartialRocksDBTipsIndex
         from hathor.indexes.rocksdb_height_index import RocksDBHeightIndex
         from hathor.indexes.rocksdb_info_index import RocksDBInfoIndex
         from hathor.indexes.rocksdb_timestamp_index import RocksDBTimestampIndex
 
-        self._db = db
+        self._db = rocksdb_storage.get_db()
 
         self.info = RocksDBInfoIndex(self._db)
         self.height = RocksDBHeightIndex(self._db)
