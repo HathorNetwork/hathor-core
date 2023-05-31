@@ -67,9 +67,8 @@ TX_HASH_SIZE = 32   # 256 bits, 32 bytes
 # H = unsigned short (2 bytes), d = double(8), f = float(4), I = unsigned int (4),
 # Q = unsigned long long int (64), B = unsigned char (1 byte)
 
-# Version (H), inputs len (B), and outputs len (B), token uids len (B).
-# H = unsigned short (2 bytes)
-_SIGHASH_ALL_FORMAT_STRING = '!HBBB'
+# Signal bits (B), version (B), inputs len (B), and outputs len (B), token uids len (B).
+_SIGHASH_ALL_FORMAT_STRING = '!BBBBB'
 
 # Weight (d), timestamp (I), and parents len (B)
 _GRAPH_FORMAT_STRING = '!dIB'
@@ -81,6 +80,9 @@ _TX_PARENTS_BLOCKS = 0
 # blocks have 3 parents, 2 txs and 1 block
 _BLOCK_PARENTS_TXS = 2
 _BLOCK_PARENTS_BLOCKS = 1
+
+# The int value of one byte
+_ONE_BYTE = 0xFF
 
 
 def sum_weights(w1: float, w2: float) -> float:
@@ -111,14 +113,11 @@ class TxVersion(IntEnum):
     MERGE_MINED_BLOCK = 3
 
     @classmethod
-    def _missing_(cls, value: Any) -> 'TxVersion':
-        # version's first byte is reserved for future use, so we'll ignore it
-        assert isinstance(value, int)
-        version = value & 0xFF
-        if version == value:
-            # Prevent infinite recursion when starting TxVerion with wrong version
-            raise ValueError('Invalid version.')
-        return cls(version)
+    def _missing_(cls, value: Any) -> None:
+        assert isinstance(value, int), f"Value '{value}' must be an integer"
+        assert value <= _ONE_BYTE, f'Value {hex(value)} must not be larger than one byte'
+
+        raise ValueError(f'Invalid version: {value}')
 
     def get_cls(self) -> Type['BaseTransaction']:
         from hathor.transaction.block import Block
@@ -155,9 +154,16 @@ class BaseTransaction(ABC):
 
     _metadata: Optional[TransactionMetadata]
 
+    # Bits extracted from the first byte of the version field. They carry extra information that may be interpreted
+    # differently by each subclass of BaseTransaction.
+    # Currently only the Block subclass uses it, carrying information about Feature Activation bits and also extra
+    # bits reserved for future use, depending on the configuration.
+    signal_bits: int
+
     def __init__(self,
                  nonce: int = 0,
                  timestamp: Optional[int] = None,
+                 signal_bits: int = 0,
                  version: int = TxVersion.REGULAR_BLOCK,
                  weight: float = 0,
                  inputs: Optional[List['TxInput']] = None,
@@ -168,13 +174,18 @@ class BaseTransaction(ABC):
         """
             Nonce: nonce used for the proof-of-work
             Timestamp: moment of creation
+            Signal bits: bits used to carry extra information that may be interpreted differently by each subclass
             Version: version when it was created
             Weight: different for transactions and blocks
             Outputs: all outputs that are being created
             Parents: transactions you are confirming (2 transactions and 1 block - in case of a block only)
         """
+        assert signal_bits <= _ONE_BYTE, f'signal_bits {hex(signal_bits)} must not be larger than one byte'
+        assert version <= _ONE_BYTE, f'version {hex(version)} must not be larger than one byte'
+
         self.nonce = nonce
         self.timestamp = timestamp or int(time.time())
+        self.signal_bits = signal_bits
         self.version = version
         self.weight = weight
         self.inputs = inputs or []
@@ -1354,8 +1365,8 @@ def tx_or_block_from_bytes(data: bytes,
                            storage: Optional['TransactionStorage'] = None) -> BaseTransaction:
     """ Creates the correct tx subclass from a sequence of bytes
     """
-    # version field takes up the first 2 bytes
-    version = int.from_bytes(data[0:2], 'big')
+    # version field takes up the second byte only
+    version = data[1]
     try:
         tx_version = TxVersion(version)
         cls = tx_version.get_cls()

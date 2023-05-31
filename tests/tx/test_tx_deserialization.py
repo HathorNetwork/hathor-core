@@ -20,7 +20,7 @@ class _BaseTest:
             tx = cls.create_from_struct(self.tx_bytes, verbose=verbose)
             tx.verify_without_storage()
 
-            key, version = v[0]
+            key, version = v[1]
             self.assertEqual(key, 'version')
 
             tx_version = TxVersion(version)

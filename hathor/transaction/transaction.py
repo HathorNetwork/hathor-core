@@ -49,11 +49,11 @@ if TYPE_CHECKING:
 settings = HathorSettings()
 cpu = get_cpu_profiler()
 
-# Version (H), token uids len (B) and inputs len (B), outputs len (B).
-_FUNDS_FORMAT_STRING = '!HBBB'
+# Signal bits (B), version (B), token uids len (B) and inputs len (B), outputs len (B).
+_FUNDS_FORMAT_STRING = '!BBBBB'
 
-# Version (H), inputs len (B), and outputs len (B), token uids len (B).
-_SIGHASH_ALL_FORMAT_STRING = '!HBBB'
+# Signal bits (B), version (B), inputs len (B), and outputs len (B), token uids len (B).
+_SIGHASH_ALL_FORMAT_STRING = '!BBBBB'
 
 
 class TokenInfo(NamedTuple):
@@ -74,6 +74,7 @@ class Transaction(BaseTransaction):
     def __init__(self,
                  nonce: int = 0,
                  timestamp: Optional[int] = None,
+                 signal_bits: int = 0,
                  version: int = TxVersion.REGULAR_TRANSACTION,
                  weight: float = 0,
                  inputs: Optional[List[TxInput]] = None,
@@ -86,8 +87,8 @@ class Transaction(BaseTransaction):
             Creating new init just to make sure inputs will always be empty array
             Inputs: all inputs that are being used (empty in case of a block)
         """
-        super().__init__(nonce=nonce, timestamp=timestamp, version=version, weight=weight, inputs=inputs
-                         or [], outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
+        super().__init__(nonce=nonce, timestamp=timestamp, signal_bits=signal_bits, version=version, weight=weight,
+                         inputs=inputs or [], outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.tokens = tokens or []
         self._sighash_cache: Optional[bytes] = None
         self._sighash_data_cache: Optional[bytes] = None
@@ -166,8 +167,13 @@ class Transaction(BaseTransaction):
 
         :raises ValueError: when the sequence of bytes is incorect
         """
-        (self.version, tokens_len, inputs_len, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
+        (self.signal_bits, self.version, tokens_len, inputs_len, outputs_len), buf = unpack(
+            _FUNDS_FORMAT_STRING,
+            buf
+        )
+
         if verbose:
+            verbose('signal_bits', self.signal_bits)
             verbose('version', self.version)
             verbose('tokens_len', tokens_len)
             verbose('inputs_len', inputs_len)
@@ -195,7 +201,14 @@ class Transaction(BaseTransaction):
         :return: funds data serialization of the transaction
         :rtype: bytes
         """
-        struct_bytes = pack(_FUNDS_FORMAT_STRING, self.version, len(self.tokens), len(self.inputs), len(self.outputs))
+        struct_bytes = pack(
+            _FUNDS_FORMAT_STRING,
+            self.signal_bits,
+            self.version,
+            len(self.tokens),
+            len(self.inputs),
+            len(self.outputs)
+        )
 
         for token_uid in self.tokens:
             struct_bytes += token_uid
@@ -220,8 +233,16 @@ class Transaction(BaseTransaction):
         if self._sighash_cache:
             return self._sighash_cache
 
-        struct_bytes = bytearray(pack(_SIGHASH_ALL_FORMAT_STRING, self.version, len(self.tokens), len(self.inputs),
-                                 len(self.outputs)))
+        struct_bytes = bytearray(
+            pack(
+                _SIGHASH_ALL_FORMAT_STRING,
+                self.signal_bits,
+                self.version,
+                len(self.tokens),
+                len(self.inputs),
+                len(self.outputs)
+            )
+        )
 
         for token_uid in self.tokens:
             struct_bytes += token_uid

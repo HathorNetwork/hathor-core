@@ -838,21 +838,52 @@ class BaseTransactionTest(unittest.TestCase):
         with self.assertRaises(InvalidOutputValue):
             TxOutput(-1, script)
 
-    def test_tx_version(self):
+    def test_tx_version_and_signal_bits(self):
         from hathor.transaction.base_transaction import TxVersion
 
-        # test the 1st byte of version field is ignored
-        version = TxVersion(0xFF00)
+        # test invalid type
+        with self.assertRaises(AssertionError) as cm:
+            TxVersion('test')
+
+        self.assertEqual(str(cm.exception), "Value 'test' must be an integer")
+
+        # test one byte max value
+        with self.assertRaises(AssertionError) as cm:
+            TxVersion(0x100)
+
+        self.assertEqual(str(cm.exception), 'Value 0x100 must not be larger than one byte')
+
+        # test invalid version
+        with self.assertRaises(ValueError) as cm:
+            TxVersion(10)
+
+        self.assertEqual(str(cm.exception), 'Invalid version: 10')
+
+        # test get the correct class
+        version = TxVersion(0x00)
         self.assertEqual(version.get_cls(), Block)
-        version = TxVersion(0xFF01)
+        version = TxVersion(0x01)
         self.assertEqual(version.get_cls(), Transaction)
+
+        # test Block.__init__() fails
+        with self.assertRaises(AssertionError) as cm:
+            Block(signal_bits=0x100)
+
+        self.assertEqual(str(cm.exception), 'signal_bits 0x100 must not be larger than one byte')
+
+        with self.assertRaises(AssertionError) as cm:
+            Block(version=0x200)
+
+        self.assertEqual(str(cm.exception), 'version 0x200 must not be larger than one byte')
 
         # test serialization doesn't mess up with version
         block = Block(
-            version=0xFF00,
+            signal_bits=0xF0,
+            version=0x0F,
             nonce=100,
             weight=1)
         block2 = block.clone()
+        self.assertEqual(block.signal_bits, block2.signal_bits)
         self.assertEqual(block.version, block2.version)
 
     def test_output_sum_ignore_authority(self):
