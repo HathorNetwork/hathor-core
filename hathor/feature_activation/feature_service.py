@@ -66,10 +66,10 @@ class FeatureService:
     ) -> FeatureState:
         """Returns the new feature state based on the new block, the criteria, and the previous state."""
         height = boundary_block.get_height()
-        assert height % self._settings.evaluation_interval == 0, (
-            'cannot calculate new state for a non-boundary block'
-        )
         criteria = self._get_criteria(feature=feature)
+
+        assert not boundary_block.is_genesis, 'cannot calculate new state for genesis'
+        assert height % self._settings.evaluation_interval == 0, 'cannot calculate new state for a non-boundary block'
 
         if previous_state is FeatureState.DEFINED:
             if height >= criteria.start_height:
@@ -88,7 +88,10 @@ class FeatureService:
             ):
                 return FeatureState.ACTIVE
 
-            count = self.get_bit_count(boundary_block=boundary_block, bit=criteria.bit)
+            # Get the count for this block's parent. Since this is a boundary block, its parent count represents the
+            # previous evaluation interval count.
+            counts = boundary_block.get_parent_feature_activation_bit_counts()
+            count = counts[criteria.bit]
             threshold = criteria.threshold if criteria.threshold is not None else self._settings.default_threshold
 
             if (
@@ -126,27 +129,6 @@ class FeatureService:
             )
             for feature, criteria in self._settings.features.items()
         }
-
-    def get_bit_count(self, *, boundary_block: Block, bit: int) -> int:
-        """Returns the count of blocks with this bit enabled in the previous evaluation interval."""
-        assert not boundary_block.is_genesis, 'cannot calculate bit count for genesis'
-        assert boundary_block.get_height() % self._settings.evaluation_interval == 0, (
-            'cannot calculate bit count for a non-boundary block'
-        )
-        count = 0
-        block = boundary_block
-
-        # TODO: We can implement this as O(1) instead of O(evaluation_interval)
-        #  by persisting the count in block metadata incrementally
-        for _ in range(self._settings.evaluation_interval):
-            block = block.get_block_parent()
-            feature_bits = block.get_feature_activation_bits()
-            bit_is_active = (feature_bits >> bit) & 1
-
-            if bit_is_active:
-                count += 1
-
-        return count
 
 
 def _get_ancestor_at_height(*, block: Block, height: int) -> Block:

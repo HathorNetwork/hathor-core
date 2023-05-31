@@ -301,6 +301,14 @@ class BaseTransaction(ABC):
     def calculate_min_height(self) -> int:
         raise NotImplementedError
 
+    @abstractmethod
+    def calculate_feature_activation_bit_counts(self) -> Optional[list[int]]:
+        """
+        Calculates the feature_activation_bit_counts metadata attribute.
+        Must only be calculated by Blocks, and return None otherwise.
+        """
+        raise NotImplementedError
+
     @property
     def hash_hex(self) -> str:
         """Return the current stored hash in hex string format"""
@@ -875,8 +883,16 @@ class BaseTransaction(ABC):
             #        happens include generating new mining blocks and some tests
             height = self.calculate_height() if self.storage else 0
             score = self.weight if self.is_genesis else 0
-            metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight, height=height, score=score,
-                                           min_height=0)
+            feature_activation_bit_counts = self.calculate_feature_activation_bit_counts()
+
+            metadata = TransactionMetadata(
+                hash=self.hash,
+                accumulated_weight=self.weight,
+                height=height,
+                score=score,
+                min_height=0,
+                feature_activation_bit_counts=feature_activation_bit_counts
+            )
             self._metadata = metadata
         if not metadata.hash:
             metadata.hash = self.hash
@@ -956,6 +972,7 @@ class BaseTransaction(ABC):
         self._update_height_metadata()
         self._update_parents_children_metadata()
         self._update_reward_lock_metadata()
+        self._update_feature_activation_bit_counts_metadata()
         if save:
             assert self.storage is not None
             self.storage.save_transaction(self, only_metadata=True)
@@ -980,6 +997,11 @@ class BaseTransaction(ABC):
             if self.hash not in metadata.children:
                 metadata.children.append(self.hash)
                 self.storage.save_transaction(parent, only_metadata=True)
+
+    def _update_feature_activation_bit_counts_metadata(self) -> None:
+        """Update the block feature_activation_bit_counts metadata."""
+        metadata = self.get_metadata()
+        metadata.feature_activation_bit_counts = self.calculate_feature_activation_bit_counts()
 
     def update_timestamp(self, now: int) -> None:
         """Update this tx's timestamp
