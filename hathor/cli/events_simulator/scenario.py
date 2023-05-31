@@ -14,63 +14,20 @@
 
 from enum import Enum
 
-from hathor.event.model.base_event import BaseEvent
-from hathor.event.model.event_data import TxData, TxMetadata
-from hathor.event.model.event_type import EventType
+from hathor.cli.events_simulator.scenarios.only_load_events import ONLY_LOAD_EVENTS
+from hathor.cli.events_simulator.scenarios.reorg_events import REORG_EVENTS
+from hathor.cli.events_simulator.scenarios.single_chain_blocks_and_transactions_events import (
+    SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS_EVENTS,
+)
+from hathor.cli.events_simulator.scenarios.single_chain_one_block_events import SINGLE_CHAIN_ONE_BLOCK_EVENTS
 
 
 class Scenario(Enum):
-    SINGLE_CHAIN = 'SINGLE_CHAIN'
-    BEST_CHAIN_WITH_SIDE_CHAINS = 'BEST_CHAIN_WITH_SIDE_CHAINS'
-    MULTIPLE_FORKS = 'MULTIPLE_FORKS'
-
-    def get_events(self):
-        return _SCENARIO_EVENTS[self]
-
-
-_TRANSACTION_DATA_1 = TxData(
-    hash='123',
-    nonce=456,
-    timestamp=0,
-    version=1,
-    weight=2,
-    inputs=[],
-    outputs=[],
-    parents=[],
-    tokens=[],
-    metadata=TxMetadata(
-        hash='123',
-        spent_outputs=[],
-        conflict_with=[],
-        voided_by=[],
-        received_by=[],
-        children=[],
-        twins=[],
-        accumulated_weight=2,
-        score=2,
-        height=0,
-        validation=''
-    )
-)
-
-_TRANSACTION_1 = BaseEvent(
-    peer_id='123',
-    id=0,
-    timestamp=0,
-    type=EventType.NEW_VERTEX_ACCEPTED,
-    data=_TRANSACTION_DATA_1
-)
-
-
-# TODO: We still have to actually populate the list of events for each scenario. Pending on design discussions.
-_SCENARIO_EVENTS = {
-    Scenario.SINGLE_CHAIN: [
-        _TRANSACTION_1
-    ],
-    Scenario.BEST_CHAIN_WITH_SIDE_CHAINS: [
-        _TRANSACTION_1
-    ],
-    Scenario.MULTIPLE_FORKS: [
-        _TRANSACTION_1
-    ],
-}
+    """
+    NOTE: The lists of events used in each scenario's enum value below were obtained from the tests in
+    tests.event.test_simulation.TestEventSimulation
+    """
+    ONLY_LOAD = ONLY_LOAD_EVENTS
+    SINGLE_CHAIN_ONE_BLOCK = SINGLE_CHAIN_ONE_BLOCK_EVENTS
+    SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS = SINGLE_CHAIN_BLOCKS_AND_TRANSACTIONS_EVENTS
+    REORG = REORG_EVENTS
