@@ -241,8 +241,6 @@ class CliBuilder:
             if self.wallet:
                 self.wallet.test_mode = True
 
-        if args.x_fast_init_beta:
-            self.log.warn('--x-fast-init-beta is now the default, no need to specify it')
         if args.x_rocksdb_indexes:
             self.log.warn('--x-rocksdb-indexes is now the default, no need to specify it')
             if args.memory_indexes:
