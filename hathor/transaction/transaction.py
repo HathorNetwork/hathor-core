@@ -42,6 +42,7 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.util import VerboseCallback, get_deposit_amount, get_withdraw_amount, unpack, unpack_len
+from hathor.types import TokenUid, VertexId
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -63,7 +64,7 @@ class TokenInfo(NamedTuple):
 
 
 class RewardLockedInfo(NamedTuple):
-    block_hash: bytes
+    block_hash: VertexId
     blocks_needed: int
 
 
@@ -79,9 +80,9 @@ class Transaction(BaseTransaction):
                  weight: float = 0,
                  inputs: Optional[List[TxInput]] = None,
                  outputs: Optional[List[TxOutput]] = None,
-                 parents: Optional[List[bytes]] = None,
-                 tokens: Optional[List[bytes]] = None,
-                 hash: Optional[bytes] = None,
+                 parents: Optional[List[VertexId]] = None,
+                 tokens: Optional[List[TokenUid]] = None,
+                 hash: Optional[VertexId] = None,
                  storage: Optional['TransactionStorage'] = None) -> None:
         """
             Creating new init just to make sure inputs will always be empty array
@@ -264,7 +265,7 @@ class Transaction(BaseTransaction):
 
         return self._sighash_data_cache
 
-    def get_token_uid(self, index: int) -> bytes:
+    def get_token_uid(self, index: int) -> TokenUid:
         """Returns the token uid with corresponding index from the tx token uid list.
 
         Hathor always has index 0, but we don't include it in the token uid list, so other tokens are
@@ -274,7 +275,6 @@ class Transaction(BaseTransaction):
         :type index: int
 
         :return: the token uid
-        :rtype: bytes
         """
         if index == 0:
             return settings.HATHOR_TOKEN_UID
@@ -413,10 +413,10 @@ class Transaction(BaseTransaction):
             if output.get_token_index() > len(self.tokens):
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
-    def get_token_info_from_inputs(self) -> Dict[bytes, TokenInfo]:
+    def get_token_info_from_inputs(self) -> Dict[TokenUid, TokenInfo]:
         """Sum up all tokens present in the inputs and their properties (amount, can_mint, can_melt)
         """
-        token_dict: Dict[bytes, TokenInfo] = {}
+        token_dict: Dict[TokenUid, TokenInfo] = {}
 
         default_info: TokenInfo = TokenInfo(0, False, False)
 
@@ -440,7 +440,7 @@ class Transaction(BaseTransaction):
 
         return token_dict
 
-    def update_token_info_from_outputs(self, token_dict: Dict[bytes, TokenInfo]) -> None:
+    def update_token_info_from_outputs(self, token_dict: Dict[TokenUid, TokenInfo]) -> None:
         """Iterate over the outputs and add values to token info dict. Updates the dict in-place.
 
         Also, checks if no token has authorities on the outputs not present on the inputs
@@ -471,7 +471,7 @@ class Transaction(BaseTransaction):
                     sum_tokens = token_info.amount + tx_output.value
                     token_dict[token_uid] = TokenInfo(sum_tokens, token_info.can_mint, token_info.can_melt)
 
-    def check_authorities_and_deposit(self, token_dict: Dict[bytes, TokenInfo]) -> None:
+    def check_authorities_and_deposit(self, token_dict: Dict[TokenUid, TokenInfo]) -> None:
         """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs
         and outputs is not 0, make sure inputs have mint/melt authority.
 
@@ -538,7 +538,7 @@ class Transaction(BaseTransaction):
         """Verify inputs signatures and ownership and all inputs actually exist"""
         from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
-        spent_outputs: Set[Tuple[bytes, int]] = set()
+        spent_outputs: Set[Tuple[VertexId, int]] = set()
         for input_tx in self.inputs:
             if len(input_tx.data) > settings.MAX_INPUT_DATA_SIZE:
                 raise InvalidInputDataSize('size: {} and max-size: {}'.format(

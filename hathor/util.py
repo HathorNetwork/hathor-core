@@ -53,6 +53,7 @@ from zope.interface.verify import verifyObject
 
 import hathor
 from hathor.conf import HathorSettings
+from hathor.types import TokenUid
 
 if TYPE_CHECKING:
     import structlog
@@ -735,7 +736,7 @@ class manualgc(AbstractContextManager):
             gc.enable()
 
 
-def is_token_uid_valid(token_uid: bytes) -> bool:
+def is_token_uid_valid(token_uid: TokenUid) -> bool:
     """ Checks whether a byte sequence can be a valid token UID.
 
     >>> is_token_uid_valid(bytes.fromhex('00'))

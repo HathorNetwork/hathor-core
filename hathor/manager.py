@@ -51,6 +51,7 @@ from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transact
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.types import Address, VertexId
 from hathor.util import EnvironmentInfo, LogDuration, Random, Reactor, calculate_min_significant_weight, not_none
 from hathor.wallet import BaseWallet
 
@@ -701,11 +702,10 @@ class HathorManager:
     def add_peer_discovery(self, peer_discovery: PeerDiscovery) -> None:
         self.peer_discoveries.append(peer_discovery)
 
-    def get_new_tx_parents(self, timestamp: Optional[float] = None) -> List[bytes]:
+    def get_new_tx_parents(self, timestamp: Optional[float] = None) -> List[VertexId]:
         """Select which transactions will be confirmed by a new transaction.
 
         :return: The hashes of the parents for a new transaction.
-        :rtype: List[bytes(hash)]
         """
         timestamp = timestamp or self.reactor.seconds()
         parent_txs = self.generate_parent_txs(timestamp)
@@ -722,7 +722,7 @@ class HathorManager:
         can_include_intervals = sorted(self.tx_storage.get_tx_tips(timestamp - 1))
         assert can_include_intervals, 'tips cannot be empty'
         max_timestamp = max(int(i.begin) for i in can_include_intervals)
-        must_include: List[bytes] = []
+        must_include: List[VertexId] = []
         assert len(can_include_intervals) > 0, f'invalid timestamp "{timestamp}", no tips found"'
         if len(can_include_intervals) < 2:
             # If there is only one tip, let's randomly choose one of its parents.
@@ -745,7 +745,7 @@ class HathorManager:
             return True
         return self.connections.has_synced_peer()
 
-    def get_block_templates(self, parent_block_hash: Optional[bytes] = None,
+    def get_block_templates(self, parent_block_hash: Optional[VertexId] = None,
                             timestamp: Optional[int] = None) -> BlockTemplates:
         """ Cached version of `make_block_templates`, cache is invalidated when latest_timestamp changes."""
         if parent_block_hash is not None:
@@ -770,7 +770,7 @@ class HathorManager:
         for parent_block_hash in self.tx_storage.get_best_block_tips():
             yield self.make_block_template(parent_block_hash, timestamp)
 
-    def make_block_template(self, parent_block_hash: bytes, timestamp: Optional[int] = None) -> BlockTemplate:
+    def make_block_template(self, parent_block_hash: VertexId, timestamp: Optional[int] = None) -> BlockTemplate:
         """ Makes a block template using the given parent block.
         """
         parent_block = self.tx_storage.get_transaction(parent_block_hash)
@@ -782,7 +782,7 @@ class HathorManager:
             current_timestamp = timestamp
         return self._make_block_template(parent_block, parent_txs, current_timestamp)
 
-    def make_custom_block_template(self, parent_block_hash: bytes, parent_tx_hashes: List[bytes],
+    def make_custom_block_template(self, parent_block_hash: VertexId, parent_tx_hashes: List[VertexId],
                                    timestamp: Optional[int] = None) -> BlockTemplate:
         """ Makes a block template using the given parent block and txs.
         """
@@ -861,8 +861,8 @@ class HathorManager:
         )
 
     def generate_mining_block(self, timestamp: Optional[int] = None,
-                              parent_block_hash: Optional[bytes] = None,
-                              data: bytes = b'', address: Optional[bytes] = None,
+                              parent_block_hash: Optional[VertexId] = None,
+                              data: bytes = b'', address: Optional[Address] = None,
                               merge_mined: bool = False) -> Union[Block, MergeMinedBlock]:
         """ Generates a block ready to be mined. The block includes new issued tokens,
         parents, and the weight.
@@ -1217,10 +1217,10 @@ class ParentTxs(NamedTuple):
     included.
     """
     max_timestamp: int
-    can_include: List[bytes]
-    must_include: List[bytes]
+    can_include: List[VertexId]
+    must_include: List[VertexId]
 
-    def get_random_parents(self, rng: Random) -> Tuple[bytes, bytes]:
+    def get_random_parents(self, rng: Random) -> Tuple[VertexId, VertexId]:
         """ Get parents from self.parents plus a random choice from self.parents_any to make it 3 in total.
 
         Using tuple as return type to make it explicit that the length is always 2.
@@ -1230,6 +1230,6 @@ class ParentTxs(NamedTuple):
         p1, p2 = self.must_include[:] + fill
         return p1, p2
 
-    def get_all_tips(self) -> List[bytes]:
+    def get_all_tips(self) -> List[VertexId]:
         """All generated "tips", can_include + must_include."""
         return self.must_include + self.can_include

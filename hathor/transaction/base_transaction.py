@@ -45,6 +45,7 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 from hathor.transaction.validation_state import ValidationState
+from hathor.types import TokenUid, TxOutputScript, VertexId
 from hathor.util import classproperty
 
 if TYPE_CHECKING:
@@ -168,8 +169,8 @@ class BaseTransaction(ABC):
                  weight: float = 0,
                  inputs: Optional[List['TxInput']] = None,
                  outputs: Optional[List['TxOutput']] = None,
-                 parents: Optional[List[bytes]] = None,
-                 hash: Optional[bytes] = None,
+                 parents: Optional[List[VertexId]] = None,
+                 hash: Optional[VertexId] = None,
                  storage: Optional['TransactionStorage'] = None) -> None:
         """
             Nonce: nonce used for the proof-of-work
@@ -812,7 +813,7 @@ class BaseTransaction(ABC):
         self.hash = self.calculate_hash()
 
     def start_mining(self, start: int = 0, end: int = MAX_NONCE, sleep_seconds: float = 0.0, update_time: bool = True,
-                     *, should_stop: Callable[[], bool] = lambda: False) -> Optional[bytes]:
+                     *, should_stop: Callable[[], bool] = lambda: False) -> Optional[VertexId]:
         """Starts mining until it solves the problem, i.e., finds the nonce that satisfies the conditions
 
         :param start: beginning of the search interval
@@ -1102,7 +1103,7 @@ class BaseTransaction(ABC):
         return new_tx
 
     @abstractmethod
-    def get_token_uid(self, index: int) -> bytes:
+    def get_token_uid(self, index: int) -> TokenUid:
         raise NotImplementedError
 
     def is_ready_for_validation(self) -> bool:
@@ -1120,19 +1121,19 @@ class BaseTransaction(ABC):
 class TxInput:
     _tx: BaseTransaction  # XXX: used for caching on hathor.transaction.Transaction.get_spent_tx
 
-    def __init__(self, tx_id: bytes, index: int, data: bytes) -> None:
+    def __init__(self, tx_id: VertexId, index: int, data: bytes) -> None:
         """
             tx_id: hash of the transaction that contains the output of this input
             index: index of the output you are spending from transaction tx_id (1 byte)
             data: data to solve output script
         """
-        assert isinstance(tx_id, bytes), 'Value is %s, type %s' % (str(tx_id), type(tx_id))
+        assert isinstance(tx_id, VertexId), 'Value is %s, type %s' % (str(tx_id), type(tx_id))
         assert isinstance(index, int), 'Value is %s, type %s' % (str(index), type(index))
         assert isinstance(data, bytes), 'Value is %s, type %s' % (str(data), type(data))
 
-        self.tx_id = tx_id  # bytes
-        self.index = index  # int
-        self.data = data  # bytes
+        self.tx_id = tx_id
+        self.index = index
+        self.data = data
 
     def __repr__(self) -> str:
         return str(self)
@@ -1216,14 +1217,14 @@ class TxOutput:
 
     ALL_AUTHORITIES = TOKEN_MINT_MASK | TOKEN_MELT_MASK
 
-    def __init__(self, value: int, script: bytes, token_data: int = 0) -> None:
+    def __init__(self, value: int, script: TxOutputScript, token_data: int = 0) -> None:
         """
             value: amount spent (4 bytes)
             script: script in bytes
             token_data: index of the token uid in the uid list
         """
         assert isinstance(value, int), 'value is %s, type %s' % (str(value), type(value))
-        assert isinstance(script, bytes), 'script is %s, type %s' % (str(script), type(script))
+        assert isinstance(script, TxOutputScript), 'script is %s, type %s' % (str(script), type(script))
         assert isinstance(token_data, int), 'token_data is %s, type %s' % (str(token_data), type(token_data))
         if value <= 0 or value > MAX_OUTPUT_VALUE:
             raise InvalidOutputValue
