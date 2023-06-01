@@ -56,6 +56,7 @@ class Simulator:
         Patches:
 
         - disable pow verification
+        - disable Transaction.resolve method
         - set DAA test-mode to DISABLED (will actually run the pow function, that won't actually verify the pow)
         - override AVG_TIME_BETWEEN_BLOCKS to 64
         """
@@ -65,8 +66,16 @@ class Simulator:
             assert self.hash is not None
             logger.new().debug('Skipping BaseTransaction.verify_pow() for simulator')
 
+        def resolve(self: BaseTransaction, update_time: bool = True) -> bool:
+            self.update_hash()
+            logger.new().debug('Skipping BaseTransaction.resolve() for simulator')
+            return True
+
         cls._original_verify_pow = BaseTransaction.verify_pow
         BaseTransaction.verify_pow = verify_pow
+
+        cls._original_resolve = BaseTransaction.resolve
+        BaseTransaction.resolve = resolve
 
         _set_test_mode(TestMode.DISABLED)
 
@@ -80,6 +89,7 @@ class Simulator:
         """
         from hathor.transaction import BaseTransaction
         BaseTransaction.verify_pow = cls._original_verify_pow
+        BaseTransaction.resolve = cls._original_resolve
 
         from hathor import daa
         daa.AVG_TIME_BETWEEN_BLOCKS = cls._original_avg_time_between_blocks
