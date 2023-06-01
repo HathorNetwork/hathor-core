@@ -7,7 +7,7 @@ from cryptography.hazmat.primitives import serialization
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key, get_private_key_bytes
 from hathor.transaction import Transaction, TxInput
-from hathor.wallet import Wallet
+from hathor.wallet import KeyPairWallet
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InsufficientFunds, InvalidAddress, OutOfUnusedAddresses, WalletLocked
 from hathor.wallet.keypair import KeyPair
@@ -38,7 +38,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         shutil.rmtree(self.directory)
 
     def test_wallet_keys_storage(self):
-        w = Wallet(directory=self.directory)
+        w = KeyPairWallet(self.manager, directory=self.directory)
         # Testing password error not in bytes
         with self.assertRaises(ValueError):
             w.unlock('testpass')
@@ -48,7 +48,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         w.get_unused_address()
         w._write_keys_to_file()
         # wallet 2 will read from saved file
-        w2 = Wallet(directory=self.directory)
+        w2 = KeyPairWallet(self.manager, directory=self.directory)
         w2._manually_initialize()
         for address, key in w.keys.items():
             key2 = w2.keys.pop(address)
@@ -66,7 +66,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         key_pair = KeyPair(private_key_bytes=genesis_private_key_bytes, address=genesis_address, used=True)
         keys = {}
         keys[key_pair.address] = key_pair
-        w = Wallet(keys=keys, directory=self.directory)
+        w = KeyPairWallet(self.manager, keys=keys, directory=self.directory)
         w.unlock(PASSWORD)
         genesis_blocks = [tx for tx in self.storage.get_all_genesis() if tx.is_block]
         genesis_block = genesis_blocks[0]
@@ -114,7 +114,7 @@ class BaseBasicWalletTest(unittest.TestCase):
 
     def test_block_increase_balance(self):
         # generate a new block and check if we increase balance
-        w = Wallet(directory=self.directory)
+        w = KeyPairWallet(self.manager, directory=self.directory)
         w.unlock(PASSWORD)
         new_address = w.get_unused_address()
         key = w.keys[new_address]
@@ -128,7 +128,7 @@ class BaseBasicWalletTest(unittest.TestCase):
 
     def test_locked(self):
         # generate a new block and check if we increase balance
-        w = Wallet(directory=self.directory)
+        w = KeyPairWallet(self.manager, directory=self.directory)
         with self.assertRaises(OutOfUnusedAddresses):
             w.get_unused_address()
 
@@ -146,7 +146,7 @@ class BaseBasicWalletTest(unittest.TestCase):
             w.generate_keys()
 
     def test_insuficient_funds(self):
-        w = Wallet(directory=self.directory)
+        w = KeyPairWallet(self.manager, directory=self.directory)
         w.unlock(PASSWORD)
 
         # create transaction spending some value
@@ -156,7 +156,7 @@ class BaseBasicWalletTest(unittest.TestCase):
             w.prepare_transaction_compute_inputs(Transaction, [out], self.storage)
 
     def test_invalid_address(self):
-        w = Wallet(directory=self.directory)
+        w = KeyPairWallet(self.manager, directory=self.directory)
         w.unlock(PASSWORD)
 
         # creating valid address

@@ -15,7 +15,7 @@
 import hashlib
 import json
 import os
-from typing import Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 from cryptography.hazmat.backends.openssl.ec import _EllipticCurvePrivateKey
 from cryptography.hazmat.primitives import hashes
@@ -29,9 +29,8 @@ from hathor.wallet.exceptions import OutOfUnusedAddresses
 from hathor.wallet.keypair import KeyPair
 
 
-class Wallet(BaseWallet):
-    def __init__(self, keys: Optional[Any] = None, directory: str = './', filename: str = 'keys.json',
-                 pubsub: Optional[Any] = None, reactor: Optional[Any] = None) -> None:
+class KeyPairWallet(BaseWallet):
+    def __init__(self, manager: 'HathorManager', keys: Optional[Any] = None, directory: str = './', filename: str = 'keys.json') -> None:
         """ A wallet will hold key pair objects and the unspent and
         spent transactions associated with the keys.
 
@@ -50,7 +49,7 @@ class Wallet(BaseWallet):
         :param pubsub: If not given, a new one is created.
         :type pubsub: :py:class:`hathor.pubsub.PubSubManager`
         """
-        super().__init__(directory=directory, pubsub=pubsub, reactor=reactor)
+        super().__init__(manager)
 
         self.filepath = os.path.join(directory, filename)
         self.keys: Dict[str, Any] = keys or {}  # Dict[string(b58_address), KeyPair]

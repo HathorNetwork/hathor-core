@@ -17,7 +17,7 @@ from collections import defaultdict
 from enum import Enum
 from itertools import chain
 from math import inf
-from typing import Any, DefaultDict, Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, DefaultDict, Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
 
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
 from pycoin.key.Key import Key
@@ -26,7 +26,7 @@ from twisted.internet.interfaces import IDelayedCall
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
-from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
+from hathor.pubsub import EventArguments, HathorEvents
 from hathor.transaction import BaseTransaction, TxInput, TxOutput
 from hathor.transaction.base_transaction import int_to_bytes
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
@@ -34,6 +34,11 @@ from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.transaction import Transaction
 from hathor.util import Reactor
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
+
+if TYPE_CHECKING:
+    from hathor.manager import HathorManager
+    from hathor.pubsub import PubSubManager
+    from hathor.transaction.storage import TransactionStorage
 
 settings = HathorSettings()
 logger = get_logger()
@@ -68,7 +73,10 @@ class WalletBalanceUpdate(NamedTuple):
 
 
 class BaseWallet:
-    reactor: Reactor
+    reactor: Optional[Reactor]
+    manager: Optional['HathorManager']
+    tx_storage: Optional['TransactionStorage']
+    pubsub: Optional['PubSubManager']
     keys: Dict[str, Any]
 
     class WalletType(Enum):
@@ -78,8 +86,7 @@ class BaseWallet:
         # Normal key pair wallet
         KEY_PAIR = 'keypair'
 
-    def __init__(self, directory: str = './', pubsub: Optional[PubSubManager] = None,
-                 reactor: Optional[Reactor] = None) -> None:
+    def __init__(self, manager: 'HathorManager') -> None:
         """ A wallet will hold the unspent and spent transactions
 
         All files will be stored in the same directory, and it should
@@ -95,6 +102,11 @@ class BaseWallet:
         :type reactor: :py:class:`twisted.internet.Reactor`
         """
         self.log = logger.new()
+
+        self.manager = manager
+        self.reactor = self.manager.reactor
+        self.tx_storage = self.manager.tx_storage
+        self.pubsub = self.manager.pubsub
 
         # Dict[token_id, Dict[Tuple[tx_id, index], UnspentTx]]
         self.unspent_txs: DefaultDict[bytes, Dict[Tuple[bytes, int], UnspentTx]] = defaultdict(dict)
@@ -118,8 +130,6 @@ class BaseWallet:
         # WalletBalanceUpdate object to store the callLater to update the balance
         self.balance_update: Optional[WalletBalanceUpdate] = None
 
-        self.pubsub: Optional[PubSubManager] = pubsub
-
         # in test mode, we assume a lot of txs will be generated and prevent creating twin txs
         self.test_mode: bool = False
 
@@ -127,29 +137,23 @@ class BaseWallet:
             HathorEvents.CONSENSUS_TX_UPDATE,
         ]
 
-        if reactor is None:
-            from hathor.util import reactor as twisted_reactor
-            reactor = twisted_reactor
-        self.reactor = reactor
-
     def _manually_initialize(self) -> None:
         pass
 
     def start(self) -> None:
         """ Start the pubsub subscription if wallet has a pubsub
         """
-        if self.pubsub:
-            for event in self.pubsub_events:
-                self.pubsub.subscribe(event, self.handle_publish)
+        assert self.manager is not None
+        for event in self.pubsub_events:
+            self.pubsub.subscribe(event, self.handle_publish)
 
         self.reactor.callLater(UTXO_CHECK_INTERVAL, self._check_utxos)
 
     def stop(self) -> None:
         """ Stop the pubsub subscription if wallet has a pubsub
         """
-        if self.pubsub:
-            for event in self.pubsub_events:
-                self.pubsub.unsubscribe(event, self.handle_publish)
+        for event in self.pubsub_events:
+            self.pubsub.unsubscribe(event, self.handle_publish)
 
     def _check_utxos(self) -> None:
         """ Go through all elements in maybe_spent_txs and check if any of them should be
@@ -421,6 +425,13 @@ class BaseWallet:
                 public_key_bytes, signature = self.get_input_aux_data(data_to_sign, self.get_private_key(address58))
                 _input.data = P2PKH.create_input_data(public_key_bytes, signature)
 
+    def is_utxo_locked(self, utxo) -> bool:
+        if not self.can_spend_block(self.tx_storage, utxo.tx_id):
+            return True
+        if utxo.is_locked(self.reactor):
+            return True
+        return False
+
     def handle_change_tx(self, sum_inputs: int, sum_outputs: int,
                          token_uid: bytes = settings.HATHOR_TOKEN_UID) -> Optional[WalletOutputInfo]:
         """Creates an output transaction with the change value
@@ -475,7 +486,7 @@ class BaseWallet:
                 continue
             if not self.can_spend_block(tx_storage, utxo.tx_id):
                 continue
-            if not utxo.is_locked(self.reactor) and not utxo.is_token_authority():
+            if not self.is_utxo_locked(utxo) and not utxo.is_token_authority():
                 # I can only use the outputs that are not locked and are not an authority utxo
                 inputs_tx.append(WalletInputInfo(utxo.tx_id, utxo.index, self.get_private_key(utxo.address)))
                 total_inputs_amount += utxo.value
@@ -498,7 +509,7 @@ class BaseWallet:
 
     def can_spend_block(self, tx_storage: 'TransactionStorage', tx_id: bytes) -> bool:
         tx = tx_storage.get_transaction(tx_id)
-        if tx.is_block:
+        if not tx.is_block:
             if tx_storage.get_height_best_block() - tx.get_metadata().height < settings.REWARD_SPEND_MIN_BLOCKS:
                 return False
         return True

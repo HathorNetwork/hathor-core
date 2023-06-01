@@ -56,9 +56,9 @@ class HDWallet(BaseWallet):
     See: https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
     """
 
-    def __init__(self, *, words: Optional[Any] = None, language: str = 'english', passphrase: bytes = b'',
-                 gap_limit: int = 20, word_count: int = 24, directory: str = './', pubsub: Optional[Any] = None,
-                 reactor: Optional[Any] = None, initial_key_generation: Optional[Any] = None) -> None:
+    def __init__(self, manager: 'HathorManager', *, words: Optional[Any] = None, language: str = 'english',
+                 passphrase: bytes = b'', gap_limit: int = 20, word_count: int = 24, directory: str = './',
+                 initial_key_generation: Optional[Any] = None) -> None:
         """
         :param words: words to generate the seed. It's a string with the words separated by a single space.
         If None we generate new words when starting the wallet
@@ -84,7 +84,7 @@ class HDWallet(BaseWallet):
 
         :raises ValueError: Raised on invalid word_count
         """
-        super().__init__(directory=directory, pubsub=pubsub, reactor=reactor)
+        super().__init__(manager)
 
         # Dict[string(base58), BIP32Key]
         self.keys: Dict[str, Any] = {}

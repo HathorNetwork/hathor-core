@@ -144,9 +144,6 @@ class Simulator:
         assert self._started, 'Simulator is not started.'
         assert peer_id is not None  # XXX: temporary, for checking that tests are using the peer_id
 
-        wallet = HDWallet(gap_limit=2)
-        wallet._manually_initialize()
-
         builder = Builder() \
             .set_reactor(self._clock) \
             .set_peer_id(peer_id or PeerId()) \
@@ -163,6 +160,12 @@ class Simulator:
             builder.enable_event_manager(event_ws_factory=event_ws_factory)
 
         artifacts = builder.build()
+
+        artifacts.manager.start()
+
+        wallet = HDWallet(artifacts.manager, gap_limit=2)
+        wallet._manually_initialize()
+        artifacts.manager.wallet = wallet
 
         artifacts.manager.start()
         self.run_to_completion()

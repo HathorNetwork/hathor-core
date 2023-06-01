@@ -33,7 +33,7 @@ from hathor.storage import RocksDBStorage
 from hathor.stratum import StratumFactory
 from hathor.transaction.storage import TransactionMemoryStorage, TransactionRocksDBStorage, TransactionStorage
 from hathor.util import Random, Reactor, get_environment_info
-from hathor.wallet import BaseWallet, Wallet
+from hathor.wallet import BaseWallet, KeyPairWallet
 
 logger = get_logger()
 
@@ -136,7 +136,6 @@ class Builder:
 
         p2p_manager = self._get_p2p_manager()
 
-        wallet = self._get_or_create_wallet()
         event_manager = self._get_or_create_event_manager()
         tx_storage = self._get_or_create_tx_storage()
         indexes = tx_storage.indexes
@@ -168,7 +167,6 @@ class Builder:
             tx_storage=tx_storage,
             p2p_manager=p2p_manager,
             event_manager=event_manager,
-            wallet=wallet,
             rng=self._rng,
             checkpoints=self._checkpoints,
             capabilities=self._capabilities,
@@ -181,6 +179,9 @@ class Builder:
         stratum_factory: Optional[StratumFactory] = None
         if self._enable_stratum_server:
             stratum_factory = self._create_stratum_server(manager)
+
+        wallet = self._get_or_create_wallet(manager)
+        manager.wallet = wallet
 
         self.artifacts = BuildArtifacts(
             peer_id=peer_id,
@@ -369,7 +370,7 @@ class Builder:
         self._force_memory_index = True
         return self
 
-    def _get_or_create_wallet(self) -> Optional[BaseWallet]:
+    def _get_or_create_wallet(self, manager: HathorManager) -> Optional[BaseWallet]:
         if self._wallet is not None:
             assert self._wallet_directory is None
             assert self._wallet_unlock is None
@@ -377,7 +378,7 @@ class Builder:
 
         if self._wallet_directory is None:
             return None
-        wallet = Wallet(directory=self._wallet_directory)
+        wallet = KeyPairWallet(manager, directory=self._wallet_directory)
         if self._wallet_unlock is not None:
             wallet.unlock(self._wallet_unlock)
         return wallet

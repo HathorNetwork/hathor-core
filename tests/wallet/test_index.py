@@ -18,7 +18,7 @@ class BaseWalletIndexTest(unittest.TestCase):
         add_new_blocks(self.manager, 5, advance_clock=15)
         add_blocks_unlock_reward(self.manager)
 
-        address = self.get_address(0)
+        address = self.get_address(self.manager, 0)
         value1 = 100
         value2 = 101
 
