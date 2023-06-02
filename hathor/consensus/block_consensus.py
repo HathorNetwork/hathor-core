@@ -161,28 +161,31 @@ class BlockConsensusAlgorithm:
                 # mark this tx as voided.
                 continue
 
+            # TODO Move this verification to the runner.
             if tx.is_creating_a_new_contract():
                 # A contract tree cannot exist before the contract is created.
                 assert not block_trie.has_key(nc_id)
-                nc_root_id = None
             else:
                 try:
                     # A contract tree must always exist after the contract is created.
-                    nc_root_id = block_trie.get(nc_id)
+                    block_trie.get(nc_id)
                 except KeyError:
                     # This case might only happen if the contract creation tx is voided.
                     # So this transaction cannot be executed and it will be marked as if its execution has failed.
                     self.mark_as_nc_fail_execution(tx)
                     continue
 
-            nc_storage = self.context.consensus.nc_storage_factory(nc_id, nc_root_id)
+            from hathor.nanocontracts.runner import Runner
+
+            assert tx.storage is not None
+            storage_factory = self.context.consensus.nc_storage_factory
+            runner = Runner(tx.storage, storage_factory, block_trie)
             try:
-                tx.execute(nc_storage)
+                tx.execute(runner)
                 # TODO Avoid calling multiple commits for the same contract. The best would be to call the commit
                 #      method once per contract per block, just like we do for the block_trie. This ensures we will
                 #      have a clean database with no orphan nodes.
-                nc_storage.commit()
-                block_trie.update(nc_id, nc_storage.get_root_id())
+                runner.commit()
             except NCFail:
                 self.log.exception('nc execution failed', tx=tx.hash.hex())
                 self.mark_as_nc_fail_execution(tx)

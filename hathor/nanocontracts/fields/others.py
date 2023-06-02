@@ -45,9 +45,9 @@ class OptionalField(SingleValueField):
         args = get_args(_type)
         assert len(args) == 2
         subtype = args[0]
-        if isinstance(None, subtype):
+        if subtype is type(None):
             subtype = args[1]
-        assert not isinstance(None, subtype)
+        assert subtype is not type(None)
         field = get_field_for_attr('', subtype)
         return cls(name, field)
 

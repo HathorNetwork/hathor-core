@@ -23,7 +23,7 @@ from hathor.crypto.util import get_address_b58_from_public_key_bytes, get_addres
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.runner import Runner
-from hathor.nanocontracts.types import Context, NCAction, NCActionType
+from hathor.nanocontracts.types import Context, ContractId, NCAction, NCActionType
 from hathor.transaction import Transaction, TxInput, TxOutput, TxVersion
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 
@@ -91,12 +91,12 @@ class NanoContract(Transaction):
         """Return true if this transaction is creating a new contract."""
         return self.nc_method == NC_INITIALIZE_METHOD
 
-    def get_nanocontract_id(self) -> bytes:
+    def get_nanocontract_id(self) -> ContractId:
         """Return the contract id."""
         if self.nc_method == NC_INITIALIZE_METHOD:
             assert self.hash is not None
-            return self.hash
-        return self.nc_id
+            return ContractId(self.hash)
+        return ContractId(self.nc_id)
 
     def get_blueprint_class(self) -> Type[Blueprint]:
         """Return the blueprint class of the contract."""
@@ -123,7 +123,7 @@ class NanoContract(Transaction):
             assert nanocontract.nc_method == NC_INITIALIZE_METHOD
             return nanocontract.nc_id
 
-    def execute(self, nc_storage: 'NCStorage') -> None:
+    def execute(self, runner: 'Runner') -> None:
         """Execute the contract's method call."""
         blueprint_class = self.get_blueprint_class()
         method = getattr(blueprint_class, self.nc_method)
@@ -131,23 +131,7 @@ class NanoContract(Transaction):
         args = parser.parse_args_bytes(self.nc_args_bytes)
 
         context = self.get_context()
-        self.call_public_method(nc_storage, self.nc_method, context, *args)
-
-    def get_runner(self, nc_storage: 'NCStorage') -> Runner:
-        """Return a Runner object."""
-        blueprint_class = self.get_blueprint_class()
-        nc_id = self.get_nanocontract_id()
-        return Runner(blueprint_class, nc_id, nc_storage)
-
-    def call_private_method(self, nc_storage: 'NCStorage', method_name: str, *args: Any) -> Any:
-        """Utility method to call the blueprint's method."""
-        runner = self.get_runner(nc_storage)
-        return runner.call_private_method(method_name, *args)
-
-    def call_public_method(self, nc_storage: 'NCStorage', method_name: str, ctx: Context, *args: Any) -> None:
-        """Utility method to call the blueprint's method."""
-        runner = self.get_runner(nc_storage)
-        runner.call_public_method(method_name, ctx, *args)
+        runner.call_public_method(self.get_nanocontract_id(), self.nc_method, context, *args)
 
     def get_context(self) -> Context:
         """Return a context to be used in a method call."""

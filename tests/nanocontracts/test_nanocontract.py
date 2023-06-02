@@ -9,12 +9,15 @@ from hathor.nanocontracts.exception import NCInvalidPubKey, NCInvalidSignature, 
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.nanocontract import NanoContract
 from hathor.nanocontracts.storage import NCMemoryStorageFactory
+from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
+from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathor.nanocontracts.types import Context, NCActionType, public
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import TokenAuthorityNotAllowed
 from hathor.transaction.validation_state import ValidationState
 from hathor.wallet import KeyPair
 from tests import unittest
+from tests.nanocontracts.utils import TestRunner
 
 
 class MyBlueprint(Blueprint):
@@ -166,20 +169,20 @@ class NCNanoContractTestCase(unittest.TestCase):
         self.assertIn(address, related_addresses)
 
     def test_execute_success(self):
+        nc_storage_factory = NCMemoryStorageFactory()
+        store = MemoryNodeTrieStore()
+        block_trie = PatriciaTrie(store)
+        runner = TestRunner(self.peer.tx_storage, nc_storage_factory, block_trie)
+
         nc = self._get_nc()
+        nc_id = nc.get_nanocontract_id()
+        runner.register_contract(nc.get_blueprint_class(), nc_id)
 
-        factory = NCMemoryStorageFactory()
-        nc_storage = factory(nc.hash, None)
+        nc.execute(runner)
+        self.assertEqual('string', runner.call_private_method(nc_id, 'get_a'))
+        self.assertEqual(1, runner.call_private_method(nc_id, 'get_b'))
 
-        nc.execute(nc_storage)
-
-        self.assertEqual('string', nc.call_private_method(nc_storage, 'get_a'))
-        self.assertEqual(1, nc.call_private_method(nc_storage, 'get_b'))
-
-        runner = nc.get_runner(nc_storage)
-        self.assertEqual('string', runner.call_private_method('get_a'))
-        self.assertEqual(1, runner.call_private_method('get_b'))
-
+        nc_storage = runner.get_storage(nc_id)
         self.assertEqual('string', nc_storage.get('a'))
         self.assertEqual(1, nc_storage.get('b'))
 

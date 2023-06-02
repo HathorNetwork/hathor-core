@@ -81,6 +81,26 @@ class NCInvalidContext(NCFail):
     pass
 
 
+class NCRecursionError(NCFail):
+    """Raised when recursion gets too deep."""
+
+
+class NCNumberOfCallsExceeded(NCFail):
+    """Raised when the total number of calls have been exceeded."""
+
+
+class NCInvalidContractId(NCFail):
+    """Raised when a contract call is invalid."""
+
+
+class NCInvalidMethodCall(NCFail):
+    """Raised when a contract calls another contract's invalid method."""
+
+
+class NCUninitializedContractError(NCFail):
+    """Raised when a contract calls a method from an uninitialized contract."""
+
+
 class UnknownFieldType(NCError):
     """Raised when there is no field available for a given type."""
     pass

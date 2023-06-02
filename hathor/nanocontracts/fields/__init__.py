@@ -26,7 +26,7 @@ from hathor.nanocontracts.fields.singles import (
     SingleValueField,
     StrField,
 )
-from hathor.nanocontracts.types import SignedData
+from hathor.nanocontracts.types import ContractId, SignedData
 
 # Mapping between types and field classes.
 _field_mapping: dict[Any, Type[Field]] = {
@@ -36,6 +36,7 @@ _field_mapping: dict[Any, Type[Field]] = {
     bool: BooleanField,
     float: FloatField,
     dict: DictField,
+    ContractId: BytesField,
 }
 
 

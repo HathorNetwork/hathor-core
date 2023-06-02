@@ -46,6 +46,7 @@ from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.nanocontracts.exception import NanoContractDoesNotExist
+from hathor.nanocontracts.runner import Runner
 from hathor.nanocontracts.storage import NCStorage
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import Peer
@@ -405,6 +406,18 @@ class HathorManager:
         self.is_profiler_running = False
         if save_to:
             self.profiler.dump_stats(save_to)
+
+    def get_nc_runner(self, block: Block) -> Runner:
+        """Return a contract runner for a given block."""
+        meta = block.get_metadata()
+        nc_storage_factory = self.consensus_algorithm.nc_storage_factory
+        block_trie = nc_storage_factory.get_trie(meta.nc_block_root_id)
+        return Runner(self.tx_storage, nc_storage_factory, block_trie)
+
+    def get_best_block_nc_runner(self) -> Runner:
+        """Return a contract runner for the best block."""
+        best_block = self.tx_storage.get_best_block()
+        return self.get_nc_runner(best_block)
 
     def get_nc_storage(self, block: Block, nc_id: VertexId) -> NCStorage:
         """Return a contract storage with the contract state at a given block."""

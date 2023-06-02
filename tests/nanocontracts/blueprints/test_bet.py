@@ -1,11 +1,12 @@
 import os
-from typing import Any, NamedTuple, Optional
+from typing import NamedTuple, Optional
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.nanocontracts.blueprints.bet import (
     Bet,
     DepositNotAllowed,
+    InsufficientBalance,
     InvalidOracleSignature,
     InvalidToken,
     Result,
@@ -14,29 +15,17 @@ from hathor.nanocontracts.blueprints.bet import (
     TooLate,
     WithdrawalNotAllowed,
 )
-from hathor.nanocontracts.exception import NCInsufficientFunds
-from hathor.nanocontracts.method_parser import NCMethodParser
-from hathor.nanocontracts.runner import Runner
 from hathor.nanocontracts.storage import NCMemoryStorageFactory
-from hathor.nanocontracts.types import Context, NCAction, NCActionType, SignedData
+from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
+from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
+from hathor.nanocontracts.types import Context, ContractId, NCAction, NCActionType, SignedData
 from hathor.transaction.scripts import P2PKH
 from hathor.util import not_none
 from hathor.wallet import KeyPair
 from tests import unittest
+from tests.nanocontracts.utils import TestRunner
 
 settings = HathorSettings()
-
-
-class MyRunner(Runner):
-    def call_public_method(self, method_name: str, ctx: Context, *args: Any) -> None:
-        method = getattr(self.blueprint_class, method_name)
-        parser = NCMethodParser(method)
-
-        serialized_args = parser.serialize_args(list(args))
-        deserialized_args = parser.parse_args_bytes(serialized_args)
-        assert tuple(args) == tuple(deserialized_args)
-
-        super().call_public_method(method_name, ctx, *args)
 
 
 class BetInfo(NamedTuple):
@@ -55,10 +44,13 @@ class NCBetBlueprintTestCase(unittest.TestCase):
         super().setUp()
         self.manager = self.create_peer('testnet')
         self.token_uid = settings.HATHOR_TOKEN_UID
+        self.nc_id = ContractId(b'1' * 32)
 
         nc_storage_factory = NCMemoryStorageFactory()
-        self.nc_storage = nc_storage_factory(b'', None)
-        self.runner = self.get_runner(Bet, self.nc_storage)
+        store = MemoryNodeTrieStore()
+        block_trie = PatriciaTrie(store)
+        self.runner = TestRunner(self.manager.tx_storage, nc_storage_factory, block_trie)
+        self.nc_storage = self.runner.get_storage(self.nc_id)
 
     def _get_any_tx(self):
         genesis = self.manager.tx_storage.get_all_genesis()
@@ -82,12 +74,8 @@ class NCBetBlueprintTestCase(unittest.TestCase):
         if timestamp is None:
             timestamp = self.get_current_timestamp()
         context = Context([action], tx, address_bytes, timestamp=timestamp)
-        self.runner.call_public_method('bet', context, address_bytes, score)
+        self.runner.call_public_method(self.nc_id, 'bet', context, address_bytes, score)
         return BetInfo(key=key, address=address_bytes, amount=amount, score=score)
-
-    def get_runner(self, blueprint, storage):
-        runner = MyRunner(blueprint, b'', storage)
-        return runner
 
     def _set_result(self, result: Result, oracle_key: Optional[KeyPair] = None) -> None:
         signed_result: SignedData[Result] = SignedData(result, b'')
@@ -99,14 +87,14 @@ class NCBetBlueprintTestCase(unittest.TestCase):
 
         tx = self._get_any_tx()
         context = Context([], tx, b'', timestamp=self.get_current_timestamp())
-        self.runner.call_public_method('set_result', context, signed_result)
+        self.runner.call_public_method(self.nc_id, 'set_result', context, signed_result)
         self.assertEqual(self.nc_storage.get('final_result'), '2x2')
 
     def _withdraw(self, address: bytes, amount: int) -> None:
         tx = self._get_any_tx()
         action = NCAction(NCActionType.WITHDRAWAL, self.token_uid, amount)
         context = Context([action], tx, address, timestamp=self.get_current_timestamp())
-        self.runner.call_public_method('withdraw', context)
+        self.runner.call_public_method(self.nc_id, 'withdraw', context)
 
     def initialize_contract(self):
         runner = self.runner
@@ -118,9 +106,11 @@ class NCBetBlueprintTestCase(unittest.TestCase):
         oracle_script = p2pkh.get_script()
         self.date_last_bet = self.get_current_timestamp() + 3600 * 24
 
+        runner.register_contract(Bet, self.nc_id)
+
         tx = self._get_any_tx()
         context = Context([], tx, b'', timestamp=self.get_current_timestamp())
-        runner.call_public_method('initialize', context, oracle_script, self.token_uid, self.date_last_bet)
+        runner.call_public_method(self.nc_id, 'initialize', context, oracle_script, self.token_uid, self.date_last_bet)
         self.assertEqual(storage.get('oracle_script'), oracle_script)
         self.assertEqual(storage.get('token_uid'), self.token_uid)
         self.assertEqual(storage.get('date_last_bet'), self.date_last_bet)
@@ -147,20 +137,20 @@ class NCBetBlueprintTestCase(unittest.TestCase):
         ###
         # Single winner withdraws all funds.
         ###
-        self.assertEqual(1100, runner.call_private_method('get_max_withdrawal', bet1.address))
+        self.assertEqual(1100, runner.call_private_method(self.nc_id, 'get_max_withdrawal', bet1.address))
 
         self._withdraw(bet1.address, 100)
-        self.assertEqual(1000, runner.call_private_method('get_max_withdrawal', bet1.address))
+        self.assertEqual(1000, runner.call_private_method(self.nc_id, 'get_max_withdrawal', bet1.address))
 
         self._withdraw(bet1.address, 1000)
-        self.assertEqual(0, runner.call_private_method('get_max_withdrawal', bet1.address))
+        self.assertEqual(0, runner.call_private_method(self.nc_id, 'get_max_withdrawal', bet1.address))
 
         # Out of funds! Any withdrawal must fail from now on...
         amount = 1
         action = NCAction(NCActionType.WITHDRAWAL, self.token_uid, amount)
         context = Context([action], tx, bet1.address, timestamp=self.get_current_timestamp())
-        with self.assertRaises(NCInsufficientFunds):
-            runner.call_public_method('withdraw', context)
+        with self.assertRaises(InsufficientBalance):
+            runner.call_public_method(self.nc_id, 'withdraw', context)
 
     def test_make_a_bet_with_withdrawal(self):
         self.initialize_contract()
@@ -172,7 +162,7 @@ class NCBetBlueprintTestCase(unittest.TestCase):
         context = Context([action], tx, address_bytes, timestamp=self.get_current_timestamp())
         score = '1x1'
         with self.assertRaises(WithdrawalNotAllowed):
-            self.runner.call_public_method('bet', context, address_bytes, score)
+            self.runner.call_public_method(self.nc_id, 'bet', context, address_bytes, score)
 
     def test_make_a_bet_after_result(self):
         self.initialize_contract()
@@ -211,7 +201,7 @@ class NCBetBlueprintTestCase(unittest.TestCase):
         action = NCAction(NCActionType.DEPOSIT, self.token_uid, 1)
         context = Context([action], tx, address_bytes, timestamp=self.get_current_timestamp())
         with self.assertRaises(DepositNotAllowed):
-            self.runner.call_public_method('withdraw', context)
+            self.runner.call_public_method(self.nc_id, 'withdraw', context)
 
     def test_make_a_bet_wrong_token(self):
         self.initialize_contract()
@@ -224,7 +214,7 @@ class NCBetBlueprintTestCase(unittest.TestCase):
         context = Context([action], tx, address_bytes, timestamp=self.get_current_timestamp())
         score = '1x1'
         with self.assertRaises(InvalidToken):
-            self.runner.call_public_method('bet', context, address_bytes, score)
+            self.runner.call_public_method(self.nc_id, 'bet', context, address_bytes, score)
 
     def test_withdraw_wrong_token(self):
         self.initialize_contract()
@@ -235,7 +225,5 @@ class NCBetBlueprintTestCase(unittest.TestCase):
         self.assertNotEqual(token_uid, self.token_uid)
         action = NCAction(NCActionType.WITHDRAWAL, token_uid, 1)
         context = Context([action], tx, bet1.address, timestamp=self.get_current_timestamp())
-        # We can't really reach the InvalidToken exception because the contract will not have balance
-        # and its execution will fail before executing the withdraw method.
-        with self.assertRaises(NCInsufficientFunds):
-            self.runner.call_public_method('withdraw', context)
+        with self.assertRaises(InvalidToken):
+            self.runner.call_public_method(self.nc_id, 'withdraw', context)

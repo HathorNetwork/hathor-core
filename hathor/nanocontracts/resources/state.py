@@ -29,6 +29,7 @@ from hathor.nanocontracts.exception import (
 )
 from hathor.nanocontracts.method_parser import NCMethodParser
 from hathor.nanocontracts.nanocontract import NanoContract
+from hathor.nanocontracts.types import ContractId
 from hathor.nanocontracts.utils import get_nano_contract_creation
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 from hathor.wallet.exceptions import InvalidAddress
@@ -59,7 +60,7 @@ class NanoContractStateResource(Resource):
             return params.json_dumpb()
 
         try:
-            nc_id_bytes = bytes.fromhex(params.id)
+            nc_id_bytes = ContractId(bytes.fromhex(params.id))
         except ValueError:
             request.setResponseCode(400)
             error_response = ErrorResponse(success=False, error=f'Invalid id: {params.id}')
@@ -81,7 +82,8 @@ class NanoContractStateResource(Resource):
             error_response = ErrorResponse(success=False, error=f'Nano contract failed execution: {params.id}')
             return error_response.json_dumpb()
 
-        nc_storage = self.manager.get_best_block_nc_storage(nc_id_bytes)
+        runner = self.manager.get_best_block_nc_runner()
+        nc_storage = runner.get_storage(nc_id_bytes)
         value: Any
 
         # Get balances.
@@ -127,7 +129,7 @@ class NanoContractStateResource(Resource):
         for call_info in params.calls:
             try:
                 method_name, method_args = self.parse_call_info(nanocontract, call_info)
-                value = nanocontract.call_private_method(nc_storage, method_name, *method_args)
+                value = runner.call_private_method(nc_id_bytes, method_name, *method_args)
                 if type(value) is bytes:
                     value = value.hex()
             except Exception as e:

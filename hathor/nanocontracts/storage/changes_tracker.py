@@ -14,6 +14,7 @@
 
 from typing import Any
 
+from hathor.nanocontracts.exception import NCInsufficientFunds
 from hathor.nanocontracts.storage.storage import AttrKey, BalanceKey, NCStorage
 from hathor.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey
 
@@ -74,11 +75,25 @@ class NCChangesTracker(NCStorage):
             self.storage.add_balance(token_uid, amount)
         self.has_been_commited = True
 
+    def reset(self) -> None:
+        """Discard all local changes without persisting."""
+        self.data = {}
+        self.balance_diff = {}
+
     def get_balance(self, token_uid: bytes) -> int:
         internal_key = BalanceKey(self.nc_id, token_uid)
         cur = self.storage.get_balance(token_uid)
         diff = self.balance_diff.get(internal_key, 0)
         return cur + diff
+
+    def validate_balances(self) -> None:
+        """Check that all final balances are positive. If not, it raises NCInsufficientFunds."""
+        for _, token_uid in self.balance_diff.keys():
+            balance = self.get_balance(token_uid)
+            if balance < 0:
+                raise NCInsufficientFunds(
+                    f'negative balance for contract {self.nc_id.hex()} (balance={balance} token_uid={token_uid.hex()})'
+                )
 
     def get_all_balances(self) -> dict[BalanceKey, int]:
         all_balances = self.storage.get_all_balances()
