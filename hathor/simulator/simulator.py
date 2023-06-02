@@ -218,6 +218,9 @@ class Simulator:
     def add_connection(self, conn: 'FakeConnection') -> None:
         self._connections.append(conn)
 
+    def remove_connection(self, conn: 'FakeConnection') -> None:
+        self._connections.remove(conn)
+
     def _run(self, interval: float, step: float, status_interval: float) -> Generator[None, None, None]:
         """ Implementation of run, yields at every step to allow verifications like in run_until_complete
         """
