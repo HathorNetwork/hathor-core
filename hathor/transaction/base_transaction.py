@@ -535,6 +535,14 @@ class BaseTransaction(ABC):
 
         meta = self.get_metadata()
 
+        # XXX: blocks can have been created previously with soft_height, we'll remove it and add a proper height
+        if self.is_block:
+            soft_height = meta.soft_height
+            meta.soft_height = None
+            meta.height = self.calculate_height()
+            if soft_height is not None:
+                assert soft_height == meta.height, 'A wrong height was previously set as soft height. Bad checkpoint?'
+
         # skip full validation when it is a checkpoint
         if meta.validation.is_checkpoint():
             self.set_validation(ValidationState.CHECKPOINT_FULL)

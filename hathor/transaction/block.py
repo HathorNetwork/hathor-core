@@ -99,6 +99,24 @@ class Block(BaseTransaction):
 
         return blc
 
+    def set_soft_height(self, height: int) -> None:
+        """This method exists to set the height metadata when we can't calculate it yet (i.e. syncing checkpoints).
+
+        `TxValidationError` will be risen if a height already exists (which is not determined by its value but by the
+        validation state, that is, a height of `None` on a full validated transaction is final) and it doesn't match
+        the given hint. This is in place in order to prevent accidentally setting the height to a wrong value after the
+        value has been validated, the height must be checked when basic-validating this tx and effort should be made to
+        always set the correct height when using this method.
+        """
+        assert self.storage is not None
+        assert self.hash is not None
+        metadata = self.get_metadata()
+        if metadata.height != 0:
+            assert metadata.height == height, 'A wrong height was previously set as soft height. Bad checkpoint?'
+            assert metadata.soft_height is None, 'Soft height not removed.'
+        else:
+            metadata.soft_height = height
+
     def calculate_height(self) -> int:
         """Return the height of the block, i.e., the number of blocks since genesis"""
         if self.is_genesis:
@@ -326,7 +344,8 @@ class Block(BaseTransaction):
     def verify_checkpoint(self, checkpoints: list[Checkpoint]) -> None:
         assert self.hash is not None
         assert self.storage is not None
-        height = self.get_height()  # TODO: use "soft height" when sync-checkpoint is added
+        meta = self.get_metadata()
+        height = meta.get_height(soft=True)
         # find checkpoint with our height:
         checkpoint: Optional[Checkpoint] = None
         for cp in checkpoints:
