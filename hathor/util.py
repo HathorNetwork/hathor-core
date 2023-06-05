@@ -440,6 +440,59 @@ _DT_LOG_PROGRESS = 30  # time in seconds after which a progress will be logged (
 _DT_YIELD_WARN = 1  # time in seconds to warn when `yield tx` takes too long (which is when processing happens)
 
 
+def generic_progress(
+    it: Iterator[T],
+    *,
+    log: 'structlog.stdlib.BoundLogger',
+    total: Optional[int]
+) -> Iterator[T]:
+    """ Implementation of progress helper for using with a generic type.
+
+    This is basically a stripped down version of `hathor.util.progress`
+    """
+    t_start = time.time()
+    count = 0
+    count_log_prev = 0
+    if total is not None:
+        log.info('loading... 0%', progress=0)
+    else:
+        log.info('loading...')
+    t_log_prev = t_start
+    while True:
+        try:
+            item = next(it)
+        except StopIteration:
+            break
+
+        t_log = time.time()
+        dt_log = LogDuration(t_log - t_log_prev)
+        if dt_log > _DT_LOG_PROGRESS:
+            t_log_prev = t_log
+            dcount = count - count_log_prev
+            rate = '?' if dt_log == 0 else dcount / dt_log
+            kwargs = dict(rate=rate, new=dcount, dt=dt_log, total=count)
+            if total is not None:
+                progress_ = count / total
+                # TODO: we could add an ETA since we know the total
+                log.info(f'loading... {math.floor(progress_ * 100):2.0f}%', progress=progress_, **kwargs)
+            else:
+                log.info('loading...', **kwargs)
+            count_log_prev = count
+        count += 1
+
+        yield item
+
+    t_final = time.time()
+    dt_total = LogDuration(t_final - t_start)
+    rate = '?' if dt_total == 0 else count / dt_total
+    if total is not None:
+        progress_ = count / total
+        log.info(f'loaded...  {math.floor(progress_ * 100):2.0f}%', progress=progress_, count=count, rate=rate,
+                 total_dt=dt_total)
+    else:
+        log.info('loaded', count=count, rate=rate, total_dt=dt_total)
+
+
 def progress(iter_tx: Iterator['BaseTransaction'], *, log: Optional['structlog.stdlib.BoundLogger'] = None,
              total: Optional[int] = None) -> Iterator['BaseTransaction']:
     """ Log the progress of a transaction iterator while iterating.
