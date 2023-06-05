@@ -623,14 +623,23 @@ class NodeSyncTimestamp(SyncManager):
         """Try to send a TIPS message. If rate limit has been reached, it schedules to send it later."""
         if not self.global_rate_limiter.add_hit(self.GlobalRateLimiter.SEND_TIPS):
             self.log.debug('send_tips throttled')
-            self._send_tips_call_later.append(self.reactor.callLater(1, self.send_tips, timestamp, include_hashes, offset))
+            self._send_tips_call_later.append(
+                self.reactor.callLater(
+                    1, self.send_tips, timestamp, include_hashes, offset
+                )
+            )
             return
         self._send_tips(timestamp, include_hashes, offset)
 
     def _send_tips(self, timestamp: Optional[int] = None, include_hashes: bool = False, offset: int = 0) -> None:
         """ Send a TIPS message.
         """
-        self._send_tips_call_later = [x for x in self._send_tips_call_later if x.active()]
+        # Filter for active delayed calls once one is executing
+        self._send_tips_call_later: List[IDelayedCall] = [
+            call_later
+            for call_later in self._send_tips_call_later
+            if call_later.active()
+        ]
 
         if timestamp is None:
             timestamp = self.manager.tx_storage.latest_timestamp
