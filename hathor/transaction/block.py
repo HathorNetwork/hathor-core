@@ -113,7 +113,7 @@ class Block(BaseTransaction):
         return max((self.storage.get_transaction(tx).get_metadata().min_height for tx in self.get_tx_parents()),
                    default=0)
 
-    def calculate_feature_activation_bit_counts(self) -> Optional[list[int]]:
+    def _calculate_feature_activation_bit_counts(self) -> Optional[list[int]]:
         """
         Calculates the feature_activation_bit_counts metadata attribute, which is a list of feature activation bit
         counts.

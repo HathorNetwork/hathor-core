@@ -301,11 +301,21 @@ class BaseTransaction(ABC):
     def calculate_min_height(self) -> int:
         raise NotImplementedError
 
-    @abstractmethod
     def calculate_feature_activation_bit_counts(self) -> Optional[list[int]]:
         """
         Calculates the feature_activation_bit_counts metadata attribute.
-        Must only be calculated by Blocks, and return None otherwise.
+        It's only calculated by Blocks, and returns None otherwise.
+        """
+        if not self.is_block:
+            return None
+
+        return self._calculate_feature_activation_bit_counts()
+
+    @abstractmethod
+    def _calculate_feature_activation_bit_counts(self) -> Optional[list[int]]:
+        """
+        Calculates the feature_activation_bit_counts metadata attribute.
+        Must only be implemented by Blocks.
         """
         raise NotImplementedError
 

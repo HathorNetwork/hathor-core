@@ -41,9 +41,14 @@ def get_bit_list(n: int, min_size: Optional[int] = None) -> list[int]:
     [0, 1, 0, 1, 0, 0, 1, 1, 1, 0]
     """
     assert n >= 0
+    bits = []
 
-    shifts = range(n.bit_length())
-    bits = [n >> shift & 1 for shift in shifts]
-    padding_zeroes = [] if min_size is None else [0] * (min_size - len(bits))
+    while n > 0:
+        bits.append(n & 1)
+        n >>= 1
 
-    return bits + padding_zeroes
+    if min_size is not None:
+        while len(bits) < min_size:
+            bits.append(0)
+
+    return bits
