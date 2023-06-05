@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import Mock, MagicMock
 
 from twisted.python.failure import Failure
 
@@ -27,8 +27,8 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         connected_peers2 = list(manager2.connections.connected_peers.values())
         self.assertEqual(1, len(connected_peers2))
-        protocol2 = connected_peers2[0]
-        sync2 = protocol2.state.sync_manager
+        protocol1 = connected_peers2[0]
+        sync2 = protocol1.state.sync_manager
         sync2._send_tips = MagicMock()
 
         for i in range(100):
@@ -43,10 +43,11 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertTrue(sync2._send_tips.call_count, 16)
 
     def test_sync_rate_limiter_disconnect(self):
+        # Test send_tips delayed calls cancelation with disconnection
         manager1 = self.create_peer()
-
         manager2 = self.create_peer()
         manager2.connections.MAX_ENABLED_SYNC = 0
+
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
         self.simulator.add_connection(conn12)
         self.simulator.run(3600)
@@ -57,15 +58,22 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
 
         connected_peers2 = list(manager2.connections.connected_peers.values())
         self.assertEqual(1, len(connected_peers2))
-        protocol2 = connected_peers2[0]
-        sync2 = protocol2.state.sync_manager
-        sync2._send_tips = MagicMock()
 
-        sync2.send_tips()
-        self.assertEqual(sync2._send_tips.call_count, 1)
+        protocol1 = connected_peers2[0]
+        sync1 = protocol1.state.sync_manager
+        sync1._send_tips = Mock(wraps=sync1._send_tips)
 
-        sync2.send_tips()
-        self.assertEqual(sync2._send_tips.call_count, 1)
+        sync1.send_tips()
+        self.assertEqual(sync1._send_tips.call_count, 1)
+        self.assertEqual(len(sync1._send_tips_call_later), 0)
+
+        sync1.send_tips()
+        self.assertEqual(sync1._send_tips.call_count, 1)
+        self.assertEqual(len(sync1._send_tips_call_later), 1)
+
+        sync1.send_tips()
+        self.assertEqual(sync1._send_tips.call_count, 1)
+        self.assertEqual(len(sync1._send_tips_call_later), 2)
 
         # Close the connection.
         conn12.disconnect(Failure(Exception('testing')))
@@ -74,7 +82,9 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.simulator.run(30)
 
         # Send tips should not be called any further since the connection has already been closed.
-        self.assertEqual(sync2._send_tips.call_count, 1)
+        self.assertEqual(sync1._send_tips.call_count, 1)
+        # Residual delayed calls
+        self.assertEqual(len(sync1._send_tips_call_later), 2)
 
 class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, BaseRandomSimulatorTestCase):
     __test__ = True
