@@ -440,13 +440,13 @@ _DT_LOG_PROGRESS = 30  # time in seconds after which a progress will be logged (
 _DT_YIELD_WARN = 1  # time in seconds to warn when `yield tx` takes too long (which is when processing happens)
 
 
-def generic_progress(
+def progress(
     it: Iterator[T],
     *,
     log: 'structlog.stdlib.BoundLogger',
     total: Optional[int]
 ) -> Iterator[T]:
-    """ Implementation of progress helper for using with a generic type.
+    """ Implementation of progress helper for using with an iterator of any type.
 
     This is basically a stripped down version of `hathor.util.progress`
     """
@@ -499,19 +499,19 @@ def generic_progress(
         log.info('loaded', count=count, rate=rate, total_dt=dt_total)
 
 
-def progress(iter_tx: Iterator['BaseTransaction'], *, log: Optional['structlog.stdlib.BoundLogger'] = None,
-             total: Optional[int] = None) -> Iterator['BaseTransaction']:
+def tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: Optional['structlog.stdlib.BoundLogger'] = None,
+                total: Optional[int] = None) -> Iterator['BaseTransaction']:
     """ Log the progress of a transaction iterator while iterating.
     """
     if log is None:
         log = logger.new()
 
-    yield from _progress(iter_tx, log=log, total=total)
+    yield from _tx_progress(iter_tx, log=log, total=total)
 
 
-def _progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib.BoundLogger', total: Optional[int]
-              ) -> Iterator['BaseTransaction']:
-    """ Inner implementation of progress helper, it expects the gc to be disabled.
+def _tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib.BoundLogger', total: Optional[int]
+                 ) -> Iterator['BaseTransaction']:
+    """ Inner implementation of progress helper.
     """
     t_start = time.time()
     h = 0
@@ -549,12 +549,12 @@ def _progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib.Bo
             ts = datetime.datetime.fromtimestamp(ts_tx)
             kwargs = dict(tx_rate=tx_rate, tx_new=dcount, dt=dt_log, total=count, latest_ts=ts, height=h)
             if total is not None:
-                progress = count / total
+                progress_ = count / total
                 elapsed_time = t_log - t_start
-                remaining_time = LogDuration(elapsed_time / progress - elapsed_time)
+                remaining_time = LogDuration(elapsed_time / progress_ - elapsed_time)
                 log.info(
-                    f'loading... {math.floor(progress * 100):2.0f}%',
-                    progress=progress,
+                    f'loading... {math.floor(progress_ * 100):2.0f}%',
+                    progress=progress_,
                     remaining_time=remaining_time,
                     **kwargs
                 )

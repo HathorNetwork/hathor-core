@@ -95,7 +95,7 @@ class DbExport(RunNode):
             yield tx
 
     def run(self) -> None:
-        from hathor.util import progress
+        from hathor.util import tx_progress
         self.log.info('export')
         self.out_file.write(MAGIC_HEADER)
         tx_count = 0
@@ -108,7 +108,7 @@ class DbExport(RunNode):
         # estimated total, this will obviously be wrong if we're not exporting everything, but it's still better than
         # nothing, and it's probably better to finish sooner than expected, rather than later than expected
         total = self.tx_storage.get_vertices_count()
-        for tx in progress(self.iter_tx(), log=self.log, total=total):
+        for tx in tx_progress(self.iter_tx(), log=self.log, total=total):
             assert tx.hash is not None
             tx_meta = tx.get_metadata()
             if tx.is_block:

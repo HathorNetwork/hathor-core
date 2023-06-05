@@ -21,7 +21,7 @@ from structlog import get_logger
 from hathor.indexes.memory_tips_index import MemoryTipsIndex
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
 from hathor.indexes.tips_index import ScopeType
-from hathor.util import generic_progress
+from hathor.util import progress
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -101,7 +101,7 @@ class PartialRocksDBTipsIndex(MemoryTipsIndex, RocksDBIndexUtils):
         else:
             log.info('index not identified, skipping total count')
             total = None
-        for iv in generic_progress(self._iter_intervals_db(), log=log, total=total):
+        for iv in progress(self._iter_intervals_db(), log=log, total=total):
             self.tree.add(iv)
             self.tx_last_interval[iv.data] = iv
 
