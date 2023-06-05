@@ -473,8 +473,14 @@ def generic_progress(
             kwargs = dict(rate=rate, new=dcount, dt=dt_log, total=count)
             if total is not None:
                 progress_ = count / total
-                # TODO: we could add an ETA since we know the total
-                log.info(f'loading... {math.floor(progress_ * 100):2.0f}%', progress=progress_, **kwargs)
+                elapsed_time = t_log - t_start
+                remaining_time = LogDuration(elapsed_time / progress_ - elapsed_time)
+                log.info(
+                    f'loading... {math.floor(progress_ * 100):2.0f}%',
+                    progress=progress_,
+                    remaining_time=remaining_time,
+                    **kwargs
+                )
             else:
                 log.info('loading...', **kwargs)
             count_log_prev = count
@@ -544,8 +550,14 @@ def _progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib.Bo
             kwargs = dict(tx_rate=tx_rate, tx_new=dcount, dt=dt_log, total=count, latest_ts=ts, height=h)
             if total is not None:
                 progress = count / total
-                # TODO: we could add an ETA since we know the total
-                log.info(f'loading... {math.floor(progress * 100):2.0f}%', progress=progress, **kwargs)
+                elapsed_time = t_log - t_start
+                remaining_time = LogDuration(elapsed_time / progress - elapsed_time)
+                log.info(
+                    f'loading... {math.floor(progress * 100):2.0f}%',
+                    progress=progress,
+                    remaining_time=remaining_time,
+                    **kwargs
+                )
             else:
                 log.info('loading...', **kwargs)
             count_log_prev = count

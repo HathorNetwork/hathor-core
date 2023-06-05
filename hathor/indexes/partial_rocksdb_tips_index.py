@@ -13,17 +13,15 @@
 # limitations under the License.
 
 import math
-import time
 from typing import TYPE_CHECKING, Dict, Iterator, Optional, Union
 
-import structlog
 from intervaltree import Interval, IntervalTree
 from structlog import get_logger
 
 from hathor.indexes.memory_tips_index import MemoryTipsIndex
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
 from hathor.indexes.tips_index import ScopeType
-from hathor.util import LogDuration, generic_progress
+from hathor.util import generic_progress
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
