@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Generator, List, Optional
 from mnemonic import Mnemonic
 from structlog import get_logger
 
-from hathor.builder import Builder
+from hathor.builder import BuildArtifacts, Builder
 from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
@@ -140,6 +140,9 @@ class Simulator:
         self._patches_rc_decrement()
 
     def get_default_builder(self) -> Builder:
+        """
+        Returns a builder with default configuration, for convenience when using create_peer() or create_artifacts()
+        """
         return Builder() \
             .set_network(self._network) \
             .set_soft_voided_tx_ids(set()) \
@@ -149,10 +152,18 @@ class Simulator:
             .use_memory()
 
     def create_peer(self, builder: Builder) -> HathorManager:
+        """
+        Returns a manager from a builder, after configuring it for simulator use.
+        You may get a builder from get_default_builder() for convenience.
+        """
         artifacts = self.create_artifacts(builder)
         return artifacts.manager
 
     def create_artifacts(self, builder: Builder) -> BuildArtifacts:
+        """
+        Returns build artifacts from a builder, after configuring it for simulator use.
+        You may get a builder from get_default_builder() for convenience.
+        """
         assert self._started, 'Simulator is not started.'
 
         wallet = HDWallet(gap_limit=2)
@@ -174,7 +185,7 @@ class Simulator:
         self.log.debug('randomized step: generate wallet', words=words)
         wallet.unlock(words=words, tx_storage=artifacts.tx_storage)
 
-        return artifacts.manager
+        return artifacts
 
     def create_tx_generator(self, peer: HathorManager, *args: Any, **kwargs: Any) -> RandomTransactionGenerator:
         return RandomTransactionGenerator(peer, self.rng, *args, **kwargs)
