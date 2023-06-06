@@ -15,7 +15,7 @@
 import secrets
 import time
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Any, Generator, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Generator, List, Optional
 
 from mnemonic import Mnemonic
 from structlog import get_logger
@@ -23,9 +23,7 @@ from structlog import get_logger
 from hathor.builder import Builder
 from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
-from hathor.event.websocket import EventWebsocketFactory
 from hathor.manager import HathorManager
-from hathor.p2p.peer_id import PeerId
 from hathor.simulator.clock import HeapClock
 from hathor.simulator.miner.dummy_miner import DummyMiner
 from hathor.simulator.miner.geometric_miner import GeometricMiner
@@ -141,38 +139,30 @@ class Simulator:
         self._started = False
         self._patches_rc_decrement()
 
-    def create_peer(
-        self,
-        network: Optional[str] = None,
-        peer_id: Optional[PeerId] = None,
-        enable_sync_v1: bool = True,
-        enable_sync_v2: bool = True,
-        soft_voided_tx_ids: Optional[Set[bytes]] = None,
-        full_verification: bool = True,
-        event_ws_factory: Optional[EventWebsocketFactory] = None
-    ) -> HathorManager:
+    def get_default_builder(self) -> Builder:
+        return Builder() \
+            .set_network(self._network) \
+            .set_soft_voided_tx_ids(set()) \
+            .enable_full_verification() \
+            .enable_sync_v1() \
+            .enable_sync_v2() \
+            .use_memory()
+
+    def create_peer(self, builder: Builder) -> HathorManager:
+        artifacts = self.create_artifacts(builder)
+        return artifacts.manager
+
+    def create_artifacts(self, builder: Builder) -> BuildArtifacts:
         assert self._started, 'Simulator is not started.'
-        assert peer_id is not None  # XXX: temporary, for checking that tests are using the peer_id
 
         wallet = HDWallet(gap_limit=2)
         wallet._manually_initialize()
 
-        builder = Builder() \
+        artifacts = builder \
             .set_reactor(self._clock) \
-            .set_peer_id(peer_id or PeerId()) \
-            .set_network(network or self._network) \
-            .set_wallet(wallet) \
             .set_rng(Random(self.rng.getrandbits(64))) \
-            .set_enable_sync_v1(enable_sync_v1) \
-            .set_enable_sync_v2(enable_sync_v2) \
-            .set_full_verification(full_verification) \
-            .set_soft_voided_tx_ids(soft_voided_tx_ids or set()) \
-            .use_memory()
-
-        if event_ws_factory:
-            builder.enable_event_manager(event_ws_factory=event_ws_factory)
-
-        artifacts = builder.build()
+            .set_wallet(wallet) \
+            .build()
 
         artifacts.manager.start()
         self.run_to_completion()

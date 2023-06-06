@@ -38,11 +38,11 @@ class TestEventSimulation(TestCase):
         simulator.start()
 
         main_peer_id = PeerId()
-        main_manager = simulator.create_peer(
-            peer_id=main_peer_id,
-            full_verification=False,
-            event_ws_factory=Mock()
-        )
+        builder = simulator.get_default_builder() \
+            .set_peer_id(main_peer_id) \
+            .disable_full_verification() \
+            .enable_event_manager(event_ws_factory=Mock())
+        main_manager = simulator.create_peer(builder)
         main_manager.allow_mining_without_peers()
 
         simulator.run(2 * 60)
@@ -102,11 +102,11 @@ class TestEventSimulation(TestCase):
         simulator.start()
 
         main_peer_id = PeerId()
-        main_manager = simulator.create_peer(
-            peer_id=main_peer_id,
-            full_verification=False,
-            event_ws_factory=Mock()
-        )
+        builder = simulator.get_default_builder() \
+            .set_peer_id(main_peer_id) \
+            .disable_full_verification() \
+            .enable_event_manager(event_ws_factory=Mock())
+        main_manager = simulator.create_peer(builder)
         main_manager.allow_mining_without_peers()
 
         miner = simulator.create_dummy_miner(main_manager, block_times=[120])
@@ -202,11 +202,11 @@ class TestEventSimulation(TestCase):
         simulator.start()
 
         main_peer_id = PeerId()
-        main_manager = simulator.create_peer(
-            peer_id=main_peer_id,
-            full_verification=False,
-            event_ws_factory=Mock()
-        )
+        builder = simulator.get_default_builder() \
+            .set_peer_id(main_peer_id) \
+            .disable_full_verification() \
+            .enable_event_manager(event_ws_factory=Mock())
+        main_manager = simulator.create_peer(builder)
         main_manager.allow_mining_without_peers()
 
         miner = simulator.create_dummy_miner(main_manager, block_times=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 120])
@@ -303,11 +303,11 @@ class TestEventSimulation(TestCase):
         simulator.start()
 
         main_peer_id = PeerId()
-        main_manager = simulator.create_peer(
-            peer_id=main_peer_id,
-            full_verification=False,
-            event_ws_factory=Mock()
-        )
+        builder = simulator.get_default_builder() \
+            .set_peer_id(main_peer_id) \
+            .disable_full_verification() \
+            .enable_event_manager(event_ws_factory=Mock())
+        main_manager = simulator.create_peer(builder)
         main_manager.allow_mining_without_peers()
 
         miner = simulator.create_dummy_miner(main_manager, block_times=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 120])

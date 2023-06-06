@@ -500,6 +500,16 @@ class Builder:
         self._full_verification = full_verification
         return self
 
+    def enable_full_verification(self) -> 'Builder':
+        self.check_if_can_modify()
+        self._full_verification = True
+        return self
+
+    def disable_full_verification(self) -> 'Builder':
+        self.check_if_can_modify()
+        self._full_verification = False
+        return self
+
     def set_soft_voided_tx_ids(self, soft_voided_tx_ids: Set[bytes]) -> 'Builder':
         self.check_if_can_modify()
         self._soft_voided_tx_ids = soft_voided_tx_ids
