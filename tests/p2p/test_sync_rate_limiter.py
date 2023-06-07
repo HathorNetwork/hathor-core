@@ -85,6 +85,9 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertEqual(sync1._send_tips.call_count, 1)
         # Residual delayed calls
         self.assertEqual(len(sync1._send_tips_call_later), 2)
+        # The residual delayed calls should have been canceled
+        for call_later in sync1._send_tips_call_later:
+            self.assertEqual(call_later.active(), False)
 
     def test_sync_rate_limiter_delayed_calls_draining(self):
         # Test the draining of delayed calls from _send_tips_call_later list
