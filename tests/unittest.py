@@ -6,7 +6,6 @@ from typing import Iterator, List, Optional
 from unittest import main as ut_main
 
 from structlog import get_logger
-from twisted.internet.defer import inlineCallbacks
 from twisted.internet.task import Clock
 from twisted.trial import unittest
 
@@ -152,7 +151,6 @@ class TestCase(unittest.TestCase):
         wallet.lock()
         return wallet
 
-    @inlineCallbacks
     def create_peer(self, network, peer_id=None, wallet=None, tx_storage=None, unlock_wallet=True, wallet_index=False,
                     capabilities=None, full_verification=True, enable_sync_v1=None, enable_sync_v2=None,
                     checkpoints=None, utxo_index=False, event_manager=None, use_memory_index=None, start_manager=True,
@@ -250,8 +248,11 @@ class TestCase(unittest.TestCase):
         manager.avg_time_between_blocks = 0.0001
 
         if start_manager:
-            yield manager.start()
+            # We don't need to yield because run_to_completion() will run until
+            # the node is fully initialized.
+            deferred = manager.start()
             self.run_to_completion()
+            self.assertTrue(deferred.called)
         return manager
 
     def run_to_completion(self):

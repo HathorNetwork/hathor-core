@@ -1,4 +1,3 @@
-from twisted.internet import defer
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.daa import TestMode, _set_test_mode

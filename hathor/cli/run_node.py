@@ -15,6 +15,7 @@
 import os
 import sys
 from argparse import SUPPRESS, ArgumentParser, Namespace
+from functools import partial
 from typing import Any, Callable, List, Tuple
 
 from pydantic import ValidationError
@@ -22,6 +23,7 @@ from structlog import get_logger
 
 from hathor.conf import TESTNET_SETTINGS_FILEPATH, HathorSettings
 from hathor.exception import PreInitializationError
+from hathor.pubsub import HathorEvents
 
 logger = get_logger()
 # LOGGING_CAPTURE_STDOUT = True
