@@ -301,24 +301,6 @@ class BaseTransaction(ABC):
     def calculate_min_height(self) -> int:
         raise NotImplementedError
 
-    def calculate_feature_activation_bit_counts(self) -> Optional[list[int]]:
-        """
-        Calculates the feature_activation_bit_counts metadata attribute.
-        It's only calculated by Blocks, and returns None otherwise.
-        """
-        if not self.is_block:
-            return None
-
-        return self._calculate_feature_activation_bit_counts()
-
-    @abstractmethod
-    def _calculate_feature_activation_bit_counts(self) -> Optional[list[int]]:
-        """
-        Calculates the feature_activation_bit_counts metadata attribute.
-        Must only be implemented by Blocks.
-        """
-        raise NotImplementedError
-
     @property
     def hash_hex(self) -> str:
         """Return the current stored hash in hex string format"""
@@ -893,7 +875,12 @@ class BaseTransaction(ABC):
             #        happens include generating new mining blocks and some tests
             height = self.calculate_height() if self.storage else 0
             score = self.weight if self.is_genesis else 0
-            feature_activation_bit_counts = self.calculate_feature_activation_bit_counts()
+            kwargs: dict[str, Any] = {}
+
+            if self.is_block:
+                from hathor.transaction import Block
+                assert isinstance(self, Block)
+                kwargs['feature_activation_bit_counts'] = self.calculate_feature_activation_bit_counts()
 
             metadata = TransactionMetadata(
                 hash=self.hash,
@@ -901,7 +888,7 @@ class BaseTransaction(ABC):
                 height=height,
                 score=score,
                 min_height=0,
-                feature_activation_bit_counts=feature_activation_bit_counts
+                **kwargs
             )
             self._metadata = metadata
         if not metadata.hash:
@@ -1010,6 +997,11 @@ class BaseTransaction(ABC):
 
     def _update_feature_activation_bit_counts_metadata(self) -> None:
         """Update the block feature_activation_bit_counts metadata."""
+        if not self.is_block:
+            return
+
+        from hathor.transaction import Block
+        assert isinstance(self, Block)
         metadata = self.get_metadata()
         metadata.feature_activation_bit_counts = self.calculate_feature_activation_bit_counts()
 

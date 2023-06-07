@@ -17,16 +17,9 @@ from unittest.mock import Mock
 import pytest
 
 from hathor.conf import HathorSettings
-from hathor.transaction import Block, Transaction, TransactionMetadata
-from hathor.transaction.genesis import BLOCK_GENESIS, TX_GENESIS1, TX_GENESIS2
+from hathor.transaction import Block, TransactionMetadata
+from hathor.transaction.genesis import BLOCK_GENESIS
 from hathor.transaction.storage import TransactionStorage
-
-
-@pytest.mark.parametrize('transaction', [TX_GENESIS1, TX_GENESIS2, Transaction()])
-def test_calculate_feature_activation_bit_counts_transaction(transaction: Transaction) -> None:
-    result = transaction.calculate_feature_activation_bit_counts()
-
-    assert result is None
 
 
 def test_calculate_feature_activation_bit_counts_genesis():

@@ -140,10 +140,6 @@ class Transaction(BaseTransaction):
             self._calculate_my_min_height(),
         )
 
-    def _calculate_feature_activation_bit_counts(self) -> Optional[list[int]]:
-        """Not implemented, as Transactions do not have the feature_activation_bit_counts metadata attribute."""
-        raise NotImplementedError
-
     def _calculate_inherited_min_height(self) -> int:
         """ Calculates min height inherited from any input or parent"""
         assert self.storage is not None
