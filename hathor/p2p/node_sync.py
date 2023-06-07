@@ -635,7 +635,7 @@ class NodeSyncTimestamp(SyncManager):
         """ Send a TIPS message.
         """
         # Filter for active delayed calls once one is executing
-        self._send_tips_call_later: List[IDelayedCall] = [
+        self._send_tips_call_later = [
             call_later
             for call_later in self._send_tips_call_later
             if call_later.active()
