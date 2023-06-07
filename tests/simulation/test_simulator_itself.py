@@ -46,11 +46,13 @@ class BaseSimulatorSelfTestCase(unittest.TestCase):
                                                       'the test class or pass `enable_sync_v2` by argument')
             enable_sync_v2 = self._enable_sync_v2
         assert enable_sync_v1 or enable_sync_v2, 'enable at least one sync version'
-        return simulator.create_peer(
-            peer_id=self.get_random_peer_id_from_pool(),
-            enable_sync_v1=enable_sync_v1,
-            enable_sync_v2=enable_sync_v2,
-        )
+
+        builder = simulator.get_default_builder() \
+            .set_peer_id(self.get_random_peer_id_from_pool()) \
+            .set_enable_sync_v1(enable_sync_v1) \
+            .set_enable_sync_v2(enable_sync_v2)
+
+        return simulator.create_peer(builder)
 
     def _simulate_run(self, run_i, simulator):
         # XXX: the following was adapted from test_new_syncing_peer, it doesn't matter too much, but has good coverage

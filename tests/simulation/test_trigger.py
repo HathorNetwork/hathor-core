@@ -12,7 +12,8 @@ class TriggerTestCase(unittest.TestCase):
         self.simulator.start()
 
         peer_id = PeerId()
-        self.manager1 = self.simulator.create_peer(peer_id=peer_id)
+        builder = self.simulator.get_default_builder().set_peer_id(peer_id)
+        self.manager1 = self.simulator.create_peer(builder)
         self.manager1.allow_mining_without_peers()
 
         print('-' * 30)
