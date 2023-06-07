@@ -49,6 +49,7 @@ class BaseEvent(BaseModel, use_enum_values=True):
         event_args: EventArguments,
         group_id: Optional[NonNegativeInt]
     ) -> 'BaseEvent':
+        """Creates a BaseEvent from PubSub's EventArguments."""
         event_data_type = event_type.data_type()
 
         return cls(

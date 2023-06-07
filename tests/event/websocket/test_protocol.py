@@ -221,6 +221,10 @@ def test_on_valid_ack_message(ack_event_id, window_size, last_sent_event_id):
 @pytest.mark.parametrize(
     ['ack_event_id', 'window_size', 'last_sent_event_id'],
     [
+        (0, 0, None),
+        (0, 1, None),
+        (10, 0, None),
+        (10, 1, None),
         (0, 0, 0),
         (0, 1, 10),
         (0, 10, 1),
@@ -274,9 +278,13 @@ def test_start_message_on_active():
     ['_ack_event_id', 'last_sent_event_id', 'ack_event_id', '_type'],
     [
         (1, None, 0, InvalidRequestType.ACK_TOO_SMALL),
+        (1, None, 1, InvalidRequestType.ACK_TOO_SMALL),
         (1, 1, 0, InvalidRequestType.ACK_TOO_SMALL),
+        (1, 1, 1, InvalidRequestType.ACK_TOO_SMALL),
         (10, None, 5, InvalidRequestType.ACK_TOO_SMALL),
+        (10, None, 10, InvalidRequestType.ACK_TOO_SMALL),
         (10, 1, 5, InvalidRequestType.ACK_TOO_SMALL),
+        (10, 1, 10, InvalidRequestType.ACK_TOO_SMALL),
         (0, None, 1, InvalidRequestType.ACK_TOO_LARGE),
         (0, 0, 1, InvalidRequestType.ACK_TOO_LARGE),
         (5, None, 10, InvalidRequestType.ACK_TOO_LARGE),
@@ -297,33 +305,26 @@ def test_on_invalid_ack_message(_ack_event_id, last_sent_event_id, ack_event_id,
 
 
 @pytest.mark.parametrize(
-    ['_ack_event_id', 'last_sent_event_id', 'ack_event_id', '_type'],
+    ['_ack_event_id', 'ack_event_id'],
     [
-        (0, None, None, InvalidRequestType.ACK_TOO_SMALL),
-        (0, 1, None, InvalidRequestType.ACK_TOO_SMALL),
-        (1, None, 0, InvalidRequestType.ACK_TOO_SMALL),
-        (1, 1, 0, InvalidRequestType.ACK_TOO_SMALL),
-        (10, None, 5, InvalidRequestType.ACK_TOO_SMALL),
-        (10, 1, 5, InvalidRequestType.ACK_TOO_SMALL),
-        (None, None, 0, InvalidRequestType.ACK_TOO_LARGE),
-        (1, 0, 1, InvalidRequestType.ACK_TOO_LARGE),
-        (0, None, 1, InvalidRequestType.ACK_TOO_LARGE),
-        (0, 0, 1, InvalidRequestType.ACK_TOO_LARGE),
-        (5, None, 10, InvalidRequestType.ACK_TOO_LARGE),
-        (5, 1, 10, InvalidRequestType.ACK_TOO_LARGE),
+        (0, None),
+        (0, None),
+        (1, 0),
+        (1, 0),
+        (10, 5),
+        (10, 5),
     ]
 )
-def test_on_invalid_start_message(_ack_event_id, last_sent_event_id, ack_event_id, _type):
+def test_on_invalid_start_message(_ack_event_id, ack_event_id):
     protocol = EventWebsocketProtocol()
     protocol._ack_event_id = _ack_event_id
-    protocol._last_sent_event_id = last_sent_event_id
     protocol.send_invalid_request_response = Mock()
     ack_event_id = 'null' if ack_event_id is None else ack_event_id
     payload = f'{{"type": "START_STREAM", "last_ack_event_id": {ack_event_id}, "window_size": 0}}'.encode('utf8')
 
     protocol.onMessage(payload, False)
 
-    protocol.send_invalid_request_response.assert_called_once_with(_type, payload)
+    protocol.send_invalid_request_response.assert_called_once_with(InvalidRequestType.ACK_TOO_SMALL, payload)
 
 
 @pytest.mark.parametrize(

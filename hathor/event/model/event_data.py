@@ -63,30 +63,34 @@ class TxMetadata(BaseModel, extra=Extra.ignore):
         >>> TxMetadata._parse_spent_outputs([0, ['tx1', 'tx2']])
         SpentOutput(index=0, tx_ids=['tx1', 'tx2'])
         """
-        if isinstance(spent_output, SpentOutput):
-            return spent_output
+        if isinstance(spent_output, list):
+            index, tx_ids = spent_output
 
-        index, tx_ids = spent_output
+            return SpentOutput(
+                index=cast(int, index),
+                tx_ids=cast(list[str], tx_ids)
+            )
 
-        return SpentOutput(
-            index=cast(int, index),
-            tx_ids=cast(list[str], tx_ids)
-        )
+        return spent_output
 
 
 class BaseEventData(BaseModel):
+    """Base class for event data polymorphism."""
     @classmethod
     def from_event_arguments(cls, args: EventArguments) -> 'EventData':
+        """Returns an instance of this class by processing PubSub's EventArguments."""
         raise NotImplementedError()
 
 
 class EmptyData(BaseEventData):
+    """Class that represents empty data on an event."""
     @classmethod
     def from_event_arguments(cls, args: EventArguments) -> 'EmptyData':
         return cls()
 
 
 class TxData(BaseEventData, extra=Extra.ignore):
+    """Class that represents transaction data on an event."""
     hash: str
     nonce: Optional[int] = None
     timestamp: int
@@ -110,6 +114,7 @@ class TxData(BaseEventData, extra=Extra.ignore):
 
 
 class ReorgData(BaseEventData):
+    """Class that represents reorg data on an event."""
     reorg_size: int
     previous_best_block: str
     new_best_block: str
@@ -125,4 +130,5 @@ class ReorgData(BaseEventData):
         )
 
 
+# Union type to encompass BaseEventData polymorphism
 EventData = Union[EmptyData, TxData, ReorgData]

@@ -93,7 +93,6 @@ class Builder:
         self._force_memory_index: bool = False
 
         self._event_manager: Optional[EventManager] = None
-        self._event_ws_factory: Optional[EventWebsocketFactory] = None
         self._enable_event_queue: Optional[bool] = None
 
         self._rocksdb_path: Optional[str] = None
@@ -374,11 +373,14 @@ class Builder:
 
     def _get_or_create_event_manager(self) -> EventManager:
         if self._event_manager is None:
+            reactor = self._get_reactor()
+            storage = self._get_or_create_event_storage()
+            factory = EventWebsocketFactory(reactor, storage)
             self._event_manager = EventManager(
-                reactor=self._get_reactor(),
+                reactor=reactor,
                 pubsub=self._get_or_create_pubsub(),
-                event_storage=self._get_or_create_event_storage(),
-                event_ws_factory=self._event_ws_factory
+                event_storage=storage,
+                event_ws_factory=factory
             )
 
         return self._event_manager
@@ -460,10 +462,9 @@ class Builder:
         self.enable_tokens_index()
         return self
 
-    def enable_event_manager(self, *, event_ws_factory: EventWebsocketFactory) -> 'Builder':
+    def enable_event_queue(self) -> 'Builder':
         self.check_if_can_modify()
         self._enable_event_queue = True
-        self._event_ws_factory = event_ws_factory
         return self
 
     def set_tx_storage(self, tx_storage: TransactionStorage) -> 'Builder':

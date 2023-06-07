@@ -31,15 +31,23 @@ logger = get_logger()
 
 
 class EventWebsocketProtocol(WebSocketServerProtocol):
-    """ Websocket protocol, basically forwards some events to the Websocket factory.
-    """
+    """WebSocket protocol that handles Event Queue feature commands."""
 
     factory: 'EventWebsocketFactory'
+
+    # The peer connected to this connection.
     client_peer: Optional[str] = None
 
+    # The last event id that was sent to this connection.
     _last_sent_event_id: Optional[int] = None
+
+    # The last event id that was acknowledged by this connection.
     _ack_event_id: Optional[int] = None
+
+    # The amount of events this connection can process. Essentially, its flux control.
     _window_size: int = 0
+
+    # Whether the stream is enabled or not.
     _stream_is_active: bool = False
 
     def __init__(self):
@@ -47,7 +55,11 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
         self.log = logger.new()
 
     def can_receive_event(self, event_id: int) -> bool:
-        """Returns whether this client is available to receive an event."""
+        """
+        Returns whether this client is available to receive an event.
+        Only the next expected event can be sent, if the stream is active. Also, there needs to be more slots in the
+        configured window than events that were sent but not acknowledged yet.
+        """
         number_of_pending_events = 0
 
         if self._last_sent_event_id is not None:
@@ -89,6 +101,7 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
             self.send_invalid_request_response(error.type, payload)
 
     def _handle_request(self, request: Request) -> None:
+        """Handles a request message according to its type."""
         # This could be a pattern match in Python 3.10
         request_type = type(request)
         handlers: dict[type, Callable] = {
@@ -103,43 +116,49 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
         handle_fn(request)
 
     def _handle_start_stream_request(self, request: StartStreamRequest) -> None:
+        """
+        Handles a StartStreamRequest message.
+        Sets all required state attributes and triggers the factory's recursion to send events while it's possible.
+        """
         if self._stream_is_active:
             raise InvalidRequestError(InvalidRequestType.STREAM_IS_ACTIVE)
 
-        self._validate_ack(request.last_ack_event_id)
-
         self._last_sent_event_id = request.last_ack_event_id
-        self._ack_event_id = request.last_ack_event_id
+        self._update_ack(request.last_ack_event_id)
         self._window_size = request.window_size
         self._stream_is_active = True
 
         self.factory.send_next_event_to_connection(self)
 
     def _handle_ack_request(self, request: AckRequest) -> None:
+        """
+        Handles an AckRequest message.
+        Updates state attributes and triggers the factory's recursion to send events while it's possible
+        """
         if not self._stream_is_active:
             raise InvalidRequestError(InvalidRequestType.STREAM_IS_INACTIVE)
 
-        self._validate_ack(request.ack_event_id)
-
-        self._ack_event_id = request.ack_event_id
+        self._update_ack(request.ack_event_id)
+        self._last_sent_event_id = request.ack_event_id
         self._window_size = request.window_size
 
         self.factory.send_next_event_to_connection(self)
 
     def _handle_stop_stream_request(self) -> None:
+        """Handles a StopStreamRequest message."""
         if not self._stream_is_active:
             raise InvalidRequestError(InvalidRequestType.STREAM_IS_INACTIVE)
 
         self._stream_is_active = False
 
-    def _validate_ack(self, ack_event_id: Optional[int]) -> None:
-        """Validates an ack_event_id from a request.
+    def _update_ack(self, ack_event_id: Optional[int]) -> None:
+        """Update the _ack_event_id if the new one is valid.
 
-        The ack_event_id can't be smaller than the last ack we've received
-        and can't be larger than the last event we've sent.
+        The ack_event_id must be greater than the last ack we've received,
+        and can't be greater than the last event we've sent.
         """
         if self._ack_event_id is not None and (
-            ack_event_id is None or ack_event_id < self._ack_event_id
+            ack_event_id is None or ack_event_id <= self._ack_event_id
         ):
             raise InvalidRequestError(InvalidRequestType.ACK_TOO_SMALL)
 
@@ -148,7 +167,10 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
         ):
             raise InvalidRequestError(InvalidRequestType.ACK_TOO_LARGE)
 
+        self._ack_event_id = ack_event_id
+
     def send_event_response(self, event_response: EventResponse) -> None:
+        """Send an EventResponse to this connection."""
         self._send_response(event_response)
         self._last_sent_event_id = event_response.event.id
 
@@ -158,6 +180,7 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
         invalid_payload: Optional[bytes] = None,
         error_message: Optional[str] = None
     ) -> None:
+        """Send an InvalidRequestResponse to this connection."""
         invalid_request = None if invalid_payload is None else invalid_payload.decode('utf8')
         response = InvalidRequestResponse(
             type=_type,
@@ -168,6 +191,7 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
         self._send_response(response)
 
     def _send_response(self, response: Response) -> None:
+        """Actually sends a response to this connection."""
         payload = json_dumpb(response.dict())
 
         try:

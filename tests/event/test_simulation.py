@@ -12,8 +12,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from unittest.mock import Mock
-
 import pytest
 
 from hathor.event.model.base_event import BaseEvent
@@ -40,7 +38,7 @@ class TestEventSimulation(TestCase):
         builder = simulator.get_default_builder() \
             .set_peer_id(main_peer_id) \
             .disable_full_verification() \
-            .enable_event_manager(event_ws_factory=Mock())
+            .enable_event_queue()
         main_manager = simulator.create_peer(builder)
         main_manager.allow_mining_without_peers()
 
@@ -104,7 +102,7 @@ class TestEventSimulation(TestCase):
         builder = simulator.get_default_builder() \
             .set_peer_id(main_peer_id) \
             .disable_full_verification() \
-            .enable_event_manager(event_ws_factory=Mock())
+            .enable_event_queue()
         main_manager = simulator.create_peer(builder)
         main_manager.allow_mining_without_peers()
 
@@ -204,7 +202,7 @@ class TestEventSimulation(TestCase):
         builder = simulator.get_default_builder() \
             .set_peer_id(main_peer_id) \
             .disable_full_verification() \
-            .enable_event_manager(event_ws_factory=Mock())
+            .enable_event_queue()
         main_manager = simulator.create_peer(builder)
         main_manager.allow_mining_without_peers()
 
@@ -305,7 +303,7 @@ class TestEventSimulation(TestCase):
         builder = simulator.get_default_builder() \
             .set_peer_id(main_peer_id) \
             .disable_full_verification() \
-            .enable_event_manager(event_ws_factory=Mock())
+            .enable_event_queue()
         main_manager = simulator.create_peer(builder)
         main_manager.allow_mining_without_peers()
 

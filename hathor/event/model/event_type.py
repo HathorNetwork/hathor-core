@@ -28,6 +28,7 @@ class EventType(Enum):
 
     @classmethod
     def from_hathor_event(cls, hathor_event: HathorEvents) -> 'EventType':
+        """Create an Event Queue feature EventType from a PubSub HathorEvents."""
         event = _HATHOR_EVENT_TO_EVENT_TYPE.get(hathor_event)
 
         assert event is not None, f'Cannot create EventType from {hathor_event}'
