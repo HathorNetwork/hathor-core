@@ -453,7 +453,7 @@ def progress(
     t_start = time.time()
     count = 0
     count_log_prev = 0
-    if total is not None:
+    if total:
         log.info('loading... 0%', progress=0)
     else:
         log.info('loading...')
@@ -471,7 +471,7 @@ def progress(
             dcount = count - count_log_prev
             rate = '?' if dt_log == 0 else dcount / dt_log
             kwargs = dict(rate=rate, new=dcount, dt=dt_log, total=count)
-            if total is not None:
+            if total:
                 progress_ = count / total
                 elapsed_time = t_log - t_start
                 remaining_time = LogDuration(elapsed_time / progress_ - elapsed_time)
@@ -491,7 +491,7 @@ def progress(
     t_final = time.time()
     dt_total = LogDuration(t_final - t_start)
     rate = '?' if dt_total == 0 else count / dt_total
-    if total is not None:
+    if total:
         progress_ = count / total
         log.info(f'loaded...  {math.floor(progress_ * 100):2.0f}%', progress=progress_, count=count, rate=rate,
                  total_dt=dt_total)
@@ -548,7 +548,7 @@ def _tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib
             tx_rate = '?' if dt_log == 0 else dcount / dt_log
             ts = datetime.datetime.fromtimestamp(ts_tx)
             kwargs = dict(tx_rate=tx_rate, tx_new=dcount, dt=dt_log, total=count, latest_ts=ts, height=h)
-            if total is not None:
+            if total:
                 progress_ = count / total
                 elapsed_time = t_log - t_start
                 remaining_time = LogDuration(elapsed_time / progress_ - elapsed_time)
