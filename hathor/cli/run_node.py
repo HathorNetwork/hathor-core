@@ -33,6 +33,7 @@ class RunNode:
         ('--enable-crash-api', lambda args: bool(args.enable_crash_api)),
         ('--x-sync-bridge', lambda args: bool(args.x_sync_bridge)),
         ('--x-sync-v2-only', lambda args: bool(args.x_sync_v2_only)),
+        ('--x-enable-event-queue', lambda args: bool(args.x_enable_event_queue))
     ]
 
     @classmethod

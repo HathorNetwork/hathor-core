@@ -170,10 +170,6 @@ class CliBuilder:
         consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub=pubsub)
 
         if args.x_enable_event_queue:
-            if not settings.ENABLE_EVENT_QUEUE_FEATURE:
-                self.log.error('The event queue feature is not available yet')
-                sys.exit(-1)
-
             self.log.info('--x-enable-event-queue flag provided. '
                           'The events detected by the full node will be stored and can be retrieved by clients')
 
