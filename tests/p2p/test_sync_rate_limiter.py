@@ -127,6 +127,51 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         # should have been executed
         self.assertEqual(len(sync1._send_tips_call_later), 0)
 
+    def test_sync_rate_limiter_delayed_calls_stop(self):
+        # Test the draining of delayed calls from _send_tips_call_later list
+        manager1 = self.create_peer()
+        manager2 = self.create_peer()
+        manager2.connections.MAX_ENABLED_SYNC = 0
+
+        conn12 = FakeConnection(manager1, manager2, latency=0.05)
+        self.simulator.add_connection(conn12)
+        self.simulator.run(3600)
+
+        connections = manager2.connections
+        connections.rate_limiter.reset(connections.GlobalRateLimiter.SEND_TIPS)
+        connections.enable_rate_limiter(1, 1)
+
+        connected_peers2 = list(manager2.connections.connected_peers.values())
+        self.assertEqual(1, len(connected_peers2))
+
+        protocol1 = connected_peers2[0]
+        sync1 = protocol1.state.sync_manager
+
+        sync1.send_tips()
+        self.assertEqual(len(sync1._send_tips_call_later), 0)
+
+        from hathor.conf import HathorSettings
+        settings = HathorSettings()
+
+        max_delayed_calls = settings.MAX_GET_TIPS_DELAYED_CALLS
+        for count in range(max_delayed_calls + 1):
+            sync1.send_tips()
+
+        self.assertEqual(len(sync1._send_tips_call_later), max_delayed_calls)
+
+        # Sync is stopped
+        self.assertFalse(sync1.is_running)
+        # Transport connection is aborted
+        self.assertTrue(conn12.tr2.disconnecting)
+
+        self.simulator.run(30)
+
+        # A residual delayed calls is kept when connection closes
+        self.assertEqual(len(sync1._send_tips_call_later), max_delayed_calls)
+        # All residual tasks should have been canceled
+        for call_later in sync1._send_tips_call_later:
+            self.assertEqual(call_later.active(), False)
+
 
 class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, BaseRandomSimulatorTestCase):
     __test__ = True

@@ -623,6 +623,11 @@ class NodeSyncTimestamp(SyncManager):
         """Try to send a TIPS message. If rate limit has been reached, it schedules to send it later."""
         if not self.global_rate_limiter.add_hit(self.GlobalRateLimiter.SEND_TIPS):
             self.log.debug('send_tips throttled')
+            if len(self._send_tips_call_later) >= settings.MAX_GET_TIPS_DELAYED_CALLS:
+                self.protocol.send_error_and_close_connection(
+                    'Too many GET_TIPS message'
+                )
+                return
             self._send_tips_call_later.append(
                 self.reactor.callLater(
                     1, self.send_tips, timestamp, include_hashes, offset

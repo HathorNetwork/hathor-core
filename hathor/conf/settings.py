@@ -392,6 +392,9 @@ class HathorSettings(NamedTuple):
     # All settings related to Feature Activation
     FEATURE_ACTIVATION: FeatureActivationSettings = FeatureActivationSettings()
 
+    # Maximum number of GET_TIPS delayed calls while running sync.
+    MAX_GET_TIPS_DELAYED_CALLS: int = 5
+
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':
         """Takes a filepath to a yaml file and returns a validated HathorSettings instance."""
