@@ -87,7 +87,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.assertEqual(len(sync1._send_tips_call_later), 2)
 
     def test_sync_rate_limiter_delayed_calls_draining(self):
-        # Test the draining of delayed calss from _send_tips_call_later list
+        # Test the draining of delayed calls from _send_tips_call_later list
         manager1 = self.create_peer()
         manager2 = self.create_peer()
         manager2.connections.MAX_ENABLED_SYNC = 0
@@ -123,6 +123,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         # Without disconnection, all the delayed calls
         # should have been executed
         self.assertEqual(len(sync1._send_tips_call_later), 0)
+
 
 class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, BaseRandomSimulatorTestCase):
     __test__ = True
