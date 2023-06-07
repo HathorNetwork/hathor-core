@@ -1,4 +1,4 @@
-from unittest.mock import Mock, MagicMock
+from unittest.mock import MagicMock, Mock
 
 from twisted.python.failure import Failure
 
