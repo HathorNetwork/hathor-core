@@ -16,7 +16,7 @@ import base64
 import struct
 from collections import OrderedDict
 from math import inf
-from typing import TYPE_CHECKING, Any, Callable, Dict, Generator, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Generator, Iterator, Optional
 from weakref import WeakSet
 
 from structlog import get_logger
@@ -65,8 +65,8 @@ class SendDataPush:
         self.is_running: bool = False
         self.is_producing: bool = False
 
-        self.queue: OrderedDict[bytes, Tuple[BaseTransaction, List[bytes]]] = OrderedDict()
-        self.priority_queue: OrderedDict[bytes, Tuple[BaseTransaction, List[bytes]]] = OrderedDict()
+        self.queue: OrderedDict[bytes, tuple[BaseTransaction, list[bytes]]] = OrderedDict()
+        self.priority_queue: OrderedDict[bytes, tuple[BaseTransaction, list[bytes]]] = OrderedDict()
 
         self.delayed_call: Optional[IDelayedCall] = None
 
@@ -220,7 +220,7 @@ class NodeSyncTimestamp(SyncManager):
         self.previous_timestamp: int = 0
 
         # Latest deferred waiting for a reply.
-        self.deferred_by_key: Dict[str, Deferred[Any]] = {}
+        self.deferred_by_key: dict[str, Deferred[Any]] = {}
 
         # Maximum difference between our latest timestamp and synced timestamp to consider
         # that the peer is synced (in seconds).
@@ -248,7 +248,7 @@ class NodeSyncTimestamp(SyncManager):
             'synced_timestamp': self.synced_timestamp,
         }
 
-    def get_cmd_dict(self) -> Dict[ProtocolMessages, Callable[[str], None]]:
+    def get_cmd_dict(self) -> dict[ProtocolMessages, Callable[[str], None]]:
         """ Return a dict of messages.
         """
         return {

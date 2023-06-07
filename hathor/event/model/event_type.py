@@ -13,7 +13,6 @@
 #  limitations under the License.
 
 from enum import Enum
-from typing import Dict, Type
 
 from hathor.event.model.event_data import BaseEventData, EmptyData, ReorgData, TxData
 from hathor.pubsub import HathorEvents
@@ -35,7 +34,7 @@ class EventType(Enum):
 
         return event
 
-    def data_type(self) -> Type[BaseEventData]:
+    def data_type(self) -> type[BaseEventData]:
         return _EVENT_TYPE_TO_EVENT_DATA[self]
 
 
@@ -48,7 +47,7 @@ _HATHOR_EVENT_TO_EVENT_TYPE = {
     HathorEvents.CONSENSUS_TX_UPDATE: EventType.VERTEX_METADATA_CHANGED
 }
 
-_EVENT_TYPE_TO_EVENT_DATA: Dict[EventType, Type[BaseEventData]] = {
+_EVENT_TYPE_TO_EVENT_DATA: dict[EventType, type[BaseEventData]] = {
     EventType.LOAD_STARTED: EmptyData,
     EventType.LOAD_FINISHED: EmptyData,
     EventType.NEW_VERTEX_ACCEPTED: TxData,

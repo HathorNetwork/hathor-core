@@ -14,7 +14,6 @@
 
 import os
 import sys
-from typing import Type
 
 from structlog import get_logger
 from twisted.internet import defer
@@ -53,7 +52,7 @@ class DebugRaiseResource(Resource):
     }
     default_msg = 'exception raised for debugging purposes'
 
-    def run(self, exc_cls: Type[BaseException], msg: str) -> None:
+    def run(self, exc_cls: type[BaseException], msg: str) -> None:
         raise exc_cls(msg)
 
     def render_GET(self, request: Request) -> bytes:
@@ -79,7 +78,7 @@ class DebugRejectResource(DebugRaiseResource):
     }
     default_msg = 'deferred rejected for debugging purposes'
 
-    def run(self, exc_cls: Type[BaseException], msg: str) -> None:
+    def run(self, exc_cls: type[BaseException], msg: str) -> None:
         deferred: defer.Deferred[None] = defer.Deferred()
         deferred.errback(exc_cls(msg))
 

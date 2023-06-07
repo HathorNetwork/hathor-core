@@ -14,7 +14,7 @@
 
 import inspect
 import json
-from typing import TYPE_CHECKING, Any, Callable, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from pydantic import ValidationError
 from twisted.protocols.basic import LineReceiver
@@ -105,7 +105,7 @@ class SysctlProtocol(LineReceiver):
             self.sendError(f'{path} not found')
             return
 
-        output: List[str] = []
+        output: list[str] = []
         output.extend(self._get_method_help('getter', cmd.getter))
         output.append('')
         output.extend(self._get_method_help('setter', cmd.setter))
@@ -135,12 +135,12 @@ class SysctlProtocol(LineReceiver):
             return tuple(json.loads(x) for x in parts)
         return json.loads(value_str)
 
-    def _get_method_help(self, method_name: str, method: Optional[Callable]) -> List[str]:
+    def _get_method_help(self, method_name: str, method: Optional[Callable]) -> list[str]:
         """Return a list of strings with the help for `method`."""
         if method is None:
             return [f'{method_name}: not available']
 
-        output: List[str] = []
+        output: list[str] = []
         doc: str = inspect.getdoc(method) or '(no help found)'
         signature = inspect.signature(method)
         output.append(f'{method_name}{signature}:')

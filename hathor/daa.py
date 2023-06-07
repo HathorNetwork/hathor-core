@@ -21,7 +21,7 @@ NOTE: This module could use a better name.
 
 from enum import IntFlag
 from math import log
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 from structlog import get_logger
 
@@ -90,7 +90,7 @@ def calculate_next_weight(parent_block: 'Block', timestamp: int) -> float:
     if N < 10:
         return MIN_BLOCK_WEIGHT
 
-    blocks: List['Block'] = []
+    blocks: list['Block'] = []
     while len(blocks) < N + 1:
         blocks.append(root)
         root = root.get_block_parent()

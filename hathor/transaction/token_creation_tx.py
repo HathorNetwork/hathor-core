@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from struct import error as StructError, pack
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from hathor.conf import HathorSettings
 from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
@@ -42,9 +42,9 @@ class TokenCreationTransaction(Transaction):
                  signal_bits: int = 0,
                  version: int = TxVersion.TOKEN_CREATION_TRANSACTION,
                  weight: float = 0,
-                 inputs: Optional[List[TxInput]] = None,
-                 outputs: Optional[List[TxOutput]] = None,
-                 parents: Optional[List[bytes]] = None,
+                 inputs: Optional[list[TxInput]] = None,
+                 outputs: Optional[list[TxOutput]] = None,
+                 parents: Optional[list[bytes]] = None,
                  hash: Optional[bytes] = None,
                  token_name: str = '',
                  token_symbol: str = '',
@@ -181,7 +181,7 @@ class TokenCreationTransaction(Transaction):
         return ret
 
     @classmethod
-    def deserialize_token_info(cls, buf: bytes, *, verbose: VerboseCallback = None) -> Tuple[str, str, bytes]:
+    def deserialize_token_info(cls, buf: bytes, *, verbose: VerboseCallback = None) -> tuple[str, str, bytes]:
         """ Gets the token name and symbol from serialized format
         """
         (token_info_version,), buf = unpack('!B', buf)
@@ -209,14 +209,14 @@ class TokenCreationTransaction(Transaction):
 
         return decoded_name, decoded_symbol, buf
 
-    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
+    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['token_name'] = self.token_name
         json['token_symbol'] = self.token_symbol
         json['tokens'] = []
         return json
 
-    def to_json_extended(self) -> Dict[str, Any]:
+    def to_json_extended(self) -> dict[str, Any]:
         json = super().to_json_extended()
         json['token_name'] = self.token_name
         json['token_symbol'] = self.token_symbol

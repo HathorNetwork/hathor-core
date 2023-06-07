@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections import defaultdict
-from typing import Dict, Iterator, List, Optional, Set, Tuple, cast
+from typing import Iterator, Optional, cast
 
 from sortedcontainers import SortedKeyList
 from structlog import get_logger
@@ -36,12 +36,12 @@ class MemoryTokenIndexInfo(TokenIndexInfo):
     _name: Optional[str]
     _symbol: Optional[str]
     _total: int
-    _mint: Set[TokenUtxoInfo]
-    _melt: Set[TokenUtxoInfo]
+    _mint: set[TokenUtxoInfo]
+    _melt: set[TokenUtxoInfo]
     _transactions: 'SortedKeyList[TransactionIndexElement]'
 
     def __init__(self, name: Optional[str] = None, symbol: Optional[str] = None, total: int = 0,
-                 mint: Optional[Set[TokenUtxoInfo]] = None, melt: Optional[Set[TokenUtxoInfo]] = None) -> None:
+                 mint: Optional[set[TokenUtxoInfo]] = None, melt: Optional[set[TokenUtxoInfo]] = None) -> None:
         self._name = name
         self._symbol = symbol
         self._total = total
@@ -75,7 +75,7 @@ class MemoryTokensIndex(TokensIndex):
         return None
 
     def force_clear(self) -> None:
-        self._tokens: Dict[bytes, MemoryTokenIndexInfo] = defaultdict(MemoryTokenIndexInfo)
+        self._tokens: dict[bytes, MemoryTokenIndexInfo] = defaultdict(MemoryTokenIndexInfo)
 
     def _add_to_index(self, tx: BaseTransaction, index: int) -> None:
         """ Add tx to mint/melt indexes and total amount
@@ -165,7 +165,7 @@ class MemoryTokensIndex(TokensIndex):
             assert tx.hash is not None
             del self._tokens[tx.hash]
 
-    def iter_all_tokens(self) -> Iterator[Tuple[bytes, TokenIndexInfo]]:
+    def iter_all_tokens(self) -> Iterator[tuple[bytes, TokenIndexInfo]]:
         yield from self._tokens.items()
 
     def get_token_info(self, token_uid: bytes) -> TokenIndexInfo:
@@ -182,7 +182,7 @@ class MemoryTokensIndex(TokensIndex):
         info = self._tokens[token_uid]
         return len(info._transactions)
 
-    def get_newest_transactions(self, token_uid: bytes, count: int) -> Tuple[List[bytes], bool]:
+    def get_newest_transactions(self, token_uid: bytes, count: int) -> tuple[list[bytes], bool]:
         assert is_token_uid_valid(token_uid)
         if token_uid not in self._tokens:
             return [], False
@@ -190,7 +190,7 @@ class MemoryTokensIndex(TokensIndex):
         return get_newest_sorted_key_list(transactions, count)
 
     def get_older_transactions(self, token_uid: bytes, timestamp: int, hash_bytes: bytes, count: int
-                               ) -> Tuple[List[bytes], bool]:
+                               ) -> tuple[list[bytes], bool]:
         assert is_token_uid_valid(token_uid)
         if token_uid not in self._tokens:
             return [], False
@@ -198,7 +198,7 @@ class MemoryTokensIndex(TokensIndex):
         return get_older_sorted_key_list(transactions, timestamp, hash_bytes, count)
 
     def get_newer_transactions(self, token_uid: bytes, timestamp: int, hash_bytes: bytes, count: int
-                               ) -> Tuple[List[bytes], bool]:
+                               ) -> tuple[list[bytes], bool]:
         assert is_token_uid_valid(token_uid)
         if token_uid not in self._tokens:
             return [], False

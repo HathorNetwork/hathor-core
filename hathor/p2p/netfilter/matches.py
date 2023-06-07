@@ -14,7 +14,7 @@
 
 from abc import ABC, abstractmethod
 from ipaddress import ip_address, ip_network
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from hathor.p2p.netfilter.context import NetfilterContext
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 class NetfilterMatch(ABC):
     """Abstract match class."""
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         return {
             'type': type(self).__name__,
             'match_params': {}
@@ -45,7 +45,7 @@ class TwoVariablesMatch(NetfilterMatch):
         self.a = a
         self.b = b
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         data = super().to_json()
         data['match_params']['a'] = self.a.to_json()
         data['match_params']['b'] = self.b.to_json()
@@ -87,7 +87,7 @@ class NetfilterMatchIPAddress(NetfilterMatch):
         """
         self.network = ip_network(host)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         data = super().to_json()
         data['match_params']['host'] = str(self.network)
         return data
@@ -118,7 +118,7 @@ class NetfilterMatchPeerId(NetfilterMatch):
     def __init__(self, peer_id: str):
         self.peer_id = peer_id
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         data = super().to_json()
         data['match_params']['peer_id'] = self.peer_id
         return data

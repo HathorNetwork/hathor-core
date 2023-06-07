@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from enum import Enum
-from typing import List, NamedTuple
+from typing import NamedTuple
 
 
 class GetNextPayload(NamedTuple):
@@ -25,7 +25,7 @@ class NextPayload(NamedTuple):
     timestamp: int
     next_timestamp: int
     next_offset: int
-    hashes: List[bytes]
+    hashes: list[bytes]
 
 
 class GetTipsPayload(NamedTuple):
@@ -38,7 +38,7 @@ class TipsPayload(NamedTuple):
     length: int
     timestamp: int
     merkle_tree: bytes
-    hashes: List[str]
+    hashes: list[str]
     has_more: bool
 
 

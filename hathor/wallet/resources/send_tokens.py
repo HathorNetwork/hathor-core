@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Optional, Union
 
 from twisted.internet import threads
 from twisted.web.http import Request
@@ -118,7 +118,7 @@ class SendTokensResource(Resource):
         from twisted.web.server import NOT_DONE_YET
         return NOT_DONE_YET
 
-    def _render_POST_thread(self, values: Dict[str, Any], request: Request) -> Union[bytes, Transaction]:
+    def _render_POST_thread(self, values: dict[str, Any], request: Request) -> Union[bytes, Transaction]:
         tx = self.manager.wallet.prepare_transaction(Transaction, values['inputs'],
                                                      values['outputs'], values['timestamp'])
         tx.storage = values['storage']

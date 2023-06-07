@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Iterator, Optional
 
 from structlog import get_logger
 
@@ -63,7 +63,7 @@ class RocksDBTimestampIndex(TimestampIndex, RocksDBIndexUtils):
         assert len(key) == 4 + 32
         return bytes(key)
 
-    def _from_key(self, key: bytes) -> Tuple[int, bytes]:
+    def _from_key(self, key: bytes) -> tuple[int, bytes]:
         """Parse a key on the column-family."""
         import struct
         assert len(key) == 4 + 32
@@ -85,7 +85,7 @@ class RocksDBTimestampIndex(TimestampIndex, RocksDBIndexUtils):
         self._db.delete((self._cf, key))
 
     def _iter(self, from_timestamp: Optional[int] = None, from_tx: Optional[bytes] = None,
-              *, reverse: bool = False) -> Iterator[Tuple[int, bytes]]:
+              *, reverse: bool = False) -> Iterator[tuple[int, bytes]]:
         """ Iterate over transactions optionally starting from a timestamp/hash, by default from oldest to newest.
 
         If we request with from_timestamp=ts1 and from_tx=tx1, (ts1,tx1) will not be returned by the iterator.
@@ -123,24 +123,24 @@ class RocksDBTimestampIndex(TimestampIndex, RocksDBIndexUtils):
             yield timestamp, tx_hash
         self.log.debug('seek end')
 
-    def get_newest(self, count: int) -> Tuple[List[bytes], bool]:
+    def get_newest(self, count: int) -> tuple[list[bytes], bool]:
         it = (x for _, x in self._iter(reverse=True))
         return collect_n(it, count)
 
-    def get_older(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[bytes], bool]:
+    def get_older(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[bytes], bool]:
         it = (x for _, x in self._iter(timestamp, hash_bytes, reverse=True))
         return collect_n(it, count)
 
-    def get_newer(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[bytes], bool]:
+    def get_newer(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[bytes], bool]:
         it = (x for _, x in self._iter(timestamp, hash_bytes))
         return collect_n(it, count)
 
-    def get_hashes_and_next_idx(self, from_idx: RangeIdx, count: int) -> Tuple[List[bytes], Optional[RangeIdx]]:
+    def get_hashes_and_next_idx(self, from_idx: RangeIdx, count: int) -> tuple[list[bytes], Optional[RangeIdx]]:
         if count <= 0:
             raise ValueError(f'count must be positive, got {count}')
         timestamp, offset = from_idx
         it = skip_n(self._iter(timestamp), offset)
-        hashes: List[bytes] = []
+        hashes: list[bytes] = []
         n = count
         next_timestamp = timestamp
         next_offset = offset

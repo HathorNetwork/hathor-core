@@ -16,7 +16,7 @@
 import heapq
 from abc import ABC, abstractmethod
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Iterable, Iterator, List, Optional, Set, Union
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional, Union
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction  # noqa: F401
@@ -43,8 +43,8 @@ class HeapItem:
 class GenericWalk(ABC):
     """ A helper class to walk on the DAG.
     """
-    seen: Set[bytes]
-    to_visit: List[Any]
+    seen: set[bytes]
+    to_visit: list[Any]
 
     def __init__(self, storage: 'TransactionStorage', *, is_dag_funds: bool = False,
                  is_dag_verifications: bool = False, is_left_to_right: bool = True):
@@ -145,7 +145,7 @@ class GenericWalk(ABC):
 class BFSWalk(GenericWalk):
     """ A help to walk in the DAG using a BFS.
     """
-    to_visit: List[HeapItem]
+    to_visit: list[HeapItem]
 
     def _push_visit(self, tx: 'BaseTransaction') -> None:
         heapq.heappush(self.to_visit, HeapItem(tx, reverse=self._reverse_heap))
@@ -163,7 +163,7 @@ class BFSWalk(GenericWalk):
 class DFSWalk(GenericWalk):
     """ A help to walk in the DAG using a DFS.
     """
-    to_visit: List['BaseTransaction']
+    to_visit: list['BaseTransaction']
 
     def _push_visit(self, tx: 'BaseTransaction') -> None:
         self.to_visit.append(tx)

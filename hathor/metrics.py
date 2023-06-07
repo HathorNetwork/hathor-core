@@ -14,7 +14,7 @@
 
 from collections import deque
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Deque, Dict, List, NamedTuple, Optional
+from typing import TYPE_CHECKING, NamedTuple, Optional
 
 from structlog import get_logger
 from twisted.internet.task import LoopingCall
@@ -97,11 +97,11 @@ class Metrics:
     estimated_hash_rate: float = 0  # log(H/s)
     stratum_factory: Optional['StratumFactory'] = None
     # Peer Connection data
-    peer_connection_metrics: List[PeerConnectionMetrics] = field(default_factory=list)
+    peer_connection_metrics: list[PeerConnectionMetrics] = field(default_factory=list)
     # Send-token timeouts counter
     send_token_timeouts: int = 0
     # Dict that stores the sizes of each column-family in RocksDB, in bytes
-    rocksdb_cfs_sizes: Dict[bytes, float] = field(default_factory=dict)
+    rocksdb_cfs_sizes: dict[bytes, float] = field(default_factory=dict)
     # TxCache Data
     transaction_cache_hits: int = 0
     transaction_cache_misses: int = 0
@@ -123,10 +123,10 @@ class Metrics:
         self.log = logger.new()
 
         # Stores caculated tx weights saved in tx storage
-        self.weight_tx_deque: Deque[WeightValue] = deque(maxlen=self.weight_tx_deque_len)
+        self.weight_tx_deque: deque[WeightValue] = deque(maxlen=self.weight_tx_deque_len)
 
         # Stores caculated block weights saved in tx storage
-        self.weight_block_deque: Deque[WeightValue] = deque(maxlen=self.weight_block_deque_len)
+        self.weight_block_deque: deque[WeightValue] = deque(maxlen=self.weight_block_deque_len)
 
         if self.reactor is None:
             from hathor.util import reactor as twisted_reactor

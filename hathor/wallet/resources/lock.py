@@ -33,7 +33,7 @@ class LockWalletResource(Resource):
         """ Lock the wallet
 
             :return: Boolean if the user locked the wallet with success
-            :rtype: string (json) Dict['success', bool]
+            :rtype: string (json) dict['success', bool]
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')

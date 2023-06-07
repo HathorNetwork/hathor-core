@@ -1,5 +1,3 @@
-from typing import List
-
 import pytest
 
 from hathor.builder import CliBuilder, ResourcesBuilder
@@ -26,7 +24,7 @@ class BuilderTestCase(unittest.TestCase):
         self.parser = RunNode.create_parser()
         self.builder = CliBuilder()
 
-    def _build_with_error(self, cmd_args: List[str], err_msg: str) -> None:
+    def _build_with_error(self, cmd_args: list[str], err_msg: str) -> None:
         args = self.parser.parse_args(cmd_args)
         with self.assertRaises(BuilderError) as cm:
             manager = self.builder.create_manager(self.reactor, args)
@@ -34,7 +32,7 @@ class BuilderTestCase(unittest.TestCase):
             self.resources_builder.build(args)
         self.assertEqual(err_msg, str(cm.exception))
 
-    def _build(self, cmd_args: List[str]) -> HathorManager:
+    def _build(self, cmd_args: list[str]) -> HathorManager:
         args = self.parser.parse_args(cmd_args)
         manager = self.builder.create_manager(self.reactor, args)
         self.assertIsNotNone(manager)

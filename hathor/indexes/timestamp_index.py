@@ -14,7 +14,7 @@
 
 from abc import abstractmethod
 from enum import Enum
-from typing import Iterator, List, NamedTuple, Optional, Tuple
+from typing import Iterator, NamedTuple, Optional
 
 from structlog import get_logger
 
@@ -82,7 +82,7 @@ class TimestampIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def get_newest(self, count: int) -> Tuple[List[bytes], bool]:
+    def get_newest(self, count: int) -> tuple[list[bytes], bool]:
         """ Get transactions or blocks from the newest to the oldest
 
         :param count: Number of transactions or blocks to be returned
@@ -91,7 +91,7 @@ class TimestampIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def get_older(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[bytes], bool]:
+    def get_older(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[bytes], bool]:
         """ Get transactions or blocks from the timestamp/hash_bytes reference to the oldest
 
         :param timestamp: Timestamp reference to start the search
@@ -102,7 +102,7 @@ class TimestampIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def get_newer(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[bytes], bool]:
+    def get_newer(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[bytes], bool]:
         """ Get transactions or blocks from the timestamp/hash_bytes reference to the newest
 
         :param timestamp: Timestamp reference to start the search
@@ -113,7 +113,7 @@ class TimestampIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def get_hashes_and_next_idx(self, from_idx: RangeIdx, count: int) -> Tuple[List[bytes], Optional[RangeIdx]]:
+    def get_hashes_and_next_idx(self, from_idx: RangeIdx, count: int) -> tuple[list[bytes], Optional[RangeIdx]]:
         """ Get up to count hashes if available and the next range-index, this is used by sync-v1.
         """
         raise NotImplementedError

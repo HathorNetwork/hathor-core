@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from enum import Enum
-from typing import Any, Dict, List, NamedTuple, Optional, Set
+from typing import Any, NamedTuple, Optional
 
 from structlog import get_logger
 
@@ -75,8 +75,8 @@ class Builder:
 
         self._settings: HathorSettingsType = HathorSettings()
         self._rng: Random = Random()
-        self._checkpoints: Optional[List[Checkpoint]] = None
-        self._capabilities: Optional[List[str]] = None
+        self._checkpoints: Optional[list[Checkpoint]] = None
+        self._capabilities: Optional[list[str]] = None
 
         self._peer_id: Optional[PeerId] = None
         self._network: Optional[str] = None
@@ -116,7 +116,7 @@ class Builder:
 
         self._full_verification: Optional[bool] = None
 
-        self._soft_voided_tx_ids: Optional[Set[bytes]] = None
+        self._soft_voided_tx_ids: Optional[set[bytes]] = None
 
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
@@ -151,7 +151,7 @@ class Builder:
         if self._enable_utxo_index:
             indexes.enable_utxo_index()
 
-        kwargs: Dict[str, Any] = {}
+        kwargs: dict[str, Any] = {}
 
         if self._full_verification is not None:
             kwargs['full_verification'] = self._full_verification
@@ -214,12 +214,12 @@ class Builder:
         self._rng = rng
         return self
 
-    def set_checkpoints(self, checkpoints: List[Checkpoint]) -> 'Builder':
+    def set_checkpoints(self, checkpoints: list[Checkpoint]) -> 'Builder':
         self.check_if_can_modify()
         self._checkpoints = checkpoints
         return self
 
-    def set_capabilities(self, capabilities: List[str]) -> 'Builder':
+    def set_capabilities(self, capabilities: list[str]) -> 'Builder':
         self.check_if_can_modify()
         self._capabilities = capabilities
         return self
@@ -237,7 +237,7 @@ class Builder:
             return self._reactor
         raise ValueError('reactor not set')
 
-    def _get_soft_voided_tx_ids(self) -> Set[bytes]:
+    def _get_soft_voided_tx_ids(self) -> set[bytes]:
         if self._soft_voided_tx_ids is not None:
             return self._soft_voided_tx_ids
 
@@ -510,7 +510,7 @@ class Builder:
         self._full_verification = False
         return self
 
-    def set_soft_voided_tx_ids(self, soft_voided_tx_ids: Set[bytes]) -> 'Builder':
+    def set_soft_voided_tx_ids(self, soft_voided_tx_ids: set[bytes]) -> 'Builder':
         self.check_if_can_modify()
         self._soft_voided_tx_ids = soft_voided_tx_ids
         return self

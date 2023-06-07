@@ -14,7 +14,7 @@
 
 from abc import abstractmethod
 from collections import defaultdict
-from typing import DefaultDict, Iterable, Set, Sized, TypeVar
+from typing import Iterable, Set, Sized, TypeVar
 
 from structlog import get_logger
 
@@ -31,7 +31,7 @@ class MemoryTxGroupIndex(TxGroupIndex[KT]):
     """Memory implementation of the TxGroupIndex. This class is abstract and cannot be used directly.
     """
 
-    index: DefaultDict[KT, Set[bytes]]
+    index: defaultdict[KT, Set[bytes]]
 
     def __init__(self) -> None:
         self.force_clear()

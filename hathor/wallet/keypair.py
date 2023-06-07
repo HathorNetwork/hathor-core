@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import base64
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
@@ -84,7 +84,7 @@ class KeyPair:
                 raise IncorrectPassword
         return priv_key
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         return {
             'privKey': self.get_private_key_b64(),
             'address': self.address,
@@ -92,7 +92,7 @@ class KeyPair:
         }
 
     @classmethod
-    def from_json(cls, json_data: Dict[str, Any]) -> 'KeyPair':
+    def from_json(cls, json_data: dict[str, Any]) -> 'KeyPair':
         priv_key_bytes = base64.b64decode(json_data['privKey'])
         address = json_data['address']
         used = json_data['used']

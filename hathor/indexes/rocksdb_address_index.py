@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Iterable, List, Optional
+from typing import TYPE_CHECKING, Iterable, Optional
 
 from structlog import get_logger
 
@@ -63,10 +63,10 @@ class RocksDBAddressIndex(RocksDBTxGroupIndex[str], AddressIndex, RocksDBIndexUt
         super().add_tx(tx)
         self._publish_tx(tx)
 
-    def get_from_address(self, address: str) -> List[bytes]:
+    def get_from_address(self, address: str) -> list[bytes]:
         return list(self._get_from_key(address))
 
-    def get_sorted_from_address(self, address: str) -> List[bytes]:
+    def get_sorted_from_address(self, address: str) -> list[bytes]:
         return list(self._get_sorted_from_key(address))
 
     def is_address_empty(self, address: str) -> bool:

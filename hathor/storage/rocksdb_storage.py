@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import os
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     import rocksdb
@@ -44,7 +44,7 @@ class RocksDBStorage:
             allow_mmap_reads=True,  # default is already True
         )
 
-        cf_names: List[bytes]
+        cf_names: list[bytes]
         try:
             # get the list of existing column families
             cf_names = rocksdb.list_column_families(db_path, options)

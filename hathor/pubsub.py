@@ -14,7 +14,7 @@
 
 from collections import defaultdict, deque
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Deque, Dict, List, Tuple, cast
+from typing import TYPE_CHECKING, Any, Callable, cast
 
 from twisted.internet.interfaces import IReactorFromThreads
 
@@ -161,11 +161,11 @@ class PubSubManager:
     It is used to let independent objects respond to events.
     """
 
-    _subscribers: Dict[HathorEvents, List[PubSubCallable]]
+    _subscribers: dict[HathorEvents, list[PubSubCallable]]
 
     def __init__(self, reactor: Reactor) -> None:
         self._subscribers = defaultdict(list)
-        self.queue: Deque[Tuple[PubSubCallable, HathorEvents, EventArguments]] = deque()
+        self.queue: deque[tuple[PubSubCallable, HathorEvents, EventArguments]] = deque()
         self.reactor = reactor
 
     def subscribe(self, key: HathorEvents, fn: PubSubCallable) -> None:

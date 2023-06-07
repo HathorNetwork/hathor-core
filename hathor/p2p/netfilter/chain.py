@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from hathor.p2p.netfilter.context import NetfilterContext
@@ -27,10 +27,10 @@ class NetfilterChain:
         """Initialize the chain."""
         self.name = name
         self.table: Optional['NetfilterTable'] = None
-        self.rules: List['NetfilterRule'] = []
+        self.rules: list['NetfilterRule'] = []
         self.policy = policy
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         return {
             'name': self.name,
             'table': self.table.to_json() if self.table else None,

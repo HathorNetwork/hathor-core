@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, Optional, Tuple
+from typing import Optional
 
 from hathor.indexes.height_index import BLOCK_GENESIS_ENTRY, HeightIndex, IndexEntry
 
@@ -21,7 +21,7 @@ class MemoryHeightIndex(HeightIndex):
     """Store the block hash for each given height
     """
 
-    _index: List[IndexEntry]
+    _index: list[IndexEntry]
 
     def __init__(self) -> None:
         super().__init__()
@@ -68,6 +68,6 @@ class MemoryHeightIndex(HeightIndex):
     def get_tip(self) -> bytes:
         return self._index[-1].hash
 
-    def get_height_tip(self) -> Tuple[int, bytes]:
+    def get_height_tip(self) -> tuple[int, bytes]:
         height = len(self._index) - 1
         return height, self._index[height].hash

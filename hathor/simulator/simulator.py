@@ -15,7 +15,7 @@
 import secrets
 import time
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Any, Generator, List, Optional
+from typing import TYPE_CHECKING, Any, Generator, Optional
 
 from mnemonic import Mnemonic
 from structlog import get_logger
@@ -120,7 +120,7 @@ class Simulator:
         self._network = 'testnet'
         self._clock = HeapClock()
         self._peers: OrderedDict[str, HathorManager] = OrderedDict()
-        self._connections: List['FakeConnection'] = []
+        self._connections: list['FakeConnection'] = []
         self._started = False
 
     def start(self) -> None:

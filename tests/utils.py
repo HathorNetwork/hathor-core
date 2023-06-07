@@ -6,7 +6,7 @@ import subprocess
 import time
 import urllib.parse
 from dataclasses import dataclass
-from typing import Iterator, List, Optional, Tuple, TypeVar, cast
+from typing import Iterator, Optional, TypeVar, cast
 
 import requests
 from hathorlib.scripts import DataScript
@@ -55,7 +55,7 @@ def resolve_block_bytes(block_bytes):
     return block.get_struct()
 
 
-def add_custom_tx(manager: HathorManager, tx_inputs: List[Tuple[BaseTransaction, int]], *, n_outputs: int = 1,
+def add_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction, int]], *, n_outputs: int = 1,
                   base_parent: Optional[Transaction] = None, weight: Optional[float] = None,
                   resolve: bool = False, address: Optional[str] = None, inc_timestamp: int = 0) -> Transaction:
     """Add a custom tx based on the gen_custom_tx(...) method."""
@@ -65,7 +65,7 @@ def add_custom_tx(manager: HathorManager, tx_inputs: List[Tuple[BaseTransaction,
     return tx
 
 
-def gen_custom_tx(manager: HathorManager, tx_inputs: List[Tuple[BaseTransaction, int]], *, n_outputs: int = 1,
+def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction, int]], *, n_outputs: int = 1,
                   base_parent: Optional[Transaction] = None, weight: Optional[float] = None,
                   resolve: bool = False, address: Optional[str] = None, inc_timestamp: int = 0) -> Transaction:
     """Generate a custom tx based on the inputs and outputs. It gives full control to the
@@ -241,7 +241,7 @@ def add_new_transactions(manager, num_txs, advance_clock=None, propagate=True):
         :type num_txs: int
 
         :return: Transactions created
-        :rtype: List[Transaction]
+        :rtype: list[Transaction]
     """
     txs = []
     for _ in range(num_txs):
@@ -285,7 +285,7 @@ def add_new_blocks(manager, num_blocks, advance_clock=None, *, parent_block_hash
         :type num_blocks: int
 
         :return: Blocks created
-        :rtype: List[Block]
+        :rtype: list[Block]
     """
     blocks = []
     for _ in range(num_blocks):
@@ -385,10 +385,10 @@ def request_server(path, method, host='http://localhost', port=8085, data=None, 
         :type port: int
 
         :param data: Request data
-        :type data: Dict
+        :type data: dict
 
         :return: Response in json format
-        :rtype: Dict (json)
+        :rtype: dict (json)
     """
     partial_url = '{}:{}/{}/'.format(host, port, prefix)
     url = urllib.parse.urljoin(partial_url, path)
@@ -492,7 +492,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
     genesis_private_key = get_genesis_key()
 
     change_output: Optional[TxOutput]
-    parents: List[bytes]
+    parents: list[bytes]
     if use_genesis:
         genesis_hash = genesis_block.hash
         assert genesis_hash is not None
@@ -576,7 +576,7 @@ def create_script_with_sigops(nops: int) -> bytes:
     return hscript.data
 
 
-def add_tx_with_data_script(manager: 'HathorManager', data: List[str], propagate: bool = True) -> Transaction:
+def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate: bool = True) -> Transaction:
     """ This method will create and propagate a transaction with only data script outputs
     """
     wallet = manager.wallet
@@ -722,7 +722,7 @@ class EventMocker:
 T = TypeVar('T')
 
 
-def zip_chunkify(flat_list: List[T], chunked_list: List[List[T]]) -> Iterator[Tuple[List[T], List[T]]]:
+def zip_chunkify(flat_list: list[T], chunked_list: list[list[T]]) -> Iterator[tuple[list[T], list[T]]]:
     """
     Takes two lists, one flat and one chunked. Chunks the first one into chunks of the same size as the second.
     Returns a zipped list where each item is a tuple of chunks, one from each list.

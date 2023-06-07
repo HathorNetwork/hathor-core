@@ -14,7 +14,7 @@
 
 import os
 from argparse import Namespace
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from autobahn.twisted.resource import WebSocketResource
 from structlog import get_logger
@@ -50,7 +50,7 @@ class ResourcesBuilder:
         return None
 
     def create_prometheus(self, args: Namespace) -> PrometheusMetricsExporter:
-        kwargs: Dict[str, Any] = {
+        kwargs: dict[str, Any] = {
             'metrics': self.manager.metrics,
             'metrics_prefix': args.prometheus_prefix
         }

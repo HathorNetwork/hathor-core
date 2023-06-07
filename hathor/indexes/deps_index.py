@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Iterator, List
+from typing import TYPE_CHECKING, Iterator
 
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
@@ -167,7 +167,7 @@ class DepsIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def known_children(self, tx: BaseTransaction) -> List[bytes]:
+    def known_children(self, tx: BaseTransaction) -> list[bytes]:
         """Return the hashes of all reverse dependencies that are children of the given tx.
 
         That is, they depend on `tx` because they are children of `tx`, and not because `tx` is an input. This is

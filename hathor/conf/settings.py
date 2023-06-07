@@ -413,7 +413,7 @@ def _parse_checkpoints(checkpoints: Union[dict[int, str], list[Checkpoint]]) -> 
         ]
 
     if not isinstance(checkpoints, list):
-        raise TypeError(f'expected \'Dict[int, str]\' or \'List[Checkpoint]\', got {checkpoints}')
+        raise TypeError(f'expected \'dict[int, str]\' or \'list[Checkpoint]\', got {checkpoints}')
 
     return checkpoints
 

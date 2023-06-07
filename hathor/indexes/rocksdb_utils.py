@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections.abc import Collection
-from typing import TYPE_CHECKING, Dict, Iterable, Iterator, NewType
+from typing import TYPE_CHECKING, Iterable, Iterator, NewType
 
 from hathor.conf import HathorSettings
 
@@ -114,7 +114,7 @@ class RocksDBIndexUtils:
         assert new_id != old_id
         self._log.debug('got new column family', id=new_id, old_id=old_id)
 
-    def _clone_into_dict(self) -> Dict[bytes, bytes]:
+    def _clone_into_dict(self) -> dict[bytes, bytes]:
         """This method will make a copy of the database into a plain dict, be careful when running on large dbs."""
         it = self._db.iteritems(self._cf)
         it.seek_to_first()

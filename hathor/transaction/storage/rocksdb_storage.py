@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Dict, Iterator, List, Optional
+from typing import TYPE_CHECKING, Iterator, Optional
 
 from structlog import get_logger
 
@@ -182,8 +182,8 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
 
     def get_sst_files_sizes_by_cf(
         self,
-        cfs: Optional[List['rocksdb.ColumnFamilyHandle']] = None
-    ) -> Dict[bytes, float]:
+        cfs: Optional[list['rocksdb.ColumnFamilyHandle']] = None
+    ) -> dict[bytes, float]:
         """Get the SST files sizes of each Column Family in bytes
 
         :param cfs: The list of column families, defaults to None, in which case all of them are returned
@@ -191,7 +191,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         """
         column_families = self._db.column_families if cfs is None else cfs
 
-        sizes: Dict[bytes, float] = {}
+        sizes: dict[bytes, float] = {}
 
         for cf in column_families:
             sizes[cf.name] = float(self._db.get_property(b'rocksdb.total-sst-files-size', cf))

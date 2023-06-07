@@ -15,11 +15,11 @@
 import time
 from collections import defaultdict
 from functools import wraps
-from typing import Any, Callable, DefaultDict, List, Tuple, Union
+from typing import Any, Callable, Union
 
 from twisted.internet.task import LoopingCall
 
-Key = Tuple[str, ...]
+Key = tuple[str, ...]
 
 
 class ProcItem:
@@ -55,13 +55,13 @@ class SimpleCPUProfiler:
         """
 
         # Store the measures for each key.
-        self.measures: DefaultDict[Key, ProcItem] = defaultdict(ProcItem)
+        self.measures: defaultdict[Key, ProcItem] = defaultdict(ProcItem)
 
         # Error message if something goes wrong.
         self.error: str = ''
 
         # Stack of the current sequence of markers.
-        self.stack: List[Tuple[str, float]] = []
+        self.stack: list[tuple[str, float]] = []
 
         # Wall time when update was last called.
         self.last_update = time.time()
@@ -70,7 +70,7 @@ class SimpleCPUProfiler:
         self.last_process_time = 0.0
 
         # List of processes and their data. It is the output of the profiler.
-        self.proc_list: List[Tuple[Key, ProcItem]] = []
+        self.proc_list: list[tuple[Key, ProcItem]] = []
 
         # Timer to call `self.update()` periodically.
         self.lc_update = LoopingCall(self.update)
@@ -111,7 +111,7 @@ class SimpleCPUProfiler:
         self.enabled = False
         self.lc_update.stop()
 
-    def get_proc_list(self) -> List[Tuple[Key, ProcItem]]:
+    def get_proc_list(self) -> list[tuple[Key, ProcItem]]:
         """Return the process list."""
         return self.proc_list
 
@@ -158,7 +158,7 @@ class SimpleCPUProfiler:
         ptime = time.process_time()
         interval = ptime - self.last_process_time
 
-        proc_list: List[Tuple[Key, ProcItem]] = []
+        proc_list: list[tuple[Key, ProcItem]] = []
 
         # Update keys.
         keys_to_remove = set()

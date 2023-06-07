@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from abc import abstractmethod
-from typing import List, NamedTuple, Optional, Tuple
+from typing import NamedTuple, Optional
 
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
@@ -85,7 +85,7 @@ class HeightIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def get_height_tip(self) -> Tuple[int, bytes]:
+    def get_height_tip(self) -> tuple[int, bytes]:
         """ Return the best block height and hash, it returns the genesis when there is no other block
         """
         raise NotImplementedError
@@ -98,7 +98,7 @@ class HeightIndex(BaseIndex):
 
         block_height = height
         side_chain_block = block
-        add_to_index: List[_AddToIndexItem] = []
+        add_to_index: list[_AddToIndexItem] = []
         while self.get(block_height) != side_chain_block.hash:
             add_to_index.append(
                 _AddToIndexItem(block_height, not_none(side_chain_block.hash), side_chain_block.timestamp)

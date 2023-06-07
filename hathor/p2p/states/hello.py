@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict, Set
+from typing import TYPE_CHECKING, Any
 
 from structlog import get_logger
 
@@ -44,7 +44,7 @@ class HelloState(BaseState):
     def _app(self) -> str:
         return f'Hathor v{hathor.__version__}'
 
-    def _get_hello_data(self) -> Dict[str, Any]:
+    def _get_hello_data(self) -> dict[str, Any]:
         """ Returns a dict with information about this node that will
         be sent to a peer.
         """
@@ -64,7 +64,7 @@ class HelloState(BaseState):
             data['sync_versions'] = [x.value for x in self._get_sync_versions()]
         return data
 
-    def _get_sync_versions(self) -> Set[SyncVersion]:
+    def _get_sync_versions(self) -> set[SyncVersion]:
         """Shortcut to ConnectionManager.get_sync_versions"""
         connections_manager = self.protocol.connections
         assert connections_manager is not None
@@ -168,7 +168,7 @@ class HelloState(BaseState):
         protocol.change_state(protocol.PeerState.PEER_ID)
 
 
-def _parse_sync_versions(hello_data: Dict[str, Any]) -> Set[SyncVersion]:
+def _parse_sync_versions(hello_data: dict[str, Any]) -> set[SyncVersion]:
     """Versions that are not recognized will not be included."""
     if settings.CAPABILITY_SYNC_VERSION in hello_data['capabilities']:
         if 'sync_versions' not in hello_data:

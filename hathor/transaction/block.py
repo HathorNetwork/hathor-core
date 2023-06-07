@@ -14,7 +14,7 @@
 
 import base64
 from struct import pack
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from hathor import daa
 from hathor.checkpoint import Checkpoint
@@ -54,8 +54,8 @@ class Block(BaseTransaction):
                  signal_bits: int = 0,
                  version: int = TxVersion.REGULAR_BLOCK,
                  weight: float = 0,
-                 outputs: Optional[List[TxOutput]] = None,
-                 parents: Optional[List[bytes]] = None,
+                 outputs: Optional[list[TxOutput]] = None,
+                 parents: Optional[list[bytes]] = None,
                  hash: Optional[bytes] = None,
                  data: bytes = b'',
                  storage: Optional['TransactionStorage'] = None) -> None:
@@ -63,7 +63,7 @@ class Block(BaseTransaction):
                          outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.data = data
 
-    def _get_formatted_fields_dict(self, short: bool = True) -> Dict[str, str]:
+    def _get_formatted_fields_dict(self, short: bool = True) -> dict[str, str]:
         d = super()._get_formatted_fields_dict(short)
         if not short:
             d.update(data=self.data.hex())
@@ -236,13 +236,13 @@ class Block(BaseTransaction):
         return settings.HATHOR_TOKEN_UID
 
     # TODO: maybe introduce convention on serialization methods names (e.g. to_json vs get_struct)
-    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
+    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['tokens'] = []
         json['data'] = base64.b64encode(self.data).decode('utf-8')
         return json
 
-    def to_json_extended(self) -> Dict[str, Any]:
+    def to_json_extended(self) -> dict[str, Any]:
         json = super().to_json_extended()
         json['height'] = self.get_metadata().height
 
@@ -264,7 +264,7 @@ class Block(BaseTransaction):
             self.verify_weight()
         self.verify_reward()
 
-    def verify_checkpoint(self, checkpoints: List[Checkpoint]) -> None:
+    def verify_checkpoint(self, checkpoints: list[Checkpoint]) -> None:
         assert self.hash is not None
         assert self.storage is not None
         meta = self.get_metadata()

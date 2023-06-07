@@ -13,7 +13,7 @@
 #  limitations under the License.
 
 from itertools import islice
-from typing import List, Optional
+from typing import Optional
 
 from pydantic import Field, NonNegativeInt
 
@@ -70,7 +70,7 @@ class GetEventsParams(QueryParams):
 
 
 class GetEventsResponse(Response):
-    events: List[BaseEvent]
+    events: list[BaseEvent]
     latest_event_id: Optional[int]
 
 

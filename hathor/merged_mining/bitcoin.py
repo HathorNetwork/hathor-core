@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import struct
-from typing import Dict, List, NamedTuple, Sequence, Tuple, Union
+from typing import NamedTuple, Sequence, Union
 
 
 class BitcoinRawTransaction(NamedTuple):
@@ -22,7 +22,7 @@ class BitcoinRawTransaction(NamedTuple):
     data: bytes
 
     @classmethod
-    def from_dict(cls, data: Dict) -> 'BitcoinRawTransaction':
+    def from_dict(cls, data: dict) -> 'BitcoinRawTransaction':
         return cls(bytes.fromhex(data['hash']), bytes.fromhex(data['txid']), bytes.fromhex(data['data']))
 
     def __bytes__(self) -> bytes:
@@ -64,7 +64,7 @@ class BitcoinBlockHeader(NamedTuple):
         ])
 
     @classmethod
-    def from_dict(cls, params: Dict) -> 'BitcoinBlockHeader':
+    def from_dict(cls, params: dict) -> 'BitcoinBlockHeader':
         r""" Convert from dict of the properties returned from Bitcoin RPC.
 
         Examples:
@@ -127,7 +127,7 @@ def _merkle_concat(left: bytes, right: bytes) -> bytes:
     return bytes(reversed(left)) + bytes(reversed(right))
 
 
-def build_merkle_path_for_coinbase(merkle_leaves: List[bytes]) -> List[bytes]:
+def build_merkle_path_for_coinbase(merkle_leaves: list[bytes]) -> list[bytes]:
     """ Return the merkle path (unidirectional since it's a list) to the coinbase (not included) from hash leaves.
 
     >>> tx_list = [bytes.fromhex(tx) for tx in [
@@ -159,7 +159,7 @@ def build_merkle_path_for_coinbase(merkle_leaves: List[bytes]) -> List[bytes]:
     return _build_merkle_path_for_coinbase([b''] + merkle_leaves)
 
 
-def _build_merkle_path_for_coinbase(merkle_leaves: List[bytes], _partial_path: List[bytes] = []) -> List[bytes]:
+def _build_merkle_path_for_coinbase(merkle_leaves: list[bytes], _partial_path: list[bytes] = []) -> list[bytes]:
     """ Internal implementation of `build_merkle_path_for_coinbase`, assumes first `merkle_leave` is the coinbase.
     """
     merkle_leaves = merkle_leaves[:]  # copy to preserve original
@@ -181,7 +181,7 @@ def _build_merkle_path_for_coinbase(merkle_leaves: List[bytes], _partial_path: L
     )
 
 
-def build_merkle_root(merkle_leaves: List[bytes]) -> bytes:
+def build_merkle_root(merkle_leaves: list[bytes]) -> bytes:
     """ Return the merkle root hash from hash leaves.
 
     >>> build_merkle_root([bytes.fromhex(tx) for tx in [
@@ -216,7 +216,7 @@ def build_merkle_root(merkle_leaves: List[bytes]) -> bytes:
     return build_merkle_root([sha256d_hash(_merkle_concat(a, b)) for a, b in zip(iter_leaves, iter_leaves)])
 
 
-def build_merkle_root_from_path(merkle_path: List[bytes]) -> bytes:
+def build_merkle_root_from_path(merkle_path: list[bytes]) -> bytes:
     """ Return the merkle root hash from a given unidirectional (all right) merkle path.
 
     Useful for computing merkle root given the merkle path to the coinbase (including the coinbase tx).
@@ -292,7 +292,7 @@ class BitcoinTransactionInput(NamedTuple):
     # Transaction version as defined by the sender. Intended for "replacement" of transactions when information is
     # updated before inclusion into a block.
     sequence: int = SEQUENCE_FINAL  # default value disables nLockTime
-    script_witness: List[bytes] = []
+    script_witness: list[bytes] = []
 
     def __bytes__(self) -> bytes:
         """ Convert to byte representation of the header.
@@ -328,7 +328,7 @@ class BitcoinTransactionInput(NamedTuple):
         return bool(self.script_witness)
 
     @classmethod
-    def from_dict(cls, params: Dict) -> 'BitcoinTransactionInput':
+    def from_dict(cls, params: dict) -> 'BitcoinTransactionInput':
         r""" Convert from dict of the properties returned from Bitcoin RPC.
 
         Examples:
@@ -387,7 +387,7 @@ class BitcoinTransactionOutput(NamedTuple):
         return struct.pack('<Q', self.value) + encode_bytearray(self.script_pubkey)
 
     @classmethod
-    def from_dict(cls, params: Dict) -> 'BitcoinTransactionOutput':
+    def from_dict(cls, params: dict) -> 'BitcoinTransactionOutput':
         r""" Convert from dict of the properties returned from Bitcoin RPC.
 
         Examples:
@@ -425,8 +425,8 @@ class BitcoinTransactionOutput(NamedTuple):
 class BitcoinTransaction(NamedTuple):
     version: int = 1  # Transaction data format version (note, this is signed)
     include_witness: bool = True  # Whether to include the witness flag (0001)
-    inputs: List[BitcoinTransactionInput] = []  # A list of 1 or more transaction inputs or sources for coins
-    outputs: List[BitcoinTransactionOutput] = []  # A list of 1 or more transaction outputs or destinations for coins
+    inputs: list[BitcoinTransactionInput] = []  # A list of 1 or more transaction inputs or sources for coins
+    outputs: list[BitcoinTransactionOutput] = []  # A list of 1 or more transaction outputs or destinations for coins
     lock_time: int = 0  # The block number or timestamp at which this transaction is unlocked
 
     def __bytes__(self) -> bytes:
@@ -472,7 +472,7 @@ class BitcoinTransaction(NamedTuple):
         return BitcoinRawTransaction(self.hash, self.txid, bytes(self))
 
     @property
-    def tx_witnesses(self) -> List[List[bytes]]:
+    def tx_witnesses(self) -> list[list[bytes]]:
         """ List of witnesses list: each input yields a list.
         """
         return [i.script_witness or [b'\00' * 32] for i in self.inputs]
@@ -490,7 +490,7 @@ class BitcoinTransaction(NamedTuple):
         return sha256d_hash(self._to_bytes(skip_segwit=True))
 
     @classmethod
-    def from_dict(cls, params: Dict) -> 'BitcoinTransaction':
+    def from_dict(cls, params: dict) -> 'BitcoinTransaction':
         r""" Convert from dict of the properties returned from Bitcoin RPC.
 
         Examples:
@@ -777,7 +777,7 @@ def encode_list(buffer: Sequence[bytes]) -> bytes:
     return encode_varint(len(buffer)) + b''.join(buffer)
 
 
-def encode_bytearray_list(buffer: List[bytes]) -> bytes:
+def encode_bytearray_list(buffer: list[bytes]) -> bytes:
     """ Variable length list encoding of bytes
     """
     return encode_varint(len(buffer)) + b''.join(map(encode_bytearray, buffer))
@@ -863,7 +863,7 @@ def read_nrevbytes(buffer: bytearray, length: int) -> bytes:
     return array
 
 
-def read_input(buffer: bytearray, witnesses: List[bytes] = []) -> BitcoinTransactionInput:
+def read_input(buffer: bytearray, witnesses: list[bytes] = []) -> BitcoinTransactionInput:
     """ Parse a single input, read bytes are consumed.
     """
     outpoint = read_outpoint(buffer)
@@ -872,7 +872,7 @@ def read_input(buffer: bytearray, witnesses: List[bytes] = []) -> BitcoinTransac
     return BitcoinTransactionInput(outpoint, script_sig, sequence, witnesses)
 
 
-def read_witnesses(buffer: bytearray, input_count: int, witnesses_offset: int) -> List[List[bytes]]:
+def read_witnesses(buffer: bytearray, input_count: int, witnesses_offset: int) -> list[list[bytes]]:
     """ Parse the list of witnesses, a list for each input, read bytes are consumed.
     """
     witnesses_buf = buffer[witnesses_offset:]
@@ -887,7 +887,7 @@ def read_witnesses(buffer: bytearray, input_count: int, witnesses_offset: int) -
     return witnesses_per_input
 
 
-def read_inputs(buffer: bytearray, with_witnesses: bool) -> List[BitcoinTransactionInput]:
+def read_inputs(buffer: bytearray, with_witnesses: bool) -> list[BitcoinTransactionInput]:
     """ Parse a list of inputs, read bytes are consumed. Optionally include witnesses.
     """
     if with_witnesses:
@@ -915,7 +915,7 @@ def read_output(buffer: bytearray) -> BitcoinTransactionOutput:
     return BitcoinTransactionOutput(value, script)
 
 
-def read_outputs(buffer: bytearray) -> List[BitcoinTransactionOutput]:
+def read_outputs(buffer: bytearray) -> list[BitcoinTransactionOutput]:
     """ Parse a list of outputs, read bytes are consumed.
     """
     count = read_varint(buffer)
@@ -925,7 +925,7 @@ def read_outputs(buffer: bytearray) -> List[BitcoinTransactionOutput]:
     return outputs
 
 
-def skip_inputs(buffer: bytearray) -> Tuple[int, int]:
+def skip_inputs(buffer: bytearray) -> tuple[int, int]:
     """ Return the number of bytes read and count of inputs, but don't consume any byte.
     """
     buffer2 = buffer.copy()
@@ -933,7 +933,7 @@ def skip_inputs(buffer: bytearray) -> Tuple[int, int]:
     return len(buffer) - len(buffer2), len(inputs)
 
 
-def skip_outputs(buffer: bytearray) -> Tuple[int, int]:
+def skip_outputs(buffer: bytearray) -> tuple[int, int]:
     """ Return the number of bytes read and count of outputs, but don't consume any byte.
     """
     buffer2 = buffer.copy()

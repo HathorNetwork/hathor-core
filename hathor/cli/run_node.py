@@ -15,7 +15,7 @@
 import os
 import sys
 from argparse import SUPPRESS, ArgumentParser, Namespace
-from typing import Any, Callable, List, Tuple
+from typing import Any, Callable
 
 from pydantic import ValidationError
 from structlog import get_logger
@@ -28,7 +28,7 @@ logger = get_logger()
 
 
 class RunNode:
-    UNSAFE_ARGUMENTS: List[Tuple[str, Callable[[Namespace], bool]]] = [
+    UNSAFE_ARGUMENTS: list[tuple[str, Callable[[Namespace], bool]]] = [
         ('--test-mode-tx-weight', lambda args: bool(args.test_mode_tx_weight)),
         ('--enable-crash-api', lambda args: bool(args.enable_crash_api)),
         ('--x-sync-bridge', lambda args: bool(args.x_sync_bridge)),
@@ -361,7 +361,7 @@ class RunNode:
         endpoint = serverFromString(self.reactor, description)
         endpoint.listen(factory)
 
-    def parse_args(self, argv: List[str]) -> Namespace:
+    def parse_args(self, argv: list[str]) -> Namespace:
         return self.parser.parse_args(argv)
 
     def run(self) -> None:

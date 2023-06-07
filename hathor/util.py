@@ -25,23 +25,7 @@ from dataclasses import asdict, dataclass
 from enum import Enum
 from functools import partial, wraps
 from random import Random as PyRandom
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Deque,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Optional,
-    Sequence,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Optional, Sequence, TypeVar, Union, cast
 
 from structlog import get_logger
 from twisted.internet import reactor as twisted_reactor
@@ -78,7 +62,7 @@ T = TypeVar('T')
 Z = TypeVar('Z', bound=Interface)
 
 
-def practically_equal(a: Dict[Any, Any], b: Dict[Any, Any]) -> bool:
+def practically_equal(a: dict[Any, Any], b: dict[Any, Any]) -> bool:
     """ Compare two defaultdict. It is used because a simple access have
     side effects in defaultdict.
 
@@ -181,7 +165,7 @@ def ichunks(array: bytes, chunk_size: int) -> Iterator[bytes]:
     return takewhile(bool, (bytes(islice(idata, chunk_size)) for _ in repeat(None)))
 
 
-def iwindows(iterable: Iterable[T], window_size: int) -> Iterator[Tuple[T, ...]]:
+def iwindows(iterable: Iterable[T], window_size: int) -> Iterator[tuple[T, ...]]:
     """ Adapt iterator to yield windows of the given size.
 
     window_size must be greater than 0
@@ -200,7 +184,7 @@ def iwindows(iterable: Iterable[T], window_size: int) -> Iterator[Tuple[T, ...]]
     from collections import deque
     it = iter(iterable)
     assert window_size > 0
-    res_item: Deque[T] = deque()
+    res_item: deque[T] = deque()
     while len(res_item) < window_size:
         res_item.append(next(it))
     yield tuple(res_item)
@@ -255,7 +239,7 @@ class MaxSizeOrderedDict(OrderedDict):
                 self.popitem(False)
 
 
-def json_loadb(raw: bytes) -> Dict:
+def json_loadb(raw: bytes) -> dict:
     """Compact loading as UTF-8 encoded bytes/string to a Python object."""
     import json
 
@@ -270,7 +254,7 @@ def json_loadb(raw: bytes) -> Dict:
 
 
 # XXX: cast-converting the function saves a function-call, which can make a difference
-json_loads = cast(Callable[[str], Dict], json_loadb)
+json_loads = cast(Callable[[str], dict], json_loadb)
 
 
 def json_dumpb(obj: object) -> bytes:
@@ -347,7 +331,7 @@ class Random(PyRandom):
         """
         return math.ceil(math.log(self.random()) / math.log(1 - p))
 
-    def ordered_sample(self, seq: Sequence[T], k: int) -> List[T]:
+    def ordered_sample(self, seq: Sequence[T], k: int) -> list[T]:
         """Like self.sample but preserve orginal order.
 
         For example, ordered_sample([1, 2, 3]) will never return [3, 2] only [2, 3] instead."""
@@ -360,7 +344,7 @@ class Random(PyRandom):
             return self.getrandbits(n * 8).to_bytes(n, 'little')
 
 
-def collect_n(it: Iterator[_T], n: int) -> Tuple[List[_T], bool]:
+def collect_n(it: Iterator[_T], n: int) -> tuple[list[_T], bool]:
     """Collect up to n elements from an iterator into a list, returns the list and whether there were more elements.
 
     This method will consume up to n+1 elements from the iterator because it will try to get one more element after it
@@ -382,7 +366,7 @@ def collect_n(it: Iterator[_T], n: int) -> Tuple[List[_T], bool]:
     """
     if n < 0:
         raise ValueError(f'n must be non-negative, got {n}')
-    col: List[_T] = []
+    col: list[_T] = []
     has_more = False
     while n > 0:
         try:
@@ -430,7 +414,7 @@ def skip_n(it: Iterator[_T], n: int) -> Iterator[_T]:
     return it
 
 
-def verified_cast(interface_class: Type[Z], obj: Any) -> Z:
+def verified_cast(interface_class: type[Z], obj: Any) -> Z:
     verifyObject(interface_class, obj)
     return obj
 
@@ -618,11 +602,11 @@ class peekable(Iterator[T]):
 
     def __init__(self, it: Iterable[T]) -> None:
         self._it: Optional[Iterator[T]] = iter(it)
-        # XXX: using Optional[Tuple[T]] makes it so the iterator can yield None, and it would be correctly peekable,
+        # XXX: using Optional[tuple[T]] makes it so the iterator can yield None, and it would be correctly peekable,
         #      which is different from not having a next element to peek into
-        self._head: Optional[Tuple[T]] = None
+        self._head: Optional[tuple[T]] = None
 
-    def _peek(self) -> Optional[Tuple[T]]:
+    def _peek(self) -> Optional[tuple[T]]:
         if self._head is None and self._it is None:
             return None
         if self._head is None:

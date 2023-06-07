@@ -16,7 +16,7 @@ import datetime
 import sys
 import time
 from enum import Enum
-from typing import Any, Iterable, Iterator, List, NamedTuple, Optional, Tuple, Union
+from typing import Any, Iterable, Iterator, NamedTuple, Optional, Union
 
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
@@ -95,8 +95,8 @@ class HathorManager:
                  network: str,
                  hostname: Optional[str] = None,
                  wallet: Optional[BaseWallet] = None,
-                 capabilities: Optional[List[str]] = None,
-                 checkpoints: Optional[List[Checkpoint]] = None,
+                 capabilities: Optional[list[str]] = None,
+                 checkpoints: Optional[list[Checkpoint]] = None,
                  rng: Optional[Random] = None,
                  environment_info: Optional[EnvironmentInfo] = None,
                  full_verification: bool = False,
@@ -148,8 +148,8 @@ class HathorManager:
         self.cpu = cpu
 
         # XXX: first checkpoint must be genesis (height=0)
-        self.checkpoints: List[Checkpoint] = checkpoints or []
-        self.checkpoints_ready: List[bool] = [False] * len(self.checkpoints)
+        self.checkpoints: list[Checkpoint] = checkpoints or []
+        self.checkpoints_ready: list[bool] = [False] * len(self.checkpoints)
         if not self.checkpoints or self.checkpoints[0].height > 0:
             self.checkpoints.insert(0, Checkpoint(0, settings.GENESIS_BLOCK_HASH))
             self.checkpoints_ready.insert(0, True)
@@ -167,7 +167,7 @@ class HathorManager:
 
         self.consensus_algorithm = consensus_algorithm
 
-        self.peer_discoveries: List[PeerDiscovery] = []
+        self.peer_discoveries: list[PeerDiscovery] = []
 
         self.connections = p2p_manager
 
@@ -194,14 +194,14 @@ class HathorManager:
         self.pow_thread_pool = ThreadPool(minthreads=0, maxthreads=settings.MAX_POW_THREADS, name='Pow thread pool')
 
         # List of addresses to listen for new connections (eg: [tcp:8000])
-        self.listen_addresses: List[str] = []
+        self.listen_addresses: list[str] = []
 
         # Full verification execute all validations for transactions and blocks when initializing the node
         # Can be activated on the command line with --full-verification
         self._full_verification = full_verification
 
         # List of whitelisted peers
-        self.peers_whitelist: List[str] = []
+        self.peers_whitelist: list[str] = []
 
         # List of capabilities of the peer
         if capabilities is not None:
@@ -526,7 +526,7 @@ class HathorManager:
         # restart all validations possible
         if self.tx_storage.indexes.deps and self.tx_storage.indexes.deps.has_needed_tx():
             self.log.debug('run pending validations')
-            depended_final_txs: List[BaseTransaction] = []
+            depended_final_txs: list[BaseTransaction] = []
             for tx_hash in self.tx_storage.indexes.deps.iter():
                 if not self.tx_storage.transaction_exists(tx_hash):
                     continue
@@ -686,7 +686,7 @@ class HathorManager:
         assert self.tx_storage.indexes.deps is not None
         if self.tx_storage.indexes.deps.has_needed_tx():
             self.log.debug('run pending validations')
-            depended_final_txs: List[BaseTransaction] = []
+            depended_final_txs: list[BaseTransaction] = []
             for tx_hash in self.tx_storage.indexes.deps.iter():
                 if not self.tx_storage.transaction_exists(tx_hash):
                     continue
@@ -702,7 +702,7 @@ class HathorManager:
     def add_peer_discovery(self, peer_discovery: PeerDiscovery) -> None:
         self.peer_discoveries.append(peer_discovery)
 
-    def get_new_tx_parents(self, timestamp: Optional[float] = None) -> List[VertexId]:
+    def get_new_tx_parents(self, timestamp: Optional[float] = None) -> list[VertexId]:
         """Select which transactions will be confirmed by a new transaction.
 
         :return: The hashes of the parents for a new transaction.
@@ -722,7 +722,7 @@ class HathorManager:
         can_include_intervals = sorted(self.tx_storage.get_tx_tips(timestamp - 1))
         assert can_include_intervals, 'tips cannot be empty'
         max_timestamp = max(int(i.begin) for i in can_include_intervals)
-        must_include: List[VertexId] = []
+        must_include: list[VertexId] = []
         assert len(can_include_intervals) > 0, f'invalid timestamp "{timestamp}", no tips found"'
         if len(can_include_intervals) < 2:
             # If there is only one tip, let's randomly choose one of its parents.
@@ -782,14 +782,14 @@ class HathorManager:
             current_timestamp = timestamp
         return self._make_block_template(parent_block, parent_txs, current_timestamp)
 
-    def make_custom_block_template(self, parent_block_hash: VertexId, parent_tx_hashes: List[VertexId],
+    def make_custom_block_template(self, parent_block_hash: VertexId, parent_tx_hashes: list[VertexId],
                                    timestamp: Optional[int] = None) -> BlockTemplate:
         """ Makes a block template using the given parent block and txs.
         """
         parent_block = self.tx_storage.get_transaction(parent_block_hash)
         assert isinstance(parent_block, Block)
         # gather the actual txs to query their timestamps
-        parent_tx_list: List[Transaction] = []
+        parent_tx_list: list[Transaction] = []
         for tx_hash in parent_tx_hashes:
             tx = self.tx_storage.get_transaction(tx_hash)
             assert isinstance(tx, Transaction)
@@ -1178,7 +1178,7 @@ class HathorManager:
 
         return True
 
-    def is_healthy(self) -> Tuple[bool, Optional[str]]:
+    def is_healthy(self) -> tuple[bool, Optional[str]]:
         if not self.has_recent_activity():
             return False, HathorManager.UnhealthinessReason.NO_RECENT_ACTIVITY
 
@@ -1217,10 +1217,10 @@ class ParentTxs(NamedTuple):
     included.
     """
     max_timestamp: int
-    can_include: List[VertexId]
-    must_include: List[VertexId]
+    can_include: list[VertexId]
+    must_include: list[VertexId]
 
-    def get_random_parents(self, rng: Random) -> Tuple[VertexId, VertexId]:
+    def get_random_parents(self, rng: Random) -> tuple[VertexId, VertexId]:
         """ Get parents from self.parents plus a random choice from self.parents_any to make it 3 in total.
 
         Using tuple as return type to make it explicit that the length is always 2.
@@ -1230,6 +1230,6 @@ class ParentTxs(NamedTuple):
         p1, p2 = self.must_include[:] + fill
         return p1, p2
 
-    def get_all_tips(self) -> List[VertexId]:
+    def get_all_tips(self) -> list[VertexId]:
         """All generated "tips", can_include + must_include."""
         return self.must_include + self.can_include

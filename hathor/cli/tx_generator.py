@@ -19,7 +19,7 @@ import sys
 import time
 from argparse import ArgumentParser, Namespace
 from json.decoder import JSONDecodeError
-from typing import Any, Dict
+from typing import Any
 
 import requests
 
@@ -116,7 +116,7 @@ def execute(args: Namespace) -> None:
             value = random.randint(10, 100)
         # print('Sending {} tokens to {}...'.format(address, value))
 
-        data: Dict[str, Any] = {'outputs': [{'address': address, 'value': value}], 'inputs': []}
+        data: dict[str, Any] = {'outputs': [{'address': address, 'value': value}], 'inputs': []}
 
         if args.timestamp:
             if args.timestamp == 'server':

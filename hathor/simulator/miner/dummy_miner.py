@@ -12,8 +12,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import List
-
 from structlog import get_logger
 
 from hathor.conf import HathorSettings
@@ -31,9 +29,9 @@ class DummyMiner(AbstractMiner):
     """Simulate blocks mined at pre-determined times."""
 
     _start_time: int
-    blocks: List[Block] = []
+    blocks: list[Block] = []
 
-    def __init__(self, manager: HathorManager, rng: Random, *, block_times: List[int]):
+    def __init__(self, manager: HathorManager, rng: Random, *, block_times: list[int]):
         """
         Creates a DummyMiner where each block will be generated at the times specified in block_times, in absolute
         seconds from the manager's clock.
@@ -43,7 +41,7 @@ class DummyMiner(AbstractMiner):
         """
         super().__init__(manager, rng)
 
-        self._block_times: List[int] = block_times
+        self._block_times: list[int] = block_times
 
     def start(self) -> None:
         self._start_time = int(self._clock.seconds())

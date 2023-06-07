@@ -15,7 +15,7 @@
 import hashlib
 from itertools import chain
 from struct import pack
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, Iterator, NamedTuple, Optional
 
 from hathor import daa
 from hathor.checkpoint import Checkpoint
@@ -78,10 +78,10 @@ class Transaction(BaseTransaction):
                  signal_bits: int = 0,
                  version: int = TxVersion.REGULAR_TRANSACTION,
                  weight: float = 0,
-                 inputs: Optional[List[TxInput]] = None,
-                 outputs: Optional[List[TxOutput]] = None,
-                 parents: Optional[List[VertexId]] = None,
-                 tokens: Optional[List[TokenUid]] = None,
+                 inputs: Optional[list[TxInput]] = None,
+                 outputs: Optional[list[TxOutput]] = None,
+                 parents: Optional[list[VertexId]] = None,
+                 tokens: Optional[list[TokenUid]] = None,
                  hash: Optional[VertexId] = None,
                  storage: Optional['TransactionStorage'] = None) -> None:
         """
@@ -280,7 +280,7 @@ class Transaction(BaseTransaction):
             return settings.HATHOR_TOKEN_UID
         return self.tokens[index - 1]
 
-    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
+    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['tokens'] = [h.hex() for h in self.tokens]
         return json
@@ -294,7 +294,7 @@ class Transaction(BaseTransaction):
         self.verify_weight()
         self.verify_without_storage()
 
-    def verify_checkpoint(self, checkpoints: List[Checkpoint]) -> None:
+    def verify_checkpoint(self, checkpoints: list[Checkpoint]) -> None:
         assert self.storage is not None
         if self.is_genesis:
             return
@@ -413,10 +413,10 @@ class Transaction(BaseTransaction):
             if output.get_token_index() > len(self.tokens):
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
-    def get_token_info_from_inputs(self) -> Dict[TokenUid, TokenInfo]:
+    def get_token_info_from_inputs(self) -> dict[TokenUid, TokenInfo]:
         """Sum up all tokens present in the inputs and their properties (amount, can_mint, can_melt)
         """
-        token_dict: Dict[TokenUid, TokenInfo] = {}
+        token_dict: dict[TokenUid, TokenInfo] = {}
 
         default_info: TokenInfo = TokenInfo(0, False, False)
 
@@ -440,7 +440,7 @@ class Transaction(BaseTransaction):
 
         return token_dict
 
-    def update_token_info_from_outputs(self, token_dict: Dict[TokenUid, TokenInfo]) -> None:
+    def update_token_info_from_outputs(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
         """Iterate over the outputs and add values to token info dict. Updates the dict in-place.
 
         Also, checks if no token has authorities on the outputs not present on the inputs
@@ -471,7 +471,7 @@ class Transaction(BaseTransaction):
                     sum_tokens = token_info.amount + tx_output.value
                     token_dict[token_uid] = TokenInfo(sum_tokens, token_info.can_mint, token_info.can_melt)
 
-    def check_authorities_and_deposit(self, token_dict: Dict[TokenUid, TokenInfo]) -> None:
+    def check_authorities_and_deposit(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
         """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs
         and outputs is not 0, make sure inputs have mint/melt authority.
 
@@ -538,7 +538,7 @@ class Transaction(BaseTransaction):
         """Verify inputs signatures and ownership and all inputs actually exist"""
         from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
-        spent_outputs: Set[Tuple[VertexId, int]] = set()
+        spent_outputs: set[tuple[VertexId, int]] = set()
         for input_tx in self.inputs:
             if len(input_tx.data) > settings.MAX_INPUT_DATA_SIZE:
                 raise InvalidInputDataSize('size: {} and max-size: {}'.format(

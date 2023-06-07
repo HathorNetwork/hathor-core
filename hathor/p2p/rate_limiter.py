@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, NamedTuple, Optional
+from typing import NamedTuple, Optional
 
 from hathor.util import Reactor
 
@@ -27,10 +27,10 @@ class RateLimiter:
     """
 
     # Stores the keys that are being limited and it's RateLimit
-    keys: Dict[str, RateLimiterLimit]
+    keys: dict[str, RateLimiterLimit]
 
     # Stores the last hit for each key
-    hits: Dict[str, RateLimiterLimit]
+    hits: dict[str, RateLimiterLimit]
 
     def __init__(self, reactor: Optional[Reactor] = None):
         self.keys = {}

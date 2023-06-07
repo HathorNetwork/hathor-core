@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import datetime
-from typing import Any, Dict, Generator, List, Optional, Set, Tuple
+from typing import Any, Generator, Optional
 from urllib.parse import parse_qs, urlparse
 
 import requests
@@ -53,7 +53,7 @@ def discover_ip_ipify() -> Optional[str]:
     return None
 
 
-def description_to_connection_string(description: str) -> Tuple[str, Optional[str]]:
+def description_to_connection_string(description: str) -> tuple[str, Optional[str]]:
     """ The description returned from DNS query may contain a peer-id parameter
         This method splits this description into the connection URL and the peer-id (in case it exists)
         Expected description is something like: tcp://127.0.0.1:40403/?id=123
@@ -78,7 +78,7 @@ def get_genesis_short_hash() -> str:
     return GENESIS_HASH.hex()[:7]
 
 
-def get_settings_hello_dict() -> Dict[str, Any]:
+def get_settings_hello_dict() -> dict[str, Any]:
     """ Return a dict of settings values that must be validated in the hello state
     """
     settings_dict = {}
@@ -99,7 +99,7 @@ def connection_string_to_host(connection_string: str) -> str:
 
 
 @inlineCallbacks
-def discover_dns(host: str, test_mode: int = 0) -> Generator[Any, Any, List[str]]:
+def discover_dns(host: str, test_mode: int = 0) -> Generator[Any, Any, list[str]]:
     """ Start a DNS peer discovery object and execute a search for the host
 
         Returns the DNS string from the requested host
@@ -151,7 +151,7 @@ def generate_certificate(private_key: RSAPrivateKey, ca_file: str, ca_pkey_file:
     return certificate
 
 
-def parse_file(text: str, *, header: Optional[str] = None) -> List[str]:
+def parse_file(text: str, *, header: Optional[str] = None) -> list[str]:
     """Parses a list of strings."""
     if header is None:
         header = 'hathor-whitelist'
@@ -164,7 +164,7 @@ def parse_file(text: str, *, header: Optional[str] = None) -> List[str]:
     return list(nonblank_lines)
 
 
-def parse_whitelist(text: str, *, header: Optional[str] = None) -> Set[str]:
+def parse_whitelist(text: str, *, header: Optional[str] = None) -> set[str]:
     """ Parses the list of whitelist peer ids
 
     Example:
