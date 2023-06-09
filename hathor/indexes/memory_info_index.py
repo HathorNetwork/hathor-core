@@ -14,11 +14,15 @@
 
 from typing import TYPE_CHECKING, Optional
 
+from twisted.internet import defer
+from twisted.internet.defer import Deferred
+
 from hathor.indexes.info_index import InfoIndex
 from hathor.transaction import BaseTransaction
 
 if TYPE_CHECKING:  # pragma: no cover
     from hathor.indexes.manager import IndexesManager
+    from hathor.util import Reactor
 
 
 class MemoryInfoIndex(InfoIndex):
@@ -28,8 +32,9 @@ class MemoryInfoIndex(InfoIndex):
         self._first_timestamp = 0
         self._latest_timestamp = 0
 
-    def init_start(self, indexes_manager: 'IndexesManager') -> None:
+    def init_start(self, reactor: 'Reactor', indexes_manager: 'IndexesManager') -> Deferred:
         self.force_clear()
+        return defer.succeed(None)
 
     def get_db_name(self) -> Optional[str]:
         return None

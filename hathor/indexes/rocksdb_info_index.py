@@ -15,6 +15,8 @@
 from typing import TYPE_CHECKING, Optional
 
 from structlog import get_logger
+from twisted.internet import defer
+from twisted.internet.defer import Deferred
 
 from hathor.indexes.memory_info_index import MemoryInfoIndex
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
@@ -24,6 +26,7 @@ if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
 
     from hathor.indexes.manager import IndexesManager
+    from hathor.util import Reactor
 
 logger = get_logger()
 
@@ -42,10 +45,11 @@ class RocksDBInfoIndex(MemoryInfoIndex, RocksDBIndexUtils):
         RocksDBIndexUtils.__init__(self, db, cf_name or _CF_NAME_ADDRESS_INDEX)
         MemoryInfoIndex.__init__(self)
 
-    def init_start(self, indexes_manager: 'IndexesManager') -> None:
+    def init_start(self, reactor: 'Reactor', indexes_manager: 'IndexesManager') -> Deferred:
         self._load_all_values()
         self.log.info('loaded info-index', block_count=self._block_count, tx_count=self._tx_count,
                       first_timestamp=self._first_timestamp, latest_timestamp=self._latest_timestamp)
+        return defer.succeed(None)
 
     def get_db_name(self) -> Optional[str]:
         return _DB_NAME

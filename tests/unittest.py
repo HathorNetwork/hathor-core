@@ -248,8 +248,11 @@ class TestCase(unittest.TestCase):
         manager.avg_time_between_blocks = 0.0001
 
         if start_manager:
-            manager.start()
+            # We don't need to yield because run_to_completion() will run until
+            # the node is fully initialized.
+            deferred = manager.start()
             self.run_to_completion()
+            self.assertTrue(deferred.called)
         return manager
 
     def run_to_completion(self):

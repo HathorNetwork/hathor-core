@@ -175,7 +175,7 @@ class Simulator:
             .set_wallet(wallet) \
             .build()
 
-        artifacts.manager.start()
+        self._clock.callLater(0, artifacts.manager.start)
         self.run_to_completion()
 
         # Don't use it anywhere else. It is unsafe to generate mnemonic words like this.

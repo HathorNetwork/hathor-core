@@ -65,9 +65,9 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
 
     def _build_indexes_manager(self) -> IndexesManager:
         if self._use_memory_indexes:
-            return MemoryIndexesManager()
+            return MemoryIndexesManager(self.reactor)
         else:
-            return RocksDBIndexesManager(self._db)
+            return RocksDBIndexesManager(self.reactor, self._db)
 
     def _tx_to_bytes(self, tx: 'BaseTransaction') -> bytes:
         return bytes(tx)

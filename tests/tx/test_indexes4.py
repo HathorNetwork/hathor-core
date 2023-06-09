@@ -1,3 +1,5 @@
+from twisted.internet.defer import inlineCallbacks
+
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction
 from hathor.transaction.storage import TransactionMemoryStorage
@@ -53,6 +55,7 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
             assert manager.propagate_tx(tx)
         return manager
 
+    @inlineCallbacks
     def test_index_initialization(self):
         from copy import deepcopy
 
@@ -79,9 +82,9 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         base_utxo_index = deepcopy(tx_storage.indexes.utxo._index)
 
         # reset the indexes and force a re-initialization of all indexes
-        tx_storage._manually_initialize()
+        yield tx_storage._manually_initialize()
         tx_storage.indexes.enable_address_index(self.manager.pubsub)
-        tx_storage._manually_initialize_indexes()
+        yield tx_storage._manually_initialize_indexes()
 
         reinit_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
         reinit_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
@@ -96,9 +99,9 @@ class BaseSimulatorIndexesTestCase(unittest.TestCase):
         self.assertEqual(reinit_utxo_index, base_utxo_index)
 
         # reset again
-        tx_storage._manually_initialize()
+        yield tx_storage._manually_initialize()
         tx_storage.indexes.enable_address_index(self.manager.pubsub)
-        tx_storage._manually_initialize_indexes()
+        yield tx_storage._manually_initialize_indexes()
 
         newinit_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
         newinit_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()

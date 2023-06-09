@@ -16,12 +16,15 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional
 
 from structlog import get_logger
+from twisted.internet import defer
+from twisted.internet.defer import Deferred
 
 from hathor.indexes.scope import Scope
 from hathor.transaction.base_transaction import BaseTransaction
 
 if TYPE_CHECKING:  # pragma: no cover
     from hathor.indexes.manager import IndexesManager
+    from hathor.util import Reactor
 
 logger = get_logger()
 
@@ -35,12 +38,12 @@ class BaseIndex(ABC):
     def __init__(self) -> None:
         self.log = logger.new()
 
-    def init_start(self, indexes_manager: 'IndexesManager') -> None:
+    def init_start(self, reactor: 'Reactor', indexes_manager: 'IndexesManager') -> Deferred:
         """ This method will always be called when starting the index manager, regardless of initialization state.
 
         It comes with a no-op implementation by default because usually indexes will not need this.
         """
-        pass
+        return defer.succeed(None)
 
     @abstractmethod
     def get_scope(self) -> Scope:
