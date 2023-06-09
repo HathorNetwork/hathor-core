@@ -17,7 +17,7 @@ from collections import defaultdict
 from enum import Enum
 from itertools import chain
 from math import inf
-from typing import Any, DefaultDict, Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
+from typing import Any, Iterable, NamedTuple, Optional, Union
 
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
 from pycoin.key.Key import Key
@@ -69,7 +69,7 @@ class WalletBalanceUpdate(NamedTuple):
 
 class BaseWallet:
     reactor: Reactor
-    keys: Dict[str, Any]
+    keys: dict[str, Any]
 
     class WalletType(Enum):
         # Hierarchical Deterministic Wallet
@@ -96,24 +96,24 @@ class BaseWallet:
         """
         self.log = logger.new()
 
-        # Dict[token_id, Dict[Tuple[tx_id, index], UnspentTx]]
-        self.unspent_txs: DefaultDict[bytes, Dict[Tuple[bytes, int], UnspentTx]] = defaultdict(dict)
+        # dict[token_id, dict[tuple[tx_id, index], UnspentTx]]
+        self.unspent_txs: defaultdict[bytes, dict[tuple[bytes, int], UnspentTx]] = defaultdict(dict)
 
-        # Dict[token_id, Dict[Tuple[tx_id, index], UnspentTx]]
-        self.maybe_spent_txs: DefaultDict[bytes, Dict[Tuple[bytes, int], UnspentTx]] = defaultdict(dict)
+        # dict[token_id, dict[tuple[tx_id, index], UnspentTx]]
+        self.maybe_spent_txs: defaultdict[bytes, dict[tuple[bytes, int], UnspentTx]] = defaultdict(dict)
 
-        # Dict[Tuple(tx_id, index), List[SpentTx]]
+        # dict[tuple(tx_id, index), list[SpentTx]]
         # We have for each output, which txs spent it
-        self.spent_txs: Dict[Tuple[bytes, int], List['SpentTx']] = defaultdict(list)
+        self.spent_txs: dict[tuple[bytes, int], list['SpentTx']] = defaultdict(list)
 
         # Save each spent tx that was voided and is not spending tokens from this wallet anymore
-        self.voided_spent: Dict[Tuple[bytes, int], List['SpentTx']] = defaultdict(list)
+        self.voided_spent: dict[tuple[bytes, int], list['SpentTx']] = defaultdict(list)
 
         # Save each unspent tx that was voided and is not increasing the tokens of this wallet anymore
-        self.voided_unspent: Dict[Tuple[bytes, int], UnspentTx] = {}
+        self.voided_unspent: dict[tuple[bytes, int], UnspentTx] = {}
 
         # Wallet now has locked balance (with timelock) and available balance
-        self.balance: Dict[bytes, WalletBalance] = defaultdict(WalletBalance)
+        self.balance: dict[bytes, WalletBalance] = defaultdict(WalletBalance)
 
         # WalletBalanceUpdate object to store the callLater to update the balance
         self.balance_update: Optional[WalletBalanceUpdate] = None
@@ -188,11 +188,11 @@ class BaseWallet:
     def get_private_key(self, address58: str) -> EllipticCurvePrivateKey:
         raise NotImplementedError
 
-    def get_input_aux_data(self, data_to_sign: bytes, private_key: Key) -> Tuple[bytes, bytes]:
+    def get_input_aux_data(self, data_to_sign: bytes, private_key: Key) -> tuple[bytes, bytes]:
         raise NotImplementedError
 
-    def prepare_transaction(self, cls: ABCMeta, inputs: List[WalletInputInfo],
-                            outputs: List[WalletOutputInfo], timestamp: Optional[int] = None) -> Transaction:
+    def prepare_transaction(self, cls: ABCMeta, inputs: list[WalletInputInfo],
+                            outputs: list[WalletOutputInfo], timestamp: Optional[int] = None) -> Transaction:
         """Prepares the tx inputs and outputs.
 
         Can be used to create blocks by passing empty list to inputs.
@@ -201,17 +201,17 @@ class BaseWallet:
         :type cls: :py:class:`hathor.transaction.Block` or :py:class:`hathor.transaction.Transaction`
 
         :param inputs: the tx inputs
-        :type inputs: List[WalletInputInfo]
+        :type inputs: list[WalletInputInfo]
 
         :param outputs: the tx outputs
-        :type inputs: List[WalletOutputInfo]
+        :type inputs: list[WalletOutputInfo]
 
         :param timestamp: timestamp to use for the transaction
         :type timestamp: int
         """
         tx_outputs = []
-        token_dict: Dict[bytes, int] = {}   # Dict[token_uid, index]
-        tokens = []         # List[bytes] = List[token_uid]
+        token_dict: dict[bytes, int] = {}   # dict[token_uid, index]
+        tokens = []         # list[bytes] = list[token_uid]
         for txout in outputs:
             token_uid = bytes.fromhex(txout.token_uid)
             if token_uid == settings.HATHOR_TOKEN_UID:
@@ -241,8 +241,8 @@ class BaseWallet:
 
         return tx
 
-    def prepare_transaction_incomplete_inputs(self, cls: ABCMeta, inputs: List[WalletInputInfo],
-                                              outputs: List[WalletOutputInfo], tx_storage: TransactionStorage,
+    def prepare_transaction_incomplete_inputs(self, cls: ABCMeta, inputs: list[WalletInputInfo],
+                                              outputs: list[WalletOutputInfo], tx_storage: TransactionStorage,
                                               force: bool = False, timestamp: Optional[int] = None) -> Transaction:
         """Uses prepare_transaction() to prepare transaction.
 
@@ -257,10 +257,10 @@ class BaseWallet:
         :type cls: Transaction or Block
 
         :param inputs: list of inputs of the tx
-        :type inputs: List[WalletInputInfo]
+        :type inputs: list[WalletInputInfo]
 
         :param outputs: list of outputs of the tx
-        :type outputs: List[WalletOutputInfo]
+        :type outputs: list[WalletOutputInfo]
 
         :param force: if True we will search the private key not only in the unspent txs
             this parameter, when set to True, can be used to allow a double spending
@@ -278,12 +278,12 @@ class BaseWallet:
         new_inputs = self.prepare_incomplete_inputs(inputs, tx_storage, force)
         return self.prepare_transaction(cls, new_inputs, outputs, timestamp)
 
-    def prepare_incomplete_inputs(self, inputs: List[WalletInputInfo], tx_storage: TransactionStorage,
-                                  force: bool = False) -> List[WalletInputInfo]:
+    def prepare_incomplete_inputs(self, inputs: list[WalletInputInfo], tx_storage: TransactionStorage,
+                                  force: bool = False) -> list[WalletInputInfo]:
         """Adds the keys to the inputs
 
         :param inputs: list of inputs of the tx
-        :type inputs: List[WalletInputInfo]
+        :type inputs: list[WalletInputInfo]
 
         :param force: if True we will search the private key not only in the unspent txs
             this parameter, when set to True, can be used to allow a double spending
@@ -298,7 +298,7 @@ class BaseWallet:
         if len(inputs) != len(set(inputs)):
             # Same input is used more than once
             raise InputDuplicated
-        new_inputs: List[WalletInputInfo] = []
+        new_inputs: list[WalletInputInfo] = []
         for _input in inputs:
             new_input = None
             output_tx = tx_storage.get_transaction(_input.tx_id)
@@ -329,7 +329,7 @@ class BaseWallet:
         return new_inputs
 
     def prepare_transaction_compute_inputs(
-        self, cls: ABCMeta, outputs: List[WalletOutputInfo],
+        self, cls: ABCMeta, outputs: list[WalletOutputInfo],
         tx_storage: 'TransactionStorage', timestamp: Optional[int] = None
     ) -> Transaction:
         """Calculates the inputs given the outputs and uses prepare_transaction() to prepare
@@ -339,7 +339,7 @@ class BaseWallet:
         :type cls: :py:class:`hathor.transaction.Block` or :py:class:`hathor.transaction.Transaction`
 
         :param outputs: the tx outputs
-        :type outputs: List[WalletOutputInfo]
+        :type outputs: list[WalletOutputInfo]
 
         :param timestamp: the tx timestamp
         :type timestamp: int
@@ -348,17 +348,17 @@ class BaseWallet:
         return self.prepare_transaction(cls, inputs, outputs, timestamp)
 
     def prepare_compute_inputs(
-        self, outputs: List[WalletOutputInfo], tx_storage: 'TransactionStorage', timestamp: Optional[int] = None
-    ) -> Tuple[List[WalletInputInfo], List[WalletOutputInfo]]:
+        self, outputs: list[WalletOutputInfo], tx_storage: 'TransactionStorage', timestamp: Optional[int] = None
+    ) -> tuple[list[WalletInputInfo], list[WalletOutputInfo]]:
         """Calculates the inputs given the outputs. Handles change.
 
         :param outputs: the tx outputs
-        :type outputs: List[WalletOutputInfo]
+        :type outputs: list[WalletOutputInfo]
 
         :param timestamp: the tx timestamp
         :type timestamp: int
         """
-        token_dict: Dict[bytes, int] = defaultdict(int)
+        token_dict: dict[bytes, int] = defaultdict(int)
         for output in outputs:
             token_uid = bytes.fromhex(output.token_uid)
             token_dict[token_uid] += output.value
@@ -376,21 +376,21 @@ class BaseWallet:
             tx_inputs.extend(inputs)
         return tx_inputs, outputs
 
-    def separate_inputs(self, inputs: List['TxInput'],
-                        tx_storage: 'TransactionStorage') -> Tuple[List['TxInput'], List['TxInput']]:
+    def separate_inputs(self, inputs: list['TxInput'],
+                        tx_storage: 'TransactionStorage') -> tuple[list['TxInput'], list['TxInput']]:
         """Separates the inputs from a tx into 2 groups: the ones that belong to this wallet and the ones that don't
 
         :param inputs: transaction to decode
-        :type inputs: List[py:class:`hathor.transaction.TxInput`]
+        :type inputs: list[py:class:`hathor.transaction.TxInput`]
 
         :return my_inputs: list of all inputs belonging to this wallet
-        :rtype my_inputs: List[py:class:`hathor.transaction.TxInput`]
+        :rtype my_inputs: list[py:class:`hathor.transaction.TxInput`]
 
         :param tx_storage: storage to search for output tx
         :type tx_storage: TransactionStorage
 
         :return other_inputs: list of all inputs NOT belonging to this wallet
-        :rtype other_inputs: List[py:class:`hathor.transaction.TxInput`]
+        :rtype other_inputs: list[py:class:`hathor.transaction.TxInput`]
         """
         my_inputs = []
         other_inputs = []
@@ -449,7 +449,7 @@ class BaseWallet:
     def get_inputs_from_amount(
         self, amount: int, tx_storage: 'TransactionStorage',
         token_uid: bytes = settings.HATHOR_TOKEN_UID, max_ts: Optional[int] = None
-    ) -> Tuple[List[WalletInputInfo], int]:
+    ) -> tuple[list[WalletInputInfo], int]:
         """Creates inputs from our pool of unspent tx given a value
 
         This is a very simple algorithm, so it does not try to find the best combination
@@ -827,12 +827,12 @@ class BaseWallet:
             # publish update history
             self.publish_update(HathorEvents.WALLET_HISTORY_UPDATED)
 
-    def get_history(self, count: int = 10, page: int = 1) -> Tuple[List[Union['SpentTx', 'UnspentTx']], int]:
+    def get_history(self, count: int = 10, page: int = 1) -> tuple[list[Union['SpentTx', 'UnspentTx']], int]:
         """Return the last transactions in this wallet ordered by timestamp and the total
 
         :rtype: tuple[list[SpentTx, UnspentTx], int]
         """
-        history: List[Union['SpentTx', 'UnspentTx']] = []
+        history: list[Union['SpentTx', 'UnspentTx']] = []
 
         for obj_dict in self.unspent_txs.values():
             history += obj_dict.values()
@@ -919,8 +919,8 @@ class BaseWallet:
             # If dont have any other timelock, set balance update to None
             self.balance_update = None
 
-    def match_inputs(self, inputs: List[TxInput],
-                     tx_storage: TransactionStorage) -> Iterable[Tuple[TxInput, Optional[str]]]:
+    def match_inputs(self, inputs: list[TxInput],
+                     tx_storage: TransactionStorage) -> Iterable[tuple[TxInput, Optional[str]]]:
         """Returns an iterable with the inputs that belong and don't belong to this wallet
 
         :return: An iterable with the inputs and corresponding address, if it belongs to this wallet
@@ -955,8 +955,8 @@ class UnspentTx:
         self.test_used = False      # flag to prevent twin txs being created (for tests only!!)
         self.maybe_spent_ts = inf
 
-    def to_dict(self) -> Dict[str, Any]:
-        data: Dict[str, Any] = {}
+    def to_dict(self) -> dict[str, Any]:
+        data: dict[str, Any] = {}
         data['timestamp'] = self.timestamp
         data['tx_id'] = self.tx_id.hex()
         data['index'] = self.index
@@ -968,7 +968,7 @@ class UnspentTx:
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'UnspentTx':
+    def from_dict(cls, data: dict[str, Any]) -> 'UnspentTx':
         return cls(bytes.fromhex(data['tx_id']), data['index'], data['value'], data['timestamp'], data['address'],
                    data['token_data'], data['voided'], data['timelock'])
 
@@ -1005,8 +1005,8 @@ class SpentTx:
         self.timestamp = timestamp
         self.voided = voided
 
-    def to_dict(self) -> Dict[str, Any]:
-        data: Dict[str, Any] = {}
+    def to_dict(self) -> dict[str, Any]:
+        data: dict[str, Any] = {}
         data['timestamp'] = self.timestamp
         data['tx_id'] = self.tx_id.hex()
         data['from_tx_id'] = self.from_tx_id.hex()
@@ -1016,7 +1016,7 @@ class SpentTx:
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'SpentTx':
+    def from_dict(cls, data: dict[str, Any]) -> 'SpentTx':
         return cls(
             bytes.fromhex(data['tx_id']), bytes.fromhex(data['from_tx_id']), data['from_index'], data['value'],
             data['timestamp'])

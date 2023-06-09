@@ -17,7 +17,7 @@ from abc import ABC, abstractmethod, abstractproperty
 from collections import defaultdict, deque
 from contextlib import AbstractContextManager
 from threading import Lock
-from typing import Any, Dict, Iterator, List, NamedTuple, Optional, Set, Tuple, Type, cast
+from typing import Any, Iterator, NamedTuple, Optional, cast
 from weakref import WeakValueDictionary
 
 from intervaltree.interval import Interval
@@ -53,9 +53,9 @@ INDEX_ATTR_PREFIX = 'index_'
 
 class AllTipsCache(NamedTuple):
     timestamp: int
-    tips: Set[Interval]
+    tips: set[Interval]
     merkle_tree: bytes
-    hashes: List[bytes]
+    hashes: list[bytes]
 
 
 class TransactionStorage(ABC):
@@ -79,11 +79,11 @@ class TransactionStorage(ABC):
     _last_start_attribute: str = 'last_start'
 
     # history of migrations that have to be applied in the order defined here
-    _migration_factories: List[Type[BaseMigration]] = [
+    _migration_factories: list[type[BaseMigration]] = [
         add_min_height_metadata.Migration,
     ]
 
-    _migrations: List[BaseMigration]
+    _migrations: list[BaseMigration]
 
     def __init__(self) -> None:
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
@@ -105,7 +105,7 @@ class TransactionStorage(ABC):
 
         # Cache for the best block tips
         # This cache is updated in the consensus algorithm.
-        self._best_block_tips_cache: Optional[List[bytes]] = None
+        self._best_block_tips_cache: Optional[list[bytes]] = None
 
         # If should create lock when getting a transaction
         self._should_lock = False
@@ -119,7 +119,7 @@ class TransactionStorage(ABC):
         self._all_tips_cache: Optional[AllTipsCache] = None
 
         # Initialize cache for genesis transactions.
-        self._genesis_cache: Dict[bytes, BaseTransaction] = {}
+        self._genesis_cache: dict[bytes, BaseTransaction] = {}
 
         # Internal toggle to choose when to select topological DFS iterator, used only on some tests
         self._always_use_topological_dfs = False
@@ -147,7 +147,7 @@ class TransactionStorage(ABC):
         """True when only genesis is present, useful for checking for a fresh database."""
         raise NotImplementedError
 
-    def update_best_block_tips_cache(self, tips_cache: Optional[List[bytes]]) -> None:
+    def update_best_block_tips_cache(self, tips_cache: Optional[list[bytes]]) -> None:
         # XXX: check that the cache update is working properly, only used in unittests
         # XXX: this might not actually hold true in some cases, commenting out while we figure it out
         # if settings.SLOW_ASSERTS:
@@ -307,7 +307,7 @@ class TransactionStorage(ABC):
             self._genesis_cache[tx2.hash] = tx2
         self._saving_genesis = False
 
-    def _get_genesis_from_settings(self) -> List[BaseTransaction]:
+    def _get_genesis_from_settings(self) -> list[BaseTransaction]:
         """Return all genesis from settings."""
         from hathor.transaction.genesis import _get_genesis_transactions_unsafe
         return _get_genesis_transactions_unsafe(self)
@@ -446,7 +446,7 @@ class TransactionStorage(ABC):
         if self.indexes is not None:
             self.del_from_indexes(tx, remove_all=True, relax_assert=True)
 
-    def remove_transactions(self, txs: List[BaseTransaction]) -> None:
+    def remove_transactions(self, txs: list[BaseTransaction]) -> None:
         """Will remove all of the transactions on the list from the database.
 
         Special notes:
@@ -458,8 +458,8 @@ class TransactionStorage(ABC):
         - parent's children metadata will be updated to reflect the removals
         - all indexes will be updated
         """
-        parents_to_update: Dict[bytes, List[bytes]] = defaultdict(list)
-        dangling_children: Set[bytes] = set()
+        parents_to_update: dict[bytes, list[bytes]] = defaultdict(list)
+        dangling_children: set[bytes] = set()
         txset = {not_none(tx.hash) for tx in txs}
         for tx in txs:
             assert tx.hash is not None
@@ -594,7 +594,7 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_best_block_tips(self, timestamp: Optional[float] = None, *, skip_cache: bool = False) -> List[bytes]:
+    def get_best_block_tips(self, timestamp: Optional[float] = None, *, skip_cache: bool = False) -> list[bytes]:
         """ Return a list of blocks that are heads in a best chain. It must be used when mining.
 
         When more than one block is returned, it means that there are multiple best chains and
@@ -604,7 +604,7 @@ class TransactionStorage(ABC):
             return self._best_block_tips_cache[:]
 
         best_score = 0.0
-        best_tip_blocks: List[bytes] = []
+        best_tip_blocks: list[bytes] = []
 
         for block_hash in (x.data for x in self.get_block_tips(timestamp)):
             meta = self.get_metadata(block_hash)
@@ -643,10 +643,10 @@ class TransactionStorage(ABC):
         return highest_height
 
     @cpu.profiler('get_merkle_tree')
-    def get_merkle_tree(self, timestamp: int) -> Tuple[bytes, List[bytes]]:
+    def get_merkle_tree(self, timestamp: int) -> tuple[bytes, list[bytes]]:
         """ Generate a hash to check whether the DAG is the same at that timestamp.
 
-        :rtype: Tuple[bytes(hash), List[bytes(hash)]]
+        :rtype: tuple[bytes(hash), list[bytes(hash)]]
         """
         if self._all_tips_cache is not None and timestamp >= self._all_tips_cache.timestamp:
             return self._all_tips_cache.merkle_tree, self._all_tips_cache.hashes
@@ -659,10 +659,10 @@ class TransactionStorage(ABC):
 
         return self.calculate_merkle_tree(intervals)
 
-    def calculate_merkle_tree(self, intervals: Set[Interval]) -> Tuple[bytes, List[bytes]]:
+    def calculate_merkle_tree(self, intervals: set[Interval]) -> tuple[bytes, list[bytes]]:
         """ Generate a hash of the transactions at the intervals
 
-        :rtype: Tuple[bytes(hash), List[bytes(hash)]]
+        :rtype: tuple[bytes(hash), list[bytes(hash)]]
         """
         hashes = [x.data for x in intervals]
         hashes.sort()
@@ -674,19 +674,19 @@ class TransactionStorage(ABC):
         return merkle.digest(), hashes
 
     @abstractmethod
-    def get_block_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
+    def get_block_tips(self, timestamp: Optional[float] = None) -> set[Interval]:
         raise NotImplementedError
 
     @abstractmethod
-    def get_all_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
+    def get_all_tips(self, timestamp: Optional[float] = None) -> set[Interval]:
         raise NotImplementedError
 
     @abstractmethod
-    def get_tx_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
+    def get_tx_tips(self, timestamp: Optional[float] = None) -> set[Interval]:
         raise NotImplementedError
 
     @abstractmethod
-    def get_newest_blocks(self, count: int) -> Tuple[List[Block], bool]:
+    def get_newest_blocks(self, count: int) -> tuple[list[Block], bool]:
         """ Get blocks from the newest to the oldest
 
         :param count: Number of blocks to be returned
@@ -695,7 +695,7 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_newest_txs(self, count: int) -> Tuple[List[BaseTransaction], bool]:
+    def get_newest_txs(self, count: int) -> tuple[list[BaseTransaction], bool]:
         """ Get transactions from the newest to the oldest
 
         :param count: Number of transactions to be returned
@@ -705,7 +705,7 @@ class TransactionStorage(ABC):
 
     @abstractmethod
     def get_older_blocks_after(self, timestamp: int, hash_bytes: bytes,
-                               count: int) -> Tuple[List[Block], bool]:
+                               count: int) -> tuple[list[Block], bool]:
         """ Get blocks from the timestamp/hash_bytes reference to the oldest
 
         :param timestamp: Timestamp reference to start the search
@@ -717,7 +717,7 @@ class TransactionStorage(ABC):
 
     @abstractmethod
     def get_newer_blocks_after(self, timestamp: int, hash_bytes: bytes,
-                               count: int) -> Tuple[List[BaseTransaction], bool]:
+                               count: int) -> tuple[list[BaseTransaction], bool]:
         """ Get blocks from the timestamp/hash_bytes reference to the newest
 
         :param timestamp: Timestamp reference to start the search
@@ -728,7 +728,7 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_older_txs_after(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[BaseTransaction], bool]:
+    def get_older_txs_after(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[BaseTransaction], bool]:
         """ Get transactions from the timestamp/hash_bytes reference to the oldest
 
         :param timestamp: Timestamp reference to start the search
@@ -739,7 +739,7 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_newer_txs_after(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[BaseTransaction], bool]:
+    def get_newer_txs_after(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[BaseTransaction], bool]:
         """ Get transactions from the timestamp/hash_bytes reference to the newest
 
         :param timestamp: Timestamp reference to start the search
@@ -849,11 +849,11 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_all_genesis(self) -> Set[BaseTransaction]:
+    def get_all_genesis(self) -> set[BaseTransaction]:
         raise NotImplementedError
 
     @abstractmethod
-    def get_transactions_before(self, hash_bytes: bytes, num_blocks: int = 100) -> List[BaseTransaction]:
+    def get_transactions_before(self, hash_bytes: bytes, num_blocks: int = 100) -> list[BaseTransaction]:
         """Run a BFS starting from the giving `hash_bytes`.
 
         :param hash_bytes: Starting point of the BFS, either a block or a transaction.
@@ -863,7 +863,7 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_blocks_before(self, hash_bytes: bytes, num_blocks: int = 100) -> List[Block]:
+    def get_blocks_before(self, hash_bytes: bytes, num_blocks: int = 100) -> list[Block]:
         """Run a BFS starting from the giving `hash_bytes`.
 
         :param hash_bytes: Starting point of the BFS.
@@ -1022,11 +1022,11 @@ class TransactionStorage(ABC):
         else:
             yield from self.iter_mempool_from_tx_tips()
 
-    def compute_transactions_that_became_invalid(self) -> List[BaseTransaction]:
+    def compute_transactions_that_became_invalid(self) -> list[BaseTransaction]:
         """ This method will look for transactions in the mempool that have became invalid due to the reward lock.
         """
         from hathor.transaction.validation_state import ValidationState
-        to_remove: List[BaseTransaction] = []
+        to_remove: list[BaseTransaction] = []
         for tx in self.iter_mempool_from_best_index():
             if tx.is_spent_reward_locked():
                 tx.set_validation(ValidationState.INVALID)
@@ -1080,13 +1080,13 @@ class BaseTransactionStorage(TransactionStorage):
         """Remove all caches in case we don't need it."""
         self.indexes = None
 
-    def get_best_block_tips(self, timestamp: Optional[float] = None, *, skip_cache: bool = False) -> List[bytes]:
+    def get_best_block_tips(self, timestamp: Optional[float] = None, *, skip_cache: bool = False) -> list[bytes]:
         return super().get_best_block_tips(timestamp, skip_cache=skip_cache)
 
     def get_weight_best_block(self) -> float:
         return super().get_weight_best_block()
 
-    def get_block_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
+    def get_block_tips(self, timestamp: Optional[float] = None) -> set[Interval]:
         if self.indexes is None:
             raise NotImplementedError
         assert self.indexes is not None
@@ -1094,7 +1094,7 @@ class BaseTransactionStorage(TransactionStorage):
             timestamp = self.latest_timestamp
         return self.indexes.block_tips[timestamp]
 
-    def get_tx_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
+    def get_tx_tips(self, timestamp: Optional[float] = None) -> set[Interval]:
         if self.indexes is None:
             raise NotImplementedError
         assert self.indexes is not None
@@ -1111,7 +1111,7 @@ class BaseTransactionStorage(TransactionStorage):
 
         return tips
 
-    def get_all_tips(self, timestamp: Optional[float] = None) -> Set[Interval]:
+    def get_all_tips(self, timestamp: Optional[float] = None) -> set[Interval]:
         if self.indexes is None:
             raise NotImplementedError
         assert self.indexes is not None
@@ -1129,7 +1129,7 @@ class BaseTransactionStorage(TransactionStorage):
 
         return tips
 
-    def get_newest_blocks(self, count: int) -> Tuple[List[Block], bool]:
+    def get_newest_blocks(self, count: int) -> tuple[list[Block], bool]:
         if self.indexes is None:
             raise NotImplementedError
         assert self.indexes is not None
@@ -1137,7 +1137,7 @@ class BaseTransactionStorage(TransactionStorage):
         blocks = [cast(Block, self.get_transaction(block_hash)) for block_hash in block_hashes]
         return blocks, has_more
 
-    def get_newest_txs(self, count: int) -> Tuple[List[BaseTransaction], bool]:
+    def get_newest_txs(self, count: int) -> tuple[list[BaseTransaction], bool]:
         if self.indexes is None:
             raise NotImplementedError
         assert self.indexes is not None
@@ -1145,7 +1145,7 @@ class BaseTransactionStorage(TransactionStorage):
         txs = [self.get_transaction(tx_hash) for tx_hash in tx_hashes]
         return txs, has_more
 
-    def get_older_blocks_after(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[Block], bool]:
+    def get_older_blocks_after(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[Block], bool]:
         if self.indexes is None:
             raise NotImplementedError
         assert self.indexes is not None
@@ -1154,7 +1154,7 @@ class BaseTransactionStorage(TransactionStorage):
         return blocks, has_more
 
     def get_newer_blocks_after(self, timestamp: int, hash_bytes: bytes,
-                               count: int) -> Tuple[List[BaseTransaction], bool]:
+                               count: int) -> tuple[list[BaseTransaction], bool]:
         if self.indexes is None:
             raise NotImplementedError
         assert self.indexes is not None
@@ -1162,7 +1162,7 @@ class BaseTransactionStorage(TransactionStorage):
         blocks = [self.get_transaction(block_hash) for block_hash in block_hashes]
         return blocks, has_more
 
-    def get_older_txs_after(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[BaseTransaction], bool]:
+    def get_older_txs_after(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[BaseTransaction], bool]:
         if self.indexes is None:
             raise NotImplementedError
         assert self.indexes is not None
@@ -1170,7 +1170,7 @@ class BaseTransactionStorage(TransactionStorage):
         txs = [self.get_transaction(tx_hash) for tx_hash in tx_hashes]
         return txs, has_more
 
-    def get_newer_txs_after(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[BaseTransaction], bool]:
+    def get_newer_txs_after(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[BaseTransaction], bool]:
         if self.indexes is None:
             raise NotImplementedError
         assert self.indexes is not None
@@ -1189,8 +1189,8 @@ class BaseTransactionStorage(TransactionStorage):
         assert self.indexes is not None
 
         cur_timestamp: Optional[int] = None
-        cur_blocks: List[Block] = []
-        cur_txs: List[Transaction] = []
+        cur_blocks: list[Block] = []
+        cur_txs: list[Transaction] = []
         for tx_hash in self.indexes.sorted_all.iter():
             tx = self.get_transaction(tx_hash)
             if tx.timestamp != cur_timestamp:
@@ -1225,8 +1225,8 @@ class BaseTransactionStorage(TransactionStorage):
                 self.is_transaction = tx.is_transaction
                 self.tx = tx
 
-        to_visit: List[Item] = list(map(Item, self.get_all_genesis()))
-        seen: Set[bytes] = set()
+        to_visit: list[Item] = list(map(Item, self.get_all_genesis()))
+        seen: set[bytes] = set()
         heapq.heapify(to_visit)
         while to_visit:
             item = heapq.heappop(to_visit)
@@ -1249,7 +1249,7 @@ class BaseTransactionStorage(TransactionStorage):
         #      Sorting the vertices by the lengths of their longest incoming paths produces a topological
         #      ordering (Dekel, Nassimi & Sahni 1981). See: https://epubs.siam.org/doi/10.1137/0210049
         #      See also: https://gitlab.com/HathorNetwork/hathor-python/merge_requests/31
-        visited: Dict[bytes, int] = dict()  # Dict[bytes, int]
+        visited: dict[bytes, int] = dict()  # dict[bytes, int]
         for tx in self.get_all_transactions():
             if not tx.is_block:
                 continue
@@ -1257,7 +1257,7 @@ class BaseTransactionStorage(TransactionStorage):
         for tx in self.get_all_transactions():
             yield from self._run_topological_sort_dfs(tx, visited)
 
-    def _run_topological_sort_dfs(self, root: BaseTransaction, visited: Dict[bytes, int]) -> Iterator[BaseTransaction]:
+    def _run_topological_sort_dfs(self, root: BaseTransaction, visited: dict[bytes, int]) -> Iterator[BaseTransaction]:
         if root.hash in visited:
             return
 
@@ -1338,25 +1338,25 @@ class BaseTransactionStorage(TransactionStorage):
         assert self._genesis_cache is not None
         return self._genesis_cache.get(hash_bytes, None)
 
-    def get_all_genesis(self) -> Set[BaseTransaction]:
+    def get_all_genesis(self) -> set[BaseTransaction]:
         assert self._genesis_cache is not None
         return set(self._genesis_cache.values())
 
     def get_transactions_before(self, hash_bytes: bytes,
-                                num_blocks: int = 100) -> List[BaseTransaction]:  # pragma: no cover
+                                num_blocks: int = 100) -> list[BaseTransaction]:  # pragma: no cover
         ref_tx = self.get_transaction(hash_bytes)
-        visited: Dict[bytes, int] = dict()  # Dict[bytes, int]
+        visited: dict[bytes, int] = dict()  # dict[bytes, int]
         result = [x for x in self._run_topological_sort_dfs(ref_tx, visited) if not x.is_block]
         result = result[-num_blocks:]
         return result
 
-    def get_blocks_before(self, hash_bytes: bytes, num_blocks: int = 100) -> List[Block]:
+    def get_blocks_before(self, hash_bytes: bytes, num_blocks: int = 100) -> list[Block]:
         ref_tx = self.get_transaction(hash_bytes)
         if not ref_tx.is_block:
             raise TransactionIsNotABlock
-        result = []  # List[Block]
-        pending_visits = deque(ref_tx.parents)  # List[bytes]
-        used = set(pending_visits)  # Set[bytes]
+        result = []  # list[Block]
+        pending_visits = deque(ref_tx.parents)  # list[bytes]
+        used = set(pending_visits)  # set[bytes]
         while pending_visits:
             tx_hash = pending_visits.popleft()
             tx = self.get_transaction(tx_hash)

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from itertools import chain
-from typing import TYPE_CHECKING, Iterable, List, Optional, Set, cast
+from typing import TYPE_CHECKING, Iterable, Optional, cast
 
 from structlog import get_logger
 
@@ -113,7 +113,7 @@ class BlockConsensusAlgorithm:
         assert storage.indexes is not None
 
         # Union of voided_by of parents
-        voided_by: Set[bytes] = self.union_voided_by_from_parents(block)
+        voided_by: set[bytes] = self.union_voided_by_from_parents(block)
 
         # Update accumulated weight of the transactions voiding us.
         assert block.hash not in voided_by
@@ -219,14 +219,14 @@ class BlockConsensusAlgorithm:
                     if not meta.voided_by:
                         self.context.mark_as_reorg(common_block)
 
-    def union_voided_by_from_parents(self, block: Block) -> Set[bytes]:
+    def union_voided_by_from_parents(self, block: Block) -> set[bytes]:
         """Return the union of the voided_by of block's parents.
 
         It does not include the hash of blocks because the hash of blocks
         are not propagated through the chains. For further information, see
         the docstring of the ConsensusAlgorithm class.
         """
-        voided_by: Set[bytes] = set()
+        voided_by: set[bytes] = set()
         for parent in block.get_parents():
             assert parent.hash is not None
             parent_meta = parent.get_metadata()
@@ -247,7 +247,7 @@ class BlockConsensusAlgorithm:
         """Update block's metadata voided_by from parents.
         Return True if the block is voided and False otherwise."""
         assert block.storage is not None
-        voided_by: Set[bytes] = self.union_voided_by_from_parents(block)
+        voided_by: set[bytes] = self.union_voided_by_from_parents(block)
         if voided_by:
             meta = block.get_metadata()
             if meta.voided_by:
@@ -259,7 +259,7 @@ class BlockConsensusAlgorithm:
             return True
         return False
 
-    def add_voided_by_to_multiple_chains(self, block: Block, heads: List[Block], first_block: Block) -> None:
+    def add_voided_by_to_multiple_chains(self, block: Block, heads: list[Block], first_block: Block) -> None:
         # We need to go through all side chains because there may be non-voided blocks
         # that must be voided.
         # For instance, imagine two chains with intersection with both heads voided.
@@ -290,7 +290,7 @@ class BlockConsensusAlgorithm:
             storage = block.storage
             heads = [cast(Block, storage.get_transaction(h)) for h in storage.get_best_block_tips()]
             best_score = 0.0
-            best_heads: List[Block]
+            best_heads: list[Block]
             for head in heads:
                 head_meta = head.get_metadata(force_reload=True)
                 if head_meta.score <= best_score - settings.WEIGHT_TOL:
@@ -446,7 +446,7 @@ class BlockConsensusAlgorithm:
             meta.first_block = None
             self.context.save(tx)
 
-    def _score_block_dfs(self, block: BaseTransaction, used: Set[bytes],
+    def _score_block_dfs(self, block: BaseTransaction, used: set[bytes],
                          mark_as_best_chain: bool, newest_timestamp: int) -> float:
         """ Internal method to run a DFS. It is used by `calculate_score()`.
         """
@@ -526,7 +526,7 @@ class BlockConsensusAlgorithm:
         parent = self._find_first_parent_in_best_chain(block)
         newest_timestamp = parent.timestamp
 
-        used: Set[bytes] = set()
+        used: set[bytes] = set()
         return self._score_block_dfs(block, used, mark_as_best_chain, newest_timestamp)
 
 

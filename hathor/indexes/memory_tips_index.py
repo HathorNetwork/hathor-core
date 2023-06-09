@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from math import inf
-from typing import Dict, Optional, Set
+from typing import Optional
 
 from intervaltree import Interval, IntervalTree
 from structlog import get_logger
@@ -45,7 +45,7 @@ class MemoryTipsIndex(TipsIndex):
 
     # It is a way to access the interval by the hash of the transaction.
     # It is useful because the interval tree allows access only by the interval.
-    tx_last_interval: Dict[bytes, Interval]
+    tx_last_interval: dict[bytes, Interval]
 
     def __init__(self, *, scope_type: ScopeType):
         super().__init__(scope_type=scope_type)
@@ -155,5 +155,5 @@ class MemoryTipsIndex(TipsIndex):
             new_interval = Interval(pi.begin, min_timestamp, pi.data)
             self._add_interval(new_interval)
 
-    def __getitem__(self, index: float) -> Set[Interval]:
+    def __getitem__(self, index: float) -> set[Interval]:
         return self.tree[index]

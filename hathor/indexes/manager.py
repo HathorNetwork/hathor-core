@@ -15,7 +15,7 @@
 import operator
 from abc import ABC, abstractmethod
 from functools import reduce
-from typing import TYPE_CHECKING, Iterator, List, Optional
+from typing import TYPE_CHECKING, Iterator, Optional
 
 from structlog import get_logger
 
@@ -136,7 +136,7 @@ class IndexesManager(ABC):
 
         db_last_started_at = tx_storage.get_last_started_at()
 
-        indexes_to_init: List[BaseIndex] = []
+        indexes_to_init: list[BaseIndex] = []
         for index in self.iter_all_indexes():
             index_db_name = index.get_db_name()
             if index_db_name is None:

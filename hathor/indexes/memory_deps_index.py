@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Dict, FrozenSet, Iterator, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Iterator, Optional
 
 from structlog import get_logger
 
@@ -28,13 +28,13 @@ logger = get_logger()
 
 class MemoryDepsIndex(DepsIndex):
     # Reverse dependency mapping
-    _rev_dep_index: Dict[bytes, Set[bytes]]
+    _rev_dep_index: dict[bytes, set[bytes]]
 
     # Ready to be validated cache
-    _txs_with_deps_ready: Set[bytes]
+    _txs_with_deps_ready: set[bytes]
 
     # Next to be downloaded
-    _needed_txs_index: Dict[bytes, Tuple[int, bytes]]
+    _needed_txs_index: dict[bytes, tuple[int, bytes]]
 
     def __init__(self):
         self.log = logger.new()
@@ -106,11 +106,11 @@ class MemoryDepsIndex(DepsIndex):
     def _iter_needed_txs(self) -> Iterator[bytes]:
         yield from self._needed_txs_index.keys()
 
-    def _get_rev_deps(self, tx: bytes) -> FrozenSet[bytes]:
+    def _get_rev_deps(self, tx: bytes) -> frozenset[bytes]:
         """Get all txs that depend on the given tx (i.e. its reverse depdendencies)."""
         return frozenset(self._rev_dep_index.get(tx, set()))
 
-    def known_children(self, tx: BaseTransaction) -> List[bytes]:
+    def known_children(self, tx: BaseTransaction) -> list[bytes]:
         assert tx.hash is not None
         assert tx.storage is not None
         it_rev_deps = map(tx.storage.get_transaction, self._get_rev_deps(tx.hash))

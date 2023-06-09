@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Dict, FrozenSet, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Optional
 
 from hathor.transaction.validation_state import ValidationState
 from hathor.util import practically_equal
@@ -27,13 +27,13 @@ if TYPE_CHECKING:
 
 class TransactionMetadata:
     hash: Optional[bytes]
-    spent_outputs: Dict[int, List[bytes]]
+    spent_outputs: dict[int, list[bytes]]
     # XXX: the following Optional[] types use None to replace empty set/list to reduce memory use
-    conflict_with: Optional[List[bytes]]
-    voided_by: Optional[Set[bytes]]
-    received_by: List[int]
-    children: List[bytes]
-    twins: List[bytes]
+    conflict_with: Optional[list[bytes]]
+    voided_by: Optional[set[bytes]]
+    received_by: list[int]
+    children: list[bytes]
+    twins: list[bytes]
     accumulated_weight: float
     score: float
     first_block: Optional[bytes]
@@ -51,7 +51,7 @@ class TransactionMetadata:
     _last_voided_by_hash: Optional[int]
     _last_spent_by_hash: Optional[int]
 
-    def __init__(self, spent_outputs: Optional[Dict[int, List[bytes]]] = None, hash: Optional[bytes] = None,
+    def __init__(self, spent_outputs: Optional[dict[int, list[bytes]]] = None, hash: Optional[bytes] = None,
                  accumulated_weight: float = 0, score: float = 0, height: int = 0, min_height: int = 0) -> None:
         from hathor.transaction.genesis import is_genesis
 
@@ -188,8 +188,8 @@ class TransactionMetadata:
 
         return True
 
-    def to_json(self) -> Dict[str, Any]:
-        data: Dict[str, Any] = {}
+    def to_json(self) -> dict[str, Any]:
+        data: dict[str, Any] = {}
         data['hash'] = self.hash and self.hash.hex()
         data['spent_outputs'] = []
         for idx, hashes in self.spent_outputs.items():
@@ -210,7 +210,7 @@ class TransactionMetadata:
         data['validation'] = self.validation.name.lower()
         return data
 
-    def to_json_extended(self, tx_storage: 'TransactionStorage') -> Dict[str, Any]:
+    def to_json_extended(self, tx_storage: 'TransactionStorage') -> dict[str, Any]:
         data = self.to_json()
         first_block_height: Optional[int]
         if self.first_block is not None:
@@ -222,7 +222,7 @@ class TransactionMetadata:
         return data
 
     @classmethod
-    def create_from_json(cls, data: Dict[str, Any]) -> 'TransactionMetadata':
+    def create_from_json(cls, data: dict[str, Any]) -> 'TransactionMetadata':
         from hathor.transaction.genesis import is_genesis
 
         meta = cls()
@@ -288,7 +288,7 @@ class TransactionMetadata:
             if not self.voided_by:
                 self.voided_by = None
 
-    def get_frozen_voided_by(self) -> FrozenSet[bytes]:
+    def get_frozen_voided_by(self) -> frozenset[bytes]:
         """Return a frozen set copy of voided_by."""
         if self.voided_by is None:
             return frozenset()

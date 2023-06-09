@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Iterator, List, Optional
+from typing import Iterator, Optional
 
 from hathor.event.model.base_event import BaseEvent
 from hathor.event.model.node_state import NodeState
@@ -21,7 +21,7 @@ from hathor.event.storage.event_storage import EventStorage
 
 class EventMemoryStorage(EventStorage):
     def __init__(self) -> None:
-        self._events: List[BaseEvent] = []
+        self._events: list[BaseEvent] = []
         self._last_event: Optional[BaseEvent] = None
         self._last_group_id: Optional[int] = None
         self._node_state: Optional[NodeState] = None

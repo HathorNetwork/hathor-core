@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import math
-from typing import TYPE_CHECKING, Dict, Iterator, Optional, Union
+from typing import TYPE_CHECKING, Iterator, Optional, Union
 
 from intervaltree import Interval, IntervalTree
 from structlog import get_logger
@@ -59,7 +59,7 @@ class PartialRocksDBTipsIndex(MemoryTipsIndex, RocksDBIndexUtils):
 
     # It is a way to access the interval by the hash of the transaction.
     # It is useful because the interval tree allows access only by the interval.
-    tx_last_interval: Dict[bytes, Interval]
+    tx_last_interval: dict[bytes, Interval]
 
     def __init__(self, db: 'rocksdb.DB', *, scope_type: ScopeType):
         MemoryTipsIndex.__init__(self, scope_type=scope_type)

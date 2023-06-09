@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import re
-from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union, cast
+from typing import Any, Optional, TypeVar, Union, cast
 
 from twisted.web.http import Request
 from twisted.web.resource import Resource as TwistedResource
@@ -57,7 +57,7 @@ def get_missing_params_msg(param_name):
     return json_dumpb({'success': False, 'message': f'Missing parameter: {param_name}'})
 
 
-def parse_args(args: Dict[bytes, List[bytes]], expected_args: List[str]) -> Dict[str, Any]:
+def parse_args(args: dict[bytes, list[bytes]], expected_args: list[str]) -> dict[str, Any]:
     """Parse all expected arguments. If there are missing arguments, returns the missing arguments
     """
     expected_set = set(expected_args)
@@ -70,7 +70,7 @@ def parse_args(args: Dict[bytes, List[bytes]], expected_args: List[str]) -> Dict
     if diff:
         return {'success': False, 'missing': ', '.join(sorted(diff))}
 
-    ret: Dict[str, str] = dict()
+    ret: dict[str, str] = dict()
     for arg2 in expected_args:
         key_str = arg2.encode('utf-8')
         first_param = args[key_str][0]
@@ -93,7 +93,7 @@ def parse_int(raw: Union[str, bytes], *,
     return value
 
 
-def validate_tx_hash(hash_hex: str, tx_storage: TransactionStorage) -> Tuple[bool, str]:
+def validate_tx_hash(hash_hex: str, tx_storage: TransactionStorage) -> tuple[bool, str]:
     """ Validate if the tx hash is valid and if it exists
         Return success and a message in case of failure
     """
@@ -118,18 +118,18 @@ def validate_tx_hash(hash_hex: str, tx_storage: TransactionStorage) -> Tuple[boo
 
 
 class Resource(TwistedResource):
-    openapi: Dict[str, Any] = {}
+    openapi: dict[str, Any] = {}
 
 
-def get_args(request: Request) -> Dict[bytes, List[bytes]]:
+def get_args(request: Request) -> dict[bytes, list[bytes]]:
     """Type-friendly way to access request.args, also always returns a dict instead of None."""
-    args = cast(Optional[Dict[bytes, List[bytes]]], request.args)
+    args = cast(Optional[dict[bytes, list[bytes]]], request.args)
     if args is None:
         return {}
     return args
 
 
-def get_arg_default(args: Dict[bytes, List[bytes]], key: str, default: T) -> T:
+def get_arg_default(args: dict[bytes, list[bytes]], key: str, default: T) -> T:
     """Get a value with given key from an request.args formatted dict, return default if key was not found.
 
     Examples:

@@ -16,7 +16,7 @@ import sys
 from argparse import ArgumentParser
 from collections import OrderedDict
 from datetime import datetime
-from typing import Any, List
+from typing import Any
 
 import configargparse
 import structlog
@@ -215,7 +215,7 @@ def setup_logging(
             event_dict['event'] = event_dict['event'].format(**event_dict)
         return event_dict
 
-    processors: List[Any] = [
+    processors: list[Any] = [
         structlog.stdlib.filter_by_level,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Optional
 
 from structlog import get_logger
 
@@ -141,7 +141,7 @@ class RocksDBHeightIndex(HeightIndex, RocksDBIndexUtils):
         assert value is not None  # must never be empty, at least genesis has been added
         return self._from_value(value).hash
 
-    def get_height_tip(self) -> Tuple[int, bytes]:
+    def get_height_tip(self) -> tuple[int, bytes]:
         it = self._db.iteritems(self._cf)
         it.seek_to_last()
         (_, key), value = it.get()

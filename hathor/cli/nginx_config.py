@@ -15,14 +15,14 @@
 import json
 import os
 from enum import Enum
-from typing import Any, Dict, List, NamedTuple, Optional, TextIO, Tuple
+from typing import Any, NamedTuple, Optional, TextIO
 
 from hathor.cli.openapi_json import get_openapi_dict
 
 BASE_PATH = os.path.join(os.path.dirname(__file__), 'nginx_files')
 
 
-def get_openapi(src_file: Optional[TextIO] = None) -> Dict[str, Any]:
+def get_openapi(src_file: Optional[TextIO] = None) -> dict[str, Any]:
     """ Open and parse the json file or generate OpenAPI dict on-the-fly
     """
     if src_file is None:
@@ -101,14 +101,14 @@ def _scale_rate_limit(raw_rate: str, rate_k: float) -> str:
     return f'{int(scaled_rate_amount)}{rate_units}'
 
 
-def _get_visibility(source: Dict[str, Any], fallback: Visibility) -> Tuple[Visibility, bool]:
+def _get_visibility(source: dict[str, Any], fallback: Visibility) -> tuple[Visibility, bool]:
     if 'x-visibility' in source:
         return Visibility(source['x-visibility']), False
     else:
         return fallback, True
 
 
-def generate_nginx_config(openapi: Dict[str, Any], *, out_file: TextIO, rate_k: float = 1.0,
+def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: float = 1.0,
                           fallback_visibility: Visibility = Visibility.PRIVATE,
                           disable_rate_limits: bool = False) -> None:
     """ Entry point of the functionality provided by the cli
@@ -120,8 +120,8 @@ def generate_nginx_config(openapi: Dict[str, Any], *, out_file: TextIO, rate_k: 
     settings = HathorSettings()
     api_prefix = settings.API_VERSION_PREFIX
 
-    locations: Dict[str, Dict[str, Any]] = {}
-    limit_rate_zones: List[RateLimitZone] = []
+    locations: dict[str, dict[str, Any]] = {}
+    limit_rate_zones: list[RateLimitZone] = []
     for path, params in openapi['paths'].items():
         visibility, did_fallback = _get_visibility(params, fallback_visibility)
         if did_fallback:
@@ -129,7 +129,7 @@ def generate_nginx_config(openapi: Dict[str, Any], *, out_file: TextIO, rate_k: 
         if visibility is Visibility.PRIVATE:
             continue
 
-        location_params: Dict[str, Any] = {
+        location_params: dict[str, Any] = {
             'rate_limits': [],
             'path_vars_re': params.get('x-path-params-regex', {}),
         }

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import List, NamedTuple, Tuple
+from typing import NamedTuple
 
 from sortedcontainers import SortedKeyList
 from structlog import get_logger
@@ -26,7 +26,7 @@ class TransactionIndexElement(NamedTuple):
 
 
 def get_newest_sorted_key_list(key_list: 'SortedKeyList[TransactionIndexElement]', count: int
-                               ) -> Tuple[List[bytes], bool]:
+                               ) -> tuple[list[bytes], bool]:
     """ Get newest data from a sorted key list
         Return the elements (quantity is the 'count' parameter) and a boolean indicating if has more
     """
@@ -45,7 +45,7 @@ def get_newest_sorted_key_list(key_list: 'SortedKeyList[TransactionIndexElement]
 
 
 def get_older_sorted_key_list(key_list: 'SortedKeyList[TransactionIndexElement]', timestamp: int,
-                              hash_bytes: bytes, count: int) -> Tuple[List[bytes], bool]:
+                              hash_bytes: bytes, count: int) -> tuple[list[bytes], bool]:
     """ Get sorted key list data from the timestamp/hash_bytes reference to the oldest
         Return the elements (quantity is the 'count' parameter) and a boolean indicating if has more
     """
@@ -61,7 +61,7 @@ def get_older_sorted_key_list(key_list: 'SortedKeyList[TransactionIndexElement]'
 
 
 def get_newer_sorted_key_list(key_list: 'SortedKeyList[TransactionIndexElement]', timestamp: int,
-                              hash_bytes: bytes, count: int) -> Tuple[List[bytes], bool]:
+                              hash_bytes: bytes, count: int) -> tuple[list[bytes], bool]:
     """ Get sorted key list data from the timestamp/hash_bytes reference to the newest
         Return the elements (quantity is the 'count' parameter) and a boolean indicating if has more
     """

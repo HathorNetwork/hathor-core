@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections import defaultdict, deque
-from typing import Any, DefaultDict, Deque, Dict, Optional, Set, Union
+from typing import Any, Optional, Union
 
 from autobahn.exception import Disconnected
 from autobahn.twisted.websocket import WebSocketServerFactory
@@ -37,7 +37,7 @@ logger = get_logger()
 # max_hits (int) and hits_window_seconds (int): together they define the Rate Limit
 # It's how many hits can this message make in the window interval
 
-CONTROLLED_TYPES: Dict[str, Dict[str, Any]] = {
+CONTROLLED_TYPES: dict[str, dict[str, Any]] = {
     HathorEvents.NETWORK_NEW_TX_ACCEPTED.value: {
         'buffer_size': 20,
         'time_buffering': 0.1,
@@ -91,16 +91,16 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         """
         # Opened websocket connections so I can broadcast messages later
         # It contains only connections that have finished handshaking.
-        self.connections: Set[HathorAdminWebsocketProtocol] = set()
+        self.connections: set[HathorAdminWebsocketProtocol] = set()
 
         # Websocket connection for each address
-        self.address_connections: DefaultDict[str, Set[HathorAdminWebsocketProtocol]] = defaultdict(set)
+        self.address_connections: defaultdict[str, set[HathorAdminWebsocketProtocol]] = defaultdict(set)
         super().__init__()
 
         # Limit the send message rate for specific type of data
         self.rate_limiter = RateLimiter(reactor=reactor)
         # Stores the buffer of messages that exceeded the rate limit and will be sent
-        self.buffer_deques: Dict[str, Deque[Dict[str, Any]]] = {}
+        self.buffer_deques: dict[str, deque[dict[str, Any]]] = {}
 
         self.metrics = metrics
         self.address_index = address_index
@@ -174,7 +174,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         data['type'] = key.value
         self.send_or_enqueue(data)
 
-    def serialize_message_data(self, event: HathorEvents, args: EventArguments) -> Dict[str, Any]:
+    def serialize_message_data(self, event: HathorEvents, args: EventArguments) -> dict[str, Any]:
         """ Receives the event and the args from the pubsub
             and serializes the data so it can be passed in the websocket
         """
@@ -209,7 +209,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         else:
             raise ValueError('Should never have entered here! We dont know this event')
 
-    def execute_send(self, data: Dict[str, Any], connections: Set[HathorAdminWebsocketProtocol]) -> None:
+    def execute_send(self, data: dict[str, Any], connections: set[HathorAdminWebsocketProtocol]) -> None:
         """ Send data in ws message for the connections
         """
         try:
@@ -228,12 +228,12 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             except Exception:
                 self.log.error('send failed, moving on', exc_info=True)
 
-    def broadcast_message(self, data: Dict[str, Any]) -> None:
+    def broadcast_message(self, data: dict[str, Any]) -> None:
         """ Broadcast the update message to the connections
         """
         self.execute_send(data, self.connections)
 
-    def send_message(self, data: Dict[str, Any]) -> None:
+    def send_message(self, data: dict[str, Any]) -> None:
         """ Check if should broadcast the message to all connections or send directly to some connections only
         """
         if data['type'] in ADDRESS_EVENTS:
@@ -250,7 +250,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             Rate limits change according to the message type, which is obtained from data['type'].
 
             :param data: message to be sent
-            :type data: Dict[string, X] -> X can be different types, depending on the type of message
+            :type data: dict[string, X] -> X can be different types, depending on the type of message
         """
         if data['type'] in CONTROLLED_TYPES:
             # This type is controlled, so I need to check the deque
@@ -268,7 +268,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             If this deque is not programed to be called later yet, we call it
 
             :param data: message to be sent
-            :type data: Dict[string, X] -> X can be different types, depending on the type of message
+            :type data: dict[string, X] -> X can be different types, depending on the type of message
         """
         # Add data to deque
         # We always add the new messages in the end
@@ -283,7 +283,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
     def process_deque(self, data_type):
         """ Process the deque and check if I have limit to send the messages now
 
-            :param data_type: Type of the message to be sent
+            :param data_type: type of the message to be sent
             :type data_type: string
         """
         while len(self.buffer_deques[data_type]) > 0:
@@ -312,15 +312,15 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         elif message['type'] == 'unsubscribe_address':
             self._handle_unsubscribe_address(connection, message)
 
-    def _handle_ping(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
+    def _handle_ping(self, connection: HathorAdminWebsocketProtocol, message: dict[Any, Any]) -> None:
         """ Handler for ping message, should respond with a simple {"type": "pong"}"""
         payload = json_dumpb({'type': 'pong'})
         connection.sendMessage(payload, False)
 
-    def _handle_subscribe_address(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
+    def _handle_subscribe_address(self, connection: HathorAdminWebsocketProtocol, message: dict[Any, Any]) -> None:
         """ Handler for subscription to an address, consideirs subscription limits."""
         addr: str = message['address']
-        subs: Set[str] = connection.subscribed_to
+        subs: set[str] = connection.subscribed_to
         if self.max_subs_addrs_conn is not None and len(subs) >= self.max_subs_addrs_conn:
             payload = json_dumpb({'message': 'Reached maximum number of subscribed '
                                              f'addresses ({self.max_subs_addrs_conn}).',
@@ -337,7 +337,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             payload = json_dumpb({'type': 'subscribe_address', 'success': True})
         connection.sendMessage(payload, False)
 
-    def _handle_unsubscribe_address(self, connection: HathorAdminWebsocketProtocol, message: Dict[Any, Any]) -> None:
+    def _handle_unsubscribe_address(self, connection: HathorAdminWebsocketProtocol, message: dict[Any, Any]) -> None:
         """ Handler for unsubscribing from an address, also removes address connection set if it ends up empty."""
         addr = message['address']
         if addr in self.address_connections and connection in self.address_connections[addr]:
@@ -368,6 +368,6 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             self._remove_connection_from_address_dict(connection, address)
 
 
-def _count_empty(addresses: Set[str], address_index: AddressIndex) -> int:
+def _count_empty(addresses: set[str], address_index: AddressIndex) -> int:
     """ Count how many of the addresses given are empty (have no outputs)."""
     return sum(1 for addr in addresses if address_index.is_address_empty(addr))

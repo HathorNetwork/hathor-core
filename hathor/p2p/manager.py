@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, NamedTuple, Optional, Set, Union
+from typing import TYPE_CHECKING, Any, Iterable, NamedTuple, Optional, Union
 
 from structlog import get_logger
 from twisted.internet import endpoints
@@ -49,11 +49,11 @@ WHITELIST_REQUEST_TIMEOUT = 45
 
 
 class _SyncRotateInfo(NamedTuple):
-    candidates: List[str]
-    old: Set[str]
-    new: Set[str]
-    to_disable: Set[str]
-    to_enable: Set[str]
+    candidates: list[str]
+    old: set[str]
+    new: set[str]
+    to_disable: set[str]
+    to_enable: set[str]
 
 
 class _ConnectingPeer(NamedTuple):
@@ -78,12 +78,12 @@ class ConnectionsManager:
         SEND_TIPS = 'NodeSyncTimestamp.send_tips'
 
     manager: Optional['HathorManager']
-    connections: Set[HathorProtocol]
-    connected_peers: Dict[str, HathorProtocol]
-    connecting_peers: Dict[IStreamClientEndpoint, _ConnectingPeer]
-    handshaking_peers: Set[HathorProtocol]
+    connections: set[HathorProtocol]
+    connected_peers: dict[str, HathorProtocol]
+    connecting_peers: dict[IStreamClientEndpoint, _ConnectingPeer]
+    handshaking_peers: set[HathorProtocol]
     whitelist_only: bool
-    _sync_factories: Dict[SyncVersion, SyncManagerFactory]
+    _sync_factories: dict[SyncVersion, SyncManagerFactory]
 
     rate_limiter: RateLimiter
 
@@ -146,7 +146,7 @@ class ConnectionsManager:
         self.received_peer_storage = PeerStorage()
 
         # List of known peers.
-        self.peer_storage = PeerStorage()  # Dict[string (peer.id), PeerId]
+        self.peer_storage = PeerStorage()  # dict[string (peer.id), PeerId]
 
         # A timer to try to reconnect to the disconnect known peers.
         self.lc_reconnect = LoopingCall(self.reconnect_to_all)
@@ -158,7 +158,7 @@ class ConnectionsManager:
         self.lc_sync_update_interval: float = 5  # seconds
 
         # Peers that always have sync enabled.
-        self.always_enable_sync: Set[str] = set()
+        self.always_enable_sync: set[str] = set()
 
         # Timestamp of the last time sync was updated.
         self._last_sync_rotate: float = 0.
@@ -247,7 +247,7 @@ class ConnectionsManager:
             len(self.peer_storage)
         )
 
-    def get_sync_versions(self) -> Set[SyncVersion]:
+    def get_sync_versions(self) -> set[SyncVersion]:
         """Set of versions that were enabled and are supported."""
         assert self.manager is not None
         if self.manager.has_sync_version_capability():
@@ -649,9 +649,9 @@ class ConnectionsManager:
         except Exception:
             self.log.error('_sync_rotate_if_needed failed', exc_info=True)
 
-    def set_always_enable_sync(self, values: List[str]) -> None:
+    def set_always_enable_sync(self, values: list[str]) -> None:
         """Set a new list of peers to always enable sync. This operation completely replaces the previous list."""
-        new: Set[str] = set(values)
+        new: set[str] = set(values)
 
         old = self.always_enable_sync
         if new == old:
@@ -676,14 +676,14 @@ class ConnectionsManager:
 
     def _calculate_sync_rotate(self) -> _SyncRotateInfo:
         """Calculate new sync rotation."""
-        current_enabled: Set[str] = set()
+        current_enabled: set[str] = set()
         for peer_id, conn in self.connected_peers.items():
             if conn.is_sync_enabled():
                 current_enabled.add(peer_id)
 
         candidates = list(self.connected_peers.keys())
         self.rng.shuffle(candidates)
-        selected_peers: Set[str] = set(candidates[:self.MAX_ENABLED_SYNC])
+        selected_peers: set[str] = set(candidates[:self.MAX_ENABLED_SYNC])
 
         to_disable = current_enabled - selected_peers
         to_enable = selected_peers - current_enabled

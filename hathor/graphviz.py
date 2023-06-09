@@ -14,7 +14,7 @@
 
 
 from itertools import chain
-from typing import Dict, Iterator, Set
+from typing import Iterator
 
 from graphviz import Digraph
 
@@ -55,11 +55,11 @@ class GraphvizVisualizer:
         self.not_fully_validated_attrs = dict(style='dashed,filled', penwidth='0.25', fillcolor='#F9FFAB')
 
         # Labels
-        self.labels: Dict[bytes, str] = {}
+        self.labels: dict[bytes, str] = {}
 
         # Internals
-        self._blocks_set: Set[bytes] = set()
-        self._txs_set: Set[bytes] = set()
+        self._blocks_set: set[bytes] = set()
+        self._txs_set: set[bytes] = set()
 
     def get_node_label(self, tx: BaseTransaction) -> str:
         """ Return the node's label for tx.
@@ -77,7 +77,7 @@ class GraphvizVisualizer:
             parts.append('a: {:.2f}'.format(meta.accumulated_weight))
         return '\n'.join(parts)
 
-    def get_node_attrs(self, tx: BaseTransaction) -> Dict[str, str]:
+    def get_node_attrs(self, tx: BaseTransaction) -> dict[str, str]:
         """ Return node's attributes.
         """
         assert tx.hash is not None
@@ -102,7 +102,7 @@ class GraphvizVisualizer:
 
         return node_attrs
 
-    def get_edge_attrs(self, tx: BaseTransaction, neighbor_hash: bytes) -> Dict[str, str]:
+    def get_edge_attrs(self, tx: BaseTransaction, neighbor_hash: bytes) -> dict[str, str]:
         """ Return edge's attributes.
         """
         edge_attrs = {}
@@ -112,12 +112,12 @@ class GraphvizVisualizer:
             edge_attrs.update(dict(penwidth='1'))
         return edge_attrs
 
-    def get_parent_edge_attrs(self, tx: BaseTransaction, neighbor_hash: bytes) -> Dict[str, str]:
+    def get_parent_edge_attrs(self, tx: BaseTransaction, neighbor_hash: bytes) -> dict[str, str]:
         """ Return edge's attributes for a verification edge.
         """
         return self.get_edge_attrs(tx, neighbor_hash)
 
-    def get_input_edge_attrs(self, tx: BaseTransaction, neighbor_hash: bytes) -> Dict[str, str]:
+    def get_input_edge_attrs(self, tx: BaseTransaction, neighbor_hash: bytes) -> dict[str, str]:
         """ Return edge's attributes for a fund edge.
         """
         edge_attrs = self.get_edge_attrs(tx, neighbor_hash)
@@ -139,8 +139,8 @@ class GraphvizVisualizer:
         dot = Digraph(format=format)
         dot.attr('node', shape='oval', style='')
 
-        self._blocks_set = set()  # Set[bytes(hash)]
-        self._txs_set = set()  # Set[bytes(hash)]
+        self._blocks_set = set()  # set[bytes(hash)]
+        self._txs_set = set()  # set[bytes(hash)]
 
         g_blocks = dot.subgraph(name='blocks')
         g_txs = dot.subgraph(name='txs')

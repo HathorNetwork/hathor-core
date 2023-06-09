@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Iterator, List, Optional, Tuple
+from typing import Iterator, Optional
 
 from sortedcontainers import SortedKeyList
 from structlog import get_logger
@@ -61,16 +61,16 @@ class MemoryTimestampIndex(TimestampIndex):
         if idx < len(self._index) and self._index[idx].hash == tx.hash:
             self._index.pop(idx)
 
-    def get_newest(self, count: int) -> Tuple[List[bytes], bool]:
+    def get_newest(self, count: int) -> tuple[list[bytes], bool]:
         return get_newest_sorted_key_list(self._index, count)
 
-    def get_older(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[bytes], bool]:
+    def get_older(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[bytes], bool]:
         return get_older_sorted_key_list(self._index, timestamp, hash_bytes, count)
 
-    def get_newer(self, timestamp: int, hash_bytes: bytes, count: int) -> Tuple[List[bytes], bool]:
+    def get_newer(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[bytes], bool]:
         return get_newer_sorted_key_list(self._index, timestamp, hash_bytes, count)
 
-    def get_hashes_and_next_idx(self, from_idx: RangeIdx, count: int) -> Tuple[List[bytes], Optional[RangeIdx]]:
+    def get_hashes_and_next_idx(self, from_idx: RangeIdx, count: int) -> tuple[list[bytes], Optional[RangeIdx]]:
         timestamp, offset = from_idx
         idx = self._index.bisect_key_left((timestamp, b''))
         txs = SortedKeyList(key=lambda x: (x.timestamp, x.hash))

@@ -14,7 +14,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Iterator, List, NamedTuple, Optional, Tuple, TypedDict, cast
+from typing import TYPE_CHECKING, Iterator, NamedTuple, Optional, TypedDict, cast
 
 from structlog import get_logger
 
@@ -330,7 +330,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             assert tx.hash is not None
             self._destroy_token(tx.hash)
 
-    def iter_all_tokens(self) -> Iterator[Tuple[bytes, TokenIndexInfo]]:
+    def iter_all_tokens(self) -> Iterator[tuple[bytes, TokenIndexInfo]]:
         self.log.debug('seek to start')
         it = self._db.iteritems(self._cf)
         it.seek(bytes([_Tag.INFO.value]))
@@ -388,17 +388,17 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         # TODO: maybe it's possible to optimize this with rocksdb prefix stuff
         return sum(1 for _ in self._iter_transactions(token_uid))
 
-    def get_newest_transactions(self, token_uid: bytes, count: int) -> Tuple[List[bytes], bool]:
+    def get_newest_transactions(self, token_uid: bytes, count: int) -> tuple[list[bytes], bool]:
         it = self._iter_transactions(token_uid, reverse=True)
         return collect_n(it, count)
 
     def get_older_transactions(self, token_uid: bytes, timestamp: int, hash_bytes: bytes, count: int
-                               ) -> Tuple[List[bytes], bool]:
+                               ) -> tuple[list[bytes], bool]:
         it = self._iter_transactions(token_uid, _TxIndex(hash_bytes, timestamp), reverse=True)
         return collect_n(it, count)
 
     def get_newer_transactions(self, token_uid: bytes, timestamp: int, hash_bytes: bytes, count: int
-                               ) -> Tuple[List[bytes], bool]:
+                               ) -> tuple[list[bytes], bool]:
         it = self._iter_transactions(token_uid, _TxIndex(hash_bytes, timestamp))
         return collect_n(it, count)
 

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from hathor.transaction.aux_pow import BitcoinAuxPow
 from hathor.transaction.base_transaction import TxOutput, TxVersion
@@ -30,8 +30,8 @@ class MergeMinedBlock(Block):
                  signal_bits: int = 0,
                  version: int = TxVersion.MERGE_MINED_BLOCK,
                  weight: float = 0,
-                 outputs: Optional[List[TxOutput]] = None,
-                 parents: Optional[List[bytes]] = None,
+                 outputs: Optional[list[TxOutput]] = None,
+                 parents: Optional[list[bytes]] = None,
                  hash: Optional[bytes] = None,
                  data: bytes = b'',
                  aux_pow: Optional[BitcoinAuxPow] = None,
@@ -40,7 +40,7 @@ class MergeMinedBlock(Block):
                          data=data, outputs=outputs or [], parents=parents or [], hash=hash, storage=storage)
         self.aux_pow = aux_pow
 
-    def _get_formatted_fields_dict(self, short: bool = True) -> Dict[str, str]:
+    def _get_formatted_fields_dict(self, short: bool = True) -> dict[str, str]:
         from hathor.util import abbrev
         d = super()._get_formatted_fields_dict(short)
         del d['nonce']
@@ -69,7 +69,7 @@ class MergeMinedBlock(Block):
             return dummy_bytes
         return bytes(self.aux_pow)
 
-    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> Dict[str, Any]:
+    def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         del json['nonce']
         json['aux_pow'] = bytes(self.aux_pow).hex() if self.aux_pow else None

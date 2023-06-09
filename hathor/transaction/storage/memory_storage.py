@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict, Iterator, Optional, TypeVar
+from typing import Any, Iterator, Optional, TypeVar
 
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.migrations import MigrationState
@@ -30,10 +30,10 @@ class TransactionMemoryStorage(BaseTransactionStorage):
                                  transaction/blocks/metadata when returning those objects.
         :type _clone_if_needed: bool
         """
-        self.transactions: Dict[bytes, BaseTransaction] = {}
-        self.metadata: Dict[bytes, TransactionMetadata] = {}
+        self.transactions: dict[bytes, BaseTransaction] = {}
+        self.metadata: dict[bytes, TransactionMetadata] = {}
         # Store custom key/value attributes
-        self.attributes: Dict[str, Any] = {}
+        self.attributes: dict[str, Any] = {}
         self._clone_if_needed = _clone_if_needed
         super().__init__(with_index=with_index)
 

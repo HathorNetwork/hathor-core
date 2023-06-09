@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Iterable, List, Optional
+from typing import TYPE_CHECKING, Iterable, Optional
 
 from structlog import get_logger
 
@@ -86,13 +86,13 @@ class AddressIndex(TxGroupIndex[str]):
         raise NotImplementedError
 
     @abstractmethod
-    def get_from_address(self, address: str) -> List[bytes]:
+    def get_from_address(self, address: str) -> list[bytes]:
         """ Get list of transaction hashes of an address
         """
         raise NotImplementedError
 
     @abstractmethod
-    def get_sorted_from_address(self, address: str) -> List[bytes]:
+    def get_sorted_from_address(self, address: str) -> list[bytes]:
         """ Get a sorted list of transaction hashes of an address
         """
         raise NotImplementedError

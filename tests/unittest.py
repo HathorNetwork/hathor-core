@@ -2,7 +2,7 @@ import os
 import shutil
 import tempfile
 import time
-from typing import Iterator, List, Optional
+from typing import Iterator, Optional
 from unittest import main as ut_main
 
 from structlog import get_logger
@@ -119,10 +119,10 @@ class TestCase(unittest.TestCase):
     def reset_peer_id_pool(self) -> None:
         self._free_peer_id_pool = self.new_peer_id_pool()
 
-    def new_peer_id_pool(self) -> List[PeerId]:
+    def new_peer_id_pool(self) -> list[PeerId]:
         return PEER_ID_POOL.copy()
 
-    def get_random_peer_id_from_pool(self, pool: Optional[List[PeerId]] = None,
+    def get_random_peer_id_from_pool(self, pool: Optional[list[PeerId]] = None,
                                      rng: Optional[Random] = None) -> PeerId:
         if pool is None:
             pool = self._free_peer_id_pool
@@ -295,7 +295,7 @@ class TestCase(unittest.TestCase):
             tx2 = manager2.tx_storage.get_transaction(tx1.hash)
             tx1_meta = tx1.get_metadata()
             tx2_meta = tx2.get_metadata()
-            # conflict_with's type is Optional[List[bytes]], so we convert to a set because order does not matter.
+            # conflict_with's type is Optional[list[bytes]], so we convert to a set because order does not matter.
             self.assertEqual(set(tx1_meta.conflict_with or []), set(tx2_meta.conflict_with or []))
             # Soft verification
             if tx1_meta.voided_by is None:

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Dict
+from typing import Any
 
 from hathor.api_util import Resource, render_options, set_cors
 from hathor.cli.openapi_files.register import register_resource
@@ -40,7 +40,7 @@ class UnlockWalletResource(Resource):
             :type password: string
 
             :return: Boolean if the user unlocked the wallet with success
-            :rtype: string (json) Dict['success', bool]
+            :rtype: string (json) dict['success', bool]
         """
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'POST')
@@ -53,13 +53,13 @@ class UnlockWalletResource(Resource):
             # Wallet HD
             return self.unlock_wallet_hd(post_data)
 
-    def unlock_wallet_hd(self, data: Dict[str, Any]) -> bytes:
+    def unlock_wallet_hd(self, data: dict[str, Any]) -> bytes:
         words = None
         if 'words' in data:
             words = data['words']
 
         passphrase = bytes(data['passphrase'], 'utf-8')
-        ret: Dict[str, Any] = {'success': True}
+        ret: dict[str, Any] = {'success': True}
 
         try:
             ret_words = self.manager.wallet.unlock(self.manager.tx_storage, words, passphrase)
@@ -72,9 +72,9 @@ class UnlockWalletResource(Resource):
 
         return json_dumpb(ret)
 
-    def unlock_wallet_keypair(self, data: Dict[str, Any]) -> bytes:
+    def unlock_wallet_keypair(self, data: dict[str, Any]) -> bytes:
         password = bytes(data['password'], 'utf-8')
-        ret: Dict[str, Any] = {}
+        ret: dict[str, Any] = {}
         success = True
 
         try:

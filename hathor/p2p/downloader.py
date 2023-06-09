@@ -14,7 +14,7 @@
 
 from collections import deque
 from functools import partial
-from typing import TYPE_CHECKING, Any, Deque, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from structlog import get_logger
 from twisted.internet import defer
@@ -42,7 +42,7 @@ class TxDetails:
     deferred: Deferred
 
     # List of connections that requested this transaction.
-    connections: List['NodeSyncTimestamp']
+    connections: list['NodeSyncTimestamp']
 
     # This will be resolved after the transaction has been downloaded,
     # but not necessarily added to the DAG.
@@ -52,7 +52,7 @@ class TxDetails:
     # Useful when we need to retry the request and want to select a new connection
     requested_index: int
 
-    def __init__(self, tx_id: bytes, deferred: Deferred, connections: List['NodeSyncTimestamp']):
+    def __init__(self, tx_id: bytes, deferred: Deferred, connections: list['NodeSyncTimestamp']):
         self.log = logger.new()
         self.tx_id = tx_id
         self.deferred = deferred
@@ -130,17 +130,17 @@ class Downloader:
     """
 
     # All transactions that must be downloaded.
-    pending_transactions: Dict[bytes, TxDetails]
+    pending_transactions: dict[bytes, TxDetails]
 
     # Transactions waiting to be downloaded.
-    waiting_deque: Deque[bytes]
+    waiting_deque: deque[bytes]
 
     # Transactions that are being downloaded.
-    downloading_deque: Deque[bytes]
+    downloading_deque: deque[bytes]
 
     # Transactions that have been downloaded but are not ready to be
     # added to the DAG.
-    downloading_buffer: Dict[bytes, 'BaseTransaction']
+    downloading_buffer: dict[bytes, 'BaseTransaction']
 
     # Size of the sliding window used to download transactions.
     window_size: int
@@ -157,7 +157,7 @@ class Downloader:
 
     def drop_connection(self, connection: 'NodeSyncTimestamp') -> None:
         """ Called when a peer is disconnected to remove that connection from all the affected pending transactions."""
-        to_remove: List[bytes] = []
+        to_remove: list[bytes] = []
         for tx_details in self.pending_transactions.values():
             if tx_details.drop_connection(connection):
                 to_remove.append(tx_details.tx_id)

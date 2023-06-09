@@ -12,12 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict
-
 from hathor.p2p.peer_id import PeerId
 
 
-class PeerStorage(Dict[str, PeerId]):
+class PeerStorage(dict[str, PeerId]):
     """ PeerStorage is used to store all known peers in memory.
     It is a dict of peer objects, and peers can be retrieved by their `peer.id`.
     """

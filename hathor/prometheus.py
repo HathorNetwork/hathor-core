@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import os
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING
 
 from prometheus_client import CollectorRegistry, Gauge, write_to_textfile
 from twisted.internet.task import LoopingCall
@@ -89,8 +89,8 @@ class PrometheusMetricsExporter:
         self.filepath: str = os.path.join(path, filename)
 
         # Stores all Gauge objects for each metric (key is the metric name)
-        # Dict[str, prometheus_client.Gauge]
-        self.metric_gauges: Dict[str, Gauge] = {}
+        # dict[str, prometheus_client.Gauge]
+        self.metric_gauges: dict[str, Gauge] = {}
 
         # Setup initial prometheus lib objects for each metric
         self._initial_setup()

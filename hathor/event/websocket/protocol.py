@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Callable, Dict, Optional, Type
+from typing import TYPE_CHECKING, Callable, Optional
 
 from autobahn.exception import Disconnected
 from autobahn.twisted.websocket import WebSocketServerProtocol
@@ -91,7 +91,7 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
     def _handle_request(self, request: Request) -> None:
         # This could be a pattern match in Python 3.10
         request_type = type(request)
-        handlers: Dict[Type, Callable] = {
+        handlers: dict[type, Callable] = {
             StartStreamRequest: self._handle_start_stream_request,
             AckRequest: self._handle_ack_request,
             StopStreamRequest: lambda _: self._handle_stop_stream_request()

@@ -12,7 +12,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import List
 from unittest.mock import Mock
 
 import pytest
@@ -420,7 +419,7 @@ def _assert_equal_events(actual_events, expected_events):
                                                              f'actual: {actual_events_chunk}'
 
 
-def _sorted_by_hash_without_id(events: List[BaseEvent]) -> List[BaseEvent]:
+def _sorted_by_hash_without_id(events: list[BaseEvent]) -> list[BaseEvent]:
     events_without_id = [event.copy(exclude={'id'}) for event in events]
 
     def key(event: BaseEvent) -> str:

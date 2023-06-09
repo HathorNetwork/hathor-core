@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Iterable, List, Set, cast
+from typing import TYPE_CHECKING, Iterable, cast
 
 from structlog import get_logger
 
@@ -173,7 +173,7 @@ class TransactionConsensusAlgorithm:
         assert tx.hash is not None
         assert tx.storage is not None
 
-        voided_by: Set[bytes] = set()
+        voided_by: set[bytes] = set()
 
         # Union of voided_by of parents
         for parent in tx.get_parents():
@@ -271,8 +271,8 @@ class TransactionConsensusAlgorithm:
             return
 
         # Filter the possible candidates to compare to tx.
-        candidates: List[Transaction] = []
-        conflict_list: List[Transaction] = []
+        candidates: list[Transaction] = []
+        conflict_list: list[Transaction] = []
         for h in meta.conflict_with or []:
             conflict_tx = cast(Transaction, tx.storage.get_transaction(h))
             conflict_list.append(conflict_tx)
@@ -348,7 +348,7 @@ class TransactionConsensusAlgorithm:
         self.log.debug('remove_voided_by', tx=tx.hash_hex, voided_hash=voided_hash.hex())
 
         bfs = BFSWalk(tx.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
-        check_list: List[BaseTransaction] = []
+        check_list: list[BaseTransaction] = []
         for tx2 in bfs.run(tx, skip_root=False):
             assert tx2.storage is not None
 
@@ -406,7 +406,7 @@ class TransactionConsensusAlgorithm:
 
         from hathor.transaction.storage.traversal import BFSWalk
         bfs = BFSWalk(tx.storage, is_dag_funds=True, is_dag_verifications=is_dag_verifications, is_left_to_right=True)
-        check_list: List[Transaction] = []
+        check_list: list[Transaction] = []
         for tx2 in bfs.run(tx, skip_root=False):
             assert tx2.storage is not None
             assert tx2.hash is not None

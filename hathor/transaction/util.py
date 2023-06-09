@@ -15,7 +15,7 @@
 import re
 import struct
 from math import ceil, floor
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, Optional
 
 from hathor.conf import HathorSettings
 
@@ -46,7 +46,7 @@ def unpack(fmt: str, buf: bytes) -> Any:
     return struct.unpack(fmt, buf[:size]), buf[size:]
 
 
-def unpack_len(n: int, buf: bytes) -> Tuple[bytes, bytes]:
+def unpack_len(n: int, buf: bytes) -> tuple[bytes, bytes]:
     return buf[:n], buf[n:]
 
 
