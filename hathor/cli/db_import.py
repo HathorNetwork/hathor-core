@@ -46,7 +46,7 @@ class DbImport(RunNode):
         self.in_file = io.BufferedReader(args.import_file)
 
     def run(self) -> None:
-        from hathor.util import progress
+        from hathor.util import tx_progress
 
         header = self.in_file.read(len(MAGIC_HEADER))
         if header != MAGIC_HEADER:
@@ -60,7 +60,7 @@ class DbImport(RunNode):
         self.tx_storage.pre_init()
         actual_tx_count = 0
         actual_block_count = 0
-        for tx in progress(self._import_txs(), log=self.log, total=total):
+        for tx in tx_progress(self._import_txs(), log=self.log, total=total):
             if tx.is_block:
                 actual_block_count += 1
             else:

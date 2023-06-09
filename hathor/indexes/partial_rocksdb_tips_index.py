@@ -13,17 +13,15 @@
 # limitations under the License.
 
 import math
-import time
 from typing import TYPE_CHECKING, Dict, Iterator, Optional, Union
 
-import structlog
 from intervaltree import Interval, IntervalTree
 from structlog import get_logger
 
 from hathor.indexes.memory_tips_index import MemoryTipsIndex
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
 from hathor.indexes.tips_index import ScopeType
-from hathor.util import LogDuration
+from hathor.util import progress
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -47,55 +45,6 @@ def _from_db_value(i: int) -> Union[int, float]:
     if i == _INF_PLACEHOLDER:
         return math.inf
     return i
-
-
-def progress(iter_iv: Iterator[Interval], *, log: 'structlog.stdlib.BoundLogger', total: Optional[int],
-             ) -> Iterator[Interval]:
-    """ Implementation of progress helper for using with loading the interval tree.
-
-    This is basically a stripped down version of `hathor.util.progress`
-    """
-    t_start = time.time()
-    count = 0
-    count_log_prev = 0
-    if total is not None:
-        log.info('loading... 0%', progress=0)
-    else:
-        log.info('loading...')
-    t_log_prev = t_start
-    while True:
-        try:
-            iv = next(iter_iv)
-        except StopIteration:
-            break
-
-        t_log = time.time()
-        dt_log = LogDuration(t_log - t_log_prev)
-        if dt_log > _DT_LOG_PROGRESS:
-            t_log_prev = t_log
-            dcount = count - count_log_prev
-            rate = '?' if dt_log == 0 else dcount / dt_log
-            kwargs = dict(rate=rate, iv_new=dcount, dt=dt_log, total=count)
-            if total is not None:
-                progress = count / total
-                # TODO: we could add an ETA since we know the total
-                log.info(f'loading... {math.floor(progress * 100):2.0f}%', progress=progress, **kwargs)
-            else:
-                log.info('loading...', **kwargs)
-            count_log_prev = count
-        count += 1
-
-        yield iv
-
-    t_final = time.time()
-    dt_total = LogDuration(t_final - t_start)
-    rate = '?' if dt_total == 0 else count / dt_total
-    if total is not None:
-        progress = count / total
-        log.info(f'loaded...  {math.floor(progress * 100):2.0f}%', progress=progress, count=count, rate=rate,
-                 total_dt=dt_total)
-    else:
-        log.info('loaded', count=count, rate=rate, total_dt=dt_total)
 
 
 class PartialRocksDBTipsIndex(MemoryTipsIndex, RocksDBIndexUtils):

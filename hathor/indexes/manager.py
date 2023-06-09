@@ -30,7 +30,7 @@ from hathor.indexes.tips_index import ScopeType as TipsScopeType, TipsIndex
 from hathor.indexes.tokens_index import TokensIndex
 from hathor.indexes.utxo_index import UtxoIndex
 from hathor.transaction import BaseTransaction
-from hathor.util import progress
+from hathor.util import tx_progress
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -173,7 +173,7 @@ class IndexesManager(ABC):
         if indexes_to_init:
             overall_scope = reduce(operator.__or__, map(lambda i: i.get_scope(), indexes_to_init))
             tx_iter_inner = overall_scope.get_iterator(tx_storage)
-            tx_iter = progress(tx_iter_inner, log=self.log, total=tx_storage.get_vertices_count())
+            tx_iter = tx_progress(tx_iter_inner, log=self.log, total=tx_storage.get_vertices_count())
             self.log.debug('indexes init', scope=overall_scope)
         else:
             tx_iter = iter([])
