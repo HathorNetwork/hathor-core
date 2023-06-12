@@ -27,7 +27,14 @@ if TYPE_CHECKING:
 
 class SyncV11Factory(SyncManagerFactory):
     def __init__(self, connections: ConnectionsManager):
-        self.downloader = Downloader(connections.manager)
+        self.connections = connections
+        self._downloader: Optional[Downloader] = None
+
+    def get_downloader(self) -> Downloader:
+        if self._downloader is None:
+            assert self.connections.manager is not None
+            self._downloader = Downloader(self.connections.manager)
+        return self._downloader
 
     def create_sync_manager(self, protocol: 'HathorProtocol', reactor: Optional[Reactor] = None) -> SyncManager:
-        return NodeSyncTimestamp(protocol, downloader=self.downloader, reactor=reactor)
+        return NodeSyncTimestamp(protocol, downloader=self.get_downloader(), reactor=reactor)

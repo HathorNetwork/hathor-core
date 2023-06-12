@@ -1,0 +1,6 @@
+extends:
+
+a: aa
+b:
+  d: dd
+  e: ee

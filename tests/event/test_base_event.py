@@ -50,6 +50,7 @@ def test_create_base_event(event_id, group_id):
             token_name=None,
             token_symbol=None,
             tokens=[],
+            aux_pow=None,
             metadata=dict(
                 hash='abc',
                 spent_outputs=[],

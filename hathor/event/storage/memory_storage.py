@@ -15,6 +15,7 @@
 from typing import Iterator, List, Optional
 
 from hathor.event.model.base_event import BaseEvent
+from hathor.event.model.node_state import NodeState
 from hathor.event.storage.event_storage import EventStorage
 
 
@@ -23,6 +24,8 @@ class EventMemoryStorage(EventStorage):
         self._events: List[BaseEvent] = []
         self._last_event: Optional[BaseEvent] = None
         self._last_group_id: Optional[int] = None
+        self._node_state: Optional[NodeState] = None
+        self._event_queue_enabled: bool = False
 
     def save_event(self, event: BaseEvent) -> None:
         if event.id != len(self._events):
@@ -54,3 +57,25 @@ class EventMemoryStorage(EventStorage):
         while key < len(self._events):
             yield self._events[key]
             key += 1
+
+    def reset_events(self) -> None:
+        self._events = []
+        self._last_event = None
+        self._last_group_id = None
+
+    def reset_all(self) -> None:
+        self.reset_events()
+        self._node_state = None
+        self._event_queue_enabled = False
+
+    def save_node_state(self, state: NodeState) -> None:
+        self._node_state = state
+
+    def get_node_state(self) -> Optional[NodeState]:
+        return self._node_state
+
+    def save_event_queue_state(self, enabled: bool) -> None:
+        self._event_queue_enabled = enabled
+
+    def get_event_queue_state(self) -> bool:
+        return self._event_queue_enabled

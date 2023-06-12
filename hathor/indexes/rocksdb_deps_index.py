@@ -194,6 +194,9 @@ class RocksDBDepsIndex(DepsIndex, RocksDBIndexUtils):
         batch = rocksdb.WriteBatch()
         validation = tx.get_metadata().validation
         if validation.is_fully_connected():
+            # discover if new txs are ready because of this tx
+            self._update_new_deps_ready(tx, batch)
+            # finally remove from rev deps
             self._del_from_deps(tx, batch)
         elif not partial:
             raise ValueError('partial=False will only accept fully connected transactions')
@@ -207,6 +210,18 @@ class RocksDBDepsIndex(DepsIndex, RocksDBIndexUtils):
         batch = rocksdb.WriteBatch()
         self._del_from_deps(tx, batch)
         self._db.write(batch)
+
+    def _update_new_deps_ready(self, tx: BaseTransaction, batch: 'rocksdb.WriteBatch') -> None:
+        """Go over the reverse dependencies of tx and check if any of them are now ready to be validated.
+
+        This is also idempotent.
+        """
+        assert tx.hash is not None
+        assert tx.storage is not None
+        for candidate_hash in self._iter_rev_deps_of(tx.hash):
+            candidate_tx = tx.storage.get_transaction(candidate_hash)
+            if candidate_tx.is_ready_for_validation():
+                self._add_ready(candidate_hash, batch)
 
     def _add_deps(self, tx: BaseTransaction, batch: 'rocksdb.WriteBatch') -> None:
         assert tx.hash is not None
@@ -229,6 +244,9 @@ class RocksDBDepsIndex(DepsIndex, RocksDBIndexUtils):
             if not tx_storage.transaction_exists(tx_dep_hash):
                 self.log.debug('tx parent is needed', tx=tx.hash.hex(), tx_dep=tx_dep_hash.hex())
                 batch.put((self._cf, self._to_key_needed(tx_dep_hash)), self._to_value_needed(height, tx.hash))
+
+        # also, remove the given transaction from needed, because we already have it
+        batch.delete((self._cf, self._to_key_needed(tx.hash)))
 
     def remove_ready_for_validation(self, tx: bytes) -> None:
         self._db.delete((self._cf, self._to_key_ready(tx)))

@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from hathor.simulator.miner import AbstractMiner
+    from hathor.simulator.tx_generator import RandomTransactionGenerator
     from hathor.wallet import BaseWallet
 
 
@@ -54,3 +55,19 @@ class StopAfterMinimumBalance(Trigger):
     def should_stop(self) -> bool:
         balance = self.wallet.balance[self.token_uid].available
         return balance >= self.minimum_balance
+
+
+class StopAfterNTransactions(Trigger):
+    """Stop the simulation after N transactions are found."""
+    def __init__(self, tx_generator: 'RandomTransactionGenerator', *, quantity: int) -> None:
+        self.tx_generator = tx_generator
+        self.quantity = quantity
+        self.reset()
+
+    def reset(self) -> None:
+        """Reset the counter, so this trigger can be reused."""
+        self.initial_counter = self.tx_generator.transactions_found
+
+    def should_stop(self) -> bool:
+        diff = self.tx_generator.transactions_found - self.initial_counter
+        return diff >= self.quantity

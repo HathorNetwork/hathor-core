@@ -55,6 +55,8 @@ class BaseBasicWalletTest(unittest.TestCase):
             self.assertEqual(key, key2)
 
     def test_wallet_create_transaction(self):
+        from hathor.transaction.transaction_metadata import ValidationState
+
         genesis_private_key_bytes = get_private_key_bytes(
             self.genesis_private_key,
             encryption_algorithm=serialization.BestAvailableEncryption(PASSWORD)
@@ -84,6 +86,7 @@ class BaseBasicWalletTest(unittest.TestCase):
         tx1 = w.prepare_transaction_compute_inputs(Transaction, [out], self.storage)
         tx1.storage = self.storage
         tx1.update_hash()
+        tx1.get_metadata().validation = ValidationState.FULL
         self.storage.save_transaction(tx1)
         w.on_new_tx(tx1)
         self.assertEqual(len(w.spent_txs), 1)
@@ -99,6 +102,7 @@ class BaseBasicWalletTest(unittest.TestCase):
                                                       outputs=[out], tx_storage=self.storage)
         tx2.storage = self.storage
         tx2.update_hash()
+        tx2.get_metadata().validation = ValidationState.FULL
         self.storage.save_transaction(tx2)
         w.on_new_tx(tx2)
         self.assertEqual(len(w.spent_txs), 2)

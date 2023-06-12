@@ -223,6 +223,169 @@ class BaseTransactionStorageTest(unittest.TestCase):
     def test_save_tx(self):
         self.validate_save(self.tx)
 
+    def test_pre_save_validation_invalid_tx_1(self):
+        self.tx.get_metadata().validation = ValidationState.BASIC
+        with self.assertRaises(AssertionError):
+            # XXX: avoid using validate_save because an exception could be raised for other reasons
+            self.tx_storage.save_transaction(self.tx)
+
+    def test_pre_save_validation_invalid_tx_2(self):
+        self.tx.get_metadata().add_voided_by(settings.PARTIALLY_VALIDATED_ID)
+        with self.assertRaises(AssertionError):
+            with self.tx_storage.allow_partially_validated_context():
+                # XXX: avoid using validate_save because an exception could be raised for other reasons
+                self.tx_storage.save_transaction(self.tx)
+
+    def test_pre_save_validation_success(self):
+        self.tx.get_metadata().validation = ValidationState.BASIC
+        self.tx.get_metadata().add_voided_by(settings.PARTIALLY_VALIDATED_ID)
+        with self.tx_storage.allow_partially_validated_context():
+            # XXX: it's good to use validate_save now since we don't expect any exceptions to be raised
+            self.validate_save(self.tx)
+
+    def test_allow_scope_get_all_transactions(self):
+        self.tx.get_metadata().validation = ValidationState.BASIC
+        self.tx.get_metadata().add_voided_by(settings.PARTIALLY_VALIDATED_ID)
+        with self.tx_storage.allow_partially_validated_context():
+            self.tx_storage.save_transaction(self.tx)
+        only_valid_txs = list(self.tx_storage.get_all_transactions())
+        self.assertNotIn(self.tx, only_valid_txs)
+        with self.tx_storage.allow_partially_validated_context():
+            txs_that_may_be_partial = list(self.tx_storage.get_all_transactions())
+            self.assertIn(self.tx, txs_that_may_be_partial)
+
+    def test_allow_scope_topological_sort_dfs(self):
+        self.tx.get_metadata().validation = ValidationState.BASIC
+        self.tx.get_metadata().add_voided_by(settings.PARTIALLY_VALIDATED_ID)
+        with self.tx_storage.allow_partially_validated_context():
+            self.tx_storage.save_transaction(self.tx)
+        only_valid_txs = list(self.tx_storage._topological_sort_dfs())
+        self.assertNotIn(self.tx, only_valid_txs)
+        with self.tx_storage.allow_partially_validated_context():
+            txs_that_may_be_partial = list(self.tx_storage._topological_sort_dfs())
+            self.assertIn(self.tx, txs_that_may_be_partial)
+
+    def test_allow_partially_validated_context(self):
+        from hathor.transaction.storage.exceptions import TransactionNotInAllowedScopeError
+        self.tx.get_metadata().validation = ValidationState.BASIC
+        self.tx.get_metadata().add_voided_by(settings.PARTIALLY_VALIDATED_ID)
+        self.assertTrue(self.tx_storage.is_only_valid_allowed())
+        self.assertFalse(self.tx_storage.is_partially_validated_allowed())
+        self.assertFalse(self.tx_storage.is_invalid_allowed())
+        # should fail because it is out of the allowed scope
+        with self.assertRaises(TransactionNotInAllowedScopeError):
+            # XXX: avoid using validate_save because an exception could be raised for other reasons
+            self.tx_storage.save_transaction(self.tx)
+        # should succeed because a custom scope is being used
+        with self.tx_storage.allow_partially_validated_context():
+            self.assertFalse(self.tx_storage.is_only_valid_allowed())
+            self.assertTrue(self.tx_storage.is_partially_validated_allowed())
+            self.assertFalse(self.tx_storage.is_invalid_allowed())
+            self.validate_save(self.tx)
+        self.assertTrue(self.tx_storage.is_only_valid_allowed())
+        self.assertFalse(self.tx_storage.is_partially_validated_allowed())
+        self.assertFalse(self.tx_storage.is_invalid_allowed())
+        # should fail because it is out of the allowed scope
+        with self.assertRaises(TransactionNotInAllowedScopeError):
+            self.tx_storage.get_transaction(self.tx.hash)
+        # should return None since TransactionNotInAllowedScopeError inherits TransactionDoesNotExist
+        self.assertIsNone(self.tx_storage.get_metadata(self.tx.hash))
+        # should succeed because a custom scope is being used
+        with self.tx_storage.allow_partially_validated_context():
+            self.assertFalse(self.tx_storage.is_only_valid_allowed())
+            self.assertTrue(self.tx_storage.is_partially_validated_allowed())
+            self.assertFalse(self.tx_storage.is_invalid_allowed())
+            self.tx_storage.get_transaction(self.tx.hash)
+            self.assertIsNotNone(self.tx_storage.get_metadata(self.tx.hash))
+
+    def test_allow_invalid_context(self):
+        from hathor.transaction.storage.exceptions import TransactionNotInAllowedScopeError
+        self.validate_save(self.tx)
+        self.tx.get_metadata().validation = ValidationState.INVALID
+        # XXX: should this apply to invalid too? note that we never save invalid transactions so using the
+        #      PARTIALLY_VALIDATED_ID marker is artificial just for testing
+        self.tx.get_metadata().add_voided_by(settings.PARTIALLY_VALIDATED_ID)
+        self.assertTrue(self.tx_storage.is_only_valid_allowed())
+        self.assertFalse(self.tx_storage.is_partially_validated_allowed())
+        self.assertFalse(self.tx_storage.is_invalid_allowed())
+        # should fail because it is out of the allowed scope
+        with self.assertRaises(TransactionNotInAllowedScopeError):
+            # XXX: avoid using validate_save because an exception could be raised for other reasons
+            self.tx_storage.save_transaction(self.tx)
+        # should succeed because a custom scope is being used
+        with self.tx_storage.allow_invalid_context():
+            self.assertFalse(self.tx_storage.is_only_valid_allowed())
+            self.assertFalse(self.tx_storage.is_partially_validated_allowed())
+            self.assertTrue(self.tx_storage.is_invalid_allowed())
+            self.validate_save(self.tx)
+        self.assertTrue(self.tx_storage.is_only_valid_allowed())
+        self.assertFalse(self.tx_storage.is_partially_validated_allowed())
+        self.assertFalse(self.tx_storage.is_invalid_allowed())
+        # should fail because it is out of the allowed scope
+        with self.assertRaises(TransactionNotInAllowedScopeError):
+            self.tx_storage.get_transaction(self.tx.hash)
+        # should return None since TransactionNotInAllowedScopeError inherits TransactionDoesNotExist
+        self.assertIsNone(self.tx_storage.get_metadata(self.tx.hash))
+        # should succeed because a custom scope is being used
+        with self.tx_storage.allow_invalid_context():
+            self.assertFalse(self.tx_storage.is_only_valid_allowed())
+            self.assertFalse(self.tx_storage.is_partially_validated_allowed())
+            self.assertTrue(self.tx_storage.is_invalid_allowed())
+            self.tx_storage.get_transaction(self.tx.hash)
+            self.assertIsNotNone(self.tx_storage.get_metadata(self.tx.hash))
+
+    def test_allow_scope_context_composing(self):
+        self.assertTrue(self.tx_storage.is_only_valid_allowed())
+        self.assertFalse(self.tx_storage.is_partially_validated_allowed())
+        self.assertFalse(self.tx_storage.is_invalid_allowed())
+        with self.tx_storage.allow_invalid_context():
+            self.assertFalse(self.tx_storage.is_only_valid_allowed())
+            self.assertFalse(self.tx_storage.is_partially_validated_allowed())
+            self.assertTrue(self.tx_storage.is_invalid_allowed())
+            with self.tx_storage.allow_partially_validated_context():
+                self.assertFalse(self.tx_storage.is_only_valid_allowed())
+                self.assertTrue(self.tx_storage.is_partially_validated_allowed())
+                self.assertTrue(self.tx_storage.is_invalid_allowed())
+                with self.tx_storage.allow_only_valid_context():
+                    self.assertTrue(self.tx_storage.is_only_valid_allowed())
+                    self.assertFalse(self.tx_storage.is_partially_validated_allowed())
+                    self.assertFalse(self.tx_storage.is_invalid_allowed())
+                self.assertFalse(self.tx_storage.is_only_valid_allowed())
+                self.assertTrue(self.tx_storage.is_partially_validated_allowed())
+                self.assertTrue(self.tx_storage.is_invalid_allowed())
+            self.assertFalse(self.tx_storage.is_only_valid_allowed())
+            self.assertFalse(self.tx_storage.is_partially_validated_allowed())
+            self.assertTrue(self.tx_storage.is_invalid_allowed())
+        self.assertTrue(self.tx_storage.is_only_valid_allowed())
+        self.assertFalse(self.tx_storage.is_partially_validated_allowed())
+        self.assertFalse(self.tx_storage.is_invalid_allowed())
+
+    def test_allow_scope_context_stacking(self):
+        self.assertTrue(self.tx_storage.is_only_valid_allowed())
+        self.assertFalse(self.tx_storage.is_partially_validated_allowed())
+        self.assertFalse(self.tx_storage.is_invalid_allowed())
+        with self.tx_storage.allow_partially_validated_context():
+            self.assertFalse(self.tx_storage.is_only_valid_allowed())
+            self.assertTrue(self.tx_storage.is_partially_validated_allowed())
+            self.assertFalse(self.tx_storage.is_invalid_allowed())
+            with self.tx_storage.allow_partially_validated_context():
+                self.assertFalse(self.tx_storage.is_only_valid_allowed())
+                self.assertTrue(self.tx_storage.is_partially_validated_allowed())
+                self.assertFalse(self.tx_storage.is_invalid_allowed())
+                with self.tx_storage.allow_partially_validated_context():
+                    self.assertFalse(self.tx_storage.is_only_valid_allowed())
+                    self.assertTrue(self.tx_storage.is_partially_validated_allowed())
+                    self.assertFalse(self.tx_storage.is_invalid_allowed())
+                self.assertFalse(self.tx_storage.is_only_valid_allowed())
+                self.assertTrue(self.tx_storage.is_partially_validated_allowed())
+                self.assertFalse(self.tx_storage.is_invalid_allowed())
+            self.assertFalse(self.tx_storage.is_only_valid_allowed())
+            self.assertTrue(self.tx_storage.is_partially_validated_allowed())
+            self.assertFalse(self.tx_storage.is_invalid_allowed())
+        self.assertTrue(self.tx_storage.is_only_valid_allowed())
+        self.assertFalse(self.tx_storage.is_partially_validated_allowed())
+        self.assertFalse(self.tx_storage.is_invalid_allowed())
+
     def test_save_token_creation_tx(self):
         tx = create_tokens(self.manager, propagate=False)
         tx.get_metadata().validation = ValidationState.FULL

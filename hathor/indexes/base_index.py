@@ -15,11 +15,15 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional
 
+from structlog import get_logger
+
 from hathor.indexes.scope import Scope
 from hathor.transaction.base_transaction import BaseTransaction
 
 if TYPE_CHECKING:  # pragma: no cover
     from hathor.indexes.manager import IndexesManager
+
+logger = get_logger()
 
 
 class BaseIndex(ABC):
@@ -28,6 +32,8 @@ class BaseIndex(ABC):
     This class exists so we can interact with indexes without knowing anything specific to its implemented. It was
     created to generalize how we initialize indexes and keep track of which ones are up-to-date.
     """
+    def __init__(self) -> None:
+        self.log = logger.new()
 
     def init_start(self, indexes_manager: 'IndexesManager') -> None:
         """ This method will always be called when starting the index manager, regardless of initialization state.

@@ -14,9 +14,11 @@
 
 from hathor.builder.builder import BuildArtifacts, Builder
 from hathor.builder.cli_builder import CliBuilder
+from hathor.builder.resources_builder import ResourcesBuilder
 
 __all__ = [
     'BuildArtifacts',
     'Builder',
     'CliBuilder',
+    'ResourcesBuilder',
 ]

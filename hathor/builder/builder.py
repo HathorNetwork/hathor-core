@@ -30,6 +30,7 @@ from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.pubsub import PubSubManager
 from hathor.storage import RocksDBStorage
+from hathor.stratum import StratumFactory
 from hathor.transaction.storage import TransactionMemoryStorage, TransactionRocksDBStorage, TransactionStorage
 from hathor.util import Random, Reactor, get_environment_info
 from hathor.wallet import BaseWallet, Wallet
@@ -56,6 +57,7 @@ class BuildArtifacts(NamedTuple):
     indexes: Optional[IndexesManager]
     wallet: Optional[BaseWallet]
     rocksdb_storage: Optional[RocksDBStorage]
+    stratum_factory: Optional[StratumFactory]
 
 
 class Builder:
@@ -85,6 +87,7 @@ class Builder:
 
         self._event_manager: Optional[EventManager] = None
         self._event_ws_factory: Optional[EventWebsocketFactory] = None
+        self._enable_event_queue: Optional[bool] = None
 
         self._rocksdb_path: Optional[str] = None
         self._rocksdb_storage: Optional[RocksDBStorage] = None
@@ -105,10 +108,11 @@ class Builder:
         self._enable_tokens_index: bool = False
         self._enable_utxo_index: bool = False
 
-        self._enable_sync_v1: Optional[bool] = None
-        self._enable_sync_v2: Optional[bool] = None
+        self._enable_sync_v1: bool = False
+        self._enable_sync_v1_1: bool = True
+        self._enable_sync_v2: bool = False
 
-        self._stratum_port: Optional[int] = None
+        self._enable_stratum_server: Optional[bool] = None
 
         self._full_verification: Optional[bool] = None
 
@@ -117,6 +121,9 @@ class Builder:
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
             raise ValueError('cannot call build twice')
+
+        if self._network is None:
+            raise TypeError('you must set a network')
 
         settings = self._get_settings()
         reactor = self._get_reactor()
@@ -127,8 +134,9 @@ class Builder:
         soft_voided_tx_ids = self._get_soft_voided_tx_ids()
         consensus_algorithm = ConsensusAlgorithm(soft_voided_tx_ids, pubsub)
 
+        p2p_manager = self._get_p2p_manager()
+
         wallet = self._get_or_create_wallet()
-        event_storage = self._get_or_create_event_storage()
         event_manager = self._get_or_create_event_manager()
         tx_storage = self._get_or_create_tx_storage()
         indexes = tx_storage.indexes
@@ -145,38 +153,34 @@ class Builder:
 
         kwargs: Dict[str, Any] = {}
 
-        if self._enable_sync_v1 is not None:
-            # XXX: the interface of the Builder was kept using v1 instead of v1_1 to minimize the changes needed
-            kwargs['enable_sync_v1_1'] = self._enable_sync_v1
-
-        if self._enable_sync_v2 is not None:
-            kwargs['enable_sync_v2'] = self._enable_sync_v2
-
-        if self._stratum_port is not None:
-            kwargs['stratum_port'] = self._stratum_port
-
-        if self._network is None:
-            raise TypeError('you must set a network')
-
         if self._full_verification is not None:
             kwargs['full_verification'] = self._full_verification
 
+        if self._enable_event_queue is not None:
+            kwargs['enable_event_queue'] = self._enable_event_queue
+
         manager = HathorManager(
             reactor,
+            network=self._network,
             pubsub=pubsub,
             consensus_algorithm=consensus_algorithm,
             peer_id=peer_id,
             tx_storage=tx_storage,
-            event_storage=event_storage,
-            network=self._network,
+            p2p_manager=p2p_manager,
+            event_manager=event_manager,
             wallet=wallet,
             rng=self._rng,
             checkpoints=self._checkpoints,
             capabilities=self._capabilities,
             environment_info=get_environment_info(self._cmdline, peer_id.id),
-            event_manager=event_manager,
             **kwargs
         )
+
+        p2p_manager.set_manager(manager)
+
+        stratum_factory: Optional[StratumFactory] = None
+        if self._enable_stratum_server:
+            stratum_factory = self._create_stratum_server(manager)
 
         self.artifacts = BuildArtifacts(
             peer_id=peer_id,
@@ -184,13 +188,14 @@ class Builder:
             rng=self._rng,
             reactor=reactor,
             manager=manager,
-            p2p_manager=manager.connections,
+            p2p_manager=p2p_manager,
             pubsub=pubsub,
             consensus=consensus_algorithm,
             tx_storage=tx_storage,
             indexes=indexes,
             wallet=wallet,
             rocksdb_storage=self._rocksdb_storage,
+            stratum_factory=stratum_factory,
         )
 
         return self.artifacts
@@ -250,6 +255,12 @@ class Builder:
             self._pubsub = PubSubManager(self._get_reactor())
         return self._pubsub
 
+    def _create_stratum_server(self, manager: HathorManager) -> StratumFactory:
+        stratum_factory = StratumFactory(manager=manager)
+        manager.stratum_factory = stratum_factory
+        manager.metrics.stratum_factory = stratum_factory
+        return stratum_factory
+
     def _get_or_create_rocksdb_storage(self) -> RocksDBStorage:
         assert self._rocksdb_path is not None
 
@@ -266,6 +277,27 @@ class Builder:
         )
 
         return self._rocksdb_storage
+
+    def _get_p2p_manager(self) -> ConnectionsManager:
+        enable_ssl = True
+        reactor = self._get_reactor()
+        my_peer = self._get_peer_id()
+
+        assert self._network is not None
+
+        p2p_manager = ConnectionsManager(
+            reactor,
+            network=self._network,
+            my_peer=my_peer,
+            pubsub=self._get_or_create_pubsub(),
+            ssl=enable_ssl,
+            whitelist_only=False,
+            rng=self._rng,
+            enable_sync_v1=self._enable_sync_v1,
+            enable_sync_v1_1=self._enable_sync_v1_1,
+            enable_sync_v2=self._enable_sync_v2,
+        )
+        return p2p_manager
 
     def _get_or_create_tx_storage(self) -> TransactionStorage:
         if self._tx_storage is not None:
@@ -303,8 +335,8 @@ class Builder:
 
         return self._event_storage
 
-    def _get_or_create_event_manager(self) -> Optional[EventManager]:
-        if self._event_manager is None and self._event_ws_factory is not None:
+    def _get_or_create_event_manager(self) -> EventManager:
+        if self._event_manager is None:
             self._event_manager = EventManager(
                 reactor=self._get_reactor(),
                 pubsub=self._get_or_create_pubsub(),
@@ -361,9 +393,9 @@ class Builder:
         self._wallet_unlock = unlock
         return self
 
-    def enable_stratum_server(self, port: int) -> 'Builder':
+    def enable_stratum_server(self) -> 'Builder':
         self.check_if_can_modify()
-        self._stratum_port = port
+        self._enable_stratum_server = True
         return self
 
     def enable_address_index(self) -> 'Builder':
@@ -389,6 +421,7 @@ class Builder:
 
     def enable_event_manager(self, *, event_ws_factory: EventWebsocketFactory) -> 'Builder':
         self.check_if_can_modify()
+        self._enable_event_queue = True
         self._event_ws_factory = event_ws_factory
         return self
 
@@ -422,6 +455,11 @@ class Builder:
         self._enable_sync_v1 = enable_sync_v1
         return self
 
+    def set_enable_sync_v1_1(self, enable_sync_v1_1: bool) -> 'Builder':
+        self.check_if_can_modify()
+        self._enable_sync_v1_1 = enable_sync_v1_1
+        return self
+
     def set_enable_sync_v2(self, enable_sync_v2: bool) -> 'Builder':
         self.check_if_can_modify()
         self._enable_sync_v2 = enable_sync_v2
@@ -435,6 +473,16 @@ class Builder:
     def disable_sync_v1(self) -> 'Builder':
         self.check_if_can_modify()
         self._enable_sync_v1 = False
+        return self
+
+    def enable_sync_v1_1(self) -> 'Builder':
+        self.check_if_can_modify()
+        self._enable_sync_v1_1 = True
+        return self
+
+    def disable_sync_v1_1(self) -> 'Builder':
+        self.check_if_can_modify()
+        self._enable_sync_v1_1 = False
         return self
 
     def enable_sync_v2(self) -> 'Builder':

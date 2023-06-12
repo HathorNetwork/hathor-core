@@ -17,7 +17,11 @@ import sys
 from argparse import SUPPRESS, ArgumentParser, Namespace
 from typing import Any, Callable, List, Tuple
 
+from pydantic import ValidationError
 from structlog import get_logger
+
+from hathor.conf import TESTNET_SETTINGS_FILEPATH, HathorSettings
+from hathor.exception import PreInitializationError
 
 logger = get_logger()
 # LOGGING_CAPTURE_STDOUT = True
@@ -100,10 +104,9 @@ class RunNode:
         parser.add_argument('--x-localhost-only', action='store_true', help='Only connect to peers on localhost')
         parser.add_argument('--x-rocksdb-indexes', action='store_true', help=SUPPRESS)
         parser.add_argument('--x-enable-event-queue', action='store_true', help='Enable event queue mechanism')
-        parser.add_argument('--x-emit-load-events', action='store_true', help='Enable emission of events during the '
-                                                                              'LOAD phase')
         parser.add_argument('--peer-id-blacklist', action='extend', default=[], nargs='+', type=str,
                             help='Peer IDs to forbid connection')
+        parser.add_argument('--config-yaml', type=str, help='Configuration yaml filepath')
         return parser
 
     def prepare(self, args: Namespace, *, register_resources: bool = True) -> None:
@@ -128,7 +131,7 @@ class RunNode:
         from hathor.util import reactor
         self.reactor = reactor
 
-        from hathor.builder import CliBuilder
+        from hathor.builder import CliBuilder, ResourcesBuilder
         from hathor.exception import BuilderError
         builder = CliBuilder()
         try:
@@ -136,11 +139,19 @@ class RunNode:
         except BuilderError as err:
             self.log.error(str(err))
             sys.exit(2)
+
         self.tx_storage = self.manager.tx_storage
         self.wallet = self.manager.wallet
         self.start_manager(args)
+
+        if args.stratum:
+            self.reactor.listenTCP(args.stratum, self.manager.stratum_factory)
+
         if register_resources:
-            builder.register_resources(args)
+            resources_builder = ResourcesBuilder(self.manager, builder.event_ws_factory)
+            status_server = resources_builder.build(args)
+            if args.status:
+                self.reactor.listenTCP(args.status, status_server)
 
         from hathor.conf import HathorSettings
         settings = HathorSettings()
@@ -159,6 +170,7 @@ class RunNode:
             indexes=self.manager.tx_storage.indexes,
             wallet=self.manager.wallet,
             rocksdb_storage=getattr(builder, 'rocksdb_storage', None),
+            stratum_factory=self.manager.stratum_factory,
         )
 
     def start_sentry_if_possible(self, args: Namespace) -> None:
@@ -308,9 +320,19 @@ class RunNode:
             argv = sys.argv[1:]
         self.parser = self.create_parser()
         args = self.parse_args(argv)
-        if args.testnet:
-            if not os.environ.get('HATHOR_CONFIG_FILE'):
-                os.environ['HATHOR_CONFIG_FILE'] = 'hathor.conf.testnet'
+
+        if args.config_yaml:
+            os.environ['HATHOR_CONFIG_YAML'] = args.config_yaml
+        elif args.testnet:
+            os.environ['HATHOR_CONFIG_YAML'] = TESTNET_SETTINGS_FILEPATH
+
+        try:
+            HathorSettings()
+        except (TypeError, ValidationError) as e:
+            raise PreInitializationError(
+                'An error was found while trying to initialize HathorSettings. See above for details.'
+            ) from e
+
         self.prepare(args)
         self.register_signal_handlers(args)
         if args.sysctl:

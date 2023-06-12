@@ -41,3 +41,7 @@ class PartialMigrationError(HathorError):
 
 class OutOfOrderMigrationError(HathorError):
     """A migration was run before another that was before it"""
+
+
+class TransactionNotInAllowedScopeError(TransactionDoesNotExist):
+    """You are trying to get a transaction that is not allowed in the current scope, treated as non-existent"""

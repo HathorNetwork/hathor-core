@@ -1,0 +1,10 @@
+extends: default
+
+rules:
+  document-start: disable
+  line-length:
+    max: 100
+  new-lines:
+    type: platform
+  comments:
+    min-spaces-from-content: 1

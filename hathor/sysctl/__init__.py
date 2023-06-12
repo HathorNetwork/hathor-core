@@ -14,8 +14,10 @@
 
 from hathor.sysctl.p2p.manager import ConnectionsManagerSysctl
 from hathor.sysctl.sysctl import Sysctl
+from hathor.sysctl.websocket.manager import WebsocketManagerSysctl
 
 __all__ = [
     'Sysctl',
     'ConnectionsManagerSysctl',
+    'WebsocketManagerSysctl',
 ]

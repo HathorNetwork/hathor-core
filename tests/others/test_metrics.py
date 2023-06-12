@@ -210,8 +210,7 @@ class BaseMetricsTest(unittest.TestCase):
             protocol = HathorProtocol(
                 network="testnet",
                 my_peer=my_peer,
-                connections=manager.connections,
-                node=manager,
+                p2p_manager=manager.connections,
                 use_ssl=False,
                 inbound=False
             )

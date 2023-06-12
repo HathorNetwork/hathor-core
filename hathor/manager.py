@@ -30,7 +30,6 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.event.event_manager import EventManager
-from hathor.event.storage import EventStorage
 from hathor.exception import (
     DoubleSpendingError,
     HathorError,
@@ -41,11 +40,13 @@ from hathor.exception import (
     SpendingVoidedError,
 )
 from hathor.mining import BlockTemplate, BlockTemplates
+from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.protocol import HathorProtocol
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.stratum import StratumFactory
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion, sum_weights
 from hathor.transaction.exceptions import TxValidationError
 from hathor.transaction.storage import TransactionStorage
@@ -88,45 +89,33 @@ class HathorManager:
                  consensus_algorithm: ConsensusAlgorithm,
                  peer_id: PeerId,
                  tx_storage: TransactionStorage,
-                 event_storage: EventStorage,
+                 p2p_manager: ConnectionsManager,
+                 event_manager: EventManager,
                  network: str,
                  hostname: Optional[str] = None,
                  wallet: Optional[BaseWallet] = None,
-                 event_manager: Optional[EventManager] = None,
-                 stratum_port: Optional[int] = None,
-                 ssl: bool = True,
-                 enable_sync_v1: bool = False,
-                 enable_sync_v1_1: bool = True,
-                 enable_sync_v2: bool = False,
                  capabilities: Optional[List[str]] = None,
                  checkpoints: Optional[List[Checkpoint]] = None,
                  rng: Optional[Random] = None,
                  environment_info: Optional[EnvironmentInfo] = None,
-                 full_verification: bool = False):
+                 full_verification: bool = False,
+                 enable_event_queue: bool = False):
         """
         :param reactor: Twisted reactor which handles the mainloop and the events.
         :param peer_id: Id of this node.
         :param network: Name of the network this node participates. Usually it is either testnet or mainnet.
         :type network: string
 
-        :param hostname: The hostname of this node. It is used to generate its entrypoints.
-        :type hostname: string
-
         :param tx_storage: Required storage backend.
         :type tx_storage: :py:class:`hathor.transaction.storage.transaction_storage.TransactionStorage`
-
-        :param stratum_port: Stratum server port. Stratum server will only be created if it is not None.
-        :type stratum_port: Optional[int]
         """
         from hathor.metrics import Metrics
-        from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
-        from hathor.p2p.manager import ConnectionsManager
 
-        if not (enable_sync_v1 or enable_sync_v1_1 or enable_sync_v2):
-            raise TypeError(f'{type(self).__name__}() at least one sync version is required')
-
-        self._enable_sync_v1 = enable_sync_v1
-        self._enable_sync_v2 = enable_sync_v2
+        if event_manager.get_event_queue_state() is True and not enable_event_queue:
+            raise InitializationError(
+                'Cannot start manager without event queue feature, as it was enabled in the previous startup. '
+                'Either enable it, or use the reset-event-queue CLI command to remove all event-related data'
+            )
 
         self._cmd_path: Optional[str] = None
 
@@ -172,27 +161,14 @@ class HathorManager:
         self.tx_storage.pubsub = self.pubsub
 
         self._event_manager = event_manager
-
-        if self._event_manager:
-            assert self._event_manager.event_storage == event_storage
-
-        if enable_sync_v2:
-            assert self.tx_storage.indexes is not None
-            self.log.debug('enable sync-v2 indexes')
-            self.tx_storage.indexes.enable_deps_index()
-            self.tx_storage.indexes.enable_mempool_index()
+        self._event_manager.save_event_queue_state(enable_event_queue)
+        self._enable_event_queue = enable_event_queue
 
         self.consensus_algorithm = consensus_algorithm
 
         self.peer_discoveries: List[PeerDiscovery] = []
 
-        self.ssl = ssl
-        self.server_factory = HathorServerFactory(self.network, self.my_peer, node=self, use_ssl=ssl)
-        self.client_factory = HathorClientFactory(self.network, self.my_peer, node=self, use_ssl=ssl)
-        self.connections = ConnectionsManager(self.reactor, self.my_peer, self.server_factory, self.client_factory,
-                                              self.pubsub, self, ssl, whitelist_only=False, rng=self.rng,
-                                              enable_sync_v1=enable_sync_v1, enable_sync_v2=enable_sync_v2,
-                                              enable_sync_v1_1=enable_sync_v1_1)
+        self.connections = p2p_manager
 
         self.metrics = Metrics(
             pubsub=self.pubsub,
@@ -207,14 +183,9 @@ class HathorManager:
             self.wallet.pubsub = self.pubsub
             self.wallet.reactor = self.reactor
 
-        if stratum_port:
-            # XXX: only import if needed
-            from hathor.stratum import StratumFactory
-            self.stratum_factory: Optional[StratumFactory] = StratumFactory(manager=self, port=stratum_port)
-        else:
-            self.stratum_factory = None
-        # Set stratum factory for metrics object
-        self.metrics.stratum_factory = self.stratum_factory
+        # It will be inject later by the builder.
+        # XXX Remove this attribute after all dependencies are cleared.
+        self.stratum_factory: Optional[StratumFactory] = None
 
         self._allow_mining_without_peers = False
 
@@ -227,10 +198,6 @@ class HathorManager:
         # Full verification execute all validations for transactions and blocks when initializing the node
         # Can be activated on the command line with --full-verification
         self._full_verification = full_verification
-
-        # Activated with --x-enable-event-queue flag
-        # It activates the event mechanism inside full node
-        self.enable_event_queue = False
 
         # List of whitelisted peers
         self.peers_whitelist: List[str] = []
@@ -285,7 +252,7 @@ class HathorManager:
                 )
                 sys.exit(-1)
 
-        if self._event_manager:
+        if self._enable_event_queue:
             self._event_manager.start(not_none(self.my_peer.id))
 
         self.state = self.NodeState.INITIALIZING
@@ -355,7 +322,7 @@ class HathorManager:
             if wait_stratum:
                 waits.append(wait_stratum)
 
-        if self._event_manager:
+        if self._enable_event_queue:
             self._event_manager.stop()
 
         self.tx_storage.flush()
@@ -396,7 +363,7 @@ class HathorManager:
 
         This method runs through all transactions, verifying them and updating our wallet.
         """
-        assert not self._event_manager, 'this method cannot be used if the events feature is enabled.'
+        assert not self._enable_event_queue, 'this method cannot be used if the events feature is enabled.'
 
         self.log.info('initialize')
         if self.wallet:
@@ -446,8 +413,9 @@ class HathorManager:
         # self.start_profiler()
         if self._full_verification:
             self.log.debug('reset all metadata')
-            for tx in self.tx_storage.get_all_transactions():
-                tx.reset_metadata()
+            with self.tx_storage.allow_partially_validated_context():
+                for tx in self.tx_storage.get_all_transactions():
+                    tx.reset_metadata()
 
         self.log.debug('load blocks and transactions')
         for tx in self.tx_storage._topological_sort_dfs():
@@ -492,9 +460,11 @@ class HathorManager:
                             self.tx_storage.indexes.mempool_tips.update(tx)  # XXX: move to indexes.update
                         if self.tx_storage.indexes.deps is not None:
                             self.sync_v2_step_validations([tx])
+                        self.tx_storage.save_transaction(tx, only_metadata=True)
                     else:
                         assert tx.validate_basic(skip_block_weight_verification=skip_block_weight_verification)
-                    self.tx_storage.save_transaction(tx, only_metadata=True)
+                        with self.tx_storage.allow_partially_validated_context():
+                            self.tx_storage.save_transaction(tx, only_metadata=True)
                 else:
                     # TODO: deal with invalid tx
                     if not tx_meta.validation.is_final():
@@ -649,6 +619,11 @@ class HathorManager:
 
         # XXX: last step before actually starting is updating the last started at timestamps
         self.tx_storage.update_last_started_at(started_at)
+
+        if self._enable_event_queue:
+            topological_iterator = self.tx_storage.topological_iterator()
+            self._event_manager.handle_load_phase_vertices(topological_iterator)
+
         self.state = self.NodeState.READY
         self.pubsub.publish(HathorEvents.LOAD_FINISHED)
 
