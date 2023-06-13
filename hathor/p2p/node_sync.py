@@ -207,6 +207,9 @@ class NodeSyncTimestamp(SyncManager):
         self.call_later_id: Optional[IDelayedCall] = None
         self.call_later_interval: int = 1  # seconds
 
+        # Keep track of call laters.
+        self._send_tips_call_later: list[IDelayedCall] = []
+
         # Timestamp of the peer's latest block (according to the peer itself)
         self.peer_timestamp: int = 0
 
@@ -284,6 +287,9 @@ class NodeSyncTimestamp(SyncManager):
             self.send_data_queue.stop()
         if self.call_later_id and self.call_later_id.active():
             self.call_later_id.cancel()
+        for call_later in self._send_tips_call_later:
+            if call_later.active():
+                call_later.cancel()
         # XXX: force remove this connection from _all_ pending downloads
         self.downloader.drop_connection(self)
 
@@ -617,13 +623,24 @@ class NodeSyncTimestamp(SyncManager):
         """Try to send a TIPS message. If rate limit has been reached, it schedules to send it later."""
         if not self.global_rate_limiter.add_hit(self.GlobalRateLimiter.SEND_TIPS):
             self.log.debug('send_tips throttled')
-            self.reactor.callLater(1, self.send_tips, timestamp, include_hashes, offset)
+            self._send_tips_call_later.append(
+                self.reactor.callLater(
+                    1, self.send_tips, timestamp, include_hashes, offset
+                )
+            )
             return
         self._send_tips(timestamp, include_hashes, offset)
 
     def _send_tips(self, timestamp: Optional[int] = None, include_hashes: bool = False, offset: int = 0) -> None:
         """ Send a TIPS message.
         """
+        # Filter for active delayed calls once one is executing
+        self._send_tips_call_later = [
+            call_later
+            for call_later in self._send_tips_call_later
+            if call_later.active()
+        ]
+
         if timestamp is None:
             timestamp = self.manager.tx_storage.latest_timestamp
 
