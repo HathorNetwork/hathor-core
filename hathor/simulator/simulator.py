@@ -24,6 +24,7 @@ from hathor.builder import BuildArtifacts, Builder
 from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
+from hathor.p2p.peer_id import PeerId
 from hathor.simulator.clock import HeapClock
 from hathor.simulator.miner.geometric_miner import GeometricMiner
 from hathor.simulator.tx_generator import RandomTransactionGenerator
@@ -144,13 +145,14 @@ class Simulator:
         """
         return Builder() \
             .set_network(self._network) \
+            .set_peer_id(PeerId()) \
             .set_soft_voided_tx_ids(set()) \
             .enable_full_verification() \
             .enable_sync_v1() \
             .enable_sync_v2() \
             .use_memory()
 
-    def create_peer(self, builder: Builder) -> HathorManager:
+    def create_peer(self, builder: Optional[Builder] = None) -> HathorManager:
         """
         Returns a manager from a builder, after configuring it for simulator use.
         You may get a builder from get_default_builder() for convenience.
@@ -158,12 +160,13 @@ class Simulator:
         artifacts = self.create_artifacts(builder)
         return artifacts.manager
 
-    def create_artifacts(self, builder: Builder) -> BuildArtifacts:
+    def create_artifacts(self, builder: Optional[Builder] = None) -> BuildArtifacts:
         """
         Returns build artifacts from a builder, after configuring it for simulator use.
         You may get a builder from get_default_builder() for convenience.
         """
         assert self._started, 'Simulator is not started.'
+        builder = builder or self.get_default_builder()
 
         wallet = HDWallet(gap_limit=2)
         wallet._manually_initialize()

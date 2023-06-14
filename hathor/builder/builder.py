@@ -190,7 +190,7 @@ class Builder:
         if self._enable_stratum_server:
             stratum_factory = self._create_stratum_server(manager)
 
-        feature_service = self._create_feature_service()
+        feature_service = self._create_feature_service(tx_storage)
 
         self.artifacts = BuildArtifacts(
             peer_id=peer_id,
@@ -272,8 +272,11 @@ class Builder:
         manager.metrics.stratum_factory = stratum_factory
         return stratum_factory
 
-    def _create_feature_service(self) -> FeatureService:
-        return FeatureService(feature_settings=self._settings.FEATURE_ACTIVATION)
+    def _create_feature_service(self, tx_storage: TransactionStorage) -> FeatureService:
+        return FeatureService(
+            feature_settings=self._settings.FEATURE_ACTIVATION,
+            tx_storage=tx_storage
+        )
 
     def _get_or_create_rocksdb_storage(self) -> RocksDBStorage:
         assert self._rocksdb_path is not None

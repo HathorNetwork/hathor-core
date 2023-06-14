@@ -156,7 +156,10 @@ class RunNode:
         from hathor.feature_activation.feature_service import FeatureService
         settings = HathorSettings()
 
-        feature_service = FeatureService(feature_settings=settings.FEATURE_ACTIVATION)
+        feature_service = FeatureService(
+            feature_settings=settings.FEATURE_ACTIVATION,
+            tx_storage=self.manager.tx_storage
+        )
 
         if register_resources:
             resources_builder = ResourcesBuilder(self.manager, self._args, builder.event_ws_factory, feature_service)

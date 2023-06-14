@@ -561,6 +561,13 @@ class TransactionStorage(ABC):
         self.post_get_validation(tx)
         return tx
 
+    def get_transaction_by_height(self, height: int) -> Optional[BaseTransaction]:
+        """Returns a transaction from the height index. This is fast."""
+        assert self.indexes is not None
+        ancestor_hash = self.indexes.height.get(height)
+
+        return None if ancestor_hash is None else self.get_transaction(ancestor_hash)
+
     def get_metadata(self, hash_bytes: bytes) -> Optional[TransactionMetadata]:
         """Returns the transaction metadata with hash `hash_bytes`.
 

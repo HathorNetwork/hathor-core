@@ -18,13 +18,15 @@ from hathor.feature_activation.model.feature_description import FeatureDescripti
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.transaction import Block
+from hathor.transaction.storage import TransactionStorage
 
 
 class FeatureService:
-    __slots__ = ('_feature_settings',)
+    __slots__ = ('_feature_settings', '_tx_storage')
 
-    def __init__(self, *, feature_settings: FeatureSettings) -> None:
+    def __init__(self, *, feature_settings: FeatureSettings, tx_storage: TransactionStorage) -> None:
         self._feature_settings = feature_settings
+        self._tx_storage = tx_storage
 
     def is_feature_active(self, *, block: Block, feature: Feature) -> bool:
         """Returns whether a Feature is active at a certain block."""
@@ -45,7 +47,7 @@ class FeatureService:
         offset_to_boundary = height % self._feature_settings.evaluation_interval
         offset_to_previous_boundary = offset_to_boundary or self._feature_settings.evaluation_interval
         previous_boundary_height = height - offset_to_previous_boundary
-        previous_boundary_block = _get_ancestor_at_height(block=block, height=previous_boundary_height)
+        previous_boundary_block = self._get_ancestor_at_height(block=block, height=previous_boundary_height)
         previous_state = self.get_state(block=previous_boundary_block, feature=feature)
 
         if offset_to_boundary != 0:
@@ -133,17 +135,30 @@ class FeatureService:
             for feature, criteria in self._feature_settings.features.items()
         }
 
+    def _get_ancestor_at_height(self, *, block: Block, height: int) -> Block:
+        """
+        Given a block, returns its ancestor at a specific height.
+        Uses the height index if the block is in the best blockchain, or search iteratively otherwise.
+        """
+        assert height < block.get_height(), (
+            f"ancestor height must be lower than the block's height: {height} >= {block.get_height()}"
+        )
 
-def _get_ancestor_at_height(*, block: Block, height: int) -> Block:
-    """Given a block, returns its ancestor at a specific height."""
-    # TODO: there may be more optimized ways of doing this using the height index,
-    #  but what if we're not in the best blockchain?
-    assert height < block.get_height(), (
-        f"ancestor height must be lower than the block's height: {height} >= {block.get_height()}"
-    )
+        metadata = block.get_metadata()
 
+        if not metadata.voided_by and (ancestor := self._tx_storage.get_transaction_by_height(height)):
+            assert isinstance(ancestor, Block)
+            return ancestor
+
+        return _get_ancestor_iteratively(block=block, ancestor_height=height)
+
+
+def _get_ancestor_iteratively(*, block: Block, ancestor_height: int) -> Block:
+    """Given a block, returns its ancestor at a specific height by iterating over its ancestors. This is slow."""
+    # TODO: there are further optimizations to be done here, the latest common block height could be persisted in
+    #  metadata, so we could still use the height index if the requested height is before that height.
     ancestor = block
-    while ancestor.get_height() > height:
+    while ancestor.get_height() > ancestor_height:
         ancestor = ancestor.get_block_parent()
 
     return ancestor
