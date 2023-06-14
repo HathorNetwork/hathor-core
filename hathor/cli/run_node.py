@@ -22,7 +22,6 @@ from structlog import get_logger
 
 from hathor.conf import TESTNET_SETTINGS_FILEPATH, HathorSettings
 from hathor.exception import PreInitializationError
-from hathor.feature_activation.feature_service import FeatureService
 
 logger = get_logger()
 # LOGGING_CAPTURE_STDOUT = True
@@ -149,6 +148,7 @@ class RunNode:
             self.reactor.listenTCP(args.stratum, self.manager.stratum_factory)
 
         from hathor.conf import HathorSettings
+        from hathor.feature_activation.feature_service import FeatureService
         settings = HathorSettings()
 
         feature_service = FeatureService(feature_settings=settings.FEATURE_ACTIVATION)
