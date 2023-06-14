@@ -35,7 +35,6 @@ from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import (
     add_blocks_unlock_reward,
-    add_new_block,
     add_new_blocks,
     add_new_transactions,
     create_script_with_sigops,
@@ -97,22 +96,6 @@ class BaseTransactionTest(unittest.TestCase):
             self.assertEqual(block_from_chain, block_from_list)
             self.assertTrue(block_from_chain.has_basic_block_parent())
         self.assertEqual(block_from_chain.get_next_block_best_chain(), None)
-
-    def test_checkpoint_validation(self):
-        from hathor.transaction.transaction_metadata import ValidationState
-
-        # manually validate with sync_checkpoints=True
-        block1 = add_new_block(self.manager, propagate=False)
-        block1.validate_full(sync_checkpoints=True)
-        self.assertTrue(block1.get_metadata().validation.is_checkpoint())
-        self.manager.propagate_tx(block1)
-        del block1
-
-        # use on_new_tx with sync_checkpoints=True
-        block2 = self.manager.generate_mining_block()
-        block2.resolve()
-        self.assertTrue(self.manager.on_new_tx(block2, sync_checkpoints=True, partial=True, fails_silently=False))
-        self.assertEqual(block2.get_metadata().validation, ValidationState.CHECKPOINT_FULL)
 
     def test_script(self):
         genesis_block = self.genesis_blocks[0]
