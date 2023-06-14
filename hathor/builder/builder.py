@@ -24,6 +24,7 @@ from hathor.consensus import ConsensusAlgorithm
 from hathor.event import EventManager
 from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
 from hathor.event.websocket import EventWebsocketFactory
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.p2p.manager import ConnectionsManager
@@ -63,6 +64,7 @@ class BuildArtifacts(NamedTuple):
     wallet: Optional[BaseWallet]
     rocksdb_storage: Optional[RocksDBStorage]
     stratum_factory: Optional[StratumFactory]
+    feature_service: FeatureService
 
 
 class Builder:
@@ -189,6 +191,8 @@ class Builder:
         if self._enable_stratum_server:
             stratum_factory = self._create_stratum_server(manager)
 
+        feature_service = self._create_feature_service()
+
         self.artifacts = BuildArtifacts(
             peer_id=peer_id,
             settings=settings,
@@ -203,6 +207,7 @@ class Builder:
             wallet=wallet,
             rocksdb_storage=self._rocksdb_storage,
             stratum_factory=stratum_factory,
+            feature_service=feature_service
         )
 
         return self.artifacts
@@ -267,6 +272,9 @@ class Builder:
         manager.stratum_factory = stratum_factory
         manager.metrics.stratum_factory = stratum_factory
         return stratum_factory
+
+    def _create_feature_service(self) -> FeatureService:
+        return FeatureService(feature_settings=self._settings.FEATURE_ACTIVATION)
 
     def _get_or_create_rocksdb_storage(self) -> RocksDBStorage:
         assert self._rocksdb_path is not None

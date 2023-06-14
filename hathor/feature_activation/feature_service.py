@@ -16,15 +16,15 @@ from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.model.feature_description import FeatureDescription
 from hathor.feature_activation.model.feature_state import FeatureState
-from hathor.feature_activation.settings import Settings
+from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.transaction import Block
 
 
 class FeatureService:
-    __slots__ = ('_settings',)
+    __slots__ = ('_feature_settings',)
 
-    def __init__(self, *, settings: Settings) -> None:
-        self._settings = settings
+    def __init__(self, *, feature_settings: FeatureSettings) -> None:
+        self._feature_settings = feature_settings
 
     def is_feature_active(self, *, block: Block, feature: Feature) -> bool:
         """Returns whether a Feature is active at a certain block."""
@@ -42,8 +42,8 @@ class FeatureService:
         # All blocks within the same evaluation interval have the same state, that is, the state is only defined for
         # the block in each interval boundary. Therefore, we get the state of the previous boundary.
         height = block.get_height()
-        offset_to_boundary = height % self._settings.evaluation_interval
-        offset_to_previous_boundary = offset_to_boundary or self._settings.evaluation_interval
+        offset_to_boundary = height % self._feature_settings.evaluation_interval
+        offset_to_previous_boundary = offset_to_boundary or self._feature_settings.evaluation_interval
         previous_boundary_height = height - offset_to_previous_boundary
         previous_boundary_block = _get_ancestor_at_height(block=block, height=previous_boundary_height)
         previous_state = self.get_state(block=previous_boundary_block, feature=feature)
@@ -69,7 +69,9 @@ class FeatureService:
         criteria = self._get_criteria(feature=feature)
 
         assert not boundary_block.is_genesis, 'cannot calculate new state for genesis'
-        assert height % self._settings.evaluation_interval == 0, 'cannot calculate new state for a non-boundary block'
+        assert height % self._feature_settings.evaluation_interval == 0, (
+            'cannot calculate new state for a non-boundary block'
+        )
 
         if previous_state is FeatureState.DEFINED:
             if height >= criteria.start_height:
@@ -90,9 +92,10 @@ class FeatureService:
 
             # Get the count for this block's parent. Since this is a boundary block, its parent count represents the
             # previous evaluation interval count.
-            counts = boundary_block.get_parent_feature_activation_bit_counts()
+            parent_block = boundary_block.get_block_parent()
+            counts = parent_block.get_feature_activation_bit_counts()
             count = counts[criteria.bit]
-            threshold = criteria.threshold if criteria.threshold is not None else self._settings.default_threshold
+            threshold = criteria.get_threshold(self._feature_settings)
 
             if (
                 height < criteria.timeout_height
@@ -113,7 +116,7 @@ class FeatureService:
 
     def _get_criteria(self, *, feature: Feature) -> Criteria:
         """Get the Criteria defined for a specific Feature."""
-        criteria = self._settings.features.get(feature)
+        criteria = self._feature_settings.features.get(feature)
 
         if not criteria:
             raise ValueError(f"Criteria not defined for feature '{feature}'.")
@@ -127,7 +130,7 @@ class FeatureService:
                 criteria=criteria,
                 state=self.get_state(block=block, feature=feature)
             )
-            for feature, criteria in self._settings.features.items()
+            for feature, criteria in self._feature_settings.features.items()
         }
 
 
