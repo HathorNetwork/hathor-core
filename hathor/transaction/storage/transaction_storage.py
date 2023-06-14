@@ -101,7 +101,7 @@ class TransactionStorage(ABC):
         self._weakref_lock: Lock = Lock()
 
         # Flag to allow/disallow partially validated vertices.
-        self.allow_scope: TxAllowScope = TxAllowScope.VALID
+        self._allow_scope: TxAllowScope = TxAllowScope.VALID
 
         # Cache for the best block tips
         # This cache is updated in the consensus algorithm.
@@ -136,6 +136,16 @@ class TransactionStorage(ABC):
             if migration_name in migration_names:
                 raise ValueError(f'Duplicate migration name "{migration_name}"')
             migration_names.add(migration_name)
+
+    def set_allow_scope(self, allow_scope: TxAllowScope) -> None:
+        """Set the allow scope for the current storage.
+
+        This method should not normally be used directly, use one of the `allow_*_scope` methods instead."""
+        self._allow_scope = allow_scope
+
+    def get_allow_scope(self) -> TxAllowScope:
+        """Get the current allow scope."""
+        return self._allow_scope
 
     @abstractmethod
     def reset_indexes(self) -> None:
@@ -353,7 +363,7 @@ class TransactionStorage(ABC):
 
         The implementation will INCLUDE allowing partially valid transactions to the current allow scope.
         """
-        new_allow_scope = self.allow_scope | TxAllowScope.PARTIAL
+        new_allow_scope = self.get_allow_scope() | TxAllowScope.PARTIAL
         return tx_allow_context(self, allow_scope=new_allow_scope)
 
     def allow_invalid_context(self) -> AbstractContextManager[None]:
@@ -361,20 +371,20 @@ class TransactionStorage(ABC):
 
         The implementation will INCLUDE allowing invalid transactions to the current allow scope.
         """
-        new_allow_scope = self.allow_scope | TxAllowScope.INVALID
+        new_allow_scope = self.get_allow_scope() | TxAllowScope.INVALID
         return tx_allow_context(self, allow_scope=new_allow_scope)
 
     def is_only_valid_allowed(self) -> bool:
         """Whether only valid transactions are allowed to be returned/accepted by the storage, the default state."""
-        return self.allow_scope is TxAllowScope.VALID
+        return self.get_allow_scope() is TxAllowScope.VALID
 
     def is_partially_validated_allowed(self) -> bool:
         """Whether partially validated transactions are allowed to be returned/accepted by the storage."""
-        return TxAllowScope.PARTIAL in self.allow_scope
+        return TxAllowScope.PARTIAL in self.get_allow_scope()
 
     def is_invalid_allowed(self) -> bool:
         """Whether invalid transactions are allowed to be returned/accepted by the storage."""
-        return TxAllowScope.INVALID in self.allow_scope
+        return TxAllowScope.INVALID in self.get_allow_scope()
 
     def _enable_weakref(self) -> None:
         """ Weakref should never be disabled unless you know exactly what you are doing.
@@ -433,9 +443,9 @@ class TransactionStorage(ABC):
                'Inconsistent ValidationState and voided_by'
 
     def _validate_transaction_in_scope(self, tx: BaseTransaction) -> None:
-        if not self.allow_scope.is_allowed(tx):
+        if not self.get_allow_scope().is_allowed(tx):
             tx_meta = tx.get_metadata()
-            raise TransactionNotInAllowedScopeError(tx.hash_hex, self.allow_scope.name, tx_meta.validation.name)
+            raise TransactionNotInAllowedScopeError(tx.hash_hex, self.get_allow_scope().name, tx_meta.validation.name)
 
     @abstractmethod
     def remove_transaction(self, tx: BaseTransaction) -> None:
@@ -567,7 +577,7 @@ class TransactionStorage(ABC):
         """Return all vertices (transactions and blocks) within the allowed scope.
         """
         for tx in self._get_all_transactions():
-            if self.allow_scope.is_allowed(tx):
+            if self.get_allow_scope().is_allowed(tx):
                 yield tx
 
     @abstractmethod

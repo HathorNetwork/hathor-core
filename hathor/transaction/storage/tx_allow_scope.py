@@ -57,9 +57,9 @@ def tx_allow_context(tx_storage: 'TransactionStorage', *, allow_scope: TxAllowSc
     """This is used to wrap the storage with a temporary allow-scope that is reverted when the context exits"""
     from hathor.transaction.storage import TransactionStorage
     assert isinstance(tx_storage, TransactionStorage)
-    previous_allow_scope = tx_storage.allow_scope
+    previous_allow_scope = tx_storage.get_allow_scope()
     try:
-        tx_storage.allow_scope = allow_scope
+        tx_storage.set_allow_scope(allow_scope)
         yield
     finally:
-        tx_storage.allow_scope = previous_allow_scope
+        tx_storage.set_allow_scope(previous_allow_scope)
