@@ -1,5 +1,3 @@
-from argparse import Namespace
-
 from hathor.cli.run_node import RunNode
 from tests import unittest
 
@@ -9,10 +7,10 @@ class RunNodeTest(unittest.TestCase):
 
     def test_memory_storage(self):
         class CustomRunNode(RunNode):
-            def start_manager(self, args: Namespace) -> None:
+            def start_manager(self) -> None:
                 pass
 
-            def register_signal_handlers(self, args: Namespace) -> None:
+            def register_signal_handlers(self) -> None:
                 pass
 
         run_node = CustomRunNode(argv=['--memory-storage'])

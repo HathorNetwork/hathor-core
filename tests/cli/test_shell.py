@@ -11,7 +11,7 @@ class ShellTest(unittest.TestCase):
     # In this case we just want to go through the code to see if it's okay
 
     def test_shell_execution_memory_storage(self):
-        shell = Shell(argv=['--memory-storage'])
+        shell = Shell(argv=['--memory-storage', '--', '--extra-arg'])
         self.assertTrue(shell is not None)
 
     @pytest.mark.skipif(not HAS_ROCKSDB, reason='requires python-rocksdb')

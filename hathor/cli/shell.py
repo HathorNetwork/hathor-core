@@ -28,18 +28,18 @@ def get_ipython(extra_args: list[Any], imported_objects: dict[str, Any]) -> Call
 
 
 class Shell(RunNode):
-    def start_manager(self, args: Namespace) -> None:
+    def start_manager(self) -> None:
         pass
 
-    def register_signal_handlers(self, args: Namespace) -> None:
+    def register_signal_handlers(self) -> None:
         pass
 
-    def prepare(self, args: Namespace, *, register_resources: bool = True) -> None:
-        super().prepare(args, register_resources=False)
+    def prepare(self, *, register_resources: bool = True) -> None:
+        super().prepare(register_resources=False)
 
         imported_objects: dict[str, Any] = {}
         imported_objects['tx_storage'] = self.tx_storage
-        if args.wallet:
+        if self._args.wallet:
             imported_objects['wallet'] = self.wallet
         imported_objects['manager'] = self.manager
         self.shell = get_ipython(self.extra_args, imported_objects)

@@ -14,7 +14,7 @@
 
 import io
 import struct
-from argparse import ArgumentParser, FileType, Namespace
+from argparse import ArgumentParser, FileType
 from typing import TYPE_CHECKING, Iterator, Optional
 
 from hathor.cli.run_node import RunNode
@@ -26,10 +26,10 @@ MAGIC_HEADER = b'HathDB'
 
 
 class DbExport(RunNode):
-    def start_manager(self, args: Namespace) -> None:
+    def start_manager(self) -> None:
         pass
 
-    def register_signal_handlers(self, args: Namespace) -> None:
+    def register_signal_handlers(self) -> None:
         pass
 
     @classmethod
@@ -58,26 +58,26 @@ class DbExport(RunNode):
         parser.add_argument('--export-skip-voided', action='store_true', help='Do not export voided txs/blocks')
         return parser
 
-    def prepare(self, args: Namespace, *, register_resources: bool = True) -> None:
-        super().prepare(args, register_resources=False)
+    def prepare(self, *, register_resources: bool = True) -> None:
+        super().prepare(register_resources=False)
 
         # allocating io.BufferedWriter here so we "own" it
-        self.out_file = io.BufferedWriter(args.export_file)
+        self.out_file = io.BufferedWriter(self._args.export_file)
         if not self.out_file.seekable():
             raise ValueError('file cannot be used because it is not seekable')
 
         self._iter_tx: Iterator['BaseTransaction']
-        if args.export_iterator == 'metadata':
+        if self._args.export_iterator == 'metadata':
             self._iter_tx = self.tx_storage._topological_sort_metadata()
-        elif args.export_iterator == 'timestamp_index':
+        elif self._args.export_iterator == 'timestamp_index':
             self._iter_tx = self.tx_storage._topological_sort_timestamp_index()
-        elif args.export_iterator == 'dfs':
+        elif self._args.export_iterator == 'dfs':
             self._iter_tx = self.tx_storage._topological_sort_dfs()
         else:
-            raise ValueError(f'unknown iterator "{args.export_iterator}"')
+            raise ValueError(f'unknown iterator "{self._args.export_iterator}"')
 
-        self.export_height = args.export_max_height
-        self.skip_voided = args.export_skip_voided
+        self.export_height = self._args.export_max_height
+        self.skip_voided = self._args.export_skip_voided
 
     def iter_tx(self) -> Iterator['BaseTransaction']:
         from hathor.conf import HathorSettings

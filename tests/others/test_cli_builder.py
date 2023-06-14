@@ -3,6 +3,7 @@ from unittest.mock import Mock
 import pytest
 
 from hathor.builder import CliBuilder, ResourcesBuilder
+from hathor.cli.run_node_args import RunNodeArgs
 from hathor.event import EventManager
 from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage
 from hathor.event.websocket import EventWebsocketFactory
@@ -24,22 +25,25 @@ class BuilderTestCase(unittest.TestCase):
 
         from hathor.cli.run_node import RunNode
         self.parser = RunNode.create_parser()
-        self.builder = CliBuilder()
 
     def _build_with_error(self, cmd_args: list[str], err_msg: str) -> None:
-        args = self.parser.parse_args(cmd_args)
+        raw_args = self.parser.parse_args(cmd_args)
+        args = RunNodeArgs.parse_obj(vars(raw_args))
+        builder = CliBuilder(args)
         with self.assertRaises(BuilderError) as cm:
-            manager = self.builder.create_manager(self.reactor, args)
-            self.resources_builder = ResourcesBuilder(manager, self.builder.event_ws_factory, Mock())
-            self.resources_builder.build(args)
+            manager = builder.create_manager(self.reactor)
+            self.resources_builder = ResourcesBuilder(manager, args, builder.event_ws_factory, Mock())
+            self.resources_builder.build()
         self.assertEqual(err_msg, str(cm.exception))
 
     def _build(self, cmd_args: list[str]) -> HathorManager:
-        args = self.parser.parse_args(cmd_args)
-        manager = self.builder.create_manager(self.reactor, args)
+        raw_args = self.parser.parse_args(cmd_args)
+        args = RunNodeArgs.parse_obj(vars(raw_args))
+        builder = CliBuilder(args)
+        manager = builder.create_manager(self.reactor)
         self.assertIsNotNone(manager)
-        self.resources_builder = ResourcesBuilder(manager, self.builder.event_ws_factory, Mock())
-        self.resources_builder.build(args)
+        self.resources_builder = ResourcesBuilder(manager, args, builder.event_ws_factory, Mock())
+        self.resources_builder.build()
         return manager
 
     def test_empty(self):
