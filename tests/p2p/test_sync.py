@@ -253,7 +253,7 @@ class SyncV1HathorSyncMethodsTestCase(unittest.SyncV1Params, BaseHathorSyncMetho
     __test__ = True
 
     def test_downloader(self):
-        from hathor.p2p.node_sync import NodeSyncTimestamp
+        from hathor.p2p.sync_v1.agent import NodeSyncTimestamp
 
         blocks = self._add_new_blocks(3)
 

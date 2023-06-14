@@ -27,7 +27,7 @@ settings = HathorSettings()
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
-    from hathor.p2p.node_sync import NodeSyncTimestamp
+    from hathor.p2p.sync_v1.agent import NodeSyncTimestamp
     from hathor.transaction import BaseTransaction
 
 logger = get_logger()

@@ -25,9 +25,9 @@ from twisted.internet.interfaces import IConsumer, IDelayedCall, IPushProducer
 from zope.interface import implementer
 
 from hathor.conf import HathorSettings
-from hathor.p2p.downloader import Downloader
 from hathor.p2p.messages import GetNextPayload, GetTipsPayload, NextPayload, ProtocolMessages, TipsPayload
 from hathor.p2p.sync_manager import SyncManager
+from hathor.p2p.sync_v1.downloader import Downloader
 from hathor.transaction import BaseTransaction
 from hathor.transaction.base_transaction import tx_or_block_from_bytes
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
