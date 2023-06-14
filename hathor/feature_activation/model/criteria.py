@@ -12,12 +12,15 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Any, ClassVar, Optional
+from typing import TYPE_CHECKING, Any, ClassVar, Optional
 
 from pydantic import Field, NonNegativeInt, validator
 
 from hathor import version
 from hathor.utils.pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from hathor.feature_activation.settings import Settings as FeatureSettings
 
 
 class Criteria(BaseModel, validate_all=True):
@@ -54,6 +57,10 @@ class Criteria(BaseModel, validate_all=True):
     minimum_activation_height: NonNegativeInt = 0
     activate_on_timeout: bool = False
     version: str = Field(..., regex=version.BUILD_VERSION_REGEX)
+
+    def get_threshold(self, feature_settings: 'FeatureSettings') -> int:
+        """Returns the configured threshold, or the default threshold if it is None."""
+        return self.threshold if self.threshold is not None else feature_settings.default_threshold
 
     @validator('bit')
     def _validate_bit(cls, bit: int) -> int:

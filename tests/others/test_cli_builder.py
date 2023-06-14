@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 import pytest
 
 from hathor.builder import CliBuilder, ResourcesBuilder
@@ -28,7 +30,7 @@ class BuilderTestCase(unittest.TestCase):
         args = self.parser.parse_args(cmd_args)
         with self.assertRaises(BuilderError) as cm:
             manager = self.builder.create_manager(self.reactor, args)
-            self.resources_builder = ResourcesBuilder(manager, self.builder.event_ws_factory)
+            self.resources_builder = ResourcesBuilder(manager, self.builder.event_ws_factory, Mock())
             self.resources_builder.build(args)
         self.assertEqual(err_msg, str(cm.exception))
 
@@ -36,7 +38,7 @@ class BuilderTestCase(unittest.TestCase):
         args = self.parser.parse_args(cmd_args)
         manager = self.builder.create_manager(self.reactor, args)
         self.assertIsNotNone(manager)
-        self.resources_builder = ResourcesBuilder(manager, self.builder.event_ws_factory)
+        self.resources_builder = ResourcesBuilder(manager, self.builder.event_ws_factory, Mock())
         self.resources_builder.build(args)
         return manager
 

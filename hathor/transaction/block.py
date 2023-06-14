@@ -140,7 +140,9 @@ class Block(BaseTransaction):
         if is_boundary_block:
             return []
 
-        return self.get_parent_feature_activation_bit_counts()
+        parent_block = self.get_block_parent()
+
+        return parent_block.get_feature_activation_bit_counts()
 
     def get_next_block_best_chain_hash(self) -> Optional[bytes]:
         """Return the hash of the next (child/left-to-right) block in the best blockchain.
@@ -386,12 +388,12 @@ class Block(BaseTransaction):
         """Returns the block's height."""
         return self.get_metadata().height
 
-    def get_parent_feature_activation_bit_counts(self) -> list[int]:
-        """Returns the parent block's feature_activation_bit_counts metadata attribute."""
-        parent_metadata = self.get_block_parent().get_metadata()
-        assert parent_metadata.feature_activation_bit_counts is not None, 'Blocks must always have this attribute set.'
+    def get_feature_activation_bit_counts(self) -> list[int]:
+        """Returns the block's feature_activation_bit_counts metadata attribute."""
+        metadata = self.get_metadata()
+        assert metadata.feature_activation_bit_counts is not None, 'Blocks must always have this attribute set.'
 
-        return parent_metadata.feature_activation_bit_counts
+        return metadata.feature_activation_bit_counts
 
     def _get_feature_activation_bit_list(self) -> list[int]:
         """

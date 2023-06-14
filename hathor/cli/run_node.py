@@ -22,6 +22,7 @@ from structlog import get_logger
 
 from hathor.conf import TESTNET_SETTINGS_FILEPATH, HathorSettings
 from hathor.exception import PreInitializationError
+from hathor.feature_activation.feature_service import FeatureService
 
 logger = get_logger()
 # LOGGING_CAPTURE_STDOUT = True
@@ -147,14 +148,16 @@ class RunNode:
         if args.stratum:
             self.reactor.listenTCP(args.stratum, self.manager.stratum_factory)
 
+        from hathor.conf import HathorSettings
+        settings = HathorSettings()
+
+        feature_service = FeatureService(feature_settings=settings.FEATURE_ACTIVATION)
+
         if register_resources:
-            resources_builder = ResourcesBuilder(self.manager, builder.event_ws_factory)
+            resources_builder = ResourcesBuilder(self.manager, builder.event_ws_factory, feature_service)
             status_server = resources_builder.build(args)
             if args.status:
                 self.reactor.listenTCP(args.status, status_server)
-
-        from hathor.conf import HathorSettings
-        settings = HathorSettings()
 
         from hathor.builder.builder import BuildArtifacts
         self.artifacts = BuildArtifacts(
@@ -171,6 +174,7 @@ class RunNode:
             wallet=self.manager.wallet,
             rocksdb_storage=getattr(builder, 'rocksdb_storage', None),
             stratum_factory=self.manager.stratum_factory,
+            feature_service=feature_service
         )
 
     def start_sentry_if_possible(self, args: Namespace) -> None:

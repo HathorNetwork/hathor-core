@@ -23,6 +23,7 @@ from twisted.web.resource import Resource
 
 from hathor.event.resources.event import EventResource
 from hathor.exception import BuilderError
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.prometheus import PrometheusMetricsExporter
 
 if TYPE_CHECKING:
@@ -33,7 +34,12 @@ logger = get_logger()
 
 
 class ResourcesBuilder:
-    def __init__(self, manager: 'HathorManager', event_ws_factory: Optional['EventWebsocketFactory']) -> None:
+    def __init__(
+        self,
+        manager: 'HathorManager',
+        event_ws_factory: Optional['EventWebsocketFactory'],
+        feature_service: FeatureService
+    ) -> None:
         self.log = logger.new()
         self.manager = manager
         self.event_ws_factory = event_ws_factory
@@ -41,6 +47,8 @@ class ResourcesBuilder:
 
         self._built_status = False
         self._built_prometheus = False
+
+        self._feature_service = feature_service
 
     def build(self, args: Namespace) -> Optional[server.Site]:
         if args.prometheus:
@@ -76,6 +84,7 @@ class ResourcesBuilder:
             DebugRaiseResource,
             DebugRejectResource,
         )
+        from hathor.feature_activation.resources.feature import FeatureResource
         from hathor.mining.ws import MiningWebsocketFactory
         from hathor.p2p.resources import (
             AddPeersResource,
@@ -189,6 +198,16 @@ class ResourcesBuilder:
             (b'peers', AddPeersResource(self.manager), p2p_resource),
             (b'netfilter', NetfilterRuleResource(self.manager), p2p_resource),
             (b'readiness', HealthcheckReadinessResource(self.manager), p2p_resource),
+            # Feature Activation
+            (
+                b'feature',
+                FeatureResource(
+                    feature_settings=settings.FEATURE_ACTIVATION,
+                    feature_service=self._feature_service,
+                    tx_storage=self.manager.tx_storage
+                ),
+                root
+            )
         ]
         # XXX: only enable UTXO search API if the index is enabled
         if args.utxo_index:

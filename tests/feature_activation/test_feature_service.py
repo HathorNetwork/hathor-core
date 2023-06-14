@@ -23,7 +23,7 @@ from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.model.feature_description import FeatureDescription
 from hathor.feature_activation.model.feature_state import FeatureState
-from hathor.feature_activation.settings import Settings
+from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.transaction import Block
 from hathor.transaction.storage import TransactionStorage
 
@@ -80,11 +80,11 @@ def block_mocks() -> list[Block]:
 
 @pytest.fixture
 def service() -> FeatureService:
-    settings = Settings(
+    feature_settings = FeatureSettings(
         evaluation_interval=4,
         default_threshold=3
     )
-    service = FeatureService(settings=settings)
+    service = FeatureService(feature_settings=feature_settings)
 
     return service
 
@@ -119,7 +119,7 @@ def test_get_state_from_defined(
     start_height: int,
     expected_state: FeatureState
 ) -> None:
-    settings = Settings.construct(
+    feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -130,7 +130,7 @@ def test_get_state_from_defined(
             )
         }
     )
-    service = FeatureService(settings=settings)
+    service = FeatureService(feature_settings=feature_settings)
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -141,7 +141,7 @@ def test_get_state_from_defined(
 @pytest.mark.parametrize('block_height', [8, 9, 10, 11, 12, 13])
 @pytest.mark.parametrize('timeout_height', [4, 8])
 def test_get_state_from_started_to_failed(block_mocks: list[Block], block_height: int, timeout_height: int) -> None:
-    settings = Settings.construct(
+    feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -153,7 +153,7 @@ def test_get_state_from_started_to_failed(block_mocks: list[Block], block_height
             )
         }
     )
-    service = FeatureService(settings=settings)
+    service = FeatureService(feature_settings=feature_settings)
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -170,7 +170,7 @@ def test_get_state_from_started_to_active_on_timeout(
     timeout_height: int,
     minimum_activation_height: int
 ) -> None:
-    settings = Settings.construct(
+    feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -183,7 +183,7 @@ def test_get_state_from_started_to_active_on_timeout(
             )
         }
     )
-    service = FeatureService(settings=settings)
+    service = FeatureService(feature_settings=feature_settings)
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -200,7 +200,7 @@ def test_get_state_from_started_to_active_on_default_threshold(
     minimum_activation_height: int,
     default_threshold: int
 ) -> None:
-    settings = Settings.construct(
+    feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         default_threshold=default_threshold,
         features={
@@ -214,7 +214,7 @@ def test_get_state_from_started_to_active_on_default_threshold(
             )
         }
     )
-    service = FeatureService(settings=settings)
+    service = FeatureService(feature_settings=feature_settings)
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -231,7 +231,7 @@ def test_get_state_from_started_to_active_on_custom_threshold(
     minimum_activation_height: int,
     custom_threshold: int
 ) -> None:
-    settings = Settings.construct(
+    feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -244,7 +244,7 @@ def test_get_state_from_started_to_active_on_custom_threshold(
             )
         }
     )
-    service = FeatureService(settings=settings)
+    service = FeatureService(feature_settings=feature_settings)
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -268,7 +268,7 @@ def test_get_state_from_started_to_started(
     timeout_height: int,
     minimum_activation_height: int
 ) -> None:
-    settings = Settings.construct(
+    feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -281,7 +281,7 @@ def test_get_state_from_started_to_started(
             )
         }
     )
-    service = FeatureService(settings=settings)
+    service = FeatureService(feature_settings=feature_settings)
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -291,7 +291,7 @@ def test_get_state_from_started_to_started(
 
 @pytest.mark.parametrize('block_height', [12, 13, 14, 15])
 def test_get_state_from_active(block_mocks: list[Block], block_height: int) -> None:
-    settings = Settings.construct(
+    feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -303,7 +303,7 @@ def test_get_state_from_active(block_mocks: list[Block], block_height: int) -> N
             )
         }
     )
-    service = FeatureService(settings=settings)
+    service = FeatureService(feature_settings=feature_settings)
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -313,7 +313,7 @@ def test_get_state_from_active(block_mocks: list[Block], block_height: int) -> N
 
 @pytest.mark.parametrize('block_height', [12, 13, 14, 15])
 def test_is_feature_active(block_mocks: list[Block], block_height: int) -> None:
-    settings = Settings.construct(
+    feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -325,7 +325,7 @@ def test_is_feature_active(block_mocks: list[Block], block_height: int) -> None:
             )
         }
     )
-    service = FeatureService(settings=settings)
+    service = FeatureService(feature_settings=feature_settings)
     block = block_mocks[block_height]
 
     result = service.is_feature_active(block=block, feature=Feature.NOP_FEATURE_1)
@@ -335,7 +335,7 @@ def test_is_feature_active(block_mocks: list[Block], block_height: int) -> None:
 
 @pytest.mark.parametrize('block_height', [12, 13, 14, 15])
 def test_get_state_from_failed(block_mocks: list[Block], block_height: int) -> None:
-    settings = Settings.construct(
+    feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
@@ -346,7 +346,7 @@ def test_get_state_from_failed(block_mocks: list[Block], block_height: int) -> N
             )
         }
     )
-    service = FeatureService(settings=settings)
+    service = FeatureService(feature_settings=feature_settings)
     block = block_mocks[block_height]
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
@@ -366,13 +366,13 @@ def test_get_state_undefined_feature(block_mocks: list[Block], service: FeatureS
 def test_get_bits_description():
     criteria_mock_1 = Criteria.construct()
     criteria_mock_2 = Criteria.construct()
-    settings = Settings.construct(
+    feature_settings = FeatureSettings.construct(
         features={
             Feature.NOP_FEATURE_1: criteria_mock_1,
             Feature.NOP_FEATURE_2: criteria_mock_2
         }
     )
-    service = FeatureService(settings=settings)
+    service = FeatureService(feature_settings=feature_settings)
 
     def get_state(self: FeatureService, *, block: Block, feature: Feature) -> FeatureState:
         states = {
