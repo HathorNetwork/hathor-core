@@ -646,7 +646,8 @@ class TransactionStorage(ABC):
         heads = [self.get_transaction(h) for h in self.get_best_block_tips()]
         highest_height = 0
         for head in heads:
-            head_height = head.get_metadata().height
+            assert isinstance(head, Block)
+            head_height = head.get_height()
             if head_height > highest_height:
                 highest_height = head_height
 

@@ -37,7 +37,7 @@ class TransactionMetadata:
     accumulated_weight: float
     score: float
     first_block: Optional[bytes]
-    height: int
+    height: Optional[int]
     validation: ValidationState
     # XXX: this is only used to defer the reward-lock verification from the transaction spending a reward to the first
     # block that confirming this transaction, it is important to always have this set to be able to distinguish an old
@@ -62,7 +62,7 @@ class TransactionMetadata:
         hash: Optional[bytes] = None,
         accumulated_weight: float = 0,
         score: float = 0,
-        height: int = 0,
+        height: Optional[int] = None,
         min_height: int = 0,
         feature_activation_bit_counts: Optional[list[int]] = None
     ) -> None:

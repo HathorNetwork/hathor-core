@@ -45,7 +45,8 @@ def get_requested_from_height(tx: BaseTransaction) -> int:
     """
     assert tx.storage is not None
     if tx.is_block:
-        return tx.get_metadata().height
+        assert isinstance(tx, Block)
+        return tx.get_height()
     first_block = tx.get_metadata().first_block
     if first_block is None:
         # XXX: consensus did not run yet to update first_block, what should we do?
@@ -54,7 +55,7 @@ def get_requested_from_height(tx: BaseTransaction) -> int:
         return INF_HEIGHT
     block = tx.storage.get_transaction(first_block)
     assert isinstance(block, Block)
-    return block.get_metadata().height
+    return block.get_height()
 
 
 class DepsIndex(BaseIndex):

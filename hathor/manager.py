@@ -409,7 +409,7 @@ class HathorManager:
             dt = LogDuration(t2 - t1)
             dcnt = cnt - cnt2
             tx_rate = '?' if dt == 0 else dcnt / dt
-            h = max(h, tx_meta.height)
+            h = max(h, tx_meta.height or 0)
             if dt > 30:
                 ts_date = datetime.datetime.fromtimestamp(self.tx_storage.latest_timestamp)
                 if h == 0:
@@ -453,14 +453,16 @@ class HathorManager:
                 # this works because blocks on the best chain are iterated from lower to higher height
                 assert tx.hash is not None
                 assert tx_meta.validation.is_at_least_basic()
+                assert isinstance(tx, Block)
+                blk_height = tx.get_height()
                 if not tx_meta.voided_by and tx_meta.validation.is_fully_connected():
                     # XXX: this might not be needed when making a full init because the consensus should already have
-                    self.tx_storage.indexes.height.add_reorg(tx_meta.height, tx.hash, tx.timestamp)
+                    self.tx_storage.indexes.height.add_reorg(blk_height, tx.hash, tx.timestamp)
 
                 # Check if it's a checkpoint block
-                if tx_meta.height in checkpoint_heights:
-                    if tx.hash == checkpoint_heights[tx_meta.height]:
-                        del checkpoint_heights[tx_meta.height]
+                if blk_height in checkpoint_heights:
+                    if tx.hash == checkpoint_heights[blk_height]:
+                        del checkpoint_heights[blk_height]
                     else:
                         # If the hash is different from checkpoint hash, we stop the node
                         self.log.error('Error initializing the node. Checkpoint validation error.')
@@ -794,7 +796,7 @@ class HathorManager:
         # protect agains a weight that is too small but using WEIGHT_TOL instead of 2*WEIGHT_TOL)
         min_significant_weight = calculate_min_significant_weight(parent_block_metadata.score, 2 * settings.WEIGHT_TOL)
         weight = max(daa.calculate_next_weight(parent_block, timestamp), min_significant_weight)
-        height = parent_block_metadata.height + 1
+        height = parent_block.get_height() + 1
         parents = [parent_block.hash] + parent_txs.must_include
         parents_any = parent_txs.can_include
         # simplify representation when you only have one to choose from

@@ -154,7 +154,7 @@ class Transaction(BaseTransaction):
         """ Calculates min height derived from own spent rewards"""
         min_height = 0
         for blk in self.iter_spent_rewards():
-            min_height = max(min_height, blk.get_metadata().height + settings.REWARD_SPEND_MIN_BLOCKS + 1)
+            min_height = max(min_height, blk.get_height() + settings.REWARD_SPEND_MIN_BLOCKS + 1)
         return min_height
 
     def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
@@ -593,12 +593,18 @@ class Transaction(BaseTransaction):
 
     def _spent_reward_needed_height(self, block: Block) -> int:
         """ Returns height still needed to unlock this reward: 0 means it's unlocked."""
+        import math
         assert self.storage is not None
         # omitting timestamp to get the current best block, this will usually hit the cache instead of being slow
         tips = self.storage.get_best_block_tips()
         assert len(tips) > 0
-        best_height = min(self.storage.get_transaction(tip).get_metadata().height for tip in tips)
-        spent_height = block.get_metadata().height
+        best_height = math.inf
+        for tip in tips:
+            blk = self.storage.get_transaction(tip)
+            assert isinstance(blk, Block)
+            best_height = min(best_height, blk.get_height())
+        assert isinstance(best_height, int)
+        spent_height = block.get_height()
         spend_blocks = best_height - spent_height
         needed_height = settings.REWARD_SPEND_MIN_BLOCKS - spend_blocks
         return max(needed_height, 0)

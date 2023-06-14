@@ -95,6 +95,7 @@ class DbExport(RunNode):
             yield tx
 
     def run(self) -> None:
+        from hathor.transaction import Block
         from hathor.util import tx_progress
         self.log.info('export')
         self.out_file.write(MAGIC_HEADER)
@@ -112,9 +113,10 @@ class DbExport(RunNode):
             assert tx.hash is not None
             tx_meta = tx.get_metadata()
             if tx.is_block:
+                assert isinstance(tx, Block)
                 if not tx_meta.voided_by:
                     # XXX: max() shouldn't be needed, but just in case
-                    best_height = max(best_height, tx_meta.height)
+                    best_height = max(best_height, tx.get_height())
                 block_count += 1
             else:
                 tx_count += 1

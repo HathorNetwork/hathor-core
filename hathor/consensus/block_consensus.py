@@ -146,7 +146,7 @@ class BlockConsensusAlgorithm:
             # we need to check that block is not voided.
             meta = block.get_metadata()
             if not meta.voided_by:
-                storage.indexes.height.add_new(meta.height, block.hash, block.timestamp)
+                storage.indexes.height.add_new(block.get_height(), block.hash, block.timestamp)
                 storage.update_best_block_tips_cache([block.hash])
             # The following assert must be true, but it is commented out for performance reasons.
             if settings.SLOW_ASSERTS:
@@ -206,10 +206,11 @@ class BlockConsensusAlgorithm:
                     # As `update_score_and_mark_as_the_best_chain_if_possible` may affect `voided_by`,
                     # we need to check that block is not voided.
                     meta = block.get_metadata()
+                    height = block.get_height()
                     if not meta.voided_by:
-                        self.log.debug('index new winner block', height=meta.height, block=block.hash_hex)
+                        self.log.debug('index new winner block', height=height, block=block.hash_hex)
                         # We update the height cache index with the new winner chain
-                        storage.indexes.height.update_new_chain(meta.height, block)
+                        storage.indexes.height.update_new_chain(height, block)
                         storage.update_best_block_tips_cache([block.hash])
                         # It is only a re-org if common_block not in heads
                         if common_block not in heads:
