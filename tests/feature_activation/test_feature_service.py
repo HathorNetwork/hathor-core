@@ -16,6 +16,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from hathor.conf import HathorSettings
 from hathor.feature_activation import feature_service
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
@@ -24,13 +25,14 @@ from hathor.feature_activation.model.feature_description import FeatureDescripti
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings
 from hathor.transaction import Block
+from hathor.transaction.storage import TransactionStorage
 
 
 @pytest.fixture
 def block_mocks() -> list[Block]:
-    mocks: list[Block] = []
+    blocks: list[Block] = []
     feature_activation_bits = [
-        0b0110,  # 0: boundary block
+        0b0000,  # 0: boundary block
         0b0010,
         0b0110,
         0b0010,
@@ -60,15 +62,20 @@ def block_mocks() -> list[Block]:
     ]
 
     for i, bits in enumerate(feature_activation_bits):
-        mock = Mock(spec_set=Block)
-        mocks.append(mock)
+        settings = HathorSettings()
+        genesis_hash = settings.GENESIS_BLOCK_HASH
+        block_hash = genesis_hash if i == 0 else b'some_hash'
 
-        mock.is_genesis = i == 0
-        mock.get_height = Mock(return_value=i)
-        mock.get_block_parent = Mock(return_value=mocks[i - 1])
-        mock.get_feature_activation_bits = Mock(return_value=bits)
+        storage = Mock(spec_set=TransactionStorage)
+        storage.get_metadata = Mock(return_value=None)
 
-    return mocks
+        block = Block(hash=block_hash, storage=storage, signal_bits=bits)
+        blocks.append(block)
+
+        get_block_parent_mock = Mock(return_value=blocks[i - 1])
+        setattr(block, 'get_block_parent', get_block_parent_mock)
+
+    return blocks
 
 
 @pytest.fixture
@@ -383,50 +390,6 @@ def test_get_bits_description():
     }
 
     assert result == expected
-
-
-def test_get_bit_count_genesis(block_mocks: list[Block], service: FeatureService) -> None:
-    block = block_mocks[0]
-
-    with pytest.raises(AssertionError) as e:
-        service.get_bit_count(boundary_block=block, bit=Mock())
-
-    assert str(e.value) == 'cannot calculate bit count for genesis'
-
-
-@pytest.mark.parametrize('block_height', [1, 2, 3, 5, 18, 21])
-def test_get_bit_count_invalid(block_mocks: list[Block], service: FeatureService, block_height: int) -> None:
-    block = block_mocks[block_height]
-
-    with pytest.raises(AssertionError) as e:
-        service.get_bit_count(boundary_block=block, bit=Mock())
-
-    assert str(e.value) == 'cannot calculate bit count for a non-boundary block'
-
-
-@pytest.mark.parametrize(
-    ['block_height', 'bit', 'expected_count'],
-    [
-        (4, 0, 0),
-        (4, 1, 4),
-        (4, 2, 2),
-
-        (8, 0, 4),
-        (8, 1, 3),
-        (8, 2, 0),
-    ]
-)
-def test_get_bit_count(
-    block_mocks: list[Block],
-    service: FeatureService,
-    block_height: int,
-    bit: int,
-    expected_count: int
-) -> None:
-    block = block_mocks[block_height]
-    result = service.get_bit_count(boundary_block=block, bit=bit)
-
-    assert result == expected_count
 
 
 @pytest.mark.parametrize(

@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import base64
+from itertools import starmap, zip_longest
+from operator import add
 from struct import pack
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -31,6 +33,7 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.utils.int import get_bit_list
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -109,6 +112,35 @@ class Block(BaseTransaction):
         # maximum min-height of any parent tx
         return max((self.storage.get_transaction(tx).get_metadata().min_height for tx in self.get_tx_parents()),
                    default=0)
+
+    def calculate_feature_activation_bit_counts(self) -> list[int]:
+        """
+        Calculates the feature_activation_bit_counts metadata attribute, which is a list of feature activation bit
+        counts.
+
+        Each list index corresponds to a bit position, and its respective value is the rolling count of active bits
+        from the previous boundary block up to this block, including it. LSB is on the left.
+        """
+        previous_counts = self._get_previous_feature_activation_bit_counts()
+        bit_list = self._get_feature_activation_bit_list()
+
+        count_and_bit_pairs = zip_longest(previous_counts, bit_list, fillvalue=0)
+        updated_counts = starmap(add, count_and_bit_pairs)
+
+        return list(updated_counts)
+
+    def _get_previous_feature_activation_bit_counts(self) -> list[int]:
+        """
+        Returns the feature_activation_bit_counts metadata attribute from the parent block,
+        or no previous counts if this is a boundary block.
+        """
+        evaluation_interval = settings.FEATURE_ACTIVATION.evaluation_interval
+        is_boundary_block = self.calculate_height() % evaluation_interval == 0
+
+        if is_boundary_block:
+            return []
+
+        return self.get_parent_feature_activation_bit_counts()
 
     def get_next_block_best_chain_hash(self) -> Optional[bytes]:
         """Return the hash of the next (child/left-to-right) block in the best blockchain.
@@ -354,13 +386,26 @@ class Block(BaseTransaction):
         """Returns the block's height."""
         return self.get_metadata().height
 
-    def get_feature_activation_bits(self) -> int:
-        """Returns the feature activation bits from the signal bits."""
+    def get_parent_feature_activation_bit_counts(self) -> list[int]:
+        """Returns the parent block's feature_activation_bit_counts metadata attribute."""
+        parent_metadata = self.get_block_parent().get_metadata()
+        assert parent_metadata.feature_activation_bit_counts is not None, 'Blocks must always have this attribute set.'
+
+        return parent_metadata.feature_activation_bit_counts
+
+    def _get_feature_activation_bit_list(self) -> list[int]:
+        """
+        Extracts feature activation bits from the signal bits, as a list where each index corresponds to the bit
+        position. LSB is on the left.
+        """
         assert self.signal_bits <= 0xFF, 'signal_bits must be one byte at most'
 
         bitmask = self._get_feature_activation_bitmask()
+        bits = self.signal_bits & bitmask
 
-        return self.signal_bits & bitmask
+        bit_list = get_bit_list(bits, min_size=settings.FEATURE_ACTIVATION.max_signal_bits)
+
+        return bit_list
 
     @classmethod
     def _get_feature_activation_bitmask(cls) -> int:

@@ -875,8 +875,21 @@ class BaseTransaction(ABC):
             #        happens include generating new mining blocks and some tests
             height = self.calculate_height() if self.storage else 0
             score = self.weight if self.is_genesis else 0
-            metadata = TransactionMetadata(hash=self.hash, accumulated_weight=self.weight, height=height, score=score,
-                                           min_height=0)
+            kwargs: dict[str, Any] = {}
+
+            if self.is_block:
+                from hathor.transaction import Block
+                assert isinstance(self, Block)
+                kwargs['feature_activation_bit_counts'] = self.calculate_feature_activation_bit_counts()
+
+            metadata = TransactionMetadata(
+                hash=self.hash,
+                accumulated_weight=self.weight,
+                height=height,
+                score=score,
+                min_height=0,
+                **kwargs
+            )
             self._metadata = metadata
         if not metadata.hash:
             metadata.hash = self.hash
@@ -956,6 +969,7 @@ class BaseTransaction(ABC):
         self._update_height_metadata()
         self._update_parents_children_metadata()
         self._update_reward_lock_metadata()
+        self._update_feature_activation_bit_counts_metadata()
         if save:
             assert self.storage is not None
             self.storage.save_transaction(self, only_metadata=True)
@@ -980,6 +994,16 @@ class BaseTransaction(ABC):
             if self.hash not in metadata.children:
                 metadata.children.append(self.hash)
                 self.storage.save_transaction(parent, only_metadata=True)
+
+    def _update_feature_activation_bit_counts_metadata(self) -> None:
+        """Update the block feature_activation_bit_counts metadata."""
+        if not self.is_block:
+            return
+
+        from hathor.transaction import Block
+        assert isinstance(self, Block)
+        metadata = self.get_metadata()
+        metadata.feature_activation_bit_counts = self.calculate_feature_activation_bit_counts()
 
     def update_timestamp(self, now: int) -> None:
         """Update this tx's timestamp

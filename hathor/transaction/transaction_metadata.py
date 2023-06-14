@@ -44,6 +44,11 @@ class TransactionMetadata:
     # metadata (that does not have this calculated, from a tx with a new format that does have this calculated)
     min_height: int
 
+    # A list of feature activation bit counts. Must only be used by Blocks, is None otherwise.
+    # Each list index corresponds to a bit position, and its respective value is the rolling count of active bits from
+    # the previous boundary block up to this block, including it. LSB is on the left.
+    feature_activation_bit_counts: Optional[list[int]]
+
     # It must be a weakref.
     _tx_ref: Optional['ReferenceType[BaseTransaction]']
 
@@ -51,8 +56,16 @@ class TransactionMetadata:
     _last_voided_by_hash: Optional[int]
     _last_spent_by_hash: Optional[int]
 
-    def __init__(self, spent_outputs: Optional[dict[int, list[bytes]]] = None, hash: Optional[bytes] = None,
-                 accumulated_weight: float = 0, score: float = 0, height: int = 0, min_height: int = 0) -> None:
+    def __init__(
+        self,
+        spent_outputs: Optional[dict[int, list[bytes]]] = None,
+        hash: Optional[bytes] = None,
+        accumulated_weight: float = 0,
+        score: float = 0,
+        height: int = 0,
+        min_height: int = 0,
+        feature_activation_bit_counts: Optional[list[int]] = None
+    ) -> None:
         from hathor.transaction.genesis import is_genesis
 
         # Hash of the transaction.
@@ -106,6 +119,8 @@ class TransactionMetadata:
 
         # Validation
         self.validation = ValidationState.INITIAL
+
+        self.feature_activation_bit_counts = feature_activation_bit_counts
 
         # Genesis specific:
         if hash is not None and is_genesis(hash):
@@ -168,7 +183,7 @@ class TransactionMetadata:
             return False
         for field in ['hash', 'conflict_with', 'voided_by', 'received_by',
                       'children', 'accumulated_weight', 'twins', 'score',
-                      'first_block', 'validation', 'min_height']:
+                      'first_block', 'validation', 'min_height', 'feature_activation_bit_counts']:
             if (getattr(self, field) or None) != (getattr(other, field) or None):
                 return False
 
@@ -203,6 +218,7 @@ class TransactionMetadata:
         data['score'] = self.score
         data['height'] = self.height
         data['min_height'] = self.min_height
+        data['feature_activation_bit_counts'] = self.feature_activation_bit_counts
         if self.first_block is not None:
             data['first_block'] = self.first_block.hex()
         else:
@@ -252,6 +268,7 @@ class TransactionMetadata:
         meta.score = data.get('score', 0)
         meta.height = data.get('height', 0)  # XXX: should we calculate the height if it's not defined?
         meta.min_height = data.get('min_height', 0)
+        meta.feature_activation_bit_counts = data.get('feature_activation_bit_counts', [])
 
         first_block_raw = data.get('first_block', None)
         if first_block_raw:
