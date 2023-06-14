@@ -21,7 +21,7 @@ from structlog import get_logger
 from hathor.conf import HathorSettings
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
-from hathor.transaction import BaseTransaction, TxOutput
+from hathor.transaction import BaseTransaction, Block, TxOutput
 from hathor.transaction.scripts import parse_address_script
 from hathor.util import sorted_merger
 
@@ -69,9 +69,11 @@ class UtxoIndexItem:
         if address_script is None:
             raise ValueError('UtxoIndexItem can only be used with scripts supported by `parse_address_script`')
 
-        tx_meta = tx.get_metadata()
-
-        heightlock: Optional[int] = tx_meta.height + settings.REWARD_SPEND_MIN_BLOCKS if tx.is_block else None
+        heightlock: Optional[int]
+        if isinstance(tx, Block):
+            heightlock = tx.get_height() + settings.REWARD_SPEND_MIN_BLOCKS
+        else:
+            heightlock = None
         # XXX: timelock forced to None when there is a heightlock
         timelock: Optional[int] = address_script.get_timelock() if heightlock is None else None
         # XXX: that is, at least one of them must but None

@@ -83,7 +83,7 @@ def calculate_next_weight(parent_block: 'Block', timestamp: int) -> float:
     from hathor.transaction import sum_weights
 
     root = parent_block
-    N = min(2 * settings.BLOCK_DIFFICULTY_N_BLOCKS, parent_block.get_metadata().height - 1)
+    N = min(2 * settings.BLOCK_DIFFICULTY_N_BLOCKS, parent_block.get_height() - 1)
     K = N // 2
     T = AVG_TIME_BETWEEN_BLOCKS
     S = 5

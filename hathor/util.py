@@ -520,8 +520,10 @@ def _tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib
             log.warn('iterator was slow to yield', took_sec=dt_next)
 
         assert tx.hash is not None
-        tx_meta = tx.get_metadata()
-        h = max(h, tx_meta.height)
+        # XXX: this is only informative and made to work with either partially/fully validated blocks/transactions
+        meta = tx.get_metadata()
+        if meta.height:
+            h = max(h, meta.height)
         ts_tx = max(ts_tx, tx.timestamp)
 
         t_log = time.time()

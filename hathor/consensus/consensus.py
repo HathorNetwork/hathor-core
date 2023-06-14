@@ -125,10 +125,9 @@ class ConsensusAlgorithm:
         # emit the reorg started event if needed
         if context.reorg_common_block is not None:
             old_best_block = base.storage.get_transaction(best_tip)
+            assert isinstance(old_best_block, Block)
             new_best_block = base.storage.get_transaction(new_best_tip)
-            old_best_block_meta = old_best_block.get_metadata()
-            common_block_meta = context.reorg_common_block.get_metadata()
-            reorg_size = old_best_block_meta.height - common_block_meta.height
+            reorg_size = old_best_block.get_height() - context.reorg_common_block.get_height()
             assert old_best_block != new_best_block
             assert reorg_size > 0
             context.pubsub.publish(HathorEvents.REORG_STARTED, old_best_height=best_height,

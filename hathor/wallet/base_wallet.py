@@ -27,7 +27,7 @@ from twisted.internet.interfaces import IDelayedCall
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
-from hathor.transaction import BaseTransaction, TxInput, TxOutput
+from hathor.transaction import BaseTransaction, Block, TxInput, TxOutput
 from hathor.transaction.base_transaction import int_to_bytes
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.transaction.storage import TransactionStorage
@@ -499,7 +499,8 @@ class BaseWallet:
     def can_spend_block(self, tx_storage: 'TransactionStorage', tx_id: bytes) -> bool:
         tx = tx_storage.get_transaction(tx_id)
         if tx.is_block:
-            if tx_storage.get_height_best_block() - tx.get_metadata().height < settings.REWARD_SPEND_MIN_BLOCKS:
+            assert isinstance(tx, Block)
+            if tx_storage.get_height_best_block() - tx.get_height() < settings.REWARD_SPEND_MIN_BLOCKS:
                 return False
         return True
 

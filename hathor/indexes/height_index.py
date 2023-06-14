@@ -57,10 +57,9 @@ class HeightIndex(BaseIndex):
             return
         assert isinstance(tx, Block)
         assert tx.hash is not None
-        tx_meta = tx.get_metadata()
-        if tx_meta.voided_by:
+        if tx.get_metadata().voided_by:
             return
-        self.add_new(tx_meta.height, tx.hash, tx.timestamp)
+        self.add_new(tx.get_height(), tx.hash, tx.timestamp)
 
     @abstractmethod
     def add_new(self, height: int, block_hash: bytes, timestamp: int) -> None:
@@ -105,7 +104,7 @@ class HeightIndex(BaseIndex):
             )
 
             side_chain_block = side_chain_block.get_block_parent()
-            new_block_height = side_chain_block.get_metadata().height
+            new_block_height = side_chain_block.get_height()
             assert new_block_height + 1 == block_height
             block_height = new_block_height
 

@@ -103,7 +103,7 @@ class Block(BaseTransaction):
             return 0
         assert self.storage is not None
         parent_block = self.get_block_parent()
-        return parent_block.get_metadata().height + 1
+        return parent_block.get_height() + 1
 
     def calculate_min_height(self) -> int:
         """The minimum height the next block needs to have, basically the maximum min-height of this block's parents.
@@ -301,16 +301,18 @@ class Block(BaseTransaction):
     def verify_checkpoint(self, checkpoints: list[Checkpoint]) -> None:
         assert self.hash is not None
         assert self.storage is not None
-        meta = self.get_metadata()
-        # XXX: it's fine to use `in` with NamedTuples
-        if Checkpoint(meta.height, self.hash) in checkpoints:
-            return
-        # otherwise at least one child must be checkpoint validated
-        for child_tx in map(self.storage.get_transaction, meta.children):
-            if child_tx.get_metadata().validation.is_checkpoint():
-                return
-        raise CheckpointError(f'Invalid new block {self.hash_hex}: expected to reach a checkpoint but none of '
-                              'its children is checkpoint-valid and its hash does not match any checkpoint')
+        height = self.get_height()  # TODO: use "soft height" when sync-checkpoint is added
+        # find checkpoint with our height:
+        checkpoint: Optional[Checkpoint] = None
+        for cp in checkpoints:
+            if cp.height == height:
+                checkpoint = cp
+                break
+        if checkpoint is not None and checkpoint.hash != self.hash:
+            raise CheckpointError(f'Invalid new block {self.hash_hex}: checkpoint hash does not match')
+        else:
+            # TODO: check whether self is a parent of any checkpoint-valid block, this is left for a future PR
+            raise NotImplementedError
 
     def verify_weight(self) -> None:
         """Validate minimum block difficulty."""
@@ -322,13 +324,14 @@ class Block(BaseTransaction):
     def verify_height(self) -> None:
         """Validate that the block height is enough to confirm all transactions being confirmed."""
         meta = self.get_metadata()
+        assert meta.height is not None
         if meta.height < meta.min_height:
             raise RewardLocked(f'Block needs {meta.min_height} height but has {meta.height}')
 
     def verify_reward(self) -> None:
         """Validate reward amount."""
         parent_block = self.get_block_parent()
-        tokens_issued_per_block = daa.get_tokens_issued_per_block(parent_block.get_metadata().height + 1)
+        tokens_issued_per_block = daa.get_tokens_issued_per_block(parent_block.get_height() + 1)
         if self.sum_outputs != tokens_issued_per_block:
             raise InvalidBlockReward(
                 f'Invalid number of issued tokens tag=invalid_issued_tokens tx.hash={self.hash_hex} '
@@ -386,7 +389,9 @@ class Block(BaseTransaction):
 
     def get_height(self) -> int:
         """Returns the block's height."""
-        return self.get_metadata().height
+        meta = self.get_metadata()
+        assert meta.height is not None
+        return meta.height
 
     def get_feature_activation_bit_counts(self) -> list[int]:
         """Returns the block's feature_activation_bit_counts metadata attribute."""
