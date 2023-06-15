@@ -723,7 +723,7 @@ class BaseTransaction(ABC):
                     len(output.script), settings.MAX_OUTPUT_SCRIPT_SIZE
                 ))
 
-    def resolve(self, update_time: bool = True) -> bool:
+    def resolve(self, update_time: bool = False) -> bool:
         """Run a CPU mining looking for the nonce that solves the proof-of-work
 
         The `self.weight` must be set before calling this method.
