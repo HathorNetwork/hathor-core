@@ -873,7 +873,7 @@ class BaseTransaction(ABC):
             # FIXME: there is code that set use_storage=False but relies on correct height being calculated
             #        which requires the use of a storage, this is a workaround that should be fixed, places where this
             #        happens include generating new mining blocks and some tests
-            height = self.calculate_height() if self.storage else 0
+            height = self.calculate_height() if self.storage else None
             score = self.weight if self.is_genesis else 0
             kwargs: dict[str, Any] = {}
 
@@ -913,6 +913,9 @@ class BaseTransaction(ABC):
             self._metadata.validation = ValidationState.INITIAL
             self._metadata.voided_by = {settings.PARTIALLY_VALIDATED_ID}
         self._metadata._tx_ref = weakref.ref(self)
+
+        self._update_height_metadata()
+
         self.storage.save_transaction(self, only_metadata=True)
 
     def update_accumulated_weight(self, *, stop_value: float = inf, save_file: bool = True) -> TransactionMetadata:
