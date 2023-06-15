@@ -25,7 +25,6 @@ from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.simulator.clock import HeapClock
-from hathor.simulator.miner.dummy_miner import DummyMiner
 from hathor.simulator.miner.geometric_miner import GeometricMiner
 from hathor.simulator.tx_generator import RandomTransactionGenerator
 from hathor.transaction.genesis import _get_genesis_transactions_unsafe
@@ -192,9 +191,6 @@ class Simulator:
 
     def create_miner(self, peer: HathorManager, *args: Any, **kwargs: Any) -> GeometricMiner:
         return GeometricMiner(peer, self.rng, *args, **kwargs)
-
-    def create_dummy_miner(self, peer: HathorManager, *args: Any, **kwargs: Any) -> DummyMiner:
-        return DummyMiner(peer, self.rng, *args, **kwargs)
 
     def run_to_completion(self):
         """ This will advance the test's clock until all calls scheduled are done.
