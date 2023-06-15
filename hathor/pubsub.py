@@ -82,9 +82,6 @@ class HathorEvents(Enum):
         WALLET_ELEMENT_VOIDED:
             Triggered when a wallet element is marked as voided
 
-        LOAD_FINISHED
-            Triggered when manager finishes reading local data and it is ready to sync
-
         REORG_STARTED
             Trigerred when consensus algorithm finds that a reorg started to happen
 
@@ -125,8 +122,6 @@ class HathorEvents(Enum):
     WALLET_ELEMENT_WINNER = 'wallet:element_winner'
 
     WALLET_ELEMENT_VOIDED = 'wallet:element_voided'
-
-    LOAD_FINISHED = 'manager:load_finished'
 
     REORG_STARTED = 'reorg:started'
 

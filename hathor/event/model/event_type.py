@@ -40,8 +40,6 @@ class EventType(Enum):
 
 
 _HATHOR_EVENT_TO_EVENT_TYPE = {
-    HathorEvents.MANAGER_ON_START: EventType.LOAD_STARTED,
-    HathorEvents.LOAD_FINISHED: EventType.LOAD_FINISHED,
     HathorEvents.NETWORK_NEW_TX_ACCEPTED: EventType.NEW_VERTEX_ACCEPTED,
     HathorEvents.REORG_STARTED: EventType.REORG_STARTED,
     HathorEvents.REORG_FINISHED: EventType.REORG_FINISHED,

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Iterator, Optional
+from typing import TYPE_CHECKING, Iterable, Iterator, Optional, Union
 
 from hathor.event.model.base_event import BaseEvent
 from hathor.event.model.node_state import NodeState
@@ -20,6 +20,10 @@ from hathor.event.storage.event_storage import EventStorage
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction.util import bytes_to_int, int_to_bytes
 from hathor.util import json_dumpb
+
+if TYPE_CHECKING:
+    import rocksdb
+
 
 _CF_NAME_EVENT = b'event'
 _CF_NAME_META = b'event-metadata'
@@ -66,16 +70,28 @@ class EventRocksDBStorage(EventStorage):
         return bytes_to_int(last_group_id)
 
     def save_event(self, event: BaseEvent) -> None:
+        self._save_event(event, database=self._db)
+
+    def _save_event(self, event: BaseEvent, *, database: Union['rocksdb.DB', 'rocksdb.WriteBatch']) -> None:
         if (self._last_event is None and event.id != 0) or \
                 (self._last_event is not None and event.id != self._last_event.id + 1):
             raise ValueError('invalid event.id, ids must be sequential and leave no gaps')
         event_data = json_dumpb(event.dict())
         key = int_to_bytes(event.id, 8)
-        self._db.put((self._cf_event, key), event_data)
+        database.put((self._cf_event, key), event_data)
         self._last_event = event
         if event.group_id is not None:
-            self._db.put((self._cf_meta, _KEY_LAST_GROUP_ID), int_to_bytes(event.group_id, 8))
+            database.put((self._cf_meta, _KEY_LAST_GROUP_ID), int_to_bytes(event.group_id, 8))
             self._last_group_id = event.group_id
+
+    def save_events(self, events: Iterable[BaseEvent]) -> None:
+        import rocksdb
+        batch = rocksdb.WriteBatch()
+
+        for event in events:
+            self._save_event(event, database=batch)
+
+        self._db.write(batch)
 
     def get_event(self, key: int) -> Optional[BaseEvent]:
         if key < 0:
