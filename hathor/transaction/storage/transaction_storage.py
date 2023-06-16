@@ -1026,10 +1026,10 @@ class TransactionStorage(ABC):
 
         This method requires indexes to be enabled.
         """
-        from hathor.transaction.storage.traversal import BFSWalk
+        from hathor.transaction.storage.traversal import BFSTimestampWalk
 
         root = self.iter_mempool_tips_from_tx_tips()
-        walk = BFSWalk(self, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=False)
+        walk = BFSTimestampWalk(self, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=False)
         for tx in walk.run(root):
             tx_meta = tx.get_metadata()
             # XXX: skip blocks and tx-tips that have already been confirmed

@@ -334,7 +334,7 @@ class TransactionConsensusAlgorithm:
         """ Remove a hash from `meta.voided_by` and its descendants (both from verification DAG
         and funds tree).
         """
-        from hathor.transaction.storage.traversal import BFSWalk
+        from hathor.transaction.storage.traversal import BFSTimestampWalk
 
         assert tx.hash is not None
         assert tx.storage is not None
@@ -347,7 +347,7 @@ class TransactionConsensusAlgorithm:
 
         self.log.debug('remove_voided_by', tx=tx.hash_hex, voided_hash=voided_hash.hex())
 
-        bfs = BFSWalk(tx.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
+        bfs = BFSTimestampWalk(tx.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
         check_list: list[BaseTransaction] = []
         for tx2 in bfs.run(tx, skip_root=False):
             assert tx2.storage is not None
@@ -404,8 +404,9 @@ class TransactionConsensusAlgorithm:
             # If tx is soft voided, we can only walk through the DAG of funds.
             is_dag_verifications = False
 
-        from hathor.transaction.storage.traversal import BFSWalk
-        bfs = BFSWalk(tx.storage, is_dag_funds=True, is_dag_verifications=is_dag_verifications, is_left_to_right=True)
+        from hathor.transaction.storage.traversal import BFSTimestampWalk
+        bfs = BFSTimestampWalk(tx.storage, is_dag_funds=True, is_dag_verifications=is_dag_verifications,
+                               is_left_to_right=True)
         check_list: list[Transaction] = []
         for tx2 in bfs.run(tx, skip_root=False):
             assert tx2.storage is not None

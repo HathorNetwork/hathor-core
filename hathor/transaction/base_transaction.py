@@ -951,8 +951,8 @@ class BaseTransaction(ABC):
         # reduce the number of visits in the BFS. We need to specially handle when a transaction is not
         # directly verified by a block.
 
-        from hathor.transaction.storage.traversal import BFSWalk
-        bfs_walk = BFSWalk(self.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
+        from hathor.transaction.storage.traversal import BFSTimestampWalk
+        bfs_walk = BFSTimestampWalk(self.storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
         for tx in bfs_walk.run(self, skip_root=True):
             accumulated_weight = sum_weights(accumulated_weight, tx.weight)
             if accumulated_weight > stop_value:
