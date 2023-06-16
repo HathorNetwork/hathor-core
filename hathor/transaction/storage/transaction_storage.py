@@ -659,6 +659,11 @@ class TransactionStorage(ABC):
             elif meta.score > best_score:
                 best_score = meta.score
                 best_tip_blocks = [block_hash]
+
+        # XXX: if there's more than one we filter it so it's the smallest hash
+        if len(best_tip_blocks) > 1:
+            best_tip_blocks = [min(best_tip_blocks)]
+
         if timestamp is None:
             self._best_block_tips_cache = best_tip_blocks[:]
         return best_tip_blocks
