@@ -185,8 +185,8 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
         yield from cast(Iterator[Transaction], it)
 
     def iter_all(self, tx_storage: 'TransactionStorage') -> Iterator[Transaction]:
-        from hathor.transaction.storage.traversal import BFSWalk
-        bfs = BFSWalk(tx_storage, is_dag_verifications=True, is_left_to_right=False)
+        from hathor.transaction.storage.traversal import BFSTimestampWalk
+        bfs = BFSTimestampWalk(tx_storage, is_dag_verifications=True, is_left_to_right=False)
         for tx in bfs.run(self.iter(tx_storage), skip_root=False):
             assert isinstance(tx, Transaction)
             if tx.get_metadata().first_block is not None:
