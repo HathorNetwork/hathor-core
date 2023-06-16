@@ -365,6 +365,36 @@ def test_get_state_from_active(block_mocks: list[Block], tx_storage: Transaction
 
 
 @pytest.mark.parametrize('block_height', [12, 13, 14, 15])
+def test_caching_mechanism(block_mocks: list[Block], tx_storage: TransactionStorage, block_height: int) -> None:
+    feature_settings = FeatureSettings.construct(
+        evaluation_interval=4,
+        features={
+            Feature.NOP_FEATURE_1: Criteria.construct(
+                bit=Mock(),
+                start_height=0,
+                timeout_height=4,
+                activate_on_timeout=True,
+                version=Mock()
+            )
+        }
+    )
+    service = FeatureService(feature_settings=feature_settings, tx_storage=tx_storage)
+    block = block_mocks[block_height]
+    calculate_new_state_mock = Mock(wraps=service._calculate_new_state)
+
+    with patch.object(FeatureService, '_calculate_new_state', calculate_new_state_mock):
+        result1 = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+
+        assert result1 == FeatureState.ACTIVE
+        assert calculate_new_state_mock.call_count == 3
+
+        result2 = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+
+        assert result2 == FeatureState.ACTIVE
+        assert calculate_new_state_mock.call_count == 3
+
+
+@pytest.mark.parametrize('block_height', [12, 13, 14, 15])
 def test_is_feature_active(block_mocks: list[Block], tx_storage: TransactionStorage, block_height: int) -> None:
     feature_settings = FeatureSettings.construct(
         evaluation_interval=4,

@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING, Any, Optional
 from hathor import daa
 from hathor.checkpoint import Checkpoint
 from hathor.conf import HathorSettings
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.profiler import get_cpu_profiler
 from hathor.transaction import BaseTransaction, TxOutput, TxVersion
 from hathor.transaction.exceptions import (
@@ -420,3 +422,20 @@ class Block(BaseTransaction):
         bitmask = (1 << settings.FEATURE_ACTIVATION.max_signal_bits) - 1
 
         return bitmask
+
+    def get_feature_state(self, *, feature: Feature) -> Optional[FeatureState]:
+        """Returns the state of a feature from metadata."""
+        metadata = self.get_metadata()
+        feature_states = metadata.feature_states or {}
+
+        return feature_states.get(feature)
+
+    def update_feature_state(self, *, feature: Feature, state: FeatureState) -> None:
+        """Updates the state of a feature in metadata and persists it."""
+        assert self.storage is not None
+        metadata = self.get_metadata()
+        feature_states = metadata.feature_states or {}
+        feature_states[feature] = state
+        metadata.feature_states = feature_states
+
+        self.storage.save_transaction(self, only_metadata=True)

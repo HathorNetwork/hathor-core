@@ -35,29 +35,37 @@ class FeatureService:
         return state == FeatureState.ACTIVE
 
     def get_state(self, *, block: Block, feature: Feature) -> FeatureState:
-        """Returns the state of a feature at a certain block."""
+        """Returns the state of a feature at a certain block. Uses block metadata to cache states."""
 
         # per definition, the genesis block is in the DEFINED state for all features
         if block.is_genesis:
             return FeatureState.DEFINED
 
+        if state := block.get_feature_state(feature=feature):
+            return state
+
         # All blocks within the same evaluation interval have the same state, that is, the state is only defined for
-        # the block in each interval boundary. Therefore, we get the state of the previous boundary.
+        # the block in each interval boundary. Therefore, we get the state of the previous boundary block or calculate
+        # a new state if this block is a boundary block.
         height = block.get_height()
         offset_to_boundary = height % self._feature_settings.evaluation_interval
         offset_to_previous_boundary = offset_to_boundary or self._feature_settings.evaluation_interval
         previous_boundary_height = height - offset_to_previous_boundary
         previous_boundary_block = self._get_ancestor_at_height(block=block, height=previous_boundary_height)
-        previous_state = self.get_state(block=previous_boundary_block, feature=feature)
+        previous_boundary_state = self.get_state(block=previous_boundary_block, feature=feature)
 
         if offset_to_boundary != 0:
-            return previous_state
+            return previous_boundary_state
 
-        return self._calculate_new_state(
+        new_state = self._calculate_new_state(
             boundary_block=block,
             feature=feature,
-            previous_state=previous_state
+            previous_state=previous_boundary_state
         )
+
+        block.update_feature_state(feature=feature, state=new_state)
+
+        return new_state
 
     def _calculate_new_state(
         self,
