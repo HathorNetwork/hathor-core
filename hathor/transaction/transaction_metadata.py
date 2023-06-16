@@ -15,6 +15,8 @@
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Optional
 
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.transaction.validation_state import ValidationState
 from hathor.util import practically_equal
 
@@ -49,6 +51,9 @@ class TransactionMetadata:
     # the previous boundary block up to this block, including it. LSB is on the left.
     feature_activation_bit_counts: Optional[list[int]]
 
+    # A dict of features in the feature activation process and their respective state. Must only be used by Blocks,
+    # is None otherwise.
+    feature_states: Optional[dict[Feature, FeatureState]] = None
     # It must be a weakref.
     _tx_ref: Optional['ReferenceType[BaseTransaction]']
 
@@ -181,9 +186,9 @@ class TransactionMetadata:
         """Override the default Equals behavior"""
         if not isinstance(other, TransactionMetadata):
             return False
-        for field in ['hash', 'conflict_with', 'voided_by', 'received_by',
-                      'children', 'accumulated_weight', 'twins', 'score',
-                      'first_block', 'validation', 'min_height', 'feature_activation_bit_counts']:
+        for field in ['hash', 'conflict_with', 'voided_by', 'received_by', 'children',
+                      'accumulated_weight', 'twins', 'score', 'first_block', 'validation',
+                      'min_height', 'feature_activation_bit_counts', 'feature_states']:
             if (getattr(self, field) or None) != (getattr(other, field) or None):
                 return False
 
@@ -219,6 +224,10 @@ class TransactionMetadata:
         data['height'] = self.height
         data['min_height'] = self.min_height
         data['feature_activation_bit_counts'] = self.feature_activation_bit_counts
+
+        if self.feature_states is not None:
+            data['feature_states'] = {feature.value: state.value for feature, state in self.feature_states.items()}
+
         if self.first_block is not None:
             data['first_block'] = self.first_block.hex()
         else:
@@ -269,6 +278,13 @@ class TransactionMetadata:
         meta.height = data.get('height', 0)  # XXX: should we calculate the height if it's not defined?
         meta.min_height = data.get('min_height', 0)
         meta.feature_activation_bit_counts = data.get('feature_activation_bit_counts', [])
+
+        feature_states_raw = data.get('feature_states')
+        if feature_states_raw:
+            meta.feature_states = {
+                Feature(feature): FeatureState(feature_state)
+                for feature, feature_state in feature_states_raw.items()
+            }
 
         first_block_raw = data.get('first_block', None)
         if first_block_raw:
