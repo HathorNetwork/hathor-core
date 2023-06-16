@@ -48,7 +48,6 @@ _FEATURE_SETTINGS = FeatureSettings(
 
 
 class BaseFeatureSimulationTest(SimulatorTestCase):
-    seed_config = 5604003716498505253
     builder: Builder
 
     def _get_result_after(self, *, n_blocks: int, miner: AbstractMiner, web_client: StubSite) -> dict[str, Any]:
@@ -58,6 +57,8 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
 
         response = web_client.get('feature')
         result = response.result.json_value()
+
+        del result['block_hash']  # we don't assert the block hash because it's not always the same
 
         return result
 
@@ -97,7 +98,6 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             # at the beginning, the feature is DEFINED:
             result = self._get_result_after(n_blocks=10, miner=miner, web_client=web_client)
             assert result == dict(
-                block_hash='6a0552f08705978048bc8981be718a04aad61fb14f13f19155f1081996bc6321',
                 block_height=10,
                 features=[
                     dict(
@@ -122,7 +122,6 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             # at block 19, the feature is DEFINED, just before becoming STARTED:
             result = self._get_result_after(n_blocks=9, miner=miner, web_client=web_client)
             assert result == dict(
-                block_hash='faa3c7715f29f7b325c7830e26fb84d1a3059bf24ee3bfbdd021296fb205f265',
                 block_height=19,
                 features=[
                     dict(
@@ -146,7 +145,6 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             # at block 20, the feature becomes STARTED:
             result = self._get_result_after(n_blocks=1, miner=miner, web_client=web_client)
             assert result == dict(
-                block_hash='f29544442676671d6b20f2c8cf2247a00b63b07ed3c3b853cd7f3f85f260c981',
                 block_height=20,
                 features=[
                     dict(
@@ -169,7 +167,6 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             # at block 39, the feature is STARTED, just before becoming ACTIVE:
             result = self._get_result_after(n_blocks=39, miner=miner, web_client=web_client)
             assert result == dict(
-                block_hash='bc5dc312e4263ab3e7b94a26042704e870d86aa00878204f9f996eab9e384387',
                 block_height=59,
                 features=[
                     dict(
@@ -194,7 +191,6 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             # at block 60, the feature becomes ACTIVE, forever:
             result = self._get_result_after(n_blocks=1, miner=miner, web_client=web_client)
             assert result == dict(
-                block_hash='df85ad722265b9b50394c6920cddbdaf0727057036cabce6414f591b82eed22b',
                 block_height=60,
                 features=[
                     dict(
@@ -265,7 +261,6 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
 
             result = self._get_result_after(n_blocks=60, miner=miner, web_client=web_client)
             assert result == dict(
-                block_hash='df85ad722265b9b50394c6920cddbdaf0727057036cabce6414f591b82eed22b',
                 block_height=60,
                 features=[
                     dict(
@@ -322,8 +317,9 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
             response = web_client.get('feature')
             result = response.result.json_value()
 
+            del result['block_hash']  # we don't assert the block hash because it's not always the same
+
             assert result == dict(
-                block_hash='df85ad722265b9b50394c6920cddbdaf0727057036cabce6414f591b82eed22b',
                 block_height=60,
                 features=[
                     dict(
