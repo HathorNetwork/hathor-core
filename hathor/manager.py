@@ -823,7 +823,7 @@ class HathorManager:
     def generate_mining_block(self, timestamp: Optional[int] = None,
                               parent_block_hash: Optional[VertexId] = None,
                               data: bytes = b'', address: Optional[Address] = None,
-                              merge_mined: bool = False) -> Union[Block, MergeMinedBlock]:
+                              merge_mined: bool = False, signal_bits: int = 0) -> Union[Block, MergeMinedBlock]:
         """ Generates a block ready to be mined. The block includes new issued tokens,
         parents, and the weight.
 
@@ -840,6 +840,7 @@ class HathorManager:
             merge_mined=merge_mined,
             address=address or None,  # XXX: because we allow b'' for explicit empty output script
             data=data,
+            signal_bits=signal_bits
         )
         return block
 

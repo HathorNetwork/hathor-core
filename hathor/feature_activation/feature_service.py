@@ -13,7 +13,6 @@
 #  limitations under the License.
 
 from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.model.feature_description import FeatureDescription
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
@@ -76,7 +75,10 @@ class FeatureService:
     ) -> FeatureState:
         """Returns the new feature state based on the new block, the criteria, and the previous state."""
         height = boundary_block.get_height()
-        criteria = self._get_criteria(feature=feature)
+        criteria = self._feature_settings.features.get(feature)
+
+        if not criteria:
+            return FeatureState.DEFINED
 
         assert not boundary_block.is_genesis, 'cannot calculate new state for genesis'
         assert height % self._feature_settings.evaluation_interval == 0, (
@@ -123,15 +125,6 @@ class FeatureService:
             return FeatureState.FAILED
 
         raise ValueError(f'Unknown previous state: {previous_state}')
-
-    def _get_criteria(self, *, feature: Feature) -> Criteria:
-        """Get the Criteria defined for a specific Feature."""
-        criteria = self._feature_settings.features.get(feature)
-
-        if not criteria:
-            raise ValueError(f"Criteria not defined for feature '{feature}'.")
-
-        return criteria
 
     def get_bits_description(self, *, block: Block) -> dict[Feature, FeatureDescription]:
         """Returns the criteria definition and feature state for all features at a certain block."""

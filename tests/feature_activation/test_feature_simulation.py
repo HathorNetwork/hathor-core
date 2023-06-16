@@ -24,37 +24,20 @@ from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.resources.feature import FeatureResource
 from hathor.feature_activation.settings import Settings as FeatureSettings
-from hathor.simulator.miner import AbstractMiner
+from hathor.simulator import FakeConnection
 from hathor.simulator.trigger import StopAfterNMinedBlocks
 from tests import unittest
 from tests.resources.base_resource import StubSite
 from tests.simulation.base import SimulatorTestCase
 from tests.utils import HAS_ROCKSDB
 
-_FEATURE_SETTINGS = FeatureSettings(
-    evaluation_interval=4,
-    max_signal_bits=4,
-    default_threshold=3,
-    features={
-        Feature.NOP_FEATURE_1: Criteria(
-            bit=0,
-            start_height=20,
-            timeout_height=60,
-            activate_on_timeout=True,
-            version='0.0.0'
-        )
-    }
-)
-
 
 class BaseFeatureSimulationTest(SimulatorTestCase):
     builder: Builder
 
-    def _get_result_after(self, *, n_blocks: int, miner: AbstractMiner, web_client: StubSite) -> dict[str, Any]:
-        """Returns the feature activation api response after N blocks."""
-        trigger = StopAfterNMinedBlocks(miner, quantity=n_blocks)
-        self.simulator.run(36000, trigger=trigger)
-
+    @staticmethod
+    def _get_result(web_client: StubSite) -> dict[str, Any]:
+        """Returns the feature activation api response."""
         response = web_client.get('feature')
         result = response.result.json_value()
 
@@ -76,10 +59,25 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         manager = artifacts.manager
         manager.allow_mining_without_peers()
 
+        feature_settings = FeatureSettings(
+            evaluation_interval=4,
+            max_signal_bits=4,
+            default_threshold=3,
+            features={
+                Feature.NOP_FEATURE_1: Criteria(
+                    bit=0,
+                    start_height=20,
+                    timeout_height=60,
+                    activate_on_timeout=True,
+                    version='0.0.0'
+                )
+            }
+        )
+
         feature_service = artifacts.feature_service
-        feature_service._feature_settings = _FEATURE_SETTINGS
+        feature_service._feature_settings = feature_settings
         feature_resource = FeatureResource(
-            feature_settings=_FEATURE_SETTINGS,
+            feature_settings=feature_settings,
             feature_service=feature_service,
             tx_storage=artifacts.tx_storage
         )
@@ -96,7 +94,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             patch.object(feature_service_module, '_get_ancestor_iteratively', get_ancestor_iteratively_mock)
         ):
             # at the beginning, the feature is DEFINED:
-            result = self._get_result_after(n_blocks=10, miner=miner, web_client=web_client)
+            trigger = StopAfterNMinedBlocks(miner, quantity=10)
+            self.simulator.run(36000, trigger=trigger)
+            result = self._get_result(web_client)
             assert result == dict(
                 block_height=10,
                 features=[
@@ -120,7 +120,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             get_state_mock.reset_mock()
 
             # at block 19, the feature is DEFINED, just before becoming STARTED:
-            result = self._get_result_after(n_blocks=9, miner=miner, web_client=web_client)
+            trigger = StopAfterNMinedBlocks(miner, quantity=9)
+            self.simulator.run(36000, trigger=trigger)
+            result = self._get_result(web_client)
             assert result == dict(
                 block_height=19,
                 features=[
@@ -143,7 +145,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             get_state_mock.reset_mock()
 
             # at block 20, the feature becomes STARTED:
-            result = self._get_result_after(n_blocks=1, miner=miner, web_client=web_client)
+            trigger = StopAfterNMinedBlocks(miner, quantity=1)
+            self.simulator.run(36000, trigger=trigger)
+            result = self._get_result(web_client)
             assert result == dict(
                 block_height=20,
                 features=[
@@ -165,7 +169,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             get_state_mock.reset_mock()
 
             # at block 39, the feature is STARTED, just before becoming ACTIVE:
-            result = self._get_result_after(n_blocks=39, miner=miner, web_client=web_client)
+            trigger = StopAfterNMinedBlocks(miner, quantity=39)
+            self.simulator.run(36000, trigger=trigger)
+            result = self._get_result(web_client)
             assert result == dict(
                 block_height=59,
                 features=[
@@ -189,7 +195,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             get_state_mock.reset_mock()
 
             # at block 60, the feature becomes ACTIVE, forever:
-            result = self._get_result_after(n_blocks=1, miner=miner, web_client=web_client)
+            trigger = StopAfterNMinedBlocks(miner, quantity=1)
+            self.simulator.run(36000, trigger=trigger)
+            result = self._get_result(web_client)
             assert result == dict(
                 block_height=60,
                 features=[
@@ -209,6 +217,207 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert self._get_state_mock_block_height_calls(get_state_mock) == [60, 56]
             assert get_ancestor_iteratively_mock.call_count == 0
             get_state_mock.reset_mock()
+
+    def test_reorg(self) -> None:
+        artifacts = self.simulator.create_artifacts(self.builder)
+        manager = artifacts.manager
+        manager.allow_mining_without_peers()
+
+        feature_settings = FeatureSettings(
+            evaluation_interval=4,
+            max_signal_bits=4,
+            default_threshold=3,
+            features={
+                Feature.NOP_FEATURE_1: Criteria(
+                    bit=1,
+                    start_height=4,
+                    timeout_height=100,
+                    activate_on_timeout=False,
+                    version='0.0.0'
+                )
+            }
+        )
+        feature_service = artifacts.feature_service
+        feature_service._feature_settings = feature_settings
+        feature_resource = FeatureResource(
+            feature_settings=feature_settings,
+            feature_service=feature_service,
+            tx_storage=artifacts.tx_storage
+        )
+        web_client = StubSite(feature_resource)
+
+        # 4 blocks per evaluation interval, and the genesis is skipped
+        signal_bits = [
+            0b0000, 0b0000, 0b0000,          # 0% acceptance
+            0b0000, 0b0000, 0b0010, 0b0000,  # 25% acceptance
+            0b0000, 0b0010, 0b0010, 0b0000,  # 50% acceptance
+            0b0010, 0b0000, 0b0010, 0b0010,  # 75% acceptance
+        ]
+
+        miner = self.simulator.create_miner(manager, hashpower=1e6, signal_bits=signal_bits)
+        miner.start()
+
+        # at the beginning, the feature is DEFINED:
+        trigger = StopAfterNMinedBlocks(miner, quantity=0)
+        self.simulator.run(36000, trigger=trigger)
+        result = self._get_result(web_client)
+        assert result == dict(
+            block_height=0,
+            features=[
+                dict(
+                    name='NOP_FEATURE_1',
+                    state='DEFINED',
+                    acceptance=None,
+                    threshold=0.75,
+                    start_height=4,
+                    timeout_height=100,
+                    minimum_activation_height=0,
+                    activate_on_timeout=False,
+                    version='0.0.0'
+                )
+            ]
+        )
+
+        # at block 4, the feature becomes STARTED with 0% acceptance
+        trigger = StopAfterNMinedBlocks(miner, quantity=4)
+        self.simulator.run(36000, trigger=trigger)
+        result = self._get_result(web_client)
+        assert result == dict(
+            block_height=4,
+            features=[
+                dict(
+                    name='NOP_FEATURE_1',
+                    state='STARTED',
+                    acceptance=0,
+                    threshold=0.75,
+                    start_height=4,
+                    timeout_height=100,
+                    minimum_activation_height=0,
+                    activate_on_timeout=False,
+                    version='0.0.0'
+                )
+            ]
+        )
+
+        # at block 7, acceptance was 25%
+        trigger = StopAfterNMinedBlocks(miner, quantity=3)
+        self.simulator.run(36000, trigger=trigger)
+        result = self._get_result(web_client)
+        assert result == dict(
+            block_height=7,
+            features=[
+                dict(
+                    name='NOP_FEATURE_1',
+                    state='STARTED',
+                    acceptance=0.25,
+                    threshold=0.75,
+                    start_height=4,
+                    timeout_height=100,
+                    minimum_activation_height=0,
+                    activate_on_timeout=False,
+                    version='0.0.0'
+                )
+            ]
+        )
+
+        # at block 11, acceptance was 50%
+        trigger = StopAfterNMinedBlocks(miner, quantity=4)
+        self.simulator.run(36000, trigger=trigger)
+        result = self._get_result(web_client)
+        assert result == dict(
+            block_height=11,
+            features=[
+                dict(
+                    name='NOP_FEATURE_1',
+                    state='STARTED',
+                    acceptance=0.5,
+                    threshold=0.75,
+                    start_height=4,
+                    timeout_height=100,
+                    minimum_activation_height=0,
+                    activate_on_timeout=False,
+                    version='0.0.0'
+                )
+            ]
+        )
+
+        # at block 15, acceptance was 75%, so the feature will be activated in the next block
+        trigger = StopAfterNMinedBlocks(miner, quantity=4)
+        self.simulator.run(36000, trigger=trigger)
+        result = self._get_result(web_client)
+        assert result == dict(
+            block_height=15,
+            features=[
+                dict(
+                    name='NOP_FEATURE_1',
+                    state='STARTED',
+                    acceptance=0.75,
+                    threshold=0.75,
+                    start_height=4,
+                    timeout_height=100,
+                    minimum_activation_height=0,
+                    activate_on_timeout=False,
+                    version='0.0.0'
+                )
+            ]
+        )
+
+        # at block 16, the feature is activated
+        trigger = StopAfterNMinedBlocks(miner, quantity=1)
+        self.simulator.run(36000, trigger=trigger)
+        result = self._get_result(web_client)
+        assert result == dict(
+            block_height=16,
+            features=[
+                dict(
+                    name='NOP_FEATURE_1',
+                    state='ACTIVE',
+                    acceptance=None,
+                    threshold=0.75,
+                    start_height=4,
+                    timeout_height=100,
+                    minimum_activation_height=0,
+                    activate_on_timeout=False,
+                    version='0.0.0'
+                )
+            ]
+        )
+
+        miner.stop()
+
+        # We then create a new manager with a miner that mines one more block (17 vs 16), so its blockchain wins when
+        # both managers are connected. This causes a reorg and the feature goes back to the STARTED state.
+        manager2 = self.simulator.create_peer()
+        manager2.allow_mining_without_peers()
+
+        miner2 = self.simulator.create_miner(manager2, hashpower=1e6)
+
+        miner2.start()
+        trigger = StopAfterNMinedBlocks(miner2, quantity=17)
+        self.simulator.run(36000, trigger=trigger)
+        miner2.stop()
+
+        connection = FakeConnection(manager, manager2)
+        self.simulator.add_connection(connection)
+        self.simulator.run(60)
+
+        result = self._get_result(web_client)
+        assert result == dict(
+            block_height=17,
+            features=[
+                dict(
+                    name='NOP_FEATURE_1',
+                    state='STARTED',
+                    acceptance=0,
+                    threshold=0.75,
+                    start_height=4,
+                    timeout_height=100,
+                    minimum_activation_height=0,
+                    activate_on_timeout=False,
+                    version='0.0.0'
+                )
+            ]
+        )
 
 
 class BaseMemoryStorageFeatureSimulationTest(BaseFeatureSimulationTest):
@@ -238,10 +447,25 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
         manager1 = artifacts1.manager
         manager1.allow_mining_without_peers()
 
+        feature_settings = FeatureSettings(
+            evaluation_interval=4,
+            max_signal_bits=4,
+            default_threshold=3,
+            features={
+                Feature.NOP_FEATURE_1: Criteria(
+                    bit=0,
+                    start_height=20,
+                    timeout_height=60,
+                    activate_on_timeout=True,
+                    version='0.0.0'
+                )
+            }
+        )
+
         feature_service = artifacts1.feature_service
-        feature_service._feature_settings = _FEATURE_SETTINGS
+        feature_service._feature_settings = feature_settings
         feature_resource = FeatureResource(
-            feature_settings=_FEATURE_SETTINGS,
+            feature_settings=feature_settings,
             feature_service=feature_service,
             tx_storage=artifacts1.tx_storage
         )
@@ -259,7 +483,9 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
         ):
             assert artifacts1.tx_storage.get_vertices_count() == 3  # genesis vertices in the storage
 
-            result = self._get_result_after(n_blocks=60, miner=miner, web_client=web_client)
+            trigger = StopAfterNMinedBlocks(miner, quantity=60)
+            self.simulator.run(36000, trigger=trigger)
+            result = self._get_result(web_client)
             assert result == dict(
                 block_height=60,
                 features=[
@@ -295,9 +521,9 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
 
         # new feature_service is created with the same storage generated above
         feature_service = artifacts2.feature_service
-        feature_service._feature_settings = _FEATURE_SETTINGS
+        feature_service._feature_settings = feature_settings
         feature_resource = FeatureResource(
-            feature_settings=_FEATURE_SETTINGS,
+            feature_settings=feature_settings,
             feature_service=feature_service,
             tx_storage=artifacts2.tx_storage
         )
@@ -314,10 +540,7 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
             assert artifacts2.tx_storage.get_vertices_count() == 63
             self.simulator.run(3600)
 
-            response = web_client.get('feature')
-            result = response.result.json_value()
-
-            del result['block_hash']  # we don't assert the block hash because it's not always the same
+            result = self._get_result(web_client)
 
             assert result == dict(
                 block_height=60,
