@@ -48,7 +48,7 @@ class BlockTemplate(NamedTuple):
     def generate_mining_block(self, rng: Random, merge_mined: bool = False, address: Optional[bytes] = None,
                               timestamp: Optional[int] = None, data: Optional[bytes] = None,
                               storage: Optional[TransactionStorage] = None, include_metadata: bool = False,
-                              ) -> Union[Block, MergeMinedBlock]:
+                              signal_bits: int = 0) -> Union[Block, MergeMinedBlock]:
         """ Generates a block by filling the template with the given options and random parents (if multiple choices).
 
         Note that if a timestamp is given it will be coerced into the [timestamp_min, timestamp_max] range.
@@ -64,7 +64,7 @@ class BlockTemplate(NamedTuple):
         tx_outputs = [TxOutput(self.reward, output_script)]
         cls: Union[type['Block'], type['MergeMinedBlock']] = MergeMinedBlock if merge_mined else Block
         block = cls(outputs=tx_outputs, parents=parents, timestamp=block_timestamp,
-                    data=data or b'', storage=storage, weight=self.weight)
+                    data=data or b'', storage=storage, weight=self.weight, signal_bits=signal_bits)
         if include_metadata:
             block._metadata = TransactionMetadata(height=self.height, score=self.score)
         block.get_metadata(use_storage=False)
@@ -124,9 +124,10 @@ class BlockTemplates(list[BlockTemplate]):
     def generate_mining_block(self, rng: Random, merge_mined: bool = False, address: Optional[bytes] = None,
                               timestamp: Optional[int] = None, data: Optional[bytes] = None,
                               storage: Optional[TransactionStorage] = None, include_metadata: bool = False,
-                              ) -> Union[Block, MergeMinedBlock]:
+                              signal_bits: int = 0) -> Union[Block, MergeMinedBlock]:
         """ Randomly choose a template and use that for generating a block, see BlockTemplate.generate_mining_block"""
         return self.choose_random_template(rng).generate_mining_block(rng, merge_mined=merge_mined, address=address,
                                                                       timestamp=timestamp, data=data,
                                                                       storage=storage or self.storage,
-                                                                      include_metadata=include_metadata)
+                                                                      include_metadata=include_metadata,
+                                                                      signal_bits=signal_bits)
