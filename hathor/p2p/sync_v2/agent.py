@@ -18,7 +18,7 @@ import math
 import struct
 from collections import OrderedDict
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Generator, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, Generator, NamedTuple, Optional, cast
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
@@ -42,6 +42,14 @@ if TYPE_CHECKING:
 logger = get_logger()
 
 MAX_GET_TRANSACTIONS_BFS_LEN: int = 8
+
+
+class BlockInfo(NamedTuple):
+    id: VertexId
+    height: int
+
+    def __repr__(self):
+        return f'BlockInfo({self.height}, {self.id.hex()})'
 
 
 class PeerState(Enum):
@@ -92,10 +100,10 @@ class NodeBlockSync(SyncAgent):
         self.receiving_stream = False
 
         # highest block where we are synced
-        self.synced_height = 0
+        self.synced_block: Optional[BlockInfo] = None
 
         # highest block peer has
-        self.peer_height = 0
+        self.peer_best_block: Optional[BlockInfo] = None
 
         # Latest deferred waiting for a reply.
         self._deferred_txs: dict[VertexId, Deferred[BaseTransaction]] = {}
@@ -151,8 +159,8 @@ class NodeBlockSync(SyncAgent):
         """
         res = {
             'is_enabled': self.is_sync_enabled(),
-            'peer_height': self.peer_height,
-            'synced_height': self.synced_height,
+            'peer_best_block': self.peer_best_block,
+            'synced_block': self.synced_block,
             'synced': self._synced,
             'state': self.state.value,
         }
@@ -274,6 +282,9 @@ class NodeBlockSync(SyncAgent):
     def _run_sync(self) -> Generator[Any, Any, None]:
         """ Actual implementation of the sync step logic in run_sync.
         """
+        yield self.run_sync_blocks()
+        return
+
         if self.receiving_stream:
             # If we're receiving a stream, wait for it to finish before running sync.
             # If we're sending a stream, do the sync to update the peer's synced block
@@ -301,7 +312,7 @@ class NodeBlockSync(SyncAgent):
             self.run_sync_transactions()
         else:
             # I am already in sync with all checkpoints, sync next blocks
-            yield self.run_sync_blocks()
+            pass
 
     def run_sync_transactions(self) -> None:
         """ Run a step of the transaction syncing phase.
@@ -339,39 +350,75 @@ class NodeBlockSync(SyncAgent):
         assert self.tx_storage.indexes is not None
         self.state = PeerState.SYNCING_BLOCKS
 
-        # Find my height
+        # Find peer's best block
+        self.peer_best_block = yield self.get_peer_best_block()
+        assert self.peer_best_block is not None
+
+        # My height
         bestblock = self.tx_storage.get_best_block()
         assert bestblock.hash is not None
         meta = bestblock.get_metadata()
-        my_height = meta.height
+        assert not meta.voided_by
+        assert meta.validation.is_fully_connected()
+        my_best_block = BlockInfo(bestblock.hash, bestblock.get_height())
 
-        self.log.debug('run sync blocks', my_height=my_height)
+        # Are we synced?
+        if self.peer_best_block == my_best_block:
+            # Yes, we are synced! \o/
+            self.log.info('blocks are synced', best_block=my_best_block)
+            self.update_synced(True)
+            self.send_relay(enable=True)
+            self.synced_block = my_best_block
+            return
 
-        # Find best block
-        data = yield self.get_peer_best_block()
-        peer_best_block = data['block']
-        peer_best_height = data['height']
-        self.peer_height = peer_best_height
-
-        # find best common block
-        yield self.find_best_common_block(peer_best_height, peer_best_block)
-        self.log.debug('run_sync_blocks', peer_height=self.peer_height, synced_height=self.synced_height)
-
-        if self.synced_height < self.peer_height:
-            # sync from common block
-            peer_block_at_height = yield self.get_peer_block_hashes([self.synced_height])
-            if peer_block_at_height:
-                self.run_block_sync(peer_block_at_height[0][1], self.synced_height, peer_best_block, peer_best_height)
-        elif my_height == self.synced_height == self.peer_height:
-            # we're synced and on the same height, get their mempool
-            self.state = PeerState.SYNCING_MEMPOOL
-            self.mempool_manager.run()
+        if self.peer_best_block.height <= my_best_block.height:
+            # Is peer behind me at the same blockchain?
+            common_block_bytes = self.tx_storage.indexes.height.get(self.peer_best_block.height)
+            if common_block_bytes == self.peer_best_block.id:
+                # Nothing to sync from this peer.
+                self.log.info('nothing to sync because peer is behind me at the same best blockchain',
+                              my_best_block=my_best_block, peer_best_block=self.peer_best_block)
+                self.update_synced(True)
+                self.send_relay(enable=True)
+                self.synced_block = self.peer_best_block
+                return
+        # TODO: validate if this is when we should disable relaying
         elif self._is_relaying:
-            # TODO: validate if this is when we should disable relaying
             self.send_relay(enable=False)
-        else:
-            # we got all the peer's blocks but aren't on the same height, nothing to do
-            pass
+
+        # If we reach this point, we need to sync.
+        self.update_synced(False)
+
+        self.log.debug('syncing blocks',
+                       my_best_block=my_best_block,
+                       peer_best_block=self.peer_best_block)
+
+        # Find best common block
+        self.synced_block = yield self.find_best_common_block(my_best_block, self.peer_best_block)
+        assert self.synced_block is not None
+        self.log.debug('sync blocks',
+                       my_best_block=my_best_block,
+                       peer_best_block=self.peer_best_block,
+                       synced_block=self.synced_block)
+
+        self.run_block_sync(
+            self.synced_block.id, self.synced_block.height,
+            self.peer_best_block.id, self.peer_best_block.height
+        )
+
+        return
+
+        # if self.synced_height < self.peer_best_height:
+        #     # sync from common block
+        #     peer_block_at_height = yield self.get_peer_block_hashes([self.synced_height])
+        #     self.run_block_sync(peer_block_at_height[0][1], self.synced_height, peer_best_block, peer_best_height)
+        # elif my_height == self.synced_height == self.peer_best_height:
+        #     # we're synced and on the same height, get their mempool
+        #     self.state = PeerState.SYNCING_MEMPOOL
+        #     self.mempool_manager.run()
+        # else:
+        #     # we got all the peer's blocks but aren't on the same height, nothing to do
+        #     pass
 
     def get_tips(self) -> Deferred[list[bytes]]:
         """ Async method to request the remote peer's tips.
@@ -494,68 +541,56 @@ class NodeBlockSync(SyncAgent):
             return self.tx_storage.transaction_exists(vertex_id)
 
     @inlineCallbacks
-    def find_best_common_block(self, peer_best_height: int, peer_best_block: bytes) -> Generator[Any, Any, None]:
+    def find_best_common_block(self, my_best_block: BlockInfo, peer_best_block: BlockInfo
+                               ) -> Generator[Any, Any, BlockInfo]:
         """ Search for the highest block/height where we're synced.
         """
         assert self.tx_storage.indexes is not None
-        my_best_height = self.tx_storage.get_height_best_block()
 
-        self.log.debug('find common chain', peer_height=peer_best_height, my_height=my_best_height)
+        # Run an n-ary search in the interval [lo, hi).
+        # `lo` is always a height we are synced.
+        # `hi` is always a height where sync state is unknown.
+        lo = self.synced_block.height if self.synced_block else 0
+        hi = min(my_best_block.height, peer_best_block.height)
+        if hi == 0:
+            hi = 1
+        assert hi > lo
 
-        if peer_best_height <= my_best_height:
-            my_block = self.tx_storage.indexes.height.get(peer_best_height)
-            if my_block == peer_best_block:
-                # we have all the peer's blocks
-                if peer_best_height == my_best_height:
-                    # We are in sync, ask for relay so the remote sends transactions in real time
-                    self.update_synced(True)
-                    self.send_relay()
-                else:
-                    self.update_synced(False)
+        common_block: BlockInfo
 
-                self.log.debug('synced to the latest peer block', height=peer_best_height)
-                self.synced_height = peer_best_height
-                return
-            else:
-                # TODO peer is on a different best chain
-                self.log.warn('peer on different chain', peer_height=peer_best_height,
-                              peer_block=peer_best_block.hex(), my_block=(my_block.hex() if my_block is not None else
-                                                                          None))
+        while True:
+            step = math.ceil((hi - lo) / 10)
+            heights = list(range(lo, hi, step))
+            heights.append(hi)
+            self.log.debug('n-ary search query', lo=lo, hi=hi, heights=heights)
 
-        self.update_synced(False)
-        not_synced = min(peer_best_height, my_best_height)
-        synced = self.synced_height
-
-        while not_synced - synced > 1:
-            self.log.debug('find_best_common_block synced not_synced', synced=synced, not_synced=not_synced)
-            step = math.ceil((not_synced - synced)/10)
-            heights = []
-            height = synced
-            while height < not_synced:
-                heights.append(height)
-                height += step
-            heights.append(not_synced)
-            block_height_list = yield self.get_peer_block_hashes(heights)
-            block_height_list.reverse()
-            for height, block_hash in block_height_list:
+            block_list = yield self.get_peer_block_hashes(heights)
+            block_list.sort(key=lambda x: x.height, reverse=True)
+            self.log.debug('n-ary search answer', block_list)
+            for info in block_list:
                 try:
                     # We must check only fully validated transactions.
-                    blk = self.tx_storage.get_transaction(block_hash)
-                    assert blk.get_metadata().validation.is_fully_connected()
-                    assert isinstance(blk, Block)
-                    if height != blk.get_height():
-                        # WTF?! It should never happen.
-                        self.state = PeerState.ERROR
-                        return
-                    synced = height
-                    break
+                    blk = self.tx_storage.get_transaction(info.id)
                 except TransactionDoesNotExist:
-                    not_synced = height
+                    hi = info.height
+                else:
+                    assert isinstance(blk, Block)
+                    assert blk.get_metadata().validation.is_fully_connected()
+                    assert info.height == blk.get_height()
+                    lo = info.height
+                    common_block = info
+                    break
+            else:
+                assert False, 'should never reach here'
 
-        self.log.debug('find_best_common_block finished synced not_synced', synced=synced, not_synced=not_synced)
-        self.synced_height = synced
+            if hi - lo <= 1:
+                break
 
-    def get_peer_block_hashes(self, heights: list[int]) -> Deferred[list[tuple[int, bytes]]]:
+        assert hi - lo == 1
+        self.log.debug('find_best_common_block', lo=lo, hi=hi, common_block=common_block)
+        return common_block
+
+    def get_peer_block_hashes(self, heights: list[int]) -> Deferred[list[BlockInfo]]:
         """ Returns the peer's block hashes in the given heights.
         """
         if self._deferred_peer_block_hashes is not None:
@@ -596,8 +631,8 @@ class NodeBlockSync(SyncAgent):
     def handle_peer_block_hashes(self, payload: str) -> None:
         """ Handle a PEER-BLOCK-HASHES message.
         """
-        data = json.loads(payload)
-        data = [(h, bytes.fromhex(block_hash)) for (h, block_hash) in data]
+        data_dict = json.loads(payload)
+        data = [BlockInfo(height=h, id=bytes.fromhex(block_hash)) for (h, block_hash) in data_dict]
         deferred = self._deferred_peer_block_hashes
         self._deferred_peer_block_hashes = None
         if deferred:
@@ -793,7 +828,7 @@ class NodeBlockSync(SyncAgent):
         self.blockchain_streaming.stop()
         self.blockchain_streaming = None
 
-    def get_peer_best_block(self) -> Deferred[dict[str, Any]]:
+    def get_peer_best_block(self) -> Deferred[BlockInfo]:
         """ Async call to get the remote peer's best block.
         """
         if self._deferred_best_block is not None:
@@ -813,6 +848,8 @@ class NodeBlockSync(SyncAgent):
         """
         best_block = self.tx_storage.get_best_block()
         meta = best_block.get_metadata()
+        assert meta.validation.is_fully_connected()
+        assert not meta.voided_by
         data = {'block': best_block.hash_hex, 'height': meta.height}
         self.send_message(ProtocolMessages.BEST_BLOCK, json.dumps(data))
 
@@ -820,14 +857,15 @@ class NodeBlockSync(SyncAgent):
         """ Handle a BEST-BLOCK message.
         """
         data = json.loads(payload)
-        assert self.protocol.connections is not None
-        self.log.debug('got best block', **data)
-        data['block'] = bytes.fromhex(data['block'])
+
+        _id = bytes.fromhex(data['block'])
+        height = data['height']
+        best_block = BlockInfo(id=_id, height=height)
 
         deferred = self._deferred_best_block
         self._deferred_best_block = None
         if deferred:
-            deferred.callback(data)
+            deferred.callback(best_block)
 
     def _setup_tx_streaming(self):
         """ Common setup before starting an outgoing transaction stream.
@@ -1137,20 +1175,7 @@ class NodeBlockSync(SyncAgent):
         if metadata.validation.is_fully_connected() or tx.can_validate_full():
             if not self.manager.on_new_tx(tx):
                 return False
-        elif sync_checkpoints:
-            assert self.tx_storage.indexes.deps is not None
-            with self.tx_storage.allow_partially_validated_context():
-                metadata.children = self.tx_storage.indexes.deps.known_children(tx)
-                try:
-                    tx.validate_checkpoint(self.manager.checkpoints)
-                except HathorError:
-                    self.log.warn('on_new_tx(): checkpoint validation failed', tx=tx.hash_hex, exc_info=True)
-                    return False
-                self.tx_storage.save_transaction(tx)
-            self.tx_storage.indexes.deps.add_tx(tx)
-            self.manager.log_new_object(tx, 'new {} partially accepted while syncing checkpoints', quiet=quiet)
         else:
-            assert self.tx_storage.indexes.deps is not None
             with self.tx_storage.allow_partially_validated_context():
                 if isinstance(tx, Block) and not tx.has_basic_block_parent():
                     self.log.warn('on_new_tx(): block parent needs to be at least basic-valid', tx=tx.hash_hex)
@@ -1164,17 +1189,6 @@ class NodeBlockSync(SyncAgent):
                 # in the tx parents even if the tx was invalid (failing the verifications above)
                 # then I would have a children that was not in the storage
                 self.tx_storage.save_transaction(tx)
-                self.tx_storage.indexes.deps.add_tx(tx)
             self.manager.log_new_object(tx, 'new {} partially accepted', quiet=quiet)
-
-        if self.tx_storage.indexes.deps is not None:
-            self.tx_storage.indexes.deps.remove_from_needed_index(tx.hash)
-
-        if self.tx_storage.indexes.deps is not None:
-            try:
-                self.manager.sync_v2_step_validations([tx], quiet=quiet)
-            except (AssertionError, HathorError):
-                self.log.warn('on_new_tx(): step validations failed', tx=tx.hash_hex, exc_info=True)
-                return False
 
         return True
