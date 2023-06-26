@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Callable, Iterator, Optional
+from typing import Callable, Iterable, Iterator, Optional
 
 from structlog import get_logger
 
@@ -23,7 +23,7 @@ from hathor.event.storage import EventStorage
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction
-from hathor.util import Reactor
+from hathor.util import Reactor, progress
 
 logger = get_logger()
 
@@ -36,8 +36,6 @@ _GROUP_END_EVENTS = {
 }
 
 _SUBSCRIBE_EVENTS = [
-    HathorEvents.MANAGER_ON_START,
-    HathorEvents.LOAD_FINISHED,
     HathorEvents.NETWORK_NEW_TX_ACCEPTED,
     HathorEvents.REORG_STARTED,
     HathorEvents.REORG_FINISHED,
@@ -125,6 +123,26 @@ class EventManager:
         for event in _SUBSCRIBE_EVENTS:
             self._pubsub.subscribe(event, self._handle_hathor_event)
 
+    def load_started(self):
+        if not self._is_running:
+            return
+
+        self._handle_event(
+            event_type=EventType.LOAD_STARTED,
+            event_args=EventArguments(),
+        )
+        self._event_storage.save_node_state(NodeState.LOAD)
+
+    def load_finished(self):
+        if not self._is_running:
+            return
+
+        self._handle_event(
+            event_type=EventType.LOAD_FINISHED,
+            event_args=EventArguments(),
+        )
+        self._event_storage.save_node_state(NodeState.SYNC)
+
     def _handle_hathor_event(self, hathor_event: HathorEvents, event_args: EventArguments) -> None:
         """Handles a PubSub 'HathorEvents' event."""
         event_type = EventType.from_hathor_event(hathor_event)
@@ -135,14 +153,6 @@ class EventManager:
         """Handles an Event Queue feature 'EventType' event."""
         assert self._is_running, 'Cannot handle event, EventManager is not started.'
         assert self._event_ws_factory is not None
-
-        event_specific_handlers = {
-            EventType.LOAD_STARTED: self._handle_load_started,
-            EventType.LOAD_FINISHED: self._handle_load_finished
-        }
-
-        if event_specific_handler := event_specific_handlers.get(event_type):
-            event_specific_handler()
 
         event = self._handle_event_creation(event_type, event_args)
 
@@ -221,14 +231,6 @@ class EventManager:
             group_id=group_id,
         )
 
-    def _handle_load_started(self) -> None:
-        """Event specific handler for EventType.LOAD_STARTED."""
-        self._event_storage.save_node_state(NodeState.LOAD)
-
-    def _handle_load_finished(self) -> None:
-        """Event specific handler for EventType.LOAD_FINISHED."""
-        self._event_storage.save_node_state(NodeState.SYNC)
-
     def _should_reload_events(self) -> bool:
         """Returns whether events should be reloaded or not."""
         return self._previous_node_state in [None, NodeState.LOAD]
@@ -241,7 +243,12 @@ class EventManager:
         """Saves whether the event queue feature is enabled from the storage."""
         self._event_storage.save_event_queue_state(state)
 
-    def handle_load_phase_vertices(self, topological_iterator: Iterator[BaseTransaction]) -> None:
+    def handle_load_phase_vertices(
+        self,
+        *,
+        topological_iterator: Iterator[BaseTransaction],
+        total_vertices: int
+    ) -> None:
         """
         Either generates load phase events or not, depending on previous node state.
         Does so asynchronously so events generated here are not processed before normal event handling.
@@ -251,10 +258,20 @@ class EventManager:
         if not self._should_reload_events():
             return
 
-        for vertex in topological_iterator:
-            self._reactor.callLater(
-                delay=0,
-                callable=self._handle_event,
-                event_type=EventType.NEW_VERTEX_ACCEPTED,
-                event_args=EventArguments(tx=vertex)
-            )
+        def create_event_batch() -> Iterable[BaseEvent]:
+            assert self._event_ws_factory is not None
+            self.log.info('Starting creating events from existing database...')
+
+            for vertex in progress(topological_iterator, log=self.log, total=total_vertices):
+                event = self._handle_event_creation(
+                    event_type=EventType.NEW_VERTEX_ACCEPTED,
+                    event_args=EventArguments(tx=vertex)
+                )
+
+                yield event
+                self._event_ws_factory.broadcast_event(event)
+                self._last_event = event
+
+            self.log.info('Finished creating events from existing database.')
+
+        self._event_storage.save_events(create_event_batch())

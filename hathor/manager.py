@@ -258,6 +258,7 @@ class HathorManager:
 
         self.state = self.NodeState.INITIALIZING
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
+        self._event_manager.load_started()
         self.connections.start()
         self.pow_thread_pool.start()
 
@@ -557,10 +558,13 @@ class HathorManager:
 
         if self._enable_event_queue:
             topological_iterator = self.tx_storage.topological_iterator()
-            self._event_manager.handle_load_phase_vertices(topological_iterator)
+            self._event_manager.handle_load_phase_vertices(
+                topological_iterator=topological_iterator,
+                total_vertices=self.tx_storage.indexes.info.get_vertices_count()
+            )
 
+        self._event_manager.load_finished()
         self.state = self.NodeState.READY
-        self.pubsub.publish(HathorEvents.LOAD_FINISHED)
 
         t1 = time.time()
         total_load_time = LogDuration(t1 - t0)

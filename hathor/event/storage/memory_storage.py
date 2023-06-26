@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Iterator, Optional
+from typing import Iterable, Iterator, Optional
 
 from hathor.event.model.base_event import BaseEvent
 from hathor.event.model.node_state import NodeState
@@ -34,6 +34,10 @@ class EventMemoryStorage(EventStorage):
         if event.group_id is not None:
             self._last_group_id = event.group_id
         self._events.append(event)
+
+    def save_events(self, events: Iterable[BaseEvent]) -> None:
+        for event in events:
+            self.save_event(event)
 
     def get_event(self, key: int) -> Optional[BaseEvent]:
         if key < 0:
