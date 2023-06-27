@@ -58,7 +58,7 @@ class FeatureResource(Resource):
             threshold_percentage = threshold_count / self._feature_settings.evaluation_interval
             acceptance_percentage = None
 
-            if state is FeatureState.STARTED:
+            if state in [FeatureState.STARTED, FeatureState.MUST_SIGNAL]:
                 acceptance_count = bit_counts[criteria.bit]
                 acceptance_percentage = acceptance_count / self._feature_settings.evaluation_interval
 
@@ -70,7 +70,7 @@ class FeatureResource(Resource):
                 start_height=criteria.start_height,
                 minimum_activation_height=criteria.minimum_activation_height,
                 timeout_height=criteria.timeout_height,
-                activate_on_timeout=criteria.activate_on_timeout,
+                lock_in_on_timeout=criteria.lock_in_on_timeout,
                 version=criteria.version
             )
 
@@ -93,7 +93,7 @@ class GetFeatureResponse(Response, use_enum_values=True):
     start_height: int
     minimum_activation_height: int
     timeout_height: int
-    activate_on_timeout: bool
+    lock_in_on_timeout: bool
     version: str
 
 
@@ -128,7 +128,7 @@ FeatureResource.openapi = {
                                             'start_height': 0,
                                             'minimum_activation_height': 0,
                                             'timeout_height': 100,
-                                            'activate_on_timeout': False,
+                                            'lock_in_on_timeout': False,
                                             'version': '0.1.0'
                                         },
                                         {
@@ -139,7 +139,7 @@ FeatureResource.openapi = {
                                             'start_height': 200,
                                             'minimum_activation_height': 0,
                                             'timeout_height': 300,
-                                            'activate_on_timeout': False,
+                                            'lock_in_on_timeout': False,
                                             'version': '0.2.0'
                                         }
                                     ]

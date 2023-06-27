@@ -87,7 +87,7 @@ def test_get_features(web):
                 start_height=0,
                 minimum_activation_height=0,
                 timeout_height=100,
-                activate_on_timeout=False,
+                lock_in_on_timeout=False,
                 version='0.1.0'
             ),
             dict(
@@ -98,7 +98,7 @@ def test_get_features(web):
                 start_height=200,
                 minimum_activation_height=0,
                 timeout_height=300,
-                activate_on_timeout=False,
+                lock_in_on_timeout=False,
                 version='0.2.0'
             )
         ]

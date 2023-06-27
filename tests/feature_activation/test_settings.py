@@ -26,14 +26,14 @@ from hathor.feature_activation.settings import FeatureInterval, Settings as Feat
             NOP_FEATURE_1=dict(
                 bit=0,
                 start_height=0,
-                timeout_height=40320,
+                timeout_height=80640,
                 threshold=0,
                 version='0.0.0'
             ),
             NOP_FEATURE_2=dict(
                 bit=1,
                 start_height=0,
-                timeout_height=40320,
+                timeout_height=80640,
                 threshold=0,
                 version='0.0.0'
             )
@@ -42,14 +42,14 @@ from hathor.feature_activation.settings import FeatureInterval, Settings as Feat
             NOP_FEATURE_1=dict(
                 bit=0,
                 start_height=0,
-                timeout_height=40320,
+                timeout_height=80640,
                 threshold=0,
                 version='0.0.0'
             ),
             NOP_FEATURE_2=dict(
                 bit=0,
-                start_height=2 * 40320,
-                timeout_height=3 * 40320,
+                start_height=3 * 40320,
+                timeout_height=5 * 40320,
                 threshold=0,
                 version='0.0.0'
             )
@@ -68,14 +68,14 @@ def test_valid_settings(features):
             NOP_FEATURE_1=dict(
                 bit=0,
                 start_height=0,
-                timeout_height=40320,
+                timeout_height=80640,
                 threshold=0,
                 version='0.0.0'
             ),
             NOP_FEATURE_2=dict(
                 bit=0,
                 start_height=0,
-                timeout_height=40320,
+                timeout_height=80640,
                 threshold=0,
                 version='0.0.0'
             )
@@ -84,14 +84,14 @@ def test_valid_settings(features):
             NOP_FEATURE_1=dict(
                 bit=0,
                 start_height=0,
-                timeout_height=40320,
+                timeout_height=80640,
                 threshold=0,
                 version='0.0.0'
             ),
             NOP_FEATURE_2=dict(
                 bit=0,
                 start_height=40320,
-                timeout_height=2 * 40320,
+                timeout_height=3 * 40320,
                 threshold=0,
                 version='0.0.0'
             )
@@ -107,7 +107,7 @@ def test_valid_settings(features):
             NOP_FEATURE_2=dict(
                 bit=1,
                 start_height=15 * 40320,
-                timeout_height=16 * 40320,
+                timeout_height=17 * 40320,
                 threshold=0,
                 version='0.0.0'
             )

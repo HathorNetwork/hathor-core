@@ -68,7 +68,8 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                     bit=0,
                     start_height=20,
                     timeout_height=60,
-                    activate_on_timeout=True,
+                    minimum_activation_height=72,
+                    lock_in_on_timeout=True,
                     version='0.0.0'
                 )
             }
@@ -107,8 +108,8 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                         threshold=0.75,
                         start_height=20,
                         timeout_height=60,
-                        minimum_activation_height=0,
-                        activate_on_timeout=True,
+                        minimum_activation_height=72,
+                        lock_in_on_timeout=True,
                         version='0.0.0'
                     )
                 ]
@@ -133,8 +134,8 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                         threshold=0.75,
                         start_height=20,
                         timeout_height=60,
-                        minimum_activation_height=0,
-                        activate_on_timeout=True,
+                        minimum_activation_height=72,
+                        lock_in_on_timeout=True,
                         version='0.0.0'
                     )
                 ]
@@ -158,8 +159,8 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                         threshold=0.75,
                         start_height=20,
                         timeout_height=60,
-                        minimum_activation_height=0,
-                        activate_on_timeout=True,
+                        minimum_activation_height=72,
+                        lock_in_on_timeout=True,
                         version='0.0.0'
                     )
                 ]
@@ -168,12 +169,12 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             assert get_ancestor_iteratively_mock.call_count == 0
             get_state_mock.reset_mock()
 
-            # at block 39, the feature is STARTED, just before becoming ACTIVE:
-            trigger = StopAfterNMinedBlocks(miner, quantity=39)
+            # at block 55, the feature is STARTED, just before becoming MUST_SIGNAL:
+            trigger = StopAfterNMinedBlocks(miner, quantity=35)
             self.simulator.run(36000, trigger=trigger)
             result = self._get_result(web_client)
             assert result == dict(
-                block_height=59,
+                block_height=55,
                 features=[
                     dict(
                         name='NOP_FEATURE_1',
@@ -182,19 +183,69 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                         threshold=0.75,
                         start_height=20,
                         timeout_height=60,
-                        minimum_activation_height=0,
-                        activate_on_timeout=True,
+                        minimum_activation_height=72,
+                        lock_in_on_timeout=True,
                         version='0.0.0'
                     )
                 ]
             )
             assert (
-                self._get_state_mock_block_height_calls(get_state_mock) == [59, 56, 52, 48, 44, 40, 36, 32, 28, 24, 20]
+                self._get_state_mock_block_height_calls(get_state_mock) == [55, 52, 48, 44, 40, 36, 32, 28, 24, 20]
             )
             assert get_ancestor_iteratively_mock.call_count == 0
             get_state_mock.reset_mock()
 
-            # at block 60, the feature becomes ACTIVE, forever:
+            # at block 56, the feature becomes MUST_SIGNAL:
+            trigger = StopAfterNMinedBlocks(miner, quantity=1)
+            self.simulator.run(36000, trigger=trigger)
+            result = self._get_result(web_client)
+            assert result == dict(
+                block_height=56,
+                features=[
+                    dict(
+                        name='NOP_FEATURE_1',
+                        state='MUST_SIGNAL',
+                        acceptance=0,
+                        threshold=0.75,
+                        start_height=20,
+                        timeout_height=60,
+                        minimum_activation_height=72,
+                        lock_in_on_timeout=True,
+                        version='0.0.0'
+                    )
+                ]
+            )
+            assert self._get_state_mock_block_height_calls(get_state_mock) == [56, 52]
+            assert get_ancestor_iteratively_mock.call_count == 0
+            get_state_mock.reset_mock()
+
+            # at block 59, the feature is MUST_SIGNAL, just before becoming LOCKED_IN:
+            trigger = StopAfterNMinedBlocks(miner, quantity=3)
+            self.simulator.run(36000, trigger=trigger)
+            result = self._get_result(web_client)
+            assert result == dict(
+                block_height=59,
+                features=[
+                    dict(
+                        name='NOP_FEATURE_1',
+                        state='MUST_SIGNAL',
+                        acceptance=0,
+                        threshold=0.75,
+                        start_height=20,
+                        timeout_height=60,
+                        minimum_activation_height=72,
+                        lock_in_on_timeout=True,
+                        version='0.0.0'
+                    )
+                ]
+            )
+            assert (
+                self._get_state_mock_block_height_calls(get_state_mock) == [59, 56]
+            )
+            assert get_ancestor_iteratively_mock.call_count == 0
+            get_state_mock.reset_mock()
+
+            # at block 60, the feature becomes LOCKED_IN:
             trigger = StopAfterNMinedBlocks(miner, quantity=1)
             self.simulator.run(36000, trigger=trigger)
             result = self._get_result(web_client)
@@ -203,18 +254,68 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 features=[
                     dict(
                         name='NOP_FEATURE_1',
-                        state='ACTIVE',
+                        state='LOCKED_IN',
                         acceptance=None,
                         threshold=0.75,
                         start_height=20,
                         timeout_height=60,
-                        minimum_activation_height=0,
-                        activate_on_timeout=True,
+                        minimum_activation_height=72,
+                        lock_in_on_timeout=True,
                         version='0.0.0'
                     )
                 ]
             )
             assert self._get_state_mock_block_height_calls(get_state_mock) == [60, 56]
+            assert get_ancestor_iteratively_mock.call_count == 0
+            get_state_mock.reset_mock()
+
+            # at block 71, the feature is LOCKED_IN, just before becoming ACTIVE:
+            trigger = StopAfterNMinedBlocks(miner, quantity=11)
+            self.simulator.run(36000, trigger=trigger)
+            result = self._get_result(web_client)
+            assert result == dict(
+                block_height=71,
+                features=[
+                    dict(
+                        name='NOP_FEATURE_1',
+                        state='LOCKED_IN',
+                        acceptance=None,
+                        threshold=0.75,
+                        start_height=20,
+                        timeout_height=60,
+                        minimum_activation_height=72,
+                        lock_in_on_timeout=True,
+                        version='0.0.0'
+                    )
+                ]
+            )
+            assert (
+                self._get_state_mock_block_height_calls(get_state_mock) == [71, 68, 64, 60]
+            )
+            assert get_ancestor_iteratively_mock.call_count == 0
+            get_state_mock.reset_mock()
+
+            # at block 72, the feature becomes ACTIVE, forever:
+            trigger = StopAfterNMinedBlocks(miner, quantity=1)
+            self.simulator.run(36000, trigger=trigger)
+            result = self._get_result(web_client)
+            assert result == dict(
+                block_height=72,
+                features=[
+                    dict(
+                        name='NOP_FEATURE_1',
+                        state='ACTIVE',
+                        acceptance=None,
+                        threshold=0.75,
+                        start_height=20,
+                        timeout_height=60,
+                        minimum_activation_height=72,
+                        lock_in_on_timeout=True,
+                        version='0.0.0'
+                    )
+                ]
+            )
+            assert self._get_state_mock_block_height_calls(get_state_mock) == [72, 68]
             assert get_ancestor_iteratively_mock.call_count == 0
             get_state_mock.reset_mock()
 
@@ -232,7 +333,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                     bit=1,
                     start_height=4,
                     timeout_height=100,
-                    activate_on_timeout=False,
+                    lock_in_on_timeout=False,
                     version='0.0.0'
                 )
             }
@@ -250,7 +351,6 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
         signal_bits = [
             0b0000, 0b0000, 0b0000,          # 0% acceptance
             0b0000, 0b0000, 0b0010, 0b0000,  # 25% acceptance
-            0b0000, 0b0010, 0b0010, 0b0000,  # 50% acceptance
             0b0010, 0b0000, 0b0010, 0b0010,  # 75% acceptance
         ]
 
@@ -272,7 +372,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                     start_height=4,
                     timeout_height=100,
                     minimum_activation_height=0,
-                    activate_on_timeout=False,
+                    lock_in_on_timeout=False,
                     version='0.0.0'
                 )
             ]
@@ -293,7 +393,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                     start_height=4,
                     timeout_height=100,
                     minimum_activation_height=0,
-                    activate_on_timeout=False,
+                    lock_in_on_timeout=False,
                     version='0.0.0'
                 )
             ]
@@ -314,13 +414,13 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                     start_height=4,
                     timeout_height=100,
                     minimum_activation_height=0,
-                    activate_on_timeout=False,
+                    lock_in_on_timeout=False,
                     version='0.0.0'
                 )
             ]
         )
 
-        # at block 11, acceptance was 50%
+        # at block 11, acceptance was 75%, so the feature will be locked-in in the next block
         trigger = StopAfterNMinedBlocks(miner, quantity=4)
         self.simulator.run(36000, trigger=trigger)
         result = self._get_result(web_client)
@@ -330,40 +430,40 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                 dict(
                     name='NOP_FEATURE_1',
                     state='STARTED',
-                    acceptance=0.5,
-                    threshold=0.75,
-                    start_height=4,
-                    timeout_height=100,
-                    minimum_activation_height=0,
-                    activate_on_timeout=False,
-                    version='0.0.0'
-                )
-            ]
-        )
-
-        # at block 15, acceptance was 75%, so the feature will be activated in the next block
-        trigger = StopAfterNMinedBlocks(miner, quantity=4)
-        self.simulator.run(36000, trigger=trigger)
-        result = self._get_result(web_client)
-        assert result == dict(
-            block_height=15,
-            features=[
-                dict(
-                    name='NOP_FEATURE_1',
-                    state='STARTED',
                     acceptance=0.75,
                     threshold=0.75,
                     start_height=4,
                     timeout_height=100,
                     minimum_activation_height=0,
-                    activate_on_timeout=False,
+                    lock_in_on_timeout=False,
+                    version='0.0.0'
+                )
+            ]
+        )
+
+        # at block 12, the feature is locked-in
+        trigger = StopAfterNMinedBlocks(miner, quantity=1)
+        self.simulator.run(36000, trigger=trigger)
+        result = self._get_result(web_client)
+        assert result == dict(
+            block_height=12,
+            features=[
+                dict(
+                    name='NOP_FEATURE_1',
+                    state='LOCKED_IN',
+                    acceptance=None,
+                    threshold=0.75,
+                    start_height=4,
+                    timeout_height=100,
+                    minimum_activation_height=0,
+                    lock_in_on_timeout=False,
                     version='0.0.0'
                 )
             ]
         )
 
         # at block 16, the feature is activated
-        trigger = StopAfterNMinedBlocks(miner, quantity=1)
+        trigger = StopAfterNMinedBlocks(miner, quantity=4)
         self.simulator.run(36000, trigger=trigger)
         result = self._get_result(web_client)
         assert result == dict(
@@ -377,7 +477,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                     start_height=4,
                     timeout_height=100,
                     minimum_activation_height=0,
-                    activate_on_timeout=False,
+                    lock_in_on_timeout=False,
                     version='0.0.0'
                 )
             ]
@@ -413,7 +513,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                     start_height=4,
                     timeout_height=100,
                     minimum_activation_height=0,
-                    activate_on_timeout=False,
+                    lock_in_on_timeout=False,
                     version='0.0.0'
                 )
             ]
@@ -456,7 +556,7 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
                     bit=0,
                     start_height=20,
                     timeout_height=60,
-                    activate_on_timeout=True,
+                    lock_in_on_timeout=True,
                     version='0.0.0'
                 )
             }
@@ -483,11 +583,11 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
         ):
             assert artifacts1.tx_storage.get_vertices_count() == 3  # genesis vertices in the storage
 
-            trigger = StopAfterNMinedBlocks(miner, quantity=60)
+            trigger = StopAfterNMinedBlocks(miner, quantity=64)
             self.simulator.run(36000, trigger=trigger)
             result = self._get_result(web_client)
             assert result == dict(
-                block_height=60,
+                block_height=64,
                 features=[
                     dict(
                         name='NOP_FEATURE_1',
@@ -497,17 +597,17 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
                         start_height=20,
                         timeout_height=60,
                         minimum_activation_height=0,
-                        activate_on_timeout=True,
+                        lock_in_on_timeout=True,
                         version='0.0.0'
                     )
                 ]
             )
             # feature states have to be calculated for all blocks in evaluation interval boundaries, as this is the
             # first run:
-            assert self._get_state_mock_block_height_calls(get_state_mock) == list(range(60, -4, -4))
+            assert self._get_state_mock_block_height_calls(get_state_mock) == list(range(64, -4, -4))
             # no blocks are voided, so we only use the height index:
             assert get_ancestor_iteratively_mock.call_count == 0
-            assert artifacts1.tx_storage.get_vertices_count() == 63
+            assert artifacts1.tx_storage.get_vertices_count() == 67
             get_state_mock.reset_mock()
 
         miner.stop()
@@ -537,13 +637,13 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
             patch.object(feature_service_module, '_get_ancestor_iteratively', get_ancestor_iteratively_mock)
         ):
             # the new storage starts populated
-            assert artifacts2.tx_storage.get_vertices_count() == 63
+            assert artifacts2.tx_storage.get_vertices_count() == 67
             self.simulator.run(3600)
 
             result = self._get_result(web_client)
 
             assert result == dict(
-                block_height=60,
+                block_height=64,
                 features=[
                     dict(
                         name='NOP_FEATURE_1',
@@ -553,15 +653,15 @@ class BaseRocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
                         start_height=20,
                         timeout_height=60,
                         minimum_activation_height=0,
-                        activate_on_timeout=True,
+                        lock_in_on_timeout=True,
                         version='0.0.0'
                     )
                 ]
             )
             # features states are not queried for previous blocks, as they have it cached:
-            assert self._get_state_mock_block_height_calls(get_state_mock) == [60]
+            assert self._get_state_mock_block_height_calls(get_state_mock) == [64]
             assert get_ancestor_iteratively_mock.call_count == 0
-            assert artifacts2.tx_storage.get_vertices_count() == 63
+            assert artifacts2.tx_storage.get_vertices_count() == 67
             get_state_mock.reset_mock()
 
 

@@ -42,7 +42,7 @@ class Criteria(BaseModel, validate_all=True):
 
         minimum_activation_height: the height of the first block at which the feature is allowed to become active.
 
-        activate_on_timeout: whether the feature should be activated even if the activation criteria are not met when
+        lock_in_on_timeout: whether the feature should be activated even if the activation criteria are not met when
             the timeout_height is reached, effectively forcing activation.
 
         version: the client version of hathor-core at which this feature was defined.
@@ -55,7 +55,7 @@ class Criteria(BaseModel, validate_all=True):
     timeout_height: NonNegativeInt
     threshold: Optional[NonNegativeInt] = None
     minimum_activation_height: NonNegativeInt = 0
-    activate_on_timeout: bool = False
+    lock_in_on_timeout: bool = False
     version: str = Field(..., regex=version.BUILD_VERSION_REGEX)
 
     def get_threshold(self, feature_settings: 'FeatureSettings') -> int:
@@ -75,11 +75,16 @@ class Criteria(BaseModel, validate_all=True):
     @validator('timeout_height')
     def _validate_timeout_height(cls, timeout_height: int, values: dict[str, Any]) -> int:
         """Validates that the timeout_height is greater than the start_height."""
+        assert Criteria.evaluation_interval is not None, 'Criteria.evaluation_interval must be set'
+
         start_height = values.get('start_height')
         assert start_height is not None, 'start_height must be set'
 
-        if timeout_height <= start_height:
-            raise ValueError(f'timeout_height must be greater than start_height: {timeout_height} <= {start_height}')
+        minimum_timeout_height = start_height + 2 * Criteria.evaluation_interval
+
+        if timeout_height < minimum_timeout_height:
+            raise ValueError(f'timeout_height must be at least two evaluation intervals after the start_height: '
+                             f'{timeout_height} < {minimum_timeout_height}')
 
         return timeout_height
 
@@ -94,20 +99,6 @@ class Criteria(BaseModel, validate_all=True):
             )
 
         return threshold
-
-    @validator('minimum_activation_height')
-    def _validate_minimum_activation_height(cls, minimum_activation_height: int, values: dict[str, Any]) -> int:
-        """Validates that the minimum_activation_height is not greater than the timeout_height."""
-        timeout_height = values.get('timeout_height')
-        assert timeout_height is not None, 'timeout_height must be set'
-
-        if minimum_activation_height > timeout_height:
-            raise ValueError(
-                f'minimum_activation_height must not be greater than timeout_height: '
-                f'{minimum_activation_height} > {timeout_height}'
-            )
-
-        return minimum_activation_height
 
     @validator('start_height', 'timeout_height', 'minimum_activation_height')
     def _validate_evaluation_interval_multiple(cls, value: int) -> int:

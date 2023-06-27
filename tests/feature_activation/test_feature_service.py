@@ -60,6 +60,11 @@ def _get_blocks_and_storage() -> tuple[list[Block], TransactionStorage]:
 
         0b0000,  # 20: boundary block
         0b0000,
+        0b0000,
+        0b0000,
+
+        0b0000,  # 24: boundary block
+        0b0000,
     ]
     storage = Mock()
     storage.get_metadata = Mock(return_value=None)
@@ -164,8 +169,8 @@ def test_get_state_from_defined(
     assert result == expected_state
 
 
-@pytest.mark.parametrize('block_height', [8, 9, 10, 11, 12, 13])
-@pytest.mark.parametrize('timeout_height', [4, 8])
+@pytest.mark.parametrize('block_height', [12, 13, 14, 15, 16, 17])
+@pytest.mark.parametrize('timeout_height', [8, 12])
 def test_get_state_from_started_to_failed(
     block_mocks: list[Block],
     tx_storage: TransactionStorage,
@@ -176,10 +181,10 @@ def test_get_state_from_started_to_failed(
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
-                bit=Mock(),
+                bit=3,
                 start_height=0,
                 timeout_height=timeout_height,
-                activate_on_timeout=False,
+                lock_in_on_timeout=False,
                 version=Mock()
             )
         }
@@ -195,25 +200,22 @@ def test_get_state_from_started_to_failed(
     assert result == FeatureState.FAILED
 
 
-@pytest.mark.parametrize('block_height', [8, 9, 10, 11, 12, 13])
-@pytest.mark.parametrize('timeout_height', [4, 8])
-@pytest.mark.parametrize('minimum_activation_height', [0, 4, 8])
-def test_get_state_from_started_to_active_on_timeout(
+@pytest.mark.parametrize('block_height', [8, 9, 10, 11])
+@pytest.mark.parametrize('timeout_height', [8, 12])
+def test_get_state_from_started_to_must_signal_on_timeout(
     block_mocks: list[Block],
     tx_storage: TransactionStorage,
     block_height: int,
     timeout_height: int,
-    minimum_activation_height: int
 ) -> None:
     feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
-                bit=Mock(),
+                bit=3,
                 start_height=0,
                 timeout_height=timeout_height,
-                activate_on_timeout=True,
-                minimum_activation_height=minimum_activation_height,
+                lock_in_on_timeout=True,
                 version=Mock()
             )
         }
@@ -226,17 +228,15 @@ def test_get_state_from_started_to_active_on_timeout(
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
 
-    assert result == FeatureState.ACTIVE
+    assert result == FeatureState.MUST_SIGNAL
 
 
-@pytest.mark.parametrize('block_height', [8, 9, 10, 11, 12, 13])
-@pytest.mark.parametrize('minimum_activation_height', [0, 4, 8])
+@pytest.mark.parametrize('block_height', [8, 9, 10, 11])
 @pytest.mark.parametrize('default_threshold', [0, 1, 2, 3])
-def test_get_state_from_started_to_active_on_default_threshold(
+def test_get_state_from_started_to_locked_in_on_default_threshold(
     block_mocks: list[Block],
     tx_storage: TransactionStorage,
     block_height: int,
-    minimum_activation_height: int,
     default_threshold: int
 ) -> None:
     feature_settings = FeatureSettings.construct(
@@ -248,7 +248,6 @@ def test_get_state_from_started_to_active_on_default_threshold(
                 start_height=0,
                 timeout_height=400,
                 threshold=None,
-                minimum_activation_height=minimum_activation_height,
                 version=Mock()
             )
         }
@@ -261,17 +260,15 @@ def test_get_state_from_started_to_active_on_default_threshold(
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
 
-    assert result == FeatureState.ACTIVE
+    assert result == FeatureState.LOCKED_IN
 
 
-@pytest.mark.parametrize('block_height', [8, 9, 10, 11, 12, 13])
-@pytest.mark.parametrize('minimum_activation_height', [0, 4, 8])
+@pytest.mark.parametrize('block_height', [8, 9, 10, 11])
 @pytest.mark.parametrize('custom_threshold', [0, 1, 2, 3])
-def test_get_state_from_started_to_active_on_custom_threshold(
+def test_get_state_from_started_to_locked_in_on_custom_threshold(
     block_mocks: list[Block],
     tx_storage: TransactionStorage,
     block_height: int,
-    minimum_activation_height: int,
     custom_threshold: int
 ) -> None:
     feature_settings = FeatureSettings.construct(
@@ -282,7 +279,6 @@ def test_get_state_from_started_to_active_on_custom_threshold(
                 start_height=0,
                 timeout_height=400,
                 threshold=custom_threshold,
-                minimum_activation_height=minimum_activation_height,
                 version=Mock()
             )
         }
@@ -295,25 +291,24 @@ def test_get_state_from_started_to_active_on_custom_threshold(
 
     result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
 
-    assert result == FeatureState.ACTIVE
+    assert result == FeatureState.LOCKED_IN
 
 
 @pytest.mark.parametrize('block_height', [8, 9, 10, 11])
 @pytest.mark.parametrize(
-    ['activate_on_timeout', 'timeout_height', 'minimum_activation_height'],
+    ['lock_in_on_timeout', 'timeout_height'],
     [
-        (False, 12, 0),
-        (True, 4, 12),
-        (True, 8, 12),
+        (False, 12),
+        (True, 16),
+        (True, 20),
     ]
 )
 def test_get_state_from_started_to_started(
     block_mocks: list[Block],
     tx_storage: TransactionStorage,
     block_height: int,
-    activate_on_timeout: bool,
+    lock_in_on_timeout: bool,
     timeout_height: int,
-    minimum_activation_height: int
 ) -> None:
     feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
@@ -322,8 +317,7 @@ def test_get_state_from_started_to_started(
                 bit=3,
                 start_height=0,
                 timeout_height=timeout_height,
-                activate_on_timeout=activate_on_timeout,
-                minimum_activation_height=minimum_activation_height,
+                lock_in_on_timeout=lock_in_on_timeout,
                 version=Mock()
             )
         }
@@ -340,15 +334,51 @@ def test_get_state_from_started_to_started(
 
 
 @pytest.mark.parametrize('block_height', [12, 13, 14, 15])
-def test_get_state_from_active(block_mocks: list[Block], tx_storage: TransactionStorage, block_height: int) -> None:
+def test_get_state_from_must_signal_to_locked_in(
+    block_mocks: list[Block],
+    tx_storage: TransactionStorage,
+    block_height: int,
+) -> None:
     feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
-                bit=Mock(),
+                bit=3,
                 start_height=0,
-                timeout_height=4,
-                activate_on_timeout=True,
+                timeout_height=8,
+                lock_in_on_timeout=True,
+                version=Mock()
+            )
+        }
+    )
+    service = FeatureService(
+        feature_settings=feature_settings,
+        tx_storage=tx_storage
+    )
+    block = block_mocks[block_height]
+
+    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+
+    assert result == FeatureState.LOCKED_IN
+
+
+@pytest.mark.parametrize('block_height', [16, 17, 18, 19])
+@pytest.mark.parametrize('minimum_activation_height', [0, 4, 8, 12, 16])
+def test_get_state_from_locked_in_to_active(
+    block_mocks: list[Block],
+    tx_storage: TransactionStorage,
+    block_height: int,
+    minimum_activation_height: int,
+) -> None:
+    feature_settings = FeatureSettings.construct(
+        evaluation_interval=4,
+        features={
+            Feature.NOP_FEATURE_1: Criteria.construct(
+                bit=3,
+                start_height=0,
+                timeout_height=8,
+                minimum_activation_height=minimum_activation_height,
+                lock_in_on_timeout=True,
                 version=Mock()
             )
         }
@@ -364,16 +394,73 @@ def test_get_state_from_active(block_mocks: list[Block], tx_storage: Transaction
     assert result == FeatureState.ACTIVE
 
 
-@pytest.mark.parametrize('block_height', [12, 13, 14, 15])
+@pytest.mark.parametrize('block_height', [16, 17, 18, 19])
+@pytest.mark.parametrize('minimum_activation_height', [17, 20, 100])
+def test_get_state_from_locked_in_to_locked_in(
+    block_mocks: list[Block],
+    tx_storage: TransactionStorage,
+    block_height: int,
+    minimum_activation_height: int,
+) -> None:
+    feature_settings = FeatureSettings.construct(
+        evaluation_interval=4,
+        features={
+            Feature.NOP_FEATURE_1: Criteria.construct(
+                bit=3,
+                start_height=0,
+                timeout_height=8,
+                minimum_activation_height=minimum_activation_height,
+                lock_in_on_timeout=True,
+                version=Mock()
+            )
+        }
+    )
+    service = FeatureService(
+        feature_settings=feature_settings,
+        tx_storage=tx_storage
+    )
+    block = block_mocks[block_height]
+
+    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+
+    assert result == FeatureState.LOCKED_IN
+
+
+@pytest.mark.parametrize('block_height', [20, 21, 22, 23])
+def test_get_state_from_active(block_mocks: list[Block], tx_storage: TransactionStorage, block_height: int) -> None:
+    feature_settings = FeatureSettings.construct(
+        evaluation_interval=4,
+        features={
+            Feature.NOP_FEATURE_1: Criteria.construct(
+                bit=3,
+                start_height=0,
+                timeout_height=8,
+                lock_in_on_timeout=True,
+                version=Mock()
+            )
+        }
+    )
+    service = FeatureService(
+        feature_settings=feature_settings,
+        tx_storage=tx_storage
+    )
+    block = block_mocks[block_height]
+
+    result = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
+
+    assert result == FeatureState.ACTIVE
+
+
+@pytest.mark.parametrize('block_height', [16, 17, 18, 19])
 def test_caching_mechanism(block_mocks: list[Block], tx_storage: TransactionStorage, block_height: int) -> None:
     feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
-                bit=Mock(),
+                bit=3,
                 start_height=0,
-                timeout_height=4,
-                activate_on_timeout=True,
+                timeout_height=8,
+                lock_in_on_timeout=True,
                 version=Mock()
             )
         }
@@ -386,24 +473,24 @@ def test_caching_mechanism(block_mocks: list[Block], tx_storage: TransactionStor
         result1 = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
 
         assert result1 == FeatureState.ACTIVE
-        assert calculate_new_state_mock.call_count == 3
+        assert calculate_new_state_mock.call_count == 4
 
         result2 = service.get_state(block=block, feature=Feature.NOP_FEATURE_1)
 
         assert result2 == FeatureState.ACTIVE
-        assert calculate_new_state_mock.call_count == 3
+        assert calculate_new_state_mock.call_count == 4
 
 
-@pytest.mark.parametrize('block_height', [12, 13, 14, 15])
+@pytest.mark.parametrize('block_height', [16, 17, 18, 19])
 def test_is_feature_active(block_mocks: list[Block], tx_storage: TransactionStorage, block_height: int) -> None:
     feature_settings = FeatureSettings.construct(
         evaluation_interval=4,
         features={
             Feature.NOP_FEATURE_1: Criteria.construct(
-                bit=Mock(),
+                bit=3,
                 start_height=0,
-                timeout_height=4,
-                activate_on_timeout=True,
+                timeout_height=8,
+                lock_in_on_timeout=True,
                 version=Mock()
             )
         }
@@ -427,7 +514,7 @@ def test_get_state_from_failed(block_mocks: list[Block], tx_storage: Transaction
             Feature.NOP_FEATURE_1: Criteria.construct(
                 bit=Mock(),
                 start_height=0,
-                timeout_height=4,
+                timeout_height=8,
                 version=Mock()
             )
         }
