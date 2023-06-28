@@ -360,6 +360,7 @@ class SyncV1HathorProtocolTestCase(unittest.SyncV1Params, BaseHathorProtocolTest
         self.assertEqual(b'PING\r\n', self.conn.peek_tr2_value())
         self.conn.run_one_step()  # PING
         self.conn.run_one_step()  # GET-TIPS
+        self.conn.run_one_step()  # GET-BEST-BLOCKCHAIN
         self.assertEqual(b'PONG\r\n', self.conn.peek_tr1_value())
         self.assertEqual(b'PONG\r\n', self.conn.peek_tr2_value())
         while b'PONG\r\n' in self.conn.peek_tr1_value():

@@ -35,6 +35,7 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.types import BlockInfo
 from hathor.utils.int import get_bit_list
 
 if TYPE_CHECKING:
@@ -147,7 +148,18 @@ class Block(BaseTransaction):
         return parent_block.get_feature_activation_bit_counts()
 
     def get_next_block_best_chain_hash(self) -> Optional[bytes]:
-        """Return the hash of the next (child/left-to-right) block in the best blockchain.
+        """Return the hash of the next block in the best blockchain. The blockchain is
+        written from left-to-righ (->), meaning the next block has a greater height.
+        In a timeline, the parent block (left) comes first of the child (right).
+
+             +-----------+       +-----------+       +-----------+
+         --->| height: 1 |------>| height: 2 |------>| height: 3 |--->
+             |  parent   |       |  current  |       |   child   |
+             +-----------+       +-----------+       +-----------+
+                 left                                    right
+                 past                                   future
+
+                                "left-to-right"
         """
         assert self.storage is not None
         meta = self.get_metadata()
@@ -168,7 +180,18 @@ class Block(BaseTransaction):
         return candidates[0]
 
     def get_next_block_best_chain(self) -> Optional['Block']:
-        """Return the next (child/left-to-right)block in the best blockchain.
+        """Return the next block in the best blockchain. The blockchain is written
+        from left-to-righ (->), meaning the next block has a greater height.
+        In a timeline, the parent block (left) comes first of the child (right).
+
+             +-----------+       +-----------+       +-----------+
+         --->| height: 1 |------>| height: 2 |------>| height: 3 |--->
+             |  parent   |       |  current  |       |   child   |
+             +-----------+       +-----------+       +-----------+
+                 left                                    right
+                 past                                   future
+
+                                "left-to-right"
         """
         assert self.storage is not None
         h = self.get_next_block_best_chain_hash()
@@ -283,6 +306,9 @@ class Block(BaseTransaction):
         json['height'] = self.get_metadata().height
 
         return json
+
+    def to_blockinfo(self) -> BlockInfo:
+        return BlockInfo(self.hash_hex, self.get_height(), self.weight)
 
     def has_basic_block_parent(self) -> bool:
         """Whether all block parent is in storage and is at least basic-valid."""

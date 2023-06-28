@@ -18,11 +18,13 @@ from typing import TYPE_CHECKING, Iterable, Optional
 from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
+from hathor.conf import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.states.base import BaseState
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.transaction import BaseTransaction
+from hathor.types import BlockInfo
 from hathor.util import json_dumps, json_loads
 
 if TYPE_CHECKING:
@@ -30,10 +32,13 @@ if TYPE_CHECKING:
 
 logger = get_logger()
 
+settings = HathorSettings()
+
 
 class ReadyState(BaseState):
     def __init__(self, protocol: 'HathorProtocol') -> None:
         super().__init__(protocol)
+
         self.log = logger.new(**self.protocol.get_logger_context())
 
         self.reactor = self.protocol.node.reactor
@@ -57,15 +62,31 @@ class ReadyState(BaseState):
         # Minimum round-trip time among PING/PONG.
         self.ping_min_rtt: float = inf
 
+        # The last blocks from the best blockchain in the peer
+        self.best_blockchain: list[BlockInfo] = []
+
         self.cmd_map.update({
             # p2p control messages
             ProtocolMessages.PING: self.handle_ping,
             ProtocolMessages.PONG: self.handle_pong,
             ProtocolMessages.GET_PEERS: self.handle_get_peers,
             ProtocolMessages.PEERS: self.handle_peers,
-
             # Other messages are added by the sync manager.
         })
+
+        self.lc_get_best_blockchain: Optional[LoopingCall] = None
+
+        # if the peer has the GET-BEST-BLOCKCHAIN capability
+        common_capabilities = protocol.capabilities & set(protocol.node.capabilities)
+        if (settings.CAPABILITY_GET_BEST_BLOCKCHAIN in common_capabilities):
+            # set the loop to get the best blockchain from the peer
+            self.lc_get_best_blockchain = LoopingCall(self.send_get_best_blockchain)
+            self.lc_get_best_blockchain.clock = self.reactor
+            self.cmd_map.update({
+                # extend the p2p control messages
+                ProtocolMessages.GET_BEST_BLOCKCHAIN: self.handle_get_best_blockchain,
+                ProtocolMessages.BEST_BLOCKCHAIN: self.handle_best_blockchain,
+            })
 
         # Initialize sync manager and add its commands to the list of available commands.
         connections = self.protocol.connections
@@ -87,11 +108,20 @@ class ReadyState(BaseState):
         self.lc_ping.start(1, now=False)
         self.send_get_peers()
 
+        if self.lc_get_best_blockchain is not None:
+            self.lc_get_best_blockchain.start(settings.BEST_BLOCKCHAIN_INTERVAL, now=False)
+
         self.sync_agent.start()
 
     def on_exit(self) -> None:
         if self.lc_ping.running:
             self.lc_ping.stop()
+
+        if self.lc_get_best_blockchain is not None and self.lc_get_best_blockchain.running:
+            self.lc_get_best_blockchain.stop()
+
+        if self.sync_agent.is_started():
+            self.sync_agent.stop()
 
         if self.sync_agent.is_started():
             self.sync_agent.stop()
@@ -180,3 +210,56 @@ class ReadyState(BaseState):
         self.ping_min_rtt = min(self.ping_min_rtt, self.ping_rtt)
         self.ping_start_time = None
         self.log.debug('rtt updated', rtt=self.ping_rtt, min_rtt=self.ping_min_rtt)
+
+    def send_get_best_blockchain(
+            self, n_blocks: int = settings.DEFAULT_BEST_BLOCKCHAIN_BLOCKS) -> None:
+        """ Send a GET-BEST-BLOCKCHAIN command, requesting a list of the latest
+        N blocks from the best blockchain.
+        """
+        self.send_message(ProtocolMessages.GET_BEST_BLOCKCHAIN, str(n_blocks))
+
+    def handle_get_best_blockchain(self, payload: str) -> None:
+        """ Executed when a GET-BEST-BLOCKCHAIN command is received.
+        It just responds with a list with N blocks from the best blockchain
+        in descending order.
+        """
+        try:
+            n_blocks = int(payload)
+        except ValueError:
+            self.protocol.send_error_and_close_connection(
+                f'Invalid param type. \'payload\' should be an int but we got {payload}.'
+            )
+            return
+
+        if not (0 < n_blocks <= settings.MAX_BEST_BLOCKCHAIN_BLOCKS):
+            self.protocol.send_error_and_close_connection(
+                f'N out of bounds. Valid range: [1, {settings.MAX_BEST_BLOCKCHAIN_BLOCKS}].'
+            )
+            return
+
+        try:
+            best_blockchain = self.protocol.node.get_best_blockchain(n_blocks)
+        except ValueError as e:
+            self.protocol.send_error_and_close_connection(msg=str(e))
+            return
+
+        self.send_best_blockchain(best_blockchain)
+
+    def send_best_blockchain(self, best_blockchain: list[BlockInfo]) -> None:
+        """ Send a BEST-BLOCKCHAIN command with a best blockchain of N blocks.
+        """
+        self.send_message(ProtocolMessages.BEST_BLOCKCHAIN, json_dumps(best_blockchain))
+
+    def handle_best_blockchain(self, payload: str) -> None:
+        """ Executed when a BEST-BLOCKCHAIN command is received. It updates
+        the best blockchain.
+        """
+        restored_blocks = json_loads(payload)
+        try:
+            best_blockchain = [BlockInfo.from_raw(block_info_raw) for block_info_raw in restored_blocks]
+        except ValueError:
+            self.protocol.send_error_and_close_connection(
+                'Invalid block_info while handling best_blockchain response.'
+            )
+            return
+        self.best_blockchain = best_blockchain
