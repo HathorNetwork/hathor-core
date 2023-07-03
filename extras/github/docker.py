@@ -5,9 +5,9 @@ from typing import Dict
 def print_output(output: Dict):
     outputs = []
     if os.environ['GITHUB_OUTPUT']:
-        outputs.push(os.environ['GITHUB_OUTPUT'])
+        outputs.append(os.environ['GITHUB_OUTPUT'])
     for k, v in output.items():
-        outputs.push('{name}={value}'.format(name=k, value=v))
+        outputs.append('{name}={value}'.format(name=k, value=v))
     os.environ['GITHUB_OUTPUT'] += '\n'.join(outputs)
 
 def prep_base_version(environ: Dict):

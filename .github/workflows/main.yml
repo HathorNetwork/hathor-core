@@ -41,7 +41,7 @@ jobs:
           outputs = []
           if os.environ['GITHUB_OUTPUT']:
             outputs.append(os.environ['GITHUB_OUTPUT'])
-          outputs.push('{name}={value}'.format(name='matrix', value=json.dumps(matrix)))
+          outputs.append('{name}={value}'.format(name='matrix', value=json.dumps(matrix)))
           os.environ['GITHUB_OUTPUT'] = '\n'.join(outputs)
   check-matrix:
     runs-on: ubuntu-latest
