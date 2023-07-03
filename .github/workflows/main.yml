@@ -38,7 +38,11 @@ jobs:
               matrix = full_matrix
           else:
               matrix = reduced_matrix
-          print('::set-output name=matrix::' + json.dumps(matrix))
+          outputs = []
+          if os.environ['GITHUB_OUTPUT']:
+            outputs.append(os.environ['GITHUB_OUTPUT'])
+          outputs.push('{name}={value}'.format(name='matrix', value=json.dumps(matrix)))
+          os.environ['GITHUB_OUTPUT'] = '\n'.join(outputs)
   check-matrix:
     runs-on: ubuntu-latest
     needs: matrix
