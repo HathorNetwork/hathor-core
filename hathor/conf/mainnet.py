@@ -67,6 +67,8 @@ SETTINGS = HathorSettings(
         cp(3_200_000, bytes.fromhex('0000000000000000028d9629d85d93d0f5e798a498ca7b1710ffc157fa045cd5')),
         cp(3_300_000, bytes.fromhex('0000000000000000065b74441acb3d2ff770d384b2bad44c9823f26a0327690c')),
         cp(3_400_000, bytes.fromhex('000000000000000077242c961a0c6f708bc671a8372eb8b095311f091fddc6c3')),
+        cp(3_500_000, bytes.fromhex('000000000000000a34ba20552c3cae9549b9c5ca07f644cf005328c948aa54d8')),
+        cp(3_600_000, bytes.fromhex('000000000000000011031d9ff030cd9e6fe8a3766bbeda6f6337c40dd30fa65f')),
     ],
     SOFT_VOIDED_TX_IDS=list(map(bytes.fromhex, [
         '0000000012a922a6887497bed9c41e5ed7dc7213cae107db295602168266cd02',
