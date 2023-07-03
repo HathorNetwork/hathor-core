@@ -57,6 +57,7 @@ class Criteria(BaseModel, validate_all=True):
     minimum_activation_height: NonNegativeInt = 0
     lock_in_on_timeout: bool = False
     version: str = Field(..., regex=version.BUILD_VERSION_REGEX)
+    signal_support_by_default: bool = False
 
     def get_threshold(self, feature_settings: 'FeatureSettings') -> int:
         """Returns the configured threshold, or the default threshold if it is None."""

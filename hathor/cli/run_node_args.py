@@ -12,10 +12,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import List, Optional
+from typing import Optional
 
 from pydantic import Extra
 
+from hathor.feature_activation.feature import Feature
 from hathor.utils.pydantic import BaseModel
 
 
@@ -32,8 +33,8 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     dns: Optional[str]
     peer: Optional[str]
     sysctl: Optional[str]
-    listen: List[str]
-    bootstrap: Optional[List[str]]
+    listen: list[str]
+    bootstrap: Optional[list[str]]
     status: Optional[int]
     stratum: Optional[int]
     data: Optional[str]
@@ -68,5 +69,7 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     x_localhost_only: bool
     x_rocksdb_indexes: bool
     x_enable_event_queue: bool
-    peer_id_blacklist: List[str]
+    peer_id_blacklist: list[str]
     config_yaml: Optional[str]
+    signal_support: set[Feature]
+    signal_not_support: set[Feature]

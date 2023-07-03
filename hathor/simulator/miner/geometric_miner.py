@@ -68,15 +68,6 @@ class GeometricMiner(AbstractMiner):
             self._block = None
             self._schedule_next_block()
 
-    def _generate_mining_block(self) -> 'Block':
-        """Generates a block ready to be mined."""
-        try:
-            signal_bits = self._signal_bits.pop(0)
-        except IndexError:
-            signal_bits = 0
-
-        return self._manager.generate_mining_block(signal_bits=signal_bits)
-
     def _schedule_next_block(self):
         if self._block:
             self._block.nonce = self._rng.getrandbits(32)
@@ -87,7 +78,7 @@ class GeometricMiner(AbstractMiner):
             self._block = None
 
         if self._manager.can_start_mining():
-            block = self._generate_mining_block()
+            block = self._manager.generate_mining_block()
             geometric_p = 2**(-block.weight)
             trials = self._rng.geometric(geometric_p)
             dt = 1.0 * trials / self._hashpower

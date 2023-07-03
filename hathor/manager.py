@@ -39,6 +39,7 @@ from hathor.exception import (
     RewardLockedError,
     SpendingVoidedError,
 )
+from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -92,6 +93,7 @@ class HathorManager:
                  tx_storage: TransactionStorage,
                  p2p_manager: ConnectionsManager,
                  event_manager: EventManager,
+                 bit_signaling_service: BitSignalingService,
                  network: str,
                  hostname: Optional[str] = None,
                  wallet: Optional[BaseWallet] = None,
@@ -164,6 +166,8 @@ class HathorManager:
         self._event_manager = event_manager
         self._event_manager.save_event_queue_state(enable_event_queue)
         self._enable_event_queue = enable_event_queue
+
+        self._bit_signaling_service = bit_signaling_service
 
         self.consensus_algorithm = consensus_algorithm
 
@@ -261,6 +265,8 @@ class HathorManager:
         self._event_manager.load_started()
         self.connections.start()
         self.pow_thread_pool.start()
+
+        self._bit_signaling_service.start()
 
         # Disable get transaction lock when initializing components
         self.tx_storage.disable_lock()
@@ -822,12 +828,13 @@ class HathorManager:
             parents_any=parents_any,
             height=height,
             score=sum_weights(parent_block_metadata.score, weight),
+            signal_bits=self._bit_signaling_service.get_signal_bits()
         )
 
     def generate_mining_block(self, timestamp: Optional[int] = None,
                               parent_block_hash: Optional[VertexId] = None,
                               data: bytes = b'', address: Optional[Address] = None,
-                              merge_mined: bool = False, signal_bits: int = 0) -> Union[Block, MergeMinedBlock]:
+                              merge_mined: bool = False) -> Union[Block, MergeMinedBlock]:
         """ Generates a block ready to be mined. The block includes new issued tokens,
         parents, and the weight.
 
@@ -844,7 +851,6 @@ class HathorManager:
             merge_mined=merge_mined,
             address=address or None,  # XXX: because we allow b'' for explicit empty output script
             data=data,
-            signal_bits=signal_bits
         )
         return block
 

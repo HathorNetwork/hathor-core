@@ -34,6 +34,7 @@ class BlockTemplate(NamedTuple):
     parents_any: list[bytes]  # list of extra parents to choose from when there are more options
     height: int  # metadata
     score: float  # metadata
+    signal_bits: int
 
     def generate_minimaly_valid_block(self) -> BaseTransaction:
         """ Generates a block, without any extra information that is valid for this template. No random choices."""
@@ -47,8 +48,8 @@ class BlockTemplate(NamedTuple):
 
     def generate_mining_block(self, rng: Random, merge_mined: bool = False, address: Optional[bytes] = None,
                               timestamp: Optional[int] = None, data: Optional[bytes] = None,
-                              storage: Optional[TransactionStorage] = None, include_metadata: bool = False,
-                              signal_bits: int = 0) -> Union[Block, MergeMinedBlock]:
+                              storage: Optional[TransactionStorage] = None, include_metadata: bool = False
+                              ) -> Union[Block, MergeMinedBlock]:
         """ Generates a block by filling the template with the given options and random parents (if multiple choices).
 
         Note that if a timestamp is given it will be coerced into the [timestamp_min, timestamp_max] range.
@@ -64,7 +65,7 @@ class BlockTemplate(NamedTuple):
         tx_outputs = [TxOutput(self.reward, output_script)]
         cls: Union[type['Block'], type['MergeMinedBlock']] = MergeMinedBlock if merge_mined else Block
         block = cls(outputs=tx_outputs, parents=parents, timestamp=block_timestamp,
-                    data=data or b'', storage=storage, weight=self.weight, signal_bits=signal_bits)
+                    data=data or b'', storage=storage, weight=self.weight, signal_bits=self.signal_bits)
         if include_metadata:
             block._metadata = TransactionMetadata(height=self.height, score=self.score)
         block.get_metadata(use_storage=False)
@@ -93,6 +94,7 @@ class BlockTemplate(NamedTuple):
             'parents_any': [p.hex() for p in self.parents_any],
             'height': self.height,
             'score': self.score,
+            'signal_bits': self.signal_bits,
         }
 
     @classmethod
@@ -108,6 +110,7 @@ class BlockTemplate(NamedTuple):
             parents_any=[bytes.fromhex(p) for p in data['parents_any']],
             height=int(data['height']),
             score=int(data['score']),
+            signal_bits=int(data.get('signal_bits', 0)),
         )
 
 
@@ -129,5 +132,4 @@ class BlockTemplates(list[BlockTemplate]):
         return self.choose_random_template(rng).generate_mining_block(rng, merge_mined=merge_mined, address=address,
                                                                       timestamp=timestamp, data=data,
                                                                       storage=storage or self.storage,
-                                                                      include_metadata=include_metadata,
-                                                                      signal_bits=signal_bits)
+                                                                      include_metadata=include_metadata,)
