@@ -3,9 +3,8 @@ import os
 from typing import Dict
 
 def print_output(output: Dict):
-    for k, v in output.items():
-        print(f'::set-output name={k}::{v}')
-
+    str_output = '\n'.join(['{}={}'.format(k, v) for k, v in output.items()])
+    os.environ['GITHUB_OUTPUT'] += str_output + '\n'
 
 def prep_base_version(environ: Dict):
     GITHUB_REF = environ.get('GITHUB_REF')
