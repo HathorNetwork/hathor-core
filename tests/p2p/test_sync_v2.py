@@ -49,6 +49,12 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         # Finally, stop all generators.
         gen_tx1.stop()
 
+        for _ in range(20):
+            print()
+        print('Starting manager2...')
+        for _ in range(20):
+            print()
+
         # Create a new peer and run sync for a while (but stop before getting synced).
         path = self.mkdtemp()
         peer_id = PeerId()

@@ -45,8 +45,8 @@ MAX_GET_TRANSACTIONS_BFS_LEN: int = 8
 
 
 class BlockInfo(NamedTuple):
-    id: VertexId
     height: int
+    id: VertexId
 
     def __repr__(self):
         return f'BlockInfo({self.height}, {self.id.hex()})'
@@ -109,7 +109,7 @@ class NodeBlockSync(SyncAgent):
         self._deferred_txs: dict[VertexId, Deferred[BaseTransaction]] = {}
         self._deferred_tips: Optional[Deferred[list[bytes]]] = None
         self._deferred_best_block: Optional[Deferred[dict[str, Any]]] = None
-        self._deferred_peer_block_hashes: Optional[Deferred[list[tuple[int, bytes]]]] = None
+        self._deferred_peer_block_hashes: Optional[Deferred[list[BlockInfo]]] = None
 
         # When syncing blocks we start streaming with all peers
         # so the moment I get some repeated blocks, I stop the download
@@ -119,6 +119,9 @@ class NodeBlockSync(SyncAgent):
         # Streaming objects
         self.blockchain_streaming: Optional[BlockchainStreaming] = None
         self.transactions_streaming: Optional[TransactionsStreaming] = None
+
+        self._pending_download: OrderedDict[VertexId, BlockInfo] = OrderedDict()
+        self._rev_dep: dict[VertexId, set[VertexId]]
 
         # Whether the peers are synced, i.e. our best height and best block are the same
         self._synced = False
@@ -291,6 +294,15 @@ class NodeBlockSync(SyncAgent):
             self.log.debug('receiving stream, try again later')
             return
 
+        if self._pending_download:
+            # import pudb; pudb.set_trace()
+            for vertex_id, requester in self._pending_download.items():
+                self.log.info('run sync transactions', start=vertex_id, requester=requester)
+                self.send_get_block_txs(vertex_id, requester.id)
+                return
+
+        return
+
         if self.mempool_manager.is_running():
             # It's running a mempool sync, so we wait until it finishes
             self.log.debug('running mempool sync, try again later')
@@ -360,7 +372,7 @@ class NodeBlockSync(SyncAgent):
         meta = bestblock.get_metadata()
         assert not meta.voided_by
         assert meta.validation.is_fully_connected()
-        my_best_block = BlockInfo(bestblock.hash, bestblock.get_height())
+        my_best_block = BlockInfo(height=bestblock.get_height(), id=bestblock.hash)
 
         # Are we synced?
         if self.peer_best_block == my_best_block:
@@ -373,20 +385,19 @@ class NodeBlockSync(SyncAgent):
 
         if self.peer_best_block.height <= my_best_block.height:
             # Is peer behind me at the same blockchain?
-            common_block_bytes = self.tx_storage.indexes.height.get(self.peer_best_block.height)
-            if common_block_bytes == self.peer_best_block.id:
-                # Nothing to sync from this peer.
+            common_block_hash = self.tx_storage.indexes.height.get(self.peer_best_block.height)
+            if common_block_hash == self.peer_best_block.id:
+                # If yes, nothing to sync from this peer.
                 self.log.info('nothing to sync because peer is behind me at the same best blockchain',
                               my_best_block=my_best_block, peer_best_block=self.peer_best_block)
                 self.update_synced(True)
                 self.send_relay(enable=True)
                 self.synced_block = self.peer_best_block
                 return
-        # TODO: validate if this is when we should disable relaying
-        elif self._is_relaying:
-            self.send_relay(enable=False)
 
+        # TODO: validate if this is when we should disable relaying
         # If we reach this point, we need to sync.
+        self.send_relay(enable=False)
         self.update_synced(False)
 
         self.log.debug('syncing blocks',
@@ -408,17 +419,9 @@ class NodeBlockSync(SyncAgent):
 
         return
 
-        # if self.synced_height < self.peer_best_height:
-        #     # sync from common block
-        #     peer_block_at_height = yield self.get_peer_block_hashes([self.synced_height])
-        #     self.run_block_sync(peer_block_at_height[0][1], self.synced_height, peer_best_block, peer_best_height)
-        # elif my_height == self.synced_height == self.peer_best_height:
-        #     # we're synced and on the same height, get their mempool
-        #     self.state = PeerState.SYNCING_MEMPOOL
-        #     self.mempool_manager.run()
-        # else:
-        #     # we got all the peer's blocks but aren't on the same height, nothing to do
-        #     pass
+        # we're synced and on the same height, get their mempool
+        self.state = PeerState.SYNCING_MEMPOOL
+        self.mempool_manager.run()
 
     def get_tips(self) -> Deferred[list[bytes]]:
         """ Async method to request the remote peer's tips.
@@ -566,7 +569,7 @@ class NodeBlockSync(SyncAgent):
 
             block_list = yield self.get_peer_block_hashes(heights)
             block_list.sort(key=lambda x: x.height, reverse=True)
-            self.log.debug('n-ary search answer', block_list)
+            self.log.debug('n-ary search answer', blocks=block_list)
             for info in block_list:
                 try:
                     # We must check only fully validated transactions.
@@ -860,7 +863,7 @@ class NodeBlockSync(SyncAgent):
 
         _id = bytes.fromhex(data['block'])
         height = data['height']
-        best_block = BlockInfo(id=_id, height=height)
+        best_block = BlockInfo(height=height, id=_id)
 
         deferred = self._deferred_best_block
         self._deferred_best_block = None
@@ -1189,6 +1192,31 @@ class NodeBlockSync(SyncAgent):
                 # in the tx parents even if the tx was invalid (failing the verifications above)
                 # then I would have a children that was not in the storage
                 self.tx_storage.save_transaction(tx)
+
+            self.add_to_deps(tx)
+
             self.manager.log_new_object(tx, 'new {} partially accepted', quiet=quiet)
 
         return True
+
+    def add_to_deps(self, tx: BaseTransaction) -> None:
+        requester: BlockInfo
+        if tx.is_block:
+            assert isinstance(tx, Block)
+            requester = BlockInfo(height=tx.get_height(), id=tx.hash)
+        else:
+            assert tx.hash in self._pending_download
+            requester = self._pending_download[tx.hash]
+
+        cnt = 0
+        for dep_hash in tx.get_all_dependencies():
+            with self.tx_storage.allow_partially_validated_context():
+                tx_exists = self.tx_storage.transaction_exists(dep_hash)
+            if not tx_exists:
+                if dep_hash not in self._pending_download:
+                    self.log.debug('add to download list', vertex_id=dep_hash.hex(), origin=tx.hash.hex(), requester=requester)
+                    self._pending_download[dep_hash] = requester
+                cnt += 1
+        assert cnt >= 1
+
+        self._pending_download.pop(tx.hash, None)
