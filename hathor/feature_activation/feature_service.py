@@ -73,7 +73,13 @@ class FeatureService:
         feature: Feature,
         previous_state: FeatureState
     ) -> FeatureState:
-        """Returns the new feature state based on the new block, the criteria, and the previous state."""
+        """
+        Returns the new feature state based on the new boundary block, the criteria, and the previous state.
+
+        This method must only be called for boundary blocks, and calling it with a non-boundary block will raise
+        an AssertionError. Non-boundary blocks never calculate their own state, they get it from their parent block
+        instead.
+        """
         height = boundary_block.get_height()
         criteria = self._feature_settings.features.get(feature)
         evaluation_interval = self._feature_settings.evaluation_interval
@@ -110,6 +116,9 @@ class FeatureService:
             return FeatureState.STARTED
 
         if previous_state is FeatureState.MUST_SIGNAL:
+            # The MUST_SIGNAL state is defined to always take exactly one evaluation interval. Since this method is
+            # only called for boundary blocks, it is guaranteed that after exactly one evaluation interval in
+            # MUST_SIGNAL, the feature will transition to LOCKED_IN.
             return FeatureState.LOCKED_IN
 
         if previous_state is FeatureState.LOCKED_IN:
