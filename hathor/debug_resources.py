@@ -14,10 +14,13 @@
 
 import os
 import sys
+from typing import cast
 
 from structlog import get_logger
 from twisted.internet import defer
+from twisted.internet.interfaces import IReactorFromThreads
 from twisted.web.http import Request
+from zope.interface.verify import verifyObject
 
 from hathor.api_util import Resource, get_arg_default, get_args
 from hathor.cli.openapi_files.register import register_resource
@@ -61,7 +64,9 @@ class DebugRaiseResource(Resource):
         assert exc_cls_name in self.exc_class_map
         exc_cls = self.exc_class_map[exc_cls_name]
         msg = get_arg_default(raw_args, 'msg', self.default_msg)
-        reactor.callFromThread(self.run, exc_cls, msg)
+        verifyObject(IReactorFromThreads, reactor)
+        threaded_reactor = cast(IReactorFromThreads, reactor)
+        threaded_reactor.callFromThread(self.run, exc_cls, msg)
         return b'OK: no side-effects\n'
 
 
@@ -185,7 +190,9 @@ class DebugMessAroundResource(Resource):
         mess = get_arg_default(get_args(request), 'with', self.default_mess)
         assert mess in self.mess_map
         mess_func = self.mess_map[mess]
-        reactor.callFromThread(mess_func)
+        verifyObject(IReactorFromThreads, reactor)
+        threaded_reactor = cast(IReactorFromThreads, reactor)
+        threaded_reactor.callFromThread(mess_func)
         return b'OK: database yanked, full-node will break\n'
 
 

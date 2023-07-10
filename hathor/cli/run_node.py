@@ -150,6 +150,7 @@ class RunNode:
         self.start_manager()
 
         if self._args.stratum:
+            assert self.manager.stratum_factory is not None
             self.reactor.listenTCP(self._args.stratum, self.manager.stratum_factory)
 
         from hathor.conf import HathorSettings
@@ -165,6 +166,7 @@ class RunNode:
             resources_builder = ResourcesBuilder(self.manager, self._args, builder.event_ws_factory, feature_service)
             status_server = resources_builder.build()
             if self._args.status:
+                assert status_server is not None
                 self.reactor.listenTCP(self._args.status, status_server)
 
         from hathor.builder.builder import BuildArtifacts

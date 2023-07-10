@@ -21,7 +21,7 @@ from hathor.event.model.base_event import BaseEvent
 from hathor.event.storage import EventStorage
 from hathor.event.websocket.protocol import EventWebsocketProtocol
 from hathor.event.websocket.response import EventResponse, InvalidRequestType
-from hathor.util import Reactor
+from hathor.reactor.reactor_time_protocol import ReactorTimeProtocol
 
 logger = get_logger()
 
@@ -37,7 +37,7 @@ class EventWebsocketFactory(WebSocketServerFactory):
     # The last event id broadcast by this factory.
     _latest_event_id: Optional[int] = None
 
-    def __init__(self, reactor: Reactor, event_storage: EventStorage):
+    def __init__(self, reactor: ReactorTimeProtocol, event_storage: EventStorage):
         super().__init__()
         self.log = logger.new()
         self._reactor = reactor

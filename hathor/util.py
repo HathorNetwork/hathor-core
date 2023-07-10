@@ -22,38 +22,28 @@ import warnings
 from collections import OrderedDict
 from contextlib import AbstractContextManager
 from dataclasses import asdict, dataclass
-from enum import Enum
 from functools import partial, wraps
 from random import Random as PyRandom
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Optional, Sequence, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Optional, Sequence, TypeVar, cast
 
 from structlog import get_logger
-from twisted.internet import reactor as twisted_reactor
-from twisted.internet.base import ReactorBase
-from twisted.internet.posixbase import PosixReactorBase
-from twisted.python.threadable import isInIOThread
 from zope.interface import Interface
 from zope.interface.verify import verifyObject
 
 import hathor
 from hathor.conf import HathorSettings
+from hathor.reactor.reactor import reactor as hathor_reactor
+from hathor.reactor.reactor_protocol import ReactorProtocol
 from hathor.types import TokenUid
 
 if TYPE_CHECKING:
     import structlog
 
-    from hathor.simulator.clock import HeapClock
     from hathor.transaction.base_transaction import BaseTransaction
 
-# Reactor = IReactorTime
-# XXX: Ideally we would want to be able to express Reactor as IReactorTime+IReactorCore, which is what everyone using
-#      this type annotation needs, however it is not possible to express this. In practice most classes that implement
-#      these interfaces use ReactorBase as base, however that is not the case for MemoryReactorClock, which inherits
-#      IReactorTime from Clock and IReactorCore from MemoryReactor. For the lack of a better approach, a union of these
-#      types is enough for most of our uses. If we end up having to use a different reactor that does not use those
-#      bases but implement IReactorTime+IReactorCore, we could add it to the Union below
-Reactor = Union[ReactorBase, 'HeapClock']
-reactor = cast(PosixReactorBase, twisted_reactor)
+Reactor = ReactorProtocol
+reactor = hathor_reactor
+
 logger = get_logger()
 settings = HathorSettings()
 
@@ -110,28 +100,6 @@ def skip_warning(func: Callable[..., Any]) -> Callable[..., Any]:
         return partial(f, getattr(func, '__self__'))
     else:
         return f
-
-
-class ReactorThread(Enum):
-    MAIN_THREAD = 'MAIN_THREAD'
-    NOT_MAIN_THREAD = 'NOT_MAIN_THREAD'
-    NOT_RUNNING = 'NOT_RUNNING'
-
-    @classmethod
-    def get_current_thread(cls, reactor: Reactor) -> 'ReactorThread':
-        """ Returns if the code is being run on the reactor thread, if it's running already.
-        """
-        running = getattr(reactor, 'running', None)
-        if running is not None:
-            if running:
-                return cls.MAIN_THREAD if isInIOThread() else cls.NOT_MAIN_THREAD
-            else:
-                # if reactor is not running yet, there's no threading
-                return cls.NOT_RUNNING
-        else:
-            # on tests, we use Clock instead of a real Reactor, so there's
-            # no threading. We consider that the reactor is running
-            return cls.MAIN_THREAD
 
 
 def abbrev(data: bytes, max_len: int = 256, gap: bytes = b' [...] ') -> bytes:

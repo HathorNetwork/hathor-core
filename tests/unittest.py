@@ -6,7 +6,7 @@ from typing import Iterator, Optional
 from unittest import main as ut_main
 
 from structlog import get_logger
-from twisted.internet.task import Clock
+from twisted.internet.testing import MemoryReactorClock
 from twisted.trial import unittest
 
 from hathor.builder import BuildArtifacts, Builder
@@ -104,7 +104,7 @@ class TestCase(unittest.TestCase):
         _set_test_mode(TestMode.TEST_ALL_WEIGHT)
         self.tmpdirs = []
         # XXX: changing this clock to a MemoryReactorClock will break a lot of tests
-        self.clock = Clock()
+        self.clock = MemoryReactorClock()
         self.clock.advance(time.time())
         self.log = logger.new()
         self.reset_peer_id_pool()
@@ -170,6 +170,7 @@ class TestCase(unittest.TestCase):
 
         if start_manager:
             manager.start()
+            self.clock.running = True
             self.run_to_completion()
 
         return manager
