@@ -45,10 +45,10 @@ FEATURE_ACTIVATION:
     NOP_FEATURE_1:
       bit: 0
       start_height: 0
-      timeout_height: 1000
+      timeout_height: 2000
       version: 0.0.0
     NOP_FEATURE_2:
       bit: 1
       start_height: 0
-      timeout_height: 1001
+      timeout_height: 2001
       version: 0.0.0

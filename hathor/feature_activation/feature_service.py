@@ -73,17 +73,22 @@ class FeatureService:
         feature: Feature,
         previous_state: FeatureState
     ) -> FeatureState:
-        """Returns the new feature state based on the new block, the criteria, and the previous state."""
+        """
+        Returns the new feature state based on the new boundary block, the criteria, and the previous state.
+
+        This method must only be called for boundary blocks, and calling it with a non-boundary block will raise
+        an AssertionError. Non-boundary blocks never calculate their own state, they get it from their parent block
+        instead.
+        """
         height = boundary_block.get_height()
         criteria = self._feature_settings.features.get(feature)
+        evaluation_interval = self._feature_settings.evaluation_interval
 
         if not criteria:
             return FeatureState.DEFINED
 
         assert not boundary_block.is_genesis, 'cannot calculate new state for genesis'
-        assert height % self._feature_settings.evaluation_interval == 0, (
-            'cannot calculate new state for a non-boundary block'
-        )
+        assert height % evaluation_interval == 0, 'cannot calculate new state for a non-boundary block'
 
         if previous_state is FeatureState.DEFINED:
             if height >= criteria.start_height:
@@ -92,15 +97,8 @@ class FeatureService:
             return FeatureState.DEFINED
 
         if previous_state is FeatureState.STARTED:
-            if height >= criteria.timeout_height and not criteria.activate_on_timeout:
+            if height >= criteria.timeout_height and not criteria.lock_in_on_timeout:
                 return FeatureState.FAILED
-
-            if (
-                height >= criteria.timeout_height
-                and criteria.activate_on_timeout
-                and height >= criteria.minimum_activation_height
-            ):
-                return FeatureState.ACTIVE
 
             # Get the count for this block's parent. Since this is a boundary block, its parent count represents the
             # previous evaluation interval count.
@@ -109,14 +107,25 @@ class FeatureService:
             count = counts[criteria.bit]
             threshold = criteria.get_threshold(self._feature_settings)
 
-            if (
-                height < criteria.timeout_height
-                and count >= threshold
-                and height >= criteria.minimum_activation_height
-            ):
-                return FeatureState.ACTIVE
+            if height < criteria.timeout_height and count >= threshold:
+                return FeatureState.LOCKED_IN
+
+            if (height + evaluation_interval >= criteria.timeout_height) and criteria.lock_in_on_timeout:
+                return FeatureState.MUST_SIGNAL
 
             return FeatureState.STARTED
+
+        if previous_state is FeatureState.MUST_SIGNAL:
+            # The MUST_SIGNAL state is defined to always take exactly one evaluation interval. Since this method is
+            # only called for boundary blocks, it is guaranteed that after exactly one evaluation interval in
+            # MUST_SIGNAL, the feature will transition to LOCKED_IN.
+            return FeatureState.LOCKED_IN
+
+        if previous_state is FeatureState.LOCKED_IN:
+            if height >= criteria.minimum_activation_height:
+                return FeatureState.ACTIVE
+
+            return FeatureState.LOCKED_IN
 
         if previous_state is FeatureState.ACTIVE:
             return FeatureState.ACTIVE
