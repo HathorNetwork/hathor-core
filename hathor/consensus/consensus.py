@@ -153,6 +153,8 @@ class ConsensusAlgorithm:
         for h in voided_by:
             if h == settings.SOFT_VOIDED_ID:
                 continue
+            if h == settings.CONSENSUS_FAIL_ID:
+                continue
             if h == tx.hash:
                 continue
             if h in self.soft_voided_tx_ids:
