@@ -173,6 +173,7 @@ class Metrics:
         """
         events = [
             HathorEvents.NETWORK_NEW_TX_ACCEPTED,
+            HathorEvents.NETWORK_PEER_CONNECTING,
             HathorEvents.NETWORK_PEER_READY,
             HathorEvents.NETWORK_PEER_CONNECTED,
             HathorEvents.NETWORK_PEER_DISCONNECTED,
@@ -196,6 +197,7 @@ class Metrics:
                 self.transactions = self.tx_storage.get_tx_count()
         elif key in (
             HathorEvents.NETWORK_PEER_READY,
+            HathorEvents.NETWORK_PEER_CONNECTING,
             HathorEvents.NETWORK_PEER_CONNECTED,
             HathorEvents.NETWORK_PEER_DISCONNECTED,
             HathorEvents.NETWORK_PEER_CONNECTION_FAILED
