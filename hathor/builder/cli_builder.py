@@ -20,7 +20,6 @@ import sys
 from typing import Any, Optional
 
 from structlog import get_logger
-from twisted.internet.posixbase import PosixReactorBase
 
 from hathor.cli.run_node import RunNodeArgs
 from hathor.consensus import ConsensusAlgorithm
@@ -35,7 +34,7 @@ from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import discover_hostname
 from hathor.pubsub import PubSubManager
 from hathor.stratum import StratumFactory
-from hathor.util import Random
+from hathor.util import Random, Reactor
 from hathor.wallet import BaseWallet, HDWallet, Wallet
 
 logger = get_logger()
@@ -55,7 +54,7 @@ class CliBuilder:
         if not condition:
             raise BuilderError(message)
 
-    def create_manager(self, reactor: PosixReactorBase) -> HathorManager:
+    def create_manager(self, reactor: Reactor) -> HathorManager:
         import hathor
         from hathor.conf import HathorSettings
         from hathor.conf.get_settings import get_settings_source

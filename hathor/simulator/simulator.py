@@ -25,7 +25,7 @@ from hathor.conf import HathorSettings
 from hathor.daa import TestMode, _set_test_mode
 from hathor.manager import HathorManager
 from hathor.p2p.peer_id import PeerId
-from hathor.simulator.clock import HeapClock
+from hathor.simulator.clock import HeapClock, MemoryReactorHeapClock
 from hathor.simulator.miner.geometric_miner import GeometricMiner
 from hathor.simulator.tx_generator import RandomTransactionGenerator
 from hathor.transaction.genesis import _get_genesis_transactions_unsafe
@@ -118,7 +118,7 @@ class Simulator:
         self.rng = Random(self.seed)
         self.settings = HathorSettings()
         self._network = 'testnet'
-        self._clock = HeapClock()
+        self._clock = MemoryReactorHeapClock()
         self._peers: OrderedDict[str, HathorManager] = OrderedDict()
         self._connections: list['FakeConnection'] = []
         self._started = False
@@ -178,6 +178,7 @@ class Simulator:
             .build()
 
         artifacts.manager.start()
+        self._clock.run()
         self.run_to_completion()
 
         # Don't use it anywhere else. It is unsafe to generate mnemonic words like this.

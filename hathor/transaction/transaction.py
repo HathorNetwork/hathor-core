@@ -43,6 +43,7 @@ from hathor.transaction.exceptions import (
 )
 from hathor.transaction.util import VerboseCallback, get_deposit_amount, get_withdraw_amount, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
+from hathor.util import not_none
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -147,11 +148,11 @@ class Transaction(BaseTransaction):
         iter_parents = map(self.storage.get_transaction, self.get_tx_parents())
         iter_inputs = map(self.get_spent_tx, self.inputs)
         for tx in chain(iter_parents, iter_inputs):
-            min_height = max(min_height, tx.get_metadata().min_height)
+            min_height = max(min_height, not_none(tx.get_metadata().min_height))
         return min_height
 
     def _calculate_my_min_height(self) -> int:
-        """ Calculates min height derived from own spent rewards"""
+        """ Calculates min height derived from own spent block rewards"""
         min_height = 0
         for blk in self.iter_spent_rewards():
             min_height = max(min_height, blk.get_height() + settings.REWARD_SPEND_MIN_BLOCKS + 1)
@@ -573,17 +574,20 @@ class Transaction(BaseTransaction):
             spent_outputs.add(key)
 
     def verify_reward_locked(self) -> None:
-        """Will raise `RewardLocked` if any reward is spent before the best block height is enough."""
+        """Will raise `RewardLocked` if any reward is spent before the best block height is enough, considering only
+        the block rewards spent by this tx itself, and not the inherited `min_height`."""
         info = self.get_spent_reward_locked_info()
         if info is not None:
             raise RewardLocked(f'Reward {info.block_hash.hex()} still needs {info.blocks_needed} to be unlocked.')
 
     def is_spent_reward_locked(self) -> bool:
-        """ Verify whether any spent reward is currently locked."""
+        """ Check whether any spent reward is currently locked, considering only the block rewards spent by this tx
+        itself, and not the inherited `min_height`"""
         return self.get_spent_reward_locked_info() is not None
 
     def get_spent_reward_locked_info(self) -> Optional[RewardLockedInfo]:
-        """ Same verification as in `is_spent_reward_locked`, but returns extra information or None for False."""
+        """Check if any input block reward is locked, returning the locked information if any, or None if they are all
+        unlocked."""
         for blk in self.iter_spent_rewards():
             assert blk.hash is not None
             needed_height = self._spent_reward_needed_height(blk)
@@ -592,7 +596,7 @@ class Transaction(BaseTransaction):
         return None
 
     def _spent_reward_needed_height(self, block: Block) -> int:
-        """ Returns height still needed to unlock this reward: 0 means it's unlocked."""
+        """ Returns height still needed to unlock this `block` reward: 0 means it's unlocked."""
         import math
         assert self.storage is not None
         # omitting timestamp to get the current best block, this will usually hit the cache instead of being slow

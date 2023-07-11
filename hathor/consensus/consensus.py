@@ -111,7 +111,7 @@ class ConsensusAlgorithm:
                           prev_block_tip=best_tip.hex(), new_block_tip=new_best_tip.hex())
             # XXX: this method will mark as INVALID all transactions in the mempool that became invalid because of a
             #      reward lock
-            to_remove = storage.compute_transactions_that_became_invalid()
+            to_remove = storage.compute_transactions_that_became_invalid(new_best_height)
             if to_remove:
                 self.log.warn('some transactions on the mempool became invalid and will be removed',
                               count=len(to_remove))

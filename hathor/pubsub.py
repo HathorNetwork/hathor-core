@@ -14,11 +14,13 @@
 
 from collections import defaultdict, deque
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, cast
+from typing import TYPE_CHECKING, Any, Callable
 
 from twisted.internet.interfaces import IReactorFromThreads
+from twisted.python.threadable import isInIOThread
 
-from hathor.util import Reactor, ReactorThread
+from hathor.util import Reactor
+from hathor.utils.zope import verified_cast
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction, Block
@@ -187,7 +189,7 @@ class PubSubManager:
         if fn in self._subscribers[key]:
             self._subscribers[key].remove(fn)
 
-    def _call_next(self):
+    def _call_next(self) -> None:
         """Execute next call if it exists."""
         if not self.queue:
             return
@@ -196,19 +198,17 @@ class PubSubManager:
         if self.queue:
             self._schedule_call_next()
 
-    def _schedule_call_next(self):
+    def _schedule_call_next(self) -> None:
         """Schedule next call's execution."""
-        reactor_thread = ReactorThread.get_current_thread(self.reactor)
-        if reactor_thread == ReactorThread.MAIN_THREAD:
-            self.reactor.callLater(0, self._call_next)
-        elif reactor_thread == ReactorThread.NOT_MAIN_THREAD:
-            # XXX: does this always hold true? an assert could be tricky because it is a zope.interface
-            reactor = cast(IReactorFromThreads, self.reactor)
+        assert self.reactor.running
+
+        if not isInIOThread() and (threaded_reactor := verified_cast(IReactorFromThreads, self.reactor)):
             # We're taking a conservative approach, since not all functions might need to run
             # on the main thread [yan 2019-02-20]
-            reactor.callFromThread(self._call_next)
-        else:
-            raise NotImplementedError
+            threaded_reactor.callFromThread(self._call_next)
+            return
+
+        self.reactor.callLater(0, self._call_next)
 
     def publish(self, key: HathorEvents, **kwargs: Any) -> None:
         """Publish a new event.
@@ -219,11 +219,9 @@ class PubSubManager:
         :param **kwargs: Named arguments to be given to the functions that will be called with this event.
         :type **kwargs: dict
         """
-        reactor_thread = ReactorThread.get_current_thread(self.reactor)
-
         args = EventArguments(**kwargs)
         for fn in self._subscribers[key]:
-            if reactor_thread == ReactorThread.NOT_RUNNING:
+            if not self.reactor.running:
                 fn(key, args)
             else:
                 is_empty = bool(not self.queue)
