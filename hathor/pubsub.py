@@ -30,6 +30,10 @@ class HathorEvents(Enum):
             Triggered when a new tx/block is accepted in the network
             Publishes a tx/block object
 
+        NETWORK_PEER_CONNECTING:
+            Triggered when a peer starts connecting to the network
+            Publishes the peer id and the peers count
+
         NETWORK_PEER_CONNECTION_FAILURE:
             Triggered when a peer connection to the network fails
             Publishes the peer id and the peers count
@@ -90,6 +94,8 @@ class HathorEvents(Enum):
     """
     MANAGER_ON_START = 'manager:on_start'
     MANAGER_ON_STOP = 'manager:on_stop'
+
+    NETWORK_PEER_CONNECTING = 'network:peer_connecting'
 
     NETWORK_PEER_CONNECTION_FAILED = 'network:peer_connection_failed'
 

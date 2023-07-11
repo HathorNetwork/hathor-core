@@ -572,6 +572,11 @@ class ConnectionsManager:
         deferred.addCallback(self._connect_to_callback, peer, endpoint, connection_string, peer_id)
         deferred.addErrback(self.on_connection_failure, peer, endpoint)
         self.log.info('connect to ', endpoint=description, peer=str(peer))
+        self.pubsub.publish(
+            HathorEvents.NETWORK_PEER_CONNECTING,
+            peer=peer,
+            peers_count=self._get_peers_count()
+        )
 
     def listen(self, description: str, use_ssl: Optional[bool] = None) -> IStreamServerEndpoint:
         """ Start to listen to new connection according to the description.
