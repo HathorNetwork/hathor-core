@@ -78,15 +78,15 @@ isort-check:
 yamllint:
 	yamllint .
 
-.PHONY: check-version
-check-version:
-	bash ./extras/check_version.sh $(VERSION)
+.PHONY: check-custom
+check-custom:
+	bash ./extras/custom_checks.sh
 
 .PHONY: check
-check: check-version yamllint flake8 isort-check mypy
+check: check-custom yamllint flake8 isort-check mypy
 
 .PHONY: dcheck
-dcheck: check-version yamllint flake8 isort-check dmypy
+dcheck: check-custom yamllint flake8 isort-check dmypy
 
 # formatting:
 

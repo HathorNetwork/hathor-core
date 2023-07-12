@@ -1,4 +1,5 @@
 import os
+import secrets
 import shutil
 import tempfile
 import time
@@ -99,6 +100,7 @@ class TestCase(unittest.TestCase):
     _enable_sync_v1: bool
     _enable_sync_v2: bool
     use_memory_storage: bool = USE_MEMORY_STORAGE
+    seed_config: Optional[int] = None
 
     def setUp(self):
         _set_test_mode(TestMode.TEST_ALL_WEIGHT)
@@ -108,7 +110,9 @@ class TestCase(unittest.TestCase):
         self.clock.advance(time.time())
         self.log = logger.new()
         self.reset_peer_id_pool()
-        self.rng = Random()
+        self.seed = secrets.randbits(64) if self.seed_config is None else self.seed_config
+        self.log.debug('set seed', seed=self.seed)
+        self.rng = Random(self.seed)
         self._pending_cleanups = []
 
     def tearDown(self):

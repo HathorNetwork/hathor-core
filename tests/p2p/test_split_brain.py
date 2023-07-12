@@ -1,5 +1,3 @@
-import random
-
 import pytest
 from mnemonic import Mnemonic
 
@@ -16,16 +14,10 @@ class BaseHathorSplitBrainTestCase(unittest.TestCase):
 
     def setUp(self):
         super().setUp()
-
-        # import sys
-        # from twisted.python import log
-        # log.startLogging(sys.stdout)
-
-        # self.set_random_seed(0)
-
         from hathor.transaction.genesis import _get_genesis_transactions_unsafe
+
         first_timestamp = min(tx.timestamp for tx in _get_genesis_transactions_unsafe(None))
-        self.clock.advance(first_timestamp + random.randint(3600, 120*24*3600))
+        self.clock.advance(first_timestamp + self.rng.randint(3600, 120*24*3600))
 
         self.network = 'testnet'
 
@@ -40,7 +32,7 @@ class BaseHathorSplitBrainTestCase(unittest.TestCase):
         # Don't use it anywhere else. It is unsafe to generate mnemonic words like this.
         # It should be used only for testing purposes.
         m = Mnemonic('english')
-        words = m.to_mnemonic(bytes(random.randint(0, 255) for _ in range(32)))
+        words = m.to_mnemonic(bytes(self.rng.randint(0, 255) for _ in range(32)))
         wallet.unlock(words=words, tx_storage=manager.tx_storage)
         return manager
 
@@ -60,9 +52,9 @@ class BaseHathorSplitBrainTestCase(unittest.TestCase):
             add_new_block(manager2, advance_clock=1)
             add_blocks_unlock_reward(manager2)
             self.clock.advance(10)
-            for _ in range(random.randint(3, 10)):
-                add_new_transactions(manager1, random.randint(2, 4), advance_clock=1)
-                add_new_transactions(manager2, random.randint(3, 7), advance_clock=1)
+            for _ in range(self.rng.randint(3, 10)):
+                add_new_transactions(manager1, self.rng.randint(2, 4), advance_clock=1)
+                add_new_transactions(manager2, self.rng.randint(3, 7), advance_clock=1)
                 add_new_double_spending(manager1)
                 add_new_double_spending(manager2)
                 self.clock.advance(10)
