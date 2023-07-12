@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from collections import OrderedDict
-from typing import Any, Iterator, Optional, Set
+from typing import Any, Iterator, Optional
 
 from twisted.internet import threads
 
@@ -29,8 +29,8 @@ class TransactionCacheStorage(BaseTransactionStorage):
     """Caching storage to be used 'on top' of other storages.
     """
 
-    cache: 'OrderedDict[bytes, BaseTransaction]'
-    dirty_txs: Set[bytes]
+    cache: OrderedDict[bytes, BaseTransaction]
+    dirty_txs: set[bytes]
 
     def __init__(self, store: 'BaseTransactionStorage', reactor: Reactor, interval: int = 5,
                  capacity: int = 10000, *, indexes: Optional[IndexesManager], _clone_if_needed: bool = False):
@@ -63,7 +63,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self._clone_if_needed = _clone_if_needed
         self.cache = OrderedDict()
         # dirty_txs has the txs that have been modified but are not persisted yet
-        self.dirty_txs = set()  # Set[bytes(hash)]
+        self.dirty_txs = set()
         self.stats = dict(hit=0, miss=0)
 
         # we need to use only one weakref dict, so we must first initialize super, and then
@@ -120,7 +120,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
             deferred.addErrback(self._err_flush_thread)
             self.flush_deferred = deferred
 
-    def _cb_flush_thread(self, flushed_txs: Set[bytes]) -> None:
+    def _cb_flush_thread(self, flushed_txs: set[bytes]) -> None:
         self.reactor.callLater(self.interval, self._start_flush_thread)
         self.flush_deferred = None
 
@@ -129,7 +129,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
         self.reactor.callLater(self.interval, self._start_flush_thread)
         self.flush_deferred = None
 
-    def _flush_to_storage(self, dirty_txs_copy: Set[bytes]) -> None:
+    def _flush_to_storage(self, dirty_txs_copy: set[bytes]) -> None:
         """Write dirty pages to disk."""
         for tx_hash in dirty_txs_copy:
             # a dirty tx might be removed from self.cache outside this thread: if _update_cache is called
@@ -155,7 +155,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
         # call super which adds to index if needed
         super().save_transaction(tx, only_metadata=only_metadata)
 
-    def get_all_genesis(self) -> Set[BaseTransaction]:
+    def get_all_genesis(self) -> set[BaseTransaction]:
         return self.store.get_all_genesis()
 
     def _save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:

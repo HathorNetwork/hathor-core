@@ -14,7 +14,6 @@
 
 from abc import abstractmethod
 from enum import Enum
-from typing import Set
 
 from intervaltree import Interval
 from structlog import get_logger
@@ -88,5 +87,5 @@ class TipsIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def __getitem__(self, index: float) -> Set[Interval]:
+    def __getitem__(self, index: float) -> set[Interval]:
         raise NotImplementedError
