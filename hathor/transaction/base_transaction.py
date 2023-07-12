@@ -534,6 +534,7 @@ class BaseTransaction(ABC):
         from hathor.transaction.transaction_metadata import ValidationState
 
         meta = self.get_metadata()
+
         # skip full validation when it is a checkpoint
         if meta.validation.is_checkpoint():
             self.set_validation(ValidationState.CHECKPOINT_FULL)

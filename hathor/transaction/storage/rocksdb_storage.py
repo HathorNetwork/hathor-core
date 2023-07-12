@@ -49,6 +49,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         self._cf_attr = rocksdb_storage.get_or_create_column_family(_CF_NAME_ATTR)
         self._cf_migrations = rocksdb_storage.get_or_create_column_family(_CF_NAME_MIGRATIONS)
 
+        self._rocksdb_storage = rocksdb_storage
         self._db = rocksdb_storage.get_db()
         super().__init__(indexes=indexes)
 

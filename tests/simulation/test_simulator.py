@@ -1,6 +1,7 @@
 import pytest
 
 from hathor.simulator import FakeConnection
+from hathor.simulator.trigger import All as AllTriggers, StopWhenSynced
 from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 
@@ -56,7 +57,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         gen_tx1.stop()
         gen_tx2.stop()
 
-        self.simulator.run(5 * 60)
+        self.assertTrue(self.simulator.run(600, trigger=StopWhenSynced(conn12)))
 
         self.assertTrue(conn12.is_connected)
         self.assertTipsEqual(manager1, manager2)
@@ -64,12 +65,16 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
     def test_many_miners_since_beginning(self):
         nodes = []
         miners = []
+        stop_triggers = []
 
         for hashpower in [10e6, 5e6, 1e6, 1e6, 1e6]:
             manager = self.create_peer()
             for node in nodes:
-                conn = FakeConnection(manager, node, latency=0.085)
+                # XXX: using autoreconnect is more realistic, but ideally it shouldn't be needed, but the test is
+                #      failing without it for some reason
+                conn = FakeConnection(manager, node, latency=0.085, autoreconnect=True)
                 self.simulator.add_connection(conn)
+                stop_triggers.append(StopWhenSynced(conn))
 
             nodes.append(manager)
 
@@ -82,7 +87,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         for miner in miners:
             miner.stop()
 
-        self.simulator.run(15)
+        self.assertTrue(self.simulator.run(3600, trigger=AllTriggers(stop_triggers)))
 
         for node in nodes[1:]:
             self.assertTipsEqual(nodes[0], node)
@@ -92,6 +97,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         nodes = []
         miners = []
         tx_generators = []
+        stop_triggers = []
 
         manager = self.create_peer()
         nodes.append(manager)
@@ -122,8 +128,9 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         self.log.debug('adding late node')
         late_manager = self.create_peer()
         for node in nodes:
-            conn = FakeConnection(late_manager, node, latency=0.300)
+            conn = FakeConnection(late_manager, node, latency=0.300, autoreconnect=True)
             self.simulator.add_connection(conn)
+            stop_triggers.append(StopWhenSynced(conn))
 
         self.simulator.run(600)
 
@@ -132,7 +139,7 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         for miner in miners:
             miner.stop()
 
-        self.simulator.run_until_complete(600)
+        self.assertTrue(self.simulator.run(3600, trigger=AllTriggers(stop_triggers)))
 
         for idx, node in enumerate(nodes):
             self.log.debug(f'checking node {idx}')

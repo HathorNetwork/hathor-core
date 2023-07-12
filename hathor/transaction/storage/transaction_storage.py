@@ -590,8 +590,12 @@ class TransactionStorage(ABC):
     def get_all_transactions(self) -> Iterator[BaseTransaction]:
         """Return all vertices (transactions and blocks) within the allowed scope.
         """
+        # It is necessary to retain a copy of the current scope because this method will yield
+        # and the scope may undergo changes. By doing so, we ensure the usage of the scope at the
+        # time of iterator creation.
+        scope = self.get_allow_scope()
         for tx in self._get_all_transactions():
-            if self.get_allow_scope().is_allowed(tx):
+            if scope.is_allowed(tx):
                 yield tx
 
     @abstractmethod

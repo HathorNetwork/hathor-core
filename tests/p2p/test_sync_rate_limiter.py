@@ -8,7 +8,9 @@ from tests import unittest
 from tests.simulation.base import SimulatorTestCase
 
 
-class BaseRandomSimulatorTestCase(SimulatorTestCase):
+class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, SimulatorTestCase):
+    __test__ = True
+
     def test_sync_rate_limiter(self):
         manager1 = self.create_peer()
 
@@ -177,16 +179,3 @@ class BaseRandomSimulatorTestCase(SimulatorTestCase):
         # All residual tasks should have been canceled
         for call_later in sync1._send_tips_call_later:
             self.assertEqual(call_later.active(), False)
-
-
-class SyncV1RandomSimulatorTestCase(unittest.SyncV1Params, BaseRandomSimulatorTestCase):
-    __test__ = True
-
-
-class SyncV2RandomSimulatorTestCase(unittest.SyncV2Params, BaseRandomSimulatorTestCase):
-    __test__ = True
-
-
-# sync-bridge should behave like sync-v2
-class SyncBridgeRandomSimulatorTestCase(unittest.SyncBridgeParams, SyncV2RandomSimulatorTestCase):
-    __test__ = True

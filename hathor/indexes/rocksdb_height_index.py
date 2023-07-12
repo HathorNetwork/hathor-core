@@ -111,7 +111,7 @@ class RocksDBHeightIndex(HeightIndex, RocksDBIndexUtils):
             raise ValueError(f'parent hash required (current height: {cur_height}, new height: {height})')
         elif height == cur_height + 1:
             self._db.put((self._cf, key), value)
-        elif cur_tip != entry.hash:
+        elif self.get(height) != entry.hash:
             if can_reorg:
                 self._del_from_height(height)
                 self._db.put((self._cf, key), value)
@@ -119,7 +119,7 @@ class RocksDBHeightIndex(HeightIndex, RocksDBIndexUtils):
                 raise ValueError('adding would cause a re-org, use can_reorg=True to accept re-orgs')
         else:
             # nothing to do (there are more blocks, but the block at height currently matches the added block)
-            assert cur_tip == entry.hash
+            pass
 
     def add_new(self, height: int, block_hash: bytes, timestamp: int) -> None:
         self._add(height, IndexEntry(block_hash, timestamp), can_reorg=False)

@@ -291,7 +291,8 @@ class Block(BaseTransaction):
         if not self.storage.transaction_exists(parent_block_hash):
             return False
         metadata = self.storage.get_metadata(parent_block_hash)
-        assert metadata is not None
+        if metadata is None:
+            return False
         return metadata.validation.is_at_least_basic()
 
     def verify_basic(self, skip_block_weight_verification: bool = False) -> None:
@@ -314,7 +315,7 @@ class Block(BaseTransaction):
             raise CheckpointError(f'Invalid new block {self.hash_hex}: checkpoint hash does not match')
         else:
             # TODO: check whether self is a parent of any checkpoint-valid block, this is left for a future PR
-            raise NotImplementedError
+            pass
 
     def verify_weight(self) -> None:
         """Validate minimum block difficulty."""

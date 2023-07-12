@@ -72,10 +72,11 @@ class ConsensusAlgorithm:
     def update(self, base: BaseTransaction) -> None:
         assert base.storage is not None
         assert base.storage.is_only_valid_allowed()
+        meta = base.get_metadata()
+        assert meta.validation.is_valid()
         try:
             self._unsafe_update(base)
         except Exception:
-            meta = base.get_metadata()
             meta.add_voided_by(settings.CONSENSUS_FAIL_ID)
             assert base.storage is not None
             base.storage.save_transaction(base, only_metadata=True)
